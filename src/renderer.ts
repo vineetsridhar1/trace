@@ -3,13 +3,21 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-// Type declaration for the API exposed via preload
-interface LogEntry {
-  id: number;
-  event_type: string;
-  tool_name: string | null;
-  input_json: string;
+const SERVER_URL = 'http://localhost:3100';
+
+// Types matching the server's Event model
+interface ServerEvent {
+  id: string;
+  sessionId: string;
+  hookEventName: string;
   timestamp: string;
+  toolName: string | null;
+  toolInput: unknown;
+  toolResponse: unknown;
+  toolUseId: string | null;
+  stopHookActive: boolean | null;
+  lastAssistantMessage: string | null;
+  rawPayload: unknown;
 }
 
 interface TraceAPI {
@@ -17,8 +25,6 @@ interface TraceAPI {
   onPtyExit: (cb: (code: number) => void) => () => void;
   sendPtyInput: (data: string) => void;
   resizePty: (cols: number, rows: number) => void;
-  getLogs: (limit?: number) => Promise<LogEntry[]>;
-  onNewLogEvent: (cb: () => void) => () => void;
 }
 
 declare global {
@@ -30,7 +36,8 @@ declare global {
 // ---------------------------------------------------------------------------
 // Terminal setup
 // ---------------------------------------------------------------------------
-const terminalContainer = document.getElementById('terminal-container')!;
+const terminalContainer = document.getElementById('terminal-container');
+if (!terminalContainer) throw new Error('Missing #terminal-container element');
 
 const term = new Terminal({
   fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -66,38 +73,38 @@ const resizeObserver = new ResizeObserver(() => {
 resizeObserver.observe(terminalContainer);
 
 // ---------------------------------------------------------------------------
-// Activity Feed
+// Activity Feed — fetches from Express server
 // ---------------------------------------------------------------------------
-const feedList = document.getElementById('feed-list')!;
-let lastSeenId = 0;
+const feedList = document.getElementById('feed-list');
+if (!feedList) throw new Error('Missing #feed-list element');
+const seenEventIds = new Set<string>();
 
 function eventIcon(eventType: string): string {
   switch (eventType) {
-    case 'PostToolUse':     return '🔧';
+    case 'PostToolUse':      return '🔧';
     case 'UserPromptSubmit': return '💬';
-    case 'Stop':            return '🛑';
-    default:                return '📌';
+    case 'Stop':             return '🛑';
+    default:                 return '📌';
   }
 }
 
-function renderLogEntry(entry: LogEntry): HTMLElement {
+function renderEvent(event: ServerEvent): HTMLElement {
   const el = document.createElement('div');
   el.className = 'feed-item';
 
-  const icon = eventIcon(entry.event_type);
-  const toolLabel = entry.tool_name ? `<span class="tool-name">${entry.tool_name}</span>` : '';
-  const time = new Date(entry.timestamp + 'Z').toLocaleTimeString();
+  const icon = eventIcon(event.hookEventName);
+  const toolLabel = event.toolName ? `<span class="tool-name">${event.toolName}</span>` : '';
+  const time = new Date(event.timestamp).toLocaleTimeString();
 
   el.innerHTML = `
     <div class="feed-item-header">
       <span class="feed-icon">${icon}</span>
-      <span class="feed-event-type">${entry.event_type}</span>
+      <span class="feed-event-type">${event.hookEventName}</span>
       ${toolLabel}
       <span class="feed-time">${time}</span>
     </div>
   `;
 
-  // Expand on click to show raw JSON
   el.addEventListener('click', () => {
     const existing = el.querySelector('.feed-detail');
     if (existing) {
@@ -106,39 +113,98 @@ function renderLogEntry(entry: LogEntry): HTMLElement {
     }
     const detail = document.createElement('pre');
     detail.className = 'feed-detail';
-    try {
-      detail.textContent = JSON.stringify(JSON.parse(entry.input_json), null, 2);
-    } catch {
-      detail.textContent = entry.input_json;
-    }
+    detail.textContent = JSON.stringify(event.rawPayload, null, 2);
     el.appendChild(detail);
   });
 
   return el;
 }
 
+async function fetchAllEvents(): Promise<ServerEvent[]> {
+  try {
+    const res = await fetch(`${SERVER_URL}/sessions`);
+    if (!res.ok) return [];
+    const { sessions } = await res.json();
+
+    const allEvents: ServerEvent[] = [];
+    for (const session of sessions) {
+      const evtRes = await fetch(`${SERVER_URL}/sessions/${session.sessionId}/events?limit=200`);
+      if (evtRes.ok) {
+        const { events } = await evtRes.json();
+        allEvents.push(...events);
+      }
+    }
+
+    // Sort descending by timestamp
+    allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return allEvents;
+  } catch {
+    return [];
+  }
+}
+
 async function refreshFeed() {
-  const logs: LogEntry[] = await window.traceAPI.getLogs(200);
-  if (logs.length === 0) return;
+  const events = await fetchAllEvents();
+  if (events.length === 0) return;
 
-  // logs come in DESC order; find new ones
-  const newEntries = logs.filter((l) => l.id > lastSeenId);
-  if (newEntries.length === 0) return;
+  const newEvents = events.filter((e) => !seenEventIds.has(e.id));
+  if (newEvents.length === 0) return;
 
-  // Insert newest at the top
-  for (const entry of newEntries.reverse()) {
-    const el = renderLogEntry(entry);
+  // Insert newest at the top (newEvents is already desc by timestamp)
+  for (const event of newEvents.reverse()) {
+    seenEventIds.add(event.id);
+    const el = renderEvent(event);
     feedList.prepend(el);
   }
+}
 
-  lastSeenId = logs[0].id;
+// ---------------------------------------------------------------------------
+// SSE — real-time updates from the server
+// ---------------------------------------------------------------------------
+function connectSSE(sessionId: string) {
+  const source = new EventSource(`${SERVER_URL}/sse/sessions/${sessionId}`);
+
+  source.addEventListener('new-event', (e) => {
+    const event: ServerEvent = JSON.parse(e.data);
+    if (seenEventIds.has(event.id)) return;
+    seenEventIds.add(event.id);
+    const el = renderEvent(event);
+    feedList.prepend(el);
+  });
+
+  source.addEventListener('error', () => {
+    // EventSource auto-reconnects
+  });
+
+  return source;
+}
+
+// Track active SSE connections so we can connect to new sessions
+const sseConnections = new Map<string, EventSource>();
+
+async function syncSSEConnections() {
+  try {
+    const res = await fetch(`${SERVER_URL}/sessions?status=active`);
+    if (!res.ok) return;
+    const { sessions } = await res.json();
+
+    for (const session of sessions) {
+      if (!sseConnections.has(session.sessionId)) {
+        const source = connectSSE(session.sessionId);
+        sseConnections.set(session.sessionId, source);
+      }
+    }
+  } catch {
+    // Server might not be up yet
+  }
 }
 
 // Initial load
 refreshFeed();
+syncSSEConnections();
 
-// Listen for real-time push from main process
-window.traceAPI.onNewLogEvent(() => refreshFeed());
-
-// Also poll as a fallback every 3 seconds
-setInterval(refreshFeed, 3000);
+// Poll for new sessions and as a fallback for events
+setInterval(() => {
+  refreshFeed();
+  syncSSEConnections();
+}, 3000);

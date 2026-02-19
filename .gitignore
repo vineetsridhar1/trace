@@ -90,3 +90,6 @@ typings/
 
 # Electron-Forge
 out/
+
+# Server build output
+server/dist/

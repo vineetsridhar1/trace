@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id             String   @id @default(uuid())
+  sessionId      String   @unique @map("session_id")
+  transcriptPath String?  @map("transcript_path")
+  cwd            String?
+  permissionMode String?  @map("permission_mode")
+  firstSeenAt    DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt     DateTime @default(now()) @map("last_seen_at")
+  status         String   @default("active")
+
+  events Event[]
+
+  @@map("sessions")
+}
+
+model Event {
+  id                   String   @id @default(uuid())
+  sessionId            String   @map("session_id")
+  hookEventName        String   @map("hook_event_name")
+  timestamp            DateTime @default(now())
+  toolName             String?  @map("tool_name")
+  toolInput            Json?    @map("tool_input")
+  toolResponse         Json?    @map("tool_response")
+  toolUseId            String?  @map("tool_use_id")
+  stopHookActive       Boolean? @map("stop_hook_active")
+  lastAssistantMessage String?  @map("last_assistant_message")
+  rawPayload           Json     @map("raw_payload")
+
+  session Session @relation(fields: [sessionId], references: [sessionId])
+
+  @@index([sessionId, timestamp])
+  @@index([hookEventName])
+  @@index([toolName])
+  @@index([sessionId, hookEventName])
+  @@map("events")
+}
