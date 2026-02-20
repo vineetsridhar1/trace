@@ -10,7 +10,7 @@ export const PostToolUseSchema = z.object({
   tool_input: z.unknown().optional(),
   tool_response: z.unknown().optional(),
   tool_use_id: z.string().optional(),
-});
+}).passthrough();
 
 export const UserPromptSubmitSchema = z.object({
   session_id: z.string(),
@@ -18,7 +18,11 @@ export const UserPromptSubmitSchema = z.object({
   cwd: z.string().optional(),
   permission_mode: z.string().optional(),
   hook_event_name: z.literal('UserPromptSubmit'),
-});
+  prompt: z.string().optional(),
+  text: z.string().optional(),
+  message: z.string().optional(),
+  user_prompt: z.string().optional(),
+}).passthrough();
 
 export const StopSchema = z.object({
   session_id: z.string(),
@@ -28,7 +32,7 @@ export const StopSchema = z.object({
   hook_event_name: z.literal('Stop'),
   stop_hook_active: z.boolean().optional(),
   last_assistant_message: z.string().optional(),
-});
+}).passthrough();
 
 export const HookEventSchema = z.discriminatedUnion('hook_event_name', [
   PostToolUseSchema,

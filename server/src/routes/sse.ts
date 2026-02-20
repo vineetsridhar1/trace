@@ -15,4 +15,16 @@ router.get('/sessions/:sessionId', (req: Request, res: Response) => {
   sseManager.addClient(req.params.sessionId as string, res);
 });
 
+router.get('/channels/:channelId', (req: Request, res: Response) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+
+  res.write('event: connected\ndata: {}\n\n');
+
+  sseManager.addChannelClient(req.params.channelId as string, res);
+});
+
 export default router;

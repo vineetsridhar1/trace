@@ -17,9 +17,48 @@ model Session {
   lastSeenAt     DateTime @default(now()) @map("last_seen_at")
   status         String   @default("active")
 
-  events Event[]
+  events   Event[]
+  messages Message[]
 
   @@map("sessions")
+}
+
+model Channel {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages Message[]
+
+  @@map("channels")
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  channelId  String   @map("channel_id")
+  sessionId  String   @map("session_id")
+  preview    String?
+  importance String   @default("non-important")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id])
+  session Session @relation(fields: [sessionId], references: [sessionId])
+  threads Thread[]
+
+  @@index([channelId, createdAt])
+  @@map("messages")
+}
+
+model Thread {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id])
+  events  Event[]
+
+  @@map("threads")
 }
 
 model Event {
@@ -34,12 +73,16 @@ model Event {
   stopHookActive       Boolean? @map("stop_hook_active")
   lastAssistantMessage String?  @map("last_assistant_message")
   rawPayload           Json     @map("raw_payload")
+  threadId             String   @map("thread_id")
+  importance           String   @default("non-important")
 
   session Session @relation(fields: [sessionId], references: [sessionId])
+  thread  Thread  @relation(fields: [threadId], references: [id])
 
   @@index([sessionId, timestamp])
   @@index([hookEventName])
   @@index([toolName])
   @@index([sessionId, hookEventName])
+  @@index([threadId, timestamp])
   @@map("events")
 }

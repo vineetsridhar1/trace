@@ -3,6 +3,7 @@ import cors from 'cors';
 import eventsRouter from './routes/events';
 import sessionsRouter from './routes/sessions';
 import sseRouter from './routes/sse';
+import channelsRouter from './routes/channels';
 import { errorHandler } from './middleware/errorHandler';
 
 export function createApp() {
@@ -14,6 +15,7 @@ export function createApp() {
   app.use('/events', eventsRouter);
   app.use('/sessions', sessionsRouter);
   app.use('/sse', sseRouter);
+  app.use('/channels', channelsRouter);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });

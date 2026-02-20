@@ -1,17 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('traceAPI', {
-  // PTY
-  onPtyData: (cb: (data: string) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: string) => cb(data);
-    ipcRenderer.on('pty-data', listener);
-    return () => ipcRenderer.removeListener('pty-data', listener);
+  spawnClaude: async (
+    messageId: string,
+    prompt: string,
+  ): Promise<{ success: boolean; worktreePath?: string; error?: string }> => {
+    try {
+      return await ipcRenderer.invoke('spawn-claude', messageId, prompt);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
   },
-  onPtyExit: (cb: (code: number) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, code: number) => cb(code);
-    ipcRenderer.on('pty-exit', listener);
-    return () => ipcRenderer.removeListener('pty-exit', listener);
+  deleteWorktree: async (
+    messageId: string,
+  ): Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }> => {
+    try {
+      return await ipcRenderer.invoke('delete-worktree', messageId);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
   },
-  sendPtyInput: (data: string) => ipcRenderer.send('pty-input', data),
-  resizePty: (cols: number, rows: number) => ipcRenderer.send('pty-resize', cols, rows),
 });
