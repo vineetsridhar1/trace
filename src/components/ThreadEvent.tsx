@@ -1,6 +1,55 @@
+import { useRef, useState, useEffect } from 'react';
 import type { ServerEvent } from '../types';
-import { extractPromptText, formatTime, isEditLikeEvent, serializeUnknown } from '../utils';
+import { extractPromptText, formatTime, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath } from '../utils';
 import { EditDiffPreview } from './EditDiffPreview';
+
+function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: number }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [collapsedH, setCollapsedH] = useState(0);
+  const [fullH, setFullH] = useState(0);
+
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const clampH = Math.ceil(lh * lineClamp);
+    const scrollH = el.scrollHeight;
+    if (scrollH > clampH + 4) {
+      setNeedsClamp(true);
+      setCollapsedH(clampH);
+      setFullH(scrollH);
+    } else {
+      setNeedsClamp(false);
+    }
+  }, [text, lineClamp]);
+
+  return (
+    <div>
+      <div
+        style={{
+          maxHeight: !needsClamp ? undefined : expanded ? `${fullH}px` : `${collapsedH}px`,
+          overflow: 'hidden',
+          transition: 'max-height 0.3s ease',
+        }}
+      >
+        <div ref={innerRef} className="break-words whitespace-pre-wrap text-sm text-[#c0caf5]">
+          {text}
+        </div>
+      </div>
+      {needsClamp && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1 cursor-pointer text-xs font-medium text-violet-400 hover:text-violet-300"
+        >
+          {expanded ? 'See less' : 'See more'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function ThreadEvent({ event }: { event: ServerEvent }) {
   const time = formatTime(event.timestamp);
@@ -31,32 +80,108 @@ function UserPromptBubble({ event, time }: { event: ServerEvent; time: string })
           <span className="text-xs font-semibold text-violet-300">You</span>
           <span className="text-xs text-[#565f89]">{time}</span>
         </div>
-        <div className="break-words whitespace-pre-wrap text-sm text-[#c0caf5]">
-          {prompt.slice(0, 500)}
-        </div>
+        <ExpandableText text={prompt} lineClamp={4} />
       </div>
     </div>
+  );
+}
+
+function isWriteEvent(event: ServerEvent): boolean {
+  return event.hookEventName === 'PostToolUse' && normalizeToolName(event.toolName) === 'write';
+}
+
+function isTodoWriteEvent(event: ServerEvent): boolean {
+  return event.hookEventName === 'PostToolUse' && normalizeToolName(event.toolName) === 'todowrite';
+}
+
+function WriteCodePreview({ event }: { event: ServerEvent }) {
+  const content = findStringByKeys(event.toolInput, ['content', 'text', 'new_source']) ?? null;
+  const rawPath = findStringByKeys(event.toolInput, ['file_path', 'path', 'filepath']) ?? null;
+  const displayPath = rawPath ? toRelativeDisplayPath(rawPath) : 'file';
+
+  if (!content) return null;
+
+  return (
+    <div className="mt-2 overflow-hidden rounded-md border border-[#3b3f5c]">
+      <div className="border-b border-[#3b3f5c] bg-[#1a1b26] px-2 py-1 text-[11px] font-semibold text-[#a9b1d6]">
+        {displayPath}
+      </div>
+      <pre className="max-h-[340px] overflow-auto bg-[#16161e] p-2 font-mono text-xs leading-relaxed text-[#c0caf5]">
+        {content.length > 5000 ? `${content.slice(0, 5000)}...` : content}
+      </pre>
+    </div>
+  );
+}
+
+interface TodoItem {
+  content: string;
+  status: string;
+}
+
+function TodoListPreview({ event }: { event: ServerEvent }) {
+  const input = event.toolInput as Record<string, unknown> | null;
+  const todos = (input?.todos ?? []) as TodoItem[];
+  if (!Array.isArray(todos) || todos.length === 0) return null;
+
+  const statusIcon = (s: string) => {
+    if (s === 'completed') return '✓';
+    if (s === 'in_progress') return '→';
+    return '○';
+  };
+  const statusColor = (s: string) => {
+    if (s === 'completed') return 'text-green-400';
+    if (s === 'in_progress') return 'text-yellow-400';
+    return 'text-[#565f89]';
+  };
+
+  return (
+    <ul className="mt-2 space-y-1 pl-1">
+      {todos.map((t, i) => (
+        <li key={i} className="flex items-start gap-2 text-sm">
+          <span className={`flex-shrink-0 font-mono text-xs leading-5 ${statusColor(t.status)}`}>
+            {statusIcon(t.status)}
+          </span>
+          <span className={t.status === 'completed' ? 'text-[#565f89] line-through' : 'text-[#c0caf5]'}>
+            {t.content}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
   const hasToolInput = event.toolInput !== null && event.toolInput !== undefined;
   const editLike = isEditLikeEvent(event);
+  const writeTool = isWriteEvent(event);
+  const todoTool = isTodoWriteEvent(event);
+
   const activityLabel = editLike
     ? `${event.toolName ?? 'Edit'} applied`
-    : `${event.toolName ?? 'Tool'} executed`;
+    : todoTool
+      ? 'Todos updated'
+      : `${event.toolName ?? 'Tool'} executed`;
+
+  const icon = editLike ? '✏️' : todoTool ? '📋' : '🛠';
 
   return (
     <div className="activity-row">
       <div className="activity-row-header">
-        <span className="activity-row-icon">{editLike ? '✏️' : '🛠'}</span>
+        <span className="activity-row-icon">{icon}</span>
         <span className="activity-row-title">{activityLabel}</span>
         <span className="activity-row-time">{time}</span>
       </div>
       {event.lastAssistantMessage && (
         <div className="activity-row-note">{event.lastAssistantMessage.slice(0, 320)}</div>
       )}
-      {editLike ? (
+      {todoTool ? (
+        <TodoListPreview event={event} />
+      ) : writeTool ? (
+        <>
+          <EditDiffPreview event={event} />
+          <WriteCodePreview event={event} />
+        </>
+      ) : editLike ? (
         <EditDiffPreview event={event} />
       ) : (
         hasToolInput && (
@@ -66,7 +191,7 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
           </details>
         )
       )}
-      {event.toolResponse && !editLike && (
+      {event.toolResponse && !editLike && !todoTool && (
         <details className="activity-row-details mt-1">
           <summary>Tool output</summary>
           <pre className="mt-1">{serializeUnknown(event.toolResponse)}</pre>
@@ -85,9 +210,7 @@ function StopBubble({ event, time }: { event: ServerEvent; time: string }) {
           <span className="ml-auto text-xs text-[#565f89]">{time}</span>
         </div>
         {event.lastAssistantMessage ? (
-          <div className="break-words whitespace-pre-wrap text-sm text-[#c0caf5]">
-            {event.lastAssistantMessage}
-          </div>
+          <ExpandableText text={event.lastAssistantMessage} lineClamp={4} />
         ) : (
           <div className="text-sm text-[#565f89]">Claude completed the run.</div>
         )}

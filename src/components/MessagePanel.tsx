@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { ChannelMessage } from '../types';
 import { avatarInitial, formatTime } from '../utils';
 
+function useAutoResize(value: string) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [value]);
+  return ref;
+}
+
 interface MessagePanelProps {
   feedTitle: string;
   messages: ChannelMessage[];
@@ -55,31 +66,52 @@ export function MessagePanel({
         ))}
       </div>
 
-      <div className="border-t border-[#292e42] px-3 py-3">
-        <div className="flex items-center gap-2">
-          <input
-            id="message-input"
-            type="text"
-            value={messageInput}
-            onChange={(e) => onMessageInputChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                onSendMessage();
-              }
-            }}
-            placeholder="Send a message..."
-            className="flex-1 rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
-          />
-          <button
-            id="message-send"
-            type="button"
-            onClick={onSendMessage}
-            className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
-          >
-            Send
-          </button>
-        </div>
+      <MessageInput
+        messageInput={messageInput}
+        onMessageInputChange={onMessageInputChange}
+        onSendMessage={onSendMessage}
+      />
+    </div>
+  );
+}
+
+function MessageInput({
+  messageInput,
+  onMessageInputChange,
+  onSendMessage,
+}: {
+  messageInput: string;
+  onMessageInputChange: (value: string) => void;
+  onSendMessage: () => void;
+}) {
+  const textareaRef = useAutoResize(messageInput);
+
+  return (
+    <div className="border-t border-[#292e42] px-3 py-3">
+      <div className="flex items-end gap-2">
+        <textarea
+          id="message-input"
+          ref={textareaRef}
+          rows={1}
+          value={messageInput}
+          onChange={(e) => onMessageInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              onSendMessage();
+            }
+          }}
+          placeholder="Send a message..."
+          className="flex-1 resize-none rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+        />
+        <button
+          id="message-send"
+          type="button"
+          onClick={onSendMessage}
+          className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+        >
+          Send
+        </button>
       </div>
     </div>
   );
