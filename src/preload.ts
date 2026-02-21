@@ -20,4 +20,14 @@ contextBridge.exposeInMainWorld('traceAPI', {
       return { success: false, error: String(err) };
     }
   },
+  reportClaudeActivity: async (
+    messageId: string,
+    eventType: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      return await ipcRenderer.invoke('claude-activity-ping', messageId, eventType);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
 });

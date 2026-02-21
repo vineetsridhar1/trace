@@ -2,7 +2,8 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Trace – Claude Activity Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trace - Claude Activity Monitor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -20,66 +21,8 @@
       };
     </script>
   </head>
-  <body class="bg-surface text-text h-screen overflow-hidden font-sans">
-    <div id="app" class="flex h-screen">
-      <!-- Channel Sidebar -->
-      <div id="channel-panel" class="flex flex-col bg-surface-dark border-r border-border panel-animate" style="width: 220px; min-width: 0px; max-width: 400px;">
-        <div class="px-4 pt-3 pb-2 border-b border-border">
-          <h2 class="text-xs font-semibold text-muted uppercase tracking-wide">Channels</h2>
-        </div>
-        <div id="channel-items" class="flex-1 overflow-y-auto px-2 py-1"></div>
-      </div>
-
-      <!-- Resize handle: channel ↔ messages -->
-      <div class="resize-handle" id="resize-left"></div>
-
-      <!-- Messages Panel -->
-      <div id="messages-panel" class="flex-1 flex flex-col min-w-0 bg-surface">
-        <div class="px-4 py-3 border-b border-border">
-          <h2 id="feed-title" class="text-sm font-semibold text-accent-light">Activity Feed</h2>
-        </div>
-        <div id="feed-list" class="flex-1 overflow-y-auto px-2 py-2 flex flex-col justify-end"></div>
-        <div class="px-3 py-3 border-t border-border">
-          <div class="flex items-center gap-2">
-            <input id="message-input" type="text" placeholder="Send a message..." class="flex-1 bg-surface-light border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-muted outline-none focus:border-accent transition-colors" />
-            <button id="message-send" class="px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors cursor-pointer">Send</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Resize handle: messages ↔ thread -->
-      <div class="resize-handle" id="resize-right" style="display: none;"></div>
-
-      <!-- Thread Panel -->
-      <div id="thread-panel" class="flex flex-col bg-surface-dark border-l border-border overflow-hidden panel-animate" style="width: 0px;">
-        <div id="thread-header" class="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 class="text-sm font-semibold text-accent-light">Thread</h3>
-          <div class="flex items-center gap-2">
-            <button
-              id="thread-delete-worktree"
-              title="Delete worktree for this thread"
-              class="w-7 h-7 rounded-md border border-border text-xs text-muted hover:text-red-300 hover:border-red-400/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 mx-auto" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="M6 6l1 14h10l1-14" />
-                <path d="M10 10v7" />
-                <path d="M14 10v7" />
-              </svg>
-            </button>
-            <button id="thread-close" class="text-muted hover:text-text text-xl leading-none cursor-pointer">&times;</button>
-          </div>
-        </div>
-        <div id="thread-content" class="flex-1 overflow-y-auto px-4 py-3 space-y-3 flex flex-col justify-end"></div>
-        <div class="px-3 py-3 border-t border-border">
-          <div class="flex items-center gap-2">
-            <input id="thread-input" type="text" placeholder="Send to Claude..." class="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text placeholder-muted outline-none focus:border-accent transition-colors" />
-            <button id="thread-send" class="px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors cursor-pointer">Send</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <script type="module" src="/src/renderer.ts"></script>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/renderer.tsx"></script>
   </body>
 </html>

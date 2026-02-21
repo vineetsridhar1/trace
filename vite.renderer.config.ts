@@ -1,4 +1,10 @@
 import { defineConfig } from 'vite';
 
-// https://vitejs.dev/config
-export default defineConfig({});
+export default defineConfig(async () => {
+  // eslint-disable-next-line import/no-unresolved
+  const { default: react } = await import('@vitejs/plugin-react');
+
+  return {
+    plugins: [react()],
+  };
+});

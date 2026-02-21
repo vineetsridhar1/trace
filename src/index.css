@@ -1,16 +1,21 @@
-/* Reset */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Panel animation */
+html,
+body,
+#root {
+  height: 100%;
+}
+
 .panel-animate {
   transition: width 0.3s ease;
 }
 
-/* Resize handles */
 .resize-handle {
   width: 4px;
   cursor: col-resize;
@@ -24,7 +29,6 @@
   background: #7c3aed;
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -42,7 +46,6 @@
   background: #3b3f5c;
 }
 
-/* Message hover / selected */
 .message-item:hover {
   background: #1f2335;
 }
@@ -52,21 +55,19 @@
   border-left-color: #7c3aed;
 }
 
-/* Thread bubble code blocks */
 .thread-bubble pre {
   background: #16161e;
   border-radius: 6px;
   padding: 8px 10px;
   margin-top: 6px;
   font-size: 12px;
-  font-family: 'Menlo', Monaco, monospace;
+  font-family: Menlo, Monaco, monospace;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
   color: #a9b1d6;
 }
 
-/* Collapsible tool input */
 .thread-bubble details summary {
   cursor: pointer;
   font-size: 12px;
@@ -78,7 +79,6 @@
   color: #a9b1d6;
 }
 
-/* Message slide-up animation */
 @keyframes message-slide-up {
   from {
     opacity: 0;
@@ -94,7 +94,6 @@
   animation: message-slide-up 0.25s ease-out;
 }
 
-/* Channel item states */
 .channel-item:hover {
   background: #1f2335;
 }
@@ -102,4 +101,181 @@
 .channel-item.active {
   background: #7c3aed22;
   color: #a78bfa;
+}
+
+.thread-panel-shell {
+  min-height: 0;
+}
+
+.thread-scroll {
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.thread-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+
+.thread-bubble {
+  flex-shrink: 0;
+}
+
+.jump-latest-chip {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  border: 1px solid #4c5d94;
+  background: #273153;
+  color: #d7ddff;
+  border-radius: 9999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgb(0 0 0 / 28%);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.jump-latest-chip.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.jump-latest-chip:hover {
+  background: #2f3a62;
+}
+
+.read-group-chevron {
+  transition: transform 0.2s ease;
+}
+
+.read-group-chevron.open {
+  transform: rotate(180deg);
+}
+
+.read-group-body {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.24s ease, opacity 0.24s ease;
+}
+
+.read-group-body.open {
+  max-height: 520px;
+  opacity: 1;
+}
+
+.activity-row {
+  border-left: 2px solid transparent;
+  padding: 6px 4px 6px 2px;
+}
+
+.activity-row-compact {
+  border-left-color: #38446f;
+}
+
+.activity-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-row-icon {
+  color: #8190c8;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.activity-row-title {
+  color: #a8b4e2;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.activity-row-time {
+  margin-left: auto;
+  color: #6472a7;
+  font-size: 11px;
+}
+
+.activity-row-note {
+  margin-top: 4px;
+  margin-left: 20px;
+  color: #7c8abd;
+  font-size: 12px;
+}
+
+.activity-row-subline {
+  margin-left: 20px;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+}
+
+.activity-row-details summary {
+  cursor: pointer;
+  margin-left: 20px;
+  color: #7382b6;
+  font-size: 12px;
+}
+
+.activity-row-details summary:hover {
+  color: #97a4d4;
+}
+
+.edit-diff-file .diff {
+  width: max-content;
+  min-width: 100%;
+  font-size: 12px;
+}
+
+.edit-diff-view {
+  --diff-background-color: #16161e;
+  --diff-text-color: #c0caf5;
+  --diff-selection-background-color: #334155;
+  --diff-selection-text-color: #e2e8f0;
+  --diff-gutter-insert-background-color: #103226;
+  --diff-gutter-insert-text-color: #9be3c4;
+  --diff-gutter-delete-background-color: #3a1f27;
+  --diff-gutter-delete-text-color: #f2b7c0;
+  --diff-gutter-selected-background-color: #2a314d;
+  --diff-gutter-selected-text-color: #d5dcff;
+  --diff-code-insert-background-color: #0f261d;
+  --diff-code-insert-text-color: #b7f3d7;
+  --diff-code-delete-background-color: #321922;
+  --diff-code-delete-text-color: #ffc6cf;
+  --diff-code-insert-edit-background-color: #18402f;
+  --diff-code-insert-edit-text-color: #d2ffeb;
+  --diff-code-delete-edit-background-color: #4a2330;
+  --diff-code-delete-edit-text-color: #ffdbe1;
+  --diff-code-selected-background-color: #2b375a;
+  --diff-code-selected-text-color: #e4e9ff;
+  --diff-omit-gutter-line-color: #ef4444;
+}
+
+.edit-diff-meta {
+  opacity: 0.9;
+}
+
+.edit-diff-body {
+  max-height: 340px;
+  overflow: auto;
+  border-radius: 6px;
+}
+
+.edit-diff-file .diff-gutter {
+  background: #141826;
+}
+
+.edit-diff-file .diff-code {
+  font-family: Menlo, Monaco, monospace;
+  line-height: 1.4;
 }

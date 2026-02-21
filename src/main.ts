@@ -56,9 +56,24 @@ const runningProcesses = new Map<string, ChildProcess>();
 const suppressSyntheticStopFor = new Set<string>();
 const SPAWN_CLAUDE_CHANNEL = 'spawn-claude';
 const DELETE_WORKTREE_CHANNEL = 'delete-worktree';
+const CLAUDE_ACTIVITY_PING_CHANNEL = 'claude-activity-ping';
 const SERVER_URL = process.env.TRACE_SERVER_URL ?? 'http://localhost:3100';
 const MAX_CAPTURE_CHARS = 20_000;
-const CLAUDE_TIMEOUT_MS = Number(process.env.CLAUDE_TIMEOUT_MS ?? 120_000);
+const CLAUDE_INACTIVITY_TIMEOUT_MS = Number(
+  process.env.CLAUDE_INACTIVITY_TIMEOUT_MS ?? process.env.CLAUDE_TIMEOUT_MS ?? 120_000,
+);
+
+interface ClaudeRunState {
+  messageId: string;
+  child: ChildProcess;
+  lastActivityAt: number;
+  watchdogTimer: NodeJS.Timeout | null;
+  active: boolean;
+  stopped: boolean;
+  timedOut: boolean;
+}
+
+const runStateByMessageId = new Map<string, ClaudeRunState>();
 
 function getWorktreeBase(): string {
   return path.join(targetDir, WORKTREE_BASE_NAME);
@@ -116,6 +131,99 @@ function appendClaudeDebugLog(messageId: string, line: string) {
   }
 }
 
+function scheduleWatchdog(messageId: string) {
+  const state = runStateByMessageId.get(messageId);
+  if (!state || !state.active || state.stopped) {
+    return;
+  }
+
+  if (state.watchdogTimer) {
+    clearTimeout(state.watchdogTimer);
+  }
+
+  state.watchdogTimer = setTimeout(() => {
+    const latest = runStateByMessageId.get(messageId);
+    if (!latest || !latest.active || latest.stopped) {
+      return;
+    }
+
+    const idleFor = Date.now() - latest.lastActivityAt;
+    if (idleFor < CLAUDE_INACTIVITY_TIMEOUT_MS) {
+      scheduleWatchdog(messageId);
+      return;
+    }
+
+    latest.timedOut = true;
+    latest.active = false;
+    latest.stopped = true;
+    if (latest.watchdogTimer) {
+      clearTimeout(latest.watchdogTimer);
+      latest.watchdogTimer = null;
+    }
+
+    appendClaudeDebugLog(
+      messageId,
+      `inactivity-timeout reached (${CLAUDE_INACTIVITY_TIMEOUT_MS}ms idle), sending SIGTERM`,
+    );
+
+    if (!latest.child.killed) {
+      latest.child.kill('SIGTERM');
+      console.error(
+        `[claude:${messageId.slice(0, 8)}] inactivity timeout after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms, sent SIGTERM`,
+      );
+    }
+  }, CLAUDE_INACTIVITY_TIMEOUT_MS);
+}
+
+function startWatchdog(messageId: string, child: ChildProcess) {
+  const existing = runStateByMessageId.get(messageId);
+  if (existing?.watchdogTimer) {
+    clearTimeout(existing.watchdogTimer);
+  }
+
+  runStateByMessageId.set(messageId, {
+    messageId,
+    child,
+    lastActivityAt: Date.now(),
+    watchdogTimer: null,
+    active: true,
+    stopped: false,
+    timedOut: false,
+  });
+
+  appendClaudeDebugLog(
+    messageId,
+    `watchdog started inactivityTimeoutMs=${CLAUDE_INACTIVITY_TIMEOUT_MS}`,
+  );
+  scheduleWatchdog(messageId);
+}
+
+function resetWatchdog(messageId: string, reason: string) {
+  const state = runStateByMessageId.get(messageId);
+  if (!state || !state.active || state.stopped) {
+    return;
+  }
+
+  state.lastActivityAt = Date.now();
+  appendClaudeDebugLog(messageId, `watchdog reset reason=${reason}`);
+  scheduleWatchdog(messageId);
+}
+
+function stopWatchdog(messageId: string, reason: string) {
+  const state = runStateByMessageId.get(messageId);
+  if (!state) {
+    return;
+  }
+
+  state.active = false;
+  state.stopped = true;
+  if (state.watchdogTimer) {
+    clearTimeout(state.watchdogTimer);
+    state.watchdogTimer = null;
+  }
+  appendClaudeDebugLog(messageId, `watchdog stopped reason=${reason}`);
+}
+
 function ensureWorktree(messageId: string): Promise<string> {
   const worktreePath = getWorktreePath(messageId);
 
@@ -170,13 +278,15 @@ async function spawnClaude(messageId: string, prompt: string): Promise<string> {
   const startedAt = Date.now();
   appendClaudeDebugLog(
     messageId,
-    `spawn start cwd=${worktreePath} timeoutMs=${CLAUDE_TIMEOUT_MS} promptLen=${prompt.length}`,
+    `spawn start cwd=${worktreePath} inactivityTimeoutMs=${CLAUDE_INACTIVITY_TIMEOUT_MS} promptLen=${prompt.length}`,
   );
 
   // Kill existing process for this message if running
   const existing = runningProcesses.get(messageId);
   if (existing && !existing.killed) {
     suppressSyntheticStopFor.add(messageId);
+    stopWatchdog(messageId, 'spawn-replaced');
+    runStateByMessageId.delete(messageId);
     existing.kill('SIGTERM');
     runningProcesses.delete(messageId);
   }
@@ -191,10 +301,10 @@ async function spawnClaude(messageId: string, prompt: string): Promise<string> {
   appendClaudeDebugLog(messageId, `spawned pid=${child.pid ?? -1}`);
 
   runningProcesses.set(messageId, child);
+  startWatchdog(messageId, child);
   let stdoutBuffer = '';
   let stderrBuffer = '';
   let failedToSpawn: string | null = null;
-  let timedOut = false;
 
   const appendToBuffer = (existing: string, chunk: string) => {
     const combined = existing + chunk;
@@ -234,6 +344,7 @@ async function spawnClaude(messageId: string, prompt: string): Promise<string> {
   child.stdout?.on('data', (data) => {
     const chunk = data.toString();
     stdoutBuffer = appendToBuffer(stdoutBuffer, chunk);
+    resetWatchdog(messageId, 'stdout');
     appendClaudeDebugLog(messageId, `stdout bytes=${Buffer.byteLength(chunk)}`);
     console.log(`[claude:${messageId.slice(0, 8)}] ${chunk.trim()}`);
   });
@@ -241,6 +352,7 @@ async function spawnClaude(messageId: string, prompt: string): Promise<string> {
   child.stderr?.on('data', (data) => {
     const chunk = data.toString();
     stderrBuffer = appendToBuffer(stderrBuffer, chunk);
+    resetWatchdog(messageId, 'stderr');
     appendClaudeDebugLog(
       messageId,
       `stderr bytes=${Buffer.byteLength(chunk)} text=${chunk.trim().slice(0, 500)}`,
@@ -250,29 +362,22 @@ async function spawnClaude(messageId: string, prompt: string): Promise<string> {
 
   child.on('error', (err) => {
     failedToSpawn = String(err);
+    stopWatchdog(messageId, 'spawn-error');
     appendClaudeDebugLog(messageId, `spawn error=${failedToSpawn}`);
     console.error(`[claude:${messageId.slice(0, 8)}:spawn] ${failedToSpawn}`);
   });
 
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    if (!child.killed) {
-      child.kill('SIGTERM');
-      console.error(
-        `[claude:${messageId.slice(0, 8)}] timed out after ${CLAUDE_TIMEOUT_MS}ms, sent SIGTERM`,
-      );
-      appendClaudeDebugLog(messageId, `timeout reached (${CLAUDE_TIMEOUT_MS}ms), sent SIGTERM`);
-    }
-  }, CLAUDE_TIMEOUT_MS);
-
   child.on('close', async (code) => {
-    clearTimeout(timeoutHandle);
     console.log(`[claude:${messageId.slice(0, 8)}] exited with code ${code}`);
     appendClaudeDebugLog(
       messageId,
       `close code=${code} durationMs=${Date.now() - startedAt} stdoutLen=${stdoutBuffer.length} stderrLen=${stderrBuffer.length}`,
     );
     runningProcesses.delete(messageId);
+    const runState = runStateByMessageId.get(messageId);
+    const timedOut = runState?.timedOut ?? false;
+    stopWatchdog(messageId, 'process-close');
+    runStateByMessageId.delete(messageId);
 
     const assistantOutput = stdoutBuffer.trim();
     const stderrOutput = stderrBuffer.trim();
@@ -286,7 +391,7 @@ async function spawnClaude(messageId: string, prompt: string): Promise<string> {
 
     const fallbackMessage = [
       assistantOutput,
-      timedOut ? `Timed out after ${CLAUDE_TIMEOUT_MS}ms.` : '',
+      timedOut ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.` : '',
       failedToSpawn ? `Spawn error: ${failedToSpawn}` : '',
       stderrOutput,
       code !== 0 && code !== null ? `Process exited with code ${code}` : '',
@@ -307,9 +412,14 @@ async function deleteWorktree(messageId: string): Promise<{ removed: boolean; wo
   const existing = runningProcesses.get(messageId);
   if (existing && !existing.killed) {
     suppressSyntheticStopFor.add(messageId);
+    stopWatchdog(messageId, 'delete-worktree');
+    runStateByMessageId.delete(messageId);
     existing.kill('SIGTERM');
     runningProcesses.delete(messageId);
     appendClaudeDebugLog(messageId, 'delete-worktree killed running process before deletion');
+  } else {
+    stopWatchdog(messageId, 'delete-worktree-no-process');
+    runStateByMessageId.delete(messageId);
   }
 
   if (!fs.existsSync(worktreePath)) {
@@ -347,6 +457,7 @@ function registerIpcHandlers() {
   // Dev reloads can re-run this file; clear then re-register the handler safely.
   ipcMain.removeHandler(SPAWN_CLAUDE_CHANNEL);
   ipcMain.removeHandler(DELETE_WORKTREE_CHANNEL);
+  ipcMain.removeHandler(CLAUDE_ACTIVITY_PING_CHANNEL);
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string) => {
     try {
       const worktreePath = await spawnClaude(messageId, prompt);
@@ -366,6 +477,22 @@ function registerIpcHandlers() {
       return { success: false, error: String(err) };
     }
   });
+
+  ipcMain.handle(
+    CLAUDE_ACTIVITY_PING_CHANNEL,
+    async (_event, messageId: string, eventType: string) => {
+      try {
+        if ((eventType ?? '').toLowerCase() === 'stop') {
+          stopWatchdog(messageId, 'activity-stop-event');
+        } else {
+          resetWatchdog(messageId, `activity-event:${eventType}`);
+        }
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    },
+  );
 }
 
 registerIpcHandlers();
@@ -419,9 +546,13 @@ app.on('before-quit', () => {
   // Kill all running claude processes
   for (const [id, proc] of runningProcesses) {
     if (!proc.killed) {
+      suppressSyntheticStopFor.add(id);
+      stopWatchdog(id, 'app-before-quit');
+      runStateByMessageId.delete(id);
       proc.kill('SIGTERM');
       console.log(`Killed claude process for ${id.slice(0, 8)}`);
     }
   }
   runningProcesses.clear();
+  runStateByMessageId.clear();
 });
