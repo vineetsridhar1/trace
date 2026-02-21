@@ -1,0 +1,61 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ServerEvent } from '../types';
+
+const THREAD_NEAR_BOTTOM_THRESHOLD_PX = 72;
+
+export function useThreadScroll(threadEvents: ServerEvent[]) {
+  const threadContentRef = useRef<HTMLDivElement | null>(null);
+  const threadNearBottomRef = useRef(true);
+  const prevThreadEventCountRef = useRef(0);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
+  const isThreadNearBottom = useCallback((): boolean => {
+    const el = threadContentRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < THREAD_NEAR_BOTTOM_THRESHOLD_PX;
+  }, []);
+
+  const scrollThreadToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    const el = threadContentRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    threadNearBottomRef.current = true;
+    setShowJumpToLatest(false);
+  }, []);
+
+  useEffect(() => {
+    const previousCount = prevThreadEventCountRef.current;
+    const nextCount = threadEvents.length;
+    const hasNew = nextCount > previousCount;
+    prevThreadEventCountRef.current = nextCount;
+
+    if (!hasNew) return;
+
+    if (threadNearBottomRef.current || previousCount === 0) {
+      requestAnimationFrame(() => scrollThreadToBottom('auto'));
+      return;
+    }
+
+    setShowJumpToLatest(true);
+  }, [threadEvents, scrollThreadToBottom]);
+
+  const onThreadScroll = useCallback(() => {
+    const nearBottom = isThreadNearBottom();
+    threadNearBottomRef.current = nearBottom;
+    if (nearBottom) setShowJumpToLatest(false);
+  }, [isThreadNearBottom]);
+
+  const resetScroll = useCallback(() => {
+    setShowJumpToLatest(false);
+    threadNearBottomRef.current = true;
+    prevThreadEventCountRef.current = 0;
+  }, []);
+
+  return {
+    threadContentRef,
+    showJumpToLatest,
+    scrollThreadToBottom,
+    onThreadScroll,
+    resetScroll,
+  };
+}

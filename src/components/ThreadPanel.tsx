@@ -1,0 +1,224 @@
+import type { DragTarget, ThreadRenderNode, ThreadStatus } from '../types';
+import { ThreadEvent } from './ThreadEvent';
+import { ReadGlobGroup } from './ReadGlobGroup';
+
+interface ThreadPanelProps {
+  threadWidth: number;
+  dragging: DragTarget;
+  threadStatus: ThreadStatus;
+  activeThreadId: string | null;
+  threadNodes: ThreadRenderNode[];
+  expandedReadGroupIds: Record<string, boolean>;
+  selectedMessageId: string | null;
+  deletingWorktree: boolean;
+  showJumpToLatest: boolean;
+  threadInput: string;
+  threadContentRef: React.RefObject<HTMLDivElement | null>;
+  onThreadScroll: () => void;
+  onToggleReadGroup: (groupId: string) => void;
+  onScrollToLatest: () => void;
+  onClose: () => void;
+  onDeleteWorktree: () => void;
+  onThreadInputChange: (value: string) => void;
+  onSendThreadMessage: () => void;
+  onStartDrag: () => void;
+}
+
+export function ThreadPanel({
+  threadWidth,
+  dragging,
+  threadStatus,
+  activeThreadId,
+  threadNodes,
+  expandedReadGroupIds,
+  selectedMessageId,
+  deletingWorktree,
+  showJumpToLatest,
+  threadInput,
+  threadContentRef,
+  onThreadScroll,
+  onToggleReadGroup,
+  onScrollToLatest,
+  onClose,
+  onDeleteWorktree,
+  onThreadInputChange,
+  onSendThreadMessage,
+  onStartDrag,
+}: ThreadPanelProps) {
+  const threadOpen = threadWidth > 0;
+
+  return (
+    <>
+      {threadOpen && (
+        <div
+          className={`resize-handle ${dragging === 'right' ? 'active' : ''}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onStartDrag();
+          }}
+        />
+      )}
+
+      <div
+        id="thread-panel"
+        className={`flex min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? '' : 'panel-animate'}`}
+        style={{ width: `${threadWidth}px` }}
+      >
+        <ThreadHeader
+          selectedMessageId={selectedMessageId}
+          deletingWorktree={deletingWorktree}
+          onClose={onClose}
+          onDeleteWorktree={onDeleteWorktree}
+        />
+
+        <div className="thread-panel-shell relative flex min-h-0 flex-1">
+          <div
+            id="thread-content"
+            ref={threadContentRef}
+            onScroll={onThreadScroll}
+            className="thread-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3"
+          >
+            <div className="thread-events-list">
+              <ThreadStatusMessage status={threadStatus} activeThreadId={activeThreadId} />
+
+              {threadNodes.map((node) => {
+                if (node.kind === 'readglob-group') {
+                  return (
+                    <ReadGlobGroup
+                      key={node.id}
+                      node={node}
+                      isExpanded={Boolean(expandedReadGroupIds[node.id])}
+                      onToggle={() => onToggleReadGroup(node.id)}
+                    />
+                  );
+                }
+                return <ThreadEvent key={node.event.id} event={node.event} />;
+              })}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onScrollToLatest}
+            className={`jump-latest-chip ${showJumpToLatest ? 'visible' : ''}`}
+          >
+            Jump to latest
+          </button>
+        </div>
+
+        <ThreadInput
+          threadInput={threadInput}
+          onThreadInputChange={onThreadInputChange}
+          onSendThreadMessage={onSendThreadMessage}
+        />
+      </div>
+    </>
+  );
+}
+
+function ThreadHeader({
+  selectedMessageId,
+  deletingWorktree,
+  onClose,
+  onDeleteWorktree,
+}: {
+  selectedMessageId: string | null;
+  deletingWorktree: boolean;
+  onClose: () => void;
+  onDeleteWorktree: () => void;
+}) {
+  return (
+    <div id="thread-header" className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
+      <h3 className="text-sm font-semibold text-violet-300">Thread</h3>
+      <div className="flex items-center gap-2">
+        <button
+          id="thread-delete-worktree"
+          type="button"
+          title="Delete worktree for this thread"
+          disabled={!selectedMessageId || deletingWorktree}
+          onClick={onDeleteWorktree}
+          className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="mx-auto h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M6 6l1 14h10l1-14" />
+            <path d="M10 10v7" />
+            <path d="M14 10v7" />
+          </svg>
+        </button>
+        <button
+          id="thread-close"
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer text-xl leading-none text-[#565f89] hover:text-[#c0caf5]"
+        >
+          &times;
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ThreadStatusMessage({ status, activeThreadId }: { status: ThreadStatus; activeThreadId: string | null }) {
+  if (status === 'loading') {
+    return <div className="text-sm text-[#565f89]">Loading events...</div>;
+  }
+  if (status === 'empty') {
+    return (
+      <div className="text-sm text-[#565f89]">
+        {activeThreadId ? 'No events yet' : 'No threads yet. Send a message to start.'}
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return <div className="text-sm text-red-400">Failed to load events</div>;
+  }
+  return null;
+}
+
+function ThreadInput({
+  threadInput,
+  onThreadInputChange,
+  onSendThreadMessage,
+}: {
+  threadInput: string;
+  onThreadInputChange: (value: string) => void;
+  onSendThreadMessage: () => void;
+}) {
+  return (
+    <div className="border-t border-[#292e42] px-3 py-3">
+      <div className="flex items-center gap-2">
+        <input
+          id="thread-input"
+          type="text"
+          value={threadInput}
+          onChange={(e) => onThreadInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              onSendThreadMessage();
+            }
+          }}
+          placeholder="Send to Claude..."
+          className="flex-1 rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+        />
+        <button
+          id="thread-send"
+          type="button"
+          onClick={onSendThreadMessage}
+          className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
