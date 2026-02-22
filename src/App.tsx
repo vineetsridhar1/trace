@@ -27,15 +27,12 @@ export default function App() {
     activeThreadId,
     threadStatus,
     deletingWorktree,
-    mergingWorktree,
-    hasWorktree,
     expandedReadGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
     loadThreadEvents,
     openThreadPanel,
     deleteWorktree,
-    mergeWorktree,
     toggleReadGroup,
   } = thread;
 
@@ -153,6 +150,36 @@ export default function App() {
     setChannelWidth(220);
   }, [closeThreadPanel]);
 
+  const mergeToMain = useCallback(async () => {
+    const message = selectedMessageRef.current;
+    if (!message || !activeChannelId) return;
+
+    const prompt = '/merge-to-main';
+    try {
+      const persistRes = await fetch(
+        `${SERVER_URL}/channels/${activeChannelId}/messages/${message.id}/prompts`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: prompt }),
+        },
+      );
+      if (!persistRes.ok) {
+        console.error('Failed to persist merge-to-main prompt');
+        return;
+      }
+
+      const { message: updated } = (await persistRes.json()) as { message: ChannelMessage };
+      upsertMessage(updated);
+      if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
+
+      const result = await window.traceAPI.spawnClaude(message.id, prompt);
+      if (!result.success) console.error('Failed to spawn claude for merge-to-main:', result.error);
+    } catch {
+      console.error('Failed to run merge-to-main');
+    }
+  }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
       <ChannelPanel
@@ -183,8 +210,6 @@ export default function App() {
         expandedReadGroupIds={expandedReadGroupIds}
         selectedMessageId={selectedMessageId}
         deletingWorktree={deletingWorktree}
-        mergingWorktree={mergingWorktree}
-        hasWorktree={hasWorktree}
         showJumpToLatest={showJumpToLatest}
         threadInput={threadInput}
         threadContentRef={threadContentRef}
@@ -193,7 +218,7 @@ export default function App() {
         onScrollToLatest={() => scrollThreadToBottom('smooth')}
         onClose={handleCloseThread}
         onDeleteWorktree={() => void deleteWorktree()}
-        onMergeWorktree={() => void mergeWorktree()}
+        onMergeToMain={() => void mergeToMain()}
         onThreadInputChange={setThreadInput}
         onSendThreadMessage={() => void sendThreadMessage()}
         onStartDrag={() => startDragging('right')}

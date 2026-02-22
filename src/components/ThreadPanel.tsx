@@ -3,14 +3,18 @@ import type { DragTarget, ThreadRenderNode, ThreadStatus } from '../types';
 import { ThreadEvent } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
 
-function useAutoResize(value: string) {
+function useAutoResize(value: string, maxHeight = 300) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (!value) {
+      el.style.height = '';
+      return;
+    }
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-  }, [value]);
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+  }, [value, maxHeight]);
   return ref;
 }
 
@@ -23,8 +27,6 @@ interface ThreadPanelProps {
   expandedReadGroupIds: Record<string, boolean>;
   selectedMessageId: string | null;
   deletingWorktree: boolean;
-  mergingWorktree: boolean;
-  hasWorktree: boolean;
   showJumpToLatest: boolean;
   threadInput: string;
   threadContentRef: React.RefObject<HTMLDivElement | null>;
@@ -33,7 +35,7 @@ interface ThreadPanelProps {
   onScrollToLatest: () => void;
   onClose: () => void;
   onDeleteWorktree: () => void;
-  onMergeWorktree: () => void;
+  onMergeToMain: () => void;
   onThreadInputChange: (value: string) => void;
   onSendThreadMessage: () => void;
   onStartDrag: () => void;
@@ -48,8 +50,6 @@ export function ThreadPanel({
   expandedReadGroupIds,
   selectedMessageId,
   deletingWorktree,
-  mergingWorktree,
-  hasWorktree,
   showJumpToLatest,
   threadInput,
   threadContentRef,
@@ -58,7 +58,7 @@ export function ThreadPanel({
   onScrollToLatest,
   onClose,
   onDeleteWorktree,
-  onMergeWorktree,
+  onMergeToMain,
   onThreadInputChange,
   onSendThreadMessage,
   onStartDrag,
@@ -85,11 +85,9 @@ export function ThreadPanel({
         <ThreadHeader
           selectedMessageId={selectedMessageId}
           deletingWorktree={deletingWorktree}
-          mergingWorktree={mergingWorktree}
-          hasWorktree={hasWorktree}
           onClose={onClose}
           onDeleteWorktree={onDeleteWorktree}
-          onMergeWorktree={onMergeWorktree}
+          onMergeToMain={onMergeToMain}
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
@@ -140,72 +138,68 @@ export function ThreadPanel({
 function ThreadHeader({
   selectedMessageId,
   deletingWorktree,
-  mergingWorktree,
-  hasWorktree,
   onClose,
   onDeleteWorktree,
-  onMergeWorktree,
+  onMergeToMain,
 }: {
   selectedMessageId: string | null;
   deletingWorktree: boolean;
-  mergingWorktree: boolean;
-  hasWorktree: boolean;
   onClose: () => void;
   onDeleteWorktree: () => void;
-  onMergeWorktree: () => void;
+  onMergeToMain: () => void;
 }) {
   return (
     <div id="thread-header" className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
       <h3 className="text-sm font-semibold text-violet-300">Thread</h3>
       <div className="flex items-center gap-2">
-        {hasWorktree && (
-          <>
-            <button
-              id="thread-merge-worktree"
-              type="button"
-              title="Merge worktree branch into main"
-              disabled={!selectedMessageId || mergingWorktree}
-              onClick={onMergeWorktree}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
+        <button
+          id="thread-merge-to-main"
+          type="button"
+          title="Merge worktree branch to main and push"
+          disabled={!selectedMessageId}
+          onClick={onMergeToMain}
+          className="h-7 cursor-pointer rounded-md border border-[#292e42] px-2 text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span className="flex items-center gap-1">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
             >
-              <svg
-                viewBox="0 0 24 24"
-                className="mx-auto h-3.5 w-3.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <circle cx="18" cy="18" r="3" />
-                <circle cx="6" cy="6" r="3" />
-                <path d="M6 21V9a9 9 0 0 0 9 9" />
-              </svg>
-            </button>
-            <button
-              id="thread-delete-worktree"
-              type="button"
-              title="Delete worktree for this thread"
-              disabled={!selectedMessageId || deletingWorktree}
-              onClick={onDeleteWorktree}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="mx-auto h-3.5 w-3.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="M6 6l1 14h10l1-14" />
-                <path d="M10 10v7" />
-                <path d="M14 10v7" />
-              </svg>
-            </button>
-          </>
-        )}
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M6 15V9a6 6 0 0 1 6-6h3" />
+              <path d="M15 3l3 3-3 3" />
+            </svg>
+            Merge
+          </span>
+        </button>
+        <button
+          id="thread-delete-worktree"
+          type="button"
+          title="Delete worktree for this thread"
+          disabled={!selectedMessageId || deletingWorktree}
+          onClick={onDeleteWorktree}
+          className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="mx-auto h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M6 6l1 14h10l1-14" />
+            <path d="M10 10v7" />
+            <path d="M14 10v7" />
+          </svg>
+        </button>
         <button
           id="thread-close"
           type="button"

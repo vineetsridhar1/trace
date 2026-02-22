@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChannelMessage } from '../types';
 import { avatarInitial, formatTime } from '../utils';
 
-function useAutoResize(value: string) {
+function useAutoResize(value: string, maxHeight = 300) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (!value) {
+      el.style.height = '';
+      return;
+    }
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-  }, [value]);
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+  }, [value, maxHeight]);
   return ref;
 }
 
@@ -117,6 +121,57 @@ function MessageInput({
   );
 }
 
+function MessagePreview({ text }: { text: string }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [collapsedH, setCollapsedH] = useState(0);
+  const [fullH, setFullH] = useState(0);
+
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    const clampH = Math.ceil(lh * 3);
+    const scrollH = el.scrollHeight;
+    if (scrollH > clampH + 4) {
+      setNeedsClamp(true);
+      setCollapsedH(clampH);
+      setFullH(scrollH);
+    } else {
+      setNeedsClamp(false);
+    }
+  }, [text]);
+
+  return (
+    <div className="mt-1">
+      <div
+        style={{
+          maxHeight: !needsClamp ? undefined : expanded ? `${fullH}px` : `${collapsedH}px`,
+          overflow: 'hidden',
+          transition: 'max-height 0.3s ease',
+        }}
+      >
+        <div ref={innerRef} className="break-words whitespace-pre-wrap text-sm text-[#a9b1d6]">
+          {text}
+        </div>
+      </div>
+      {needsClamp && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(!expanded);
+          }}
+          className="mt-1 cursor-pointer text-xs font-medium text-violet-400 hover:text-violet-300"
+        >
+          {expanded ? 'See less' : 'See more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function MessageItem({
   message,
   isSelected,
@@ -154,7 +209,7 @@ function MessageItem({
           </span>
           <span className="ml-auto text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
         </div>
-        <div className="mt-1 truncate text-sm text-[#a9b1d6]">{preview}</div>
+        <MessagePreview text={preview} />
         {threadCount > 0 && (
           <div className="mt-1.5 text-xs text-violet-300 hover:underline">
             {threadCount} thread{threadCount > 1 ? 's' : ''}

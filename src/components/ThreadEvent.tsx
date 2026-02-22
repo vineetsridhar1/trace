@@ -119,29 +119,38 @@ interface TodoItem {
   status: string;
 }
 
+function TodoSpinner() {
+  return (
+    <svg
+      className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-violet-400"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+    </svg>
+  );
+}
+
 function TodoListPreview({ event }: { event: ServerEvent }) {
   const input = event.toolInput as Record<string, unknown> | null;
   const todos = (input?.todos ?? []) as TodoItem[];
   if (!Array.isArray(todos) || todos.length === 0) return null;
 
-  const statusIcon = (s: string) => {
-    if (s === 'completed') return '✓';
-    if (s === 'in_progress') return '→';
-    return '○';
-  };
-  const statusColor = (s: string) => {
-    if (s === 'completed') return 'text-green-400';
-    if (s === 'in_progress') return 'text-yellow-400';
-    return 'text-[#565f89]';
-  };
-
   return (
-    <ul className="mt-2 space-y-1 pl-1">
+    <ul className="mt-2 space-y-1.5 pl-1">
       {todos.map((t, i) => (
-        <li key={i} className="flex items-start gap-2 text-sm">
-          <span className={`flex-shrink-0 font-mono text-xs leading-5 ${statusColor(t.status)}`}>
-            {statusIcon(t.status)}
-          </span>
+        <li key={i} className="flex items-center gap-2 text-sm">
+          {t.status === 'in_progress' ? (
+            <TodoSpinner />
+          ) : t.status === 'completed' ? (
+            <svg className="h-3.5 w-3.5 flex-shrink-0 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <path d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <span className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border border-[#565f89]" />
+          )}
           <span className={t.status === 'completed' ? 'text-[#565f89] line-through' : 'text-[#c0caf5]'}>
             {t.content}
           </span>
