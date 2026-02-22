@@ -528,7 +528,7 @@ export function AskUserQuestion({
 }
 
 const PLAN_PRESETS = [
-  { label: 'Approve (clear context)', value: 'yes, and clear the context window when you start' },
+  { label: 'Approve (clear context)', value: 'yes, and clear the context window when you start', clearContext: true },
   { label: 'Approve (keep context)', value: 'yes, and keep the context window as-is' },
   { label: 'Approve (manual review)', value: 'yes, but pause after each file so I can review' },
 ] as const;
@@ -538,10 +538,23 @@ export function PlanReview({
   onPlanResponse,
 }: {
   node: PlanReviewNode;
-  onPlanResponse: (text: string) => void;
+  onPlanResponse: (text: string, claudePrompt?: string) => void;
 }) {
   const [feedback, setFeedback] = useState('');
   const time = formatTime(node.event.timestamp);
+
+  const buildClaudePrompt = (instruction: string, clearContext?: boolean) => {
+    if (!node.planContent) return undefined;
+    if (clearContext) return node.planContent;
+    return `${node.planContent}\n\n${instruction}`;
+  };
+
+  const sendFeedback = (text: string) => {
+    const claudePrompt = node.planContent
+      ? `${node.planContent}\n\n${text}`
+      : undefined;
+    onPlanResponse(text, claudePrompt);
+  };
 
   return (
     <div className="thread-bubble flex justify-start">
@@ -564,7 +577,10 @@ export function PlanReview({
             <button
               key={preset.label}
               type="button"
-              onClick={() => onPlanResponse(preset.value)}
+              onClick={() => {
+                const clearContext = 'clearContext' in preset && preset.clearContext;
+                onPlanResponse(preset.value, buildClaudePrompt(preset.value, clearContext));
+              }}
               className="w-full cursor-pointer rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-left text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/25 hover:text-violet-200"
             >
               {preset.label}
@@ -577,7 +593,7 @@ export function PlanReview({
               onChange={(e) => setFeedback(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && feedback.trim()) {
-                  onPlanResponse(feedback.trim());
+                  sendFeedback(feedback.trim());
                   setFeedback('');
                 }
               }}
@@ -589,7 +605,7 @@ export function PlanReview({
               disabled={!feedback.trim()}
               onClick={() => {
                 if (feedback.trim()) {
-                  onPlanResponse(feedback.trim());
+                  sendFeedback(feedback.trim());
                   setFeedback('');
                 }
               }}

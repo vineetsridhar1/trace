@@ -220,7 +220,7 @@ export default function App() {
     }
   }, [isFullscreen, hasWorktree, exitFullscreen]);
 
-  const sendPlanResponse = useCallback(async (text: string) => {
+  const sendPlanResponse = useCallback(async (text: string, claudePrompt?: string) => {
     const message = selectedMessageRef.current;
     if (!text || !message || !activeChannelId) return;
 
@@ -243,7 +243,7 @@ export default function App() {
       if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
 
       spawnedMessageIds.current.add(message.id);
-      const result = await window.traceAPI.spawnClaude(message.id, text);
+      const result = await window.traceAPI.spawnClaude(message.id, claudePrompt ?? text);
       if (!result.success) console.error('Failed to spawn claude for plan response:', result.error);
     } catch {
       console.error('Failed to send plan response');
@@ -336,7 +336,7 @@ export default function App() {
         onMergeToMain={() => void mergeToMain()}
         onThreadInputChange={setThreadInput}
         onSendThreadMessage={() => void sendThreadMessage()}
-        onPlanResponse={(text) => void sendPlanResponse(text)}
+        onPlanResponse={(text, claudePrompt) => void sendPlanResponse(text, claudePrompt)}
         onStartDrag={() => startDragging('right')}
         isFullscreen={isFullscreen}
         onEnterFullscreen={() => void enterFullscreen()}

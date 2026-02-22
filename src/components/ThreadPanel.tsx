@@ -42,7 +42,7 @@ interface ThreadPanelProps {
   onMergeToMain: () => void;
   onThreadInputChange: (value: string) => void;
   onSendThreadMessage: () => void;
-  onPlanResponse: (text: string) => void;
+  onPlanResponse: (text: string, claudePrompt?: string) => void;
   onStartDrag: () => void;
   isFullscreen?: boolean;
   onEnterFullscreen?: () => void;
