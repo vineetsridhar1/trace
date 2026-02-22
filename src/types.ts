@@ -2,6 +2,15 @@ import { type ComponentType, type ReactNode } from 'react';
 
 export const SERVER_URL = 'http://localhost:3100';
 
+export interface WorktreeDiffResult {
+  success: boolean;
+  branchDiff?: string;
+  uncommittedDiff?: string;
+  stagedDiff?: string;
+  status?: string;
+  error?: string;
+}
+
 export interface TraceAPI {
   spawnClaude: (
     messageId: string,
@@ -20,6 +29,13 @@ export interface TraceAPI {
     messageId: string,
     eventType: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  createPty: (terminalId: string, cwd: string) => Promise<{ success: boolean; error?: string }>;
+  writePty: (terminalId: string, data: string) => Promise<void>;
+  resizePty: (terminalId: string, cols: number, rows: number) => Promise<void>;
+  killPty: (terminalId: string) => Promise<void>;
+  onPtyData: (callback: (terminalId: string, data: string) => void) => () => void;
+  onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
+  getWorktreeDiff: (messageId: string) => Promise<WorktreeDiffResult>;
 }
 
 declare global {

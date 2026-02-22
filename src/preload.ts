@@ -48,4 +48,33 @@ contextBridge.exposeInMainWorld('traceAPI', {
       return { success: false, error: String(err) };
     }
   },
+
+  createPty: (terminalId: string, cwd: string) =>
+    ipcRenderer.invoke('pty-create', terminalId, cwd),
+
+  writePty: (terminalId: string, data: string) =>
+    ipcRenderer.invoke('pty-write', terminalId, data),
+
+  resizePty: (terminalId: string, cols: number, rows: number) =>
+    ipcRenderer.invoke('pty-resize', terminalId, cols, rows),
+
+  killPty: (terminalId: string) =>
+    ipcRenderer.invoke('pty-kill', terminalId),
+
+  onPtyData: (callback: (terminalId: string, data: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, terminalId: string, data: string) =>
+      callback(terminalId, data);
+    ipcRenderer.on('pty-data', handler);
+    return () => ipcRenderer.removeListener('pty-data', handler);
+  },
+
+  onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, terminalId: string, exitCode: number) =>
+      callback(terminalId, exitCode);
+    ipcRenderer.on('pty-exit', handler);
+    return () => ipcRenderer.removeListener('pty-exit', handler);
+  },
+
+  getWorktreeDiff: (messageId: string) =>
+    ipcRenderer.invoke('get-worktree-diff', messageId),
 });

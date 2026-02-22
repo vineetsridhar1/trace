@@ -3,8 +3,9 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
 import { injectHooks } from './main/hooks';
-import { registerIpcHandlers } from './main/ipc';
+import { registerIpcHandlers, setMainWindow } from './main/ipc';
 import { setWorktreeBaseFn, runStateByMessageId, stopWatchdog } from './main/watchdog';
+import { killAllPtys } from './main/pty';
 import {
   setTargetDir,
   getWorktreeBase,
@@ -27,6 +28,8 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  setMainWindow(mainWindow);
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -59,6 +62,7 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
+  killAllPtys();
   for (const [id, proc] of runningProcesses) {
     if (!proc.killed) {
       suppressSyntheticStopFor.add(id);

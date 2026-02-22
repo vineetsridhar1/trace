@@ -93,3 +93,6 @@ out/
 
 # Server build output
 server/dist/
+
+# Trace worktrees
+.trace-worktrees/

@@ -11,6 +11,7 @@ import { useSse } from './hooks/useSse';
 import { ChannelPanel } from './components/ChannelPanel';
 import { MessagePanel } from './components/MessagePanel';
 import { ThreadPanel } from './components/ThreadPanel';
+import { FullscreenView } from './components/FullscreenView';
 
 export default function App() {
   const { channels, activeChannelId, activeChannel, switchChannel } = useChannels();
@@ -43,6 +44,9 @@ export default function App() {
   const [channelWidth, setChannelWidth] = useState(220);
   const [messageInput, setMessageInput] = useState('');
   const [threadInput, setThreadInput] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [worktreePath, setWorktreePath] = useState('');
+  const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const spawnedMessageIds = useRef(new Set<string>());
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth);
@@ -161,6 +165,29 @@ export default function App() {
     setChannelWidth(220);
   }, [closeThreadPanel]);
 
+  const enterFullscreen = useCallback(async () => {
+    if (!selectedMessageId) return;
+    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId);
+    if (!result.success || !result.exists || !result.worktreePath) return;
+
+    savedWidthsRef.current = { channel: channelWidth, thread: threadWidth };
+    setWorktreePath(result.worktreePath);
+    setIsFullscreen(true);
+  }, [selectedMessageId, channelWidth, threadWidth]);
+
+  const exitFullscreen = useCallback(() => {
+    setIsFullscreen(false);
+    setChannelWidth(savedWidthsRef.current.channel);
+    setThreadWidth(savedWidthsRef.current.thread);
+  }, [setThreadWidth]);
+
+  // Auto-exit fullscreen if worktree gets deleted
+  useEffect(() => {
+    if (isFullscreen && hasWorktree === false) {
+      exitFullscreen();
+    }
+  }, [isFullscreen, hasWorktree, exitFullscreen]);
+
   const sendPlanResponse = useCallback(async (text: string) => {
     const message = selectedMessageRef.current;
     if (!text || !message || !activeChannelId) return;
@@ -222,6 +249,37 @@ export default function App() {
     }
   }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents]);
 
+  if (isFullscreen) {
+    return (
+      <FullscreenView
+        messageId={selectedMessageId}
+        worktreePath={worktreePath}
+        threadProps={{
+          threadStatus,
+          activeThreadId,
+          threadNodes,
+          expandedReadGroupIds,
+          selectedMessageId,
+          deletingWorktree,
+          hasWorktree,
+          showJumpToLatest,
+          threadInput,
+          isClaudeRunning,
+          threadContentRef,
+          onThreadScroll,
+          onToggleReadGroup: toggleReadGroup,
+          onScrollToLatest: () => scrollThreadToBottom('smooth'),
+          onDeleteWorktree: () => void deleteWorktree(),
+          onMergeToMain: () => void mergeToMain(),
+          onThreadInputChange: setThreadInput,
+          onSendThreadMessage: () => void sendThreadMessage(),
+          onPlanResponse: (text) => void sendPlanResponse(text),
+          onExitFullscreen: exitFullscreen,
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
       <ChannelPanel
@@ -267,6 +325,7 @@ export default function App() {
         onSendThreadMessage={() => void sendThreadMessage()}
         onPlanResponse={(text) => void sendPlanResponse(text)}
         onStartDrag={() => startDragging('right')}
+        onEnterFullscreen={() => void enterFullscreen()}
       />
     </div>
   );

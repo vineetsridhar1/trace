@@ -42,6 +42,9 @@ interface ThreadPanelProps {
   onSendThreadMessage: () => void;
   onPlanResponse: (text: string) => void;
   onStartDrag: () => void;
+  isFullscreen?: boolean;
+  onEnterFullscreen?: () => void;
+  onExitFullscreen?: () => void;
 }
 
 export function ThreadPanel({
@@ -68,12 +71,15 @@ export function ThreadPanel({
   onSendThreadMessage,
   onPlanResponse,
   onStartDrag,
+  isFullscreen = false,
+  onEnterFullscreen,
+  onExitFullscreen,
 }: ThreadPanelProps) {
   const threadOpen = threadWidth > 0;
 
   return (
     <>
-      {threadOpen && (
+      {threadOpen && !isFullscreen && (
         <div
           className={`resize-handle ${dragging === 'right' ? 'active' : ''}`}
           onMouseDown={(e) => {
@@ -85,16 +91,19 @@ export function ThreadPanel({
 
       <div
         id="thread-panel"
-        className={`flex min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? '' : 'panel-animate'}`}
-        style={{ width: `${threadWidth}px` }}
+        className={`flex min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${isFullscreen ? 'w-full' : ''} ${dragging ? '' : 'panel-animate'}`}
+        style={isFullscreen ? undefined : { width: `${threadWidth}px` }}
       >
         <ThreadHeader
           selectedMessageId={selectedMessageId}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
+          isFullscreen={isFullscreen}
           onClose={onClose}
           onDeleteWorktree={onDeleteWorktree}
           onMergeToMain={onMergeToMain}
+          onEnterFullscreen={onEnterFullscreen}
+          onExitFullscreen={onExitFullscreen}
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
@@ -165,16 +174,22 @@ function ThreadHeader({
   selectedMessageId,
   deletingWorktree,
   hasWorktree,
+  isFullscreen,
   onClose,
   onDeleteWorktree,
   onMergeToMain,
+  onEnterFullscreen,
+  onExitFullscreen,
 }: {
   selectedMessageId: string | null;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
+  isFullscreen: boolean;
   onClose: () => void;
   onDeleteWorktree: () => void;
   onMergeToMain: () => void;
+  onEnterFullscreen?: () => void;
+  onExitFullscreen?: () => void;
 }) {
   return (
     <div id="thread-header" className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
@@ -187,6 +202,50 @@ function ThreadHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
+        {hasWorktree === true && !isFullscreen && onEnterFullscreen && (
+          <button
+            type="button"
+            title="Open fullscreen view"
+            onClick={onEnterFullscreen}
+            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="mx-auto h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+              <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+              <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+            </svg>
+          </button>
+        )}
+        {isFullscreen && onExitFullscreen && (
+          <button
+            type="button"
+            title="Exit fullscreen"
+            onClick={onExitFullscreen}
+            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="mx-auto h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="M4 14h6v6" />
+              <path d="M20 10h-6V4" />
+              <path d="M14 10l7-7" />
+              <path d="M3 21l7-7" />
+            </svg>
+          </button>
+        )}
         {hasWorktree === true && (
           <>
             <button
@@ -242,7 +301,7 @@ function ThreadHeader({
         <button
           id="thread-close"
           type="button"
-          onClick={onClose}
+          onClick={isFullscreen && onExitFullscreen ? onExitFullscreen : onClose}
           className="cursor-pointer text-xl leading-none text-[#565f89] hover:text-[#c0caf5]"
         >
           &times;
