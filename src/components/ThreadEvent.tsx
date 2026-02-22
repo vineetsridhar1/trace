@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import type { ServerEvent } from '../types';
 import { extractPromptText, formatTime, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath } from '../utils';
 import { EditDiffPreview } from './EditDiffPreview';
@@ -34,8 +35,8 @@ function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: num
           transition: 'max-height 0.3s ease',
         }}
       >
-        <div ref={innerRef} className="break-words whitespace-pre-wrap text-sm text-[#c0caf5]">
-          {text}
+        <div ref={innerRef} className="markdown-body break-words text-sm text-[#c0caf5]">
+          <ReactMarkdown>{text}</ReactMarkdown>
         </div>
       </div>
       {needsClamp && (
