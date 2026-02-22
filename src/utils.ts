@@ -1,4 +1,4 @@
-import type { ServerEvent, ExtractedDiffContent, ThreadRenderNode, DiffRuntime } from './types';
+import type { ServerEvent, ExtractedDiffContent, ThreadRenderNode, DiffRuntime, Question } from './types';
 
 const READ_LIKE_TOOL_NAMES = new Set(['read', 'glob']);
 const EDIT_LIKE_TOOL_NAMES = new Set(['edit', 'multiedit', 'write']);
@@ -231,6 +231,7 @@ export function extractReadGlobSummary(event: ServerEvent): string {
   return event.toolName ?? 'Read/Glob';
 }
 
+
 export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
   const nodes: ThreadRenderNode[] = [];
   let bucket: ServerEvent[] = [];
@@ -285,6 +286,77 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
         lastTodoIdx--;
       }
     }
+  }
+
+  // Detect plan sequences: a Stop event preceded by a Write of a .md plan file
+  // (Claude writes the plan, then exits — user sees plan review UI to approve/reject)
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (n.kind !== 'event' || n.event.hookEventName !== 'Stop') continue;
+
+    // Look backwards for a Write event that wrote a plan .md file
+    let planContent = '';
+    let writeIdx = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      const candidate = nodes[j];
+      if (candidate.kind !== 'event') continue;
+      // Stop searching if we hit another Stop or UserPromptSubmit (different turn)
+      if (
+        candidate.event.hookEventName === 'Stop' ||
+        candidate.event.hookEventName === 'UserPromptSubmit'
+      ) {
+        break;
+      }
+      if (
+        candidate.event.hookEventName === 'PostToolUse' &&
+        normalizeToolName(candidate.event.toolName) === 'write'
+      ) {
+        const filePath = findStringByKeys(candidate.event.toolInput, ['file_path', 'path', 'filepath']) ?? '';
+        if (filePath.includes('.claude/plans/') && filePath.endsWith('.md')) {
+          planContent = findStringByKeys(candidate.event.toolInput, ['content', 'text']) ?? '';
+          writeIdx = j;
+          break;
+        }
+      }
+    }
+
+    if (writeIdx < 0) continue;
+
+    // Fallback to lastAssistantMessage if content extraction failed
+    if (!planContent && n.event.lastAssistantMessage) {
+      planContent = n.event.lastAssistantMessage;
+    }
+
+    // Replace the Stop node with a plan-review node
+    const planNode: ThreadRenderNode = {
+      kind: 'plan-review',
+      id: `plan-review-${n.event.id}`,
+      planContent,
+      event: n.event,
+    };
+    nodes.splice(i, 1, planNode);
+
+    // Remove the Write .md node
+    nodes.splice(writeIdx, 1);
+  }
+
+  // Detect Stop events enriched with AskUserQuestion data from the transcript
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (n.kind !== 'event' || n.event.hookEventName !== 'Stop') continue;
+    if (n.event.toolName !== 'AskUserQuestion') continue;
+
+    const toolInput = n.event.toolInput as Record<string, unknown> | null;
+    const questions = toolInput?.questions as Question[] | undefined;
+    if (!questions || !Array.isArray(questions) || questions.length === 0) continue;
+
+    const askNode: ThreadRenderNode = {
+      kind: 'ask-user-question',
+      id: `ask-question-${n.event.id}`,
+      questions,
+      event: n.event,
+    };
+    nodes.splice(i, 1, askNode);
   }
 
   return nodes;

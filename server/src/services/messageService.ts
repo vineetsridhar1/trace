@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { extractAskUserQuestionFromTranscript } from './eventService';
 
 const USER_SESSION_ID = 'user-manual-input';
 
@@ -253,6 +254,35 @@ export async function getEventsByThread(
     }),
     prisma.event.count({ where }),
   ]);
+
+  // Lazily enrich the last Stop event if it hasn't been enriched with AskUserQuestion data.
+  // Only enrich the final Stop event (which is the one Claude is currently waiting on).
+  const lastEvent = events.length > 0 ? events[events.length - 1] : null;
+  if (
+    lastEvent &&
+    lastEvent.hookEventName === 'Stop' &&
+    !lastEvent.toolName &&
+    lastEvent.stopHookActive
+  ) {
+    const session = await prisma.session.findUnique({
+      where: { sessionId: lastEvent.sessionId },
+      select: { transcriptPath: true },
+    });
+    if (session?.transcriptPath) {
+      const askData = extractAskUserQuestionFromTranscript(session.transcriptPath);
+      if (askData) {
+        await prisma.event.update({
+          where: { id: lastEvent.id },
+          data: {
+            toolName: 'AskUserQuestion',
+            toolInput: JSON.parse(JSON.stringify(askData)),
+          },
+        });
+        (lastEvent as Record<string, unknown>).toolName = 'AskUserQuestion';
+        (lastEvent as Record<string, unknown>).toolInput = askData;
+      }
+    }
+  }
 
   return { events, total, limit, offset };
 }

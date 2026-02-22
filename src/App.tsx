@@ -61,9 +61,11 @@ export default function App() {
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
   const isClaudeRunning = useMemo(() => {
     if (!selectedMessageId || !spawnedMessageIds.current.has(selectedMessageId)) return false;
+    // If the last thread event is a Stop, Claude is definitely not running
+    if (threadEvents.length > 0 && threadEvents[threadEvents.length - 1].hookEventName === 'Stop') return false;
     const msg = messages.find((m) => m.id === selectedMessageId);
     return msg ? msg.session.status !== 'stopped' : false;
-  }, [messages, selectedMessageId]);
+  }, [messages, selectedMessageId, threadEvents]);
 
   useEffect(() => {
     if (activeChannelId) void refreshMessages(activeChannelId);
@@ -159,6 +161,36 @@ export default function App() {
     setChannelWidth(220);
   }, [closeThreadPanel]);
 
+  const sendPlanResponse = useCallback(async (text: string) => {
+    const message = selectedMessageRef.current;
+    if (!text || !message || !activeChannelId) return;
+
+    try {
+      const persistRes = await fetch(
+        `${SERVER_URL}/channels/${activeChannelId}/messages/${message.id}/prompts`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        },
+      );
+      if (!persistRes.ok) {
+        console.error('Failed to persist plan response prompt');
+        return;
+      }
+
+      const { message: updated } = (await persistRes.json()) as { message: ChannelMessage };
+      upsertMessage(updated);
+      if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
+
+      spawnedMessageIds.current.add(message.id);
+      const result = await window.traceAPI.spawnClaude(message.id, text);
+      if (!result.success) console.error('Failed to spawn claude for plan response:', result.error);
+    } catch {
+      console.error('Failed to send plan response');
+    }
+  }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents]);
+
   const mergeToMain = useCallback(async () => {
     const message = selectedMessageRef.current;
     if (!message || !activeChannelId) return;
@@ -233,6 +265,7 @@ export default function App() {
         onMergeToMain={() => void mergeToMain()}
         onThreadInputChange={setThreadInput}
         onSendThreadMessage={() => void sendThreadMessage()}
+        onPlanResponse={(text) => void sendPlanResponse(text)}
         onStartDrag={() => startDragging('right')}
       />
     </div>

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import prisma from '../lib/prisma';
 import { HookEvent } from '../types/hookEvents';
@@ -53,6 +54,47 @@ function extractPromptFromRawPayload(rawPayload: unknown): string | null {
     if (typeof value === 'string' && value.trim()) {
       return value.trim();
     }
+  }
+
+  return null;
+}
+
+export function extractAskUserQuestionFromTranscript(
+  transcriptPath: string,
+): { questions: unknown[] } | null {
+  try {
+    const content = fs.readFileSync(transcriptPath, 'utf-8');
+    const lines = content.trim().split('\n');
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+
+      const entry = parsed as Record<string, unknown>;
+      if (entry.type !== 'assistant') continue;
+
+      const message = entry.message as Record<string, unknown> | undefined;
+      if (!message?.content || !Array.isArray(message.content)) continue;
+
+      for (const block of message.content) {
+        const b = block as Record<string, unknown>;
+        if (b.type === 'tool_use' && b.name === 'AskUserQuestion') {
+          const input = b.input as Record<string, unknown> | undefined;
+          if (input?.questions && Array.isArray(input.questions) && input.questions.length > 0) {
+            return { questions: input.questions };
+          }
+        }
+      }
+    }
+  } catch {
+    // Transcript file may not exist or be unreadable
   }
 
   return null;
@@ -147,6 +189,14 @@ export async function ingestEvent(payload: HookEvent) {
   if (payload.hook_event_name === 'Stop') {
     eventData.stopHookActive = payload.stop_hook_active;
     eventData.lastAssistantMessage = payload.last_assistant_message;
+
+    if (payload.transcript_path) {
+      const askData = extractAskUserQuestionFromTranscript(payload.transcript_path);
+      if (askData) {
+        eventData.toolName = 'AskUserQuestion';
+        eventData.toolInput = JSON.parse(JSON.stringify(askData));
+      }
+    }
   }
 
   const event = await prisma.event.create({ data: eventData });

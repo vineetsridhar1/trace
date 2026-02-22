@@ -1,6 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage } from '../types';
 import { avatarInitial, formatTime } from '../utils';
+
+function useWorktreeStatus(messages: ChannelMessage[]) {
+  // Map of messageId -> boolean (true = worktree exists)
+  const [statusMap, setStatusMap] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = messages.map((m) => m.id);
+
+    Promise.all(
+      ids.map(async (id) => {
+        const result = await window.traceAPI.checkWorktreeExists(id);
+        return [id, result.exists ?? false] as const;
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      const next: Record<string, boolean> = {};
+      for (const [id, exists] of results) next[id] = exists;
+      setStatusMap(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [messages]);
+
+  return statusMap;
+}
 
 function useAutoResize(value: string, maxHeight = 300) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -37,6 +65,24 @@ export function MessagePanel({
   onOpenThread,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
+  const [deletedExpanded, setDeletedExpanded] = useState(false);
+  const worktreeStatus = useWorktreeStatus(messages);
+
+  const { activeMessages, deletedMessages } = useMemo(() => {
+    const active: ChannelMessage[] = [];
+    const deleted: ChannelMessage[] = [];
+
+    for (const msg of messages) {
+      // If we haven't checked yet, treat as active
+      if (worktreeStatus[msg.id] === false) {
+        deleted.push(msg);
+      } else {
+        active.push(msg);
+      }
+    }
+
+    return { activeMessages: active, deletedMessages: deleted };
+  }, [messages, worktreeStatus]);
 
   const scrollFeedToBottom = useCallback(() => {
     const el = feedListRef.current;
@@ -61,7 +107,7 @@ export function MessagePanel({
         className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
       >
         <div className="flex-1" />
-        {messages.map((message) => (
+        {activeMessages.map((message) => (
           <MessageItem
             key={message.id}
             message={message}
@@ -69,6 +115,34 @@ export function MessagePanel({
             onOpenThread={onOpenThread}
           />
         ))}
+
+        {deletedMessages.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setDeletedExpanded((prev) => !prev)}
+              className="mx-1 mt-3 mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#a9b1d6]"
+            >
+              <span
+                className="inline-block transition-transform"
+                style={{ transform: deletedExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+              >
+                ▶
+              </span>
+              <span>Deleted worktrees ({deletedMessages.length})</span>
+            </button>
+            {deletedExpanded &&
+              deletedMessages.map((message) => (
+                <MessageItem
+                  key={message.id}
+                  message={message}
+                  isSelected={message.id === selectedMessageId}
+                  onOpenThread={onOpenThread}
+                  dimmed
+                />
+              ))}
+          </>
+        )}
       </div>
 
       <MessageInput
@@ -177,12 +251,14 @@ function MessageItem({
   message,
   isSelected,
   onOpenThread,
+  dimmed,
 }: {
   message: ChannelMessage;
   isSelected: boolean;
   onOpenThread: (message: ChannelMessage) => void;
+  dimmed?: boolean;
 }) {
-  const active = message.session.status !== 'stopped';
+  const active = !dimmed && message.session.status !== 'stopped';
   const preview = message.preview || message.session.cwd || message.sessionId;
   const threadCount = message._count.threads;
 
@@ -191,7 +267,7 @@ function MessageItem({
       type="button"
       className={`message-item flex cursor-pointer items-start gap-3 border-l-2 border-transparent px-3 py-3 text-left transition-colors ${
         isSelected ? 'selected' : ''
-      }`}
+      } ${dimmed ? 'opacity-50' : ''}`}
       onClick={() => onOpenThread(message)}
     >
       <div

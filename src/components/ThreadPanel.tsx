@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { DragTarget, ThreadRenderNode, ThreadStatus } from '../types';
-import { ThreadEvent } from './ThreadEvent';
+import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
 
 function useAutoResize(value: string, maxHeight = 300) {
@@ -40,6 +40,7 @@ interface ThreadPanelProps {
   onMergeToMain: () => void;
   onThreadInputChange: (value: string) => void;
   onSendThreadMessage: () => void;
+  onPlanResponse: (text: string) => void;
   onStartDrag: () => void;
 }
 
@@ -65,6 +66,7 @@ export function ThreadPanel({
   onMergeToMain,
   onThreadInputChange,
   onSendThreadMessage,
+  onPlanResponse,
   onStartDrag,
 }: ThreadPanelProps) {
   const threadOpen = threadWidth > 0;
@@ -113,6 +115,24 @@ export function ThreadPanel({
                       node={node}
                       isExpanded={Boolean(expandedReadGroupIds[node.id])}
                       onToggle={() => onToggleReadGroup(node.id)}
+                    />
+                  );
+                }
+                if (node.kind === 'plan-review') {
+                  return (
+                    <PlanReview
+                      key={node.id}
+                      node={node}
+                      onPlanResponse={onPlanResponse}
+                    />
+                  );
+                }
+                if (node.kind === 'ask-user-question') {
+                  return (
+                    <AskUserQuestion
+                      key={node.id}
+                      node={node}
+                      onResponse={onPlanResponse}
                     />
                   );
                 }

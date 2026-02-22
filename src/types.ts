@@ -105,7 +105,33 @@ export interface ReadGlobGroupNode {
   events: ServerEvent[];
 }
 
-export type ThreadRenderNode = ThreadEventNode | ReadGlobGroupNode;
+export interface PlanReviewNode {
+  kind: 'plan-review';
+  id: string;
+  planContent: string;
+  event: ServerEvent;
+}
+
+export interface QuestionOption {
+  label: string;
+  description: string;
+}
+
+export interface Question {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
+export interface AskUserQuestionNode {
+  kind: 'ask-user-question';
+  id: string;
+  questions: Question[];
+  event: ServerEvent;
+}
+
+export type ThreadRenderNode = ThreadEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode;
 
 export interface ExtractedDiffContent {
   title: string;
