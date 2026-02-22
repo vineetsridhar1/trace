@@ -96,3 +96,5 @@ server/dist/
 
 # Trace worktrees
 .trace-worktrees/
+
+dist/

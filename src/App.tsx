@@ -48,6 +48,8 @@ export default function App() {
   const [threadInput, setThreadInput] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [worktreePath, setWorktreePath] = useState('');
+  const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(null);
+  const [pendingRunPrompt, setPendingRunPrompt] = useState('');
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const spawnedMessageIds = useRef(new Set<string>());
 
@@ -121,18 +123,31 @@ export default function App() {
       const { message } = (await res.json()) as { message: ChannelMessage };
       upsertMessage(message);
       handleOpenThread(message);
-
-      spawnedMessageIds.current.add(message.id);
-      const result = await window.traceAPI.spawnClaude(message.id, text);
-      if (result.success) {
-        setHasWorktree(true);
-      } else {
-        console.error('Failed to spawn claude:', result.error);
-      }
+      setPendingRunMessageId(message.id);
+      setPendingRunPrompt(text);
     } catch {
       console.error('Failed to send message');
     }
-  }, [messageInput, activeChannelId, upsertMessage, handleOpenThread, setHasWorktree]);
+  }, [messageInput, activeChannelId, upsertMessage, handleOpenThread]);
+
+  const runMessage = useCallback(async (planMode: boolean) => {
+    if (!pendingRunMessageId || !pendingRunPrompt) return;
+
+    const prompt = planMode
+      ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${pendingRunPrompt}`
+      : pendingRunPrompt;
+
+    setPendingRunMessageId(null);
+    setPendingRunPrompt('');
+
+    spawnedMessageIds.current.add(pendingRunMessageId);
+    const result = await window.traceAPI.spawnClaude(pendingRunMessageId, prompt);
+    if (result.success) {
+      setHasWorktree(true);
+    } else {
+      console.error('Failed to spawn claude:', result.error);
+    }
+  }, [pendingRunMessageId, pendingRunPrompt, setHasWorktree]);
 
   const sendThreadMessage = useCallback(async () => {
     const text = threadInput.trim();
@@ -311,6 +326,8 @@ export default function App() {
         threadInput={threadInput}
         isClaudeRunning={isClaudeRunning}
         threadContentRef={threadContentRef}
+        pendingRunMessageId={pendingRunMessageId}
+        onRun={(planMode: boolean) => void runMessage(planMode)}
         onThreadScroll={onThreadScroll}
         onToggleReadGroup={toggleReadGroup}
         onScrollToLatest={() => scrollThreadToBottom('smooth')}

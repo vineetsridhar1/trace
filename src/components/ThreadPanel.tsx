@@ -32,6 +32,8 @@ interface ThreadPanelProps {
   threadInput: string;
   isClaudeRunning: boolean;
   threadContentRef: React.RefObject<HTMLDivElement | null>;
+  pendingRunMessageId: string | null;
+  onRun: (planMode: boolean) => void;
   onThreadScroll: () => void;
   onToggleReadGroup: (groupId: string) => void;
   onScrollToLatest: () => void;
@@ -61,6 +63,8 @@ export function ThreadPanel({
   threadInput,
   isClaudeRunning,
   threadContentRef,
+  pendingRunMessageId,
+  onRun,
   onThreadScroll,
   onToggleReadGroup,
   onScrollToLatest,
@@ -159,12 +163,16 @@ export function ThreadPanel({
           </button>
         </div>
 
-        <ThreadInput
-          threadInput={threadInput}
-          isClaudeRunning={isClaudeRunning}
-          onThreadInputChange={onThreadInputChange}
-          onSendThreadMessage={onSendThreadMessage}
-        />
+        {pendingRunMessageId === selectedMessageId ? (
+          <RunButtons onRun={onRun} />
+        ) : (
+          <ThreadInput
+            threadInput={threadInput}
+            isClaudeRunning={isClaudeRunning}
+            onThreadInputChange={onThreadInputChange}
+            onSendThreadMessage={onSendThreadMessage}
+          />
+        )}
       </div>
     </>
   );
@@ -326,6 +334,29 @@ function ThreadStatusMessage({ status, activeThreadId }: { status: ThreadStatus;
     return <div className="text-sm text-red-400">Failed to load events</div>;
   }
   return null;
+}
+
+function RunButtons({ onRun }: { onRun: (planMode: boolean) => void }) {
+  return (
+    <div className="border-t border-[#292e42] px-3 py-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onRun(false)}
+          className="flex-1 cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+        >
+          Run
+        </button>
+        <button
+          type="button"
+          onClick={() => onRun(true)}
+          className="flex-1 cursor-pointer rounded-lg border border-violet-500 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/20"
+        >
+          Run in plan mode
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function ThreadInput({

@@ -3,11 +3,9 @@ import path from 'node:path';
 import prisma from '../lib/prisma';
 import { HookEvent } from '../types/hookEvents';
 import { sseManager } from './sseManager';
-import { getDefaultChannel } from './channelService';
 import {
   getMessageByIdForFeed,
   getMessageByIdWithThreads,
-  getOrCreateMessageForSession,
   updateMessagePreviewAndImportance,
 } from './messageService';
 
@@ -105,6 +103,19 @@ export function extractAskUserQuestionFromTranscript(
 }
 
 export async function ingestEvent(payload: HookEvent) {
+  // Resolve target message from worktree path. If the session wasn't spawned
+  // by the app (no worktree path), silently drop the event so external CLI
+  // sessions don't pollute #general.
+  const messageIdFromCwd = extractMessageIdFromWorktreePath(payload.cwd);
+  const messageIdFromTranscript = extractMessageIdFromWorktreePath(payload.transcript_path);
+  const resolvedMessageId = messageIdFromCwd ?? messageIdFromTranscript;
+  const message = resolvedMessageId
+    ? await getMessageByIdWithThreads(resolvedMessageId)
+    : null;
+  if (!message) {
+    return null;
+  }
+
   // Upsert session
   const session = await prisma.session.upsert({
     where: { sessionId: payload.session_id },
@@ -123,19 +134,6 @@ export async function ingestEvent(payload: HookEvent) {
       ...(payload.permission_mode ? { permissionMode: payload.permission_mode } : {}),
     },
   });
-
-  // Resolve target message/thread for this hook event.
-  const messageIdFromCwd = extractMessageIdFromWorktreePath(payload.cwd);
-  const messageIdFromTranscript = extractMessageIdFromWorktreePath(payload.transcript_path);
-  const resolvedMessageId = messageIdFromCwd ?? messageIdFromTranscript;
-  const messageFromCwd = resolvedMessageId
-    ? await getMessageByIdWithThreads(resolvedMessageId)
-    : null;
-  let message = messageFromCwd;
-  if (!message) {
-    const defaultChannelId = await getDefaultChannel();
-    message = await getOrCreateMessageForSession(defaultChannelId, payload.session_id);
-  }
   const channelId = message.channelId;
   const thread =
     message.threads[0] ??

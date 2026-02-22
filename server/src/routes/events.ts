@@ -8,6 +8,10 @@ const router = Router();
 router.post('/', validate(HookEventSchema), async (req: Request, res: Response) => {
   try {
     const result = await ingestEvent(req.body);
+    if (!result) {
+      res.status(204).end();
+      return;
+    }
     res.status(201).json(result);
   } catch (err) {
     console.error('Error ingesting event:', err);
