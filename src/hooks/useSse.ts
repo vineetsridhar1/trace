@@ -58,6 +58,16 @@ export function useSse({
 
       void reportClaudeActivity(payload.messageId, payload.event.hookEventName);
 
+      if (payload.event.hookEventName === 'Stop') {
+        const existing = messagesRef.current.find((item) => item.id === payload.messageId);
+        if (existing && existing.session.status !== 'stopped') {
+          upsertMessage({
+            ...existing,
+            session: { ...existing.session, status: 'stopped' },
+          });
+        }
+      }
+
       if (selectedMessageIdRef.current !== payload.messageId) return;
 
       const message =
