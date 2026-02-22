@@ -25,7 +25,7 @@ export function WorktreeChanges({ messageId }: WorktreeChangesProps) {
   const hasUncommitted = Boolean(diffData?.uncommittedDiff?.trim() || diffData?.stagedDiff?.trim());
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="edit-diff-view flex h-full flex-col overflow-hidden">
       <ChangesHeader loading={loading} onRefresh={refresh} statusText={diffData?.status} />
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {!diffData && !loading && (

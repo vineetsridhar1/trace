@@ -192,6 +192,7 @@ export function useThread() {
     deletingWorktree,
     mergingWorktree,
     hasWorktree,
+    setHasWorktree,
     showJumpToLatest,
     setShowJumpToLatest,
     expandedReadGroupIds,

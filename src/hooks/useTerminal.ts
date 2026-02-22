@@ -57,8 +57,11 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Fit after a frame to ensure container is sized
-    requestAnimationFrame(() => fitAddon.fit());
+    // Fit after a frame to ensure container is sized, then focus
+    requestAnimationFrame(() => {
+      fitAddon.fit();
+      terminal.focus();
+    });
 
     // Spawn PTY
     void window.traceAPI.createPty(terminalId, cwd);

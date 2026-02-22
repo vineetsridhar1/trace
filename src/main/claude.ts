@@ -36,7 +36,9 @@ export async function spawnClaude(messageId: string, prompt: string): Promise<st
   const child = spawn('claude', ['--dangerously-skip-permissions', '-p', prompt], {
     cwd: worktreePath,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env },
+    env: Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
+    ),
   });
   appendClaudeDebugLog(messageId, `spawned pid=${child.pid ?? -1}`);
 

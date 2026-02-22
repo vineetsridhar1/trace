@@ -21,7 +21,9 @@ export function createPty(
     cols: 80,
     rows: 24,
     cwd,
-    env: process.env as Record<string, string>,
+    env: Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
+    ) as Record<string, string>,
   });
 
   proc.onData((data) => {

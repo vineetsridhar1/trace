@@ -11,7 +11,8 @@ import { useSse } from './hooks/useSse';
 import { ChannelPanel } from './components/ChannelPanel';
 import { MessagePanel } from './components/MessagePanel';
 import { ThreadPanel } from './components/ThreadPanel';
-import { FullscreenView } from './components/FullscreenView';
+import { WorktreeChanges } from './components/WorktreeChanges';
+import { Terminal } from './components/Terminal';
 
 export default function App() {
   const { channels, activeChannelId, activeChannel, switchChannel } = useChannels();
@@ -29,6 +30,7 @@ export default function App() {
     threadStatus,
     deletingWorktree,
     hasWorktree,
+    setHasWorktree,
     expandedReadGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
@@ -122,11 +124,15 @@ export default function App() {
 
       spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, text);
-      if (!result.success) console.error('Failed to spawn claude:', result.error);
+      if (result.success) {
+        setHasWorktree(true);
+      } else {
+        console.error('Failed to spawn claude:', result.error);
+      }
     } catch {
       console.error('Failed to send message');
     }
-  }, [messageInput, activeChannelId, upsertMessage, handleOpenThread]);
+  }, [messageInput, activeChannelId, upsertMessage, handleOpenThread, setHasWorktree]);
 
   const sendThreadMessage = useCallback(async () => {
     const text = threadInput.trim();
@@ -154,16 +160,26 @@ export default function App() {
 
       spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, text);
-      if (!result.success) console.error('Failed to spawn claude:', result.error);
+      if (result.success) {
+        setHasWorktree(true);
+      } else {
+        console.error('Failed to spawn claude:', result.error);
+      }
     } catch {
       console.error('Failed to send thread message');
     }
-  }, [activeChannelId, threadInput, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents]);
+  }, [activeChannelId, threadInput, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents, setHasWorktree]);
 
   const handleCloseThread = useCallback(() => {
+    if (isFullscreen) {
+      setIsFullscreen(false);
+      setChannelWidth(savedWidthsRef.current.channel);
+      setThreadWidth(savedWidthsRef.current.thread);
+      return;
+    }
     closeThreadPanel();
     setChannelWidth(220);
-  }, [closeThreadPanel]);
+  }, [closeThreadPanel, isFullscreen, setThreadWidth]);
 
   const enterFullscreen = useCallback(async () => {
     if (!selectedMessageId) return;
@@ -172,6 +188,7 @@ export default function App() {
 
     savedWidthsRef.current = { channel: channelWidth, thread: threadWidth };
     setWorktreePath(result.worktreePath);
+    setChannelWidth(0);
     setIsFullscreen(true);
   }, [selectedMessageId, channelWidth, threadWidth]);
 
@@ -249,60 +266,39 @@ export default function App() {
     }
   }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents]);
 
-  if (isFullscreen) {
-    return (
-      <FullscreenView
-        messageId={selectedMessageId}
-        worktreePath={worktreePath}
-        threadProps={{
-          threadStatus,
-          activeThreadId,
-          threadNodes,
-          expandedReadGroupIds,
-          selectedMessageId,
-          deletingWorktree,
-          hasWorktree,
-          showJumpToLatest,
-          threadInput,
-          isClaudeRunning,
-          threadContentRef,
-          onThreadScroll,
-          onToggleReadGroup: toggleReadGroup,
-          onScrollToLatest: () => scrollThreadToBottom('smooth'),
-          onDeleteWorktree: () => void deleteWorktree(),
-          onMergeToMain: () => void mergeToMain(),
-          onThreadInputChange: setThreadInput,
-          onSendThreadMessage: () => void sendThreadMessage(),
-          onPlanResponse: (text) => void sendPlanResponse(text),
-          onExitFullscreen: exitFullscreen,
-        }}
-      />
-    );
-  }
+  const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
       <ChannelPanel
         channels={channels}
         activeChannelId={activeChannelId}
-        channelWidth={channelWidth}
+        channelWidth={isFullscreen ? 0 : channelWidth}
         dragging={dragging}
         onSwitchChannel={handleSwitchChannel}
         onStartDrag={() => startDragging('left')}
       />
 
-      <MessagePanel
-        feedTitle={feedTitle}
-        messages={messages}
-        selectedMessageId={selectedMessageId}
-        messageInput={messageInput}
-        onMessageInputChange={setMessageInput}
-        onSendMessage={() => void sendMessage()}
-        onOpenThread={handleOpenThread}
-      />
+      <div
+        className="flex min-h-0 min-w-0 flex-col panel-animate"
+        style={{
+          flex: isFullscreen ? '0 0 0px' : '1 1 0%',
+          overflow: 'hidden',
+        }}
+      >
+        <MessagePanel
+          feedTitle={feedTitle}
+          messages={messages}
+          selectedMessageId={selectedMessageId}
+          messageInput={messageInput}
+          onMessageInputChange={setMessageInput}
+          onSendMessage={() => void sendMessage()}
+          onOpenThread={handleOpenThread}
+        />
+      </div>
 
       <ThreadPanel
-        threadWidth={threadWidth}
+        threadWidth={isFullscreen ? 9999 : threadWidth}
         dragging={dragging}
         threadStatus={threadStatus}
         activeThreadId={activeThreadId}
@@ -325,8 +321,28 @@ export default function App() {
         onSendThreadMessage={() => void sendThreadMessage()}
         onPlanResponse={(text) => void sendPlanResponse(text)}
         onStartDrag={() => startDragging('right')}
+        isFullscreen={isFullscreen}
         onEnterFullscreen={() => void enterFullscreen()}
+        onExitFullscreen={exitFullscreen}
       />
+
+      <div
+        className="flex min-h-0 flex-col panel-animate"
+        style={{
+          flex: isFullscreen ? '1 1 50%' : '0 0 0px',
+          overflow: 'hidden',
+        }}
+      >
+        <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
+          {isFullscreen && <WorktreeChanges messageId={selectedMessageId} />}
+        </div>
+        <div
+          className="overflow-hidden"
+          style={{ height: isFullscreen ? '40%' : '0', minHeight: isFullscreen ? '150px' : '0' }}
+        >
+          {isFullscreen && <Terminal terminalId={terminalId} cwd={worktreePath} />}
+        </div>
+      </div>
     </div>
   );
 }
