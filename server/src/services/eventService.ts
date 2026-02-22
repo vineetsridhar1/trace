@@ -211,10 +211,14 @@ export async function ingestEvent(payload: HookEvent) {
         ? extractPromptFromPayload(payload)?.slice(0, 200) ?? null
         : null;
 
-  if (importance === 'important' || preview) {
+  // Only set the preview once (first message), so the thread preview shows the
+  // initial prompt rather than the latest assistant response.
+  const shouldSetPreview = preview && !message.preview;
+
+  if (shouldSetPreview || importance === 'important') {
     await updateMessagePreviewAndImportance(
       message.id,
-      preview,
+      shouldSetPreview ? preview : null,
       importance === 'important' ? 'important' : message.importance,
     );
   }

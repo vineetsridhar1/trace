@@ -202,7 +202,9 @@ function ThreadHeader({
   return (
     <div id="thread-header" className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-violet-300">Thread</h3>
+        <h3 className="text-sm font-semibold text-violet-300">
+          {selectedMessageId ? `trace/${selectedMessageId.slice(0, 8)}` : 'Thread'}
+        </h3>
         {hasWorktree === false && selectedMessageId && (
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
             Worktree deleted

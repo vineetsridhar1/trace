@@ -291,9 +291,9 @@ function MessageItem({
           <span className="ml-auto text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
         </div>
         <MessagePreview text={preview} />
-        {threadCount > 0 && (
+        {threadCount > 1 && (
           <div className="mt-1.5 text-xs text-violet-300 hover:underline">
-            {threadCount} thread{threadCount > 1 ? 's' : ''}
+            {threadCount} threads
           </div>
         )}
       </div>
