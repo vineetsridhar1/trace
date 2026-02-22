@@ -53,7 +53,7 @@ export function toRelativeDisplayPath(pathValue: string): string {
     return normalized;
   }
 
-  const worktreeMatch = normalized.match(/\/\.trace-worktrees\/[^/]+\/(.+)/);
+  const worktreeMatch = normalized.match(/\/worktrees\/[0-9a-f-]{36}\/(.+)/);
   if (worktreeMatch?.[1]) {
     return worktreeMatch[1];
   }

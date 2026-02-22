@@ -8,6 +8,7 @@ import { setWorktreeBaseFn, runStateByMessageId, stopWatchdog } from './main/wat
 import { killAllPtys } from './main/pty';
 import {
   setTargetDir,
+  setWorktreeBase,
   getWorktreeBase,
   runningProcesses,
   suppressSyntheticStopFor,
@@ -45,6 +46,7 @@ const createWindow = () => {
 app.on('ready', () => {
   const targetDir = process.cwd();
   setTargetDir(targetDir);
+  setWorktreeBase(path.join(app.getPath('userData'), 'worktrees'));
   injectHooks(targetDir);
   createWindow();
 });

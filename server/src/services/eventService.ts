@@ -18,7 +18,11 @@ function extractMessageIdFromWorktreePath(worktreePath: string | undefined): str
 
   const normalized = path.normalize(worktreePath);
   const segments = normalized.split(path.sep).filter(Boolean);
-  const markerIndex = segments.lastIndexOf('.trace-worktrees');
+  // Look for the "worktrees" marker (supports both old .trace-worktrees and new app-data location)
+  let markerIndex = segments.lastIndexOf('worktrees');
+  if (markerIndex === -1) {
+    markerIndex = segments.lastIndexOf('.trace-worktrees');
+  }
 
   if (markerIndex === -1 || markerIndex + 1 >= segments.length) {
     return null;

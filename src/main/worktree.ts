@@ -9,12 +9,11 @@ import {
   appendClaudeDebugLog,
 } from './watchdog';
 
-const WORKTREE_BASE_NAME = '.trace-worktrees';
-
 export const runningProcesses = new Map<string, import('node:child_process').ChildProcess>();
 export const suppressSyntheticStopFor = new Set<string>();
 
 let targetDir = process.cwd();
+let worktreeBase = '';
 
 export function setTargetDir(dir: string) {
   targetDir = dir;
@@ -24,8 +23,12 @@ export function getTargetDir(): string {
   return targetDir;
 }
 
+export function setWorktreeBase(dir: string) {
+  worktreeBase = dir;
+}
+
 export function getWorktreeBase(): string {
-  return path.join(targetDir, WORKTREE_BASE_NAME);
+  return worktreeBase;
 }
 
 export function getWorktreePath(messageId: string): string {
