@@ -110,6 +110,13 @@ export async function getOrCreateMessageForSession(channelId: string, sessionId:
   return ensureMessageHasThread(message);
 }
 
+export async function updateMessageStatus(messageId: string, status: string) {
+  return prisma.message.update({
+    where: { id: messageId },
+    data: { status },
+  });
+}
+
 export async function updateMessagePreviewAndImportance(
   messageId: string,
   preview: string | null,

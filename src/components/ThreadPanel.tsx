@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { DragTarget, ThreadRenderNode, ThreadStatus } from '../types';
+import type { DragTarget, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
 
@@ -26,6 +26,7 @@ interface ThreadPanelProps {
   threadNodes: ThreadRenderNode[];
   expandedReadGroupIds: Record<string, boolean>;
   selectedMessageId: string | null;
+  messageStatus: TicketStatus;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   showJumpToLatest: boolean;
@@ -57,6 +58,7 @@ export function ThreadPanel({
   threadNodes,
   expandedReadGroupIds,
   selectedMessageId,
+  messageStatus,
   deletingWorktree,
   hasWorktree,
   showJumpToLatest,
@@ -100,6 +102,7 @@ export function ThreadPanel({
       >
         <ThreadHeader
           selectedMessageId={selectedMessageId}
+          messageStatus={messageStatus}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
           isFullscreen={isFullscreen}
@@ -178,8 +181,15 @@ export function ThreadPanel({
   );
 }
 
+const HEADER_STATUS_CONFIG: Record<TicketStatus, { label: string; className: string }> = {
+  pending: { label: 'Pending', className: 'text-yellow-400 bg-yellow-400/10' },
+  in_progress: { label: 'In Progress', className: 'text-blue-400 bg-blue-400/10' },
+  completed: { label: 'Completed', className: 'text-green-400 bg-green-400/10' },
+};
+
 function ThreadHeader({
   selectedMessageId,
+  messageStatus,
   deletingWorktree,
   hasWorktree,
   isFullscreen,
@@ -190,6 +200,7 @@ function ThreadHeader({
   onExitFullscreen,
 }: {
   selectedMessageId: string | null;
+  messageStatus: TicketStatus;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   isFullscreen: boolean;
@@ -199,13 +210,20 @@ function ThreadHeader({
   onEnterFullscreen?: () => void;
   onExitFullscreen?: () => void;
 }) {
+  const statusConfig = HEADER_STATUS_CONFIG[messageStatus] ?? HEADER_STATUS_CONFIG.pending;
+
   return (
     <div id="thread-header" className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-semibold text-violet-300">
           {selectedMessageId ? `trace/${selectedMessageId.slice(0, 8)}` : 'Thread'}
         </h3>
-        {hasWorktree === false && selectedMessageId && (
+        {selectedMessageId && (
+          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}>
+            {statusConfig.label}
+          </span>
+        )}
+        {hasWorktree === false && messageStatus !== 'pending' && selectedMessageId && (
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
             Worktree deleted
           </span>
@@ -256,57 +274,57 @@ function ThreadHeader({
             </svg>
           </button>
         )}
-        {hasWorktree === true && (
-          <>
-            <button
-              id="thread-merge-to-main"
-              type="button"
-              title="Merge worktree branch to main and push"
-              disabled={!selectedMessageId}
-              onClick={onMergeToMain}
-              className="h-7 cursor-pointer rounded-md border border-[#292e42] px-2 text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <span className="flex items-center gap-1">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  <circle cx="18" cy="6" r="3" />
-                  <circle cx="6" cy="18" r="3" />
-                  <path d="M6 15V9a6 6 0 0 1 6-6h3" />
-                  <path d="M15 3l3 3-3 3" />
-                </svg>
-                Merge
-              </span>
-            </button>
-            <button
-              id="thread-delete-worktree"
-              type="button"
-              title="Delete worktree for this thread"
-              disabled={!selectedMessageId || deletingWorktree}
-              onClick={onDeleteWorktree}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
-            >
+        {hasWorktree === true && messageStatus === 'in_progress' && (
+          <button
+            id="thread-merge-to-main"
+            type="button"
+            title="Merge worktree branch to main and push"
+            disabled={!selectedMessageId}
+            onClick={onMergeToMain}
+            className="h-7 cursor-pointer rounded-md border border-[#292e42] px-2 text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="flex items-center gap-1">
               <svg
                 viewBox="0 0 24 24"
-                className="mx-auto h-3.5 w-3.5"
+                className="h-3.5 w-3.5"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
                 aria-hidden="true"
               >
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="M6 6l1 14h10l1-14" />
-                <path d="M10 10v7" />
-                <path d="M14 10v7" />
+                <circle cx="18" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <path d="M6 15V9a6 6 0 0 1 6-6h3" />
+                <path d="M15 3l3 3-3 3" />
               </svg>
-            </button>
-          </>
+              Merge
+            </span>
+          </button>
+        )}
+        {hasWorktree === true && (
+          <button
+            id="thread-delete-worktree"
+            type="button"
+            title="Delete worktree for this thread"
+            disabled={!selectedMessageId || deletingWorktree}
+            onClick={onDeleteWorktree}
+            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="mx-auto h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="M6 6l1 14h10l1-14" />
+              <path d="M10 10v7" />
+              <path d="M14 10v7" />
+            </svg>
+          </button>
         )}
         <button
           id="thread-close"

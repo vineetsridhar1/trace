@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage } from './types';
+import type { ChannelMessage, TicketStatus } from './types';
 import { SERVER_URL } from './types';
 import { buildThreadNodes } from './utils';
 import { useChannels } from './hooks/useChannels';
@@ -65,8 +65,35 @@ export default function App() {
     selectedMessageRef,
   });
 
+  const updateMessageStatus = useCallback(
+    async (messageId: string, status: string) => {
+      if (!activeChannelId) return;
+      try {
+        const res = await fetch(
+          `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/status`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status }),
+          },
+        );
+        if (!res.ok) return;
+        const { message } = (await res.json()) as { message: ChannelMessage };
+        upsertMessage(message);
+      } catch {
+        console.error('Failed to update message status');
+      }
+    },
+    [activeChannelId, upsertMessage],
+  );
+
   const feedTitle = activeChannel ? `# ${activeChannel.name}` : 'Activity Feed';
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
+  const selectedMessageStatus: TicketStatus = useMemo(() => {
+    const msg = messages.find((m) => m.id === selectedMessageId);
+    return (msg?.status ?? 'pending') as TicketStatus;
+  }, [messages, selectedMessageId]);
+
   const isClaudeRunning = useMemo(() => {
     if (!selectedMessageId || !spawnedMessageIds.current.has(selectedMessageId)) return false;
     // If the last thread event is a Stop, Claude is definitely not running
@@ -137,17 +164,19 @@ export default function App() {
       ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${pendingRunPrompt}`
       : pendingRunPrompt;
 
+    const messageId = pendingRunMessageId;
     setPendingRunMessageId(null);
     setPendingRunPrompt('');
 
-    spawnedMessageIds.current.add(pendingRunMessageId);
-    const result = await window.traceAPI.spawnClaude(pendingRunMessageId, prompt);
+    spawnedMessageIds.current.add(messageId);
+    const result = await window.traceAPI.spawnClaude(messageId, prompt);
     if (result.success) {
       setHasWorktree(true);
+      void updateMessageStatus(messageId, 'in_progress');
     } else {
       console.error('Failed to spawn claude:', result.error);
     }
-  }, [pendingRunMessageId, pendingRunPrompt, setHasWorktree]);
+  }, [pendingRunMessageId, pendingRunPrompt, setHasWorktree, updateMessageStatus]);
 
   const sendThreadMessage = useCallback(async () => {
     const text = threadInput.trim();
@@ -177,13 +206,14 @@ export default function App() {
       const result = await window.traceAPI.spawnClaude(message.id, text);
       if (result.success) {
         setHasWorktree(true);
+        void updateMessageStatus(message.id, 'in_progress');
       } else {
         console.error('Failed to spawn claude:', result.error);
       }
     } catch {
       console.error('Failed to send thread message');
     }
-  }, [activeChannelId, threadInput, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents, setHasWorktree]);
+  }, [activeChannelId, threadInput, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents, setHasWorktree, updateMessageStatus]);
 
   const handleCloseThread = useCallback(() => {
     if (isFullscreen) {
@@ -275,11 +305,15 @@ export default function App() {
 
       spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, prompt);
-      if (!result.success) console.error('Failed to spawn claude for merge-to-main:', result.error);
+      if (result.success) {
+        void updateMessageStatus(message.id, 'completed');
+      } else {
+        console.error('Failed to spawn claude for merge-to-main:', result.error);
+      }
     } catch {
       console.error('Failed to run merge-to-main');
     }
-  }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents]);
+  }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents, updateMessageStatus]);
 
   const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
 
@@ -320,6 +354,7 @@ export default function App() {
         threadNodes={threadNodes}
         expandedReadGroupIds={expandedReadGroupIds}
         selectedMessageId={selectedMessageId}
+        messageStatus={selectedMessageStatus}
         deletingWorktree={deletingWorktree}
         hasWorktree={hasWorktree}
         showJumpToLatest={showJumpToLatest}

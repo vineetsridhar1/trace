@@ -7,6 +7,7 @@ import {
   getMessageByIdForFeed,
   getMessageByIdWithThreads,
   updateMessagePreviewAndImportance,
+  updateMessageStatus,
 } from './messageService';
 
 function extractMessageIdFromWorktreePath(worktreePath: string | undefined): string | null {
@@ -164,6 +165,11 @@ export async function ingestEvent(payload: HookEvent) {
         return { id: existingPromptEvent.id, session_id: session.sessionId };
       }
     }
+  }
+
+  // Auto-transition pending -> in_progress on first non-UserPromptSubmit event
+  if (message.status === 'pending' && payload.hook_event_name !== 'UserPromptSubmit') {
+    await updateMessageStatus(message.id, 'in_progress');
   }
 
   // Compute importance
