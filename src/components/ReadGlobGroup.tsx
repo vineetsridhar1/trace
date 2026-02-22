@@ -9,14 +9,13 @@ interface ReadGlobGroupProps {
 
 export function ReadGlobGroup({ node, isExpanded, onToggle }: ReadGlobGroupProps) {
   return (
-    <div className="activity-row activity-row-compact">
+    <div className="activity-row">
       <button
         type="button"
         onClick={onToggle}
         className="activity-row-header w-full cursor-pointer text-left"
       >
-        <span className="activity-row-icon">📚</span>
-        <span className="activity-row-title">{node.count} file scans (Read/Glob)</span>
+        <span className="activity-row-title opacity-60">{node.count} file scans (Read/Glob)</span>
         <span className="activity-row-time">
           {formatTime(node.startTimestamp)} - {formatTime(node.endTimestamp)}
         </span>
@@ -24,10 +23,6 @@ export function ReadGlobGroup({ node, isExpanded, onToggle }: ReadGlobGroupProps
           ▼
         </span>
       </button>
-
-      {node.summaryLabels.length > 0 && (
-        <div className="activity-row-note">{node.summaryLabels.join(' · ')}</div>
-      )}
 
       <div className={`read-group-body ${isExpanded ? 'open' : ''}`}>
         <div className="space-y-1 pt-1">

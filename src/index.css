@@ -174,12 +174,7 @@ body,
 }
 
 .activity-row {
-  border-left: 2px solid transparent;
   padding: 6px 4px 6px 2px;
-}
-
-.activity-row-compact {
-  border-left-color: #38446f;
 }
 
 .activity-row-header {
