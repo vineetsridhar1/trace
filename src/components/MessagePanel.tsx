@@ -268,9 +268,17 @@ function MessageItem({
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-xs text-[#565f89]">
             {message.sessionId === 'user-manual-input' ? 'You' : message.sessionId.slice(0, 8)}
           </span>
+          {message.branch && (
+            <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-xs text-blue-400">
+              {message.branch.replace(/^trace\//, '')}
+            </span>
+          )}
           <span className="ml-auto text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
         </div>
         <MessagePreview text={preview} />
+        {message.summary && (
+          <p className="mt-0.5 line-clamp-2 text-xs text-[#565f89]">{message.summary}</p>
+        )}
         {threadCount > 1 && (
           <div className="mt-1.5 text-xs text-violet-300 hover:underline">
             {threadCount} threads

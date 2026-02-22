@@ -3,11 +3,13 @@ import path from 'node:path';
 import prisma from '../lib/prisma';
 import { HookEvent } from '../types/hookEvents';
 import { sseManager } from './sseManager';
+import { execSync } from 'node:child_process';
 import {
   getMessageByIdForFeed,
   getMessageByIdWithThreads,
   updateMessagePreviewAndImportance,
   updateMessageStatus,
+  updateMessageSummaryAndBranch,
 } from './messageService';
 
 function extractMessageIdFromWorktreePath(worktreePath: string | undefined): string | null {
@@ -105,6 +107,18 @@ export function extractAskUserQuestionFromTranscript(
   }
 
   return null;
+}
+
+function resolveGitBranch(cwd: string): string | null {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd,
+      timeout: 3000,
+      encoding: 'utf-8',
+    }).trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function ingestEvent(payload: HookEvent) {
@@ -234,6 +248,18 @@ export async function ingestEvent(payload: HookEvent) {
       shouldSetPreview ? preview : null,
       importance === 'important' ? 'important' : message.importance,
     );
+  }
+
+  // Update summary and branch
+  const summaryText =
+    payload.hook_event_name === 'Stop' && payload.last_assistant_message
+      ? payload.last_assistant_message.slice(0, 500)
+      : null;
+  const branchName =
+    !message.branch && payload.cwd ? resolveGitBranch(payload.cwd) : null;
+
+  if (summaryText || branchName) {
+    await updateMessageSummaryAndBranch(message.id, summaryText, branchName);
   }
 
   const hydratedMessage = await getMessageByIdForFeed(message.id);

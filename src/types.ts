@@ -80,6 +80,8 @@ export interface ChannelMessage {
   preview: string | null;
   importance: string;
   status: TicketStatus;
+  summary: string | null;
+  branch: string | null;
   createdAt: string;
   session: MessageSession;
   _count: { threads: number };

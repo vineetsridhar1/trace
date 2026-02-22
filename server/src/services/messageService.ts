@@ -131,6 +131,20 @@ export async function updateMessagePreviewAndImportance(
   });
 }
 
+export async function updateMessageSummaryAndBranch(
+  messageId: string,
+  summary: string | null,
+  branch: string | null,
+) {
+  return prisma.message.update({
+    where: { id: messageId },
+    data: {
+      ...(summary !== null ? { summary } : {}),
+      ...(branch !== null ? { branch } : {}),
+    },
+  });
+}
+
 export async function createUserMessage(channelId: string, text: string) {
   await ensureManualInputSession();
 
