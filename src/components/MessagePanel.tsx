@@ -58,8 +58,9 @@ export function MessagePanel({
       <div
         id="feed-list"
         ref={feedListRef}
-        className="flex min-h-0 flex-1 flex-col justify-end overflow-y-auto px-2 py-2"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
       >
+        <div className="flex-1" />
         {messages.map((message) => (
           <MessageItem
             key={message.id}
