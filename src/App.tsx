@@ -27,6 +27,7 @@ export default function App() {
     activeThreadId,
     threadStatus,
     deletingWorktree,
+    hasWorktree,
     expandedReadGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
@@ -219,6 +220,7 @@ export default function App() {
         expandedReadGroupIds={expandedReadGroupIds}
         selectedMessageId={selectedMessageId}
         deletingWorktree={deletingWorktree}
+        hasWorktree={hasWorktree}
         showJumpToLatest={showJumpToLatest}
         threadInput={threadInput}
         isClaudeRunning={isClaudeRunning}
