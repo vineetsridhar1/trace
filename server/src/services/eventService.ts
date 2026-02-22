@@ -29,6 +29,10 @@ function extractMessageIdFromWorktreePath(worktreePath: string | undefined): str
   return segments[markerIndex + 1] ?? null;
 }
 
+function stripTraceInternal(text: string): string {
+  return text.replace(/<trace-internal>[\s\S]*?<\/trace-internal>\s*/g, '');
+}
+
 function extractPromptFromPayload(payload: HookEvent): string | null {
   const raw = payload as unknown as Record<string, unknown>;
   const candidates = ['prompt', 'text', 'message', 'user_prompt'];
@@ -144,7 +148,10 @@ export async function ingestEvent(payload: HookEvent) {
   // De-duplicate hook prompt events when we've already persisted the exact
   // prompt from the UI before spawning Claude.
   if (payload.hook_event_name === 'UserPromptSubmit') {
-    const incomingPrompt = extractPromptFromPayload(payload)?.trim() ?? null;
+    const rawIncoming = extractPromptFromPayload(payload)?.trim() ?? null;
+    // Strip <trace-internal> blocks so the injected branch-rename instruction
+    // doesn't prevent dedup against the clean prompt already persisted by the UI.
+    const incomingPrompt = rawIncoming ? stripTraceInternal(rawIncoming).trim() : null;
     if (incomingPrompt) {
       const existingPromptEvent = await prisma.event.findFirst({
         where: {

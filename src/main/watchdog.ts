@@ -3,7 +3,7 @@ import path from 'node:path';
 import { ChildProcess } from 'node:child_process';
 
 export const CLAUDE_INACTIVITY_TIMEOUT_MS = Number(
-  process.env.CLAUDE_INACTIVITY_TIMEOUT_MS ?? process.env.CLAUDE_TIMEOUT_MS ?? 120_000,
+  process.env.CLAUDE_INACTIVITY_TIMEOUT_MS ?? process.env.CLAUDE_TIMEOUT_MS ?? 300_000,
 );
 
 export interface ClaudeRunState {
