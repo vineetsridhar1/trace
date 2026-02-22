@@ -270,22 +270,8 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
     return <GenericToolRow event={event} time={time} />;
   }
 
-  const activityLabel = editLike
-    ? `${event.toolName ?? 'Edit'} applied`
-    : 'Todos updated';
-
-  const icon = editLike ? '✏️' : '📋';
-
   return (
     <div className="activity-row">
-      <div className="activity-row-header">
-        <span className="activity-row-icon">{icon}</span>
-        <span className="activity-row-title">{activityLabel}</span>
-        <span className="activity-row-time">{time}</span>
-      </div>
-      {event.lastAssistantMessage && (
-        <div className="activity-row-note">{event.lastAssistantMessage.slice(0, 320)}</div>
-      )}
       {todoTool ? (
         <TodoListPreview event={event} />
       ) : writeTool ? (

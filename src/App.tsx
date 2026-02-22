@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage } from './types';
 import { SERVER_URL } from './types';
 import { buildThreadNodes } from './utils';
@@ -42,6 +42,7 @@ export default function App() {
   const [channelWidth, setChannelWidth] = useState(220);
   const [messageInput, setMessageInput] = useState('');
   const [threadInput, setThreadInput] = useState('');
+  const spawnedMessageIds = useRef(new Set<string>());
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth);
 
@@ -58,6 +59,7 @@ export default function App() {
   const feedTitle = activeChannel ? `# ${activeChannel.name}` : 'Activity Feed';
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
   const isClaudeRunning = useMemo(() => {
+    if (!selectedMessageId || !spawnedMessageIds.current.has(selectedMessageId)) return false;
     const msg = messages.find((m) => m.id === selectedMessageId);
     return msg ? msg.session.status !== 'stopped' : false;
   }, [messages, selectedMessageId]);
@@ -111,6 +113,7 @@ export default function App() {
       upsertMessage(message);
       handleOpenThread(message);
 
+      spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, text);
       if (!result.success) console.error('Failed to spawn claude:', result.error);
     } catch {
@@ -142,6 +145,7 @@ export default function App() {
       upsertMessage(updated);
       if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
 
+      spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, text);
       if (!result.success) console.error('Failed to spawn claude:', result.error);
     } catch {
@@ -177,6 +181,7 @@ export default function App() {
       upsertMessage(updated);
       if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
 
+      spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, prompt);
       if (!result.success) console.error('Failed to spawn claude for merge-to-main:', result.error);
     } catch {

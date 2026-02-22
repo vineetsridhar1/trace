@@ -268,6 +268,25 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
   }
 
   flushBucket();
+
+  // Only keep the last TodoWrite event — each one replaces the previous
+  let lastTodoIdx = -1;
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (
+      n.kind === 'event' &&
+      n.event.hookEventName === 'PostToolUse' &&
+      normalizeToolName(n.event.toolName) === 'todowrite'
+    ) {
+      if (lastTodoIdx === -1) {
+        lastTodoIdx = i;
+      } else {
+        nodes.splice(i, 1);
+        lastTodoIdx--;
+      }
+    }
+  }
+
   return nodes;
 }
 
