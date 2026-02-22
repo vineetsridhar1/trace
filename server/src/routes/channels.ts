@@ -6,6 +6,8 @@ import {
   getEventsByThread,
   createUserMessage,
   appendPromptToMessageThread,
+  updateMessageStatus,
+  getMessageByIdForFeed,
 } from '../services/messageService';
 import { sseManager } from '../services/sseManager';
 
@@ -102,6 +104,33 @@ router.post(
     sseManager.broadcastChannel(req.params.channelId, 'new-event', created.event);
 
     res.status(201).json(created);
+  },
+);
+
+const VALID_STATUSES = ['pending', 'in_progress', 'completed'];
+
+router.patch(
+  '/:channelId/messages/:messageId/status',
+  async (req: Request<{ channelId: string; messageId: string }>, res: Response) => {
+    const { status } = req.body;
+    if (!status || !VALID_STATUSES.includes(status)) {
+      res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+      return;
+    }
+
+    await updateMessageStatus(req.params.messageId, status);
+    const message = await getMessageByIdForFeed(req.params.messageId);
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
+
+    sseManager.broadcastChannel(req.params.channelId, 'message-upsert', {
+      channelId: req.params.channelId,
+      message,
+    });
+
+    res.json({ message });
   },
 );
 

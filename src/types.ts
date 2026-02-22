@@ -79,6 +79,7 @@ export interface ChannelMessage {
   sessionId: string;
   preview: string | null;
   importance: string;
+  status: TicketStatus;
   createdAt: string;
   session: MessageSession;
   _count: { threads: number };
@@ -103,6 +104,7 @@ export interface ThreadEventEnvelope {
   event: ServerEvent;
 }
 
+export type TicketStatus = 'pending' | 'in_progress' | 'completed';
 export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
 
