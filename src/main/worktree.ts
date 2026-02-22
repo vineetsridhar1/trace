@@ -83,6 +83,16 @@ export function ensureWorktree(messageId: string): Promise<string> {
   });
 }
 
+export async function getWorktreeBranch(messageId: string): Promise<string> {
+  const worktreePath = getWorktreePath(messageId);
+  const result = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+  const branch = result.stdout.trim();
+  if (result.code !== 0 || !branch) {
+    return `trace/${messageId.slice(0, 8)}`;
+  }
+  return branch;
+}
+
 export function checkWorktreeExists(messageId: string): { exists: boolean; worktreePath: string } {
   const worktreePath = getWorktreePath(messageId);
   return { exists: fs.existsSync(worktreePath), worktreePath };
@@ -90,11 +100,12 @@ export function checkWorktreeExists(messageId: string): { exists: boolean; workt
 
 export async function mergeWorktree(messageId: string): Promise<{ success: boolean; branch: string }> {
   const worktreePath = getWorktreePath(messageId);
-  const branch = `trace/${messageId.slice(0, 8)}`;
 
   if (!fs.existsSync(worktreePath)) {
     throw new Error(`Worktree not found: ${worktreePath}`);
   }
+
+  const branch = await getWorktreeBranch(messageId);
 
   // Merge the branch into main from the target (main) directory
   const mergeResult = await runProcess('git', ['merge', branch], targetDir);
@@ -126,6 +137,9 @@ export async function deleteWorktree(messageId: string): Promise<{ removed: bool
     return { removed: false, worktreePath };
   }
 
+  // Resolve the actual branch name before removing the worktree directory
+  const branch = await getWorktreeBranch(messageId);
+
   const removeResult = await runProcess('git', ['worktree', 'remove', '--force', worktreePath], targetDir);
 
   if (removeResult.code !== 0) {
@@ -139,7 +153,7 @@ export async function deleteWorktree(messageId: string): Promise<{ removed: bool
   }
 
   await runProcess('git', ['worktree', 'prune'], targetDir);
-  await runProcess('git', ['branch', '-D', `trace/${messageId.slice(0, 8)}`], targetDir);
+  await runProcess('git', ['branch', '-D', branch], targetDir);
 
   return { removed: true, worktreePath };
 }

@@ -11,6 +11,7 @@ import {
   runningProcesses,
   suppressSyntheticStopFor,
   ensureWorktree,
+  getWorktreeBranch,
 } from './worktree';
 
 const SERVER_URL = process.env.TRACE_SERVER_URL ?? 'http://localhost:3100';
@@ -24,6 +25,25 @@ export async function spawnClaude(messageId: string, prompt: string): Promise<st
     `spawn start cwd=${worktreePath} inactivityTimeoutMs=${CLAUDE_INACTIVITY_TIMEOUT_MS} promptLen=${prompt.length}`,
   );
 
+  // If this is the first spawn (branch still has the default UUID name),
+  // inject a hidden instruction asking Claude to rename the branch based on intent.
+  const defaultBranch = `trace/${messageId.slice(0, 8)}`;
+  const currentBranch = await getWorktreeBranch(messageId);
+  let effectivePrompt = prompt;
+  if (currentBranch === defaultBranch) {
+    effectivePrompt =
+      `<trace-internal>\n` +
+      `IMPORTANT: Before doing anything else, you must first rename the current git branch to reflect the user's intent.\n` +
+      `Current branch: ${currentBranch}\n` +
+      `Analyze the user's prompt below and create a short, descriptive kebab-case branch name (max 5 words, prefixed with "trace/").\n` +
+      `Examples: trace/fix-login-bug, trace/add-dark-mode, trace/refactor-auth-system\n` +
+      `Run this command FIRST before any other work:\n` +
+      `git branch -m <new-branch-name>\n\n` +
+      `After renaming the branch, proceed with the user's actual request below. Do NOT mention the branch rename to the user.\n` +
+      `</trace-internal>\n\n` +
+      prompt;
+  }
+
   const existing = runningProcesses.get(messageId);
   if (existing && !existing.killed) {
     suppressSyntheticStopFor.add(messageId);
@@ -33,7 +53,7 @@ export async function spawnClaude(messageId: string, prompt: string): Promise<st
     runningProcesses.delete(messageId);
   }
 
-  const child = spawn('claude', ['--dangerously-skip-permissions', '-p', prompt], {
+  const child = spawn('claude', ['--dangerously-skip-permissions', '-p', effectivePrompt], {
     cwd: worktreePath,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: Object.fromEntries(
