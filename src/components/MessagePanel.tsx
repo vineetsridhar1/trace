@@ -7,8 +7,12 @@ function useWorktreeStatus(messages: ChannelMessage[]) {
   const [statusMap, setStatusMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    if (!window.traceAPI || typeof window.traceAPI.checkWorktreeExists !== 'function') return;
+
     let cancelled = false;
-    const ids = messages.map((m) => m.id);
+    // Only check messages spawned via UI (user-manual-input); external sessions never have worktrees
+    const uiMessages = messages.filter((m) => m.sessionId === 'user-manual-input');
+    const ids = uiMessages.map((m) => m.id);
 
     Promise.all(
       ids.map(async (id) => {
@@ -282,7 +286,7 @@ function MessageItem({
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-[#c0caf5]">Session</span>
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-xs text-[#565f89]">
-            {message.sessionId.slice(0, 8)}
+            {message.sessionId === 'user-manual-input' ? 'You' : message.sessionId.slice(0, 8)}
           </span>
           <span className="ml-auto text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
         </div>

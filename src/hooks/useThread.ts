@@ -12,7 +12,7 @@ export function useThread() {
   const [threadWidth, setThreadWidth] = useState(0);
   const [deletingWorktree, setDeletingWorktree] = useState(false);
   const [mergingWorktree, setMergingWorktree] = useState(false);
-  const [hasWorktree, setHasWorktree] = useState(false);
+  const [hasWorktree, setHasWorktree] = useState<boolean | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<Record<string, boolean>>({});
 
@@ -117,6 +117,7 @@ export function useThread() {
     (message: ChannelMessage) => {
       setSelectedMessageId(message.id);
       setSelectedMessage(message);
+      setHasWorktree(null);
       setThreadWidth(clamp(Math.floor(window.innerWidth * 0.5), 280, 600));
       resetThreadViewState();
       void loadThreadEvents(message);
