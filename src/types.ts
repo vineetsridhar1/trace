@@ -10,6 +10,12 @@ export interface TraceAPI {
   deleteWorktree: (
     messageId: string,
   ) => Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }>;
+  checkWorktreeExists: (
+    messageId: string,
+  ) => Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }>;
+  mergeWorktree: (
+    messageId: string,
+  ) => Promise<{ success: boolean; branch?: string; error?: string }>;
   reportClaudeActivity: (
     messageId: string,
     eventType: string,

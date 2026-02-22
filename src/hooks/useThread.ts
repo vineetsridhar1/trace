@@ -11,6 +11,8 @@ export function useThread() {
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>('idle');
   const [threadWidth, setThreadWidth] = useState(0);
   const [deletingWorktree, setDeletingWorktree] = useState(false);
+  const [mergingWorktree, setMergingWorktree] = useState(false);
+  const [hasWorktree, setHasWorktree] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<Record<string, boolean>>({});
 
@@ -98,6 +100,19 @@ export function useThread() {
     [reportClaudeActivity],
   );
 
+  const checkWorktree = useCallback(async (messageId: string) => {
+    if (!window.traceAPI || typeof window.traceAPI.checkWorktreeExists !== 'function') {
+      setHasWorktree(false);
+      return;
+    }
+    try {
+      const result = await window.traceAPI.checkWorktreeExists(messageId);
+      setHasWorktree(result.success && result.exists === true);
+    } catch {
+      setHasWorktree(false);
+    }
+  }, []);
+
   const openThreadPanel = useCallback(
     (message: ChannelMessage) => {
       setSelectedMessageId(message.id);
@@ -105,8 +120,9 @@ export function useThread() {
       setThreadWidth(clamp(Math.floor(window.innerWidth * 0.5), 280, 600));
       resetThreadViewState();
       void loadThreadEvents(message);
+      void checkWorktree(message.id);
     },
-    [loadThreadEvents, resetThreadViewState],
+    [loadThreadEvents, resetThreadViewState, checkWorktree],
   );
 
   const deleteWorktree = useCallback(async () => {
@@ -128,8 +144,29 @@ export function useThread() {
           ? `Deleted worktree: ${result.worktreePath}`
           : `Worktree already missing: ${result.worktreePath}`,
       );
+      setHasWorktree(false);
     } finally {
       setDeletingWorktree(false);
+    }
+  }, []);
+
+  const mergeWorktree = useCallback(async () => {
+    const message = selectedMessageRef.current;
+    if (!message) return;
+
+    const confirmed = window.confirm('Merge this worktree branch into main?');
+    if (!confirmed) return;
+
+    setMergingWorktree(true);
+    try {
+      const result = await window.traceAPI.mergeWorktree(message.id);
+      if (!result.success) {
+        console.error('Failed to merge worktree:', result.error);
+        return;
+      }
+      console.log(`Merged branch ${result.branch} into main`);
+    } finally {
+      setMergingWorktree(false);
     }
   }, []);
 
@@ -152,6 +189,8 @@ export function useThread() {
     setThreadWidth,
     threadOpen,
     deletingWorktree,
+    mergingWorktree,
+    hasWorktree,
     showJumpToLatest,
     setShowJumpToLatest,
     expandedReadGroupIds,
@@ -160,6 +199,7 @@ export function useThread() {
     loadThreadEvents,
     openThreadPanel,
     deleteWorktree,
+    mergeWorktree,
     toggleReadGroup,
   };
 }

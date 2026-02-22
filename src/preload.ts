@@ -20,6 +20,24 @@ contextBridge.exposeInMainWorld('traceAPI', {
       return { success: false, error: String(err) };
     }
   },
+  checkWorktreeExists: async (
+    messageId: string,
+  ): Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }> => {
+    try {
+      return await ipcRenderer.invoke('check-worktree', messageId);
+    } catch (err) {
+      return { success: false, exists: false, error: String(err) };
+    }
+  },
+  mergeWorktree: async (
+    messageId: string,
+  ): Promise<{ success: boolean; branch?: string; error?: string }> => {
+    try {
+      return await ipcRenderer.invoke('merge-worktree', messageId);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
   reportClaudeActivity: async (
     messageId: string,
     eventType: string,

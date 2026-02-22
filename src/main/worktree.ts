@@ -80,6 +80,28 @@ export function ensureWorktree(messageId: string): Promise<string> {
   });
 }
 
+export function checkWorktreeExists(messageId: string): { exists: boolean; worktreePath: string } {
+  const worktreePath = getWorktreePath(messageId);
+  return { exists: fs.existsSync(worktreePath), worktreePath };
+}
+
+export async function mergeWorktree(messageId: string): Promise<{ success: boolean; branch: string }> {
+  const worktreePath = getWorktreePath(messageId);
+  const branch = `trace/${messageId.slice(0, 8)}`;
+
+  if (!fs.existsSync(worktreePath)) {
+    throw new Error(`Worktree not found: ${worktreePath}`);
+  }
+
+  // Merge the branch into main from the target (main) directory
+  const mergeResult = await runProcess('git', ['merge', branch], targetDir);
+  if (mergeResult.code !== 0) {
+    throw new Error(`Merge failed: ${mergeResult.stderr.trim()}`);
+  }
+
+  return { success: true, branch };
+}
+
 export async function deleteWorktree(messageId: string): Promise<{ removed: boolean; worktreePath: string }> {
   const worktreePath = getWorktreePath(messageId);
   const existing = runningProcesses.get(messageId);

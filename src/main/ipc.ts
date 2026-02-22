@@ -1,15 +1,19 @@
 import { ipcMain } from 'electron';
 import { spawnClaude } from './claude';
-import { deleteWorktree } from './worktree';
+import { checkWorktreeExists, deleteWorktree, mergeWorktree } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
 
 const SPAWN_CLAUDE_CHANNEL = 'spawn-claude';
 const DELETE_WORKTREE_CHANNEL = 'delete-worktree';
+const CHECK_WORKTREE_CHANNEL = 'check-worktree';
+const MERGE_WORKTREE_CHANNEL = 'merge-worktree';
 const CLAUDE_ACTIVITY_PING_CHANNEL = 'claude-activity-ping';
 
 export function registerIpcHandlers() {
   ipcMain.removeHandler(SPAWN_CLAUDE_CHANNEL);
   ipcMain.removeHandler(DELETE_WORKTREE_CHANNEL);
+  ipcMain.removeHandler(CHECK_WORKTREE_CHANNEL);
+  ipcMain.removeHandler(MERGE_WORKTREE_CHANNEL);
   ipcMain.removeHandler(CLAUDE_ACTIVITY_PING_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string) => {
@@ -28,6 +32,25 @@ export function registerIpcHandlers() {
       return { success: true, ...result };
     } catch (err) {
       console.error('Failed to delete worktree:', err);
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(CHECK_WORKTREE_CHANNEL, async (_event, messageId: string) => {
+    try {
+      const result = checkWorktreeExists(messageId);
+      return { success: true, ...result };
+    } catch (err) {
+      return { success: false, exists: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(MERGE_WORKTREE_CHANNEL, async (_event, messageId: string) => {
+    try {
+      const result = await mergeWorktree(messageId);
+      return { success: true, ...result };
+    } catch (err) {
+      console.error('Failed to merge worktree:', err);
       return { success: false, error: String(err) };
     }
   });

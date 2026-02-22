@@ -27,12 +27,15 @@ export default function App() {
     activeThreadId,
     threadStatus,
     deletingWorktree,
+    mergingWorktree,
+    hasWorktree,
     expandedReadGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
     loadThreadEvents,
     openThreadPanel,
     deleteWorktree,
+    mergeWorktree,
     toggleReadGroup,
   } = thread;
 
@@ -180,6 +183,8 @@ export default function App() {
         expandedReadGroupIds={expandedReadGroupIds}
         selectedMessageId={selectedMessageId}
         deletingWorktree={deletingWorktree}
+        mergingWorktree={mergingWorktree}
+        hasWorktree={hasWorktree}
         showJumpToLatest={showJumpToLatest}
         threadInput={threadInput}
         threadContentRef={threadContentRef}
@@ -188,6 +193,7 @@ export default function App() {
         onScrollToLatest={() => scrollThreadToBottom('smooth')}
         onClose={handleCloseThread}
         onDeleteWorktree={() => void deleteWorktree()}
+        onMergeWorktree={() => void mergeWorktree()}
         onThreadInputChange={setThreadInput}
         onSendThreadMessage={() => void sendThreadMessage()}
         onStartDrag={() => startDragging('right')}
