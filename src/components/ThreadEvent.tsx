@@ -160,19 +160,121 @@ function TodoListPreview({ event }: { event: ServerEvent }) {
   );
 }
 
-function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
+function isBashEvent(event: ServerEvent): boolean {
+  return event.hookEventName === 'PostToolUse' && normalizeToolName(event.toolName) === 'bash';
+}
+
+function BashToolRow({ event, time }: { event: ServerEvent; time: string }) {
+  const [open, setOpen] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState(0);
+
+  const input = event.toolInput as Record<string, unknown> | null;
+  const command = (typeof input?.command === 'string' ? input.command : null);
+  const output = event.toolResponse ? serializeUnknown(event.toolResponse, 2000) : null;
+
+  useEffect(() => {
+    if (bodyRef.current) {
+      setBodyHeight(bodyRef.current.scrollHeight);
+    }
+  }, [output, open]);
+
+  return (
+    <div className="tool-cmd-row">
+      <button
+        type="button"
+        className="tool-cmd-button"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="tool-cmd-chevron" style={{ transform: open ? 'rotate(90deg)' : undefined }}>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+            <path d="M3 1.5L7 5 3 8.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          </svg>
+        </span>
+        <code className="tool-cmd-code">{command ?? `${event.toolName ?? 'Tool'} executed`}</code>
+        <span className="tool-cmd-time">{time}</span>
+      </button>
+      <div
+        className="tool-cmd-body"
+        style={{ maxHeight: open ? `${bodyHeight}px` : '0px' }}
+      >
+        <div ref={bodyRef}>
+          {output && (
+            <pre className="tool-cmd-output">{output}</pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GenericToolRow({ event, time }: { event: ServerEvent; time: string }) {
+  const [open, setOpen] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState(0);
+
   const hasToolInput = event.toolInput !== null && event.toolInput !== undefined;
+  const output = event.toolResponse ? serializeUnknown(event.toolResponse, 2000) : null;
+
+  useEffect(() => {
+    if (bodyRef.current) {
+      setBodyHeight(bodyRef.current.scrollHeight);
+    }
+  }, [output, open]);
+
+  const label = `${event.toolName ?? 'Tool'} executed`;
+
+  return (
+    <div className="tool-cmd-row">
+      <button
+        type="button"
+        className="tool-cmd-button"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="tool-cmd-chevron" style={{ transform: open ? 'rotate(90deg)' : undefined }}>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+            <path d="M3 1.5L7 5 3 8.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          </svg>
+        </span>
+        <code className="tool-cmd-code">{label}</code>
+        <span className="tool-cmd-time">{time}</span>
+      </button>
+      <div
+        className="tool-cmd-body"
+        style={{ maxHeight: open ? `${bodyHeight}px` : '0px' }}
+      >
+        <div ref={bodyRef}>
+          {hasToolInput && (
+            <pre className="tool-cmd-output">{serializeUnknown(event.toolInput)}</pre>
+          )}
+          {output && (
+            <pre className="tool-cmd-output">{output}</pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
   const editLike = isEditLikeEvent(event);
   const writeTool = isWriteEvent(event);
   const todoTool = isTodoWriteEvent(event);
+  const bashTool = isBashEvent(event);
+
+  if (bashTool) {
+    return <BashToolRow event={event} time={time} />;
+  }
+
+  if (!editLike && !todoTool) {
+    return <GenericToolRow event={event} time={time} />;
+  }
 
   const activityLabel = editLike
     ? `${event.toolName ?? 'Edit'} applied`
-    : todoTool
-      ? 'Todos updated'
-      : `${event.toolName ?? 'Tool'} executed`;
+    : 'Todos updated';
 
-  const icon = editLike ? '✏️' : todoTool ? '📋' : '🛠';
+  const icon = editLike ? '✏️' : '📋';
 
   return (
     <div className="activity-row">
@@ -191,21 +293,8 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
           <EditDiffPreview event={event} />
           <WriteCodePreview event={event} />
         </>
-      ) : editLike ? (
-        <EditDiffPreview event={event} />
       ) : (
-        hasToolInput && (
-          <details className="activity-row-details mt-1">
-            <summary>Tool input</summary>
-            <pre className="mt-1">{serializeUnknown(event.toolInput)}</pre>
-          </details>
-        )
-      )}
-      {event.toolResponse && !editLike && !todoTool && (
-        <details className="activity-row-details mt-1">
-          <summary>Tool output</summary>
-          <pre className="mt-1">{serializeUnknown(event.toolResponse)}</pre>
-        </details>
+        <EditDiffPreview event={event} />
       )}
     </div>
   );

@@ -29,6 +29,7 @@ interface ThreadPanelProps {
   deletingWorktree: boolean;
   showJumpToLatest: boolean;
   threadInput: string;
+  isClaudeRunning: boolean;
   threadContentRef: React.RefObject<HTMLDivElement | null>;
   onThreadScroll: () => void;
   onToggleReadGroup: (groupId: string) => void;
@@ -52,6 +53,7 @@ export function ThreadPanel({
   deletingWorktree,
   showJumpToLatest,
   threadInput,
+  isClaudeRunning,
   threadContentRef,
   onThreadScroll,
   onToggleReadGroup,
@@ -127,6 +129,7 @@ export function ThreadPanel({
 
         <ThreadInput
           threadInput={threadInput}
+          isClaudeRunning={isClaudeRunning}
           onThreadInputChange={onThreadInputChange}
           onSendThreadMessage={onSendThreadMessage}
         />
@@ -232,10 +235,12 @@ function ThreadStatusMessage({ status, activeThreadId }: { status: ThreadStatus;
 
 function ThreadInput({
   threadInput,
+  isClaudeRunning,
   onThreadInputChange,
   onSendThreadMessage,
 }: {
   threadInput: string;
+  isClaudeRunning: boolean;
   onThreadInputChange: (value: string) => void;
   onSendThreadMessage: () => void;
 }) {
@@ -243,27 +248,43 @@ function ThreadInput({
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
+      {isClaudeRunning && (
+        <div className="mb-2 flex items-center gap-2 px-1">
+          <svg
+            className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-violet-400"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+          </svg>
+          <span className="text-xs text-violet-400">Claude is working...</span>
+        </div>
+      )}
       <div className="flex items-end gap-2">
         <textarea
           id="thread-input"
           ref={textareaRef}
           rows={1}
           value={threadInput}
+          disabled={isClaudeRunning}
           onChange={(e) => onThreadInputChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              onSendThreadMessage();
+              if (!isClaudeRunning) onSendThreadMessage();
             }
           }}
-          placeholder="Send to Claude..."
-          className="flex-1 resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+          placeholder={isClaudeRunning ? 'Waiting for Claude...' : 'Send to Claude...'}
+          className={`flex-1 resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
         />
         <button
           id="thread-send"
           type="button"
+          disabled={isClaudeRunning}
           onClick={onSendThreadMessage}
-          className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+          className={`cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Send
         </button>

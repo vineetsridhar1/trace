@@ -57,6 +57,10 @@ export default function App() {
 
   const feedTitle = activeChannel ? `# ${activeChannel.name}` : 'Activity Feed';
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
+  const isClaudeRunning = useMemo(() => {
+    const msg = messages.find((m) => m.id === selectedMessageId);
+    return msg ? msg.session.status !== 'stopped' : false;
+  }, [messages, selectedMessageId]);
 
   useEffect(() => {
     if (activeChannelId) void refreshMessages(activeChannelId);
@@ -212,6 +216,7 @@ export default function App() {
         deletingWorktree={deletingWorktree}
         showJumpToLatest={showJumpToLatest}
         threadInput={threadInput}
+        isClaudeRunning={isClaudeRunning}
         threadContentRef={threadContentRef}
         onThreadScroll={onThreadScroll}
         onToggleReadGroup={toggleReadGroup}
