@@ -58,8 +58,8 @@ contextBridge.exposeInMainWorld('traceAPI', {
     }
   },
 
-  createPty: (terminalId: string, cwd: string) =>
-    ipcRenderer.invoke('pty-create', terminalId, cwd),
+  createPty: (terminalId: string, cwd: string, extraEnv?: Record<string, string>) =>
+    ipcRenderer.invoke('pty-create', terminalId, cwd, extraEnv),
 
   writePty: (terminalId: string, data: string) =>
     ipcRenderer.invoke('pty-write', terminalId, data),
@@ -86,6 +86,12 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   getWorktreeDiff: (messageId: string) =>
     ipcRenderer.invoke('get-worktree-diff', messageId),
+
+  allocatePorts: (messageId: string, count: number) =>
+    ipcRenderer.invoke('allocate-ports', messageId, count),
+
+  releasePorts: (messageId: string) =>
+    ipcRenderer.invoke('release-ports', messageId),
 
   focusWindow: () => ipcRenderer.invoke('focus-window'),
 });

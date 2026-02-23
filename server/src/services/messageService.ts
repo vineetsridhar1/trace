@@ -266,15 +266,19 @@ export async function getEventsByThread(
   const where: Record<string, unknown> = { threadId };
   if (after) where.timestamp = { gt: new Date(after) };
 
-  const [events, total] = await Promise.all([
+  const [rawEvents, total] = await Promise.all([
     prisma.event.findMany({
       where,
-      orderBy: { timestamp: 'asc' },
+      orderBy: { timestamp: 'desc' },
       skip: offset,
       take: limit,
     }),
     prisma.event.count({ where }),
   ]);
+
+  // Reverse to chronological order (query fetches newest-first so the latest
+  // events are always included, even when total exceeds the limit).
+  const events = rawEvents.reverse();
 
   // Lazily enrich the last Stop event if it hasn't been enriched with AskUserQuestion data.
   // Only enrich the final Stop event (which is the one Claude is currently waiting on).

@@ -131,14 +131,14 @@ export async function spawnClaude(messageId: string, prompt: string): Promise<st
     runningProcesses.delete(messageId);
     const runState = runStateByMessageId.get(messageId);
     const timedOut = runState?.timedOut ?? false;
+    const hookStopReceived = runState?.hookStopReceived ?? false;
     stopWatchdog(messageId, 'process-close');
     runStateByMessageId.delete(messageId);
 
     const assistantOutput = stdoutBuffer.trim();
     const stderrOutput = stderrBuffer.trim();
     const suppressed = suppressSyntheticStopFor.delete(messageId);
-    const shouldPostSyntheticStop =
-      !suppressed && (timedOut || !!failedToSpawn || code !== 0);
+    const shouldPostSyntheticStop = !suppressed && !hookStopReceived;
 
     if (!shouldPostSyntheticStop) return;
 

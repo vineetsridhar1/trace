@@ -35,6 +35,8 @@ interface ThreadPanelProps {
   threadInput: string;
   isClaudeRunning: boolean;
   threadContentRef: React.RefObject<HTMLDivElement | null>;
+  scriptsAvailable: boolean;
+  onRunScripts: () => void;
   pendingRunMessageId: string | null;
   pendingRunPrompt: string;
   onPendingPromptChange: (value: string) => void;
@@ -70,6 +72,8 @@ export function ThreadPanel({
   threadInput,
   isClaudeRunning,
   threadContentRef,
+  scriptsAvailable,
+  onRunScripts,
   pendingRunMessageId,
   pendingRunPrompt,
   onPendingPromptChange,
@@ -113,6 +117,8 @@ export function ThreadPanel({
           messageStatus={messageStatus}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
+          scriptsAvailable={scriptsAvailable}
+          onRunScripts={onRunScripts}
           isFullscreen={isFullscreen}
           onClose={onClose}
           onDeleteWorktree={onDeleteWorktree}
@@ -205,6 +211,8 @@ function ThreadHeader({
   messageStatus,
   deletingWorktree,
   hasWorktree,
+  scriptsAvailable,
+  onRunScripts,
   isFullscreen,
   onClose,
   onDeleteWorktree,
@@ -216,6 +224,8 @@ function ThreadHeader({
   messageStatus: TicketStatus;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
+  scriptsAvailable: boolean;
+  onRunScripts: () => void;
   isFullscreen: boolean;
   onClose: () => void;
   onDeleteWorktree: () => void;
@@ -243,6 +253,23 @@ function ThreadHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
+        {hasWorktree === true && scriptsAvailable && (
+          <button
+            type="button"
+            title="Run startup scripts in this worktree"
+            onClick={onRunScripts}
+            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="mx-auto h-3.5 w-3.5"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </button>
+        )}
         {hasWorktree === true && !isFullscreen && onEnterFullscreen && (
           <button
             type="button"

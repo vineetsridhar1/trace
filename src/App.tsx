@@ -57,6 +57,7 @@ export default function App() {
     activeTabId,
     setActiveTabId,
     isVisible: startupTerminalsVisible,
+    runCwd: startupTerminalsCwd,
     runAllScripts,
     killAllTerminals,
     killTerminal,
@@ -167,13 +168,17 @@ export default function App() {
 
   const handleSwitchChannel = useCallback(
     (channelId: string) => {
+      // Release ports for any running message scripts before switching
+      if (selectedMessageId) {
+        void window.traceAPI.releasePorts(selectedMessageId);
+      }
       switchChannel(channelId);
       clearMessages();
       closeThreadPanel();
       setChannelWidth(220);
       killAllTerminals();
     },
-    [switchChannel, clearMessages, closeThreadPanel, killAllTerminals],
+    [switchChannel, clearMessages, closeThreadPanel, killAllTerminals, selectedMessageId],
   );
 
   const handleOpenThread = useCallback(
@@ -251,6 +256,7 @@ export default function App() {
       setHasWorktree(true);
       void updateMessageStatus(messageId, 'in_progress');
     } else {
+      spawnedMessageIds.current.delete(messageId);
       console.error('Failed to spawn claude:', result.error);
     }
   }, [pendingRunMessageId, pendingRunPrompt, activeChannelId, upsertMessage, setHasWorktree, updateMessageStatus]);
@@ -290,6 +296,7 @@ export default function App() {
         setHasWorktree(true);
         void updateMessageStatus(message.id, 'in_progress');
       } else {
+        spawnedMessageIds.current.delete(message.id);
         console.error('Failed to spawn claude:', result.error);
       }
     } catch {
@@ -356,7 +363,10 @@ export default function App() {
 
       spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, claudePrompt ?? text);
-      if (!result.success) console.error('Failed to spawn claude for plan response:', result.error);
+      if (!result.success) {
+        spawnedMessageIds.current.delete(message.id);
+        console.error('Failed to spawn claude for plan response:', result.error);
+      }
     } catch {
       console.error('Failed to send plan response');
     }
@@ -390,6 +400,7 @@ export default function App() {
       if (result.success) {
         void updateMessageStatus(message.id, 'completed');
       } else {
+        spawnedMessageIds.current.delete(message.id);
         console.error('Failed to spawn claude for merge-to-main:', result.error);
       }
     } catch {
@@ -462,6 +473,47 @@ export default function App() {
     [channels, runAllScripts],
   );
 
+  // --- Per-message startup scripts ---
+  const handleRunMessageScripts = useCallback(
+    async () => {
+      if (!selectedMessageId || !activeChannelId) return;
+
+      // Check worktree exists to get the path
+      const wtResult = await window.traceAPI.checkWorktreeExists(selectedMessageId);
+      if (!wtResult.success || !wtResult.exists || !wtResult.worktreePath) return;
+      const worktreeDir = wtResult.worktreePath;
+
+      // Fetch channel's startup scripts
+      const res = await fetch(`${SERVER_URL}/channels/${activeChannelId}/startup-scripts`);
+      if (!res.ok) return;
+      const { scripts: channelScripts } = (await res.json()) as { scripts: StartupScript[] };
+      if (channelScripts.length === 0) return;
+
+      // Allocate ports — one per script
+      const portResult = await window.traceAPI.allocatePorts(selectedMessageId, channelScripts.length);
+      if (!portResult.success || !portResult.ports) return;
+      const ports = portResult.ports;
+
+      // Build per-script env maps
+      const envMaps: Record<string, string>[] = channelScripts.map((_, i) => {
+        const env: Record<string, string> = {
+          PORT: String(ports[i]),
+          TRACE_BASE_PORT: String(ports[0]),
+        };
+        for (let j = 0; j < ports.length; j++) {
+          env[`TRACE_PORT_${j}`] = String(ports[j]);
+        }
+        return env;
+      });
+
+      runAllScripts(selectedMessageId, worktreeDir, channelScripts, envMaps);
+    },
+    [selectedMessageId, activeChannelId, runAllScripts],
+  );
+
+  // Whether the play button should appear in the thread header
+  const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
+
   const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
 
   // Find the cwd for the active channel (for startup terminals)
@@ -487,7 +539,7 @@ export default function App() {
           overflow: 'hidden',
         }}
       >
-        <div className={startupTerminalsVisible && !isFullscreen ? 'min-h-0 flex-1 overflow-hidden' : 'min-h-0 flex-1'}>
+        <div className={startupTerminalsVisible && !isFullscreen ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex min-h-0 flex-1 flex-col'}>
           <MessagePanel
             feedTitle={feedTitle}
             messages={messages}
@@ -508,7 +560,7 @@ export default function App() {
             <TerminalTabs
               terminals={startupTerminalList}
               activeTabId={activeTabId}
-              cwd={activeChannelCwd}
+              cwd={startupTerminalsCwd || activeChannelCwd}
               onSelectTab={setActiveTabId}
               onCloseTab={killTerminal}
               onCloseAll={killAllTerminals}
@@ -532,6 +584,8 @@ export default function App() {
         threadInput={threadInput}
         isClaudeRunning={isClaudeRunning}
         threadContentRef={threadContentRef}
+        scriptsAvailable={scriptsAvailable}
+        onRunScripts={() => void handleRunMessageScripts()}
         pendingRunMessageId={pendingRunMessageId}
         pendingRunPrompt={pendingRunPrompt}
         onPendingPromptChange={setPendingRunPrompt}
@@ -541,7 +595,11 @@ export default function App() {
         onToggleReadGroup={toggleReadGroup}
         onScrollToLatest={() => scrollThreadToBottom('smooth')}
         onClose={handleCloseThread}
-        onDeleteWorktree={() => void deleteWorktree((messageId) => void updateMessageStatus(messageId, 'completed'))}
+        onDeleteWorktree={() => {
+          killAllTerminals();
+          if (selectedMessageId) void window.traceAPI.releasePorts(selectedMessageId);
+          void deleteWorktree((messageId) => void updateMessageStatus(messageId, 'completed'));
+        }}
         onMergeToMain={() => void mergeToMain()}
         onThreadInputChange={setThreadInput}
         onSendThreadMessage={() => void sendThreadMessage()}

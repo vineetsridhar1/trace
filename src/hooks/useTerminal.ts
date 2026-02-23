@@ -28,9 +28,10 @@ const TOKYO_NIGHT_THEME = {
 interface UseTerminalOptions {
   terminalId: string;
   cwd: string;
+  env?: Record<string, string>;
 }
 
-export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
+export function useTerminal({ terminalId, cwd, env }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -99,7 +100,7 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
         focusTimers.push(timer);
       }
 
-      void window.traceAPI.createPty(terminalId, cwd).then((result) => {
+      void window.traceAPI.createPty(terminalId, cwd, env).then((result) => {
         if (!result.success) {
           terminal?.write(`\r\n[PTY start failed: ${result.error ?? 'unknown error'}]\r\n`);
         }
@@ -153,7 +154,7 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [terminalId, cwd, focusInput]);
+  }, [terminalId, cwd, env, focusInput]);
 
   return { containerRef, fit, focus };
 }

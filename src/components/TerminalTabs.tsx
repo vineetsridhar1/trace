@@ -8,10 +8,11 @@ interface TerminalTabContentProps {
   cwd: string;
   command: string;
   visible: boolean;
+  env?: Record<string, string>;
 }
 
-function TerminalTabContent({ terminalId, cwd, command, visible }: TerminalTabContentProps) {
-  const { containerRef, focus } = useTerminal({ terminalId, cwd });
+function TerminalTabContent({ terminalId, cwd, command, visible, env }: TerminalTabContentProps) {
+  const { containerRef, focus } = useTerminal({ terminalId, cwd, env });
   const commandWritten = useRef(false);
 
   // Write the startup command into the terminal after shell init
@@ -97,6 +98,7 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
             cwd={cwd}
             command={t.script.command}
             visible={t.terminalId === activeTabId}
+            env={t.env}
           />
         ))}
       </div>

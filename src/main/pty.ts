@@ -13,19 +13,21 @@ export function createPty(
   terminalId: string,
   cwd: string,
   window: BrowserWindow,
+  extraEnv?: Record<string, string>,
 ): void {
   killPty(terminalId);
   lastCwdByTerminalId.set(terminalId, cwd);
 
   const shell = process.platform === 'darwin' ? 'zsh' : process.env.SHELL || 'bash';
+  const baseEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
+  ) as Record<string, string>;
   const proc = pty.spawn(shell, [], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     cwd,
-    env: Object.fromEntries(
-      Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
-    ) as Record<string, string>,
+    env: { ...baseEnv, ...extraEnv },
   });
 
   proc.onData((data) => {

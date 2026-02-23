@@ -4,12 +4,14 @@ import type { StartupScript } from '../types';
 export interface StartupTerminal {
   terminalId: string;
   script: StartupScript;
+  env?: Record<string, string>;
 }
 
 export function useStartupTerminals() {
   const [terminals, setTerminals] = useState<StartupTerminal[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [runCwd, setRunCwd] = useState<string>('');
   // Counter to generate unique terminal IDs across runs
   const runCountRef = useRef(0);
 
@@ -38,16 +40,18 @@ export function useStartupTerminals() {
   }, []);
 
   const runAllScripts = useCallback(
-    (channelId: string, cwd: string, scripts: StartupScript[]) => {
+    (contextId: string, cwd: string, scripts: StartupScript[], envMaps?: Record<string, string>[]) => {
       runCountRef.current += 1;
       const run = runCountRef.current;
 
       // Build new terminal list. Old terminals unmount, killing their PTYs.
-      const newTerminals: StartupTerminal[] = scripts.map((script) => ({
-        terminalId: `startup-${channelId}-${script.id}-${run}`,
+      const newTerminals: StartupTerminal[] = scripts.map((script, i) => ({
+        terminalId: `startup-${contextId}-${script.id}-${run}`,
         script,
+        env: envMaps?.[i],
       }));
 
+      setRunCwd(cwd);
       setTerminals(newTerminals);
       setActiveTabId(newTerminals.length > 0 ? newTerminals[0].terminalId : null);
       setIsVisible(newTerminals.length > 0);
@@ -60,6 +64,7 @@ export function useStartupTerminals() {
     activeTabId,
     setActiveTabId,
     isVisible,
+    runCwd,
     runAllScripts,
     killAllTerminals,
     killTerminal,

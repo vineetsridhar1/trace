@@ -1,8 +1,9 @@
 import { ipcMain, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
-import { resetWatchdog, stopWatchdog } from './watchdog';
+import { resetWatchdog, stopWatchdog, markHookStopReceived } from './watchdog';
 import { createPty, writePty, resizePty, killPty, getPtyCwd } from './pty';
+import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
 
 const SPAWN_CLAUDE_CHANNEL = 'spawn-claude';
@@ -17,6 +18,8 @@ const PTY_KILL_CHANNEL = 'pty-kill';
 const STOP_CLAUDE_CHANNEL = 'stop-claude';
 const GET_WORKTREE_DIFF_CHANNEL = 'get-worktree-diff';
 const FOCUS_WINDOW_CHANNEL = 'focus-window';
+const ALLOCATE_PORTS_CHANNEL = 'allocate-ports';
+const RELEASE_PORTS_CHANNEL = 'release-ports';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -37,6 +40,8 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(STOP_CLAUDE_CHANNEL);
   ipcMain.removeHandler(GET_WORKTREE_DIFF_CHANNEL);
   ipcMain.removeHandler(FOCUS_WINDOW_CHANNEL);
+  ipcMain.removeHandler(ALLOCATE_PORTS_CHANNEL);
+  ipcMain.removeHandler(RELEASE_PORTS_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string) => {
     try {
@@ -91,6 +96,7 @@ export function registerIpcHandlers() {
     async (_event, messageId: string, eventType: string) => {
       try {
         if ((eventType ?? '').toLowerCase() === 'stop') {
+          markHookStopReceived(messageId);
           stopWatchdog(messageId, 'activity-stop-event');
         } else {
           resetWatchdog(messageId, `activity-event:${eventType}`);
@@ -102,10 +108,10 @@ export function registerIpcHandlers() {
     },
   );
 
-  ipcMain.handle(PTY_CREATE_CHANNEL, (_event, terminalId: string, cwd: string) => {
+  ipcMain.handle(PTY_CREATE_CHANNEL, (_event, terminalId: string, cwd: string, extraEnv?: Record<string, string>) => {
     if (!mainWindowRef) return { success: false, error: 'No main window' };
     try {
-      createPty(terminalId, cwd, mainWindowRef);
+      createPty(terminalId, cwd, mainWindowRef, extraEnv);
       return { success: true };
     } catch (err) {
       return { success: false, error: String(err) };
@@ -153,6 +159,24 @@ export function registerIpcHandlers() {
       const worktreePath = getWorktreePath(messageId);
       const result = await getWorktreeDiff(worktreePath);
       return { success: true, ...result };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(ALLOCATE_PORTS_CHANNEL, async (_event, messageId: string, count: number) => {
+    try {
+      const ports = await allocatePorts(messageId, count);
+      return { success: true, ports };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(RELEASE_PORTS_CHANNEL, (_event, messageId: string) => {
+    try {
+      releasePorts(messageId);
+      return { success: true };
     } catch (err) {
       return { success: false, error: String(err) };
     }
