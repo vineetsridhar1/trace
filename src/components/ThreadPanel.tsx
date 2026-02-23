@@ -1,42 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { DragTarget, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
 import { useSlashCommands } from '../hooks/useSlashCommands';
+import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
+import { useClaudeActions } from '../context/ClaudeActionsContext';
 import { SlashCommandMenu } from './SlashCommandMenu';
-
-function useAutoResize(value: string, maxHeight = 300) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-  const valueRef = useRef(value);
-  valueRef.current = value;
-
-  const measure = useCallback((el: HTMLTextAreaElement) => {
-    const v = valueRef.current;
-    if (!v) {
-      el.style.height = '';
-      return;
-    }
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
-  }, [maxHeight]);
-
-  // Re-measure when value changes
-  useEffect(() => {
-    const el = ref.current;
-    if (el) measure(el);
-  }, [value, measure]);
-
-  // Re-measure when the element's size changes (e.g. panel transition settles)
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => measure(el));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [measure]);
-
-  return ref;
-}
 
 interface ThreadPanelProps {
   threadWidth: number;
@@ -54,18 +23,11 @@ interface ThreadPanelProps {
   threadContentRef: React.RefObject<HTMLDivElement | null>;
   scriptsAvailable: boolean;
   onRunScripts: () => void;
-  pendingRunMessageId: string | null;
-  pendingRunInitialPrompt: string;
-  onRun: (planMode: boolean, prompt: string) => void;
-  onStopClaude: () => void;
   onThreadScroll: () => void;
   onToggleReadGroup: (groupId: string) => void;
   onScrollToLatest: () => void;
   onClose: () => void;
   onDeleteWorktree: () => void;
-  onMergeToMain: () => void;
-  onSendThreadMessage: (text: string) => Promise<boolean>;
-  onPlanResponse: (text: string, claudePrompt?: string) => void;
   onStartDrag: () => void;
   isFullscreen?: boolean;
   onEnterFullscreen?: () => void;
@@ -88,23 +50,25 @@ export function ThreadPanel({
   threadContentRef,
   scriptsAvailable,
   onRunScripts,
-  pendingRunMessageId,
-  pendingRunInitialPrompt,
-  onRun,
-  onStopClaude,
   onThreadScroll,
   onToggleReadGroup,
   onScrollToLatest,
   onClose,
   onDeleteWorktree,
-  onMergeToMain,
-  onSendThreadMessage,
-  onPlanResponse,
   onStartDrag,
   isFullscreen = false,
   onEnterFullscreen,
   onExitFullscreen,
 }: ThreadPanelProps) {
+  const {
+    pendingRunMessageId,
+    pendingRunInitialPrompt,
+    runPendingMessage,
+    stopClaude,
+    sendThreadMessage,
+    sendPlanResponse,
+    mergeToMain,
+  } = useClaudeActions();
   const threadOpen = threadWidth > 0;
 
   return (
@@ -134,7 +98,7 @@ export function ThreadPanel({
           isFullscreen={isFullscreen}
           onClose={onClose}
           onDeleteWorktree={onDeleteWorktree}
-          onMergeToMain={onMergeToMain}
+          onMergeToMain={() => void mergeToMain()}
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
         />
@@ -165,7 +129,9 @@ export function ThreadPanel({
                     <PlanReview
                       key={node.id}
                       node={node}
-                      onPlanResponse={onPlanResponse}
+                      onPlanResponse={(text, claudePrompt) => {
+                        void sendPlanResponse(text, claudePrompt);
+                      }}
                     />
                   );
                 }
@@ -174,7 +140,9 @@ export function ThreadPanel({
                     <AskUserQuestion
                       key={node.id}
                       node={node}
-                      onResponse={onPlanResponse}
+                      onResponse={(text) => {
+                        void sendPlanResponse(text);
+                      }}
                     />
                   );
                 }
@@ -195,13 +163,15 @@ export function ThreadPanel({
         {pendingRunMessageId === selectedMessageId ? (
           <RunButtons
             initialPrompt={pendingRunInitialPrompt}
-            onRun={onRun}
+            onRun={(planMode, prompt) => {
+              void runPendingMessage(planMode, prompt);
+            }}
           />
         ) : (
           <ThreadInput
             isClaudeRunning={isClaudeRunning}
-            onSendThreadMessage={onSendThreadMessage}
-            onStopClaude={onStopClaude}
+            onSendThreadMessage={sendThreadMessage}
+            onStopClaude={() => void stopClaude()}
           />
         )}
       </div>
@@ -410,10 +380,10 @@ function RunButtons({
   onRun,
 }: {
   initialPrompt: string;
-  onRun: (planMode: boolean, prompt: string) => void;
+  onRun: (planMode: boolean, prompt: string) => Promise<void> | void;
 }) {
   const [prompt, setPrompt] = useState(initialPrompt);
-  const textareaRef = useAutoResize(prompt);
+  const textareaRef = useAutoResizeTextarea(prompt, { observeResize: true });
 
   useEffect(() => {
     setPrompt(initialPrompt);
@@ -464,7 +434,7 @@ function ThreadInput({
   onStopClaude: () => void;
 }) {
   const [threadInput, setThreadInput] = useState('');
-  const textareaRef = useAutoResize(threadInput);
+  const textareaRef = useAutoResizeTextarea(threadInput, { observeResize: true });
   const slashCommands = useSlashCommands(threadInput, setThreadInput);
 
   const handleSendThreadMessage = useCallback(async () => {

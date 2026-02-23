@@ -1,30 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, TicketStatus } from '../types';
 import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
+import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
+import { useClaudeActions } from '../context/ClaudeActionsContext';
 import { SlashCommandMenu } from './SlashCommandMenu';
-
-function useAutoResize(value: string, maxHeight = 300) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (!value) {
-      el.style.height = '';
-      return;
-    }
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
-  }, [value, maxHeight]);
-  return ref;
-}
 
 interface MessagePanelProps {
   feedTitle: string;
   messages: ChannelMessage[];
   selectedMessageId: string | null;
   attentionMessageIds: Set<string>;
-  onSendMessage: (text: string) => Promise<boolean>;
   onOpenThread: (message: ChannelMessage) => void;
 }
 
@@ -33,7 +19,6 @@ export function MessagePanel({
   messages,
   selectedMessageId,
   attentionMessageIds,
-  onSendMessage,
   onOpenThread,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -117,30 +102,25 @@ export function MessagePanel({
         )}
       </div>
 
-      <MessageInput
-        onSendMessage={onSendMessage}
-      />
+      <MessageInput />
     </div>
   );
 }
 
-function MessageInput({
-  onSendMessage,
-}: {
-  onSendMessage: (text: string) => Promise<boolean>;
-}) {
+function MessageInput() {
+  const { sendMessage } = useClaudeActions();
   const [messageInput, setMessageInput] = useState('');
-  const textareaRef = useAutoResize(messageInput);
+  const textareaRef = useAutoResizeTextarea(messageInput);
   const slashCommands = useSlashCommands(messageInput, setMessageInput);
 
   const handleSendMessage = useCallback(async () => {
     const text = messageInput.trim();
     if (!text) return;
-    const sent = await onSendMessage(text);
+    const sent = await sendMessage(text);
     if (sent) {
       setMessageInput('');
     }
-  }, [messageInput, onSendMessage]);
+  }, [messageInput, sendMessage]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -248,19 +228,21 @@ function StatusBadge({ status }: { status: TicketStatus }) {
   );
 }
 
-function MessageItem({
-  message,
-  isSelected,
-  needsAttention,
-  onOpenThread,
-  dimmed,
-}: {
+interface MessageItemProps {
   message: ChannelMessage;
   isSelected: boolean;
   needsAttention?: boolean;
   onOpenThread: (message: ChannelMessage) => void;
   dimmed?: boolean;
-}) {
+}
+
+const MessageItem = memo(function MessageItem({
+  message,
+  isSelected,
+  needsAttention,
+  onOpenThread,
+  dimmed,
+}: MessageItemProps) {
   const rawPreview = message.preview || message.session.cwd || message.sessionId;
   const preview = stripTraceInternal(rawPreview);
   const threadCount = message._count.threads;
@@ -305,5 +287,15 @@ function MessageItem({
         )}
       </div>
     </button>
+  );
+}, areMessageItemPropsEqual);
+
+function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps) {
+  return (
+    prev.message === next.message &&
+    prev.isSelected === next.isSelected &&
+    prev.needsAttention === next.needsAttention &&
+    prev.dimmed === next.dimmed &&
+    prev.onOpenThread === next.onOpenThread
   );
 }
