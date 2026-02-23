@@ -50,10 +50,36 @@ export default function App() {
   const [worktreePath, setWorktreePath] = useState('');
   const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(null);
   const [pendingRunPrompt, setPendingRunPrompt] = useState('');
+  const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const spawnedMessageIds = useRef(new Set<string>());
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth);
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
+  }, []);
+
+  const handleNeedsAttention = useCallback(
+    (messageId: string, reason: 'stopped' | 'ask-user-question') => {
+      setAttentionMessageIds((prev) => {
+        if (prev.has(messageId)) return prev;
+        const next = new Set(prev);
+        next.add(messageId);
+        return next;
+      });
+
+      if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
+        const title = reason === 'ask-user-question' ? 'Input needed' : 'Chat completed';
+        const msg = messagesRef.current.find((m) => m.id === messageId);
+        const body = msg?.preview || msg?.session.cwd || messageId;
+        new Notification(title, { body });
+      }
+    },
+    [messagesRef],
+  );
 
   const { sseConnected } = useSse({
     activeChannelId,
@@ -63,6 +89,7 @@ export default function App() {
     selectedMessageIdRef,
     messagesRef,
     selectedMessageRef,
+    onNeedsAttention: handleNeedsAttention,
   });
 
   const updateMessageStatus = useCallback(
@@ -130,6 +157,12 @@ export default function App() {
       setChannelWidth(0);
       resetScroll();
       openThreadPanel(message);
+      setAttentionMessageIds((prev) => {
+        if (!prev.has(message.id)) return prev;
+        const next = new Set(prev);
+        next.delete(message.id);
+        return next;
+      });
     },
     [openThreadPanel, resetScroll],
   );
@@ -340,6 +373,7 @@ export default function App() {
           messages={messages}
           selectedMessageId={selectedMessageId}
           messageInput={messageInput}
+          attentionMessageIds={attentionMessageIds}
           onMessageInputChange={setMessageInput}
           onSendMessage={() => void sendMessage()}
           onOpenThread={handleOpenThread}

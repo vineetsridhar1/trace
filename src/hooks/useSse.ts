@@ -10,6 +10,7 @@ interface UseSseOptions {
   selectedMessageIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
   selectedMessageRef: React.RefObject<ChannelMessage | null>;
+  onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question') => void;
 }
 
 export function useSse({
@@ -20,6 +21,7 @@ export function useSse({
   selectedMessageIdRef,
   messagesRef,
   selectedMessageRef,
+  onNeedsAttention,
 }: UseSseOptions) {
   const [sseConnected, setSseConnected] = useState(false);
   const activeSseRef = useRef<EventSource | null>(null);
@@ -66,6 +68,16 @@ export function useSse({
             session: { ...existing.session, status: 'stopped' },
           });
         }
+        if (selectedMessageIdRef.current !== payload.messageId) {
+          const reason = payload.event.toolName === 'AskUserQuestion' ? 'ask-user-question' : 'stopped';
+          onNeedsAttention(payload.messageId, reason);
+        }
+      }
+
+      if (payload.event.hookEventName === 'AskUserQuestion') {
+        if (selectedMessageIdRef.current !== payload.messageId) {
+          onNeedsAttention(payload.messageId, 'ask-user-question');
+        }
       }
 
       if (selectedMessageIdRef.current !== payload.messageId) return;
@@ -81,7 +93,7 @@ export function useSse({
       source.close();
       if (activeSseRef.current === source) activeSseRef.current = null;
     };
-  }, [activeChannelId, loadThreadEvents, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef]);
+  }, [activeChannelId, loadThreadEvents, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention]);
 
   return { sseConnected, activeChannelRef };
 }
