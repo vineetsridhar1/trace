@@ -6,6 +6,12 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   completed: { label: 'Completed', className: 'text-green-400 bg-green-400/10' },
 };
 
+const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = {
+  low: { label: 'Low', className: 'text-green-400 bg-green-400/10' },
+  medium: { label: 'Medium', className: 'text-yellow-400 bg-yellow-400/10' },
+  high: { label: 'High', className: 'text-red-400 bg-red-400/10' },
+};
+
 export function TicketView({ ticket }: { ticket: KanbanTicket }) {
   const statusConfig = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
 
@@ -46,16 +52,29 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
         </div>
       )}
 
-      {ticket.metadata != null && (
-        <div className="mb-4">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#565f89]">
-            Metadata
-          </h4>
-          <pre className="overflow-x-auto rounded bg-[#1f2335] p-3 text-xs text-[#a9b1d6]">
-            {JSON.stringify(ticket.metadata, null, 2)}
-          </pre>
-        </div>
-      )}
+      {ticket.metadata != null && (() => {
+        const meta = ticket.metadata as { tags?: string[]; complexity?: string };
+        const hasTags = Array.isArray(meta.tags) && meta.tags.length > 0;
+        const complexityConfig = meta.complexity ? COMPLEXITY_CONFIG[meta.complexity] : null;
+        if (!hasTags && !complexityConfig) return null;
+        return (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {complexityConfig && (
+              <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${complexityConfig.className}`}>
+                {complexityConfig.label} complexity
+              </span>
+            )}
+            {hasTags && (meta.tags as string[]).map((tag) => (
+              <span
+                key={tag}
+                className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] font-medium text-[#a9b1d6]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }

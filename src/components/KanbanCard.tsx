@@ -2,6 +2,12 @@ import { memo } from 'react';
 import type { KanbanTicket } from '../types';
 import { formatTime } from '../utils';
 
+const COMPLEXITY_BADGE: Record<string, string> = {
+  low: 'text-green-400 bg-green-400/10',
+  medium: 'text-yellow-400 bg-yellow-400/10',
+  high: 'text-red-400 bg-red-400/10',
+};
+
 interface KanbanCardProps {
   ticket: KanbanTicket;
   onClickTicket: (messageId: string) => void;
@@ -35,6 +41,31 @@ export const KanbanCard = memo(function KanbanCard({
           {ticket.solutionApproach}
         </p>
       )}
+
+      {(() => {
+        const meta = ticket.metadata as { tags?: string[]; complexity?: string } | null;
+        if (!meta) return null;
+        const hasTags = Array.isArray(meta.tags) && meta.tags.length > 0;
+        const complexityClass = meta.complexity ? COMPLEXITY_BADGE[meta.complexity] : null;
+        if (!hasTags && !complexityClass) return null;
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {complexityClass && (
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${complexityClass}`}>
+                {meta.complexity}
+              </span>
+            )}
+            {hasTags && (meta.tags as string[]).map((tag) => (
+              <span
+                key={tag}
+                className="rounded bg-[#1a1b26] px-1.5 py-0.5 text-[10px] text-[#a9b1d6]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="mt-2 flex items-center gap-2">
         {ticket.message.branch && (
