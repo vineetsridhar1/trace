@@ -22,6 +22,7 @@ interface MessagePanelProps {
   messages: ChannelMessage[];
   selectedMessageId: string | null;
   messageInput: string;
+  attentionMessageIds: Set<string>;
   onMessageInputChange: (value: string) => void;
   onSendMessage: () => void;
   onOpenThread: (message: ChannelMessage) => void;
@@ -32,6 +33,7 @@ export function MessagePanel({
   messages,
   selectedMessageId,
   messageInput,
+  attentionMessageIds,
   onMessageInputChange,
   onSendMessage,
   onOpenThread,
@@ -82,6 +84,7 @@ export function MessagePanel({
             key={message.id}
             message={message}
             isSelected={message.id === selectedMessageId}
+            needsAttention={attentionMessageIds.has(message.id)}
             onOpenThread={onOpenThread}
           />
         ))}
@@ -107,6 +110,7 @@ export function MessagePanel({
                   key={message.id}
                   message={message}
                   isSelected={message.id === selectedMessageId}
+                  needsAttention={attentionMessageIds.has(message.id)}
                   onOpenThread={onOpenThread}
                   dimmed
                 />
@@ -235,11 +239,13 @@ function StatusBadge({ status }: { status: TicketStatus }) {
 function MessageItem({
   message,
   isSelected,
+  needsAttention,
   onOpenThread,
   dimmed,
 }: {
   message: ChannelMessage;
   isSelected: boolean;
+  needsAttention?: boolean;
   onOpenThread: (message: ChannelMessage) => void;
   dimmed?: boolean;
 }) {
@@ -253,7 +259,7 @@ function MessageItem({
       type="button"
       className={`message-item flex cursor-pointer items-start gap-3 border-l-2 border-transparent px-3 py-3 text-left transition-colors ${
         isSelected ? 'selected' : ''
-      } ${dimmed ? 'opacity-50' : ''}`}
+      } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
       onClick={() => onOpenThread(message)}
     >
       <div

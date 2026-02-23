@@ -55,6 +55,15 @@ body,
   border-left-color: #7c3aed;
 }
 
+@keyframes attention-pulse {
+  0%, 100% { border-left-color: transparent; background: transparent; }
+  50% { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.04); }
+}
+
+.message-item.needs-attention {
+  animation: attention-pulse 2s ease-in-out infinite;
+}
+
 .thread-bubble pre {
   background: #16161e;
   border-radius: 6px;
