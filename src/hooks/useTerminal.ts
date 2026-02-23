@@ -40,7 +40,14 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
   }, []);
 
   const focus = useCallback(() => {
-    terminalRef.current?.focus();
+    const term = terminalRef.current;
+    if (!term) return;
+    term.focus();
+    // Fallback: directly focus the helper textarea xterm uses for keyboard input.
+    // In some Electron/xterm.js configurations, terminal.focus() alone doesn't
+    // reliably move DOM focus to the hidden textarea.
+    const textarea = containerRef.current?.querySelector('textarea');
+    if (textarea) textarea.focus();
   }, []);
 
   useEffect(() => {
@@ -73,15 +80,16 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
 
-      // Delay fit + focus until the container is fully laid out.
-      // A single rAF can fire before the CSS transition finishes,
-      // so schedule a second frame to be safe.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          fitAddon?.fit();
-          terminal?.focus();
-        });
-      });
+      // Delay fit + focus until the CSS panel transition completes (350ms).
+      // Using setTimeout instead of rAF because the transition duration
+      // is longer than a couple of animation frames.
+      setTimeout(() => {
+        fitAddon?.fit();
+        terminal?.focus();
+        // Also directly focus the helper textarea as a fallback
+        const textarea = container.querySelector('textarea');
+        if (textarea) textarea.focus();
+      }, 380);
 
       void window.traceAPI.createPty(terminalId, cwd);
 
