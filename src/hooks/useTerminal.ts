@@ -35,20 +35,27 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
+  const focusInput = useCallback(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+    term.focus();
+    const textarea =
+      term.textarea ??
+      (containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null);
+    if (!textarea) return;
+    textarea.focus({ preventScroll: true });
+    if (document.activeElement !== textarea) {
+      requestAnimationFrame(() => textarea.focus({ preventScroll: true }));
+    }
+  }, []);
+
   const fit = useCallback(() => {
     fitAddonRef.current?.fit();
   }, []);
 
   const focus = useCallback(() => {
-    const term = terminalRef.current;
-    if (!term) return;
-    term.focus();
-    // Fallback: directly focus the helper textarea xterm uses for keyboard input.
-    // In some Electron/xterm.js configurations, terminal.focus() alone doesn't
-    // reliably move DOM focus to the hidden textarea.
-    const textarea = containerRef.current?.querySelector('textarea');
-    if (textarea) textarea.focus();
-  }, []);
+    focusInput();
+  }, [focusInput]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -60,6 +67,7 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
     let resizeDisposable: { dispose: () => void } | null = null;
     let cleanupData: (() => void) | null = null;
     let cleanupExit: (() => void) | null = null;
+    const focusTimers: ReturnType<typeof setTimeout>[] = [];
 
     const init = () => {
       if (terminal) return;
@@ -80,18 +88,22 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
 
-      // Delay fit + focus until the CSS panel transition completes (350ms).
-      // Using setTimeout instead of rAF because the transition duration
-      // is longer than a couple of animation frames.
-      setTimeout(() => {
-        fitAddon?.fit();
-        terminal?.focus();
-        // Also directly focus the helper textarea as a fallback
-        const textarea = container.querySelector('textarea');
-        if (textarea) textarea.focus();
-      }, 380);
+      // Retry focus through the panel transition; the first attempt can fail
+      // while the fullscreen layout is still settling in Electron.
+      const focusDelays = [380, 520, 700];
+      for (const delay of focusDelays) {
+        const timer = setTimeout(() => {
+          fitAddon?.fit();
+          focusInput();
+        }, delay);
+        focusTimers.push(timer);
+      }
 
-      void window.traceAPI.createPty(terminalId, cwd);
+      void window.traceAPI.createPty(terminalId, cwd).then((result) => {
+        if (!result.success) {
+          terminal?.write(`\r\n[PTY start failed: ${result.error ?? 'unknown error'}]\r\n`);
+        }
+      });
 
       inputDisposable = terminal.onData((data) => {
         void window.traceAPI.writePty(terminalId, data);
@@ -110,6 +122,9 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
       });
     };
 
+    const handleWindowFocus = () => focusInput();
+    window.addEventListener('focus', handleWindowFocus);
+
     // Wait for container to have dimensions before initializing xterm.
     // The container may start at zero size during CSS transitions.
     const observer = new ResizeObserver(() => {
@@ -127,6 +142,8 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
 
     return () => {
       observer.disconnect();
+      window.removeEventListener('focus', handleWindowFocus);
+      for (const timer of focusTimers) clearTimeout(timer);
       inputDisposable?.dispose();
       resizeDisposable?.dispose();
       cleanupData?.();
@@ -136,7 +153,7 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [terminalId, cwd]);
+  }, [terminalId, cwd, focusInput]);
 
   return { containerRef, fit, focus };
 }

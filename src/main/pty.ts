@@ -7,6 +7,7 @@ interface PtySession {
 }
 
 const sessions = new Map<string, PtySession>();
+const lastCwdByTerminalId = new Map<string, string>();
 
 export function createPty(
   terminalId: string,
@@ -14,6 +15,7 @@ export function createPty(
   window: BrowserWindow,
 ): void {
   killPty(terminalId);
+  lastCwdByTerminalId.set(terminalId, cwd);
 
   const shell = process.platform === 'darwin' ? 'zsh' : process.env.SHELL || 'bash';
   const proc = pty.spawn(shell, [], {
@@ -42,19 +44,30 @@ export function createPty(
   sessions.set(terminalId, { process: proc, window });
 }
 
-export function writePty(terminalId: string, data: string): void {
-  sessions.get(terminalId)?.process.write(data);
-}
-
-export function resizePty(terminalId: string, cols: number, rows: number): void {
-  sessions.get(terminalId)?.process.resize(cols, rows);
-}
-
-export function killPty(terminalId: string): void {
+export function writePty(terminalId: string, data: string): boolean {
   const session = sessions.get(terminalId);
-  if (!session) return;
+  if (!session) return false;
+  session.process.write(data);
+  return true;
+}
+
+export function resizePty(terminalId: string, cols: number, rows: number): boolean {
+  const session = sessions.get(terminalId);
+  if (!session) return false;
+  session.process.resize(cols, rows);
+  return true;
+}
+
+export function killPty(terminalId: string): boolean {
+  const session = sessions.get(terminalId);
+  if (!session) return false;
   session.process.kill();
   sessions.delete(terminalId);
+  return true;
+}
+
+export function getPtyCwd(terminalId: string): string | undefined {
+  return lastCwdByTerminalId.get(terminalId);
 }
 
 export function killAllPtys(): void {

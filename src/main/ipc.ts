@@ -2,7 +2,7 @@ import { ipcMain, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
-import { createPty, writePty, resizePty, killPty } from './pty';
+import { createPty, writePty, resizePty, killPty, getPtyCwd } from './pty';
 import { getWorktreeDiff } from './diff';
 
 const SPAWN_CLAUDE_CHANNEL = 'spawn-claude';
@@ -113,15 +113,39 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle(PTY_WRITE_CHANNEL, (_event, terminalId: string, data: string) => {
-    writePty(terminalId, data);
+    let success = writePty(terminalId, data);
+    if (!success && mainWindowRef) {
+      const cwd = getPtyCwd(terminalId);
+      if (cwd) {
+        try {
+          createPty(terminalId, cwd, mainWindowRef);
+          success = writePty(terminalId, data);
+        } catch {
+          success = false;
+        }
+      }
+    }
+    return { success };
   });
 
   ipcMain.handle(PTY_RESIZE_CHANNEL, (_event, terminalId: string, cols: number, rows: number) => {
-    resizePty(terminalId, cols, rows);
+    let success = resizePty(terminalId, cols, rows);
+    if (!success && mainWindowRef) {
+      const cwd = getPtyCwd(terminalId);
+      if (cwd) {
+        try {
+          createPty(terminalId, cwd, mainWindowRef);
+          success = resizePty(terminalId, cols, rows);
+        } catch {
+          success = false;
+        }
+      }
+    }
+    return { success };
   });
 
   ipcMain.handle(PTY_KILL_CHANNEL, (_event, terminalId: string) => {
-    killPty(terminalId);
+    return { success: killPty(terminalId) };
   });
 
   ipcMain.handle(GET_WORKTREE_DIFF_CHANNEL, async (_event, messageId: string) => {

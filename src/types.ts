@@ -33,9 +33,9 @@ export interface TraceAPI {
     eventType: string,
   ) => Promise<{ success: boolean; error?: string }>;
   createPty: (terminalId: string, cwd: string) => Promise<{ success: boolean; error?: string }>;
-  writePty: (terminalId: string, data: string) => Promise<void>;
-  resizePty: (terminalId: string, cols: number, rows: number) => Promise<void>;
-  killPty: (terminalId: string) => Promise<void>;
+  writePty: (terminalId: string, data: string) => Promise<{ success: boolean }>;
+  resizePty: (terminalId: string, cols: number, rows: number) => Promise<{ success: boolean }>;
+  killPty: (terminalId: string) => Promise<{ success: boolean }>;
   onPtyData: (callback: (terminalId: string, data: string) => void) => () => void;
   onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
   getWorktreeDiff: (messageId: string) => Promise<WorktreeDiffResult>;

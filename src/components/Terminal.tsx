@@ -9,8 +9,88 @@ interface TerminalProps {
 export function Terminal({ terminalId, cwd }: TerminalProps) {
   const { containerRef, focus } = useTerminal({ terminalId, cwd });
 
+  const mapKeyToPtyData = (e: React.KeyboardEvent<HTMLDivElement>): string | null => {
+    if (e.metaKey || e.altKey) return null;
+
+    if (e.ctrlKey && e.key.length === 1) {
+      const ch = e.key.toUpperCase();
+      if (ch >= 'A' && ch <= 'Z') return String.fromCharCode(ch.charCodeAt(0) - 64);
+      if (ch === ' ') return '\0';
+      return null;
+    }
+
+    switch (e.key) {
+      case 'Enter':
+        return '\r';
+      case 'Backspace':
+        return '\x7f';
+      case 'Tab':
+        return '\t';
+      case 'Escape':
+        return '\x1b';
+      case 'ArrowUp':
+        return '\x1b[A';
+      case 'ArrowDown':
+        return '\x1b[B';
+      case 'ArrowRight':
+        return '\x1b[C';
+      case 'ArrowLeft':
+        return '\x1b[D';
+      case 'Delete':
+        return '\x1b[3~';
+      case 'Home':
+        return '\x1b[H';
+      case 'End':
+        return '\x1b[F';
+      case 'PageUp':
+        return '\x1b[5~';
+      case 'PageDown':
+        return '\x1b[6~';
+      default:
+        break;
+    }
+
+    return e.key.length === 1 ? e.key : null;
+  };
+
+  const focusTerminal = () => {
+    focus();
+    requestAnimationFrame(focus);
+  };
+
+  const handleFallbackKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    const isXtermTextarea = Boolean(target?.classList?.contains('xterm-helper-textarea'));
+    if (isXtermTextarea) return;
+
+    const data = mapKeyToPtyData(e);
+    if (!data) return;
+    e.preventDefault();
+    void window.traceAPI.writePty(terminalId, data);
+  };
+
+  const handleFallbackPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    const isXtermTextarea = Boolean(target?.classList?.contains('xterm-helper-textarea'));
+    if (isXtermTextarea) return;
+
+    const text = e.clipboardData.getData('text');
+    if (!text) return;
+    e.preventDefault();
+    void window.traceAPI.writePty(terminalId, text.replace(/\r?\n/g, '\r'));
+  };
+
   return (
-    <div className="flex h-full flex-col overflow-hidden" onClick={focus} onMouseDown={focus}>
+    <div
+      className="flex h-full flex-col overflow-hidden outline-none"
+      tabIndex={0}
+      onFocus={focusTerminal}
+      onClick={focusTerminal}
+      onMouseDown={focusTerminal}
+      onTouchStart={focusTerminal}
+      onKeyDown={handleFallbackKeyDown}
+      onPaste={handleFallbackPaste}
+    >
       <div className="flex items-center border-b border-[#292e42] px-3 py-1.5">
         <h4 className="text-xs font-semibold text-[#565f89]">Terminal</h4>
       </div>
