@@ -70,7 +70,7 @@ export default function App() {
   const {
     scripts,
     fetchScripts,
-    updateChannelCwd,
+    updateChannel: updateChannelSettings,
     addScript,
     updateScript,
     deleteScript,
@@ -234,19 +234,13 @@ export default function App() {
     [openThreadPanel, resetScroll],
   );
 
-  const getCreationCommands = useCallback(async (): Promise<string[]> => {
-    if (!activeChannelId) return [];
-    try {
-      const response = await fetch(`${SERVER_URL}/channels/${activeChannelId}/startup-scripts`);
-      if (!response.ok) return [];
-      const { scripts: allScripts } = (await response.json()) as { scripts: StartupScript[] };
-      return allScripts
-        .filter((s) => s.scriptType === 'creation')
-        .map((s) => s.command);
-    } catch {
-      return [];
-    }
-  }, [activeChannelId]);
+  const getCreationCommands = useCallback((): string[] => {
+    if (!activeChannel?.creationScript) return [];
+    return activeChannel.creationScript
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }, [activeChannel]);
 
   const claudeActions = useClaudeMessageActions({
     activeChannelId,
@@ -418,10 +412,10 @@ export default function App() {
   );
 
   const handleSaveSettings = useCallback(
-    async (cwd: string | null, draftScripts: DraftScript[]) => {
+    async (cwd: string | null, creationScript: string | null, draftScripts: DraftScript[]) => {
       if (!settingsChannelId) return;
 
-      await updateChannelCwd(settingsChannelId, cwd);
+      await updateChannelSettings(settingsChannelId, { cwd, creationScript });
 
       const existingIds = new Set(scripts.map((script) => script.id));
       const draftIds = new Set(
@@ -444,13 +438,12 @@ export default function App() {
             updateScript(settingsChannelId, script.id, {
               name,
               command,
-              scriptType: script.scriptType,
               sortOrder: index,
             }),
           ];
         }
 
-        return [addScript(settingsChannelId, name, command, script.scriptType)];
+        return [addScript(settingsChannelId, name, command)];
       });
 
       await Promise.all([...deleteTasks, ...upsertTasks]);
@@ -462,7 +455,7 @@ export default function App() {
       refreshChannels,
       scripts,
       settingsChannelId,
-      updateChannelCwd,
+      updateChannelSettings,
       updateScript,
     ],
   );
@@ -486,10 +479,9 @@ export default function App() {
       if (!channel?.cwd) return;
 
       const channelScripts = await fetchChannelScripts(channelId);
-      const startupOnly = channelScripts.filter((s) => s.scriptType !== 'creation');
-      if (startupOnly.length === 0) return;
+      if (channelScripts.length === 0) return;
 
-      runAllScripts(channelId, channel.cwd, startupOnly);
+      runAllScripts(channelId, channel.cwd, channelScripts);
     },
     [channels, fetchChannelScripts, runAllScripts],
   );
@@ -507,17 +499,16 @@ export default function App() {
     }
 
     const channelScripts = await fetchChannelScripts(activeChannelId);
-    const startupOnly = channelScripts.filter((s) => s.scriptType !== 'creation');
-    if (startupOnly.length === 0) return;
+    if (channelScripts.length === 0) return;
 
     const portResult = await window.traceAPI.allocatePorts(
       selectedMessageId,
-      startupOnly.length,
+      channelScripts.length,
     );
     if (!portResult.success || !portResult.ports) return;
 
     const ports = portResult.ports;
-    const envMaps: Record<string, string>[] = startupOnly.map((_, scriptIndex) => {
+    const envMaps: Record<string, string>[] = channelScripts.map((_, scriptIndex) => {
       const env: Record<string, string> = {
         PORT: String(ports[scriptIndex]),
         TRACE_BASE_PORT: String(ports[0]),
@@ -531,7 +522,7 @@ export default function App() {
     runAllScripts(
       selectedMessageId,
       worktreeResult.worktreePath,
-      startupOnly,
+      channelScripts,
       envMaps,
     );
   }, [activeChannelId, fetchChannelScripts, runAllScripts, selectedMessageId]);

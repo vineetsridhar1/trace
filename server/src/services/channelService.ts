@@ -25,7 +25,7 @@ export async function getDefaultChannel() {
   return defaultChannelId;
 }
 
-export async function updateChannel(id: string, data: { name?: string; cwd?: string | null }) {
+export async function updateChannel(id: string, data: { name?: string; cwd?: string | null; creationScript?: string | null }) {
   return prisma.channel.update({ where: { id }, data });
 }
 

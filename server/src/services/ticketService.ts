@@ -11,6 +11,7 @@ const DEFAULT_COLUMNS = [
 
 const STATUS_TO_SLUG: Record<string, string> = {
   pending: 'todo',
+  creation: 'in_progress',
   in_progress: 'in_progress',
   completed: 'completed',
   merged: 'merged',

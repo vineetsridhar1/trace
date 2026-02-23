@@ -205,6 +205,7 @@ export function ThreadPanel({
 
 const HEADER_STATUS_CONFIG: Record<TicketStatus, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'text-yellow-400 bg-yellow-400/10' },
+  creation: { label: 'Creating', className: 'text-orange-400 bg-orange-400/10' },
   in_progress: { label: 'In Progress', className: 'text-blue-400 bg-blue-400/10' },
   completed: { label: 'Completed', className: 'text-green-400 bg-green-400/10' },
 };
@@ -281,7 +282,7 @@ function ThreadHeader({
             </button>
           </div>
         )}
-        {hasWorktree === false && messageStatus !== 'pending' && selectedMessageId && (
+        {hasWorktree === false && messageStatus !== 'pending' && messageStatus !== 'creation' && selectedMessageId && (
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
             Worktree deleted
           </span>

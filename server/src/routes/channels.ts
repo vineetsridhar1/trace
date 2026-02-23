@@ -38,7 +38,7 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
 });
 
 router.patch('/:id', async (req: Request<{ id: string }>, res: Response) => {
-  const { name, cwd } = req.body;
+  const { name, cwd, creationScript } = req.body;
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' });
     return;
@@ -47,9 +47,14 @@ router.patch('/:id', async (req: Request<{ id: string }>, res: Response) => {
     res.status(400).json({ error: 'cwd must be a string or null' });
     return;
   }
-  const data: { name?: string; cwd?: string | null } = {};
+  if (creationScript !== undefined && creationScript !== null && typeof creationScript !== 'string') {
+    res.status(400).json({ error: 'creationScript must be a string or null' });
+    return;
+  }
+  const data: { name?: string; cwd?: string | null; creationScript?: string | null } = {};
   if (name !== undefined) data.name = name;
   if (cwd !== undefined) data.cwd = cwd;
+  if (creationScript !== undefined) data.creationScript = creationScript;
   const channel = await updateChannel(req.params.id, data);
   res.json(channel);
 });
@@ -213,7 +218,7 @@ router.patch(
   },
 );
 
-const VALID_STATUSES = ['pending', 'in_progress', 'completed'];
+const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation'];
 
 router.patch(
   '/:channelId/messages/:messageId/status',

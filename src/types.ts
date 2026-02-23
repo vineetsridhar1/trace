@@ -71,18 +71,16 @@ export interface Channel {
   id: string;
   name: string;
   cwd: string | null;
+  creationScript: string | null;
   createdAt: string;
   updatedAt: string;
 }
-
-export type ScriptType = 'creation' | 'startup';
 
 export interface StartupScript {
   id: string;
   channelId: string;
   name: string;
   command: string;
-  scriptType: ScriptType;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -127,7 +125,7 @@ export interface ThreadEventEnvelope {
   event: ServerEvent;
 }
 
-export type TicketStatus = 'pending' | 'in_progress' | 'completed';
+export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation';
 export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
 export type MiddlePanelView = 'feed' | 'board';

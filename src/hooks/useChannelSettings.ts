@@ -16,27 +16,27 @@ export function useChannelSettings() {
     }
   }, []);
 
-  const updateChannelCwd = useCallback(async (channelId: string, cwd: string | null) => {
+  const updateChannel = useCallback(async (channelId: string, data: { cwd?: string | null; creationScript?: string | null }) => {
     try {
       const res = await fetch(`${SERVER_URL}/channels/${channelId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cwd }),
+        body: JSON.stringify(data),
       });
       if (!res.ok) return null;
       return await res.json();
     } catch {
-      console.error('Failed to update channel cwd');
+      console.error('Failed to update channel');
       return null;
     }
   }, []);
 
-  const addScript = useCallback(async (channelId: string, name: string, command: string, scriptType?: string) => {
+  const addScript = useCallback(async (channelId: string, name: string, command: string) => {
     try {
       const res = await fetch(`${SERVER_URL}/channels/${channelId}/startup-scripts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, command, scriptType }),
+        body: JSON.stringify({ name, command }),
       });
       if (!res.ok) return null;
       const script = (await res.json()) as StartupScript;
@@ -49,7 +49,7 @@ export function useChannelSettings() {
   }, []);
 
   const updateScript = useCallback(
-    async (channelId: string, scriptId: string, data: { name?: string; command?: string; scriptType?: string; sortOrder?: number }) => {
+    async (channelId: string, scriptId: string, data: { name?: string; command?: string; sortOrder?: number }) => {
       try {
         const res = await fetch(`${SERVER_URL}/channels/${channelId}/startup-scripts/${scriptId}`, {
           method: 'PATCH',
@@ -82,5 +82,5 @@ export function useChannelSettings() {
     }
   }, []);
 
-  return { scripts, fetchScripts, updateChannelCwd, addScript, updateScript, deleteScript };
+  return { scripts, fetchScripts, updateChannel, addScript, updateScript, deleteScript };
 }

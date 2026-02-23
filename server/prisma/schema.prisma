@@ -24,11 +24,12 @@ model Session {
 }
 
 model Channel {
-  id        String   @id @default(uuid())
-  name      String
-  cwd       String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  name           String
+  cwd            String?
+  creationScript String?  @map("creation_script")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   messages       Message[]
   startupScripts StartupScript[]
