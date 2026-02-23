@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage, TicketStatus } from '../types';
+import type { ChannelMessage, KanbanColumn as KanbanColumnType, MiddlePanelView, TicketStatus } from '../types';
 import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
 import { useClaudeActions } from '../context/ClaudeActionsContext';
 import { SlashCommandMenu } from './SlashCommandMenu';
+import { KanbanBoard } from './KanbanBoard';
 
 interface MessagePanelProps {
   feedTitle: string;
@@ -12,6 +13,11 @@ interface MessagePanelProps {
   selectedMessageId: string | null;
   attentionMessageIds: Set<string>;
   onOpenThread: (message: ChannelMessage) => void;
+  middlePanelView: MiddlePanelView;
+  onSetView: (view: MiddlePanelView) => void;
+  kanbanColumns: KanbanColumnType[];
+  kanbanLoading: boolean;
+  onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
 }
 
 export function MessagePanel({
@@ -20,6 +26,11 @@ export function MessagePanel({
   selectedMessageId,
   attentionMessageIds,
   onOpenThread,
+  middlePanelView,
+  onSetView,
+  kanbanColumns,
+  kanbanLoading,
+  onMoveTicket,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
   const [completedExpanded, setCompletedExpanded] = useState(false);
@@ -48,61 +59,107 @@ export function MessagePanel({
     scrollFeedToBottom();
   }, [messages, scrollFeedToBottom]);
 
+  const handleBoardClickTicket = useCallback(
+    (messageId: string) => {
+      const message = messages.find((m) => m.id === messageId);
+      if (message) onOpenThread(message);
+    },
+    [messages, onOpenThread],
+  );
+
   return (
     <div id="messages-panel" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b26]">
-      <div className="border-b border-[#292e42] px-4 py-3">
+      <div className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
         <h2 id="feed-title" className="text-sm font-semibold text-violet-300">
           {feedTitle}
         </h2>
+        <div className="flex rounded-lg bg-[#1f2335] p-0.5">
+          <button
+            type="button"
+            onClick={() => onSetView('feed')}
+            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              middlePanelView === 'feed'
+                ? 'bg-violet-500/20 text-violet-300'
+                : 'text-[#565f89] hover:text-[#a9b1d6]'
+            }`}
+          >
+            Feed
+          </button>
+          <button
+            type="button"
+            onClick={() => onSetView('board')}
+            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              middlePanelView === 'board'
+                ? 'bg-violet-500/20 text-violet-300'
+                : 'text-[#565f89] hover:text-[#a9b1d6]'
+            }`}
+          >
+            Board
+          </button>
+        </div>
       </div>
 
-      <div
-        id="feed-list"
-        ref={feedListRef}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
-      >
-        <div className="flex-1" />
-        {activeMessages.map((message) => (
-          <MessageItem
-            key={message.id}
-            message={message}
-            isSelected={message.id === selectedMessageId}
-            needsAttention={attentionMessageIds.has(message.id)}
-            onOpenThread={onOpenThread}
+      {middlePanelView === 'feed' ? (
+        <>
+          <div
+            id="feed-list"
+            ref={feedListRef}
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
+          >
+            <div className="flex-1" />
+            {activeMessages.map((message) => (
+              <MessageItem
+                key={message.id}
+                message={message}
+                isSelected={message.id === selectedMessageId}
+                needsAttention={attentionMessageIds.has(message.id)}
+                onOpenThread={onOpenThread}
+              />
+            ))}
+
+            {completedMessages.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCompletedExpanded((prev) => !prev)}
+                  className="mx-1 mt-3 mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#a9b1d6]"
+                >
+                  <span
+                    className="inline-block transition-transform"
+                    style={{ transform: completedExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                  >
+                    ▶
+                  </span>
+                  <span>Completed ({completedMessages.length})</span>
+                </button>
+                {completedExpanded &&
+                  completedMessages.map((message) => (
+                    <MessageItem
+                      key={message.id}
+                      message={message}
+                      isSelected={message.id === selectedMessageId}
+                      needsAttention={attentionMessageIds.has(message.id)}
+                      onOpenThread={onOpenThread}
+                      dimmed
+                    />
+                  ))}
+              </>
+            )}
+          </div>
+
+          <MessageInput />
+        </>
+      ) : (
+        <>
+          <KanbanBoard
+            columns={kanbanColumns}
+            loading={kanbanLoading}
+            onClickTicket={handleBoardClickTicket}
+            onMoveTicket={onMoveTicket}
           />
-        ))}
-
-        {completedMessages.length > 0 && (
-          <>
-            <button
-              type="button"
-              onClick={() => setCompletedExpanded((prev) => !prev)}
-              className="mx-1 mt-3 mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#a9b1d6]"
-            >
-              <span
-                className="inline-block transition-transform"
-                style={{ transform: completedExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-              >
-                ▶
-              </span>
-              <span>Completed ({completedMessages.length})</span>
-            </button>
-            {completedExpanded &&
-              completedMessages.map((message) => (
-                <MessageItem
-                  key={message.id}
-                  message={message}
-                  isSelected={message.id === selectedMessageId}
-                  needsAttention={attentionMessageIds.has(message.id)}
-                  onOpenThread={onOpenThread}
-                  dimmed
-                />
-              ))}
-          </>
-        )}
-      </div>
-
-      <MessageInput />
+          <MessageInput />
+        </>
+      )}
     </div>
   );
 }

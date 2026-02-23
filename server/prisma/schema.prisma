@@ -32,6 +32,7 @@ model Channel {
 
   messages       Message[]
   startupScripts StartupScript[]
+  kanbanColumns  KanbanColumn[]
 
   @@map("channels")
 }
@@ -65,6 +66,7 @@ model Message {
   channel Channel @relation(fields: [channelId], references: [id])
   session Session @relation(fields: [sessionId], references: [sessionId])
   threads Thread[]
+  ticket  Ticket?
 
   @@index([channelId, createdAt])
   @@map("messages")
@@ -105,4 +107,42 @@ model Event {
   @@index([sessionId, hookEventName])
   @@index([threadId, timestamp])
   @@map("events")
+}
+
+model KanbanColumn {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  name      String
+  slug      String
+  color     String?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channel Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+
+  @@unique([channelId, slug])
+  @@index([channelId, sortOrder])
+  @@map("kanban_columns")
+}
+
+model Ticket {
+  id               String   @id @default(uuid())
+  messageId        String   @unique @map("message_id")
+  columnId         String   @map("column_id")
+  title            String
+  description      String?
+  solutionApproach String?  @map("solution_approach")
+  status           String   @default("open")
+  metadata         Json?
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  message Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  column  KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  @@index([columnId, sortOrder])
+  @@map("tickets")
 }

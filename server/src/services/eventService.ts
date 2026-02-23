@@ -11,6 +11,7 @@ import {
   updateMessageStatus,
   updateMessageSummaryAndBranch,
 } from './messageService';
+import { updateTicketFromEvent, syncTicketWithMessageStatus } from './ticketService';
 
 function extractMessageIdFromWorktreePath(worktreePath: string | undefined): string | null {
   if (!worktreePath) {
@@ -191,6 +192,7 @@ export async function ingestEvent(payload: HookEvent) {
   // Auto-transition pending -> in_progress on first non-UserPromptSubmit event
   if (message.status === 'pending' && payload.hook_event_name !== 'UserPromptSubmit') {
     await updateMessageStatus(message.id, 'in_progress');
+    void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
   }
 
   // Compute importance
@@ -260,6 +262,16 @@ export async function ingestEvent(payload: HookEvent) {
 
   if (summaryText || branchName) {
     await updateMessageSummaryAndBranch(message.id, summaryText, branchName);
+  }
+
+  // Update kanban ticket on Stop events
+  if (payload.hook_event_name === 'Stop' && payload.last_assistant_message) {
+    void updateTicketFromEvent(
+      message.id,
+      channelId,
+      payload.last_assistant_message.slice(0, 1000),
+      summaryText ?? '',
+    );
   }
 
   const hydratedMessage = await getMessageByIdForFeed(message.id);

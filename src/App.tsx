@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage, StartupScript, TicketStatus } from './types';
+import type { ChannelMessage, MiddlePanelView, StartupScript, TicketStatus } from './types';
 import { SERVER_URL } from './types';
 import { buildThreadNodes } from './utils';
 import { useChannels } from './hooks/useChannels';
@@ -11,6 +11,7 @@ import { useSse } from './hooks/useSse';
 import { useChannelSettings } from './hooks/useChannelSettings';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
 import { useClaudeMessageActions } from './hooks/useClaudeMessageActions';
+import { useKanban } from './hooks/useKanban';
 import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
 import { ChannelPanel } from './components/ChannelPanel';
 import { MessagePanel } from './components/MessagePanel';
@@ -88,6 +89,16 @@ export default function App() {
     addTerminal,
   } = useStartupTerminals();
 
+  const {
+    columns: kanbanColumns,
+    loading: kanbanLoading,
+    fetchBoard,
+    upsertTicket,
+    moveTicket,
+    clearBoard,
+  } = useKanban();
+
+  const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('feed');
   const [channelWidth, setChannelWidth] = useState(220);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [worktreePath, setWorktreePath] = useState('');
@@ -149,6 +160,7 @@ export default function App() {
     messagesRef,
     selectedMessageRef,
     onNeedsAttention: handleNeedsAttention,
+    upsertTicket,
   });
 
   const updateMessageStatus = useCallback(
@@ -171,6 +183,24 @@ export default function App() {
       }
     },
     [activeChannelId, upsertMessage],
+  );
+
+  const handleSetView = useCallback(
+    (view: MiddlePanelView) => {
+      setMiddlePanelView(view);
+      if (view === 'board' && activeChannelId) {
+        void fetchBoard(activeChannelId);
+      }
+    },
+    [activeChannelId, fetchBoard],
+  );
+
+  const handleMoveTicket = useCallback(
+    (ticketId: string, columnId: string, sortOrder: number) => {
+      if (!activeChannelId) return;
+      void moveTicket(activeChannelId, ticketId, columnId, sortOrder);
+    },
+    [activeChannelId, moveTicket],
   );
 
   const feedTitle = activeChannel ? `# ${activeChannel.name}` : 'Activity Feed';
@@ -270,6 +300,8 @@ export default function App() {
       }
       switchChannel(channelId);
       clearMessages();
+      clearBoard();
+      setMiddlePanelView('feed');
       closeThreadPanel();
       setChannelWidth(220);
       killAllTerminals();
@@ -277,6 +309,7 @@ export default function App() {
     [
       switchChannel,
       clearMessages,
+      clearBoard,
       closeThreadPanel,
       killAllTerminals,
       selectedMessageId,
@@ -513,6 +546,11 @@ export default function App() {
               selectedMessageId={selectedMessageId}
               attentionMessageIds={attentionMessageIds}
               onOpenThread={handleOpenThread}
+              middlePanelView={middlePanelView}
+              onSetView={handleSetView}
+              kanbanColumns={kanbanColumns}
+              kanbanLoading={kanbanLoading}
+              onMoveTicket={handleMoveTicket}
             />
           </div>
 

@@ -10,6 +10,7 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@prisma/client": "^6.19.2",
     "cors": "^2.8.5",
     "express": "^4.21.2",

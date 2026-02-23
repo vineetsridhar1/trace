@@ -126,6 +126,43 @@ export interface ThreadEventEnvelope {
 export type TicketStatus = 'pending' | 'in_progress' | 'completed';
 export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
+export type MiddlePanelView = 'feed' | 'board';
+
+export interface KanbanTicket {
+  id: string;
+  messageId: string;
+  columnId: string;
+  columnSlug?: string;
+  title: string;
+  description: string | null;
+  solutionApproach: string | null;
+  status: string;
+  metadata: unknown;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  message: {
+    id: string;
+    branch: string | null;
+    status: string;
+    createdAt: string;
+  };
+}
+
+export interface KanbanColumn {
+  id: string;
+  channelId: string;
+  name: string;
+  slug: string;
+  color: string | null;
+  sortOrder: number;
+  tickets: KanbanTicket[];
+}
+
+export interface TicketEnvelope {
+  channelId: string;
+  ticket: KanbanTicket;
+}
 
 export interface ThreadEventNode {
   kind: 'event';

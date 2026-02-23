@@ -19,6 +19,7 @@ import {
   getMessageByIdForFeed,
 } from '../services/messageService';
 import { sseManager } from '../services/sseManager';
+import { createTicketForMessage, syncTicketWithMessageStatus } from '../services/ticketService';
 
 const router = Router();
 
@@ -130,6 +131,15 @@ router.post('/:id/messages', async (req: Request<{ id: string }>, res: Response)
   });
   sseManager.broadcastChannel(req.params.id, 'new-event', created.event);
 
+  // Fire-and-forget: create a kanban ticket for this message
+  const channel = await getChannel(req.params.id);
+  void createTicketForMessage(
+    created.message.id,
+    req.params.id,
+    text.trim(),
+    channel?.name ?? 'general',
+  );
+
   res.status(201).json(created);
 });
 
@@ -220,6 +230,9 @@ router.patch(
       channelId: req.params.channelId,
       message,
     });
+
+    // Sync kanban ticket with message status
+    void syncTicketWithMessageStatus(req.params.messageId, req.params.channelId, status);
 
     res.json({ message });
   },

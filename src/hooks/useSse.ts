@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ChannelMessage, MessageEnvelope, ThreadEventEnvelope } from '../types';
+import type { ChannelMessage, KanbanTicket, MessageEnvelope, ThreadEventEnvelope, TicketEnvelope } from '../types';
 import { SERVER_URL } from '../types';
 
 interface UseSseOptions {
@@ -11,6 +11,7 @@ interface UseSseOptions {
   messagesRef: React.RefObject<ChannelMessage[]>;
   selectedMessageRef: React.RefObject<ChannelMessage | null>;
   onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => void;
+  upsertTicket?: (ticket: KanbanTicket) => void;
 }
 
 export function useSse({
@@ -22,6 +23,7 @@ export function useSse({
   messagesRef,
   selectedMessageRef,
   onNeedsAttention,
+  upsertTicket,
 }: UseSseOptions) {
   const [sseConnected, setSseConnected] = useState(false);
   const activeSseRef = useRef<EventSource | null>(null);
@@ -99,13 +101,27 @@ export function useSse({
       if (message) void loadThreadEvents(message);
     });
 
+    source.addEventListener('ticket-created', (evt) => {
+      if (!upsertTicket) return;
+      const payload = JSON.parse((evt as MessageEvent).data) as TicketEnvelope;
+      if (payload.channelId !== activeChannelRef.current) return;
+      upsertTicket(payload.ticket);
+    });
+
+    source.addEventListener('ticket-updated', (evt) => {
+      if (!upsertTicket) return;
+      const payload = JSON.parse((evt as MessageEvent).data) as TicketEnvelope;
+      if (payload.channelId !== activeChannelRef.current) return;
+      upsertTicket(payload.ticket);
+    });
+
     source.addEventListener('error', () => setSseConnected(false));
 
     return () => {
       source.close();
       if (activeSseRef.current === source) activeSseRef.current = null;
     };
-  }, [activeChannelId, loadThreadEvents, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention]);
+  }, [activeChannelId, loadThreadEvents, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention, upsertTicket]);
 
   return { sseConnected, activeChannelRef };
 }
