@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragTarget, KanbanTicket, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
@@ -75,6 +75,16 @@ export function ThreadPanel({
     mergeToMain,
   } = useClaudeActions();
   const threadOpen = threadWidth > 0;
+
+  const lastUserMessageTime = useMemo(() => {
+    for (let i = threadNodes.length - 1; i >= 0; i--) {
+      const node = threadNodes[i];
+      if (node.kind === 'event' && node.event.hookEventName === 'UserPromptSubmit') {
+        return node.event.timestamp;
+      }
+    }
+    return null;
+  }, [threadNodes]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('agent');
 
@@ -194,6 +204,7 @@ export function ThreadPanel({
         ) : (
           <ThreadInput
             isClaudeRunning={isClaudeRunning}
+            lastUserMessageTime={lastUserMessageTime}
             onSendThreadMessage={sendThreadMessage}
             onStopClaude={() => void stopClaude()}
           />
@@ -481,12 +492,41 @@ function RunButtons({
   );
 }
 
+function ElapsedTimer({ startTime }: { startTime: string }) {
+  const startRef = useRef(new Date(startTime).getTime());
+  const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - startRef.current) / 1000));
+
+  useEffect(() => {
+    startRef.current = new Date(startTime).getTime();
+    setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+  }, [startTime]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const secs = Math.max(0, elapsed);
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  const h = Math.floor(m / 60);
+  const display = h > 0
+    ? `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
+
+  return <span className="tabular-nums text-xs text-violet-400/70">{display}</span>;
+}
+
 function ThreadInput({
   isClaudeRunning,
+  lastUserMessageTime,
   onSendThreadMessage,
   onStopClaude,
 }: {
   isClaudeRunning: boolean;
+  lastUserMessageTime: string | null;
   onSendThreadMessage: (text: string) => Promise<boolean>;
   onStopClaude: () => void;
 }) {
@@ -518,6 +558,7 @@ function ThreadInput({
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
           </svg>
           <span className="text-xs text-violet-400">Claude is working...</span>
+          {lastUserMessageTime && <ElapsedTimer startTime={lastUserMessageTime} />}
         </div>
       )}
       <div className="flex items-end gap-2">
