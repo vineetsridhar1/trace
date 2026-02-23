@@ -210,6 +210,15 @@ export default function App() {
     return (selected?.status ?? 'pending') as TicketStatus;
   }, [messages, selectedMessageId]);
 
+  const selectedTicket = useMemo(() => {
+    if (!selectedMessageId) return null;
+    for (const col of kanbanColumns) {
+      const found = col.tickets.find((t) => t.messageId === selectedMessageId);
+      if (found) return found;
+    }
+    return null;
+  }, [kanbanColumns, selectedMessageId]);
+
   const handleOpenThread = useCallback(
     (message: ChannelMessage) => {
       setChannelWidth(0);
@@ -272,8 +281,11 @@ export default function App() {
   }, [isMessageSpawned, messages, selectedMessageId, threadEvents]);
 
   useEffect(() => {
-    if (activeChannelId) void refreshMessages(activeChannelId);
-  }, [activeChannelId, refreshMessages]);
+    if (activeChannelId) {
+      void refreshMessages(activeChannelId);
+      void fetchBoard(activeChannelId);
+    }
+  }, [activeChannelId, refreshMessages, fetchBoard]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -585,6 +597,7 @@ export default function App() {
           expandedReadGroupIds={expandedReadGroupIds}
           selectedMessageId={selectedMessageId}
           messageStatus={selectedMessageStatus}
+          ticket={selectedTicket}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
           showJumpToLatest={showJumpToLatest}

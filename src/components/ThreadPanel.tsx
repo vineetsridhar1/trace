@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { DragTarget, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
+import type { DragTarget, KanbanTicket, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
+import { TicketView } from './TicketView';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
 import { useClaudeActions } from '../context/ClaudeActionsContext';
 import { SlashCommandMenu } from './SlashCommandMenu';
+
+type ViewMode = 'agent' | 'ticket';
 
 interface ThreadPanelProps {
   threadWidth: number;
@@ -16,6 +19,7 @@ interface ThreadPanelProps {
   expandedReadGroupIds: Record<string, boolean>;
   selectedMessageId: string | null;
   messageStatus: TicketStatus;
+  ticket: KanbanTicket | null;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   showJumpToLatest: boolean;
@@ -43,6 +47,7 @@ export function ThreadPanel({
   expandedReadGroupIds,
   selectedMessageId,
   messageStatus,
+  ticket,
   deletingWorktree,
   hasWorktree,
   showJumpToLatest,
@@ -71,6 +76,16 @@ export function ThreadPanel({
   } = useClaudeActions();
   const threadOpen = threadWidth > 0;
 
+  const [viewMode, setViewMode] = useState<ViewMode>('agent');
+
+  useEffect(() => {
+    if (messageStatus === 'completed' && ticket) {
+      setViewMode('ticket');
+    } else {
+      setViewMode('agent');
+    }
+  }, [selectedMessageId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       {threadOpen && !isFullscreen && (
@@ -91,6 +106,9 @@ export function ThreadPanel({
         <ThreadHeader
           selectedMessageId={selectedMessageId}
           messageStatus={messageStatus}
+          hasTicket={ticket !== null}
+          viewMode={viewMode}
+          onSetViewMode={setViewMode}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
           scriptsAvailable={scriptsAvailable}
@@ -104,60 +122,66 @@ export function ThreadPanel({
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
-          <div
-            id="thread-content"
-            ref={threadContentRef}
-            onScroll={onThreadScroll}
-            className="thread-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3"
-          >
-            <div className="thread-events-list">
-              <ThreadStatusMessage status={threadStatus} activeThreadId={activeThreadId} />
+          {viewMode === 'ticket' && ticket ? (
+            <TicketView ticket={ticket} />
+          ) : (
+            <>
+              <div
+                id="thread-content"
+                ref={threadContentRef}
+                onScroll={onThreadScroll}
+                className="thread-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3"
+              >
+                <div className="thread-events-list">
+                  <ThreadStatusMessage status={threadStatus} activeThreadId={activeThreadId} />
 
-              {threadNodes.map((node) => {
-                if (node.kind === 'readglob-group') {
-                  return (
-                    <ReadGlobGroup
-                      key={node.id}
-                      node={node}
-                      isExpanded={Boolean(expandedReadGroupIds[node.id])}
-                      onToggle={() => onToggleReadGroup(node.id)}
-                    />
-                  );
-                }
-                if (node.kind === 'plan-review') {
-                  return (
-                    <PlanReview
-                      key={node.id}
-                      node={node}
-                      onPlanResponse={(text, claudePrompt) => {
-                        void sendPlanResponse(text, claudePrompt);
-                      }}
-                    />
-                  );
-                }
-                if (node.kind === 'ask-user-question') {
-                  return (
-                    <AskUserQuestion
-                      key={node.id}
-                      node={node}
-                      onResponse={(text) => {
-                        void sendPlanResponse(text);
-                      }}
-                    />
-                  );
-                }
-                return <ThreadEvent key={node.event.id} event={node.event} />;
-              })}
-            </div>
-          </div>
+                  {threadNodes.map((node) => {
+                    if (node.kind === 'readglob-group') {
+                      return (
+                        <ReadGlobGroup
+                          key={node.id}
+                          node={node}
+                          isExpanded={Boolean(expandedReadGroupIds[node.id])}
+                          onToggle={() => onToggleReadGroup(node.id)}
+                        />
+                      );
+                    }
+                    if (node.kind === 'plan-review') {
+                      return (
+                        <PlanReview
+                          key={node.id}
+                          node={node}
+                          onPlanResponse={(text, claudePrompt) => {
+                            void sendPlanResponse(text, claudePrompt);
+                          }}
+                        />
+                      );
+                    }
+                    if (node.kind === 'ask-user-question') {
+                      return (
+                        <AskUserQuestion
+                          key={node.id}
+                          node={node}
+                          onResponse={(text) => {
+                            void sendPlanResponse(text);
+                          }}
+                        />
+                      );
+                    }
+                    return <ThreadEvent key={node.event.id} event={node.event} />;
+                  })}
+                </div>
+              </div>
 
-          <button
-            type="button"
-            onClick={onScrollToLatest}
-            className={`jump-latest-chip ${showJumpToLatest ? 'visible' : ''}`}
-          >
-            Jump to latest
-          </button>
+              <button
+                type="button"
+                onClick={onScrollToLatest}
+                className={`jump-latest-chip ${showJumpToLatest ? 'visible' : ''}`}
+              >
+                Jump to latest
+              </button>
+            </>
+          )}
         </div>
 
         {pendingRunMessageId === selectedMessageId ? (
@@ -188,6 +212,9 @@ const HEADER_STATUS_CONFIG: Record<TicketStatus, { label: string; className: str
 function ThreadHeader({
   selectedMessageId,
   messageStatus,
+  hasTicket,
+  viewMode,
+  onSetViewMode,
   deletingWorktree,
   hasWorktree,
   scriptsAvailable,
@@ -201,6 +228,9 @@ function ThreadHeader({
 }: {
   selectedMessageId: string | null;
   messageStatus: TicketStatus;
+  hasTicket: boolean;
+  viewMode: ViewMode;
+  onSetViewMode: (mode: ViewMode) => void;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   scriptsAvailable: boolean;
@@ -224,6 +254,32 @@ function ThreadHeader({
           <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}>
             {statusConfig.label}
           </span>
+        )}
+        {hasTicket && (
+          <div className="flex rounded-lg bg-[#1f2335] p-0.5">
+            <button
+              type="button"
+              onClick={() => onSetViewMode('agent')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                viewMode === 'agent'
+                  ? 'bg-violet-500/20 text-violet-300'
+                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+              }`}
+            >
+              Agent
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetViewMode('ticket')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                viewMode === 'ticket'
+                  ? 'bg-violet-500/20 text-violet-300'
+                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+              }`}
+            >
+              Ticket
+            </button>
+          </div>
         )}
         {hasWorktree === false && messageStatus !== 'pending' && selectedMessageId && (
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
