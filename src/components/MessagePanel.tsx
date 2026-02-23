@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, TicketStatus } from '../types';
 import { avatarInitial, formatTime } from '../utils';
+import { useSlashCommands } from '../hooks/useSlashCommands';
+import { SlashCommandMenu } from './SlashCommandMenu';
 
 function useAutoResize(value: string, maxHeight = 300) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -134,25 +136,35 @@ function MessageInput({
   onSendMessage: () => void;
 }) {
   const textareaRef = useAutoResize(messageInput);
+  const slashCommands = useSlashCommands(messageInput, onMessageInputChange);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
       <div className="flex items-end gap-2">
-        <textarea
-          id="message-input"
-          ref={textareaRef}
-          rows={1}
-          value={messageInput}
-          onChange={(e) => onMessageInputChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              onSendMessage();
-            }
-          }}
-          placeholder="Send a message..."
-          className="flex-1 resize-none rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
-        />
+        <div className="relative flex-1">
+          <SlashCommandMenu
+            isOpen={slashCommands.isOpen}
+            commands={slashCommands.filteredCommands}
+            selectedIndex={slashCommands.selectedIndex}
+            onSelect={slashCommands.selectCommand}
+          />
+          <textarea
+            id="message-input"
+            ref={textareaRef}
+            rows={1}
+            value={messageInput}
+            onChange={(e) => onMessageInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (slashCommands.handleKeyDown(e)) return;
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                onSendMessage();
+              }
+            }}
+            placeholder="Send a message..."
+            className="w-full resize-none rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+          />
+        </div>
         <button
           id="message-send"
           type="button"

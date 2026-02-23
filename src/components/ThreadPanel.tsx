@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import type { DragTarget, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
+import { useSlashCommands } from '../hooks/useSlashCommands';
+import { SlashCommandMenu } from './SlashCommandMenu';
 
 function useAutoResize(value: string, maxHeight = 300) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -391,6 +393,7 @@ function ThreadInput({
   onSendThreadMessage: () => void;
 }) {
   const textareaRef = useAutoResize(threadInput);
+  const slashCommands = useSlashCommands(threadInput, onThreadInputChange);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -409,22 +412,31 @@ function ThreadInput({
         </div>
       )}
       <div className="flex items-end gap-2">
-        <textarea
-          id="thread-input"
-          ref={textareaRef}
-          rows={1}
-          value={threadInput}
-          disabled={isClaudeRunning}
-          onChange={(e) => onThreadInputChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              if (!isClaudeRunning) onSendThreadMessage();
-            }
-          }}
-          placeholder={isClaudeRunning ? 'Waiting for Claude...' : 'Send to Claude...'}
-          className={`flex-1 resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
-        />
+        <div className="relative flex-1">
+          <SlashCommandMenu
+            isOpen={slashCommands.isOpen}
+            commands={slashCommands.filteredCommands}
+            selectedIndex={slashCommands.selectedIndex}
+            onSelect={slashCommands.selectCommand}
+          />
+          <textarea
+            id="thread-input"
+            ref={textareaRef}
+            rows={1}
+            value={threadInput}
+            disabled={isClaudeRunning}
+            onChange={(e) => onThreadInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (slashCommands.handleKeyDown(e)) return;
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!isClaudeRunning) onSendThreadMessage();
+              }
+            }}
+            placeholder={isClaudeRunning ? 'Waiting for Claude...' : 'Send to Claude...'}
+            className={`w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
+          />
+        </div>
         <button
           id="thread-send"
           type="button"
