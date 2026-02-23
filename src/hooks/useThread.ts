@@ -52,7 +52,8 @@ export function useThread() {
   const loadThreadEvents = useCallback(
     async (message: ChannelMessage) => {
       try {
-        setThreadStatus('loading');
+        // Only show "loading" on initial load, not on incremental SSE updates
+        setThreadStatus((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
 
         const threadsRes = await fetch(
           `${SERVER_URL}/channels/${message.channelId}/messages/${message.id}/threads`,

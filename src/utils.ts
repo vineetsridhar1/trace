@@ -251,7 +251,7 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
 
     nodes.push({
       kind: 'readglob-group',
-      id: `${first.id}:${last.id}:${bucket.length}`,
+      id: `readglob-${first.id}`,
       count: bucket.length,
       startTimestamp: first.timestamp,
       endTimestamp: last.timestamp,
