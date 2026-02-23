@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage, KanbanColumn as KanbanColumnType, MiddlePanelView, TicketStatus } from '../types';
+import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
@@ -33,6 +33,16 @@ export function MessagePanel({
   onMoveTicket,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
+
+  const ticketByMessageId = useMemo(() => {
+    const map = new Map<string, KanbanTicket>();
+    for (const col of kanbanColumns) {
+      for (const ticket of col.tickets) {
+        map.set(ticket.messageId, ticket);
+      }
+    }
+    return map;
+  }, [kanbanColumns]);
 
   // Sort: completed items first (oldest→newest), then active items (oldest→newest)
   const sortedMessages = useMemo(() => {
@@ -111,6 +121,7 @@ export function MessagePanel({
               <MessageItem
                 key={message.id}
                 message={message}
+                ticket={ticketByMessageId.get(message.id) ?? null}
                 isSelected={message.id === selectedMessageId}
                 needsAttention={attentionMessageIds.has(message.id)}
                 onOpenThread={onOpenThread}
@@ -259,6 +270,7 @@ function StatusBadge({ status }: { status: TicketStatus }) {
 
 interface MessageItemProps {
   message: ChannelMessage;
+  ticket: KanbanTicket | null;
   isSelected: boolean;
   needsAttention?: boolean;
   onOpenThread: (message: ChannelMessage) => void;
@@ -267,6 +279,7 @@ interface MessageItemProps {
 
 const MessageItem = memo(function MessageItem({
   message,
+  ticket,
   isSelected,
   needsAttention,
   onOpenThread,
@@ -305,9 +318,21 @@ const MessageItem = memo(function MessageItem({
           )}
           <span className="ml-auto text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
         </div>
-        <MessagePreview text={preview} />
-        {message.summary && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-[#565f89]">{message.summary}</p>
+        {ticket ? (
+          <>
+            <p className="mt-1 text-sm font-semibold text-[#c0caf5]">{ticket.title}</p>
+            {ticket.description && (
+              <p className="mt-0.5 line-clamp-2 text-sm text-[#a9b1d6]">{ticket.description}</p>
+            )}
+            <MessagePreview text={preview} />
+          </>
+        ) : (
+          <>
+            <MessagePreview text={preview} />
+            {message.summary && (
+              <p className="mt-0.5 line-clamp-2 text-xs text-[#565f89]">{message.summary}</p>
+            )}
+          </>
         )}
         {threadCount > 1 && (
           <div className="mt-1.5 text-xs text-violet-300 hover:underline">
@@ -322,6 +347,7 @@ const MessageItem = memo(function MessageItem({
 function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps) {
   return (
     prev.message === next.message &&
+    prev.ticket === next.ticket &&
     prev.isSelected === next.isSelected &&
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
