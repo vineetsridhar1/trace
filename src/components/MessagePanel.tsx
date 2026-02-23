@@ -23,10 +23,8 @@ interface MessagePanelProps {
   feedTitle: string;
   messages: ChannelMessage[];
   selectedMessageId: string | null;
-  messageInput: string;
   attentionMessageIds: Set<string>;
-  onMessageInputChange: (value: string) => void;
-  onSendMessage: () => void;
+  onSendMessage: (text: string) => Promise<boolean>;
   onOpenThread: (message: ChannelMessage) => void;
 }
 
@@ -34,9 +32,7 @@ export function MessagePanel({
   feedTitle,
   messages,
   selectedMessageId,
-  messageInput,
   attentionMessageIds,
-  onMessageInputChange,
   onSendMessage,
   onOpenThread,
 }: MessagePanelProps) {
@@ -122,8 +118,6 @@ export function MessagePanel({
       </div>
 
       <MessageInput
-        messageInput={messageInput}
-        onMessageInputChange={onMessageInputChange}
         onSendMessage={onSendMessage}
       />
     </div>
@@ -131,16 +125,22 @@ export function MessagePanel({
 }
 
 function MessageInput({
-  messageInput,
-  onMessageInputChange,
   onSendMessage,
 }: {
-  messageInput: string;
-  onMessageInputChange: (value: string) => void;
-  onSendMessage: () => void;
+  onSendMessage: (text: string) => Promise<boolean>;
 }) {
+  const [messageInput, setMessageInput] = useState('');
   const textareaRef = useAutoResize(messageInput);
-  const slashCommands = useSlashCommands(messageInput, onMessageInputChange);
+  const slashCommands = useSlashCommands(messageInput, setMessageInput);
+
+  const handleSendMessage = useCallback(async () => {
+    const text = messageInput.trim();
+    if (!text) return;
+    const sent = await onSendMessage(text);
+    if (sent) {
+      setMessageInput('');
+    }
+  }, [messageInput, onSendMessage]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -157,12 +157,12 @@ function MessageInput({
             ref={textareaRef}
             rows={1}
             value={messageInput}
-            onChange={(e) => onMessageInputChange(e.target.value)}
+            onChange={(e) => setMessageInput(e.target.value)}
             onKeyDown={(e) => {
               if (slashCommands.handleKeyDown(e)) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                onSendMessage();
+                void handleSendMessage();
               }
             }}
             placeholder="Send a message..."
@@ -172,7 +172,7 @@ function MessageInput({
         <button
           id="message-send"
           type="button"
-          onClick={onSendMessage}
+          onClick={() => void handleSendMessage()}
           className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
         >
           Send
