@@ -33,11 +33,11 @@ export function MessagePanel({
   onMoveTicket,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
-  const [completedExpanded, setCompletedExpanded] = useState(false);
 
-  const { activeMessages, completedMessages } = useMemo(() => {
-    const active: ChannelMessage[] = [];
+  // Sort: completed items first (oldest→newest), then active items (oldest→newest)
+  const sortedMessages = useMemo(() => {
     const completed: ChannelMessage[] = [];
+    const active: ChannelMessage[] = [];
 
     for (const msg of messages) {
       if (msg.status === 'completed') {
@@ -47,7 +47,7 @@ export function MessagePanel({
       }
     }
 
-    return { activeMessages: active, completedMessages: completed };
+    return [...completed, ...active];
   }, [messages]);
 
   const scrollFeedToBottom = useCallback(() => {
@@ -107,44 +107,16 @@ export function MessagePanel({
             className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
           >
             <div className="flex-1" />
-            {activeMessages.map((message) => (
+            {sortedMessages.map((message) => (
               <MessageItem
                 key={message.id}
                 message={message}
                 isSelected={message.id === selectedMessageId}
                 needsAttention={attentionMessageIds.has(message.id)}
                 onOpenThread={onOpenThread}
+                dimmed={message.status === 'completed'}
               />
             ))}
-
-            {completedMessages.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setCompletedExpanded((prev) => !prev)}
-                  className="mx-1 mt-3 mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#a9b1d6]"
-                >
-                  <span
-                    className="inline-block transition-transform"
-                    style={{ transform: completedExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-                  >
-                    ▶
-                  </span>
-                  <span>Completed ({completedMessages.length})</span>
-                </button>
-                {completedExpanded &&
-                  completedMessages.map((message) => (
-                    <MessageItem
-                      key={message.id}
-                      message={message}
-                      isSelected={message.id === selectedMessageId}
-                      needsAttention={attentionMessageIds.has(message.id)}
-                      onOpenThread={onOpenThread}
-                      dimmed
-                    />
-                  ))}
-              </>
-            )}
           </div>
 
           <MessageInput />
