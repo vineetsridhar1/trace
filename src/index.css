@@ -337,6 +337,10 @@ body,
   border-radius: 6px;
 }
 
+.edit-diff-body-fullscreen {
+  overflow-x: auto;
+}
+
 .edit-diff-file .diff-gutter {
   background: #141826;
 }
