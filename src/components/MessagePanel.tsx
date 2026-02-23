@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, TicketStatus } from '../types';
-import { avatarInitial, formatTime } from '../utils';
+import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { SlashCommandMenu } from './SlashCommandMenu';
 
@@ -261,7 +261,8 @@ function MessageItem({
   onOpenThread: (message: ChannelMessage) => void;
   dimmed?: boolean;
 }) {
-  const preview = message.preview || message.session.cwd || message.sessionId;
+  const rawPreview = message.preview || message.session.cwd || message.sessionId;
+  const preview = stripTraceInternal(rawPreview);
   const threadCount = message._count.threads;
   const status = (message.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;

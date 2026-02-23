@@ -10,7 +10,7 @@ interface UseSseOptions {
   selectedMessageIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
   selectedMessageRef: React.RefObject<ChannelMessage | null>;
-  onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question') => void;
+  onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => void;
 }
 
 export function useSse({
@@ -51,6 +51,18 @@ export function useSse({
     source.addEventListener('message-upsert', (evt) => {
       const payload = JSON.parse((evt as MessageEvent).data) as MessageEnvelope;
       if (payload.channelId !== activeChannelRef.current) return;
+
+      // Detect completion transitions for attention notification
+      if (onNeedsAttention && payload.message.status === 'completed') {
+        const prev = messagesRef.current.find((m) => m.id === payload.message.id);
+        if (prev && prev.status !== 'completed') {
+          const notViewing = selectedMessageIdRef.current !== payload.message.id || document.hidden;
+          if (notViewing) {
+            onNeedsAttention(payload.message.id, 'completed');
+          }
+        }
+      }
+
       upsertMessage(payload.message);
     });
 

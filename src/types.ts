@@ -39,6 +39,7 @@ export interface TraceAPI {
   onPtyData: (callback: (terminalId: string, data: string) => void) => () => void;
   onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
   getWorktreeDiff: (messageId: string) => Promise<WorktreeDiffResult>;
+  focusWindow: () => Promise<void>;
 }
 
 declare global {

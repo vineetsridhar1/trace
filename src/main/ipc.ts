@@ -16,6 +16,7 @@ const PTY_RESIZE_CHANNEL = 'pty-resize';
 const PTY_KILL_CHANNEL = 'pty-kill';
 const STOP_CLAUDE_CHANNEL = 'stop-claude';
 const GET_WORKTREE_DIFF_CHANNEL = 'get-worktree-diff';
+const FOCUS_WINDOW_CHANNEL = 'focus-window';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -35,6 +36,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(PTY_KILL_CHANNEL);
   ipcMain.removeHandler(STOP_CLAUDE_CHANNEL);
   ipcMain.removeHandler(GET_WORKTREE_DIFF_CHANNEL);
+  ipcMain.removeHandler(FOCUS_WINDOW_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string) => {
     try {
@@ -130,5 +132,12 @@ export function registerIpcHandlers() {
     } catch (err) {
       return { success: false, error: String(err) };
     }
+  });
+
+  ipcMain.handle(FOCUS_WINDOW_CHANNEL, () => {
+    if (!mainWindowRef) return;
+    if (mainWindowRef.isMinimized()) mainWindowRef.restore();
+    mainWindowRef.show();
+    mainWindowRef.focus();
   });
 }

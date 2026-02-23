@@ -86,4 +86,6 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   getWorktreeDiff: (messageId: string) =>
     ipcRenderer.invoke('get-worktree-diff', messageId),
+
+  focusWindow: () => ipcRenderer.invoke('focus-window'),
 });

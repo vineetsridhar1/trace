@@ -15,7 +15,7 @@ export function ReadGlobGroup({ node, isExpanded, onToggle }: ReadGlobGroupProps
         onClick={onToggle}
         className="activity-row-header w-full cursor-pointer text-left"
       >
-        <span className="activity-row-title opacity-60">{node.count} file scans (Read/Glob)</span>
+        <span className="activity-row-title opacity-60 font-light">{node.count} file scans (Read/Glob)</span>
         <span className="activity-row-time">
           {formatTime(node.startTimestamp)} - {formatTime(node.endTimestamp)}
         </span>

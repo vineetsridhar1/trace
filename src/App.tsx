@@ -63,7 +63,7 @@ export default function App() {
   }, []);
 
   const handleNeedsAttention = useCallback(
-    (messageId: string, reason: 'stopped' | 'ask-user-question') => {
+    (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => {
       setAttentionMessageIds((prev) => {
         if (prev.has(messageId)) return prev;
         const next = new Set(prev);
@@ -75,7 +75,10 @@ export default function App() {
         const title = reason === 'ask-user-question' ? 'Input needed' : 'Chat completed';
         const msg = messagesRef.current.find((m) => m.id === messageId);
         const body = msg?.preview || msg?.session.cwd || messageId;
-        new Notification(title, { body });
+        const notification = new Notification(title, { body });
+        notification.onclick = () => {
+          void window.traceAPI.focusWindow();
+        };
       }
     },
     [messagesRef],

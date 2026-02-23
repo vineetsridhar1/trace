@@ -235,7 +235,7 @@ export async function ingestEvent(payload: HookEvent) {
     payload.hook_event_name === 'Stop' && payload.last_assistant_message
       ? payload.last_assistant_message.slice(0, 200)
       : payload.hook_event_name === 'UserPromptSubmit'
-        ? extractPromptFromPayload(payload)?.slice(0, 200) ?? null
+        ? (() => { const p = extractPromptFromPayload(payload); return p ? stripTraceInternal(p).slice(0, 200) : null; })()
         : null;
 
   // Only set the preview once (first message), so the thread preview shows the

@@ -1,5 +1,9 @@
 import type { ServerEvent, ExtractedDiffContent, ThreadRenderNode, DiffRuntime, Question } from './types';
 
+export function stripTraceInternal(text: string): string {
+  return text.replace(/<trace-internal>[\s\S]*?<\/trace-internal>\s*/g, '');
+}
+
 const READ_LIKE_TOOL_NAMES = new Set(['read', 'glob']);
 const EDIT_LIKE_TOOL_NAMES = new Set(['edit', 'multiedit', 'write']);
 
