@@ -17,7 +17,6 @@ const COMMANDS: SlashCommand[] = [
   { name: 'cost', displayName: '/cost', description: 'Show token usage and cost', source: 'built-in' },
   { name: 'init', displayName: '/init', description: 'Initialize project settings', source: 'built-in' },
   { name: 'memory', displayName: '/memory', description: 'Edit CLAUDE.md memory files', source: 'built-in' },
-  { name: 'model', displayName: '/model', description: 'Switch AI model', source: 'built-in' },
   { name: 'review', displayName: '/review', description: 'Review code changes', source: 'built-in' },
   { name: 'status', displayName: '/status', description: 'Show session status', source: 'built-in' },
 ];
