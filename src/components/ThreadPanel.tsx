@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DragTarget, KanbanTicket, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
-import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
+import type { AskUserQuestionNode, DragTarget, KanbanTicket, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
+import { ThreadEvent, PlanReview } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
+import { AskUserQuestionBar } from './AskUserQuestionBar';
 import { TicketView } from './TicketView';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
@@ -103,6 +104,23 @@ export function ThreadPanel({
     return null;
   }, [threadNodes]);
 
+  // Detect the last ask-user-question node (only when Claude isn't actively running)
+  const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
+    if (isClaudeRunning) return null;
+    for (let i = threadNodes.length - 1; i >= 0; i--) {
+      const node = threadNodes[i];
+      if (node.kind === 'ask-user-question') return node;
+    }
+    return null;
+  }, [threadNodes, isClaudeRunning]);
+
+  const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
+
+  // The question to show in the bottom bar (null if dismissed or none active)
+  const showQuestion = activeQuestionNode && activeQuestionNode.id !== dismissedQuestionId
+    ? activeQuestionNode
+    : null;
+
   const [viewMode, setViewMode] = useState<ViewMode>('agent');
 
   useEffect(() => {
@@ -185,15 +203,7 @@ export function ThreadPanel({
                       );
                     }
                     if (node.kind === 'ask-user-question') {
-                      return (
-                        <AskUserQuestion
-                          key={node.id}
-                          node={node}
-                          onResponse={(text) => {
-                            void sendPlanResponse(text);
-                          }}
-                        />
-                      );
+                      return null;
                     }
                     return <ThreadEvent key={node.event.id} event={node.event} />;
                   })}
@@ -218,6 +228,17 @@ export function ThreadPanel({
             initialPrompt={pendingRunInitialPrompt}
             onRun={(planMode, prompt) => {
               void runPendingMessage(planMode, prompt);
+            }}
+          />
+        ) : showQuestion ? (
+          <AskUserQuestionBar
+            node={showQuestion}
+            onResponse={(text) => {
+              void sendPlanResponse(text);
+            }}
+            onDismiss={() => {
+              setDismissedQuestionId(showQuestion.id);
+              void stopClaude();
             }}
           />
         ) : (

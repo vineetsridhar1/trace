@@ -1,0 +1,90 @@
+import { useCallback, useState } from 'react';
+import type { AskUserQuestionNode } from '../types';
+
+/**
+ * Manages selection, custom text, and pagination state
+ * for a multi-page AskUserQuestion flow.
+ */
+export function useQuestionState(node: AskUserQuestionNode) {
+  const total = node.questions.length;
+  const [page, setPage] = useState(0);
+  const [selections, setSelections] = useState<Record<number, Set<string>>>({});
+  const [customTexts, setCustomTexts] = useState<Record<number, string>>({});
+
+  const q = node.questions[page];
+  const currentSelected = selections[page] ?? new Set<string>();
+  const currentCustom = customTexts[page] ?? '';
+  const isLastPage = page === total - 1;
+  const isFirstPage = page === 0;
+
+  const hasAnyAnswer =
+    Object.values(selections).some((s: Set<string>) => s.size > 0) ||
+    Object.values(customTexts).some((t: string) => t.trim().length > 0);
+
+  const toggleOption = useCallback(
+    (label: string) => {
+      setSelections((prev: Record<number, Set<string>>) => {
+        const current = prev[page] ?? new Set<string>();
+        const next = new Set(current);
+        if (q.multiSelect) {
+          if (next.has(label)) next.delete(label);
+          else next.add(label);
+        } else {
+          if (next.has(label)) next.clear();
+          else {
+            next.clear();
+            next.add(label);
+          }
+        }
+        return { ...prev, [page]: next };
+      });
+    },
+    [page, q.multiSelect],
+  );
+
+  const setCustomText = useCallback(
+    (text: string) => {
+      setCustomTexts((prev: Record<number, string>) => ({ ...prev, [page]: text }));
+    },
+    [page],
+  );
+
+  const goNext = useCallback(() => {
+    if (!isLastPage) setPage((p: number) => p + 1);
+  }, [isLastPage]);
+
+  const goPrev = useCallback(() => {
+    if (!isFirstPage) setPage((p: number) => p - 1);
+  }, [isFirstPage]);
+
+  const buildResponse = useCallback((): string | null => {
+    const parts: string[] = [];
+    for (let i = 0; i < total; i++) {
+      const qi = node.questions[i];
+      const selected = selections[i];
+      const custom = (customTexts[i] ?? '').trim();
+      if (custom) {
+        parts.push(`${qi.header}: ${custom}`);
+      } else if (selected && selected.size > 0) {
+        parts.push(`${qi.header}: ${[...selected].join(', ')}`);
+      }
+    }
+    return parts.length > 0 ? parts.join('\n') : null;
+  }, [total, node.questions, selections, customTexts]);
+
+  return {
+    page,
+    total,
+    question: q,
+    currentSelected,
+    currentCustom,
+    isFirstPage,
+    isLastPage,
+    hasAnyAnswer,
+    toggleOption,
+    setCustomText,
+    goNext,
+    goPrev,
+    buildResponse,
+  };
+}
