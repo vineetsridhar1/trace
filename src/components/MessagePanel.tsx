@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, TicketStatus } from '../types';
-import { avatarInitial, formatTime } from '../utils';
+import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 
 function useAutoResize(value: string, maxHeight = 300) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -25,6 +25,7 @@ interface MessagePanelProps {
   onMessageInputChange: (value: string) => void;
   onSendMessage: () => void;
   onOpenThread: (message: ChannelMessage) => void;
+  attentionMessageIds?: Set<string>;
 }
 
 export function MessagePanel({
@@ -35,6 +36,7 @@ export function MessagePanel({
   onMessageInputChange,
   onSendMessage,
   onOpenThread,
+  attentionMessageIds,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
   const [completedExpanded, setCompletedExpanded] = useState(false);
@@ -83,6 +85,7 @@ export function MessagePanel({
             message={message}
             isSelected={message.id === selectedMessageId}
             onOpenThread={onOpenThread}
+            needsAttention={attentionMessageIds?.has(message.id)}
           />
         ))}
 
@@ -109,6 +112,7 @@ export function MessagePanel({
                   isSelected={message.id === selectedMessageId}
                   onOpenThread={onOpenThread}
                   dimmed
+                  needsAttention={attentionMessageIds?.has(message.id)}
                 />
               ))}
           </>
@@ -237,13 +241,16 @@ function MessageItem({
   isSelected,
   onOpenThread,
   dimmed,
+  needsAttention,
 }: {
   message: ChannelMessage;
   isSelected: boolean;
   onOpenThread: (message: ChannelMessage) => void;
   dimmed?: boolean;
+  needsAttention?: boolean;
 }) {
-  const preview = message.preview || message.session.cwd || message.sessionId;
+  const rawPreview = message.preview || message.session.cwd || message.sessionId;
+  const preview = stripTraceInternal(rawPreview);
   const threadCount = message._count.threads;
   const status = (message.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
@@ -253,7 +260,7 @@ function MessageItem({
       type="button"
       className={`message-item flex cursor-pointer items-start gap-3 border-l-2 border-transparent px-3 py-3 text-left transition-colors ${
         isSelected ? 'selected' : ''
-      } ${dimmed ? 'opacity-50' : ''}`}
+      } ${dimmed ? 'opacity-50' : ''} ${needsAttention ? 'message-attention' : ''}`}
       onClick={() => onOpenThread(message)}
     >
       <div

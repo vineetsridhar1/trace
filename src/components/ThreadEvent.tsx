@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ServerEvent, PlanReviewNode, AskUserQuestionNode, Question } from '../types';
-import { extractPromptText, formatTime, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath } from '../utils';
+import { extractPromptText, formatTime, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath, stripTraceInternal } from '../utils';
 import { EditDiffPreview } from './EditDiffPreview';
 
 function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: number }) {
@@ -71,8 +71,9 @@ export function ThreadEvent({ event }: { event: ServerEvent }) {
 }
 
 function UserPromptBubble({ event, time }: { event: ServerEvent; time: string }) {
-  const prompt =
+  const rawPrompt =
     extractPromptText(event.rawPayload) ?? event.lastAssistantMessage ?? '(prompt)';
+  const prompt = stripTraceInternal(rawPrompt);
 
   return (
     <div className="thread-bubble flex justify-end">
@@ -295,7 +296,7 @@ function StopBubble({ event, time }: { event: ServerEvent; time: string }) {
           <span className="ml-auto text-xs text-[#565f89]">{time}</span>
         </div>
         {event.lastAssistantMessage ? (
-          <ExpandableText text={event.lastAssistantMessage} lineClamp={4} />
+          <ExpandableText text={stripTraceInternal(event.lastAssistantMessage)} lineClamp={4} />
         ) : (
           <div className="text-sm text-[#565f89]">Claude completed the run.</div>
         )}

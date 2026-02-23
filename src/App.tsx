@@ -52,8 +52,32 @@ export default function App() {
   const [pendingRunPrompt, setPendingRunPrompt] = useState('');
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const spawnedMessageIds = useRef(new Set<string>());
+  const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth);
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
+  }, []);
+
+  const handleNeedsAttention = useCallback((messageId: string, reason: 'completed' | 'stopped') => {
+    setAttentionMessageIds((prev) => {
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const title = reason === 'completed' ? 'Task completed' : 'Claude needs input';
+      const body = `Message ${messageId.slice(0, 8)} ${reason === 'completed' ? 'has finished' : 'is waiting for input'}`;
+      const notification = new Notification(title, { body });
+      notification.onclick = () => {
+        void window.traceAPI.focusWindow();
+      };
+    }
+  }, []);
 
   const { sseConnected } = useSse({
     activeChannelId,
@@ -63,6 +87,7 @@ export default function App() {
     selectedMessageIdRef,
     messagesRef,
     selectedMessageRef,
+    onNeedsAttention: handleNeedsAttention,
   });
 
   const updateMessageStatus = useCallback(
@@ -130,6 +155,12 @@ export default function App() {
       setChannelWidth(0);
       resetScroll();
       openThreadPanel(message);
+      setAttentionMessageIds((prev) => {
+        if (!prev.has(message.id)) return prev;
+        const next = new Set(prev);
+        next.delete(message.id);
+        return next;
+      });
     },
     [openThreadPanel, resetScroll],
   );
@@ -343,6 +374,7 @@ export default function App() {
           onMessageInputChange={setMessageInput}
           onSendMessage={() => void sendMessage()}
           onOpenThread={handleOpenThread}
+          attentionMessageIds={attentionMessageIds}
         />
       </div>
 
