@@ -126,7 +126,7 @@ export function useThread() {
     [loadThreadEvents, resetThreadViewState, checkWorktree],
   );
 
-  const deleteWorktree = useCallback(async () => {
+  const deleteWorktree = useCallback(async (onDeleted?: (messageId: string) => void) => {
     const message = selectedMessageRef.current;
     if (!message) return;
 
@@ -146,6 +146,7 @@ export function useThread() {
           : `Worktree already missing: ${result.worktreePath}`,
       );
       setHasWorktree(false);
+      onDeleted?.(message.id);
     } finally {
       setDeletingWorktree(false);
     }

@@ -432,7 +432,7 @@ export default function App() {
         onToggleReadGroup={toggleReadGroup}
         onScrollToLatest={() => scrollThreadToBottom('smooth')}
         onClose={handleCloseThread}
-        onDeleteWorktree={() => void deleteWorktree()}
+        onDeleteWorktree={() => void deleteWorktree((messageId) => void updateMessageStatus(messageId, 'completed'))}
         onMergeToMain={() => void mergeToMain()}
         onThreadInputChange={setThreadInput}
         onSendThreadMessage={() => void sendThreadMessage()}
