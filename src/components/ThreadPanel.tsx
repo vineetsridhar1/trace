@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DragTarget, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
@@ -50,15 +50,13 @@ interface ThreadPanelProps {
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   showJumpToLatest: boolean;
-  threadInput: string;
   isClaudeRunning: boolean;
   threadContentRef: React.RefObject<HTMLDivElement | null>;
   scriptsAvailable: boolean;
   onRunScripts: () => void;
   pendingRunMessageId: string | null;
-  pendingRunPrompt: string;
-  onPendingPromptChange: (value: string) => void;
-  onRun: (planMode: boolean) => void;
+  pendingRunInitialPrompt: string;
+  onRun: (planMode: boolean, prompt: string) => void;
   onStopClaude: () => void;
   onThreadScroll: () => void;
   onToggleReadGroup: (groupId: string) => void;
@@ -66,8 +64,7 @@ interface ThreadPanelProps {
   onClose: () => void;
   onDeleteWorktree: () => void;
   onMergeToMain: () => void;
-  onThreadInputChange: (value: string) => void;
-  onSendThreadMessage: () => void;
+  onSendThreadMessage: (text: string) => Promise<boolean>;
   onPlanResponse: (text: string, claudePrompt?: string) => void;
   onStartDrag: () => void;
   isFullscreen?: boolean;
@@ -87,14 +84,12 @@ export function ThreadPanel({
   deletingWorktree,
   hasWorktree,
   showJumpToLatest,
-  threadInput,
   isClaudeRunning,
   threadContentRef,
   scriptsAvailable,
   onRunScripts,
   pendingRunMessageId,
-  pendingRunPrompt,
-  onPendingPromptChange,
+  pendingRunInitialPrompt,
   onRun,
   onStopClaude,
   onThreadScroll,
@@ -103,7 +98,6 @@ export function ThreadPanel({
   onClose,
   onDeleteWorktree,
   onMergeToMain,
-  onThreadInputChange,
   onSendThreadMessage,
   onPlanResponse,
   onStartDrag,
@@ -200,15 +194,12 @@ export function ThreadPanel({
 
         {pendingRunMessageId === selectedMessageId ? (
           <RunButtons
-            prompt={pendingRunPrompt}
-            onPromptChange={onPendingPromptChange}
+            initialPrompt={pendingRunInitialPrompt}
             onRun={onRun}
           />
         ) : (
           <ThreadInput
-            threadInput={threadInput}
             isClaudeRunning={isClaudeRunning}
-            onThreadInputChange={onThreadInputChange}
             onSendThreadMessage={onSendThreadMessage}
             onStopClaude={onStopClaude}
           />
@@ -415,15 +406,18 @@ function ThreadStatusMessage({ status, activeThreadId }: { status: ThreadStatus;
 }
 
 function RunButtons({
-  prompt,
-  onPromptChange,
+  initialPrompt,
   onRun,
 }: {
-  prompt: string;
-  onPromptChange: (value: string) => void;
-  onRun: (planMode: boolean) => void;
+  initialPrompt: string;
+  onRun: (planMode: boolean, prompt: string) => void;
 }) {
+  const [prompt, setPrompt] = useState(initialPrompt);
   const textareaRef = useAutoResize(prompt);
+
+  useEffect(() => {
+    setPrompt(initialPrompt);
+  }, [initialPrompt]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -431,11 +425,11 @@ function RunButtons({
         ref={textareaRef}
         rows={1}
         value={prompt}
-        onChange={(e) => onPromptChange(e.target.value)}
+        onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            onRun(false);
+            onRun(false, prompt);
           }
         }}
         className="mb-2 w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
@@ -443,14 +437,14 @@ function RunButtons({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => onRun(false)}
+          onClick={() => onRun(false, prompt)}
           className="flex-1 cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
         >
           Run
         </button>
         <button
           type="button"
-          onClick={() => onRun(true)}
+          onClick={() => onRun(true, prompt)}
           className="flex-1 cursor-pointer rounded-lg border border-violet-500 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/20"
         >
           Run in plan mode
@@ -461,20 +455,27 @@ function RunButtons({
 }
 
 function ThreadInput({
-  threadInput,
   isClaudeRunning,
-  onThreadInputChange,
   onSendThreadMessage,
   onStopClaude,
 }: {
-  threadInput: string;
   isClaudeRunning: boolean;
-  onThreadInputChange: (value: string) => void;
-  onSendThreadMessage: () => void;
+  onSendThreadMessage: (text: string) => Promise<boolean>;
   onStopClaude: () => void;
 }) {
+  const [threadInput, setThreadInput] = useState('');
   const textareaRef = useAutoResize(threadInput);
-  const slashCommands = useSlashCommands(threadInput, onThreadInputChange);
+  const slashCommands = useSlashCommands(threadInput, setThreadInput);
+
+  const handleSendThreadMessage = useCallback(async () => {
+    const text = threadInput.trim();
+    if (!text || isClaudeRunning) return;
+
+    const sent = await onSendThreadMessage(text);
+    if (sent) {
+      setThreadInput('');
+    }
+  }, [threadInput, isClaudeRunning, onSendThreadMessage]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -506,12 +507,12 @@ function ThreadInput({
             rows={1}
             value={threadInput}
             disabled={isClaudeRunning}
-            onChange={(e) => onThreadInputChange(e.target.value)}
+            onChange={(e) => setThreadInput(e.target.value)}
             onKeyDown={(e) => {
               if (slashCommands.handleKeyDown(e)) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isClaudeRunning) onSendThreadMessage();
+                if (!isClaudeRunning) void handleSendThreadMessage();
               }
             }}
             placeholder={isClaudeRunning ? 'Waiting for Claude...' : 'Send to Claude...'}
@@ -534,7 +535,7 @@ function ThreadInput({
           <button
             id="thread-send"
             type="button"
-            onClick={onSendThreadMessage}
+            onClick={() => void handleSendThreadMessage()}
             title="Send"
             className="cursor-pointer rounded-lg bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
           >

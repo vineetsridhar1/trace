@@ -1,27 +1,43 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Channel, ChannelMessage, StartupScript, TicketStatus } from './types';
-import { SERVER_URL } from './types';
-import { buildThreadNodes } from './utils';
-import { useChannels } from './hooks/useChannels';
-import { useMessages } from './hooks/useMessages';
-import { useThread } from './hooks/useThread';
-import { useThreadScroll } from './hooks/useThreadScroll';
-import { usePanelResize } from './hooks/usePanelResize';
-import { useSse } from './hooks/useSse';
-import { useChannelSettings } from './hooks/useChannelSettings';
-import { useStartupTerminals } from './hooks/useStartupTerminals';
-import { ChannelPanel } from './components/ChannelPanel';
-import { MessagePanel } from './components/MessagePanel';
-import { ThreadPanel } from './components/ThreadPanel';
-import { WorktreeChanges } from './components/WorktreeChanges';
-import { Terminal } from './components/Terminal';
-import { ChannelSettingsModal } from './components/ChannelSettingsModal';
-import type { DraftScript } from './components/ChannelSettingsModal';
-import { TerminalTabs } from './components/TerminalTabs';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ChannelMessage,
+  StartupScript,
+  TicketStatus,
+} from "./types";
+import { SERVER_URL } from "./types";
+import { buildThreadNodes } from "./utils";
+import { useChannels } from "./hooks/useChannels";
+import { useMessages } from "./hooks/useMessages";
+import { useThread } from "./hooks/useThread";
+import { useThreadScroll } from "./hooks/useThreadScroll";
+import { usePanelResize } from "./hooks/usePanelResize";
+import { useSse } from "./hooks/useSse";
+import { useChannelSettings } from "./hooks/useChannelSettings";
+import { useStartupTerminals } from "./hooks/useStartupTerminals";
+import { ChannelPanel } from "./components/ChannelPanel";
+import { MessagePanel } from "./components/MessagePanel";
+import { ThreadPanel } from "./components/ThreadPanel";
+import { WorktreeChanges } from "./components/WorktreeChanges";
+import { Terminal } from "./components/Terminal";
+import { ChannelSettingsModal } from "./components/ChannelSettingsModal";
+import type { DraftScript } from "./components/ChannelSettingsModal";
+import { TerminalTabs } from "./components/TerminalTabs";
 
 export default function App() {
-  const { channels, activeChannelId, activeChannel, switchChannel, refreshChannels } = useChannels();
-  const { messages, messagesRef, upsertMessage, refreshMessages, clearMessages } = useMessages();
+  const {
+    channels,
+    activeChannelId,
+    activeChannel,
+    switchChannel,
+    refreshChannels,
+  } = useChannels();
+  const {
+    messages,
+    messagesRef,
+    upsertMessage,
+    refreshMessages,
+    clearMessages,
+  } = useMessages();
 
   const thread = useThread();
   const {
@@ -46,10 +62,23 @@ export default function App() {
   } = thread;
 
   const scroll = useThreadScroll(threadEvents);
-  const { threadContentRef, showJumpToLatest, scrollThreadToBottom, onThreadScroll, resetScroll } = scroll;
+  const {
+    threadContentRef,
+    showJumpToLatest,
+    scrollThreadToBottom,
+    onThreadScroll,
+    resetScroll,
+  } = scroll;
 
   const channelSettings = useChannelSettings();
-  const { scripts, fetchScripts, updateChannelCwd, addScript, updateScript, deleteScript } = channelSettings;
+  const {
+    scripts,
+    fetchScripts,
+    updateChannelCwd,
+    addScript,
+    updateScript,
+    deleteScript,
+  } = channelSettings;
 
   const startupTerminals = useStartupTerminals();
   const {
@@ -66,27 +95,37 @@ export default function App() {
   } = startupTerminals;
 
   const [channelWidth, setChannelWidth] = useState(220);
-  const [messageInput, setMessageInput] = useState('');
-  const [threadInput, setThreadInput] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [worktreePath, setWorktreePath] = useState('');
-  const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(null);
-  const [pendingRunPrompt, setPendingRunPrompt] = useState('');
-  const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
-  const [settingsChannelId, setSettingsChannelId] = useState<string | null>(null);
+  const [worktreePath, setWorktreePath] = useState("");
+  const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(
+    null,
+  );
+  const [pendingRunInitialPrompt, setPendingRunInitialPrompt] = useState("");
+  const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [settingsChannelId, setSettingsChannelId] = useState<string | null>(
+    null,
+  );
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const spawnedMessageIds = useRef(new Set<string>());
 
-  const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth);
+  const { dragging, startDragging } = usePanelResize(
+    setChannelWidth,
+    setThreadWidth,
+  );
 
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
+    if ("Notification" in window && Notification.permission === "default") {
       void Notification.requestPermission();
     }
   }, []);
 
   const handleNeedsAttention = useCallback(
-    (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => {
+    (
+      messageId: string,
+      reason: "stopped" | "ask-user-question" | "completed",
+    ) => {
       setAttentionMessageIds((prev) => {
         if (prev.has(messageId)) return prev;
         const next = new Set(prev);
@@ -94,8 +133,13 @@ export default function App() {
         return next;
       });
 
-      if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
-        const title = reason === 'ask-user-question' ? 'Input needed' : 'Chat completed';
+      if (
+        !document.hasFocus() &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        const title =
+          reason === "ask-user-question" ? "Input needed" : "Chat completed";
         const msg = messagesRef.current.find((m) => m.id === messageId);
         const body = msg?.preview || msg?.session.cwd || messageId;
         const notification = new Notification(title, { body });
@@ -125,8 +169,8 @@ export default function App() {
         const res = await fetch(
           `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/status`,
           {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status }),
           },
         );
@@ -134,25 +178,33 @@ export default function App() {
         const { message } = (await res.json()) as { message: ChannelMessage };
         upsertMessage(message);
       } catch {
-        console.error('Failed to update message status');
+        console.error("Failed to update message status");
       }
     },
     [activeChannelId, upsertMessage],
   );
 
-  const feedTitle = activeChannel ? `# ${activeChannel.name}` : 'Activity Feed';
-  const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
+  const feedTitle = activeChannel ? `# ${activeChannel.name}` : "Activity Feed";
+  const threadNodes = useMemo(
+    () => buildThreadNodes(threadEvents),
+    [threadEvents],
+  );
   const selectedMessageStatus: TicketStatus = useMemo(() => {
     const msg = messages.find((m) => m.id === selectedMessageId);
-    return (msg?.status ?? 'pending') as TicketStatus;
+    return (msg?.status ?? "pending") as TicketStatus;
   }, [messages, selectedMessageId]);
 
   const isClaudeRunning = useMemo(() => {
-    if (!selectedMessageId || !spawnedMessageIds.current.has(selectedMessageId)) return false;
+    if (!selectedMessageId || !spawnedMessageIds.current.has(selectedMessageId))
+      return false;
     // If the last thread event is a Stop, Claude is definitely not running
-    if (threadEvents.length > 0 && threadEvents[threadEvents.length - 1].hookEventName === 'Stop') return false;
+    if (
+      threadEvents.length > 0 &&
+      threadEvents[threadEvents.length - 1].hookEventName === "Stop"
+    )
+      return false;
     const msg = messages.find((m) => m.id === selectedMessageId);
-    return msg ? msg.session.status !== 'stopped' : false;
+    return msg ? msg.session.status !== "stopped" : false;
   }, [messages, selectedMessageId, threadEvents]);
 
   useEffect(() => {
@@ -163,10 +215,17 @@ export default function App() {
     const interval = setInterval(() => {
       if (!activeChannelId || sseConnected) return;
       void refreshMessages(activeChannelId);
-      if (selectedMessageRef.current) void loadThreadEvents(selectedMessageRef.current);
+      if (selectedMessageRef.current)
+        void loadThreadEvents(selectedMessageRef.current);
     }, 3000);
     return () => clearInterval(interval);
-  }, [activeChannelId, loadThreadEvents, refreshMessages, selectedMessageRef, sseConnected]);
+  }, [
+    activeChannelId,
+    loadThreadEvents,
+    refreshMessages,
+    selectedMessageRef,
+    sseConnected,
+  ]);
 
   const handleSwitchChannel = useCallback(
     (channelId: string) => {
@@ -180,7 +239,13 @@ export default function App() {
       setChannelWidth(220);
       killAllTerminals();
     },
-    [switchChannel, clearMessages, closeThreadPanel, killAllTerminals, selectedMessageId],
+    [
+      switchChannel,
+      clearMessages,
+      closeThreadPanel,
+      killAllTerminals,
+      selectedMessageId,
+    ],
   );
 
   const handleOpenThread = useCallback(
@@ -198,113 +263,141 @@ export default function App() {
     [openThreadPanel, resetScroll],
   );
 
-  const sendMessage = useCallback(async () => {
-    const text = messageInput.trim();
-    if (!text || !activeChannelId) return;
+  const sendMessage = useCallback(async (rawText: string) => {
+    const text = rawText.trim();
+    if (!text || !activeChannelId) return false;
 
-    setMessageInput('');
     try {
-      const res = await fetch(`${SERVER_URL}/channels/${activeChannelId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) return;
+      const res = await fetch(
+        `${SERVER_URL}/channels/${activeChannelId}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        },
+      );
+      if (!res.ok) return false;
 
       const { message } = (await res.json()) as { message: ChannelMessage };
       upsertMessage(message);
       handleOpenThread(message);
       setPendingRunMessageId(message.id);
-      setPendingRunPrompt(text);
+      setPendingRunInitialPrompt(text);
+      return true;
     } catch {
-      console.error('Failed to send message');
+      console.error("Failed to send message");
+      return false;
     }
-  }, [messageInput, activeChannelId, upsertMessage, handleOpenThread]);
+  }, [activeChannelId, upsertMessage, handleOpenThread]);
 
-  const runMessage = useCallback(async (planMode: boolean) => {
-    if (!pendingRunMessageId || !pendingRunPrompt) return;
+  const runMessage = useCallback(
+    async (planMode: boolean, promptText: string) => {
+      const editedPrompt = promptText.trim();
+      if (!pendingRunMessageId || !editedPrompt) return;
 
-    const prompt = planMode
-      ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${pendingRunPrompt}`
-      : pendingRunPrompt;
+      const prompt = planMode
+        ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${editedPrompt}`
+        : editedPrompt;
 
-    const messageId = pendingRunMessageId;
-    setPendingRunMessageId(null);
-    setPendingRunPrompt('');
+      const messageId = pendingRunMessageId;
+      setPendingRunMessageId(null);
+      setPendingRunInitialPrompt("");
 
-    // Update the message preview in DB so the card stays in sync with edits
-    if (activeChannelId) {
-      try {
-        const patchRes = await fetch(
-          `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/preview`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ preview: pendingRunPrompt }),
-          },
-        );
-        if (patchRes.ok) {
-          const { message } = (await patchRes.json()) as { message: ChannelMessage };
-          upsertMessage(message);
+      // Update the message preview in DB so the card stays in sync with edits
+      if (activeChannelId) {
+        try {
+          const patchRes = await fetch(
+            `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/preview`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ preview: editedPrompt }),
+            },
+          );
+          if (patchRes.ok) {
+            const { message } = (await patchRes.json()) as {
+              message: ChannelMessage;
+            };
+            upsertMessage(message);
+          }
+        } catch {
+          // non-critical, continue with spawn
         }
-      } catch {
-        // non-critical, continue with spawn
       }
-    }
 
-    spawnedMessageIds.current.add(messageId);
-    const result = await window.traceAPI.spawnClaude(messageId, prompt);
-    if (result.success) {
-      setHasWorktree(true);
-      void updateMessageStatus(messageId, 'in_progress');
-    } else {
-      spawnedMessageIds.current.delete(messageId);
-      console.error('Failed to spawn claude:', result.error);
-    }
-  }, [pendingRunMessageId, pendingRunPrompt, activeChannelId, upsertMessage, setHasWorktree, updateMessageStatus]);
+      spawnedMessageIds.current.add(messageId);
+      const result = await window.traceAPI.spawnClaude(messageId, prompt);
+      if (result.success) {
+        setHasWorktree(true);
+        void updateMessageStatus(messageId, "in_progress");
+      } else {
+        spawnedMessageIds.current.delete(messageId);
+        console.error("Failed to spawn claude:", result.error);
+      }
+    },
+    [
+      pendingRunMessageId,
+      activeChannelId,
+      upsertMessage,
+      setHasWorktree,
+      updateMessageStatus,
+    ],
+  );
 
   const stopClaude = useCallback(async () => {
     if (!selectedMessageId) return;
     await window.traceAPI.stopClaude(selectedMessageId);
   }, [selectedMessageId]);
 
-  const sendThreadMessage = useCallback(async () => {
-    const text = threadInput.trim();
+  const sendThreadMessage = useCallback(async (rawText: string) => {
+    const text = rawText.trim();
     const message = selectedMessageRef.current;
-    if (!text || !message || !activeChannelId) return;
+    if (!text || !message || !activeChannelId) return false;
 
-    setThreadInput('');
     try {
       const persistRes = await fetch(
         `${SERVER_URL}/channels/${activeChannelId}/messages/${message.id}/prompts`,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text }),
         },
       );
       if (!persistRes.ok) {
-        console.error('Failed to persist thread prompt');
-        return;
+        console.error("Failed to persist thread prompt");
+        return false;
       }
 
-      const { message: updated } = (await persistRes.json()) as { message: ChannelMessage };
+      const { message: updated } = (await persistRes.json()) as {
+        message: ChannelMessage;
+      };
       upsertMessage(updated);
-      if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
+      if (selectedMessageIdRef.current === updated.id)
+        void loadThreadEvents(updated);
 
       spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, text);
       if (result.success) {
         setHasWorktree(true);
-        void updateMessageStatus(message.id, 'in_progress');
+        void updateMessageStatus(message.id, "in_progress");
       } else {
         spawnedMessageIds.current.delete(message.id);
-        console.error('Failed to spawn claude:', result.error);
+        console.error("Failed to spawn claude:", result.error);
       }
+      return true;
     } catch {
-      console.error('Failed to send thread message');
+      console.error("Failed to send thread message");
+      return false;
     }
-  }, [activeChannelId, threadInput, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents, setHasWorktree, updateMessageStatus]);
+  }, [
+    activeChannelId,
+    selectedMessageRef,
+    selectedMessageIdRef,
+    upsertMessage,
+    loadThreadEvents,
+    setHasWorktree,
+    updateMessageStatus,
+  ]);
 
   const handleCloseThread = useCallback(() => {
     if (isFullscreen) {
@@ -357,74 +450,105 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [addTerminal]);
 
-  const sendPlanResponse = useCallback(async (text: string, claudePrompt?: string) => {
-    const message = selectedMessageRef.current;
-    if (!text || !message || !activeChannelId) return;
+  const sendPlanResponse = useCallback(
+    async (text: string, claudePrompt?: string) => {
+      const message = selectedMessageRef.current;
+      if (!text || !message || !activeChannelId) return;
 
-    try {
-      const persistRes = await fetch(
-        `${SERVER_URL}/channels/${activeChannelId}/messages/${message.id}/prompts`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
-        },
-      );
-      if (!persistRes.ok) {
-        console.error('Failed to persist plan response prompt');
-        return;
+      try {
+        const persistRes = await fetch(
+          `${SERVER_URL}/channels/${activeChannelId}/messages/${message.id}/prompts`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          },
+        );
+        if (!persistRes.ok) {
+          console.error("Failed to persist plan response prompt");
+          return;
+        }
+
+        const { message: updated } = (await persistRes.json()) as {
+          message: ChannelMessage;
+        };
+        upsertMessage(updated);
+        if (selectedMessageIdRef.current === updated.id)
+          void loadThreadEvents(updated);
+
+        spawnedMessageIds.current.add(message.id);
+        const result = await window.traceAPI.spawnClaude(
+          message.id,
+          claudePrompt ?? text,
+        );
+        if (!result.success) {
+          spawnedMessageIds.current.delete(message.id);
+          console.error(
+            "Failed to spawn claude for plan response:",
+            result.error,
+          );
+        }
+      } catch {
+        console.error("Failed to send plan response");
       }
-
-      const { message: updated } = (await persistRes.json()) as { message: ChannelMessage };
-      upsertMessage(updated);
-      if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
-
-      spawnedMessageIds.current.add(message.id);
-      const result = await window.traceAPI.spawnClaude(message.id, claudePrompt ?? text);
-      if (!result.success) {
-        spawnedMessageIds.current.delete(message.id);
-        console.error('Failed to spawn claude for plan response:', result.error);
-      }
-    } catch {
-      console.error('Failed to send plan response');
-    }
-  }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents]);
+    },
+    [
+      activeChannelId,
+      selectedMessageRef,
+      selectedMessageIdRef,
+      upsertMessage,
+      loadThreadEvents,
+    ],
+  );
 
   const mergeToMain = useCallback(async () => {
     const message = selectedMessageRef.current;
     if (!message || !activeChannelId) return;
 
-    const prompt = '/merge-to-main';
+    const prompt = "/merge-to-main";
     try {
       const persistRes = await fetch(
         `${SERVER_URL}/channels/${activeChannelId}/messages/${message.id}/prompts`,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: prompt }),
         },
       );
       if (!persistRes.ok) {
-        console.error('Failed to persist merge-to-main prompt');
+        console.error("Failed to persist merge-to-main prompt");
         return;
       }
 
-      const { message: updated } = (await persistRes.json()) as { message: ChannelMessage };
+      const { message: updated } = (await persistRes.json()) as {
+        message: ChannelMessage;
+      };
       upsertMessage(updated);
-      if (selectedMessageIdRef.current === updated.id) void loadThreadEvents(updated);
+      if (selectedMessageIdRef.current === updated.id)
+        void loadThreadEvents(updated);
 
       spawnedMessageIds.current.add(message.id);
       const result = await window.traceAPI.spawnClaude(message.id, prompt);
       if (result.success) {
-        void updateMessageStatus(message.id, 'completed');
+        void updateMessageStatus(message.id, "completed");
       } else {
         spawnedMessageIds.current.delete(message.id);
-        console.error('Failed to spawn claude for merge-to-main:', result.error);
+        console.error(
+          "Failed to spawn claude for merge-to-main:",
+          result.error,
+        );
       }
     } catch {
-      console.error('Failed to run merge-to-main');
+      console.error("Failed to run merge-to-main");
     }
-  }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents, updateMessageStatus]);
+  }, [
+    activeChannelId,
+    selectedMessageRef,
+    selectedMessageIdRef,
+    upsertMessage,
+    loadThreadEvents,
+    updateMessageStatus,
+  ]);
 
   // --- Channel Settings Modal ---
   const settingsChannel = useMemo(
@@ -448,7 +572,9 @@ export default function App() {
 
       // Diff existing scripts vs draft to determine create/update/delete
       const existingIds = new Set(scripts.map((s) => s.id));
-      const draftIds = new Set(draftScripts.filter((d) => d.id).map((d) => d.id!));
+      const draftIds = new Set(
+        draftScripts.filter((d) => d.id).map((d) => d.id!),
+      );
 
       // Delete scripts that were removed
       for (const s of scripts) {
@@ -462,7 +588,11 @@ export default function App() {
         const d = draftScripts[i];
         if (!d.name.trim() && !d.command.trim()) continue;
         if (d.id && existingIds.has(d.id)) {
-          await updateScript(settingsChannelId, d.id, { name: d.name, command: d.command, sortOrder: i });
+          await updateScript(settingsChannelId, d.id, {
+            name: d.name,
+            command: d.command,
+            sortOrder: i,
+          });
         } else {
           await addScript(settingsChannelId, d.name, d.command);
         }
@@ -471,7 +601,15 @@ export default function App() {
       // Refresh channel list to pick up cwd change
       void refreshChannels();
     },
-    [settingsChannelId, scripts, updateChannelCwd, deleteScript, updateScript, addScript, refreshChannels],
+    [
+      settingsChannelId,
+      scripts,
+      updateChannelCwd,
+      deleteScript,
+      updateScript,
+      addScript,
+      refreshChannels,
+    ],
   );
 
   // --- Startup Scripts ---
@@ -481,9 +619,13 @@ export default function App() {
       if (!channel?.cwd) return;
 
       // Fetch latest scripts for this channel
-      const res = await fetch(`${SERVER_URL}/channels/${channelId}/startup-scripts`);
+      const res = await fetch(
+        `${SERVER_URL}/channels/${channelId}/startup-scripts`,
+      );
       if (!res.ok) return;
-      const { scripts: channelScripts } = (await res.json()) as { scripts: StartupScript[] };
+      const { scripts: channelScripts } = (await res.json()) as {
+        scripts: StartupScript[];
+      };
       if (channelScripts.length === 0) return;
 
       runAllScripts(channelId, channel.cwd, channelScripts);
@@ -492,50 +634,55 @@ export default function App() {
   );
 
   // --- Per-message startup scripts ---
-  const handleRunMessageScripts = useCallback(
-    async () => {
-      if (!selectedMessageId || !activeChannelId) return;
+  const handleRunMessageScripts = useCallback(async () => {
+    if (!selectedMessageId || !activeChannelId) return;
 
-      // Check worktree exists to get the path
-      const wtResult = await window.traceAPI.checkWorktreeExists(selectedMessageId);
-      if (!wtResult.success || !wtResult.exists || !wtResult.worktreePath) return;
-      const worktreeDir = wtResult.worktreePath;
+    // Check worktree exists to get the path
+    const wtResult =
+      await window.traceAPI.checkWorktreeExists(selectedMessageId);
+    if (!wtResult.success || !wtResult.exists || !wtResult.worktreePath) return;
+    const worktreeDir = wtResult.worktreePath;
 
-      // Fetch channel's startup scripts
-      const res = await fetch(`${SERVER_URL}/channels/${activeChannelId}/startup-scripts`);
-      if (!res.ok) return;
-      const { scripts: channelScripts } = (await res.json()) as { scripts: StartupScript[] };
-      if (channelScripts.length === 0) return;
+    // Fetch channel's startup scripts
+    const res = await fetch(
+      `${SERVER_URL}/channels/${activeChannelId}/startup-scripts`,
+    );
+    if (!res.ok) return;
+    const { scripts: channelScripts } = (await res.json()) as {
+      scripts: StartupScript[];
+    };
+    if (channelScripts.length === 0) return;
 
-      // Allocate ports — one per script
-      const portResult = await window.traceAPI.allocatePorts(selectedMessageId, channelScripts.length);
-      if (!portResult.success || !portResult.ports) return;
-      const ports = portResult.ports;
+    // Allocate ports — one per script
+    const portResult = await window.traceAPI.allocatePorts(
+      selectedMessageId,
+      channelScripts.length,
+    );
+    if (!portResult.success || !portResult.ports) return;
+    const ports = portResult.ports;
 
-      // Build per-script env maps
-      const envMaps: Record<string, string>[] = channelScripts.map((_, i) => {
-        const env: Record<string, string> = {
-          PORT: String(ports[i]),
-          TRACE_BASE_PORT: String(ports[0]),
-        };
-        for (let j = 0; j < ports.length; j++) {
-          env[`TRACE_PORT_${j}`] = String(ports[j]);
-        }
-        return env;
-      });
+    // Build per-script env maps
+    const envMaps: Record<string, string>[] = channelScripts.map((_, i) => {
+      const env: Record<string, string> = {
+        PORT: String(ports[i]),
+        TRACE_BASE_PORT: String(ports[0]),
+      };
+      for (let j = 0; j < ports.length; j++) {
+        env[`TRACE_PORT_${j}`] = String(ports[j]);
+      }
+      return env;
+    });
 
-      runAllScripts(selectedMessageId, worktreeDir, channelScripts, envMaps);
-    },
-    [selectedMessageId, activeChannelId, runAllScripts],
-  );
+    runAllScripts(selectedMessageId, worktreeDir, channelScripts, envMaps);
+  }, [selectedMessageId, activeChannelId, runAllScripts]);
 
   // Whether the play button should appear in the thread header
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
 
-  const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
+  const terminalId = `fullscreen-${selectedMessageId ?? "none"}`;
 
   // Find the cwd for the active channel (for startup terminals)
-  const activeChannelCwd = activeChannel?.cwd ?? '';
+  const activeChannelCwd = activeChannel?.cwd ?? "";
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
@@ -547,25 +694,29 @@ export default function App() {
         onSwitchChannel={handleSwitchChannel}
         onOpenSettings={handleOpenSettings}
         onRunStartupScripts={(id) => void handleRunStartupScripts(id)}
-        onStartDrag={() => startDragging('left')}
+        onStartDrag={() => startDragging("left")}
       />
 
       <div
         className="flex min-h-0 min-w-0 flex-col panel-animate"
         style={{
-          flex: isFullscreen ? '0 0 0px' : '1 1 0%',
-          overflow: 'hidden',
+          flex: isFullscreen ? "0 0 0px" : "1 1 0%",
+          overflow: "hidden",
         }}
       >
-        <div className={startupTerminalsVisible && startupTerminalList.length > 0 && !isFullscreen ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex min-h-0 flex-1 flex-col'}>
+        <div
+          className={
+            startupTerminalsVisible && startupTerminalList.length > 0 && !isFullscreen
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : "flex min-h-0 flex-1 flex-col"
+          }
+        >
           <MessagePanel
             feedTitle={feedTitle}
             messages={messages}
             selectedMessageId={selectedMessageId}
-            messageInput={messageInput}
             attentionMessageIds={attentionMessageIds}
-            onMessageInputChange={setMessageInput}
-            onSendMessage={() => void sendMessage()}
+            onSendMessage={sendMessage}
             onOpenThread={handleOpenThread}
           />
         </div>
@@ -574,9 +725,9 @@ export default function App() {
           <div
             className="shrink-0 border-t border-[#292e42]"
             style={{
-              height: startupTerminalsVisible ? '35%' : '0',
-              minHeight: startupTerminalsVisible ? '150px' : '0',
-              overflow: 'hidden',
+              height: startupTerminalsVisible ? "35%" : "0",
+              minHeight: startupTerminalsVisible ? "150px" : "0",
+              overflow: "hidden",
             }}
           >
             <TerminalTabs
@@ -604,30 +755,34 @@ export default function App() {
         deletingWorktree={deletingWorktree}
         hasWorktree={hasWorktree}
         showJumpToLatest={showJumpToLatest}
-        threadInput={threadInput}
         isClaudeRunning={isClaudeRunning}
         threadContentRef={threadContentRef}
         scriptsAvailable={scriptsAvailable}
         onRunScripts={() => void handleRunMessageScripts()}
         pendingRunMessageId={pendingRunMessageId}
-        pendingRunPrompt={pendingRunPrompt}
-        onPendingPromptChange={setPendingRunPrompt}
-        onRun={(planMode: boolean) => void runMessage(planMode)}
+        pendingRunInitialPrompt={pendingRunInitialPrompt}
+        onRun={(planMode: boolean, prompt: string) =>
+          void runMessage(planMode, prompt)
+        }
         onStopClaude={() => void stopClaude()}
         onThreadScroll={onThreadScroll}
         onToggleReadGroup={toggleReadGroup}
-        onScrollToLatest={() => scrollThreadToBottom('smooth')}
+        onScrollToLatest={() => scrollThreadToBottom("smooth")}
         onClose={handleCloseThread}
         onDeleteWorktree={() => {
           killAllTerminals();
-          if (selectedMessageId) void window.traceAPI.releasePorts(selectedMessageId);
-          void deleteWorktree((messageId) => void updateMessageStatus(messageId, 'completed'));
+          if (selectedMessageId)
+            void window.traceAPI.releasePorts(selectedMessageId);
+          void deleteWorktree(
+            (messageId) => void updateMessageStatus(messageId, "completed"),
+          );
         }}
         onMergeToMain={() => void mergeToMain()}
-        onThreadInputChange={setThreadInput}
-        onSendThreadMessage={() => void sendThreadMessage()}
-        onPlanResponse={(text, claudePrompt) => void sendPlanResponse(text, claudePrompt)}
-        onStartDrag={() => startDragging('right')}
+        onSendThreadMessage={sendThreadMessage}
+        onPlanResponse={(text, claudePrompt) =>
+          void sendPlanResponse(text, claudePrompt)
+        }
+        onStartDrag={() => startDragging("right")}
         isFullscreen={isFullscreen}
         onEnterFullscreen={() => void enterFullscreen()}
         onExitFullscreen={exitFullscreen}
@@ -636,8 +791,8 @@ export default function App() {
       <div
         className="flex min-h-0 flex-col panel-animate"
         style={{
-          flex: isFullscreen ? '1 1 50%' : '0 0 0px',
-          overflow: 'hidden',
+          flex: isFullscreen ? "1 1 50%" : "0 0 0px",
+          overflow: "hidden",
         }}
       >
         <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
@@ -645,7 +800,10 @@ export default function App() {
         </div>
         <div
           className="overflow-hidden"
-          style={{ height: isFullscreen ? '40%' : '0', minHeight: isFullscreen ? '150px' : '0' }}
+          style={{
+            height: isFullscreen ? "40%" : "0",
+            minHeight: isFullscreen ? "150px" : "0",
+          }}
         >
           {isFullscreen && startupTerminalList.length > 0 ? (
             <TerminalTabs
