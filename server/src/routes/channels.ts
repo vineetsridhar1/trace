@@ -60,7 +60,7 @@ router.get('/:id/startup-scripts', async (req: Request<{ id: string }>, res: Res
 });
 
 router.post('/:id/startup-scripts', async (req: Request<{ id: string }>, res: Response) => {
-  const { name, command } = req.body;
+  const { name, command, scriptType } = req.body;
   if (!name || typeof name !== 'string') {
     res.status(400).json({ error: 'name is required' });
     return;
@@ -69,17 +69,22 @@ router.post('/:id/startup-scripts', async (req: Request<{ id: string }>, res: Re
     res.status(400).json({ error: 'command is required' });
     return;
   }
-  const script = await createStartupScript(req.params.id, { name, command });
+  if (scriptType !== undefined && scriptType !== 'creation' && scriptType !== 'startup') {
+    res.status(400).json({ error: 'scriptType must be "creation" or "startup"' });
+    return;
+  }
+  const script = await createStartupScript(req.params.id, { name, command, scriptType });
   res.status(201).json(script);
 });
 
 router.patch(
   '/:id/startup-scripts/:scriptId',
   async (req: Request<{ id: string; scriptId: string }>, res: Response) => {
-    const { name, command, sortOrder } = req.body;
-    const data: { name?: string; command?: string; sortOrder?: number } = {};
+    const { name, command, scriptType, sortOrder } = req.body;
+    const data: { name?: string; command?: string; scriptType?: string; sortOrder?: number } = {};
     if (name !== undefined) data.name = name;
     if (command !== undefined) data.command = command;
+    if (scriptType !== undefined) data.scriptType = scriptType;
     if (sortOrder !== undefined) data.sortOrder = sortOrder;
     const script = await updateStartupScript(req.params.scriptId, data);
     res.json(script);

@@ -4,9 +4,10 @@ contextBridge.exposeInMainWorld('traceAPI', {
   spawnClaude: async (
     messageId: string,
     prompt: string,
+    creationCommands?: string[],
   ): Promise<{ success: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('spawn-claude', messageId, prompt);
+      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, creationCommands);
     } catch (err) {
       return { success: false, error: String(err) };
     }

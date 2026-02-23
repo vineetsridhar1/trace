@@ -13,12 +13,34 @@ import {
   ensureWorktree,
   getWorktreeBranch,
 } from './worktree';
+import { runProcess } from './process';
 
 const SERVER_URL = process.env.TRACE_SERVER_URL ?? 'http://localhost:3100';
 const MAX_CAPTURE_CHARS = 20_000;
 
-export async function spawnClaude(messageId: string, prompt: string): Promise<string> {
-  const worktreePath = await ensureWorktree(messageId);
+async function runCreationScripts(worktreePath: string, commands: string[]): Promise<void> {
+  for (const command of commands) {
+    const trimmed = command.trim();
+    if (!trimmed) continue;
+    const result = await runProcess('sh', ['-c', trimmed], worktreePath);
+    if (result.code !== 0) {
+      console.error(`[creation-script] command failed: ${trimmed}\n${result.stderr}`);
+    }
+  }
+}
+
+export async function spawnClaude(
+  messageId: string,
+  prompt: string,
+  creationCommands?: string[],
+): Promise<string> {
+  const { worktreePath, created } = await ensureWorktree(messageId);
+
+  if (created && creationCommands && creationCommands.length > 0) {
+    appendClaudeDebugLog(messageId, `running ${creationCommands.length} creation script(s)`);
+    await runCreationScripts(worktreePath, creationCommands);
+    appendClaudeDebugLog(messageId, 'creation scripts completed');
+  }
   const startedAt = Date.now();
   appendClaudeDebugLog(
     messageId,

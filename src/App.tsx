@@ -234,6 +234,20 @@ export default function App() {
     [openThreadPanel, resetScroll],
   );
 
+  const getCreationCommands = useCallback(async (): Promise<string[]> => {
+    if (!activeChannelId) return [];
+    try {
+      const response = await fetch(`${SERVER_URL}/channels/${activeChannelId}/startup-scripts`);
+      if (!response.ok) return [];
+      const { scripts: allScripts } = (await response.json()) as { scripts: StartupScript[] };
+      return allScripts
+        .filter((s) => s.scriptType === 'creation')
+        .map((s) => s.command);
+    } catch {
+      return [];
+    }
+  }, [activeChannelId]);
+
   const claudeActions = useClaudeMessageActions({
     activeChannelId,
     selectedMessageId,
@@ -244,6 +258,7 @@ export default function App() {
     upsertMessage,
     setHasWorktree,
     updateMessageStatus,
+    getCreationCommands,
   });
 
   const claudeActionsContextValue = useMemo(
@@ -429,12 +444,13 @@ export default function App() {
             updateScript(settingsChannelId, script.id, {
               name,
               command,
+              scriptType: script.scriptType,
               sortOrder: index,
             }),
           ];
         }
 
-        return [addScript(settingsChannelId, name, command)];
+        return [addScript(settingsChannelId, name, command, script.scriptType)];
       });
 
       await Promise.all([...deleteTasks, ...upsertTasks]);
@@ -470,9 +486,10 @@ export default function App() {
       if (!channel?.cwd) return;
 
       const channelScripts = await fetchChannelScripts(channelId);
-      if (channelScripts.length === 0) return;
+      const startupOnly = channelScripts.filter((s) => s.scriptType !== 'creation');
+      if (startupOnly.length === 0) return;
 
-      runAllScripts(channelId, channel.cwd, channelScripts);
+      runAllScripts(channelId, channel.cwd, startupOnly);
     },
     [channels, fetchChannelScripts, runAllScripts],
   );
@@ -490,16 +507,17 @@ export default function App() {
     }
 
     const channelScripts = await fetchChannelScripts(activeChannelId);
-    if (channelScripts.length === 0) return;
+    const startupOnly = channelScripts.filter((s) => s.scriptType !== 'creation');
+    if (startupOnly.length === 0) return;
 
     const portResult = await window.traceAPI.allocatePorts(
       selectedMessageId,
-      channelScripts.length,
+      startupOnly.length,
     );
     if (!portResult.success || !portResult.ports) return;
 
     const ports = portResult.ports;
-    const envMaps: Record<string, string>[] = channelScripts.map((_, scriptIndex) => {
+    const envMaps: Record<string, string>[] = startupOnly.map((_, scriptIndex) => {
       const env: Record<string, string> = {
         PORT: String(ports[scriptIndex]),
         TRACE_BASE_PORT: String(ports[0]),
@@ -513,7 +531,7 @@ export default function App() {
     runAllScripts(
       selectedMessageId,
       worktreeResult.worktreePath,
-      channelScripts,
+      startupOnly,
       envMaps,
     );
   }, [activeChannelId, fetchChannelScripts, runAllScripts, selectedMessageId]);
