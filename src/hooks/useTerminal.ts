@@ -39,67 +39,96 @@ export function useTerminal({ terminalId, cwd }: UseTerminalOptions) {
     fitAddonRef.current?.fit();
   }, []);
 
+  const focus = useCallback(() => {
+    terminalRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const terminal = new Terminal({
-      theme: TOKYO_NIGHT_THEME,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      cursorBlink: true,
-      convertEol: true,
+    let terminal: Terminal | null = null;
+    let fitAddon: FitAddon | null = null;
+    let inputDisposable: { dispose: () => void } | null = null;
+    let resizeDisposable: { dispose: () => void } | null = null;
+    let cleanupData: (() => void) | null = null;
+    let cleanupExit: (() => void) | null = null;
+
+    const init = () => {
+      if (terminal) return;
+
+      terminal = new Terminal({
+        theme: TOKYO_NIGHT_THEME,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontSize: 13,
+        cursorBlink: true,
+        convertEol: true,
+      });
+      fitAddon = new FitAddon();
+      terminal.loadAddon(fitAddon);
+      // Clear any leftover DOM from a previous terminal (e.g. React StrictMode remount)
+      container.replaceChildren();
+      terminal.open(container);
+
+      terminalRef.current = terminal;
+      fitAddonRef.current = fitAddon;
+
+      // Delay fit + focus until the container is fully laid out.
+      // A single rAF can fire before the CSS transition finishes,
+      // so schedule a second frame to be safe.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fitAddon?.fit();
+          terminal?.focus();
+        });
+      });
+
+      void window.traceAPI.createPty(terminalId, cwd);
+
+      inputDisposable = terminal.onData((data) => {
+        void window.traceAPI.writePty(terminalId, data);
+      });
+
+      cleanupData = window.traceAPI.onPtyData((id, data) => {
+        if (id === terminalId) terminal?.write(data);
+      });
+
+      cleanupExit = window.traceAPI.onPtyExit((id) => {
+        if (id === terminalId) terminal?.write('\r\n[Process exited]\r\n');
+      });
+
+      resizeDisposable = terminal.onResize(({ cols, rows }) => {
+        void window.traceAPI.resizePty(terminalId, cols, rows);
+      });
+    };
+
+    // Wait for container to have dimensions before initializing xterm.
+    // The container may start at zero size during CSS transitions.
+    const observer = new ResizeObserver(() => {
+      if (!terminal && container.clientWidth > 0 && container.clientHeight > 0) {
+        init();
+      } else if (fitAddon) {
+        fitAddon.fit();
+      }
     });
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.open(container);
-
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-
-    // Fit after a frame to ensure container is sized, then focus
-    requestAnimationFrame(() => {
-      fitAddon.fit();
-      terminal.focus();
-    });
-
-    // Spawn PTY
-    void window.traceAPI.createPty(terminalId, cwd);
-
-    // Forward input to PTY
-    const inputDisposable = terminal.onData((data) => {
-      void window.traceAPI.writePty(terminalId, data);
-    });
-
-    // Receive PTY output
-    const cleanupData = window.traceAPI.onPtyData((id, data) => {
-      if (id === terminalId) terminal.write(data);
-    });
-
-    const cleanupExit = window.traceAPI.onPtyExit((id) => {
-      if (id === terminalId) terminal.write('\r\n[Process exited]\r\n');
-    });
-
-    // Auto-resize
-    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
-      void window.traceAPI.resizePty(terminalId, cols, rows);
-    });
-
-    const observer = new ResizeObserver(() => fitAddon.fit());
     observer.observe(container);
+
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      init();
+    }
 
     return () => {
       observer.disconnect();
-      inputDisposable.dispose();
-      resizeDisposable.dispose();
-      cleanupData();
-      cleanupExit();
-      terminal.dispose();
+      inputDisposable?.dispose();
+      resizeDisposable?.dispose();
+      cleanupData?.();
+      cleanupExit?.();
+      terminal?.dispose();
       void window.traceAPI.killPty(terminalId);
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
   }, [terminalId, cwd]);
 
-  return { containerRef, fit };
+  return { containerRef, fit, focus };
 }
