@@ -36,7 +36,10 @@ interface ThreadPanelProps {
   isClaudeRunning: boolean;
   threadContentRef: React.RefObject<HTMLDivElement | null>;
   pendingRunMessageId: string | null;
+  pendingRunPrompt: string;
+  onPendingPromptChange: (value: string) => void;
   onRun: (planMode: boolean) => void;
+  onStopClaude: () => void;
   onThreadScroll: () => void;
   onToggleReadGroup: (groupId: string) => void;
   onScrollToLatest: () => void;
@@ -68,7 +71,10 @@ export function ThreadPanel({
   isClaudeRunning,
   threadContentRef,
   pendingRunMessageId,
+  pendingRunPrompt,
+  onPendingPromptChange,
   onRun,
+  onStopClaude,
   onThreadScroll,
   onToggleReadGroup,
   onScrollToLatest,
@@ -169,13 +175,18 @@ export function ThreadPanel({
         </div>
 
         {pendingRunMessageId === selectedMessageId ? (
-          <RunButtons onRun={onRun} />
+          <RunButtons
+            prompt={pendingRunPrompt}
+            onPromptChange={onPendingPromptChange}
+            onRun={onRun}
+          />
         ) : (
           <ThreadInput
             threadInput={threadInput}
             isClaudeRunning={isClaudeRunning}
             onThreadInputChange={onThreadInputChange}
             onSendThreadMessage={onSendThreadMessage}
+            onStopClaude={onStopClaude}
           />
         )}
       </div>
@@ -358,9 +369,32 @@ function ThreadStatusMessage({ status, activeThreadId }: { status: ThreadStatus;
   return null;
 }
 
-function RunButtons({ onRun }: { onRun: (planMode: boolean) => void }) {
+function RunButtons({
+  prompt,
+  onPromptChange,
+  onRun,
+}: {
+  prompt: string;
+  onPromptChange: (value: string) => void;
+  onRun: (planMode: boolean) => void;
+}) {
+  const textareaRef = useAutoResize(prompt);
+
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
+      <textarea
+        ref={textareaRef}
+        rows={1}
+        value={prompt}
+        onChange={(e) => onPromptChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            onRun(false);
+          }
+        }}
+        className="mb-2 w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+      />
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -386,11 +420,13 @@ function ThreadInput({
   isClaudeRunning,
   onThreadInputChange,
   onSendThreadMessage,
+  onStopClaude,
 }: {
   threadInput: string;
   isClaudeRunning: boolean;
   onThreadInputChange: (value: string) => void;
   onSendThreadMessage: () => void;
+  onStopClaude: () => void;
 }) {
   const textareaRef = useAutoResize(threadInput);
   const slashCommands = useSlashCommands(threadInput, onThreadInputChange);
@@ -437,15 +473,32 @@ function ThreadInput({
             className={`w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
         </div>
-        <button
-          id="thread-send"
-          type="button"
-          disabled={isClaudeRunning}
-          onClick={onSendThreadMessage}
-          className={`cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          Send
-        </button>
+        {isClaudeRunning ? (
+          <button
+            id="thread-stop"
+            type="button"
+            onClick={onStopClaude}
+            title="Stop Claude"
+            className="cursor-pointer rounded-lg bg-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            id="thread-send"
+            type="button"
+            onClick={onSendThreadMessage}
+            title="Send"
+            className="cursor-pointer rounded-lg bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M22 2L11 13" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

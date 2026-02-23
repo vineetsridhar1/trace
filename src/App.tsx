@@ -201,6 +201,26 @@ export default function App() {
     setPendingRunMessageId(null);
     setPendingRunPrompt('');
 
+    // Update the message preview in DB so the card stays in sync with edits
+    if (activeChannelId) {
+      try {
+        const patchRes = await fetch(
+          `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/preview`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preview: pendingRunPrompt }),
+          },
+        );
+        if (patchRes.ok) {
+          const { message } = (await patchRes.json()) as { message: ChannelMessage };
+          upsertMessage(message);
+        }
+      } catch {
+        // non-critical, continue with spawn
+      }
+    }
+
     spawnedMessageIds.current.add(messageId);
     const result = await window.traceAPI.spawnClaude(messageId, prompt);
     if (result.success) {
@@ -209,7 +229,12 @@ export default function App() {
     } else {
       console.error('Failed to spawn claude:', result.error);
     }
-  }, [pendingRunMessageId, pendingRunPrompt, setHasWorktree, updateMessageStatus]);
+  }, [pendingRunMessageId, pendingRunPrompt, activeChannelId, upsertMessage, setHasWorktree, updateMessageStatus]);
+
+  const stopClaude = useCallback(async () => {
+    if (!selectedMessageId) return;
+    await window.traceAPI.stopClaude(selectedMessageId);
+  }, [selectedMessageId]);
 
   const sendThreadMessage = useCallback(async () => {
     const text = threadInput.trim();
@@ -396,7 +421,10 @@ export default function App() {
         isClaudeRunning={isClaudeRunning}
         threadContentRef={threadContentRef}
         pendingRunMessageId={pendingRunMessageId}
+        pendingRunPrompt={pendingRunPrompt}
+        onPendingPromptChange={setPendingRunPrompt}
         onRun={(planMode: boolean) => void runMessage(planMode)}
+        onStopClaude={() => void stopClaude()}
         onThreadScroll={onThreadScroll}
         onToggleReadGroup={toggleReadGroup}
         onScrollToLatest={() => scrollThreadToBottom('smooth')}

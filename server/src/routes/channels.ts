@@ -7,6 +7,7 @@ import {
   createUserMessage,
   appendPromptToMessageThread,
   updateMessageStatus,
+  updateMessagePreviewAndImportance,
   getMessageByIdForFeed,
 } from '../services/messageService';
 import { sseManager } from '../services/sseManager';
@@ -104,6 +105,31 @@ router.post(
     sseManager.broadcastChannel(req.params.channelId, 'new-event', created.event);
 
     res.status(201).json(created);
+  },
+);
+
+router.patch(
+  '/:channelId/messages/:messageId/preview',
+  async (req: Request<{ channelId: string; messageId: string }>, res: Response) => {
+    const { preview } = req.body;
+    if (typeof preview !== 'string') {
+      res.status(400).json({ error: 'preview must be a string' });
+      return;
+    }
+
+    await updateMessagePreviewAndImportance(req.params.messageId, preview, 'normal');
+    const message = await getMessageByIdForFeed(req.params.messageId);
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
+
+    sseManager.broadcastChannel(req.params.channelId, 'message-upsert', {
+      channelId: req.params.channelId,
+      message,
+    });
+
+    res.json({ message });
   },
 );
 
