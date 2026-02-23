@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Channel, StartupScript } from '../types';
+import type { Channel, StartupScript, ScriptType } from '../types';
 
 interface DraftScript {
   id?: string;
   name: string;
   command: string;
+  scriptType: ScriptType;
 }
 
 interface ChannelSettingsModalProps {
@@ -23,11 +24,13 @@ export function ChannelSettingsModal({ channel, scripts, onClose, onSave }: Chan
 
   useEffect(() => {
     setDraftCwd(channel.cwd ?? '');
-    setDraftScripts(scripts.map((s) => ({ id: s.id, name: s.name, command: s.command })));
+    setDraftScripts(
+      scripts.map((s) => ({ id: s.id, name: s.name, command: s.command, scriptType: s.scriptType })),
+    );
   }, [channel, scripts]);
 
-  const addDraftScript = useCallback(() => {
-    setDraftScripts((prev) => [...prev, { name: '', command: '' }]);
+  const addDraftScript = useCallback((scriptType: ScriptType) => {
+    setDraftScripts((prev) => [...prev, { name: '', command: '', scriptType }]);
   }, []);
 
   const removeDraftScript = useCallback((index: number) => {
@@ -47,6 +50,71 @@ export function ChannelSettingsModal({ channel, scripts, onClose, onSave }: Chan
       setSaving(false);
     }
   }, [draftCwd, draftScripts, onSave, onClose]);
+
+  const creationScripts = draftScripts
+    .map((s, i) => ({ script: s, originalIndex: i }))
+    .filter(({ script }) => script.scriptType === 'creation');
+  const startupScripts = draftScripts
+    .map((s, i) => ({ script: s, originalIndex: i }))
+    .filter(({ script }) => script.scriptType === 'startup');
+
+  const renderScriptSection = (
+    label: string,
+    description: string,
+    scriptType: ScriptType,
+    items: { script: DraftScript; originalIndex: number }[],
+  ) => (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <label className="text-xs font-medium text-[#565f89]">{label}</label>
+          <p className="text-[10px] text-[#3b4261]">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => addDraftScript(scriptType)}
+          className="rounded px-2 py-0.5 text-xs text-[#7aa2f7] hover:bg-[#292e42]"
+        >
+          + Add
+        </button>
+      </div>
+
+      {items.length === 0 && (
+        <p className="text-xs text-[#3b4261]">No {label.toLowerCase()} configured.</p>
+      )}
+
+      <div className="space-y-2">
+        {items.map(({ script, originalIndex }) => (
+          <div key={script.id ?? `new-${originalIndex}`} className="flex gap-2 items-start">
+            <input
+              type="text"
+              value={script.name}
+              onChange={(e) => updateDraftScript(originalIndex, 'name', e.target.value)}
+              placeholder="Name"
+              className="w-28 shrink-0 rounded border border-[#292e42] bg-[#16161e] px-2 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
+            />
+            <textarea
+              value={script.command}
+              onChange={(e) => updateDraftScript(originalIndex, 'command', e.target.value)}
+              placeholder={scriptType === 'creation' ? 'e.g. cp ../.env .env\nnpm install' : 'e.g. npm run dev'}
+              rows={1}
+              style={{ fieldSizing: 'content' } as React.CSSProperties}
+              className="min-w-0 flex-1 rounded border border-[#292e42] bg-[#16161e] px-2 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => removeDraftScript(originalIndex)}
+              className="shrink-0 rounded p-1.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 2l8 8M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -76,53 +144,21 @@ export function ChannelSettingsModal({ channel, scripts, onClose, onSave }: Chan
             />
           </div>
 
+          {/* Creation Scripts */}
+          {renderScriptSection(
+            'Creation Scripts',
+            'Run once when a worktree is created (e.g. copy .env, npm install)',
+            'creation',
+            creationScripts,
+          )}
+
           {/* Startup Scripts */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-xs font-medium text-[#565f89]">Startup Scripts</label>
-              <button
-                type="button"
-                onClick={addDraftScript}
-                className="rounded px-2 py-0.5 text-xs text-[#7aa2f7] hover:bg-[#292e42]"
-              >
-                + Add Script
-              </button>
-            </div>
-
-            {draftScripts.length === 0 && (
-              <p className="text-xs text-[#3b4261]">No startup scripts configured.</p>
-            )}
-
-            <div className="space-y-2">
-              {draftScripts.map((script, i) => (
-                <div key={script.id ?? `new-${i}`} className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    value={script.name}
-                    onChange={(e) => updateDraftScript(i, 'name', e.target.value)}
-                    placeholder="Name"
-                    className="w-28 shrink-0 rounded border border-[#292e42] bg-[#16161e] px-2 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
-                  />
-                  <input
-                    type="text"
-                    value={script.command}
-                    onChange={(e) => updateDraftScript(i, 'command', e.target.value)}
-                    placeholder="Command (e.g. npm run dev)"
-                    className="min-w-0 flex-1 rounded border border-[#292e42] bg-[#16161e] px-2 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeDraftScript(i)}
-                    className="shrink-0 rounded p-1.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 2l8 8M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+          {renderScriptSection(
+            'Startup Scripts',
+            'Run each time to start servers (e.g. npm run dev)',
+            'startup',
+            startupScripts,
+          )}
         </div>
 
         {/* Footer */}

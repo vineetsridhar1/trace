@@ -15,6 +15,7 @@ export interface TraceAPI {
   spawnClaude: (
     messageId: string,
     prompt: string,
+    creationCommands?: string[],
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   stopClaude: (
     messageId: string,
@@ -74,11 +75,14 @@ export interface Channel {
   updatedAt: string;
 }
 
+export type ScriptType = 'creation' | 'startup';
+
 export interface StartupScript {
   id: string;
   channelId: string;
   name: string;
   command: string;
+  scriptType: ScriptType;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

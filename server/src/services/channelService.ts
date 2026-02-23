@@ -36,20 +36,24 @@ export async function listStartupScripts(channelId: string) {
   });
 }
 
-export async function createStartupScript(channelId: string, data: { name: string; command: string }) {
+export async function createStartupScript(
+  channelId: string,
+  data: { name: string; command: string; scriptType?: string },
+) {
+  const scriptType = data.scriptType ?? 'startup';
   const maxOrder = await prisma.startupScript.aggregate({
     where: { channelId },
     _max: { sortOrder: true },
   });
   const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
   return prisma.startupScript.create({
-    data: { channelId, name: data.name, command: data.command, sortOrder },
+    data: { channelId, name: data.name, command: data.command, scriptType, sortOrder },
   });
 }
 
 export async function updateStartupScript(
   id: string,
-  data: { name?: string; command?: string; sortOrder?: number },
+  data: { name?: string; command?: string; scriptType?: string; sortOrder?: number },
 ) {
   return prisma.startupScript.update({ where: { id }, data });
 }

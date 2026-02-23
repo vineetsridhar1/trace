@@ -35,12 +35,17 @@ export function getWorktreePath(messageId: string): string {
   return path.join(getWorktreeBase(), messageId);
 }
 
-export function ensureWorktree(messageId: string): Promise<string> {
+export interface EnsureWorktreeResult {
+  worktreePath: string;
+  created: boolean;
+}
+
+export function ensureWorktree(messageId: string): Promise<EnsureWorktreeResult> {
   const worktreePath = getWorktreePath(messageId);
 
   if (fs.existsSync(worktreePath)) {
     injectHooks(worktreePath);
-    return Promise.resolve(worktreePath);
+    return Promise.resolve({ worktreePath, created: false });
   }
 
   const base = getWorktreeBase();
@@ -50,7 +55,7 @@ export function ensureWorktree(messageId: string): Promise<string> {
 
   const branchName = `trace/${messageId.slice(0, 8)}`;
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<EnsureWorktreeResult>((resolve, reject) => {
     const result = spawn('git', ['worktree', 'add', '-b', branchName, worktreePath], {
       cwd: targetDir,
       stdio: 'pipe',
@@ -72,12 +77,12 @@ export function ensureWorktree(messageId: string): Promise<string> {
             reject(new Error(`Failed to create worktree: ${stderr} / ${retryErr}`));
           } else {
             injectHooks(worktreePath);
-            resolve(worktreePath);
+            resolve({ worktreePath, created: true });
           }
         });
       } else {
         injectHooks(worktreePath);
-        resolve(worktreePath);
+        resolve({ worktreePath, created: true });
       }
     });
   });

@@ -13,12 +13,14 @@ interface UseClaudeMessageActionsOptions {
   upsertMessage: (message: ChannelMessage) => void;
   setHasWorktree: Dispatch<SetStateAction<boolean | null>>;
   updateMessageStatus: (messageId: string, status: TicketStatus) => Promise<void>;
+  getCreationCommands: () => Promise<string[]>;
 }
 
 interface SpawnOptions {
   statusOnSuccess?: TicketStatus;
   errorPrefix: string;
   setHasWorktreeOnSuccess?: boolean;
+  creationCommands?: string[];
 }
 
 export function useClaudeMessageActions({
@@ -31,6 +33,7 @@ export function useClaudeMessageActions({
   upsertMessage,
   setHasWorktree,
   updateMessageStatus,
+  getCreationCommands,
 }: UseClaudeMessageActionsOptions) {
   const spawnedMessageIdsRef = useRef(new Set<string>());
   const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(
@@ -42,7 +45,7 @@ export function useClaudeMessageActions({
     async (messageId: string, prompt: string, options: SpawnOptions) => {
       spawnedMessageIdsRef.current.add(messageId);
       try {
-        const result = await window.traceAPI.spawnClaude(messageId, prompt);
+        const result = await window.traceAPI.spawnClaude(messageId, prompt, options.creationCommands);
 
         if (!result.success) {
           spawnedMessageIdsRef.current.delete(messageId);
@@ -165,13 +168,15 @@ export function useClaudeMessageActions({
       setPendingRunMessageId(null);
       setPendingRunInitialPrompt('');
 
+      const creationCommands = await getCreationCommands();
       await updatePreviewForPendingRun(messageId, editedPrompt);
       await spawnClaudeForMessage(messageId, prompt, {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
+        creationCommands,
       });
     },
-    [pendingRunMessageId, spawnClaudeForMessage, updatePreviewForPendingRun],
+    [getCreationCommands, pendingRunMessageId, spawnClaudeForMessage, updatePreviewForPendingRun],
   );
 
   const stopClaude = useCallback(async () => {
@@ -192,13 +197,15 @@ export function useClaudeMessageActions({
       );
       if (!persisted) return false;
 
+      const creationCommands = await getCreationCommands();
       await spawnClaudeForMessage(selectedMessage.id, text, {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
+        creationCommands,
       });
       return true;
     },
-    [activeChannelId, persistPrompt, selectedMessageRef, spawnClaudeForMessage],
+    [activeChannelId, getCreationCommands, persistPrompt, selectedMessageRef, spawnClaudeForMessage],
   );
 
   const sendPlanResponse = useCallback(

@@ -31,12 +31,12 @@ export function useChannelSettings() {
     }
   }, []);
 
-  const addScript = useCallback(async (channelId: string, name: string, command: string) => {
+  const addScript = useCallback(async (channelId: string, name: string, command: string, scriptType?: string) => {
     try {
       const res = await fetch(`${SERVER_URL}/channels/${channelId}/startup-scripts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, command }),
+        body: JSON.stringify({ name, command, scriptType }),
       });
       if (!res.ok) return null;
       const script = (await res.json()) as StartupScript;
@@ -49,7 +49,7 @@ export function useChannelSettings() {
   }, []);
 
   const updateScript = useCallback(
-    async (channelId: string, scriptId: string, data: { name?: string; command?: string; sortOrder?: number }) => {
+    async (channelId: string, scriptId: string, data: { name?: string; command?: string; scriptType?: string; sortOrder?: number }) => {
       try {
         const res = await fetch(`${SERVER_URL}/channels/${channelId}/startup-scripts/${scriptId}`, {
           method: 'PATCH',

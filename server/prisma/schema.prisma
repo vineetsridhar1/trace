@@ -38,13 +38,14 @@ model Channel {
 }
 
 model StartupScript {
-  id        String   @id @default(uuid())
-  channelId String   @map("channel_id")
-  name      String
-  command   String
-  sortOrder Int      @default(0) @map("sort_order")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(uuid())
+  channelId  String   @map("channel_id")
+  name       String
+  command    String
+  scriptType String   @default("startup") @map("script_type")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
