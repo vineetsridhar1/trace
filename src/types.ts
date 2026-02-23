@@ -67,6 +67,17 @@ export interface ServerEvent {
 export interface Channel {
   id: string;
   name: string;
+  cwd: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StartupScript {
+  id: string;
+  channelId: string;
+  name: string;
+  command: string;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }

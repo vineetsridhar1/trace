@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage, TicketStatus } from './types';
+import type { Channel, ChannelMessage, StartupScript, TicketStatus } from './types';
 import { SERVER_URL } from './types';
 import { buildThreadNodes } from './utils';
 import { useChannels } from './hooks/useChannels';
@@ -8,14 +8,19 @@ import { useThread } from './hooks/useThread';
 import { useThreadScroll } from './hooks/useThreadScroll';
 import { usePanelResize } from './hooks/usePanelResize';
 import { useSse } from './hooks/useSse';
+import { useChannelSettings } from './hooks/useChannelSettings';
+import { useStartupTerminals } from './hooks/useStartupTerminals';
 import { ChannelPanel } from './components/ChannelPanel';
 import { MessagePanel } from './components/MessagePanel';
 import { ThreadPanel } from './components/ThreadPanel';
 import { WorktreeChanges } from './components/WorktreeChanges';
 import { Terminal } from './components/Terminal';
+import { ChannelSettingsModal } from './components/ChannelSettingsModal';
+import type { DraftScript } from './components/ChannelSettingsModal';
+import { TerminalTabs } from './components/TerminalTabs';
 
 export default function App() {
-  const { channels, activeChannelId, activeChannel, switchChannel } = useChannels();
+  const { channels, activeChannelId, activeChannel, switchChannel, refreshChannels } = useChannels();
   const { messages, messagesRef, upsertMessage, refreshMessages, clearMessages } = useMessages();
 
   const thread = useThread();
@@ -43,6 +48,20 @@ export default function App() {
   const scroll = useThreadScroll(threadEvents);
   const { threadContentRef, showJumpToLatest, scrollThreadToBottom, onThreadScroll, resetScroll } = scroll;
 
+  const channelSettings = useChannelSettings();
+  const { scripts, fetchScripts, updateChannelCwd, addScript, updateScript, deleteScript } = channelSettings;
+
+  const startupTerminals = useStartupTerminals();
+  const {
+    terminals: startupTerminalList,
+    activeTabId,
+    setActiveTabId,
+    isVisible: startupTerminalsVisible,
+    runAllScripts,
+    killAllTerminals,
+    killTerminal,
+  } = startupTerminals;
+
   const [channelWidth, setChannelWidth] = useState(220);
   const [messageInput, setMessageInput] = useState('');
   const [threadInput, setThreadInput] = useState('');
@@ -51,6 +70,7 @@ export default function App() {
   const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(null);
   const [pendingRunPrompt, setPendingRunPrompt] = useState('');
   const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
+  const [settingsChannelId, setSettingsChannelId] = useState<string | null>(null);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const spawnedMessageIds = useRef(new Set<string>());
 
@@ -151,8 +171,9 @@ export default function App() {
       clearMessages();
       closeThreadPanel();
       setChannelWidth(220);
+      killAllTerminals();
     },
-    [switchChannel, clearMessages, closeThreadPanel],
+    [switchChannel, clearMessages, closeThreadPanel, killAllTerminals],
   );
 
   const handleOpenThread = useCallback(
@@ -376,7 +397,75 @@ export default function App() {
     }
   }, [activeChannelId, selectedMessageRef, selectedMessageIdRef, upsertMessage, loadThreadEvents, updateMessageStatus]);
 
+  // --- Channel Settings Modal ---
+  const settingsChannel = useMemo(
+    () => channels.find((c) => c.id === settingsChannelId) ?? null,
+    [channels, settingsChannelId],
+  );
+
+  const handleOpenSettings = useCallback(
+    (channelId: string) => {
+      setSettingsChannelId(channelId);
+      void fetchScripts(channelId);
+    },
+    [fetchScripts],
+  );
+
+  const handleSaveSettings = useCallback(
+    async (cwd: string | null, draftScripts: DraftScript[]) => {
+      if (!settingsChannelId) return;
+
+      await updateChannelCwd(settingsChannelId, cwd);
+
+      // Diff existing scripts vs draft to determine create/update/delete
+      const existingIds = new Set(scripts.map((s) => s.id));
+      const draftIds = new Set(draftScripts.filter((d) => d.id).map((d) => d.id!));
+
+      // Delete scripts that were removed
+      for (const s of scripts) {
+        if (!draftIds.has(s.id)) {
+          await deleteScript(settingsChannelId, s.id);
+        }
+      }
+
+      // Create or update scripts
+      for (let i = 0; i < draftScripts.length; i++) {
+        const d = draftScripts[i];
+        if (!d.name.trim() && !d.command.trim()) continue;
+        if (d.id && existingIds.has(d.id)) {
+          await updateScript(settingsChannelId, d.id, { name: d.name, command: d.command, sortOrder: i });
+        } else {
+          await addScript(settingsChannelId, d.name, d.command);
+        }
+      }
+
+      // Refresh channel list to pick up cwd change
+      void refreshChannels();
+    },
+    [settingsChannelId, scripts, updateChannelCwd, deleteScript, updateScript, addScript, refreshChannels],
+  );
+
+  // --- Startup Scripts ---
+  const handleRunStartupScripts = useCallback(
+    async (channelId: string) => {
+      const channel = channels.find((c) => c.id === channelId);
+      if (!channel?.cwd) return;
+
+      // Fetch latest scripts for this channel
+      const res = await fetch(`${SERVER_URL}/channels/${channelId}/startup-scripts`);
+      if (!res.ok) return;
+      const { scripts: channelScripts } = (await res.json()) as { scripts: StartupScript[] };
+      if (channelScripts.length === 0) return;
+
+      runAllScripts(channelId, channel.cwd, channelScripts);
+    },
+    [channels, runAllScripts],
+  );
+
   const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
+
+  // Find the cwd for the active channel (for startup terminals)
+  const activeChannelCwd = activeChannel?.cwd ?? '';
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
@@ -386,6 +475,8 @@ export default function App() {
         channelWidth={isFullscreen ? 0 : channelWidth}
         dragging={dragging}
         onSwitchChannel={handleSwitchChannel}
+        onOpenSettings={handleOpenSettings}
+        onRunStartupScripts={(id) => void handleRunStartupScripts(id)}
         onStartDrag={() => startDragging('left')}
       />
 
@@ -396,16 +487,34 @@ export default function App() {
           overflow: 'hidden',
         }}
       >
-        <MessagePanel
-          feedTitle={feedTitle}
-          messages={messages}
-          selectedMessageId={selectedMessageId}
-          messageInput={messageInput}
-          attentionMessageIds={attentionMessageIds}
-          onMessageInputChange={setMessageInput}
-          onSendMessage={() => void sendMessage()}
-          onOpenThread={handleOpenThread}
-        />
+        <div className={startupTerminalsVisible && !isFullscreen ? 'min-h-0 flex-1 overflow-hidden' : 'min-h-0 flex-1'}>
+          <MessagePanel
+            feedTitle={feedTitle}
+            messages={messages}
+            selectedMessageId={selectedMessageId}
+            messageInput={messageInput}
+            attentionMessageIds={attentionMessageIds}
+            onMessageInputChange={setMessageInput}
+            onSendMessage={() => void sendMessage()}
+            onOpenThread={handleOpenThread}
+          />
+        </div>
+
+        {startupTerminalsVisible && !isFullscreen && (
+          <div
+            className="shrink-0 border-t border-[#292e42]"
+            style={{ height: '35%', minHeight: '150px' }}
+          >
+            <TerminalTabs
+              terminals={startupTerminalList}
+              activeTabId={activeTabId}
+              cwd={activeChannelCwd}
+              onSelectTab={setActiveTabId}
+              onCloseTab={killTerminal}
+              onCloseAll={killAllTerminals}
+            />
+          </div>
+        )}
       </div>
 
       <ThreadPanel
@@ -460,6 +569,15 @@ export default function App() {
           {isFullscreen && <Terminal terminalId={terminalId} cwd={worktreePath} />}
         </div>
       </div>
+
+      {settingsChannel && (
+        <ChannelSettingsModal
+          channel={settingsChannel}
+          scripts={scripts}
+          onClose={() => setSettingsChannelId(null)}
+          onSave={handleSaveSettings}
+        />
+      )}
     </div>
   );
 }

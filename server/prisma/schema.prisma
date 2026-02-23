@@ -26,12 +26,29 @@ model Session {
 model Channel {
   id        String   @id @default(uuid())
   name      String
+  cwd       String?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  messages Message[]
+  messages       Message[]
+  startupScripts StartupScript[]
 
   @@map("channels")
+}
+
+model StartupScript {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  name      String
+  command   String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, sortOrder])
+  @@map("startup_scripts")
 }
 
 model Message {

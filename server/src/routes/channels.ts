@@ -1,5 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { listChannels, getChannel } from '../services/channelService';
+import {
+  listChannels,
+  getChannel,
+  updateChannel,
+  listStartupScripts,
+  createStartupScript,
+  updateStartupScript,
+  deleteStartupScript,
+} from '../services/channelService';
 import {
   getMessagesByChannel,
   getThreadsByMessage,
@@ -27,6 +35,63 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
   }
   res.json(channel);
 });
+
+router.patch('/:id', async (req: Request<{ id: string }>, res: Response) => {
+  const { name, cwd } = req.body;
+  if (name !== undefined && typeof name !== 'string') {
+    res.status(400).json({ error: 'name must be a string' });
+    return;
+  }
+  if (cwd !== undefined && cwd !== null && typeof cwd !== 'string') {
+    res.status(400).json({ error: 'cwd must be a string or null' });
+    return;
+  }
+  const data: { name?: string; cwd?: string | null } = {};
+  if (name !== undefined) data.name = name;
+  if (cwd !== undefined) data.cwd = cwd;
+  const channel = await updateChannel(req.params.id, data);
+  res.json(channel);
+});
+
+router.get('/:id/startup-scripts', async (req: Request<{ id: string }>, res: Response) => {
+  const scripts = await listStartupScripts(req.params.id);
+  res.json({ scripts });
+});
+
+router.post('/:id/startup-scripts', async (req: Request<{ id: string }>, res: Response) => {
+  const { name, command } = req.body;
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ error: 'name is required' });
+    return;
+  }
+  if (!command || typeof command !== 'string') {
+    res.status(400).json({ error: 'command is required' });
+    return;
+  }
+  const script = await createStartupScript(req.params.id, { name, command });
+  res.status(201).json(script);
+});
+
+router.patch(
+  '/:id/startup-scripts/:scriptId',
+  async (req: Request<{ id: string; scriptId: string }>, res: Response) => {
+    const { name, command, sortOrder } = req.body;
+    const data: { name?: string; command?: string; sortOrder?: number } = {};
+    if (name !== undefined) data.name = name;
+    if (command !== undefined) data.command = command;
+    if (sortOrder !== undefined) data.sortOrder = sortOrder;
+    const script = await updateStartupScript(req.params.scriptId, data);
+    res.json(script);
+  },
+);
+
+router.delete(
+  '/:id/startup-scripts/:scriptId',
+  async (req: Request<{ id: string; scriptId: string }>, res: Response) => {
+    await deleteStartupScript(req.params.scriptId);
+    res.status(204).send();
+  },
+);
 
 router.get('/:id/messages', async (req: Request<{ id: string }>, res: Response) => {
   const { limit, offset } = req.query;

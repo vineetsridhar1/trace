@@ -34,5 +34,5 @@ export function useChannels() {
     setActiveChannelId(channelId);
   }, []);
 
-  return { channels, activeChannelId, activeChannel, switchChannel };
+  return { channels, activeChannelId, activeChannel, switchChannel, refreshChannels: fetchChannels };
 }
