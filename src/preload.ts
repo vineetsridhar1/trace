@@ -11,6 +11,15 @@ contextBridge.exposeInMainWorld('traceAPI', {
       return { success: false, error: String(err) };
     }
   },
+  stopClaude: async (
+    messageId: string,
+  ): Promise<{ success: boolean; stopped?: boolean; error?: string }> => {
+    try {
+      return await ipcRenderer.invoke('stop-claude', messageId);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
   deleteWorktree: async (
     messageId: string,
   ): Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }> => {

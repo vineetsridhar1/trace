@@ -1,6 +1,6 @@
 import { ipcMain, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
-import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath } from './worktree';
+import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
 import { createPty, writePty, resizePty, killPty } from './pty';
 import { getWorktreeDiff } from './diff';
@@ -14,6 +14,7 @@ const PTY_CREATE_CHANNEL = 'pty-create';
 const PTY_WRITE_CHANNEL = 'pty-write';
 const PTY_RESIZE_CHANNEL = 'pty-resize';
 const PTY_KILL_CHANNEL = 'pty-kill';
+const STOP_CLAUDE_CHANNEL = 'stop-claude';
 const GET_WORKTREE_DIFF_CHANNEL = 'get-worktree-diff';
 
 let mainWindowRef: BrowserWindow | null = null;
@@ -32,6 +33,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(PTY_WRITE_CHANNEL);
   ipcMain.removeHandler(PTY_RESIZE_CHANNEL);
   ipcMain.removeHandler(PTY_KILL_CHANNEL);
+  ipcMain.removeHandler(STOP_CLAUDE_CHANNEL);
   ipcMain.removeHandler(GET_WORKTREE_DIFF_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string) => {
@@ -69,6 +71,15 @@ export function registerIpcHandlers() {
       return { success: true, ...result };
     } catch (err) {
       console.error('Failed to merge worktree:', err);
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(STOP_CLAUDE_CHANNEL, (_event, messageId: string) => {
+    try {
+      const result = stopClaudeProcess(messageId);
+      return { success: true, ...result };
+    } catch (err) {
       return { success: false, error: String(err) };
     }
   });

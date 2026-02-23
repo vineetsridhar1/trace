@@ -83,6 +83,17 @@ export function ensureWorktree(messageId: string): Promise<string> {
   });
 }
 
+export function stopClaudeProcess(messageId: string): { stopped: boolean } {
+  const existing = runningProcesses.get(messageId);
+  if (!existing || existing.killed) {
+    return { stopped: false };
+  }
+
+  stopWatchdog(messageId, 'user-stop');
+  existing.kill('SIGTERM');
+  return { stopped: true };
+}
+
 export async function getWorktreeBranch(messageId: string): Promise<string> {
   const worktreePath = getWorktreePath(messageId);
   const result = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);

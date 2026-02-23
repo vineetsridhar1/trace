@@ -16,6 +16,9 @@ export interface TraceAPI {
     messageId: string,
     prompt: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
+  stopClaude: (
+    messageId: string,
+  ) => Promise<{ success: boolean; stopped?: boolean; error?: string }>;
   deleteWorktree: (
     messageId: string,
   ) => Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }>;
