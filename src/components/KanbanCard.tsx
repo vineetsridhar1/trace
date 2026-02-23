@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { KanbanTicket } from '../types';
 import { formatTime } from '../utils';
+import { CopyableBranch } from './CopyableBranch';
 
 interface KanbanCardProps {
   ticket: KanbanTicket;
@@ -57,9 +58,7 @@ export const KanbanCard = memo(function KanbanCard({
 
       <div className="relative mt-2 flex items-center gap-2">
         {ticket.message.branch && (
-          <span className="truncate rounded bg-[#1a1b26] px-1.5 py-0.5 font-mono text-[10px] text-blue-400 hover:absolute hover:z-10 hover:max-w-none hover:overflow-visible hover:whitespace-nowrap">
-            {ticket.message.branch.replace(/^trace\//, '')}
-          </span>
+          <CopyableBranch branch={ticket.message.branch} />
         )}
         <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] text-[#565f89]">
           {formatTime(ticket.createdAt)}
