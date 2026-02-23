@@ -2,12 +2,6 @@ import { memo } from 'react';
 import type { KanbanTicket } from '../types';
 import { formatTime } from '../utils';
 
-const COMPLEXITY_BADGE: Record<string, string> = {
-  low: 'text-green-400 bg-green-400/10',
-  medium: 'text-yellow-400 bg-yellow-400/10',
-  high: 'text-red-400 bg-red-400/10',
-};
-
 interface KanbanCardProps {
   ticket: KanbanTicket;
   onClickTicket: (messageId: string) => void;
@@ -43,22 +37,16 @@ export const KanbanCard = memo(function KanbanCard({
       )}
 
       {(() => {
-        const meta = ticket.metadata as { tags?: string[]; complexity?: string } | null;
+        const meta = ticket.metadata as { tags?: string[] } | null;
         if (!meta) return null;
         const hasTags = Array.isArray(meta.tags) && meta.tags.length > 0;
-        const complexityClass = meta.complexity ? COMPLEXITY_BADGE[meta.complexity] : null;
-        if (!hasTags && !complexityClass) return null;
+        if (!hasTags) return null;
         return (
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            {complexityClass && (
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${complexityClass}`}>
-                {meta.complexity}
-              </span>
-            )}
-            {hasTags && (meta.tags as string[]).map((tag) => (
+            {(meta.tags as string[]).map((tag) => (
               <span
                 key={tag}
-                className="rounded bg-[#1a1b26] px-1.5 py-0.5 text-[10px] text-[#a9b1d6]"
+                className="rounded px-1.5 py-0.5 text-[10px] text-[#565f89]"
               >
                 {tag}
               </span>
@@ -67,13 +55,13 @@ export const KanbanCard = memo(function KanbanCard({
         );
       })()}
 
-      <div className="mt-2 flex items-center gap-2">
+      <div className="relative mt-2 flex items-center gap-2">
         {ticket.message.branch && (
-          <span className="truncate rounded bg-[#1a1b26] px-1.5 py-0.5 font-mono text-[10px] text-blue-400">
+          <span className="truncate rounded bg-[#1a1b26] px-1.5 py-0.5 font-mono text-[10px] text-blue-400 hover:absolute hover:z-10 hover:max-w-none hover:overflow-visible hover:whitespace-nowrap">
             {ticket.message.branch.replace(/^trace\//, '')}
           </span>
         )}
-        <span className="ml-auto text-[10px] text-[#565f89]">
+        <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] text-[#565f89]">
           {formatTime(ticket.createdAt)}
         </span>
       </div>
