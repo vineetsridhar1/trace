@@ -129,6 +129,12 @@ body,
   min-height: 100%;
 }
 
+.sticky-todo-list {
+  flex-shrink: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
 .thread-bubble {
   flex-shrink: 0;
 }
@@ -309,7 +315,7 @@ body,
 .edit-diff-file .diff {
   width: max-content;
   min-width: 100%;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .edit-diff-view {
@@ -350,13 +356,30 @@ body,
   overflow-x: auto;
 }
 
+.edit-diff-view .diff {
+  width: max-content;
+  min-width: 100%;
+  font-size: 11px;
+}
+
+.edit-diff-view .diff-code {
+  font-family: Menlo, Monaco, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.edit-diff-view .diff-gutter {
+  background: #141826;
+}
+
 .edit-diff-file .diff-gutter {
   background: #141826;
 }
 
 .edit-diff-file .diff-code {
   font-family: Menlo, Monaco, monospace;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 /* Markdown body styles */

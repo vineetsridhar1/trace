@@ -26,9 +26,12 @@ function countChanges(hunks: ParsedHunk[]): { additions: number; deletions: numb
   return { additions, deletions };
 }
 
+type DiffTab = 'working' | 'branch';
+
 export function WorktreeChanges({ messageId }: WorktreeChangesProps) {
   const { diffData, loading, refresh } = useWorktreeChanges(messageId);
   const [runtime, setRuntime] = useState<DiffRuntime | null>(null);
+  const [activeTab, setActiveTab] = useState<DiffTab>('working');
 
   useEffect(() => {
     let cancelled = false;
@@ -44,28 +47,64 @@ export function WorktreeChanges({ messageId }: WorktreeChangesProps) {
   return (
     <div className="edit-diff-view flex h-full flex-col overflow-hidden">
       <ChangesHeader loading={loading} onRefresh={refresh} statusText={diffData?.status} />
+      <div className="flex items-center gap-1 border-b border-[#292e42] px-3 py-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('working')}
+          className={`cursor-pointer rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+            activeTab === 'working'
+              ? 'bg-[#292e42] text-[#c0caf5]'
+              : 'text-[#565f89] hover:text-[#a9b1d6]'
+          }`}
+        >
+          Working / Staged
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('branch')}
+          className={`cursor-pointer rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+            activeTab === 'branch'
+              ? 'bg-[#292e42] text-[#c0caf5]'
+              : 'text-[#565f89] hover:text-[#a9b1d6]'
+          }`}
+        >
+          vs Main
+        </button>
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {!diffData && !loading && (
           <p className="text-xs text-[#565f89]">No diff data available.</p>
         )}
 
-        {hasBranchDiff && (
-          <DiffSection title="Changes vs main" diffText={diffData!.branchDiff!} runtime={runtime} />
-        )}
-
-        {hasUncommitted && (
+        {activeTab === 'branch' && (
           <>
-            {diffData?.stagedDiff?.trim() && (
-              <DiffSection title="Staged changes" diffText={diffData.stagedDiff} runtime={runtime} />
-            )}
-            {diffData?.uncommittedDiff?.trim() && (
-              <DiffSection title="Uncommitted changes" diffText={diffData.uncommittedDiff} runtime={runtime} />
+            {hasBranchDiff ? (
+              <DiffSection title="Changes vs main" diffText={diffData!.branchDiff!} runtime={runtime} />
+            ) : (
+              diffData && !loading && (
+                <p className="text-xs text-[#565f89]">No changes vs main.</p>
+              )
             )}
           </>
         )}
 
-        {diffData && !hasBranchDiff && !hasUncommitted && !loading && (
-          <p className="text-xs text-[#565f89]">No changes detected.</p>
+        {activeTab === 'working' && (
+          <>
+            {hasUncommitted ? (
+              <>
+                {diffData?.stagedDiff?.trim() && (
+                  <DiffSection title="Staged changes" diffText={diffData.stagedDiff} runtime={runtime} />
+                )}
+                {diffData?.uncommittedDiff?.trim() && (
+                  <DiffSection title="Uncommitted changes" diffText={diffData.uncommittedDiff} runtime={runtime} />
+                )}
+              </>
+            ) : (
+              diffData && !loading && (
+                <p className="text-xs text-[#565f89]">No working or staged changes.</p>
+              )
+            )}
+          </>
         )}
       </div>
     </div>
