@@ -29,9 +29,10 @@ interface UseTerminalOptions {
   terminalId: string;
   cwd: string;
   env?: Record<string, string>;
+  command?: string;
 }
 
-export function useTerminal({ terminalId, cwd, env }: UseTerminalOptions) {
+export function useTerminal({ terminalId, cwd, env, command }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -68,7 +69,9 @@ export function useTerminal({ terminalId, cwd, env }: UseTerminalOptions) {
     let resizeDisposable: { dispose: () => void } | null = null;
     let cleanupData: (() => void) | null = null;
     let cleanupExit: (() => void) | null = null;
+    let cleanupCmdReady: (() => void) | null = null;
     const focusTimers: ReturnType<typeof setTimeout>[] = [];
+    const miscTimers: ReturnType<typeof setTimeout>[] = [];
 
     const init = () => {
       if (terminal) return;
@@ -103,6 +106,33 @@ export function useTerminal({ terminalId, cwd, env }: UseTerminalOptions) {
       void window.traceAPI.createPty(terminalId, cwd, env).then((result) => {
         if (!result.success) {
           terminal?.write(`\r\n[PTY start failed: ${result.error ?? 'unknown error'}]\r\n`);
+        } else if (command) {
+          // Wait for the shell to emit its first output (prompt) before
+          // sending the startup command.  This avoids a fixed timeout that
+          // can be too short when multiple PTYs start concurrently.
+          let sent = false;
+          cleanupCmdReady = window.traceAPI.onPtyData((id, _data) => {
+            if (id === terminalId && !sent) {
+              sent = true;
+              cleanupCmdReady?.();
+              cleanupCmdReady = null;
+              // Small delay after first output to let the prompt fully render
+              const t = setTimeout(() => {
+                void window.traceAPI.writePty(terminalId, `${command}\n`);
+              }, 80);
+              miscTimers.push(t);
+            }
+          });
+          // Fallback: if we never get PTY data within 3s, send anyway
+          const fallback = setTimeout(() => {
+            if (!sent) {
+              sent = true;
+              cleanupCmdReady?.();
+              cleanupCmdReady = null;
+              void window.traceAPI.writePty(terminalId, `${command}\n`);
+            }
+          }, 3000);
+          miscTimers.push(fallback);
         }
       });
 
@@ -145,16 +175,18 @@ export function useTerminal({ terminalId, cwd, env }: UseTerminalOptions) {
       observer.disconnect();
       window.removeEventListener('focus', handleWindowFocus);
       for (const timer of focusTimers) clearTimeout(timer);
+      for (const timer of miscTimers) clearTimeout(timer);
       inputDisposable?.dispose();
       resizeDisposable?.dispose();
       cleanupData?.();
       cleanupExit?.();
+      cleanupCmdReady?.();
       terminal?.dispose();
       void window.traceAPI.killPty(terminalId);
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [terminalId, cwd, env, focusInput]);
+  }, [terminalId, cwd, env, command, focusInput]);
 
   return { containerRef, fit, focus };
 }

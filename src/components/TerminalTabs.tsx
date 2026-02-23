@@ -1,29 +1,17 @@
-import { useEffect, useRef } from 'react';
 import { useTerminal } from '../hooks/useTerminal';
-import type { StartupTerminal } from '../hooks/useStartupTerminals';
+import type { TerminalTab } from '../hooks/useStartupTerminals';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalTabContentProps {
   terminalId: string;
   cwd: string;
-  command: string;
+  command?: string;
   visible: boolean;
   env?: Record<string, string>;
 }
 
 function TerminalTabContent({ terminalId, cwd, command, visible, env }: TerminalTabContentProps) {
-  const { containerRef, focus } = useTerminal({ terminalId, cwd, env });
-  const commandWritten = useRef(false);
-
-  // Write the startup command into the terminal after shell init
-  useEffect(() => {
-    if (commandWritten.current) return;
-    commandWritten.current = true;
-    const timer = setTimeout(() => {
-      void window.traceAPI.writePty(terminalId, `${command}\n`);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [terminalId, command]);
+  const { containerRef, focus } = useTerminal({ terminalId, cwd, env, command });
 
   return (
     <div
@@ -38,15 +26,16 @@ function TerminalTabContent({ terminalId, cwd, command, visible, env }: Terminal
 }
 
 interface TerminalTabsProps {
-  terminals: StartupTerminal[];
+  terminals: TerminalTab[];
   activeTabId: string | null;
   cwd: string;
   onSelectTab: (terminalId: string) => void;
   onCloseTab: (terminalId: string) => void;
   onCloseAll: () => void;
+  onAddTab: () => void;
 }
 
-export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onCloseTab, onCloseAll }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onCloseTab, onCloseAll, onAddTab }: TerminalTabsProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Tab bar */}
@@ -62,7 +51,7 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
                 }`}
                 onClick={() => onSelectTab(t.terminalId)}
               >
-                <span className="truncate max-w-[120px]">{t.script.name}</span>
+                <span className="truncate max-w-[120px]">{t.name}</span>
                 <button
                   type="button"
                   className="ml-0.5 shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-[#3b4261]"
@@ -78,6 +67,14 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
               </div>
             );
           })}
+          <button
+            type="button"
+            onClick={onAddTab}
+            className="shrink-0 rounded px-1.5 py-1 text-xs text-[#565f89] hover:bg-[#1f2335] hover:text-[#a9b1d6]"
+            title="New terminal"
+          >
+            +
+          </button>
         </div>
         <button
           type="button"
@@ -96,7 +93,7 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
             key={t.terminalId}
             terminalId={t.terminalId}
             cwd={cwd}
-            command={t.script.command}
+            command={t.command}
             visible={t.terminalId === activeTabId}
             env={t.env}
           />

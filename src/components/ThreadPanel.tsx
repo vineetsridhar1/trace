@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { DragTarget, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestion } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
@@ -7,16 +7,34 @@ import { SlashCommandMenu } from './SlashCommandMenu';
 
 function useAutoResize(value: string, maxHeight = 300) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (!value) {
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  const measure = useCallback((el: HTMLTextAreaElement) => {
+    const v = valueRef.current;
+    if (!v) {
       el.style.height = '';
       return;
     }
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
-  }, [value, maxHeight]);
+  }, [maxHeight]);
+
+  // Re-measure when value changes
+  useEffect(() => {
+    const el = ref.current;
+    if (el) measure(el);
+  }, [value, measure]);
+
+  // Re-measure when the element's size changes (e.g. panel transition settles)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => measure(el));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+
   return ref;
 }
 

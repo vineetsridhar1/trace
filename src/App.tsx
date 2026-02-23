@@ -58,9 +58,11 @@ export default function App() {
     setActiveTabId,
     isVisible: startupTerminalsVisible,
     runCwd: startupTerminalsCwd,
+    showTerminals,
     runAllScripts,
     killAllTerminals,
     killTerminal,
+    addTerminal,
   } = startupTerminals;
 
   const [channelWidth, setChannelWidth] = useState(220);
@@ -324,7 +326,11 @@ export default function App() {
     setWorktreePath(result.worktreePath);
     setChannelWidth(0);
     setIsFullscreen(true);
-  }, [selectedMessageId, channelWidth, threadWidth]);
+    // Show startup terminals in the fullscreen view if they exist
+    if (startupTerminalList.length > 0) {
+      showTerminals();
+    }
+  }, [selectedMessageId, channelWidth, threadWidth, startupTerminalList.length, showTerminals]);
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
@@ -338,6 +344,18 @@ export default function App() {
       exitFullscreen();
     }
   }, [isFullscreen, hasWorktree, exitFullscreen]);
+
+  // Cmd+T / Ctrl+T to add a new terminal tab
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 't' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        addTerminal();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [addTerminal]);
 
   const sendPlanResponse = useCallback(async (text: string, claudePrompt?: string) => {
     const message = selectedMessageRef.current;
@@ -539,7 +557,7 @@ export default function App() {
           overflow: 'hidden',
         }}
       >
-        <div className={startupTerminalsVisible && !isFullscreen ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex min-h-0 flex-1 flex-col'}>
+        <div className={startupTerminalsVisible && startupTerminalList.length > 0 && !isFullscreen ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex min-h-0 flex-1 flex-col'}>
           <MessagePanel
             feedTitle={feedTitle}
             messages={messages}
@@ -552,10 +570,14 @@ export default function App() {
           />
         </div>
 
-        {startupTerminalsVisible && !isFullscreen && (
+        {startupTerminalList.length > 0 && !isFullscreen && (
           <div
             className="shrink-0 border-t border-[#292e42]"
-            style={{ height: '35%', minHeight: '150px' }}
+            style={{
+              height: startupTerminalsVisible ? '35%' : '0',
+              minHeight: startupTerminalsVisible ? '150px' : '0',
+              overflow: 'hidden',
+            }}
           >
             <TerminalTabs
               terminals={startupTerminalList}
@@ -564,6 +586,7 @@ export default function App() {
               onSelectTab={setActiveTabId}
               onCloseTab={killTerminal}
               onCloseAll={killAllTerminals}
+              onAddTab={addTerminal}
             />
           </div>
         )}
@@ -624,7 +647,19 @@ export default function App() {
           className="overflow-hidden"
           style={{ height: isFullscreen ? '40%' : '0', minHeight: isFullscreen ? '150px' : '0' }}
         >
-          {isFullscreen && <Terminal terminalId={terminalId} cwd={worktreePath} />}
+          {isFullscreen && startupTerminalList.length > 0 ? (
+            <TerminalTabs
+              terminals={startupTerminalList}
+              activeTabId={activeTabId}
+              cwd={activeChannelCwd}
+              onSelectTab={setActiveTabId}
+              onCloseTab={killTerminal}
+              onCloseAll={killAllTerminals}
+              onAddTab={addTerminal}
+            />
+          ) : isFullscreen ? (
+            <Terminal terminalId={terminalId} cwd={worktreePath} />
+          ) : null}
         </div>
       </div>
 
