@@ -13,7 +13,7 @@ export interface ClaudeActionsContextValue {
   runPendingMessage: (planMode: boolean, prompt: string) => Promise<void>;
   stopClaude: () => Promise<void>;
   sendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
-  sendPlanResponse: (text: string, claudePrompt?: string) => Promise<void>;
+  sendPlanResponse: (text: string) => Promise<void>;
   mergeToMain: () => Promise<void>;
 }
 
