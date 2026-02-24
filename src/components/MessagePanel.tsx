@@ -325,7 +325,6 @@ const MessageItem = memo(function MessageItem({
             {ticket.description && (
               <p className="mt-0.5 line-clamp-2 text-sm text-[#a9b1d6]">{ticket.description}</p>
             )}
-            <MessagePreview text={preview} />
           </>
         ) : (
           <>
