@@ -7,6 +7,7 @@ const MAX_FILES_SHOWN = 20;
 
 interface WorktreeChangesProps {
   messageId: string | null;
+  baseBranch?: string;
 }
 
 function countChanges(hunks: ParsedHunk[]): { additions: number; deletions: number } {
@@ -28,8 +29,8 @@ function countChanges(hunks: ParsedHunk[]): { additions: number; deletions: numb
 
 type DiffTab = 'working' | 'branch';
 
-export function WorktreeChanges({ messageId }: WorktreeChangesProps) {
-  const { diffData, loading, refresh } = useWorktreeChanges(messageId);
+export function WorktreeChanges({ messageId, baseBranch = 'main' }: WorktreeChangesProps) {
+  const { diffData, loading, refresh } = useWorktreeChanges(messageId, baseBranch);
   const [runtime, setRuntime] = useState<DiffRuntime | null>(null);
   const [activeTab, setActiveTab] = useState<DiffTab>('working');
 
@@ -68,7 +69,7 @@ export function WorktreeChanges({ messageId }: WorktreeChangesProps) {
               : 'text-[#565f89] hover:text-[#a9b1d6]'
           }`}
         >
-          vs Main
+          vs {baseBranch}
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
@@ -79,10 +80,10 @@ export function WorktreeChanges({ messageId }: WorktreeChangesProps) {
         {activeTab === 'branch' && (
           <>
             {hasBranchDiff ? (
-              <DiffSection title="Changes vs main" diffText={diffData!.branchDiff!} runtime={runtime} />
+              <DiffSection title={`Changes vs ${baseBranch}`} diffText={diffData!.branchDiff!} runtime={runtime} />
             ) : (
               diffData && !loading && (
-                <p className="text-xs text-[#565f89]">No changes vs main.</p>
+                <p className="text-xs text-[#565f89]">No changes vs {baseBranch}.</p>
               )
             )}
           </>

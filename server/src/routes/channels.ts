@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express';
 import {
   listChannels,
   getChannel,
+  createChannel,
   updateChannel,
   listStartupScripts,
   createStartupScript,
   updateStartupScript,
   deleteStartupScript,
 } from '../services/channelService';
+import { validateGitRepo, getGithubRemoteUrl, validateBranchExists } from '../services/gitService';
 import {
   getMessagesByChannel,
   getThreadsByMessage,
@@ -28,6 +30,57 @@ router.get('/', async (_req: Request, res: Response) => {
   res.json({ channels });
 });
 
+router.post('/', async (req: Request, res: Response) => {
+  const { name, localRepoPath, baseBranch } = req.body;
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ error: 'name is required' });
+    return;
+  }
+
+  let githubUrl: string | null = null;
+
+  if (localRepoPath && typeof localRepoPath === 'string') {
+    const validation = await validateGitRepo(localRepoPath);
+    if (!validation.valid) {
+      res.status(400).json({ error: validation.error ?? 'Invalid git repository' });
+      return;
+    }
+    githubUrl = await getGithubRemoteUrl(localRepoPath);
+
+    const branch = baseBranch && typeof baseBranch === 'string' ? baseBranch : 'main';
+    const branchExists = await validateBranchExists(localRepoPath, branch);
+    if (!branchExists) {
+      res.status(400).json({ error: `Branch "${branch}" does not exist` });
+      return;
+    }
+  }
+
+  const channel = await createChannel({
+    name,
+    localRepoPath: localRepoPath || null,
+    baseBranch: baseBranch || 'main',
+    githubUrl,
+  });
+  res.status(201).json({ channel });
+});
+
+router.post('/validate-repo', async (req: Request, res: Response) => {
+  const { localRepoPath } = req.body;
+  if (!localRepoPath || typeof localRepoPath !== 'string') {
+    res.json({ valid: false, error: 'Path is required' });
+    return;
+  }
+
+  const validation = await validateGitRepo(localRepoPath);
+  if (!validation.valid) {
+    res.json({ valid: false, error: validation.error });
+    return;
+  }
+
+  const githubUrl = await getGithubRemoteUrl(localRepoPath);
+  res.json({ valid: true, githubUrl });
+});
+
 router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
   const channel = await getChannel(req.params.id);
   if (!channel) {
@@ -38,22 +91,34 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
 });
 
 router.patch('/:id', async (req: Request<{ id: string }>, res: Response) => {
-  const { name, cwd, creationScript } = req.body;
+  const { name, localRepoPath, baseBranch, creationScript } = req.body;
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' });
     return;
   }
-  if (cwd !== undefined && cwd !== null && typeof cwd !== 'string') {
-    res.status(400).json({ error: 'cwd must be a string or null' });
+  if (localRepoPath !== undefined && localRepoPath !== null && typeof localRepoPath !== 'string') {
+    res.status(400).json({ error: 'localRepoPath must be a string or null' });
+    return;
+  }
+  if (baseBranch !== undefined && baseBranch !== null && typeof baseBranch !== 'string') {
+    res.status(400).json({ error: 'baseBranch must be a string or null' });
     return;
   }
   if (creationScript !== undefined && creationScript !== null && typeof creationScript !== 'string') {
     res.status(400).json({ error: 'creationScript must be a string or null' });
     return;
   }
-  const data: { name?: string; cwd?: string | null; creationScript?: string | null } = {};
+  const data: { name?: string; localRepoPath?: string | null; baseBranch?: string | null; githubUrl?: string | null; creationScript?: string | null } = {};
   if (name !== undefined) data.name = name;
-  if (cwd !== undefined) data.cwd = cwd;
+  if (localRepoPath !== undefined) {
+    data.localRepoPath = localRepoPath;
+    if (localRepoPath) {
+      data.githubUrl = await getGithubRemoteUrl(localRepoPath);
+    } else {
+      data.githubUrl = null;
+    }
+  }
+  if (baseBranch !== undefined) data.baseBranch = baseBranch;
   if (creationScript !== undefined) data.creationScript = creationScript;
   const channel = await updateChannel(req.params.id, data);
   res.json(channel);

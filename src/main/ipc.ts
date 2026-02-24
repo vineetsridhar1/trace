@@ -43,9 +43,9 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(ALLOCATE_PORTS_CHANNEL);
   ipcMain.removeHandler(RELEASE_PORTS_CHANNEL);
 
-  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, creationCommands?: string[], resumeSessionId?: string) => {
+  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string) => {
     try {
-      const worktreePath = await spawnClaude(messageId, prompt, creationCommands, resumeSessionId);
+      const worktreePath = await spawnClaude(messageId, prompt, repoPath, creationCommands, resumeSessionId);
       return { success: true, worktreePath };
     } catch (err) {
       console.error('Failed to spawn claude:', err);
@@ -53,9 +53,9 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(DELETE_WORKTREE_CHANNEL, async (_event, messageId: string) => {
+  ipcMain.handle(DELETE_WORKTREE_CHANNEL, async (_event, messageId: string, repoPath: string) => {
     try {
-      const result = await deleteWorktree(messageId);
+      const result = await deleteWorktree(messageId, repoPath);
       return { success: true, ...result };
     } catch (err) {
       console.error('Failed to delete worktree:', err);
@@ -72,9 +72,9 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(MERGE_WORKTREE_CHANNEL, async (_event, messageId: string) => {
+  ipcMain.handle(MERGE_WORKTREE_CHANNEL, async (_event, messageId: string, repoPath: string, baseBranch: string) => {
     try {
-      const result = await mergeWorktree(messageId);
+      const result = await mergeWorktree(messageId, repoPath, baseBranch);
       return { success: true, ...result };
     } catch (err) {
       console.error('Failed to merge worktree:', err);
@@ -154,10 +154,10 @@ export function registerIpcHandlers() {
     return { success: killPty(terminalId) };
   });
 
-  ipcMain.handle(GET_WORKTREE_DIFF_CHANNEL, async (_event, messageId: string) => {
+  ipcMain.handle(GET_WORKTREE_DIFF_CHANNEL, async (_event, messageId: string, baseBranch: string) => {
     try {
       const worktreePath = getWorktreePath(messageId);
-      const result = await getWorktreeDiff(worktreePath);
+      const result = await getWorktreeDiff(worktreePath, baseBranch || 'main');
       return { success: true, ...result };
     } catch (err) {
       return { success: false, error: String(err) };

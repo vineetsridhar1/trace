@@ -26,7 +26,9 @@ model Session {
 model Channel {
   id             String   @id @default(uuid())
   name           String
-  cwd            String?
+  localRepoPath  String?  @map("local_repo_path")
+  baseBranch     String?  @map("base_branch")
+  githubUrl      String?  @map("github_url")
   creationScript String?  @map("creation_script")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")

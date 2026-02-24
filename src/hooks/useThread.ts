@@ -3,7 +3,12 @@ import type { ChannelMessage, ServerEvent, ThreadStatus, MessageThread } from '.
 import { SERVER_URL } from '../types';
 import { clamp } from '../utils';
 
-export function useThread() {
+interface UseThreadOptions {
+  getChannelRepoPath: () => string;
+  getChannelBaseBranch: () => string;
+}
+
+export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThreadOptions) {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ChannelMessage | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -136,7 +141,8 @@ export function useThread() {
 
     setDeletingWorktree(true);
     try {
-      const result = await window.traceAPI.deleteWorktree(message.id);
+      const repoPath = getChannelRepoPath();
+      const result = await window.traceAPI.deleteWorktree(message.id, repoPath);
       if (!result.success) {
         console.error('Failed to delete worktree:', result.error);
         return;
@@ -151,27 +157,29 @@ export function useThread() {
     } finally {
       setDeletingWorktree(false);
     }
-  }, []);
+  }, [getChannelRepoPath]);
 
   const mergeWorktree = useCallback(async () => {
     const message = selectedMessageRef.current;
     if (!message) return;
 
-    const confirmed = window.confirm('Merge this worktree branch into main?');
+    const baseBranch = getChannelBaseBranch();
+    const confirmed = window.confirm(`Merge this worktree branch into ${baseBranch}?`);
     if (!confirmed) return;
 
     setMergingWorktree(true);
     try {
-      const result = await window.traceAPI.mergeWorktree(message.id);
+      const repoPath = getChannelRepoPath();
+      const result = await window.traceAPI.mergeWorktree(message.id, repoPath, baseBranch);
       if (!result.success) {
         console.error('Failed to merge worktree:', result.error);
         return;
       }
-      console.log(`Merged branch ${result.branch} into main`);
+      console.log(`Merged branch ${result.branch} into ${baseBranch}`);
     } finally {
       setMergingWorktree(false);
     }
-  }, []);
+  }, [getChannelBaseBranch, getChannelRepoPath]);
 
   const toggleReadGroup = useCallback((groupId: string) => {
     setExpandedReadGroupIds((current) => ({

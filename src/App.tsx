@@ -20,6 +20,7 @@ import { WorktreeChanges } from './components/WorktreeChanges';
 import { Terminal } from './components/Terminal';
 import { ChannelSettingsModal } from './components/ChannelSettingsModal';
 import type { DraftScript } from './components/ChannelSettingsModal';
+import { CreateChannelModal } from './components/CreateChannelModal';
 import { TerminalTabs } from './components/TerminalTabs';
 
 export default function App() {
@@ -37,6 +38,12 @@ export default function App() {
     refreshMessages,
     clearMessages,
   } = useMessages();
+
+  const activeChannelRef = useRef(activeChannel);
+  activeChannelRef.current = activeChannel;
+
+  const getChannelRepoPath = useCallback(() => activeChannelRef.current?.localRepoPath ?? '', []);
+  const getChannelBaseBranch = useCallback(() => activeChannelRef.current?.baseBranch ?? 'main', []);
 
   const {
     selectedMessageId,
@@ -57,7 +64,7 @@ export default function App() {
     openThreadPanel,
     deleteWorktree,
     toggleReadGroup,
-  } = useThread();
+  } = useThread({ getChannelRepoPath, getChannelBaseBranch });
 
   const {
     threadContentRef,
@@ -108,6 +115,7 @@ export default function App() {
   const [settingsChannelId, setSettingsChannelId] = useState<string | null>(
     null,
   );
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
 
   const { dragging, startDragging } = usePanelResize(
@@ -253,6 +261,8 @@ export default function App() {
     setHasWorktree,
     updateMessageStatus,
     getCreationCommands,
+    getChannelRepoPath,
+    getChannelBaseBranch,
   });
 
   const claudeActionsContextValue = useMemo(
@@ -412,10 +422,10 @@ export default function App() {
   );
 
   const handleSaveSettings = useCallback(
-    async (cwd: string | null, creationScript: string | null, draftScripts: DraftScript[]) => {
+    async (localRepoPath: string | null, baseBranch: string | null, creationScript: string | null, draftScripts: DraftScript[]) => {
       if (!settingsChannelId) return;
 
-      await updateChannelSettings(settingsChannelId, { cwd, creationScript });
+      await updateChannelSettings(settingsChannelId, { localRepoPath, baseBranch, creationScript });
 
       const existingIds = new Set(scripts.map((script) => script.id));
       const draftIds = new Set(
@@ -476,12 +486,12 @@ export default function App() {
   const handleRunStartupScripts = useCallback(
     async (channelId: string) => {
       const channel = channels.find((item) => item.id === channelId);
-      if (!channel?.cwd) return;
+      if (!channel?.localRepoPath) return;
 
       const channelScripts = await fetchChannelScripts(channelId);
       if (channelScripts.length === 0) return;
 
-      runAllScripts(channelId, channel.cwd, channelScripts);
+      runAllScripts(channelId, channel.localRepoPath, channelScripts);
     },
     [channels, fetchChannelScripts, runAllScripts],
   );
@@ -529,7 +539,8 @@ export default function App() {
 
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
   const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
-  const activeChannelCwd = activeChannel?.cwd ?? '';
+  const activeChannelRepoPath = activeChannel?.localRepoPath ?? '';
+  const activeChannelBaseBranch = activeChannel?.baseBranch ?? 'main';
 
   return (
     <ClaudeActionsProvider value={claudeActionsContextValue}>
@@ -542,6 +553,7 @@ export default function App() {
           onSwitchChannel={handleSwitchChannel}
           onOpenSettings={handleOpenSettings}
           onRunStartupScripts={(channelId) => void handleRunStartupScripts(channelId)}
+          onCreateChannel={() => setShowCreateChannel(true)}
           onStartDrag={() => startDragging('left')}
         />
 
@@ -587,7 +599,7 @@ export default function App() {
               <TerminalTabs
                 terminals={startupTerminalList}
                 activeTabId={activeTabId}
-                cwd={startupTerminalsCwd || activeChannelCwd}
+                cwd={startupTerminalsCwd || activeChannelRepoPath}
                 onSelectTab={setActiveTabId}
                 onCloseTab={killTerminal}
                 onCloseAll={killAllTerminals}
@@ -641,7 +653,7 @@ export default function App() {
           }}
         >
           <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
-            {isFullscreen && <WorktreeChanges messageId={selectedMessageId} />}
+            {isFullscreen && <WorktreeChanges messageId={selectedMessageId} baseBranch={activeChannelBaseBranch} />}
           </div>
           <div
             className="overflow-hidden"
@@ -654,7 +666,7 @@ export default function App() {
               <TerminalTabs
                 terminals={startupTerminalList}
                 activeTabId={activeTabId}
-                cwd={activeChannelCwd}
+                cwd={activeChannelRepoPath}
                 onSelectTab={setActiveTabId}
                 onCloseTab={killTerminal}
                 onCloseAll={killAllTerminals}
@@ -672,6 +684,16 @@ export default function App() {
             scripts={scripts}
             onClose={() => setSettingsChannelId(null)}
             onSave={handleSaveSettings}
+          />
+        )}
+
+        {showCreateChannel && (
+          <CreateChannelModal
+            onClose={() => setShowCreateChannel(false)}
+            onCreated={() => {
+              setShowCreateChannel(false);
+              void refreshChannels();
+            }}
           />
         )}
       </div>

@@ -4,11 +4,12 @@ contextBridge.exposeInMainWorld('traceAPI', {
   spawnClaude: async (
     messageId: string,
     prompt: string,
+    repoPath: string,
     creationCommands?: string[],
     resumeSessionId?: string,
   ): Promise<{ success: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, creationCommands, resumeSessionId);
+      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, repoPath, creationCommands, resumeSessionId);
     } catch (err) {
       return { success: false, error: String(err) };
     }
@@ -24,9 +25,10 @@ contextBridge.exposeInMainWorld('traceAPI', {
   },
   deleteWorktree: async (
     messageId: string,
+    repoPath: string,
   ): Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('delete-worktree', messageId);
+      return await ipcRenderer.invoke('delete-worktree', messageId, repoPath);
     } catch (err) {
       return { success: false, error: String(err) };
     }
@@ -42,9 +44,11 @@ contextBridge.exposeInMainWorld('traceAPI', {
   },
   mergeWorktree: async (
     messageId: string,
+    repoPath: string,
+    baseBranch: string,
   ): Promise<{ success: boolean; branch?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('merge-worktree', messageId);
+      return await ipcRenderer.invoke('merge-worktree', messageId, repoPath, baseBranch);
     } catch (err) {
       return { success: false, error: String(err) };
     }
@@ -86,8 +90,8 @@ contextBridge.exposeInMainWorld('traceAPI', {
     return () => ipcRenderer.removeListener('pty-exit', handler);
   },
 
-  getWorktreeDiff: (messageId: string) =>
-    ipcRenderer.invoke('get-worktree-diff', messageId),
+  getWorktreeDiff: (messageId: string, baseBranch: string) =>
+    ipcRenderer.invoke('get-worktree-diff', messageId, baseBranch),
 
   allocatePorts: (messageId: string, count: number) =>
     ipcRenderer.invoke('allocate-ports', messageId, count),

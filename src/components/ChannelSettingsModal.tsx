@@ -11,19 +11,21 @@ interface ChannelSettingsModalProps {
   channel: Channel;
   scripts: StartupScript[];
   onClose: () => void;
-  onSave: (cwd: string | null, creationScript: string | null, scripts: DraftScript[]) => Promise<void>;
+  onSave: (localRepoPath: string | null, baseBranch: string | null, creationScript: string | null, scripts: DraftScript[]) => Promise<void>;
 }
 
 export type { DraftScript };
 
 export function ChannelSettingsModal({ channel, scripts, onClose, onSave }: ChannelSettingsModalProps) {
-  const [draftCwd, setDraftCwd] = useState(channel.cwd ?? '');
+  const [draftRepoPath, setDraftRepoPath] = useState(channel.localRepoPath ?? '');
+  const [draftBaseBranch, setDraftBaseBranch] = useState(channel.baseBranch ?? 'main');
   const [draftCreationScript, setDraftCreationScript] = useState(channel.creationScript ?? '');
   const [draftScripts, setDraftScripts] = useState<DraftScript[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraftCwd(channel.cwd ?? '');
+    setDraftRepoPath(channel.localRepoPath ?? '');
+    setDraftBaseBranch(channel.baseBranch ?? 'main');
     setDraftCreationScript(channel.creationScript ?? '');
     setDraftScripts(
       scripts.map((s) => ({ id: s.id, name: s.name, command: s.command })),
@@ -45,12 +47,17 @@ export function ChannelSettingsModal({ channel, scripts, onClose, onSave }: Chan
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await onSave(draftCwd.trim() || null, draftCreationScript.trim() || null, draftScripts);
+      await onSave(
+        draftRepoPath.trim() || null,
+        draftBaseBranch.trim() || null,
+        draftCreationScript.trim() || null,
+        draftScripts,
+      );
       onClose();
     } finally {
       setSaving(false);
     }
-  }, [draftCwd, draftCreationScript, draftScripts, onSave, onClose]);
+  }, [draftRepoPath, draftBaseBranch, draftCreationScript, draftScripts, onSave, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -68,16 +75,32 @@ export function ChannelSettingsModal({ channel, scripts, onClose, onSave }: Chan
         </div>
 
         <div className="space-y-5 px-5 py-4">
-          {/* Working Directory */}
+          {/* Local Repo Path */}
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Working Directory</label>
+            <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Local Repo Path</label>
             <input
               type="text"
-              value={draftCwd}
-              onChange={(e) => setDraftCwd(e.target.value)}
-              placeholder="/path/to/project"
+              value={draftRepoPath}
+              onChange={(e) => setDraftRepoPath(e.target.value)}
+              placeholder="/path/to/git/repo"
               className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
             />
+            {channel.githubUrl && (
+              <p className="mt-1 text-[10px] text-[#565f89]">GitHub: {channel.githubUrl}</p>
+            )}
+          </div>
+
+          {/* Base Branch */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Base Branch</label>
+            <input
+              type="text"
+              value={draftBaseBranch}
+              onChange={(e) => setDraftBaseBranch(e.target.value)}
+              placeholder="main"
+              className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
+            />
+            <p className="mt-1 text-[10px] text-[#3b4261]">Branch to merge worktrees into</p>
           </div>
 
           {/* Creation Script */}

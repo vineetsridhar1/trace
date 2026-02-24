@@ -14,6 +14,8 @@ interface UseClaudeMessageActionsOptions {
   setHasWorktree: Dispatch<SetStateAction<boolean | null>>;
   updateMessageStatus: (messageId: string, status: TicketStatus) => Promise<void>;
   getCreationCommands: () => string[];
+  getChannelRepoPath: () => string;
+  getChannelBaseBranch: () => string;
 }
 
 interface SpawnOptions {
@@ -35,6 +37,8 @@ export function useClaudeMessageActions({
   setHasWorktree,
   updateMessageStatus,
   getCreationCommands,
+  getChannelRepoPath,
+  getChannelBaseBranch,
 }: UseClaudeMessageActionsOptions) {
   const spawnedMessageIdsRef = useRef(new Set<string>());
   const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(
@@ -46,7 +50,8 @@ export function useClaudeMessageActions({
     async (messageId: string, prompt: string, options: SpawnOptions) => {
       spawnedMessageIdsRef.current.add(messageId);
       try {
-        const result = await window.traceAPI.spawnClaude(messageId, prompt, options.creationCommands, options.resumeSessionId);
+        const repoPath = getChannelRepoPath();
+        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId);
 
         if (!result.success) {
           spawnedMessageIdsRef.current.delete(messageId);
@@ -69,7 +74,7 @@ export function useClaudeMessageActions({
         return false;
       }
     },
-    [setHasWorktree, updateMessageStatus],
+    [getChannelRepoPath, setHasWorktree, updateMessageStatus],
   );
 
   const updatePreviewForPendingRun = useCallback(
@@ -243,7 +248,8 @@ export function useClaudeMessageActions({
     const selectedMessage = selectedMessageRef.current;
     if (!selectedMessage || !activeChannelId) return;
 
-    const prompt = '/merge-to-main';
+    const baseBranch = getChannelBaseBranch();
+    const prompt = `/merge-to-main ${baseBranch}`;
     const persisted = await persistPrompt(
       selectedMessage.id,
       prompt,
@@ -256,7 +262,7 @@ export function useClaudeMessageActions({
       errorPrefix: 'Failed to spawn claude for merge-to-main',
       setHasWorktreeOnSuccess: false,
     });
-  }, [activeChannelId, persistPrompt, selectedMessageRef, spawnClaudeForMessage]);
+  }, [activeChannelId, getChannelBaseBranch, persistPrompt, selectedMessageRef, spawnClaudeForMessage]);
 
   const isMessageSpawned = useCallback((messageId: string) => {
     return spawnedMessageIdsRef.current.has(messageId);

@@ -15,6 +15,7 @@ export interface TraceAPI {
   spawnClaude: (
     messageId: string,
     prompt: string,
+    repoPath: string,
     creationCommands?: string[],
     resumeSessionId?: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
@@ -23,12 +24,15 @@ export interface TraceAPI {
   ) => Promise<{ success: boolean; stopped?: boolean; error?: string }>;
   deleteWorktree: (
     messageId: string,
+    repoPath: string,
   ) => Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }>;
   checkWorktreeExists: (
     messageId: string,
   ) => Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }>;
   mergeWorktree: (
     messageId: string,
+    repoPath: string,
+    baseBranch: string,
   ) => Promise<{ success: boolean; branch?: string; error?: string }>;
   reportClaudeActivity: (
     messageId: string,
@@ -40,7 +44,7 @@ export interface TraceAPI {
   killPty: (terminalId: string) => Promise<{ success: boolean }>;
   onPtyData: (callback: (terminalId: string, data: string) => void) => () => void;
   onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
-  getWorktreeDiff: (messageId: string) => Promise<WorktreeDiffResult>;
+  getWorktreeDiff: (messageId: string, baseBranch: string) => Promise<WorktreeDiffResult>;
   allocatePorts: (messageId: string, count: number) => Promise<{ success: boolean; ports?: number[]; error?: string }>;
   releasePorts: (messageId: string) => Promise<{ success: boolean; error?: string }>;
   focusWindow: () => Promise<void>;
@@ -71,7 +75,9 @@ export interface ServerEvent {
 export interface Channel {
   id: string;
   name: string;
-  cwd: string | null;
+  localRepoPath: string | null;
+  baseBranch: string | null;
+  githubUrl: string | null;
   creationScript: string | null;
   createdAt: string;
   updatedAt: string;

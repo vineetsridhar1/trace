@@ -2,12 +2,10 @@ import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
-import { injectHooks } from './main/hooks';
 import { registerIpcHandlers, setMainWindow } from './main/ipc';
 import { setWorktreeBaseFn, runStateByMessageId, stopWatchdog } from './main/watchdog';
 import { killAllPtys } from './main/pty';
 import {
-  setTargetDir,
   setWorktreeBase,
   getWorktreeBase,
   runningProcesses,
@@ -44,10 +42,7 @@ const createWindow = () => {
 };
 
 app.on('ready', () => {
-  const targetDir = process.cwd();
-  setTargetDir(targetDir);
   setWorktreeBase(path.join(app.getPath('userData'), 'worktrees'));
-  injectHooks(targetDir);
   createWindow();
 });
 

@@ -32,10 +32,11 @@ async function runCreationScripts(worktreePath: string, commands: string[]): Pro
 export async function spawnClaude(
   messageId: string,
   prompt: string,
+  repoPath: string,
   creationCommands?: string[],
   resumeSessionId?: string,
 ): Promise<string> {
-  const { worktreePath, created } = await ensureWorktree(messageId);
+  const { worktreePath, created } = await ensureWorktree(messageId, repoPath);
 
   if (created && creationCommands && creationCommands.length > 0) {
     appendClaudeDebugLog(messageId, `running ${creationCommands.length} creation script(s)`);

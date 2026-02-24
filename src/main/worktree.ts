@@ -12,16 +12,7 @@ import {
 export const runningProcesses = new Map<string, import('node:child_process').ChildProcess>();
 export const suppressSyntheticStopFor = new Set<string>();
 
-let targetDir = process.cwd();
 let worktreeBase = '';
-
-export function setTargetDir(dir: string) {
-  targetDir = dir;
-}
-
-export function getTargetDir(): string {
-  return targetDir;
-}
 
 export function setWorktreeBase(dir: string) {
   worktreeBase = dir;
@@ -40,7 +31,7 @@ export interface EnsureWorktreeResult {
   created: boolean;
 }
 
-export function ensureWorktree(messageId: string): Promise<EnsureWorktreeResult> {
+export function ensureWorktree(messageId: string, repoPath: string): Promise<EnsureWorktreeResult> {
   const worktreePath = getWorktreePath(messageId);
 
   if (fs.existsSync(worktreePath)) {
@@ -57,7 +48,7 @@ export function ensureWorktree(messageId: string): Promise<EnsureWorktreeResult>
 
   return new Promise<EnsureWorktreeResult>((resolve, reject) => {
     const result = spawn('git', ['worktree', 'add', '-b', branchName, worktreePath], {
-      cwd: targetDir,
+      cwd: repoPath,
       stdio: 'pipe',
     });
 
@@ -67,7 +58,7 @@ export function ensureWorktree(messageId: string): Promise<EnsureWorktreeResult>
     result.on('close', (code) => {
       if (code !== 0) {
         const retry = spawn('git', ['worktree', 'add', worktreePath, branchName], {
-          cwd: targetDir,
+          cwd: repoPath,
           stdio: 'pipe',
         });
         let retryErr = '';
@@ -114,7 +105,7 @@ export function checkWorktreeExists(messageId: string): { exists: boolean; workt
   return { exists: fs.existsSync(worktreePath), worktreePath };
 }
 
-export async function mergeWorktree(messageId: string): Promise<{ success: boolean; branch: string }> {
+export async function mergeWorktree(messageId: string, repoPath: string, baseBranch: string): Promise<{ success: boolean; branch: string }> {
   const worktreePath = getWorktreePath(messageId);
 
   if (!fs.existsSync(worktreePath)) {
@@ -123,8 +114,13 @@ export async function mergeWorktree(messageId: string): Promise<{ success: boole
 
   const branch = await getWorktreeBranch(messageId);
 
-  // Merge the branch into main from the target (main) directory
-  const mergeResult = await runProcess('git', ['merge', branch], targetDir);
+  // Checkout the base branch and merge the worktree branch
+  const checkoutResult = await runProcess('git', ['checkout', baseBranch], repoPath);
+  if (checkoutResult.code !== 0) {
+    throw new Error(`Failed to checkout ${baseBranch}: ${checkoutResult.stderr.trim()}`);
+  }
+
+  const mergeResult = await runProcess('git', ['merge', branch], repoPath);
   if (mergeResult.code !== 0) {
     throw new Error(`Merge failed: ${mergeResult.stderr.trim()}`);
   }
@@ -132,7 +128,7 @@ export async function mergeWorktree(messageId: string): Promise<{ success: boole
   return { success: true, branch };
 }
 
-export async function deleteWorktree(messageId: string): Promise<{ removed: boolean; worktreePath: string }> {
+export async function deleteWorktree(messageId: string, repoPath: string): Promise<{ removed: boolean; worktreePath: string }> {
   const worktreePath = getWorktreePath(messageId);
   const existing = runningProcesses.get(messageId);
 
@@ -156,7 +152,7 @@ export async function deleteWorktree(messageId: string): Promise<{ removed: bool
   // Resolve the actual branch name before removing the worktree directory
   const branch = await getWorktreeBranch(messageId);
 
-  const removeResult = await runProcess('git', ['worktree', 'remove', '--force', worktreePath], targetDir);
+  const removeResult = await runProcess('git', ['worktree', 'remove', '--force', worktreePath], repoPath);
 
   if (removeResult.code !== 0) {
     fs.rmSync(worktreePath, { recursive: true, force: true });
@@ -168,8 +164,8 @@ export async function deleteWorktree(messageId: string): Promise<{ removed: bool
     appendClaudeDebugLog(messageId, `delete-worktree git remove succeeded path=${worktreePath}`);
   }
 
-  await runProcess('git', ['worktree', 'prune'], targetDir);
-  await runProcess('git', ['branch', '-D', branch], targetDir);
+  await runProcess('git', ['worktree', 'prune'], repoPath);
+  await runProcess('git', ['branch', '-D', branch], repoPath);
 
   return { removed: true, worktreePath };
 }

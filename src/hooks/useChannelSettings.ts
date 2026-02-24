@@ -16,7 +16,7 @@ export function useChannelSettings() {
     }
   }, []);
 
-  const updateChannel = useCallback(async (channelId: string, data: { cwd?: string | null; creationScript?: string | null }) => {
+  const updateChannel = useCallback(async (channelId: string, data: { localRepoPath?: string | null; baseBranch?: string | null; creationScript?: string | null }) => {
     try {
       const res = await fetch(`${SERVER_URL}/channels/${channelId}`, {
         method: 'PATCH',
