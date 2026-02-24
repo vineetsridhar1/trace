@@ -182,7 +182,7 @@ export async function spawnClaude(
 
     if (!shouldPostSyntheticStop) return;
 
-    if (userStopped) {
+    if (userStopped || code === 143) {
       await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user');
       return;
     }
@@ -192,7 +192,7 @@ export async function spawnClaude(
       timedOut ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.` : '',
       failedToSpawn ? `Spawn error: ${failedToSpawn}` : '',
       stderrOutput,
-      code !== 0 && code !== null ? `Process exited with code ${code}` : '',
+      code !== 0 && code !== null && code !== 143 ? `Process exited with code ${code}` : '',
     ]
       .filter(Boolean)
       .join('\n\n')

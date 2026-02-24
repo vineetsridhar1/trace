@@ -309,12 +309,10 @@ function StopBubble({ event, time }: { event: ServerEvent; time: string }) {
 
   if (isUserStop) {
     return (
-      <div className="activity-row">
-        <div className="activity-row-header">
-          <span className="activity-row-icon text-red-400">&#9632;</span>
-          <span className="activity-row-title text-red-300">Stopped by user</span>
-          <span className="activity-row-time">{time}</span>
-        </div>
+      <div className="flex items-center gap-1.5 py-0.5 px-1 pl-0.5 opacity-45">
+        <span className="text-[#b07070] text-[8px] leading-none">&#9632;</span>
+        <span className="text-[#9a8a9e] text-[11px] font-normal">Stopped by user</span>
+        <span className="activity-row-time">{time}</span>
       </div>
     );
   }
