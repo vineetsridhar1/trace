@@ -254,7 +254,7 @@ export function ThreadPanel({
           )}
         </div>
 
-        {viewMode === "agent" && latestTodos && (
+        {viewMode === "agent" && isClaudeRunning && latestTodos && (
           <StickyTodoList todos={latestTodos} />
         )}
 
