@@ -24,6 +24,7 @@ interface SpawnOptions {
   setHasWorktreeOnSuccess?: boolean;
   creationCommands?: string[];
   resumeSessionId?: string;
+  filePaths?: string[];
 }
 
 export function useClaudeMessageActions({
@@ -45,13 +46,14 @@ export function useClaudeMessageActions({
     null,
   );
   const [pendingRunInitialPrompt, setPendingRunInitialPrompt] = useState('');
+  const [pendingRunFilePaths, setPendingRunFilePaths] = useState<string[]>([]);
 
   const spawnClaudeForMessage = useCallback(
     async (messageId: string, prompt: string, options: SpawnOptions) => {
       spawnedMessageIdsRef.current.add(messageId);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId);
+        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths);
 
         if (!result.success) {
           spawnedMessageIdsRef.current.delete(messageId);
@@ -102,7 +104,7 @@ export function useClaudeMessageActions({
   );
 
   const persistPrompt = useCallback(
-    async (messageId: string, text: string, errorLabel: string) => {
+    async (messageId: string, text: string, errorLabel: string, attachmentIds?: string[]) => {
       if (!activeChannelId) return null;
 
       try {
@@ -111,7 +113,7 @@ export function useClaudeMessageActions({
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ text, attachmentIds }),
           },
         );
 
@@ -135,7 +137,7 @@ export function useClaudeMessageActions({
   );
 
   const sendMessage = useCallback(
-    async (rawText: string) => {
+    async (rawText: string, attachmentIds?: string[], filePaths?: string[]) => {
       const text = rawText.trim();
       if (!text || !activeChannelId) return false;
 
@@ -143,7 +145,7 @@ export function useClaudeMessageActions({
         const response = await fetch(`${SERVER_URL}/channels/${activeChannelId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, attachmentIds }),
         });
         if (!response.ok) return false;
 
@@ -152,6 +154,7 @@ export function useClaudeMessageActions({
         onMessageCreated(message);
         setPendingRunMessageId(message.id);
         setPendingRunInitialPrompt(text);
+        setPendingRunFilePaths(filePaths ?? []);
         return true;
       } catch {
         console.error('Failed to send message');
@@ -171,8 +174,10 @@ export function useClaudeMessageActions({
         : editedPrompt;
 
       const messageId = pendingRunMessageId;
+      const filePaths = pendingRunFilePaths;
       setPendingRunMessageId(null);
       setPendingRunInitialPrompt('');
+      setPendingRunFilePaths([]);
 
       const creationCommands = getCreationCommands();
 
@@ -185,13 +190,14 @@ export function useClaudeMessageActions({
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
         creationCommands,
+        filePaths: filePaths.length > 0 ? filePaths : undefined,
       });
 
       if (!success && creationCommands.length > 0) {
         await updateMessageStatus(messageId, 'pending');
       }
     },
-    [getCreationCommands, pendingRunMessageId, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+    [getCreationCommands, pendingRunMessageId, pendingRunFilePaths, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
   );
 
   const stopClaude = useCallback(async () => {
@@ -200,7 +206,7 @@ export function useClaudeMessageActions({
   }, [selectedMessageId]);
 
   const sendThreadMessage = useCallback(
-    async (rawText: string) => {
+    async (rawText: string, attachmentIds?: string[], filePaths?: string[]) => {
       const text = rawText.trim();
       const selectedMessage = selectedMessageRef.current;
       if (!text || !selectedMessage || !activeChannelId) return false;
@@ -209,6 +215,7 @@ export function useClaudeMessageActions({
         selectedMessage.id,
         text,
         'Failed to persist thread prompt',
+        attachmentIds,
       );
       if (!persisted) return false;
 
@@ -217,6 +224,7 @@ export function useClaudeMessageActions({
         errorPrefix: 'Failed to spawn claude',
         creationCommands: getCreationCommands(),
         resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
+        filePaths: filePaths && filePaths.length > 0 ? filePaths : undefined,
       });
       return true;
     },

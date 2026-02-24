@@ -132,3 +132,15 @@ model Ticket {
   @@index([columnId, sortOrder])
   @@map("tickets")
 }
+
+model Attachment {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  filename    String
+  contentType String   @map("content_type")
+  byteSize    Int      @map("byte_size")
+  checksum    String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("attachments")
+}

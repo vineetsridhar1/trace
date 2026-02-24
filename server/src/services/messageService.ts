@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { extractAskUserQuestionFromTranscript } from './eventService';
+import { getStorage } from './storageService';
 
 const USER_SESSION_ID = 'user-manual-input';
 
@@ -15,11 +16,37 @@ type FeedMessage = Prisma.MessageGetPayload<{
   };
 }>;
 
-function buildUserPromptPayload(text: string) {
+interface AttachmentMeta {
+  id: string;
+  key: string;
+  filename: string;
+  contentType: string;
+  url: string;
+  localPath: string;
+}
+
+async function resolveAttachmentMetas(attachmentIds: string[]): Promise<AttachmentMeta[]> {
+  if (attachmentIds.length === 0) return [];
+  const storage = getStorage();
+  const attachments = await prisma.attachment.findMany({
+    where: { id: { in: attachmentIds } },
+  });
+  return attachments.map((a) => ({
+    id: a.id,
+    key: a.key,
+    filename: a.filename,
+    contentType: a.contentType,
+    url: storage.url(a.key),
+    localPath: storage.localPath(a.key),
+  }));
+}
+
+function buildUserPromptPayload(text: string, attachments?: AttachmentMeta[]) {
   return {
     hook_event_name: 'UserPromptSubmit',
     prompt: text,
     source: 'ui',
+    ...(attachments && attachments.length > 0 ? { attachments } : {}),
   };
 }
 
@@ -145,8 +172,10 @@ export async function updateMessageSummaryAndBranch(
   });
 }
 
-export async function createUserMessage(channelId: string, text: string) {
+export async function createUserMessage(channelId: string, text: string, attachmentIds?: string[]) {
   await ensureManualInputSession();
+
+  const attachmentMetas = await resolveAttachmentMetas(attachmentIds ?? []);
 
   const created = await prisma.$transaction(async (tx) => {
     const message = await tx.message.create({
@@ -166,7 +195,7 @@ export async function createUserMessage(channelId: string, text: string) {
       data: {
         sessionId: USER_SESSION_ID,
         hookEventName: 'UserPromptSubmit',
-        rawPayload: buildUserPromptPayload(text),
+        rawPayload: buildUserPromptPayload(text, attachmentMetas),
         threadId: thread.id,
         importance: 'important',
       },
@@ -191,7 +220,10 @@ export async function appendPromptToMessageThread(
   channelId: string,
   messageId: string,
   text: string,
+  attachmentIds?: string[],
 ) {
+  const attachmentMetas = await resolveAttachmentMetas(attachmentIds ?? []);
+
   const created = await prisma.$transaction(async (tx) => {
     const message = await tx.message.findFirst({
       where: { id: messageId, channelId },
@@ -212,7 +244,7 @@ export async function appendPromptToMessageThread(
       data: {
         sessionId: message.sessionId,
         hookEventName: 'UserPromptSubmit',
-        rawPayload: buildUserPromptPayload(text),
+        rawPayload: buildUserPromptPayload(text, attachmentMetas),
         threadId: thread.id,
         importance: 'important',
       },

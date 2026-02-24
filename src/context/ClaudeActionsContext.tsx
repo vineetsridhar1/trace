@@ -4,10 +4,10 @@ import type { ReactNode } from 'react';
 export interface ClaudeActionsContextValue {
   pendingRunMessageId: string | null;
   pendingRunInitialPrompt: string;
-  sendMessage: (text: string) => Promise<boolean>;
+  sendMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
   runPendingMessage: (planMode: boolean, prompt: string) => Promise<void>;
   stopClaude: () => Promise<void>;
-  sendThreadMessage: (text: string) => Promise<boolean>;
+  sendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
   sendPlanResponse: (text: string, claudePrompt?: string) => Promise<void>;
   mergeToMain: () => Promise<void>;
 }

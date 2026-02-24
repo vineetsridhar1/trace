@@ -35,6 +35,7 @@ export async function spawnClaude(
   repoPath: string,
   creationCommands?: string[],
   resumeSessionId?: string,
+  filePaths?: string[],
 ): Promise<string> {
   const { worktreePath, created } = await ensureWorktree(messageId, repoPath);
 
@@ -81,6 +82,11 @@ export async function spawnClaude(
   const args = ['--dangerously-skip-permissions'];
   if (resumeSessionId) {
     args.push('--resume', resumeSessionId);
+  }
+  if (filePaths && filePaths.length > 0) {
+    for (const filePath of filePaths) {
+      args.push('--file', filePath);
+    }
   }
   args.push('-p', effectivePrompt);
 

@@ -4,7 +4,9 @@ import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
 import { useClaudeActions } from '../context/ClaudeActionsContext';
+import { useImageAttachments } from '../hooks/useImageAttachments';
 import { SlashCommandMenu } from './SlashCommandMenu';
+import { ImageThumbnails } from './ImageThumbnails';
 import { KanbanBoard } from './KanbanBoard';
 
 interface MessagePanelProps {
@@ -152,18 +154,36 @@ function MessageInput() {
   const [messageInput, setMessageInput] = useState('');
   const textareaRef = useAutoResizeTextarea(messageInput);
   const slashCommands = useSlashCommands(messageInput, setMessageInput);
+  const imageAttachments = useImageAttachments();
 
   const handleSendMessage = useCallback(async () => {
     const text = messageInput.trim();
     if (!text) return;
-    const sent = await sendMessage(text);
+    const attachmentIds = imageAttachments.getAttachmentIds();
+    const filePaths = imageAttachments.getFilePaths();
+    const sent = await sendMessage(
+      text,
+      attachmentIds.length > 0 ? attachmentIds : undefined,
+      filePaths.length > 0 ? filePaths : undefined,
+    );
     if (sent) {
       setMessageInput('');
+      imageAttachments.clearAttachments();
     }
-  }, [messageInput, sendMessage]);
+  }, [messageInput, sendMessage, imageAttachments]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
+      <ImageThumbnails images={imageAttachments.attachments} onRemove={imageAttachments.removeAttachment} />
+      {imageAttachments.uploading && (
+        <div className="flex items-center gap-2 px-1 pb-2">
+          <svg className="h-3.5 w-3.5 animate-spin text-violet-400" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+          </svg>
+          <span className="text-xs text-[#565f89]">Uploading...</span>
+        </div>
+      )}
       <div className="flex items-end gap-2">
         <div className="relative flex-1">
           <SlashCommandMenu
@@ -178,6 +198,7 @@ function MessageInput() {
             rows={1}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
+            onPaste={(e) => void imageAttachments.handlePaste(e)}
             onKeyDown={(e) => {
               if (slashCommands.handleKeyDown(e)) return;
               if (e.key === 'Enter' && !e.shiftKey) {

@@ -37,6 +37,22 @@ export function extractPromptText(rawPayload: unknown): string | null {
   return null;
 }
 
+export interface RawPayloadAttachment {
+  id: string;
+  key: string;
+  filename: string;
+  contentType: string;
+  url: string;
+  localPath: string;
+}
+
+export function extractAttachments(rawPayload: unknown): RawPayloadAttachment[] {
+  if (!rawPayload || typeof rawPayload !== 'object') return [];
+  const record = rawPayload as Record<string, unknown>;
+  if (!Array.isArray(record.attachments)) return [];
+  return record.attachments as RawPayloadAttachment[];
+}
+
 export function serializeUnknown(value: unknown, maxLen = 1000): string {
   try {
     const serialized = JSON.stringify(value, null, 2) ?? '';

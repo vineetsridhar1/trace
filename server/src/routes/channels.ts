@@ -115,12 +115,12 @@ router.get('/:id/messages', async (req: Request<{ id: string }>, res: Response) 
 });
 
 router.post('/:id/messages', async (req: Request<{ id: string }>, res: Response) => {
-  const { text } = req.body;
+  const { text, attachmentIds } = req.body;
   if (!text || typeof text !== 'string') {
     res.status(400).json({ error: 'text is required' });
     return;
   }
-  const created = await createUserMessage(req.params.id, text.trim());
+  const created = await createUserMessage(req.params.id, text.trim(), attachmentIds);
 
   sseManager.broadcastChannel(req.params.id, 'message-created', {
     channelId: req.params.id,
@@ -157,7 +157,7 @@ router.post('/:id/messages', async (req: Request<{ id: string }>, res: Response)
 router.post(
   '/:channelId/messages/:messageId/prompts',
   async (req: Request<{ channelId: string; messageId: string }>, res: Response) => {
-    const { text } = req.body;
+    const { text, attachmentIds } = req.body;
     if (!text || typeof text !== 'string') {
       res.status(400).json({ error: 'text is required' });
       return;
@@ -167,6 +167,7 @@ router.post(
       req.params.channelId,
       req.params.messageId,
       text.trim(),
+      attachmentIds,
     );
 
     if (!created) {
