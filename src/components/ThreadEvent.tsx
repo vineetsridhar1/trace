@@ -10,7 +10,6 @@ function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: num
   const [needsClamp, setNeedsClamp] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [collapsedH, setCollapsedH] = useState(0);
-  const [fullH, setFullH] = useState(0);
 
   useEffect(() => {
     const el = innerRef.current;
@@ -21,7 +20,6 @@ function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: num
     if (scrollH > clampH + 4) {
       setNeedsClamp(true);
       setCollapsedH(clampH);
-      setFullH(scrollH);
     } else {
       setNeedsClamp(false);
     }
@@ -31,9 +29,9 @@ function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: num
     <div>
       <div
         style={{
-          maxHeight: !needsClamp ? undefined : expanded ? `${fullH}px` : `${collapsedH}px`,
-          overflow: 'hidden',
-          transition: 'max-height 0.3s ease',
+          maxHeight: !needsClamp ? undefined : expanded ? undefined : `${collapsedH}px`,
+          overflow: expanded ? undefined : 'hidden',
+          transition: expanded ? undefined : 'max-height 0.3s ease',
         }}
       >
         <div ref={innerRef} className="markdown-body break-words text-sm text-[#c0caf5]">

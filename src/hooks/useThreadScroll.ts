@@ -39,8 +39,21 @@ export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: 
 
     if (!hasNew) return;
 
-    if (threadNearBottomRef.current || previousCount === 0) {
+    if (previousCount === 0) {
       requestAnimationFrame(() => scrollThreadToBottom('auto'));
+      return;
+    }
+
+    // Re-check near-bottom inside rAF so we don't override a user scroll-up
+    // that happened between the state update and the paint
+    if (threadNearBottomRef.current) {
+      requestAnimationFrame(() => {
+        if (threadNearBottomRef.current) {
+          scrollThreadToBottom('auto');
+        } else {
+          setShowJumpToLatest(true);
+        }
+      });
       return;
     }
 

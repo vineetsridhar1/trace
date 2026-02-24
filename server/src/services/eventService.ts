@@ -155,7 +155,8 @@ export async function ingestEvent(payload: HookEvent) {
     },
   });
   // Save Claude session ID on the message for conversation continuity
-  if (payload.session_id !== 'user-manual-input') {
+  // Skip synthetic IDs (trace-local-*) and manual input
+  if (payload.session_id !== 'user-manual-input' && !payload.session_id.startsWith('trace-local-')) {
     await prisma.message.update({
       where: { id: message.id },
       data: { claudeSessionId: payload.session_id },
