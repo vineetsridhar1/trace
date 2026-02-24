@@ -144,20 +144,19 @@ function TodoListPreview({ event }: { event: ServerEvent }) {
   const todos = (input?.todos ?? []) as TodoItem[];
   if (!Array.isArray(todos) || todos.length === 0) return null;
 
+  // Only show in event log once all todos are completed;
+  // while in progress the sticky todo bar handles display
+  const allCompleted = todos.every((t) => t.status === 'completed');
+  if (!allCompleted) return null;
+
   return (
     <ul className="mt-2 space-y-1.5 pl-1">
       {todos.map((t, i) => (
         <li key={i} className="flex items-center gap-2 text-sm">
-          {t.status === 'in_progress' ? (
-            <TodoSpinner />
-          ) : t.status === 'completed' ? (
-            <svg className="h-3.5 w-3.5 flex-shrink-0 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-              <path d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <span className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border border-[#565f89]" />
-          )}
-          <span className={t.status === 'completed' ? 'text-[#565f89] line-through' : 'text-[#c0caf5]'}>
+          <svg className="h-3.5 w-3.5 flex-shrink-0 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+            <path d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="text-[#565f89] line-through">
             {t.content}
           </span>
         </li>
@@ -272,15 +271,27 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
     return <BashToolRow event={event} time={time} />;
   }
 
-  if (!editLike && !todoTool) {
+  if (todoTool) {
+    // Only render in event log when all todos are completed;
+    // the sticky todo bar handles in-progress display
+    const input = event.toolInput as Record<string, unknown> | null;
+    const todos = (input?.todos ?? []) as TodoItem[];
+    const allCompleted = Array.isArray(todos) && todos.length > 0 && todos.every((t) => t.status === 'completed');
+    if (!allCompleted) return null;
+    return (
+      <div className="activity-row">
+        <TodoListPreview event={event} />
+      </div>
+    );
+  }
+
+  if (!editLike) {
     return <GenericToolRow event={event} time={time} />;
   }
 
   return (
     <div className="activity-row">
-      {todoTool ? (
-        <TodoListPreview event={event} />
-      ) : writeTool ? (
+      {writeTool ? (
         <WriteCodePreview event={event} />
       ) : (
         <EditDiffPreview event={event} />
