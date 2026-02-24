@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
-import type { ChannelMessage, TicketStatus } from '../types';
+import type { ChannelMessage, TicketStatus, ClaudeModel, EffortLevel } from '../types';
 import { SERVER_URL } from '../types';
 
 interface UseClaudeMessageActionsOptions {
@@ -25,6 +25,8 @@ interface SpawnOptions {
   creationCommands?: string[];
   resumeSessionId?: string;
   filePaths?: string[];
+  model?: string;
+  effort?: string;
 }
 
 export function useClaudeMessageActions({
@@ -47,13 +49,15 @@ export function useClaudeMessageActions({
   );
   const [pendingRunInitialPrompt, setPendingRunInitialPrompt] = useState('');
   const [pendingRunFilePaths, setPendingRunFilePaths] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<ClaudeModel>('opus');
+  const [selectedEffort, setSelectedEffort] = useState<EffortLevel>('high');
 
   const spawnClaudeForMessage = useCallback(
     async (messageId: string, prompt: string, options: SpawnOptions) => {
       spawnedMessageIdsRef.current.add(messageId);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths);
+        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort);
 
         if (!result.success) {
           spawnedMessageIdsRef.current.delete(messageId);
@@ -191,13 +195,15 @@ export function useClaudeMessageActions({
         errorPrefix: 'Failed to spawn claude',
         creationCommands,
         filePaths: filePaths.length > 0 ? filePaths : undefined,
+        model: selectedModel,
+        effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
       });
 
       if (!success && creationCommands.length > 0) {
         await updateMessageStatus(messageId, 'pending');
       }
     },
-    [getCreationCommands, pendingRunMessageId, pendingRunFilePaths, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+    [getCreationCommands, pendingRunMessageId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
   );
 
   const stopClaude = useCallback(async () => {
@@ -225,10 +231,12 @@ export function useClaudeMessageActions({
         creationCommands: getCreationCommands(),
         resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
         filePaths: filePaths && filePaths.length > 0 ? filePaths : undefined,
+        model: selectedModel,
+        effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
       });
       return true;
     },
-    [activeChannelId, getCreationCommands, persistPrompt, selectedMessageRef, spawnClaudeForMessage],
+    [activeChannelId, getCreationCommands, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
   );
 
   const sendPlanResponse = useCallback(
@@ -247,9 +255,11 @@ export function useClaudeMessageActions({
       await spawnClaudeForMessage(selectedMessage.id, claudePrompt ?? trimmed, {
         errorPrefix: 'Failed to spawn claude for plan response',
         resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
+        model: selectedModel,
+        effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
       });
     },
-    [activeChannelId, persistPrompt, selectedMessageRef, spawnClaudeForMessage],
+    [activeChannelId, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
   );
 
   const mergeToMain = useCallback(async () => {
@@ -279,6 +289,10 @@ export function useClaudeMessageActions({
   return {
     pendingRunMessageId,
     pendingRunInitialPrompt,
+    selectedModel,
+    selectedEffort,
+    setSelectedModel,
+    setSelectedEffort,
     sendMessage,
     runPendingMessage,
     stopClaude,

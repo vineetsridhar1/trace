@@ -331,6 +331,10 @@ export default function App() {
     () => ({
       pendingRunMessageId: claudeActions.pendingRunMessageId,
       pendingRunInitialPrompt: claudeActions.pendingRunInitialPrompt,
+      selectedModel: claudeActions.selectedModel,
+      selectedEffort: claudeActions.selectedEffort,
+      setSelectedModel: claudeActions.setSelectedModel,
+      setSelectedEffort: claudeActions.setSelectedEffort,
       sendMessage: claudeActions.sendMessage,
       runPendingMessage: claudeActions.runPendingMessage,
       stopClaude: claudeActions.stopClaude,
@@ -341,6 +345,10 @@ export default function App() {
     [
       claudeActions.pendingRunMessageId,
       claudeActions.pendingRunInitialPrompt,
+      claudeActions.selectedModel,
+      claudeActions.selectedEffort,
+      claudeActions.setSelectedModel,
+      claudeActions.setSelectedEffort,
       claudeActions.sendMessage,
       claudeActions.runPendingMessage,
       claudeActions.stopClaude,

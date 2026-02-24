@@ -25,6 +25,8 @@ export interface TraceAPI {
     creationCommands?: string[],
     resumeSessionId?: string,
     filePaths?: string[],
+    model?: string,
+    effort?: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   stopClaude: (
     messageId: string,
@@ -136,6 +138,8 @@ export interface ThreadEventEnvelope {
 }
 
 export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation';
+export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
+export type EffortLevel = 'low' | 'medium' | 'high';
 export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
 export type MiddlePanelView = 'feed' | 'board';

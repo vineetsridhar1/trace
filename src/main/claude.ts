@@ -36,6 +36,8 @@ export async function spawnClaude(
   creationCommands?: string[],
   resumeSessionId?: string,
   filePaths?: string[],
+  model?: string,
+  effort?: string,
 ): Promise<string> {
   const { worktreePath, created } = await ensureWorktree(messageId, repoPath);
 
@@ -82,6 +84,14 @@ export async function spawnClaude(
   const args = ['--dangerously-skip-permissions'];
   if (resumeSessionId) {
     args.push('--resume', resumeSessionId);
+  }
+
+  if (model) {
+    args.push('--model', model);
+  }
+
+  if (effort && model !== 'haiku') {
+    args.push('--effort', effort);
   }
 
   let finalPrompt = effectivePrompt;

@@ -19,6 +19,7 @@ import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useImageAttachments } from "../hooks/useImageAttachments";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { ImageThumbnails } from "./ImageThumbnails";
+import { ModelEffortSelector } from "./ModelEffortSelector";
 import { normalizeToolName } from "../utils";
 
 type ViewMode = "agent" | "ticket";
@@ -647,6 +648,12 @@ function RunButtons({
   initialPrompt: string;
   onRun: (planMode: boolean, prompt: string) => Promise<void> | void;
 }) {
+  const {
+    selectedModel,
+    selectedEffort,
+    setSelectedModel,
+    setSelectedEffort,
+  } = useClaudeActions();
   const [prompt, setPrompt] = useState(initialPrompt);
   const textareaRef = useAutoResizeTextarea(prompt, { observeResize: true });
 
@@ -669,6 +676,14 @@ function RunButtons({
         }}
         className="mb-2 w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
       />
+      <div className="mb-2">
+        <ModelEffortSelector
+          model={selectedModel}
+          effort={selectedEffort}
+          onModelChange={setSelectedModel}
+          onEffortChange={setSelectedEffort}
+        />
+      </div>
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -736,6 +751,12 @@ function ThreadInput({
   ) => Promise<boolean>;
   onStopClaude: () => void;
 }) {
+  const {
+    selectedModel,
+    selectedEffort,
+    setSelectedModel,
+    setSelectedEffort,
+  } = useClaudeActions();
   const [threadInput, setThreadInput] = useState("");
   const textareaRef = useAutoResizeTextarea(threadInput, {
     observeResize: true,
@@ -887,6 +908,16 @@ function ThreadInput({
           </button>
         )}
       </div>
+      {!isClaudeRunning && (
+        <div className="mt-2">
+          <ModelEffortSelector
+            model={selectedModel}
+            effort={selectedEffort}
+            onModelChange={setSelectedModel}
+            onEffortChange={setSelectedEffort}
+          />
+        </div>
+      )}
     </div>
   );
 }

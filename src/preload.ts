@@ -8,9 +8,11 @@ contextBridge.exposeInMainWorld('traceAPI', {
     creationCommands?: string[],
     resumeSessionId?: string,
     filePaths?: string[],
+    model?: string,
+    effort?: string,
   ): Promise<{ success: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, repoPath, creationCommands, resumeSessionId, filePaths);
+      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, repoPath, creationCommands, resumeSessionId, filePaths, model, effort);
     } catch (err) {
       return { success: false, error: String(err) };
     }

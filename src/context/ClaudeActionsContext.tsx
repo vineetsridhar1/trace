@@ -1,9 +1,14 @@
 import { createContext, useContext } from 'react';
-import type { ReactNode } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import type { ClaudeModel, EffortLevel } from '../types';
 
 export interface ClaudeActionsContextValue {
   pendingRunMessageId: string | null;
   pendingRunInitialPrompt: string;
+  selectedModel: ClaudeModel;
+  selectedEffort: EffortLevel;
+  setSelectedModel: Dispatch<SetStateAction<ClaudeModel>>;
+  setSelectedEffort: Dispatch<SetStateAction<EffortLevel>>;
   sendMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
   runPendingMessage: (planMode: boolean, prompt: string) => Promise<void>;
   stopClaude: () => Promise<void>;
