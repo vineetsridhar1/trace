@@ -163,6 +163,7 @@ export async function spawnClaude(
     const runState = runStateByMessageId.get(messageId);
     const timedOut = runState?.timedOut ?? false;
     const hookStopReceived = runState?.hookStopReceived ?? false;
+    const userStopped = runState?.userStopped ?? false;
     stopWatchdog(messageId, 'process-close');
     runStateByMessageId.delete(messageId);
 
@@ -177,14 +178,16 @@ export async function spawnClaude(
       assistantOutput,
       timedOut ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.` : '',
       failedToSpawn ? `Spawn error: ${failedToSpawn}` : '',
-      stderrOutput,
-      code !== 0 && code !== null ? `Process exited with code ${code}` : '',
+      userStopped ? '' : stderrOutput,
+      !userStopped && code !== 0 && code !== null ? `Process exited with code ${code}` : '',
     ]
       .filter(Boolean)
       .join('\n\n')
       .trim();
 
-    const messageToPersist = fallbackMessage || 'Claude run completed without textual output.';
+    const messageToPersist = userStopped
+      ? (assistantOutput || 'Stopped by user')
+      : (fallbackMessage || 'Claude run completed without textual output.');
     await postSyntheticStopEvent(messageToPersist, code);
   });
 
