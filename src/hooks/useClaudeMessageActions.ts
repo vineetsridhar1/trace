@@ -232,7 +232,7 @@ export function useClaudeMessageActions({
   );
 
   const sendPlanResponse = useCallback(
-    async (text: string, claudePrompt?: string) => {
+    async (text: string) => {
       const trimmed = text.trim();
       const selectedMessage = selectedMessageRef.current;
       if (!trimmed || !selectedMessage || !activeChannelId) return;
@@ -244,7 +244,7 @@ export function useClaudeMessageActions({
       );
       if (!persisted) return;
 
-      await spawnClaudeForMessage(selectedMessage.id, claudePrompt ?? trimmed, {
+      await spawnClaudeForMessage(selectedMessage.id, trimmed, {
         errorPrefix: 'Failed to spawn claude for plan response',
         resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
       });

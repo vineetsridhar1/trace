@@ -285,9 +285,9 @@ export function ThreadPanel({
         ) : showPlan ? (
           <PlanResponseBar
             node={showPlan}
-            onPlanResponse={(text, claudePrompt) => {
+            onPlanResponse={(text) => {
               setDismissedPlanId(showPlan.id);
-              void sendPlanResponse(text, claudePrompt);
+              void sendPlanResponse(text);
             }}
             onDismiss={() => {
               setDismissedPlanId(showPlan.id);

@@ -3,44 +3,31 @@ import type { PlanReviewNode } from '../types';
 import { QuestionOptionPill } from './QuestionOptionPill';
 
 const PLAN_PRESETS = [
-  { label: 'Approve (clear context)', value: 'yes, and clear the context window when you start', clearContext: true },
-  { label: 'Approve (keep context)', value: 'yes, and keep the context window as-is', clearContext: false },
-  { label: 'Approve (manual review)', value: 'yes, but pause after each file so I can review', clearContext: false },
+  { label: 'Approve (clear context)', value: 'yes, and clear the context window when you start' },
+  { label: 'Approve (keep context)', value: 'yes, and keep the context window as-is' },
+  { label: 'Approve (manual review)', value: 'yes, but pause after each file so I can review' },
 ] as const;
 
-/**
- * Compact bottom-bar for plan review responses.
- * Shows preset approval pills + custom feedback input, matching the AskUserQuestionBar style.
- */
 export function PlanResponseBar({
   node,
   onPlanResponse,
   onDismiss,
 }: {
   node: PlanReviewNode;
-  onPlanResponse: (text: string, claudePrompt?: string) => void;
+  onPlanResponse: (text: string) => void;
   onDismiss: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
 
-  const buildClaudePrompt = (instruction: string, clearContext?: boolean) => {
-    if (!node.planContent) return undefined;
-    if (clearContext) return node.planContent;
-    return `${node.planContent}\n\n${instruction}`;
-  };
-
   const handleSubmit = () => {
     if (selected) {
       const preset = PLAN_PRESETS.find((p) => p.label === selected);
       if (preset) {
-        onPlanResponse(preset.value, buildClaudePrompt(preset.value, preset.clearContext));
+        onPlanResponse(preset.value);
       }
     } else if (feedback.trim()) {
-      const claudePrompt = node.planContent
-        ? `${node.planContent}\n\n${feedback.trim()}`
-        : undefined;
-      onPlanResponse(feedback.trim(), claudePrompt);
+      onPlanResponse(feedback.trim());
     }
   };
 
@@ -49,10 +36,7 @@ export function PlanResponseBar({
       e.preventDefault();
       if (feedback.trim()) {
         setSelected(null);
-        const claudePrompt = node.planContent
-          ? `${node.planContent}\n\n${feedback.trim()}`
-          : undefined;
-        onPlanResponse(feedback.trim(), claudePrompt);
+        onPlanResponse(feedback.trim());
       }
     }
   };
@@ -78,7 +62,7 @@ export function PlanResponseBar({
         </button>
       </div>
 
-      {/* Option pills */}
+      {/* Approval pills */}
       <div className="mb-2 flex flex-wrap gap-1.5">
         {PLAN_PRESETS.map((preset) => (
           <QuestionOptionPill
@@ -95,7 +79,7 @@ export function PlanResponseBar({
         ))}
       </div>
 
-      {/* Bottom row: custom input + send */}
+      {/* Bottom row: revision input + send */}
       <div className="flex items-center gap-2">
         <input
           type="text"
@@ -105,20 +89,17 @@ export function PlanResponseBar({
             if (e.target.value) setSelected(null);
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Or type custom feedback..."
+          placeholder="Suggest changes to revise the plan..."
           className="min-w-0 flex-1 rounded-lg border border-[#292e42] bg-[#16161e] px-2.5 py-1.5 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500"
         />
         <button
           type="button"
           disabled={!hasAnswer}
           onClick={handleSubmit}
-          title="Send"
+          title={selected ? 'Approve and execute the plan' : 'Revise the plan with feedback'}
           className="cursor-pointer rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M22 2L11 13" />
-            <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-          </svg>
+          {selected ? 'Approve' : 'Revise'}
         </button>
       </div>
     </div>
