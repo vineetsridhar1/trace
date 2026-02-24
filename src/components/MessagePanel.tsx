@@ -1,4 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
@@ -391,7 +393,9 @@ const MessageItem = memo(function MessageItem({
           <>
             <p className="mt-1 text-sm font-semibold text-[#c0caf5]">{ticket.title}</p>
             {ticket.description && (
-              <p className="mt-0.5 line-clamp-2 text-sm text-[#a9b1d6]">{ticket.description}</p>
+              <div className="markdown-body mt-0.5 line-clamp-2 text-sm text-[#a9b1d6]">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.description}</ReactMarkdown>
+              </div>
             )}
           </>
         ) : (

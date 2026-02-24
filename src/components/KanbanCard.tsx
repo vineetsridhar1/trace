@@ -1,4 +1,6 @@
 import { memo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { KanbanTicket } from '../types';
 import { formatTime } from '../utils';
 import { CopyableBranch } from './CopyableBranch';
@@ -27,14 +29,16 @@ export const KanbanCard = memo(function KanbanCard({
       <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]">{ticket.title}</h4>
 
       {ticket.description && (
-        <p className="mt-1 line-clamp-2 text-xs text-[#565f89]">{ticket.description}</p>
+        <div className="markdown-body mt-1 line-clamp-2 text-xs text-[#565f89]">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.description}</ReactMarkdown>
+        </div>
       )}
 
       {ticket.solutionApproach && (
-        <p className="mt-1.5 line-clamp-1 text-xs text-[#7aa2f7]/70">
+        <div className="mt-1.5 line-clamp-1 text-xs text-[#7aa2f7]/70">
           <span className="mr-1">&#9672;</span>
-          {ticket.solutionApproach}
-        </p>
+          <span className="markdown-body inline"><ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.solutionApproach}</ReactMarkdown></span>
+        </div>
       )}
 
       {(() => {

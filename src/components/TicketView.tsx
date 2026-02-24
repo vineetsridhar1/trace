@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { KanbanTicket } from '../types';
 import { SERVER_URL } from '../types';
 import { ImageLightbox } from './ImageLightbox';
@@ -40,9 +42,9 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
           <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#565f89]">
             Description
           </h4>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#a9b1d6]">
-            {ticket.description}
-          </p>
+          <div className="markdown-body text-sm leading-relaxed text-[#a9b1d6]">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.description}</ReactMarkdown>
+          </div>
         </div>
       )}
 
@@ -51,9 +53,9 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
           <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#565f89]">
             Solution Approach
           </h4>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#a9b1d6]">
-            {ticket.solutionApproach}
-          </p>
+          <div className="markdown-body text-sm leading-relaxed text-[#a9b1d6]">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.solutionApproach}</ReactMarkdown>
+          </div>
         </div>
       )}
 
