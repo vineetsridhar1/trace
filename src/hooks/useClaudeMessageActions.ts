@@ -16,6 +16,7 @@ interface UseClaudeMessageActionsOptions {
   getCreationCommands: () => string[];
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
+  getSystemInstructions: () => string | undefined;
 }
 
 interface SpawnOptions {
@@ -27,6 +28,7 @@ interface SpawnOptions {
   filePaths?: string[];
   model?: string;
   effort?: string;
+  systemInstructions?: string;
 }
 
 export function useClaudeMessageActions({
@@ -42,6 +44,7 @@ export function useClaudeMessageActions({
   getCreationCommands,
   getChannelRepoPath,
   getChannelBaseBranch,
+  getSystemInstructions,
 }: UseClaudeMessageActionsOptions) {
   const spawnedMessageIdsRef = useRef(new Set<string>());
   const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(
@@ -57,7 +60,7 @@ export function useClaudeMessageActions({
       spawnedMessageIdsRef.current.add(messageId);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort);
+        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions);
 
         if (!result.success) {
           spawnedMessageIdsRef.current.delete(messageId);
@@ -174,7 +177,7 @@ export function useClaudeMessageActions({
       if (!pendingRunMessageId || !editedPrompt) return;
 
       const prompt = planMode
-        ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${editedPrompt}`
+        ? `<trace-internal>\nBefore implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n</trace-internal>\n\n${editedPrompt}`
         : editedPrompt;
 
       const messageId = pendingRunMessageId;
@@ -190,6 +193,14 @@ export function useClaudeMessageActions({
       }
 
       await updatePreviewForPendingRun(messageId, editedPrompt);
+
+      const baseBranch = getChannelBaseBranch();
+      const userInstructions = getSystemInstructions();
+      const instructionParts = [
+        `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
+      ];
+      if (userInstructions) instructionParts.push(userInstructions);
+
       const success = await spawnClaudeForMessage(messageId, prompt, {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
@@ -197,13 +208,14 @@ export function useClaudeMessageActions({
         filePaths: filePaths.length > 0 ? filePaths : undefined,
         model: selectedModel,
         effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+        systemInstructions: instructionParts.join('\n\n'),
       });
 
       if (!success && creationCommands.length > 0) {
         await updateMessageStatus(messageId, 'pending');
       }
     },
-    [getCreationCommands, pendingRunMessageId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+    [getChannelBaseBranch, getCreationCommands, getSystemInstructions, pendingRunMessageId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
   );
 
   const stopClaude = useCallback(async () => {

@@ -17,6 +17,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
   const [draftBaseBranch, setDraftBaseBranch] = useState(channel.baseBranch ?? 'main');
   const [draftCreationScript, setDraftCreationScript] = useState(localConfig?.creationScript ?? '');
   const [draftScripts, setDraftScripts] = useState<DraftScript[]>([]);
+  const [draftSystemInstructions, setDraftSystemInstructions] = useState(localConfig?.systemInstructions ?? '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
     setDraftScripts(
       localConfig?.startupScripts?.map((s) => ({ name: s.name, command: s.command })) ?? [],
     );
+    setDraftSystemInstructions(localConfig?.systemInstructions ?? '');
   }, [channel, localConfig]);
 
   const addDraftScript = useCallback(() => {
@@ -51,6 +53,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
           localRepoPath: repoPath,
           creationScript: draftCreationScript.trim() || undefined,
           startupScripts: filteredScripts.length > 0 ? filteredScripts : undefined,
+          systemInstructions: draftSystemInstructions.trim() || undefined,
         };
       }
 
@@ -62,7 +65,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
     } finally {
       setSaving(false);
     }
-  }, [draftBaseBranch, draftCreationScript, draftScripts, localConfig, onSave, onClose]);
+  }, [draftBaseBranch, draftCreationScript, draftScripts, draftSystemInstructions, localConfig, onSave, onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -119,6 +122,22 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
               rows={3}
               style={{ fieldSizing: 'content' } as React.CSSProperties}
               className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono"
+            />
+          </div>
+
+          {/* System Instructions */}
+          <div>
+            <div className="mb-2">
+              <label className="text-xs font-medium text-[#565f89]">System Instructions</label>
+              <p className="text-[10px] text-[#3b4261]">Injected as hidden context into every new task</p>
+            </div>
+            <textarea
+              value={draftSystemInstructions}
+              onChange={(e) => setDraftSystemInstructions(e.target.value)}
+              placeholder={"e.g. This is a TypeScript monorepo. Always run tests with `npm test` from the root."}
+              rows={3}
+              style={{ fieldSizing: 'content' } as React.CSSProperties}
+              className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none"
             />
           </div>
 

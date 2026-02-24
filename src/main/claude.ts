@@ -38,6 +38,7 @@ export async function spawnClaude(
   filePaths?: string[],
   model?: string,
   effort?: string,
+  systemInstructions?: string,
 ): Promise<string> {
   const { worktreePath, created } = await ensureWorktree(messageId, repoPath);
 
@@ -58,18 +59,31 @@ export async function spawnClaude(
   const defaultBranch = `trace/${messageId.slice(0, 8)}`;
   const currentBranch = await getWorktreeBranch(messageId);
   let effectivePrompt = prompt;
-  if (!resumeSessionId && currentBranch === defaultBranch) {
-    effectivePrompt =
-      `<trace-internal>\n` +
-      `IMPORTANT: Before doing anything else, you must first rename the current git branch to reflect the user's intent.\n` +
-      `Current branch: ${currentBranch}\n` +
-      `Analyze the user's prompt below and create a short, descriptive kebab-case branch name (max 5 words, prefixed with "trace/").\n` +
-      `Examples: trace/fix-login-bug, trace/add-dark-mode, trace/refactor-auth-system\n` +
-      `Run this command FIRST before any other work:\n` +
-      `git branch -m <new-branch-name>\n\n` +
-      `After renaming the branch, proceed with the user's actual request below. Do NOT mention the branch rename to the user.\n` +
-      `</trace-internal>\n\n` +
-      prompt;
+  if (!resumeSessionId) {
+    const hiddenParts: string[] = [];
+
+    if (currentBranch === defaultBranch) {
+      hiddenParts.push(
+        `IMPORTANT: Before doing anything else, you must first rename the current git branch to reflect the user's intent.\n` +
+        `Current branch: ${currentBranch}\n` +
+        `Analyze the user's prompt below and create a short, descriptive kebab-case branch name (max 5 words, prefixed with "trace/").\n` +
+        `Examples: trace/fix-login-bug, trace/add-dark-mode, trace/refactor-auth-system\n` +
+        `Run this command FIRST before any other work:\n` +
+        `git branch -m <new-branch-name>\n\n` +
+        `After renaming the branch, proceed with the user's actual request below. Do NOT mention the branch rename to the user.`
+      );
+    }
+
+    hiddenParts.push(
+      `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
+      `Your work takes place in ${worktreePath} which is an isolated git worktree created for this task.`
+    );
+
+    if (systemInstructions) {
+      hiddenParts.push(systemInstructions);
+    }
+
+    effectivePrompt = `<trace-internal>\n${hiddenParts.join('\n\n')}\n</trace-internal>\n\n${prompt}`;
   }
 
   const existing = runningProcesses.get(messageId);
