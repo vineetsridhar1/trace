@@ -1,4 +1,6 @@
+import { FiX } from 'react-icons/fi';
 import { useTerminal } from '../hooks/useTerminal';
+import { Tooltip } from './Tooltip';
 import type { TerminalTab } from '../hooks/useStartupTerminals';
 import '@xterm/xterm/css/xterm.css';
 
@@ -52,38 +54,40 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
                 onClick={() => onSelectTab(t.terminalId)}
               >
                 <span className="truncate max-w-[120px]">{t.name}</span>
-                <button
-                  type="button"
-                  className="ml-0.5 shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-[#3b4261]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseTab(t.terminalId);
-                  }}
-                >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                    <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                  </svg>
-                </button>
+                <Tooltip text="Close tab">
+                  <button
+                    type="button"
+                    className="ml-0.5 shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-[#3b4261]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCloseTab(t.terminalId);
+                    }}
+                  >
+                    <FiX className="h-2 w-2" aria-hidden="true" />
+                  </button>
+                </Tooltip>
               </div>
             );
           })}
+          <Tooltip text="New terminal">
+            <button
+              type="button"
+              onClick={onAddTab}
+              className="shrink-0 rounded px-1.5 py-1 text-xs text-[#565f89] hover:bg-[#1f2335] hover:text-[#a9b1d6]"
+            >
+              +
+            </button>
+          </Tooltip>
+        </div>
+        <Tooltip text="Close all terminals">
           <button
             type="button"
-            onClick={onAddTab}
-            className="shrink-0 rounded px-1.5 py-1 text-xs text-[#565f89] hover:bg-[#1f2335] hover:text-[#a9b1d6]"
-            title="New terminal"
+            onClick={onCloseAll}
+            className="shrink-0 rounded px-2 py-1 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
           >
-            +
+            Close All
           </button>
-        </div>
-        <button
-          type="button"
-          onClick={onCloseAll}
-          className="shrink-0 rounded px-2 py-1 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
-          title="Close all terminals"
-        >
-          Close All
-        </button>
+        </Tooltip>
       </div>
 
       {/* Terminal content -- all mounted, visibility toggled via CSS */}

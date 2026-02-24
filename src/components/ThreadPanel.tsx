@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FiCheck, FiGitMerge, FiMap, FiMaximize2, FiMinimize2, FiPlay, FiSend, FiTrash2, FiX } from "react-icons/fi";
+import { Tooltip } from "./Tooltip";
 import type {
   AskUserQuestionNode,
   DragTarget,
@@ -339,16 +341,7 @@ function StickyTodoList({
                 />
               </svg>
             ) : t.status === "completed" ? (
-              <svg
-                className="h-3 w-3 flex-shrink-0 text-green-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                aria-hidden="true"
-              >
-                <path d="M5 13l4 4L19 7" />
-              </svg>
+              <FiCheck className="h-3 w-3 flex-shrink-0 text-green-400" aria-hidden="true" />
             ) : (
               <span className="flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-[#565f89]" />
             )}
@@ -482,128 +475,77 @@ function ThreadHeader({
       </div>
       <div className="flex items-center gap-2">
         {hasWorktree === true && scriptsAvailable && (
-          <button
-            type="button"
-            title="Run startup scripts in this worktree"
-            onClick={onRunScripts}
-            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="mx-auto h-3.5 w-3.5"
-              fill="currentColor"
-              aria-hidden="true"
+          <Tooltip text="Run startup scripts" position="bottom">
+            <button
+              type="button"
+              onClick={onRunScripts}
+              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300"
             >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </button>
+              <FiPlay className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
         {hasWorktree === true && !isFullscreen && onEnterFullscreen && (
-          <button
-            type="button"
-            title="Open fullscreen view"
-            onClick={onEnterFullscreen}
-            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="mx-auto h-3.5 w-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
+          <Tooltip text="Fullscreen" position="bottom">
+            <button
+              type="button"
+              onClick={onEnterFullscreen}
+              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
             >
-              <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-              <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-              <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-              <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-            </svg>
-          </button>
+              <FiMaximize2 className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
         {isFullscreen && onExitFullscreen && (
-          <button
-            type="button"
-            title="Exit fullscreen"
-            onClick={onExitFullscreen}
-            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="mx-auto h-3.5 w-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
+          <Tooltip text="Exit fullscreen" position="bottom">
+            <button
+              type="button"
+              onClick={onExitFullscreen}
+              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
             >
-              <path d="M4 14h6v6" />
-              <path d="M20 10h-6V4" />
-              <path d="M14 10l7-7" />
-              <path d="M3 21l7-7" />
-            </svg>
-          </button>
+              <FiMinimize2 className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
         {hasWorktree === true && messageStatus === "in_progress" && (
           <button
             id="thread-merge-to-main"
             type="button"
-            title="Merge worktree branch to main and push"
             disabled={!selectedMessageId}
             onClick={onMergeToMain}
             className="h-7 cursor-pointer rounded-md border border-[#292e42] px-2 text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span className="flex items-center gap-1">
-              <svg
-                viewBox="0 0 24 24"
-                className="h-3.5 w-3.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <circle cx="18" cy="6" r="3" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M6 15V9a6 6 0 0 1 6-6h3" />
-                <path d="M15 3l3 3-3 3" />
-              </svg>
+              <FiGitMerge className="h-3.5 w-3.5" aria-hidden="true" />
               Merge
             </span>
           </button>
         )}
         {hasWorktree === true && (
-          <button
-            id="thread-delete-worktree"
-            type="button"
-            title="Delete worktree for this thread"
-            disabled={!selectedMessageId || deletingWorktree}
-            onClick={onDeleteWorktree}
-            className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="mx-auto h-3.5 w-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
+          <Tooltip text="Delete worktree" position="bottom">
+            <button
+              id="thread-delete-worktree"
+              type="button"
+              disabled={!selectedMessageId || deletingWorktree}
+              onClick={onDeleteWorktree}
+              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <path d="M3 6h18" />
-              <path d="M8 6V4h8v2" />
-              <path d="M6 6l1 14h10l1-14" />
-              <path d="M10 10v7" />
-              <path d="M14 10v7" />
-            </svg>
-          </button>
+              <FiTrash2 className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
-        <button
-          id="thread-close"
-          type="button"
-          onClick={
-            isFullscreen && onExitFullscreen ? onExitFullscreen : onClose
-          }
-          className="cursor-pointer text-xl leading-none text-[#565f89] hover:text-[#c0caf5]"
-        >
-          &times;
-        </button>
+        <Tooltip text="Close thread" position="bottom">
+          <button
+            id="thread-close"
+            type="button"
+            onClick={
+              isFullscreen && onExitFullscreen ? onExitFullscreen : onClose
+            }
+            className="cursor-pointer text-[#565f89] hover:text-[#c0caf5]"
+          >
+            <FiX className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -642,40 +584,26 @@ function PlanModeToggle({
   onToggle: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      title={active ? "Plan mode on (click to disable)" : "Enable plan mode"}
-      className={`flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-200 ${
-        active
-          ? "border-violet-500 bg-violet-500/20 text-violet-300"
-          : "border-[#292e42] bg-[#1a1b26] text-[#565f89] hover:border-[#3b3f5c] hover:text-[#a9b1d6]"
-      }`}
-    >
-      <svg
-        className="h-3.5 w-3.5 flex-shrink-0"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3" />
-        <path d="M12 22v-5" />
-        <path d="M17 22v-3" />
-        <path d="m15 17 2-5 2 5" />
-        <path d="M15.1 19.9h3.8" />
-      </svg>
-      <span
-        className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${
-          active ? "ml-1 max-w-[36px] opacity-100" : "max-w-0 opacity-0"
+    <Tooltip text={active ? "Plan mode on" : "Plan mode"}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium transition-all duration-200 ${
+          active
+            ? "border-violet-500 bg-violet-500/20 text-violet-300"
+            : "border-[#292e42] bg-[#1a1b26] text-[#565f89] hover:border-[#3b3f5c] hover:text-[#a9b1d6]"
         }`}
       >
-        Plan
-      </span>
-    </button>
+        <FiMap className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+        <span
+          className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${
+            active ? "ml-1 max-w-[36px] opacity-100" : "max-w-0 opacity-0"
+          }`}
+        >
+          Plan
+        </span>
+      </button>
+    </Tooltip>
   );
 }
 
@@ -713,7 +641,7 @@ function RunButtons({
             onRun(planMode, prompt);
           }
         }}
-        className="mb-2 w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+        className="mb-2 w-full resize-none rounded-md border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
       />
       <div className="mb-2 flex items-center gap-1.5">
         <ModelEffortSelector
@@ -730,7 +658,7 @@ function RunButtons({
       <button
         type="button"
         onClick={() => onRun(planMode, prompt)}
-        className="w-full cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+        className="w-full cursor-pointer rounded-md bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
       >
         Run
       </button>
@@ -880,7 +808,7 @@ function ThreadInput({
         </div>
       )}
       <div className="flex items-end gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex flex-col flex-1">
           <SlashCommandMenu
             isOpen={slashCommands.isOpen}
             commands={slashCommands.filteredCommands}
@@ -910,46 +838,38 @@ function ThreadInput({
             placeholder={
               isClaudeRunning ? "Waiting for Claude..." : "Send to Claude..."
             }
-            className={`w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? "opacity-50 cursor-not-allowed" : ""}`}
+            className={`w-full resize-none rounded-md border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? "opacity-50 cursor-not-allowed" : ""}`}
           />
         </div>
         {isClaudeRunning ? (
-          <button
-            id="thread-stop"
-            type="button"
-            onClick={onStopClaude}
-            title="Stop Claude"
-            className="cursor-pointer rounded-lg bg-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="currentColor"
-              aria-hidden="true"
+          <Tooltip text="Stop Claude">
+            <button
+              id="thread-stop"
+              type="button"
+              onClick={onStopClaude}
+              className="h-[38px] cursor-pointer rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
             >
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+            </button>
+          </Tooltip>
         ) : (
-          <button
-            id="thread-send"
-            type="button"
-            onClick={() => void handleSendThreadMessage()}
-            title="Send"
-            className="cursor-pointer rounded-lg bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
+          <Tooltip text="Send message">
+            <button
+              id="thread-send"
+              type="button"
+              onClick={() => void handleSendThreadMessage()}
+              className="h-[38px] cursor-pointer rounded-md bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
             >
-              <path d="M22 2L11 13" />
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-            </svg>
-          </button>
+              <FiSend className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </Tooltip>
         )}
       </div>
       {!isClaudeRunning && (

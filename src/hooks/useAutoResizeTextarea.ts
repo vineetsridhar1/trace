@@ -16,13 +16,9 @@ export function useAutoResizeTextarea(
 
   const measure = useCallback(
     (el: HTMLTextAreaElement) => {
-      const nextValue = valueRef.current;
-      if (!nextValue) {
-        el.style.height = '';
-        return;
-      }
       el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+      const border = el.offsetHeight - el.clientHeight;
+      el.style.height = `${Math.min(el.scrollHeight + border, maxHeight)}px`;
     },
     [maxHeight],
   );

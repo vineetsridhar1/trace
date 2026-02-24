@@ -24,7 +24,7 @@ export const KanbanCard = memo(function KanbanCard({
         onDragStart(ticket.id);
       }}
       onClick={() => onClickTicket(ticket.messageId)}
-      className="group cursor-pointer rounded-lg border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
+      className="group cursor-pointer rounded-md border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
     >
       <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]">{ticket.title}</h4>
 

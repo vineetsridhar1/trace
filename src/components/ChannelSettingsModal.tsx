@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { FiX } from 'react-icons/fi';
+import { Tooltip } from './Tooltip';
 import type { Channel, LocalChannelConfig } from '../types';
 
 interface DraftScript {
@@ -72,11 +74,11 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
       >
         <div className="flex items-center justify-between border-b border-[#292e42] px-5 py-3">
           <h2 className="text-sm font-semibold text-[#c0caf5]">Channel Settings — #{channel.name}</h2>
-          <button type="button" onClick={onClose} className="text-[#565f89] hover:text-[#c0caf5]">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+          <Tooltip text="Close" position="bottom">
+            <button type="button" onClick={onClose} className="text-[#565f89] hover:text-[#c0caf5]">
+              <FiX className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
         </div>
 
         <div className="space-y-5 px-5 py-4">
@@ -165,9 +167,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
                     onClick={() => removeDraftScript(index)}
                     className="shrink-0 rounded p-1.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
                   >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 2l8 8M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
+                    <FiX className="h-3 w-3" aria-hidden="true" />
                   </button>
                 </div>
               ))}
