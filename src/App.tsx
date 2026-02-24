@@ -312,6 +312,9 @@ export default function App() {
       .filter(Boolean);
   }, [enrichedActiveChannel]);
 
+  const activeSystemInstructions = activeChannelId ? localConfigs[activeChannelId]?.systemInstructions : undefined;
+  const getSystemInstructions = useCallback((): string | undefined => activeSystemInstructions, [activeSystemInstructions]);
+
   const claudeActions = useClaudeMessageActions({
     activeChannelId,
     selectedMessageId,
@@ -325,6 +328,7 @@ export default function App() {
     getCreationCommands,
     getChannelRepoPath,
     getChannelBaseBranch,
+    getSystemInstructions,
   });
 
   const claudeActionsContextValue = useMemo(

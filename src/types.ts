@@ -15,6 +15,7 @@ export interface LocalChannelConfig {
   localRepoPath: string;
   creationScript?: string;
   startupScripts?: { name: string; command: string }[];
+  systemInstructions?: string;
 }
 
 export interface TraceAPI {
@@ -27,6 +28,7 @@ export interface TraceAPI {
     filePaths?: string[],
     model?: string,
     effort?: string,
+    systemInstructions?: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   stopClaude: (
     messageId: string,
