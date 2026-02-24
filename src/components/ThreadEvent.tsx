@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import type { ServerEvent, PlanReviewNode } from '../types';
 import { extractPromptText, formatTime, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath, stripTraceInternal } from '../utils';
 import { EditDiffPreview } from './EditDiffPreview';
+import { SyntaxHighlightedCode } from './SyntaxHighlight';
 
 function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: number }) {
   const innerRef = useRef<HTMLDivElement>(null);
@@ -103,14 +104,16 @@ function WriteCodePreview({ event }: { event: ServerEvent }) {
 
   if (!content) return null;
 
+  const truncated = content.length > 5000 ? `${content.slice(0, 5000)}...` : content;
+
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-[#3b3f5c]">
       <div className="border-b border-[#3b3f5c] bg-[#1a1b26] px-2 py-1 text-[11px] font-semibold text-[#a9b1d6]">
         {displayPath}
       </div>
-      <pre className="max-h-[340px] overflow-auto bg-[#16161e] p-2 font-mono text-xs leading-relaxed text-[#c0caf5]">
-        {content.length > 5000 ? `${content.slice(0, 5000)}...` : content}
-      </pre>
+      <div className="bg-[#16161e]">
+        <SyntaxHighlightedCode code={truncated} filePath={rawPath} />
+      </div>
     </div>
   );
 }
