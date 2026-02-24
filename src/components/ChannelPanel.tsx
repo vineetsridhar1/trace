@@ -47,9 +47,8 @@ export function ChannelPanel({
         <div id="channel-items" className="flex-1 overflow-y-auto px-2 py-1">
           {channels.map((channel) => {
             const isActive = channel.id === activeChannelId;
-            const hasScriptSetup = !!channel.localRepoPath;
             return (
-              <div key={channel.id} className="group my-0.5 flex items-center">
+              <div key={channel.id} className="my-0.5 flex items-center">
                 <button
                   type="button"
                   onClick={() => onSwitchChannel(channel.id)}
@@ -60,45 +59,6 @@ export function ChannelPanel({
                   <span className="text-xs text-[#565f89]">#</span>
                   <span className="truncate">{channel.name}</span>
                 </button>
-                <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {hasScriptSetup && (
-                    <button
-                      type="button"
-                      title="Run startup scripts"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRunStartupScripts(channel.id);
-                      }}
-                      className="rounded p-1 text-[#565f89] hover:bg-[#292e42] hover:text-[#9ece6a]"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2.5 1.5l7 4.5-7 4.5V1.5z" fill="currentColor" />
-                      </svg>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    title="Channel settings"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenSettings(channel.id);
-                    }}
-                    className="rounded p-1 text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path
-                        d="M6 7.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
-                        stroke="currentColor"
-                        strokeWidth="1"
-                      />
-                      <path
-                        d="M10.2 7.4l-.7-.4a.5.5 0 01-.2-.6l.3-.8a.5.5 0 00-.1-.5l-.6-.6a.5.5 0 00-.5-.1l-.8.3a.5.5 0 01-.6-.2l-.4-.7a.5.5 0 00-.4-.3h-.8a.5.5 0 00-.4.3l-.4.7a.5.5 0 01-.6.2l-.8-.3a.5.5 0 00-.5.1l-.6.6a.5.5 0 00-.1.5l.3.8a.5.5 0 01-.2.6l-.7.4a.5.5 0 00-.3.4v.8a.5.5 0 00.3.4l.7.4a.5.5 0 01.2.6l-.3.8a.5.5 0 00.1.5l.6.6a.5.5 0 00.5.1l.8-.3a.5.5 0 01.6.2l.4.7a.5.5 0 00.4.3h.8a.5.5 0 00.4-.3l.4-.7a.5.5 0 01.6-.2l.8.3a.5.5 0 00.5-.1l.6-.6a.5.5 0 00.1-.5l-.3-.8a.5.5 0 01.2-.6l.7-.4a.5.5 0 00.3-.4v-.8a.5.5 0 00-.3-.4z"
-                        stroke="currentColor"
-                        strokeWidth="1"
-                      />
-                    </svg>
-                  </button>
-                </div>
               </div>
             );
           })}
