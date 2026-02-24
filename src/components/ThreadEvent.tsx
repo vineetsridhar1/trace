@@ -378,21 +378,19 @@ export function PlanReview({ node }: { node: PlanReviewNode }) {
   const time = formatTime(node.event.timestamp);
 
   return (
-    <div className="thread-bubble flex justify-start">
-      <div className="w-full max-w-[95%] rounded-xl border border-violet-500/30 bg-[#1f2335] px-4 py-3">
-        <div className="mb-2 flex items-center gap-2">
-          <span className="text-xs font-semibold text-violet-300">Plan Review</span>
-          <span className="text-xs text-[#565f89]">{time}</span>
-        </div>
-
-        {node.planContent ? (
-          <div className="markdown-body max-h-[500px] overflow-y-auto rounded-md border border-[#292e42] bg-[#16161e] p-3 text-sm text-[#c0caf5]">
-            <ReactMarkdown>{node.planContent}</ReactMarkdown>
-          </div>
-        ) : (
-          <div className="text-sm text-[#565f89]">No plan content available.</div>
-        )}
+    <div className="px-4 py-2">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-xs font-semibold text-violet-300">Plan Review</span>
+        <span className="text-xs text-[#565f89]">{time}</span>
       </div>
+
+      {node.planContent ? (
+        <div className="markdown-body text-sm text-[#c0caf5]">
+          <ReactMarkdown>{node.planContent}</ReactMarkdown>
+        </div>
+      ) : (
+        <div className="text-sm text-[#565f89]">No plan content available.</div>
+      )}
     </div>
   );
 }
