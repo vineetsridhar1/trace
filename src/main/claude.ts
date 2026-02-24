@@ -106,7 +106,11 @@ export async function spawnClaude(
       : combined.slice(combined.length - MAX_CAPTURE_CHARS);
   };
 
-  const postSyntheticStopEvent = async (assistantText: string, exitCode: number | null) => {
+  const postSyntheticStopEvent = async (
+    assistantText: string,
+    exitCode: number | null,
+    stopReason?: string,
+  ) => {
     const payload = {
       session_id: `trace-local-${messageId}`,
       cwd: worktreePath,
@@ -115,6 +119,7 @@ export async function spawnClaude(
       last_assistant_message: assistantText,
       source: 'electron-main',
       exit_code: exitCode,
+      ...(stopReason && { stop_reason: stopReason }),
     };
 
     try {
@@ -163,6 +168,7 @@ export async function spawnClaude(
     const runState = runStateByMessageId.get(messageId);
     const timedOut = runState?.timedOut ?? false;
     const hookStopReceived = runState?.hookStopReceived ?? false;
+    const userStopped = runState?.userStopped ?? false;
     stopWatchdog(messageId, 'process-close');
     runStateByMessageId.delete(messageId);
 
@@ -172,6 +178,11 @@ export async function spawnClaude(
     const shouldPostSyntheticStop = !suppressed && !hookStopReceived;
 
     if (!shouldPostSyntheticStop) return;
+
+    if (userStopped) {
+      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user');
+      return;
+    }
 
     const fallbackMessage = [
       assistantOutput,

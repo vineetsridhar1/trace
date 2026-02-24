@@ -304,19 +304,32 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
 }
 
 function StopBubble({ event, time }: { event: ServerEvent; time: string }) {
-  return (
-    <div className="thread-bubble flex justify-start">
-      <div className="max-w-[85%] rounded-xl rounded-bl-sm border border-[#292e42] bg-[#1f2335] px-3 py-2">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="text-xs font-semibold text-violet-300">Claude</span>
-          <span className="ml-auto text-xs text-[#565f89]">{time}</span>
+  const message = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage) : '';
+  const stopReason = (event.rawPayload as Record<string, unknown>)?.stop_reason;
+  const isUserStop = stopReason === 'user';
+  const displayMessage = message || 'Claude completed the run.';
+
+  if (isUserStop) {
+    return (
+      <div className="activity-row">
+        <div className="activity-row-header">
+          <span className="activity-row-icon text-red-400">&#9632;</span>
+          <span className="activity-row-title text-red-300">Stopped by user</span>
+          <span className="activity-row-time">{time}</span>
         </div>
-        {event.lastAssistantMessage ? (
-          <ExpandableText text={stripTraceInternal(event.lastAssistantMessage)} lineClamp={4} />
-        ) : (
-          <div className="text-sm text-[#565f89]">Claude completed the run.</div>
-        )}
-        <div className="mt-2 text-[11px] tracking-wide text-[#565f89] uppercase">Stop hook</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="activity-row">
+      <div className="activity-row-header">
+        <span className="activity-row-icon">&#9632;</span>
+        <span className="activity-row-title">Run ended</span>
+        <span className="activity-row-time">{time}</span>
+      </div>
+      <div className="activity-row-note">
+        <ExpandableText text={displayMessage} lineClamp={4} />
       </div>
     </div>
   );

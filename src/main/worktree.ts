@@ -85,6 +85,10 @@ export function stopClaudeProcess(messageId: string): { stopped: boolean } {
     return { stopped: false };
   }
 
+  const state = runStateByMessageId.get(messageId);
+  if (state) {
+    state.userStopped = true;
+  }
   stopWatchdog(messageId, 'user-stop');
   existing.kill('SIGTERM');
   return { stopped: true };

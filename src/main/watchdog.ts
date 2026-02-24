@@ -15,6 +15,7 @@ export interface ClaudeRunState {
   stopped: boolean;
   timedOut: boolean;
   hookStopReceived: boolean;
+  userStopped: boolean;
 }
 
 export const runStateByMessageId = new Map<string, ClaudeRunState>();
@@ -90,6 +91,7 @@ export function startWatchdog(messageId: string, child: ChildProcess) {
     stopped: false,
     timedOut: false,
     hookStopReceived: false,
+    userStopped: false,
   });
 
   appendClaudeDebugLog(
