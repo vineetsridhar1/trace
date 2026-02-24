@@ -267,7 +267,9 @@ export async function ingestEvent(payload: HookEvent) {
       ? payload.last_assistant_message.slice(0, 500)
       : null;
   const branchName =
-    !message.branch && payload.cwd ? resolveGitBranch(payload.cwd) : null;
+    payload.cwd && (payload.hook_event_name === 'Stop' || !message.branch)
+      ? resolveGitBranch(payload.cwd)
+      : null;
 
   if (summaryText || branchName) {
     await updateMessageSummaryAndBranch(message.id, summaryText, branchName);
