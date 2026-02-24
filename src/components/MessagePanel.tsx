@@ -1,4 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FiMessageSquare, FiSend, FiSettings } from 'react-icons/fi';
+import { Tooltip } from './Tooltip';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
@@ -125,17 +127,15 @@ export function MessagePanel({
               Workspaces
             </button>
           </div>
-          <button
-            type="button"
-            title="Channel settings"
-            onClick={onOpenSettings}
-            className="cursor-pointer rounded p-1 text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5] transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h.08a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.08a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-            </svg>
-          </button>
+          <Tooltip text="Channel settings" position="bottom">
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="cursor-pointer rounded p-1 text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5] transition-colors"
+            >
+              <FiSettings className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -182,16 +182,7 @@ export function MessagePanel({
 function ChatPlaceholder() {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4">
-      <svg
-        viewBox="0 0 24 24"
-        className="h-12 w-12 text-[#565f89]"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        aria-hidden="true"
-      >
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
+      <FiMessageSquare className="h-12 w-12 text-[#565f89]" aria-hidden="true" />
       <h3 className="text-sm font-semibold text-[#565f89]">Team Chat</h3>
       <p className="text-xs text-[#565f89]">Coming soon</p>
     </div>
@@ -234,7 +225,7 @@ function MessageInput() {
         </div>
       )}
       <div className="flex items-end gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex flex-col flex-1">
           <SlashCommandMenu
             isOpen={slashCommands.isOpen}
             commands={slashCommands.filteredCommands}
@@ -256,17 +247,19 @@ function MessageInput() {
               }
             }}
             placeholder="Create a workspace..."
-            className="w-full resize-none rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+            className="w-full resize-none rounded-md border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
           />
         </div>
-        <button
-          id="message-send"
-          type="button"
-          onClick={() => void handleSendMessage()}
-          className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
-        >
-          Send
-        </button>
+        <Tooltip text="Send">
+          <button
+            id="message-send"
+            type="button"
+            onClick={() => void handleSendMessage()}
+            className="h-[38px] cursor-pointer rounded-md bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+          >
+            <FiSend className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

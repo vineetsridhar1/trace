@@ -1,4 +1,6 @@
 import type { KeyboardEvent } from 'react';
+import { FiChevronLeft, FiChevronRight, FiSend, FiX } from 'react-icons/fi';
+import { Tooltip } from './Tooltip';
 import type { AskUserQuestionNode } from '../types';
 import { useQuestionState } from '../hooks/useQuestionState';
 import { QuestionOptionPill } from './QuestionOptionPill';
@@ -65,14 +67,15 @@ export function AskUserQuestionBar({
             {question.question}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          title="Dismiss and stop Claude"
-          className="flex-shrink-0 cursor-pointer text-lg leading-none text-[#565f89] transition-colors hover:text-red-400"
-        >
-          &times;
-        </button>
+        <Tooltip text="Dismiss">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex-shrink-0 cursor-pointer text-[#565f89] transition-colors hover:text-red-400"
+          >
+            <FiX className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Option pills */}
@@ -97,48 +100,44 @@ export function AskUserQuestionBar({
           onChange={(e) => setCustomText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Other..."
-          className="min-w-0 flex-1 rounded-lg border border-[#292e42] bg-[#16161e] px-2.5 py-1.5 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500"
+          className="min-w-0 flex-1 rounded-md border border-[#292e42] bg-[#16161e] px-2.5 py-1.5 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500"
         />
 
         {total > 1 && (
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={goPrev}
-              disabled={isFirstPage}
-              title="Previous question"
-              className="cursor-pointer rounded-md border border-[#292e42] px-2 py-1.5 text-xs text-[#a9b1d6] transition-colors hover:border-[#3b3f5c] disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={isLastPage}
-              title="Next question"
-              className="cursor-pointer rounded-md border border-[#292e42] px-2 py-1.5 text-xs text-[#a9b1d6] transition-colors hover:border-[#3b3f5c] disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </button>
+            <Tooltip text="Previous question">
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={isFirstPage}
+                className="cursor-pointer rounded-md border border-[#292e42] px-2 py-1.5 text-xs text-[#a9b1d6] transition-colors hover:border-[#3b3f5c] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <FiChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </Tooltip>
+            <Tooltip text="Next question">
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={isLastPage}
+                className="cursor-pointer rounded-md border border-[#292e42] px-2 py-1.5 text-xs text-[#a9b1d6] transition-colors hover:border-[#3b3f5c] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <FiChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
         )}
 
-        <button
-          type="button"
-          disabled={!hasAnyAnswer}
-          onClick={handleSubmit}
-          title="Send answers"
-          className="cursor-pointer rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M22 2L11 13" />
-            <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-          </svg>
-        </button>
+        <Tooltip text="Send answers">
+          <button
+            type="button"
+            disabled={!hasAnyAnswer}
+            onClick={handleSubmit}
+            className="cursor-pointer rounded-md bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <FiSend className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

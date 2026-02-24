@@ -1,4 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
+import { FiSend, FiX } from 'react-icons/fi';
+import { Tooltip } from './Tooltip';
 import type { PlanReviewNode } from '../types';
 import { QuestionOptionPill } from './QuestionOptionPill';
 
@@ -52,14 +54,15 @@ export function PlanResponseBar({
             Plan Review
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          title="Dismiss and stop Claude"
-          className="flex-shrink-0 cursor-pointer text-lg leading-none text-[#565f89] transition-colors hover:text-red-400"
-        >
-          &times;
-        </button>
+        <Tooltip text="Dismiss">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex-shrink-0 cursor-pointer text-[#565f89] transition-colors hover:text-red-400"
+          >
+            <FiX className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Approval pills */}
@@ -90,15 +93,15 @@ export function PlanResponseBar({
           }}
           onKeyDown={handleKeyDown}
           placeholder="Suggest changes to revise the plan..."
-          className="min-w-0 flex-1 rounded-lg border border-[#292e42] bg-[#16161e] px-2.5 py-1.5 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500"
+          className="min-w-0 flex-1 rounded-md border border-[#292e42] bg-[#16161e] px-2.5 py-1.5 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500"
         />
         <button
           type="button"
           disabled={!hasAnswer}
           onClick={handleSubmit}
-          title={selected ? 'Approve and execute the plan' : 'Revise the plan with feedback'}
-          className="cursor-pointer rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex items-center gap-1.5 cursor-pointer rounded-md bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
+          <FiSend className="h-3.5 w-3.5" aria-hidden="true" />
           {selected ? 'Approve' : 'Revise'}
         </button>
       </div>

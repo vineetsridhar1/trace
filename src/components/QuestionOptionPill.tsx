@@ -21,7 +21,7 @@ export function QuestionOptionPill({
       type="button"
       title={description}
       onClick={onClick}
-      className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+      className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
         selected
           ? 'border-violet-500 bg-violet-500/20 text-violet-200'
           : 'border-[#292e42] bg-[#1a1b26] text-[#a9b1d6] hover:border-[#3b3f5c] hover:bg-[#1f2335]'

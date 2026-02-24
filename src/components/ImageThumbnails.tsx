@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { FiX } from 'react-icons/fi';
+import { Tooltip } from './Tooltip';
 import type { AttachedImage } from '../hooks/useImageAttachments';
 import { ImageLightbox } from './ImageLightbox';
 
@@ -28,15 +30,15 @@ export function ImageThumbnails({ images, onRemove }: ImageThumbnailsProps) {
                 className="h-full w-full object-cover"
               />
             </button>
-            <button
-              type="button"
-              onClick={() => onRemove(img.id)}
-              className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#292e42] text-[#565f89] opacity-0 transition-opacity hover:bg-red-500/80 hover:text-white group-hover:opacity-100"
-            >
-              <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M2 2l8 8M10 2l-8 8" />
-              </svg>
-            </button>
+            <Tooltip text="Remove" position="bottom">
+              <button
+                type="button"
+                onClick={() => onRemove(img.id)}
+                className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#292e42] text-[#565f89] opacity-0 transition-opacity hover:bg-red-500/80 hover:text-white group-hover:opacity-100"
+              >
+                <FiX className="h-2.5 w-2.5" aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
         ))}
       </div>
