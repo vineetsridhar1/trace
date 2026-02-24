@@ -106,7 +106,11 @@ export async function spawnClaude(
       : combined.slice(combined.length - MAX_CAPTURE_CHARS);
   };
 
-  const postSyntheticStopEvent = async (assistantText: string, exitCode: number | null) => {
+  const postSyntheticStopEvent = async (
+    assistantText: string,
+    exitCode: number | null,
+    stopReason?: string,
+  ) => {
     const payload = {
       session_id: `trace-local-${messageId}`,
       cwd: worktreePath,
@@ -115,6 +119,7 @@ export async function spawnClaude(
       last_assistant_message: assistantText,
       source: 'electron-main',
       exit_code: exitCode,
+      ...(stopReason && { stop_reason: stopReason }),
     };
 
     try {
@@ -174,20 +179,23 @@ export async function spawnClaude(
 
     if (!shouldPostSyntheticStop) return;
 
+    if (userStopped) {
+      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user');
+      return;
+    }
+
     const fallbackMessage = [
       assistantOutput,
       timedOut ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.` : '',
       failedToSpawn ? `Spawn error: ${failedToSpawn}` : '',
-      userStopped ? '' : stderrOutput,
-      !userStopped && code !== 0 && code !== null ? `Process exited with code ${code}` : '',
+      stderrOutput,
+      code !== 0 && code !== null ? `Process exited with code ${code}` : '',
     ]
       .filter(Boolean)
       .join('\n\n')
       .trim();
 
-    const messageToPersist = userStopped
-      ? (assistantOutput || 'Stopped by user')
-      : (fallbackMessage || 'Claude run completed without textual output.');
+    const messageToPersist = fallbackMessage || 'Claude run completed without textual output.';
     await postSyntheticStopEvent(messageToPersist, code);
   });
 

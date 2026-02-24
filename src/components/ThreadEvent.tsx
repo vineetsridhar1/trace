@@ -291,7 +291,8 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
 
 function StopBubble({ event, time }: { event: ServerEvent; time: string }) {
   const message = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage) : '';
-  const isUserStop = message === 'Stopped by user';
+  const stopReason = (event.rawPayload as Record<string, unknown>)?.stop_reason;
+  const isUserStop = stopReason === 'user';
   const displayMessage = message || 'Claude completed the run.';
 
   if (isUserStop) {
