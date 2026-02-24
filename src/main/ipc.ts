@@ -43,9 +43,9 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(ALLOCATE_PORTS_CHANNEL);
   ipcMain.removeHandler(RELEASE_PORTS_CHANNEL);
 
-  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, creationCommands?: string[]) => {
+  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, creationCommands?: string[], resumeSessionId?: string) => {
     try {
-      const worktreePath = await spawnClaude(messageId, prompt, creationCommands);
+      const worktreePath = await spawnClaude(messageId, prompt, creationCommands, resumeSessionId);
       return { success: true, worktreePath };
     } catch (err) {
       console.error('Failed to spawn claude:', err);

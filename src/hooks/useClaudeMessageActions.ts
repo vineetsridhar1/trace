@@ -21,6 +21,7 @@ interface SpawnOptions {
   errorPrefix: string;
   setHasWorktreeOnSuccess?: boolean;
   creationCommands?: string[];
+  resumeSessionId?: string;
 }
 
 export function useClaudeMessageActions({
@@ -45,7 +46,7 @@ export function useClaudeMessageActions({
     async (messageId: string, prompt: string, options: SpawnOptions) => {
       spawnedMessageIdsRef.current.add(messageId);
       try {
-        const result = await window.traceAPI.spawnClaude(messageId, prompt, options.creationCommands);
+        const result = await window.traceAPI.spawnClaude(messageId, prompt, options.creationCommands, options.resumeSessionId);
 
         if (!result.success) {
           spawnedMessageIdsRef.current.delete(messageId);
@@ -210,6 +211,7 @@ export function useClaudeMessageActions({
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
         creationCommands: getCreationCommands(),
+        resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
       });
       return true;
     },
@@ -231,6 +233,7 @@ export function useClaudeMessageActions({
 
       await spawnClaudeForMessage(selectedMessage.id, claudePrompt ?? trimmed, {
         errorPrefix: 'Failed to spawn claude for plan response',
+        resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
       });
     },
     [activeChannelId, persistPrompt, selectedMessageRef, spawnClaudeForMessage],

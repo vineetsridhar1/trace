@@ -61,7 +61,7 @@ export function AskUserQuestionBar({
               </span>
             )}
           </div>
-          <div className="mt-0.5 line-clamp-2 text-sm text-[#c0caf5]">
+          <div className="mt-0.5 max-h-24 overflow-y-auto text-sm text-[#c0caf5]">
             {question.question}
           </div>
         </div>

@@ -33,6 +33,7 @@ export async function spawnClaude(
   messageId: string,
   prompt: string,
   creationCommands?: string[],
+  resumeSessionId?: string,
 ): Promise<string> {
   const { worktreePath, created } = await ensureWorktree(messageId);
 
@@ -49,10 +50,11 @@ export async function spawnClaude(
 
   // If this is the first spawn (branch still has the default UUID name),
   // inject a hidden instruction asking Claude to rename the branch based on intent.
+  // Skip when resuming a session — the branch was already renamed on the first spawn.
   const defaultBranch = `trace/${messageId.slice(0, 8)}`;
   const currentBranch = await getWorktreeBranch(messageId);
   let effectivePrompt = prompt;
-  if (currentBranch === defaultBranch) {
+  if (!resumeSessionId && currentBranch === defaultBranch) {
     effectivePrompt =
       `<trace-internal>\n` +
       `IMPORTANT: Before doing anything else, you must first rename the current git branch to reflect the user's intent.\n` +
@@ -75,7 +77,13 @@ export async function spawnClaude(
     runningProcesses.delete(messageId);
   }
 
-  const child = spawn('claude', ['--dangerously-skip-permissions', '-p', effectivePrompt], {
+  const args = ['--dangerously-skip-permissions'];
+  if (resumeSessionId) {
+    args.push('--resume', resumeSessionId);
+  }
+  args.push('-p', effectivePrompt);
+
+  const child = spawn('claude', args, {
     cwd: worktreePath,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: Object.fromEntries(

@@ -16,6 +16,7 @@ export interface TraceAPI {
     messageId: string,
     prompt: string,
     creationCommands?: string[],
+    resumeSessionId?: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   stopClaude: (
     messageId: string,
@@ -101,6 +102,7 @@ export interface ChannelMessage {
   status: TicketStatus;
   summary: string | null;
   branch: string | null;
+  claudeSessionId: string | null;
   createdAt: string;
   session: MessageSession;
   _count: { threads: number };

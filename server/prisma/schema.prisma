@@ -61,9 +61,10 @@ model Message {
   preview    String?
   importance String   @default("non-important")
   status     String   @default("pending")
-  summary    String?
-  branch     String?
-  createdAt  DateTime @default(now()) @map("created_at")
+  summary        String?
+  branch         String?
+  claudeSessionId String?  @map("claude_session_id")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   channel Channel @relation(fields: [channelId], references: [id])
   session Session @relation(fields: [sessionId], references: [sessionId])

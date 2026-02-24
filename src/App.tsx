@@ -65,7 +65,7 @@ export default function App() {
     scrollThreadToBottom,
     onThreadScroll,
     resetScroll,
-  } = useThreadScroll(threadEvents);
+  } = useThreadScroll(threadEvents, selectedMessageId);
 
   const {
     scripts,

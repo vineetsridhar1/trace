@@ -154,6 +154,14 @@ export async function ingestEvent(payload: HookEvent) {
       ...(payload.permission_mode ? { permissionMode: payload.permission_mode } : {}),
     },
   });
+  // Save Claude session ID on the message for conversation continuity
+  if (payload.session_id !== 'user-manual-input') {
+    await prisma.message.update({
+      where: { id: message.id },
+      data: { claudeSessionId: payload.session_id },
+    });
+  }
+
   const channelId = message.channelId;
   const thread =
     message.threads[0] ??

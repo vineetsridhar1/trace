@@ -3,7 +3,7 @@ import type { ServerEvent } from '../types';
 
 const THREAD_NEAR_BOTTOM_THRESHOLD_PX = 72;
 
-export function useThreadScroll(threadEvents: ServerEvent[]) {
+export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: string | null) {
   const threadContentRef = useRef<HTMLDivElement | null>(null);
   const threadNearBottomRef = useRef(true);
   const prevThreadEventCountRef = useRef(0);
@@ -22,6 +22,14 @@ export function useThreadScroll(threadEvents: ServerEvent[]) {
     threadNearBottomRef.current = true;
     setShowJumpToLatest(false);
   }, []);
+
+  // Scroll to bottom when a thread is first opened
+  useEffect(() => {
+    if (!selectedMessageId) return;
+    // Use a short delay to ensure the scroll container is mounted and laid out
+    const timer = setTimeout(() => scrollThreadToBottom('auto'), 50);
+    return () => clearTimeout(timer);
+  }, [selectedMessageId, scrollThreadToBottom]);
 
   useEffect(() => {
     const previousCount = prevThreadEventCountRef.current;

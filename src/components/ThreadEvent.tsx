@@ -104,13 +104,18 @@ function WriteCodePreview({ event }: { event: ServerEvent }) {
   if (!content) return null;
 
   return (
-    <div className="mt-2 overflow-hidden rounded-md border border-[#3b3f5c]">
+    <div className="mt-2">
+      <div className="edit-diff-meta mb-1 text-[11px] font-semibold text-[#a9b1d6]">
+        Write &middot; {displayPath}
+      </div>
+      <div className="overflow-hidden rounded-md border border-[#3b3f5c]">
       <div className="border-b border-[#3b3f5c] bg-[#1a1b26] px-2 py-1 text-[11px] font-semibold text-[#a9b1d6]">
         {displayPath}
       </div>
       <pre className="max-h-[340px] overflow-auto bg-[#16161e] p-2 font-mono text-xs leading-relaxed text-[#c0caf5]">
         {content.length > 5000 ? `${content.slice(0, 5000)}...` : content}
       </pre>
+      </div>
     </div>
   );
 }
@@ -276,10 +281,7 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
       {todoTool ? (
         <TodoListPreview event={event} />
       ) : writeTool ? (
-        <>
-          <EditDiffPreview event={event} />
-          <WriteCodePreview event={event} />
-        </>
+        <WriteCodePreview event={event} />
       ) : (
         <EditDiffPreview event={event} />
       )}
@@ -322,34 +324,8 @@ function GenericEventRow({ event, time }: { event: ServerEvent; time: string }) 
   );
 }
 
-const PLAN_PRESETS = [
-  { label: 'Approve (clear context)', value: 'yes, and clear the context window when you start', clearContext: true },
-  { label: 'Approve (keep context)', value: 'yes, and keep the context window as-is' },
-  { label: 'Approve (manual review)', value: 'yes, but pause after each file so I can review' },
-] as const;
-
-export function PlanReview({
-  node,
-  onPlanResponse,
-}: {
-  node: PlanReviewNode;
-  onPlanResponse: (text: string, claudePrompt?: string) => void;
-}) {
-  const [feedback, setFeedback] = useState('');
+export function PlanReview({ node }: { node: PlanReviewNode }) {
   const time = formatTime(node.event.timestamp);
-
-  const buildClaudePrompt = (instruction: string, clearContext?: boolean) => {
-    if (!node.planContent) return undefined;
-    if (clearContext) return node.planContent;
-    return `${node.planContent}\n\n${instruction}`;
-  };
-
-  const sendFeedback = (text: string) => {
-    const claudePrompt = node.planContent
-      ? `${node.planContent}\n\n${text}`
-      : undefined;
-    onPlanResponse(text, claudePrompt);
-  };
 
   return (
     <div className="thread-bubble flex justify-start">
@@ -360,56 +336,12 @@ export function PlanReview({
         </div>
 
         {node.planContent ? (
-          <div className="markdown-body mb-3 max-h-[500px] overflow-y-auto rounded-md border border-[#292e42] bg-[#16161e] p-3 text-sm text-[#c0caf5]">
+          <div className="markdown-body max-h-[500px] overflow-y-auto rounded-md border border-[#292e42] bg-[#16161e] p-3 text-sm text-[#c0caf5]">
             <ReactMarkdown>{node.planContent}</ReactMarkdown>
           </div>
         ) : (
-          <div className="mb-3 text-sm text-[#565f89]">No plan content available.</div>
+          <div className="text-sm text-[#565f89]">No plan content available.</div>
         )}
-
-        <div className="flex flex-col gap-2">
-          {PLAN_PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => {
-                const clearContext = 'clearContext' in preset && preset.clearContext;
-                onPlanResponse(preset.value, buildClaudePrompt(preset.value, clearContext));
-              }}
-              className="w-full cursor-pointer rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-left text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/25 hover:text-violet-200"
-            >
-              {preset.label}
-            </button>
-          ))}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && feedback.trim()) {
-                  sendFeedback(feedback.trim());
-                  setFeedback('');
-                }
-              }}
-              placeholder="Or type custom feedback..."
-              className="flex-1 rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500"
-            />
-            <button
-              type="button"
-              disabled={!feedback.trim()}
-              onClick={() => {
-                if (feedback.trim()) {
-                  sendFeedback(feedback.trim());
-                  setFeedback('');
-                }
-              }}
-              className="cursor-pointer rounded-lg bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Send
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

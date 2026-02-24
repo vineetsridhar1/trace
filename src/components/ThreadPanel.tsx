@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AskUserQuestionNode, DragTarget, KanbanTicket, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
+import type { AskUserQuestionNode, DragTarget, KanbanTicket, PlanReviewNode, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
 import { ThreadEvent, PlanReview } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
 import { AskUserQuestionBar } from './AskUserQuestionBar';
+import { PlanResponseBar } from './PlanResponseBar';
 import { TicketView } from './TicketView';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
@@ -104,13 +105,11 @@ export function ThreadPanel({
     return null;
   }, [threadNodes]);
 
-  // Detect the last ask-user-question node (only when Claude isn't actively running)
+  // Detect question only when it's the last node (unanswered) and Claude isn't running
   const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
     if (isClaudeRunning) return null;
-    for (let i = threadNodes.length - 1; i >= 0; i--) {
-      const node = threadNodes[i];
-      if (node.kind === 'ask-user-question') return node;
-    }
+    const last = threadNodes[threadNodes.length - 1];
+    if (last?.kind === 'ask-user-question') return last;
     return null;
   }, [threadNodes, isClaudeRunning]);
 
@@ -119,6 +118,20 @@ export function ThreadPanel({
   // The question to show in the bottom bar (null if dismissed or none active)
   const showQuestion = activeQuestionNode && activeQuestionNode.id !== dismissedQuestionId
     ? activeQuestionNode
+    : null;
+
+  // Detect plan-review only when it's the last node (unanswered) and Claude isn't running
+  const activePlanNode = useMemo((): PlanReviewNode | null => {
+    if (isClaudeRunning) return null;
+    const last = threadNodes[threadNodes.length - 1];
+    if (last?.kind === 'plan-review') return last;
+    return null;
+  }, [threadNodes, isClaudeRunning]);
+
+  const [dismissedPlanId, setDismissedPlanId] = useState<string | null>(null);
+
+  const showPlan = activePlanNode && activePlanNode.id !== dismissedPlanId
+    ? activePlanNode
     : null;
 
   const [viewMode, setViewMode] = useState<ViewMode>('agent');
@@ -130,6 +143,14 @@ export function ThreadPanel({
       setViewMode('agent');
     }
   }, [selectedMessageId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll to bottom when switching to agent view
+  useEffect(() => {
+    if (viewMode === 'agent') {
+      const timer = setTimeout(() => onScrollToLatest(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [viewMode, onScrollToLatest]);
 
   return (
     <>
@@ -192,15 +213,7 @@ export function ThreadPanel({
                       );
                     }
                     if (node.kind === 'plan-review') {
-                      return (
-                        <PlanReview
-                          key={node.id}
-                          node={node}
-                          onPlanResponse={(text, claudePrompt) => {
-                            void sendPlanResponse(text, claudePrompt);
-                          }}
-                        />
-                      );
+                      return <PlanReview key={node.id} node={node} />;
                     }
                     if (node.kind === 'ask-user-question') {
                       return null;
@@ -238,6 +251,18 @@ export function ThreadPanel({
             }}
             onDismiss={() => {
               setDismissedQuestionId(showQuestion.id);
+              void stopClaude();
+            }}
+          />
+        ) : showPlan ? (
+          <PlanResponseBar
+            node={showPlan}
+            onPlanResponse={(text, claudePrompt) => {
+              setDismissedPlanId(showPlan.id);
+              void sendPlanResponse(text, claudePrompt);
+            }}
+            onDismiss={() => {
+              setDismissedPlanId(showPlan.id);
               void stopClaude();
             }}
           />
