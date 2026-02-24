@@ -164,13 +164,6 @@ export function ThreadPanel({
     }
   }, [selectedMessageId]);
 
-  // Scroll to bottom when switching to agent view
-  useEffect(() => {
-    if (viewMode === "agent") {
-      const timer = setTimeout(() => onScrollToLatest(), 50);
-      return () => clearTimeout(timer);
-    }
-  }, [viewMode, onScrollToLatest]);
 
   return (
     <>

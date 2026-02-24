@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ServerEvent } from '../types';
 
-const THREAD_NEAR_BOTTOM_THRESHOLD_PX = 72;
+const THREAD_NEAR_BOTTOM_THRESHOLD_PX = 100;
 
 export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: string | null) {
   const threadContentRef = useRef<HTMLDivElement | null>(null);
   const threadNearBottomRef = useRef(true);
   const prevThreadEventCountRef = useRef(0);
+  const mountedMessageRef = useRef<string | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
   const isThreadNearBottom = useCallback((): boolean => {
@@ -23,14 +24,20 @@ export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: 
     setShowJumpToLatest(false);
   }, []);
 
-  // Scroll to bottom when a thread is first opened
+  // Scroll to bottom only when a NEW thread is opened (not on every re-render)
   useEffect(() => {
     if (!selectedMessageId) return;
-    // Use a short delay to ensure the scroll container is mounted and laid out
+    if (mountedMessageRef.current === selectedMessageId) return;
+    mountedMessageRef.current = selectedMessageId;
+    // Reset state for new thread
+    threadNearBottomRef.current = true;
+    prevThreadEventCountRef.current = 0;
+    setShowJumpToLatest(false);
     const timer = setTimeout(() => scrollThreadToBottom('auto'), 50);
     return () => clearTimeout(timer);
   }, [selectedMessageId, scrollThreadToBottom]);
 
+  // Auto-scroll when new events arrive, but only if user is near the bottom
   useEffect(() => {
     const previousCount = prevThreadEventCountRef.current;
     const nextCount = threadEvents.length;
@@ -39,13 +46,13 @@ export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: 
 
     if (!hasNew) return;
 
+    // First load for this thread — always scroll to bottom
     if (previousCount === 0) {
       requestAnimationFrame(() => scrollThreadToBottom('auto'));
       return;
     }
 
-    // Re-check near-bottom inside rAF so we don't override a user scroll-up
-    // that happened between the state update and the paint
+    // Only auto-scroll if user is near the bottom
     if (threadNearBottomRef.current) {
       requestAnimationFrame(() => {
         if (threadNearBottomRef.current) {
@@ -70,6 +77,7 @@ export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: 
     setShowJumpToLatest(false);
     threadNearBottomRef.current = true;
     prevThreadEventCountRef.current = 0;
+    mountedMessageRef.current = null;
   }, []);
 
   return {
