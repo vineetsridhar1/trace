@@ -167,7 +167,7 @@ export default function App() {
     clearBoard,
   } = useKanban();
 
-  const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('feed');
+  const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('workspaces');
   const [channelWidth, setChannelWidth] = useState(220);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [worktreePath, setWorktreePath] = useState('');
@@ -273,7 +273,7 @@ export default function App() {
     [activeChannelId, moveTicket],
   );
 
-  const feedTitle = enrichedActiveChannel ? `# ${enrichedActiveChannel.name}` : 'Activity Feed';
+  const panelTitle = enrichedActiveChannel ? `# ${enrichedActiveChannel.name}` : 'Workspaces';
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
   const selectedMessageStatus: TicketStatus = useMemo(() => {
     const selected = messages.find((message) => message.id === selectedMessageId);
@@ -402,7 +402,7 @@ export default function App() {
       switchChannel(channelId);
       clearMessages();
       clearBoard();
-      setMiddlePanelView('feed');
+      setMiddlePanelView('workspaces');
       closeThreadPanel();
       setChannelWidth(220);
       killAllTerminals();
@@ -598,7 +598,7 @@ export default function App() {
             }
           >
             <MessagePanel
-              feedTitle={feedTitle}
+              panelTitle={panelTitle}
               messages={messages}
               selectedMessageId={selectedMessageId}
               attentionMessageIds={attentionMessageIds}

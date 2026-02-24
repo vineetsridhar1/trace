@@ -10,7 +10,7 @@ import { ImageThumbnails } from './ImageThumbnails';
 import { KanbanBoard } from './KanbanBoard';
 
 interface MessagePanelProps {
-  feedTitle: string;
+  panelTitle: string;
   messages: ChannelMessage[];
   selectedMessageId: string | null;
   attentionMessageIds: Set<string>;
@@ -24,7 +24,7 @@ interface MessagePanelProps {
 }
 
 export function MessagePanel({
-  feedTitle,
+  panelTitle,
   messages,
   selectedMessageId,
   attentionMessageIds,
@@ -84,21 +84,21 @@ export function MessagePanel({
   return (
     <div id="messages-panel" className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b26]">
       <div className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
-        <h2 id="feed-title" className="text-sm font-semibold text-violet-300">
-          {feedTitle}
+        <h2 id="panel-title" className="text-sm font-semibold text-violet-300">
+          {panelTitle}
         </h2>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg bg-[#1f2335] p-0.5">
             <button
               type="button"
-              onClick={() => onSetView('feed')}
+              onClick={() => onSetView('chat')}
               className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                middlePanelView === 'feed'
+                middlePanelView === 'chat'
                   ? 'bg-violet-500/20 text-violet-300'
                   : 'text-[#565f89] hover:text-[#a9b1d6]'
               }`}
             >
-              Feed
+              Chat
             </button>
             <button
               type="button"
@@ -110,6 +110,17 @@ export function MessagePanel({
               }`}
             >
               Board
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetView('workspaces')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                middlePanelView === 'workspaces'
+                  ? 'bg-violet-500/20 text-violet-300'
+                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+              }`}
+            >
+              Workspaces
             </button>
           </div>
           <button
@@ -126,10 +137,22 @@ export function MessagePanel({
         </div>
       </div>
 
-      {middlePanelView === 'feed' ? (
+      {middlePanelView === 'chat' ? (
+        <ChatPlaceholder />
+      ) : middlePanelView === 'board' ? (
+        <>
+          <KanbanBoard
+            columns={kanbanColumns}
+            loading={kanbanLoading}
+            onClickTicket={handleBoardClickTicket}
+            onMoveTicket={onMoveTicket}
+          />
+          <MessageInput />
+        </>
+      ) : (
         <>
           <div
-            id="feed-list"
+            id="workspaces-list"
             ref={feedListRef}
             className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
           >
@@ -149,17 +172,26 @@ export function MessagePanel({
 
           <MessageInput />
         </>
-      ) : (
-        <>
-          <KanbanBoard
-            columns={kanbanColumns}
-            loading={kanbanLoading}
-            onClickTicket={handleBoardClickTicket}
-            onMoveTicket={onMoveTicket}
-          />
-          <MessageInput />
-        </>
       )}
+    </div>
+  );
+}
+
+function ChatPlaceholder() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4">
+      <svg
+        viewBox="0 0 24 24"
+        className="h-12 w-12 text-[#565f89]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        aria-hidden="true"
+      >
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+      <h3 className="text-sm font-semibold text-[#565f89]">Team Chat</h3>
+      <p className="text-xs text-[#565f89]">Coming soon</p>
     </div>
   );
 }
@@ -221,7 +253,7 @@ function MessageInput() {
                 void handleSendMessage();
               }
             }}
-            placeholder="Send a message..."
+            placeholder="Create a workspace..."
             className="w-full resize-none rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
           />
         </div>

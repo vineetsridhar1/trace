@@ -624,7 +624,7 @@ function ThreadStatusMessage({
       <div className="text-sm text-[#565f89]">
         {activeThreadId
           ? "No events yet"
-          : "No threads yet. Send a message to start."}
+          : "No threads yet. Create a workspace to start."}
       </div>
     );
   }

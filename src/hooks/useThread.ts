@@ -136,7 +136,7 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     const message = selectedMessageRef.current;
     if (!message) return;
 
-    const confirmed = window.confirm('Delete this thread worktree? This removes local files for this message.');
+    const confirmed = window.confirm('Delete this worktree? This removes local files for this workspace.');
     if (!confirmed) return;
 
     setDeletingWorktree(true);

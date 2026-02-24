@@ -142,7 +142,7 @@ export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';
 export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
-export type MiddlePanelView = 'feed' | 'board';
+export type MiddlePanelView = 'chat' | 'board' | 'workspaces';
 
 export interface TicketAttachment {
   id: string;
