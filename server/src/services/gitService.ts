@@ -20,29 +20,29 @@ export async function validateGitRepo(repoPath: string): Promise<{ valid: boolea
   }
 }
 
-export async function getGithubRemoteUrl(repoPath: string): Promise<string | null> {
+export async function getOriginRemoteUrl(repoPath: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync('git', ['remote', 'get-url', 'origin'], { cwd: repoPath });
     const url = stdout.trim();
-    if (url.includes('github.com')) {
-      return url;
-    }
-    return null;
+    return url || null;
   } catch {
     return null;
   }
 }
 
-export async function validateBranchExists(repoPath: string, branch: string): Promise<boolean> {
+export async function listBranches(repoPath: string): Promise<string[]> {
   try {
-    await execFileAsync('git', ['rev-parse', '--verify', branch], { cwd: repoPath });
-    return true;
+    const { stdout } = await execFileAsync(
+      'git',
+      ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'],
+      { cwd: repoPath },
+    );
+    return stdout
+      .split('\n')
+      .map((b) => b.trim())
+      .filter(Boolean);
   } catch {
-    try {
-      await execFileAsync('git', ['rev-parse', '--verify', `origin/${branch}`], { cwd: repoPath });
-      return true;
-    } catch {
-      return false;
-    }
+    return [];
   }
 }
+

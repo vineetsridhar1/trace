@@ -25,43 +25,10 @@ export async function getDefaultChannel() {
   return defaultChannelId;
 }
 
-export async function createChannel(data: { name: string; localRepoPath?: string | null; baseBranch?: string | null; githubUrl?: string | null }) {
+export async function createChannel(data: { name: string; baseBranch?: string | null; githubUrl?: string | null }) {
   return prisma.channel.create({ data });
 }
 
-export async function updateChannel(id: string, data: { name?: string; localRepoPath?: string | null; baseBranch?: string | null; githubUrl?: string | null; creationScript?: string | null }) {
+export async function updateChannel(id: string, data: { name?: string; baseBranch?: string | null; githubUrl?: string | null }) {
   return prisma.channel.update({ where: { id }, data });
-}
-
-export async function listStartupScripts(channelId: string) {
-  return prisma.startupScript.findMany({
-    where: { channelId },
-    orderBy: { sortOrder: 'asc' },
-  });
-}
-
-export async function createStartupScript(
-  channelId: string,
-  data: { name: string; command: string; scriptType?: string },
-) {
-  const scriptType = data.scriptType ?? 'startup';
-  const maxOrder = await prisma.startupScript.aggregate({
-    where: { channelId },
-    _max: { sortOrder: true },
-  });
-  const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
-  return prisma.startupScript.create({
-    data: { channelId, name: data.name, command: data.command, scriptType, sortOrder },
-  });
-}
-
-export async function updateStartupScript(
-  id: string,
-  data: { name?: string; command?: string; scriptType?: string; sortOrder?: number },
-) {
-  return prisma.startupScript.update({ where: { id }, data });
-}
-
-export async function deleteStartupScript(id: string) {
-  return prisma.startupScript.delete({ where: { id } });
 }

@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import type { StartupScript } from '../types';
 
 export interface TerminalTab {
   terminalId: string;
@@ -50,7 +49,7 @@ export function useStartupTerminals() {
   }, []);
 
   const runAllScripts = useCallback(
-    (contextId: string, cwd: string, scripts: StartupScript[], envMaps?: Record<string, string>[]) => {
+    (contextId: string, cwd: string, scripts: { name: string; command: string }[], envMaps?: Record<string, string>[]) => {
       // If terminals already exist for this context, just show them
       if (activeChannelRef.current === contextId) {
         setIsVisible(true);
@@ -62,7 +61,7 @@ export function useStartupTerminals() {
 
       // Build new terminal list. Old terminals unmount, killing their PTYs.
       const newTerminals: TerminalTab[] = scripts.map((script, i) => ({
-        terminalId: `startup-${contextId}-${script.id}-${run}`,
+        terminalId: `startup-${contextId}-${i}-${run}`,
         name: script.name,
         command: script.command,
         env: envMaps?.[i],

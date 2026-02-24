@@ -1,59 +1,80 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
+import type { LocalChannelConfig } from '../types';
 import { SERVER_URL } from '../types';
 
 interface CreateChannelModalProps {
   onClose: () => void;
   onCreated: () => void;
+  onLocalConfigSave: (channelId: string, data: LocalChannelConfig) => Promise<void>;
 }
 
-export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalProps) {
+export function CreateChannelModal({ onClose, onCreated, onLocalConfigSave }: CreateChannelModalProps) {
   const [name, setName] = useState('');
   const [localRepoPath, setLocalRepoPath] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
+  const [branches, setBranches] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [repoValid, setRepoValid] = useState<boolean | null>(null);
-  const [detectedGithubUrl, setDetectedGithubUrl] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [detectedOriginUrl, setDetectedOriginUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!localRepoPath.trim()) {
-      setRepoValid(null);
-      setDetectedGithubUrl(null);
-      setError(null);
-      return;
-    }
+  const handleSelectFolder = useCallback(async () => {
+    const result = await window.traceAPI.selectFolder();
+    if (!result.success || result.canceled || !result.path) return;
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const selectedPath = result.path;
+    setLocalRepoPath(selectedPath);
+    setError(null);
+    setValidating(true);
+    setRepoValid(null);
+    setDetectedOriginUrl(null);
+    setBranches([]);
+    setBaseBranch('main');
 
-    debounceRef.current = setTimeout(async () => {
-      setValidating(true);
-      setError(null);
-      try {
-        const res = await fetch(`${SERVER_URL}/channels/validate-repo`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ localRepoPath: localRepoPath.trim() }),
-        });
-        const data = (await res.json()) as { valid: boolean; githubUrl?: string; error?: string };
-        setRepoValid(data.valid);
-        setDetectedGithubUrl(data.githubUrl ?? null);
-        if (!data.valid && data.error) {
-          setError(data.error);
-        }
-      } catch {
+    try {
+      const res = await fetch(`${SERVER_URL}/channels/validate-repo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localRepoPath: selectedPath }),
+      });
+      const data = (await res.json()) as { valid: boolean; originUrl?: string; error?: string };
+
+      if (!data.valid) {
         setRepoValid(false);
-        setError('Failed to validate path');
-      } finally {
-        setValidating(false);
+        setError(data.error ?? 'Invalid repository');
+        setLocalRepoPath('');
+        return;
       }
-    }, 500);
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [localRepoPath]);
+      setRepoValid(true);
+      setDetectedOriginUrl(data.originUrl ?? null);
+
+      // Fetch branches
+      const branchRes = await fetch(`${SERVER_URL}/channels/validate-repo/branches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localRepoPath: selectedPath }),
+      });
+      const branchData = (await branchRes.json()) as { branches: string[] };
+      setBranches(branchData.branches);
+
+      if (branchData.branches.length > 0) {
+        const defaultBranch = branchData.branches.includes('main')
+          ? 'main'
+          : branchData.branches.includes('master')
+            ? 'master'
+            : branchData.branches[0];
+        setBaseBranch(defaultBranch);
+      }
+    } catch {
+      setRepoValid(false);
+      setError('Failed to validate path');
+      setLocalRepoPath('');
+    } finally {
+      setValidating(false);
+    }
+  }, []);
 
   const handleCreate = useCallback(async () => {
     const trimmedName = name.trim();
@@ -67,7 +88,7 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: trimmedName,
-          localRepoPath: localRepoPath.trim() || null,
+          githubUrl: detectedOriginUrl,
           baseBranch: baseBranch.trim() || 'main',
         }),
       });
@@ -78,13 +99,20 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
         return;
       }
 
+      const { channel } = (await res.json()) as { channel: { id: string } };
+
+      // Save local config
+      if (localRepoPath) {
+        await onLocalConfigSave(channel.id, { localRepoPath });
+      }
+
       onCreated();
     } catch {
       setError('Failed to create channel');
     } finally {
       setCreating(false);
     }
-  }, [name, localRepoPath, baseBranch, onCreated]);
+  }, [name, localRepoPath, baseBranch, detectedOriginUrl, onCreated, onLocalConfigSave]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -115,23 +143,40 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Local Repo Path</label>
-            <input
-              type="text"
-              value={localRepoPath}
-              onChange={(e) => setLocalRepoPath(e.target.value)}
-              placeholder="/path/to/git/repo"
-              className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
-            />
-            {validating && (
-              <p className="mt-1 text-[10px] text-[#565f89]">Validating...</p>
+            <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Repository</label>
+            {localRepoPath && repoValid ? (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#565f89]">
+                  {localRepoPath}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocalRepoPath('');
+                    setRepoValid(null);
+                    setDetectedOriginUrl(null);
+                    setBranches([]);
+                    setBaseBranch('main');
+                    setError(null);
+                  }}
+                  className="shrink-0 rounded px-2 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleSelectFolder()}
+                disabled={validating}
+                className="w-full rounded border border-dashed border-[#292e42] bg-[#16161e] px-3 py-3 text-sm text-[#565f89] hover:border-[#7aa2f7] hover:text-[#c0caf5] disabled:opacity-50"
+              >
+                {validating ? 'Validating...' : 'Select Folder'}
+              </button>
             )}
-            {repoValid === true && (
+            {repoValid === true && detectedOriginUrl && (
               <p className="mt-1 text-[10px] text-[#9ece6a]">
-                Valid git repository
-                {detectedGithubUrl && (
-                  <span className="ml-1 text-[#565f89]">({detectedGithubUrl})</span>
-                )}
+                Origin: <span className="text-[#565f89]">{detectedOriginUrl}</span>
               </p>
             )}
             {repoValid === false && error && (
@@ -139,17 +184,21 @@ export function CreateChannelModal({ onClose, onCreated }: CreateChannelModalPro
             )}
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Base Branch</label>
-            <input
-              type="text"
-              value={baseBranch}
-              onChange={(e) => setBaseBranch(e.target.value)}
-              placeholder="main"
-              className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
-            />
-            <p className="mt-1 text-[10px] text-[#3b4261]">Branch to merge worktrees into (defaults to main)</p>
-          </div>
+          {repoValid && branches.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Base Branch</label>
+              <select
+                value={baseBranch}
+                onChange={(e) => setBaseBranch(e.target.value)}
+                className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] outline-none focus:border-[#7aa2f7]"
+              >
+                {branches.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-[#3b4261]">Branch to merge worktrees into</p>
+            </div>
+          )}
 
           {error && repoValid !== false && (
             <p className="text-xs text-[#f7768e]">{error}</p>

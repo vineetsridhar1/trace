@@ -100,4 +100,19 @@ contextBridge.exposeInMainWorld('traceAPI', {
     ipcRenderer.invoke('release-ports', messageId),
 
   focusWindow: () => ipcRenderer.invoke('focus-window'),
+
+  selectFolder: () =>
+    ipcRenderer.invoke('select-folder') as Promise<{ success: boolean; canceled?: boolean; path?: string; error?: string }>,
+
+  getLocalConfig: (channelId: string) =>
+    ipcRenderer.invoke('get-local-config', channelId),
+
+  setLocalConfig: (channelId: string, data: { localRepoPath: string; creationScript?: string; startupScripts?: { name: string; command: string }[] }) =>
+    ipcRenderer.invoke('set-local-config', channelId, data),
+
+  getAllLocalConfigs: () =>
+    ipcRenderer.invoke('get-all-local-configs'),
+
+  deleteLocalConfig: (channelId: string) =>
+    ipcRenderer.invoke('delete-local-config', channelId),
 });

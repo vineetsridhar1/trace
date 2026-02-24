@@ -1,10 +1,12 @@
-import { ipcMain, type BrowserWindow } from 'electron';
+import { ipcMain, dialog, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog, markHookStopReceived } from './watchdog';
 import { createPty, writePty, resizePty, killPty, getPtyCwd } from './pty';
 import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
+import { getChannelLocalConfig, setChannelLocalConfig, getAllChannelLocalConfigs, deleteChannelLocalConfig } from './localConfig';
+import type { LocalChannelConfig } from './localConfig';
 
 const SPAWN_CLAUDE_CHANNEL = 'spawn-claude';
 const DELETE_WORKTREE_CHANNEL = 'delete-worktree';
@@ -20,6 +22,11 @@ const GET_WORKTREE_DIFF_CHANNEL = 'get-worktree-diff';
 const FOCUS_WINDOW_CHANNEL = 'focus-window';
 const ALLOCATE_PORTS_CHANNEL = 'allocate-ports';
 const RELEASE_PORTS_CHANNEL = 'release-ports';
+const SELECT_FOLDER_CHANNEL = 'select-folder';
+const GET_LOCAL_CONFIG_CHANNEL = 'get-local-config';
+const SET_LOCAL_CONFIG_CHANNEL = 'set-local-config';
+const GET_ALL_LOCAL_CONFIGS_CHANNEL = 'get-all-local-configs';
+const DELETE_LOCAL_CONFIG_CHANNEL = 'delete-local-config';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -42,6 +49,11 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(FOCUS_WINDOW_CHANNEL);
   ipcMain.removeHandler(ALLOCATE_PORTS_CHANNEL);
   ipcMain.removeHandler(RELEASE_PORTS_CHANNEL);
+  ipcMain.removeHandler(SELECT_FOLDER_CHANNEL);
+  ipcMain.removeHandler(GET_LOCAL_CONFIG_CHANNEL);
+  ipcMain.removeHandler(SET_LOCAL_CONFIG_CHANNEL);
+  ipcMain.removeHandler(GET_ALL_LOCAL_CONFIGS_CHANNEL);
+  ipcMain.removeHandler(DELETE_LOCAL_CONFIG_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string) => {
     try {
@@ -187,5 +199,34 @@ export function registerIpcHandlers() {
     if (mainWindowRef.isMinimized()) mainWindowRef.restore();
     mainWindowRef.show();
     mainWindowRef.focus();
+  });
+
+  ipcMain.handle(SELECT_FOLDER_CHANNEL, async () => {
+    if (!mainWindowRef) return { success: false, error: 'No main window' };
+    const result = await dialog.showOpenDialog(mainWindowRef, {
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: true, canceled: true };
+    }
+    return { success: true, canceled: false, path: result.filePaths[0] };
+  });
+
+  ipcMain.handle(GET_LOCAL_CONFIG_CHANNEL, (_event, channelId: string) => {
+    return getChannelLocalConfig(channelId);
+  });
+
+  ipcMain.handle(SET_LOCAL_CONFIG_CHANNEL, (_event, channelId: string, data: LocalChannelConfig) => {
+    setChannelLocalConfig(channelId, data);
+    return { success: true };
+  });
+
+  ipcMain.handle(GET_ALL_LOCAL_CONFIGS_CHANNEL, () => {
+    return getAllChannelLocalConfigs();
+  });
+
+  ipcMain.handle(DELETE_LOCAL_CONFIG_CHANNEL, (_event, channelId: string) => {
+    deleteChannelLocalConfig(channelId);
+    return { success: true };
   });
 }

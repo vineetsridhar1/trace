@@ -11,6 +11,12 @@ export interface WorktreeDiffResult {
   error?: string;
 }
 
+export interface LocalChannelConfig {
+  localRepoPath: string;
+  creationScript?: string;
+  startupScripts?: { name: string; command: string }[];
+}
+
 export interface TraceAPI {
   spawnClaude: (
     messageId: string,
@@ -48,6 +54,11 @@ export interface TraceAPI {
   allocatePorts: (messageId: string, count: number) => Promise<{ success: boolean; ports?: number[]; error?: string }>;
   releasePorts: (messageId: string) => Promise<{ success: boolean; error?: string }>;
   focusWindow: () => Promise<void>;
+  selectFolder: () => Promise<{ success: boolean; canceled?: boolean; path?: string; error?: string }>;
+  getLocalConfig: (channelId: string) => Promise<LocalChannelConfig | null>;
+  setLocalConfig: (channelId: string, data: LocalChannelConfig) => Promise<{ success: boolean }>;
+  getAllLocalConfigs: () => Promise<Record<string, LocalChannelConfig>>;
+  deleteLocalConfig: (channelId: string) => Promise<{ success: boolean }>;
 }
 
 declare global {
@@ -75,20 +86,10 @@ export interface ServerEvent {
 export interface Channel {
   id: string;
   name: string;
-  localRepoPath: string | null;
+  localRepoPath?: string | null;
   baseBranch: string | null;
   githubUrl: string | null;
-  creationScript: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface StartupScript {
-  id: string;
-  channelId: string;
-  name: string;
-  command: string;
-  sortOrder: number;
+  creationScript?: string | null;
   createdAt: string;
   updatedAt: string;
 }
