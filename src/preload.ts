@@ -7,10 +7,9 @@ contextBridge.exposeInMainWorld('traceAPI', {
     repoPath: string,
     creationCommands?: string[],
     resumeSessionId?: string,
-    permissionMode?: string,
   ): Promise<{ success: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, repoPath, creationCommands, resumeSessionId, permissionMode);
+      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, repoPath, creationCommands, resumeSessionId);
     } catch (err) {
       return { success: false, error: String(err) };
     }

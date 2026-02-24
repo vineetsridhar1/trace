@@ -55,9 +55,9 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(GET_ALL_LOCAL_CONFIGS_CHANNEL);
   ipcMain.removeHandler(DELETE_LOCAL_CONFIG_CHANNEL);
 
-  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, permissionMode?: string) => {
+  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string) => {
     try {
-      const worktreePath = await spawnClaude(messageId, prompt, repoPath, creationCommands, resumeSessionId, permissionMode as 'plan' | 'skip' | undefined);
+      const worktreePath = await spawnClaude(messageId, prompt, repoPath, creationCommands, resumeSessionId);
       return { success: true, worktreePath };
     } catch (err) {
       console.error('Failed to spawn claude:', err);

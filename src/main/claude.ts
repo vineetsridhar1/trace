@@ -35,7 +35,6 @@ export async function spawnClaude(
   repoPath: string,
   creationCommands?: string[],
   resumeSessionId?: string,
-  permissionMode?: 'plan' | 'skip',
 ): Promise<string> {
   const { worktreePath, created } = await ensureWorktree(messageId, repoPath);
 
@@ -56,7 +55,7 @@ export async function spawnClaude(
   const defaultBranch = `trace/${messageId.slice(0, 8)}`;
   const currentBranch = await getWorktreeBranch(messageId);
   let effectivePrompt = prompt;
-  if (!resumeSessionId && currentBranch === defaultBranch && permissionMode !== 'plan') {
+  if (!resumeSessionId && currentBranch === defaultBranch) {
     effectivePrompt =
       `<trace-internal>\n` +
       `IMPORTANT: Before doing anything else, you must first rename the current git branch to reflect the user's intent.\n` +
@@ -79,9 +78,7 @@ export async function spawnClaude(
     runningProcesses.delete(messageId);
   }
 
-  const args = permissionMode === 'plan'
-    ? ['--permission-mode', 'plan']
-    : ['--dangerously-skip-permissions'];
+  const args = ['--dangerously-skip-permissions'];
   if (resumeSessionId) {
     args.push('--resume', resumeSessionId);
   }

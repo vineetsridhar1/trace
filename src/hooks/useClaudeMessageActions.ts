@@ -24,7 +24,6 @@ interface SpawnOptions {
   setHasWorktreeOnSuccess?: boolean;
   creationCommands?: string[];
   resumeSessionId?: string;
-  permissionMode?: string;
 }
 
 export function useClaudeMessageActions({
@@ -52,7 +51,7 @@ export function useClaudeMessageActions({
       spawnedMessageIdsRef.current.add(messageId);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.permissionMode);
+        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId);
 
         if (!result.success) {
           spawnedMessageIdsRef.current.delete(messageId);
@@ -167,6 +166,10 @@ export function useClaudeMessageActions({
       const editedPrompt = promptText.trim();
       if (!pendingRunMessageId || !editedPrompt) return;
 
+      const prompt = planMode
+        ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${editedPrompt}`
+        : editedPrompt;
+
       const messageId = pendingRunMessageId;
       setPendingRunMessageId(null);
       setPendingRunInitialPrompt('');
@@ -178,11 +181,10 @@ export function useClaudeMessageActions({
       }
 
       await updatePreviewForPendingRun(messageId, editedPrompt);
-      const success = await spawnClaudeForMessage(messageId, editedPrompt, {
+      const success = await spawnClaudeForMessage(messageId, prompt, {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
         creationCommands,
-        permissionMode: planMode ? 'plan' : undefined,
       });
 
       if (!success && creationCommands.length > 0) {
@@ -236,8 +238,7 @@ export function useClaudeMessageActions({
 
       await spawnClaudeForMessage(selectedMessage.id, claudePrompt ?? trimmed, {
         errorPrefix: 'Failed to spawn claude for plan response',
-        // Fresh spawn with full permissions — the plan content is included in claudePrompt.
-        // No resumeSessionId since the planning session used --permission-mode plan.
+        resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
       });
     },
     [activeChannelId, persistPrompt, selectedMessageRef, spawnClaudeForMessage],

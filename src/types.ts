@@ -24,7 +24,6 @@ export interface TraceAPI {
     repoPath: string,
     creationCommands?: string[],
     resumeSessionId?: string,
-    permissionMode?: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   stopClaude: (
     messageId: string,
