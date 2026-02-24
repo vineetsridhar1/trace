@@ -25,8 +25,9 @@ const TICKET_MESSAGE_SELECT = {
 const DEFAULT_COLUMNS = [
   { name: 'TODO', slug: 'todo', color: '#f7768e', sortOrder: 0 },
   { name: 'In Progress', slug: 'in_progress', color: '#7aa2f7', sortOrder: 1 },
-  { name: 'Completed', slug: 'completed', color: '#9ece6a', sortOrder: 2 },
-  { name: 'Merged', slug: 'merged', color: '#bb9af7', sortOrder: 3 },
+  { name: 'In Review', slug: 'in_review', color: '#e0af68', sortOrder: 2 },
+  { name: 'Completed', slug: 'completed', color: '#9ece6a', sortOrder: 3 },
+  { name: 'Merged', slug: 'merged', color: '#bb9af7', sortOrder: 4 },
 ];
 
 const STATUS_TO_SLUG: Record<string, string> = {
