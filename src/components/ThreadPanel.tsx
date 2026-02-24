@@ -634,6 +634,51 @@ function ThreadStatusMessage({
   return null;
 }
 
+function PlanModeToggle({
+  active,
+  onToggle,
+}: {
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={active ? "Plan mode on (click to disable)" : "Enable plan mode"}
+      className={`flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-200 ${
+        active
+          ? "border-violet-500 bg-violet-500/20 text-violet-300"
+          : "border-[#292e42] bg-[#1a1b26] text-[#565f89] hover:border-[#3b3f5c] hover:text-[#a9b1d6]"
+      }`}
+    >
+      <svg
+        className="h-3.5 w-3.5 flex-shrink-0"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3" />
+        <path d="M12 22v-5" />
+        <path d="M17 22v-3" />
+        <path d="m15 17 2-5 2 5" />
+        <path d="M15.1 19.9h3.8" />
+      </svg>
+      <span
+        className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${
+          active ? "ml-1 max-w-[36px] opacity-100" : "max-w-0 opacity-0"
+        }`}
+      >
+        Plan
+      </span>
+    </button>
+  );
+}
+
 function RunButtons({
   initialPrompt,
   onRun,
@@ -648,6 +693,7 @@ function RunButtons({
     setSelectedEffort,
   } = useClaudeActions();
   const [prompt, setPrompt] = useState(initialPrompt);
+  const [planMode, setPlanMode] = useState(false);
   const textareaRef = useAutoResizeTextarea(prompt, { observeResize: true });
 
   useEffect(() => {
@@ -664,35 +710,30 @@ function RunButtons({
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            onRun(false, prompt);
+            onRun(planMode, prompt);
           }
         }}
         className="mb-2 w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
       />
-      <div className="mb-2">
+      <div className="mb-2 flex items-center gap-1.5">
         <ModelEffortSelector
           model={selectedModel}
           effort={selectedEffort}
           onModelChange={setSelectedModel}
           onEffortChange={setSelectedEffort}
         />
+        <PlanModeToggle
+          active={planMode}
+          onToggle={() => setPlanMode((p) => !p)}
+        />
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onRun(false, prompt)}
-          className="flex-1 cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
-        >
-          Run
-        </button>
-        <button
-          type="button"
-          onClick={() => onRun(true, prompt)}
-          className="flex-1 cursor-pointer rounded-lg border border-violet-500 px-4 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/20"
-        >
-          Run in plan mode
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => onRun(planMode, prompt)}
+        className="w-full cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+      >
+        Run
+      </button>
     </div>
   );
 }
@@ -751,6 +792,7 @@ function ThreadInput({
     setSelectedEffort,
   } = useClaudeActions();
   const [threadInput, setThreadInput] = useState("");
+  const [planMode, setPlanMode] = useState(false);
   const textareaRef = useAutoResizeTextarea(threadInput, {
     observeResize: true,
   });
@@ -761,10 +803,14 @@ function ThreadInput({
     const text = threadInput.trim();
     if (!text || isClaudeRunning) return;
 
+    const finalText = planMode
+      ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${text}`
+      : text;
+
     const attachmentIds = imageAttachments.getAttachmentIds();
     const filePaths = imageAttachments.getFilePaths();
     const sent = await onSendThreadMessage(
-      text,
+      finalText,
       attachmentIds.length > 0 ? attachmentIds : undefined,
       filePaths.length > 0 ? filePaths : undefined,
     );
@@ -772,7 +818,7 @@ function ThreadInput({
       setThreadInput("");
       imageAttachments.clearAttachments();
     }
-  }, [threadInput, isClaudeRunning, onSendThreadMessage, imageAttachments]);
+  }, [threadInput, planMode, isClaudeRunning, onSendThreadMessage, imageAttachments]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -850,6 +896,11 @@ function ThreadInput({
             onChange={(e) => setThreadInput(e.target.value)}
             onPaste={(e) => void imageAttachments.handlePaste(e)}
             onKeyDown={(e) => {
+              if (e.key === "Tab" && e.shiftKey) {
+                e.preventDefault();
+                setPlanMode((p) => !p);
+                return;
+              }
               if (slashCommands.handleKeyDown(e)) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -902,12 +953,16 @@ function ThreadInput({
         )}
       </div>
       {!isClaudeRunning && (
-        <div className="mt-2">
+        <div className="mt-2 flex items-center gap-1.5">
           <ModelEffortSelector
             model={selectedModel}
             effort={selectedEffort}
             onModelChange={setSelectedModel}
             onEffortChange={setSelectedEffort}
+          />
+          <PlanModeToggle
+            active={planMode}
+            onToggle={() => setPlanMode((p) => !p)}
           />
         </div>
       )}
