@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
-import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
+
 import { useClaudeActions } from '../context/ClaudeActionsContext';
 import { useImageAttachments } from '../hooks/useImageAttachments';
 import { SlashCommandMenu } from './SlashCommandMenu';
@@ -192,7 +192,6 @@ function ChatPlaceholder() {
 function MessageInput() {
   const { sendMessage } = useClaudeActions();
   const [messageInput, setMessageInput] = useState('');
-  const textareaRef = useAutoResizeTextarea(messageInput);
   const slashCommands = useSlashCommands(messageInput, setMessageInput);
   const imageAttachments = useImageAttachments();
 
@@ -234,7 +233,6 @@ function MessageInput() {
           />
           <textarea
             id="message-input"
-            ref={textareaRef}
             rows={1}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
@@ -247,6 +245,7 @@ function MessageInput() {
               }
             }}
             placeholder="Create a workspace..."
+            style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
             className="w-full resize-none rounded-md border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
           />
         </div>

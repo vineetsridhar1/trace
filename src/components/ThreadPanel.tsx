@@ -16,7 +16,7 @@ import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { TicketView } from "./TicketView";
 import { useSlashCommands } from "../hooks/useSlashCommands";
-import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
+
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useImageAttachments } from "../hooks/useImageAttachments";
 import { SlashCommandMenu } from "./SlashCommandMenu";
@@ -636,8 +636,6 @@ function RunButtons({
   } = useClaudeActions();
   const [prompt, setPrompt] = useState(initialPrompt);
   const [planMode, setPlanMode] = useState(false);
-  const textareaRef = useAutoResizeTextarea(prompt, { observeResize: true });
-
   useEffect(() => {
     setPrompt(initialPrompt);
   }, [initialPrompt]);
@@ -645,7 +643,6 @@ function RunButtons({
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
       <textarea
-        ref={textareaRef}
         rows={1}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -655,6 +652,7 @@ function RunButtons({
             onRun(planMode, prompt);
           }
         }}
+        style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
         className="mb-2 w-full resize-none rounded-md border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
       />
       <div className="mb-2 flex items-center gap-1.5">
@@ -735,9 +733,6 @@ function ThreadInput({
   } = useClaudeActions();
   const [threadInput, setThreadInput] = useState("");
   const [planMode, setPlanMode] = useState(false);
-  const textareaRef = useAutoResizeTextarea(threadInput, {
-    observeResize: true,
-  });
   const slashCommands = useSlashCommands(threadInput, setThreadInput);
   const imageAttachments = useImageAttachments();
 
@@ -831,7 +826,6 @@ function ThreadInput({
           />
           <textarea
             id="thread-input"
-            ref={textareaRef}
             rows={1}
             value={threadInput}
             disabled={isClaudeRunning}
@@ -852,6 +846,7 @@ function ThreadInput({
             placeholder={
               isClaudeRunning ? "Waiting for Claude..." : "Send to Claude..."
             }
+            style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
             className={`w-full resize-none rounded-md border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? "opacity-50 cursor-not-allowed" : ""}`}
           />
         </div>
