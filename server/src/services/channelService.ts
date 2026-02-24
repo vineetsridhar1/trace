@@ -1,4 +1,6 @@
+import path from 'node:path';
 import prisma from '../lib/prisma';
+import { getOriginRemoteUrl } from './gitService';
 
 let defaultChannelId: string | null = null;
 
@@ -19,7 +21,11 @@ export async function getDefaultChannel() {
   }
   let channel = await prisma.channel.findFirst({ where: { name: 'general' } });
   if (!channel) {
-    channel = await prisma.channel.create({ data: { name: 'general' } });
+    const repoPath = path.resolve(process.cwd(), '..');
+    const githubUrl = await getOriginRemoteUrl(repoPath);
+    channel = await prisma.channel.create({
+      data: { name: 'general', baseBranch: 'main', githubUrl },
+    });
   }
   defaultChannelId = channel.id;
   return defaultChannelId;
