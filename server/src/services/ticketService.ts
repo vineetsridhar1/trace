@@ -44,17 +44,36 @@ export async function ensureKanbanColumns(channelId: string) {
     orderBy: { sortOrder: 'asc' },
   });
 
-  if (existing.length > 0) return existing;
+  if (existing.length === 0) {
+    const columns = await prisma.$transaction(
+      DEFAULT_COLUMNS.map((col) =>
+        prisma.kanbanColumn.create({
+          data: { channelId, ...col },
+        }),
+      ),
+    );
+    return columns;
+  }
 
-  const columns = await prisma.$transaction(
-    DEFAULT_COLUMNS.map((col) =>
-      prisma.kanbanColumn.create({
-        data: { channelId, ...col },
-      }),
-    ),
-  );
+  // Add any missing default columns to existing boards
+  const existingSlugs = new Set(existing.map((col) => col.slug));
+  const missing = DEFAULT_COLUMNS.filter((col) => !existingSlugs.has(col.slug));
 
-  return columns;
+  if (missing.length > 0) {
+    await prisma.$transaction(
+      missing.map((col) =>
+        prisma.kanbanColumn.create({
+          data: { channelId, ...col },
+        }),
+      ),
+    );
+    return prisma.kanbanColumn.findMany({
+      where: { channelId },
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  return existing;
 }
 
 export async function getBoard(channelId: string) {
