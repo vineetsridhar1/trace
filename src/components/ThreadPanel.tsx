@@ -1,19 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AskUserQuestionNode, DragTarget, KanbanTicket, PlanReviewNode, ThreadRenderNode, ThreadStatus, TicketStatus } from '../types';
-import { ThreadEvent, PlanReview } from './ThreadEvent';
-import { ReadGlobGroup } from './ReadGlobGroup';
-import { AskUserQuestionBar } from './AskUserQuestionBar';
-import { PlanResponseBar } from './PlanResponseBar';
-import { TicketView } from './TicketView';
-import { useSlashCommands } from '../hooks/useSlashCommands';
-import { useAutoResizeTextarea } from '../hooks/useAutoResizeTextarea';
-import { useClaudeActions } from '../context/ClaudeActionsContext';
-import { useImageAttachments } from '../hooks/useImageAttachments';
-import { SlashCommandMenu } from './SlashCommandMenu';
-import { ImageThumbnails } from './ImageThumbnails';
-import { normalizeToolName } from '../utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  AskUserQuestionNode,
+  DragTarget,
+  KanbanTicket,
+  PlanReviewNode,
+  ThreadRenderNode,
+  ThreadStatus,
+  TicketStatus,
+} from "../types";
+import { ThreadEvent, PlanReview } from "./ThreadEvent";
+import { ReadGlobGroup } from "./ReadGlobGroup";
+import { AskUserQuestionBar } from "./AskUserQuestionBar";
+import { PlanResponseBar } from "./PlanResponseBar";
+import { TicketView } from "./TicketView";
+import { useSlashCommands } from "../hooks/useSlashCommands";
+import { useAutoResizeTextarea } from "../hooks/useAutoResizeTextarea";
+import { useClaudeActions } from "../context/ClaudeActionsContext";
+import { useImageAttachments } from "../hooks/useImageAttachments";
+import { SlashCommandMenu } from "./SlashCommandMenu";
+import { ImageThumbnails } from "./ImageThumbnails";
+import { normalizeToolName } from "../utils";
 
-type ViewMode = 'agent' | 'ticket';
+type ViewMode = "agent" | "ticket";
 
 interface ThreadPanelProps {
   threadWidth: number;
@@ -84,7 +92,10 @@ export function ThreadPanel({
   const lastUserMessageTime = useMemo(() => {
     for (let i = threadNodes.length - 1; i >= 0; i--) {
       const node = threadNodes[i];
-      if (node.kind === 'event' && node.event.hookEventName === 'UserPromptSubmit') {
+      if (
+        node.kind === "event" &&
+        node.event.hookEventName === "UserPromptSubmit"
+      ) {
         return node.event.timestamp;
       }
     }
@@ -95,12 +106,14 @@ export function ThreadPanel({
     for (let i = threadNodes.length - 1; i >= 0; i--) {
       const node = threadNodes[i];
       if (
-        node.kind === 'event' &&
-        node.event.hookEventName === 'PostToolUse' &&
-        normalizeToolName(node.event.toolName) === 'todowrite'
+        node.kind === "event" &&
+        node.event.hookEventName === "PostToolUse" &&
+        normalizeToolName(node.event.toolName) === "todowrite"
       ) {
         const input = node.event.toolInput as Record<string, unknown> | null;
-        const todos = input?.todos as Array<{ content: string; status: string; activeForm?: string }> | undefined;
+        const todos = input?.todos as
+          | Array<{ content: string; status: string; activeForm?: string }>
+          | undefined;
         if (Array.isArray(todos) && todos.length > 0) return todos;
       }
     }
@@ -111,44 +124,48 @@ export function ThreadPanel({
   const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
     if (isClaudeRunning) return null;
     const last = threadNodes[threadNodes.length - 1];
-    if (last?.kind === 'ask-user-question') return last;
+    if (last?.kind === "ask-user-question") return last;
     return null;
   }, [threadNodes, isClaudeRunning]);
 
-  const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
+  const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(
+    null,
+  );
 
   // The question to show in the bottom bar (null if dismissed or none active)
-  const showQuestion = activeQuestionNode && activeQuestionNode.id !== dismissedQuestionId
-    ? activeQuestionNode
-    : null;
+  const showQuestion =
+    activeQuestionNode && activeQuestionNode.id !== dismissedQuestionId
+      ? activeQuestionNode
+      : null;
 
   // Detect plan-review only when it's the last node (unanswered) and Claude isn't running
   const activePlanNode = useMemo((): PlanReviewNode | null => {
     if (isClaudeRunning) return null;
     const last = threadNodes[threadNodes.length - 1];
-    if (last?.kind === 'plan-review') return last;
+    if (last?.kind === "plan-review") return last;
     return null;
   }, [threadNodes, isClaudeRunning]);
 
   const [dismissedPlanId, setDismissedPlanId] = useState<string | null>(null);
 
-  const showPlan = activePlanNode && activePlanNode.id !== dismissedPlanId
-    ? activePlanNode
-    : null;
+  const showPlan =
+    activePlanNode && activePlanNode.id !== dismissedPlanId
+      ? activePlanNode
+      : null;
 
-  const [viewMode, setViewMode] = useState<ViewMode>('agent');
+  const [viewMode, setViewMode] = useState<ViewMode>("agent");
 
   useEffect(() => {
-    if (messageStatus === 'completed' && ticket) {
-      setViewMode('ticket');
+    if (messageStatus === "completed" && ticket) {
+      setViewMode("ticket");
     } else {
-      setViewMode('agent');
+      setViewMode("agent");
     }
-  }, [selectedMessageId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedMessageId]);
 
   // Scroll to bottom when switching to agent view
   useEffect(() => {
-    if (viewMode === 'agent') {
+    if (viewMode === "agent") {
       const timer = setTimeout(() => onScrollToLatest(), 50);
       return () => clearTimeout(timer);
     }
@@ -158,7 +175,7 @@ export function ThreadPanel({
     <>
       {threadOpen && !isFullscreen && (
         <div
-          className={`resize-handle ${dragging === 'right' ? 'active' : ''}`}
+          className={`resize-handle ${dragging === "right" ? "active" : ""}`}
           onMouseDown={(e) => {
             e.preventDefault();
             onStartDrag();
@@ -168,8 +185,10 @@ export function ThreadPanel({
 
       <div
         id="thread-panel"
-        className={`flex min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? '' : 'panel-animate'}`}
-        style={isFullscreen ? { flex: '1 1 50%' } : { width: `${threadWidth}px` }}
+        className={`flex min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
+        style={
+          isFullscreen ? { flex: "1 1 50%" } : { width: `${threadWidth}px` }
+        }
       >
         <ThreadHeader
           selectedMessageId={selectedMessageId}
@@ -190,7 +209,7 @@ export function ThreadPanel({
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
-          {viewMode === 'ticket' && ticket ? (
+          {viewMode === "ticket" && ticket ? (
             <TicketView ticket={ticket} />
           ) : (
             <>
@@ -201,10 +220,13 @@ export function ThreadPanel({
                 className="thread-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3"
               >
                 <div className="thread-events-list">
-                  <ThreadStatusMessage status={threadStatus} activeThreadId={activeThreadId} />
+                  <ThreadStatusMessage
+                    status={threadStatus}
+                    activeThreadId={activeThreadId}
+                  />
 
                   {threadNodes.map((node) => {
-                    if (node.kind === 'readglob-group') {
+                    if (node.kind === "readglob-group") {
                       return (
                         <ReadGlobGroup
                           key={node.id}
@@ -214,13 +236,15 @@ export function ThreadPanel({
                         />
                       );
                     }
-                    if (node.kind === 'plan-review') {
+                    if (node.kind === "plan-review") {
                       return <PlanReview key={node.id} node={node} />;
                     }
-                    if (node.kind === 'ask-user-question') {
+                    if (node.kind === "ask-user-question") {
                       return null;
                     }
-                    return <ThreadEvent key={node.event.id} event={node.event} />;
+                    return (
+                      <ThreadEvent key={node.event.id} event={node.event} />
+                    );
                   })}
                 </div>
               </div>
@@ -228,7 +252,7 @@ export function ThreadPanel({
               <button
                 type="button"
                 onClick={onScrollToLatest}
-                className={`jump-latest-chip ${showJumpToLatest ? 'visible' : ''}`}
+                className={`jump-latest-chip ${showJumpToLatest ? "visible" : ""}`}
               >
                 Jump to latest
               </button>
@@ -236,7 +260,9 @@ export function ThreadPanel({
           )}
         </div>
 
-        {viewMode === 'agent' && latestTodos && <StickyTodoList todos={latestTodos} />}
+        {viewMode === "agent" && latestTodos && (
+          <StickyTodoList todos={latestTodos} />
+        )}
 
         {pendingRunMessageId === selectedMessageId ? (
           <RunButtons
@@ -281,35 +307,69 @@ export function ThreadPanel({
   );
 }
 
-function StickyTodoList({ todos }: { todos: Array<{ content: string; status: string; activeForm?: string }> }) {
-  const hasActive = todos.some((t) => t.status !== 'completed');
+function StickyTodoList({
+  todos,
+}: {
+  todos: Array<{ content: string; status: string; activeForm?: string }>;
+}) {
+  const hasActive = todos.some((t) => t.status !== "completed");
   if (!hasActive) return null;
 
   return (
     <div className="sticky-todo-list border-t border-[#292e42] bg-[#1a1b26] px-4 py-2.5">
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#565f89]">Tasks</div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#565f89]">
+        Tasks
+      </div>
       <ul className="space-y-1">
         {todos.map((t, i) => (
           <li key={i} className="flex items-center gap-2 text-xs">
-            {t.status === 'in_progress' ? (
+            {t.status === "in_progress" ? (
               <svg
                 className="h-3 w-3 flex-shrink-0 animate-spin text-violet-400"
                 viewBox="0 0 24 24"
                 fill="none"
                 aria-hidden="true"
               >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
+                />
               </svg>
-            ) : t.status === 'completed' ? (
-              <svg className="h-3 w-3 flex-shrink-0 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+            ) : t.status === "completed" ? (
+              <svg
+                className="h-3 w-3 flex-shrink-0 text-green-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                aria-hidden="true"
+              >
                 <path d="M5 13l4 4L19 7" />
               </svg>
             ) : (
               <span className="flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-[#565f89]" />
             )}
-            <span className={t.status === 'completed' ? 'text-[#565f89] line-through' : t.status === 'in_progress' ? 'text-violet-300' : 'text-[#a9b1d6]'}>
-              {t.status === 'in_progress' && t.activeForm ? t.activeForm : t.content}
+            <span
+              className={
+                t.status === "completed"
+                  ? "text-[#565f89] line-through"
+                  : t.status === "in_progress"
+                    ? "text-violet-300"
+                    : "text-[#a9b1d6]"
+              }
+            >
+              {t.status === "in_progress" && t.activeForm
+                ? t.activeForm
+                : t.content}
             </span>
           </li>
         ))}
@@ -318,11 +378,23 @@ function StickyTodoList({ todos }: { todos: Array<{ content: string; status: str
   );
 }
 
-const HEADER_STATUS_CONFIG: Record<TicketStatus, { label: string; className: string }> = {
-  pending: { label: 'Pending', className: 'text-yellow-400 bg-yellow-400/10' },
-  creation: { label: 'Creating', className: 'text-orange-400 bg-orange-400/10' },
-  in_progress: { label: 'In Progress', className: 'text-blue-400 bg-blue-400/10' },
-  completed: { label: 'Completed', className: 'text-green-400 bg-green-400/10' },
+const HEADER_STATUS_CONFIG: Record<
+  TicketStatus,
+  { label: string; className: string }
+> = {
+  pending: { label: "Pending", className: "text-yellow-400 bg-yellow-400/10" },
+  creation: {
+    label: "Creating",
+    className: "text-orange-400 bg-orange-400/10",
+  },
+  in_progress: {
+    label: "In Progress",
+    className: "text-blue-400 bg-blue-400/10",
+  },
+  completed: {
+    label: "Completed",
+    className: "text-green-400 bg-green-400/10",
+  },
 };
 
 function ThreadHeader({
@@ -358,16 +430,24 @@ function ThreadHeader({
   onEnterFullscreen?: () => void;
   onExitFullscreen?: () => void;
 }) {
-  const statusConfig = HEADER_STATUS_CONFIG[messageStatus] ?? HEADER_STATUS_CONFIG.pending;
+  const statusConfig =
+    HEADER_STATUS_CONFIG[messageStatus] ?? HEADER_STATUS_CONFIG.pending;
 
   return (
-    <div id="thread-header" className="flex items-center justify-between border-b border-[#292e42] px-4 py-3">
+    <div
+      id="thread-header"
+      className="flex items-center justify-between border-b border-[#292e42] px-4 py-3"
+    >
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-semibold text-violet-300">
-          {selectedMessageId ? `trace/${selectedMessageId.slice(0, 8)}` : 'Thread'}
+          {selectedMessageId
+            ? `trace/${selectedMessageId.slice(0, 8)}`
+            : "Thread"}
         </h3>
         {selectedMessageId && (
-          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}>
+          <span
+            className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}
+          >
             {statusConfig.label}
           </span>
         )}
@@ -375,33 +455,36 @@ function ThreadHeader({
           <div className="flex rounded-lg bg-[#1f2335] p-0.5">
             <button
               type="button"
-              onClick={() => onSetViewMode('agent')}
+              onClick={() => onSetViewMode("agent")}
               className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                viewMode === 'agent'
-                  ? 'bg-violet-500/20 text-violet-300'
-                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+                viewMode === "agent"
+                  ? "bg-violet-500/20 text-violet-300"
+                  : "text-[#565f89] hover:text-[#a9b1d6]"
               }`}
             >
               Agent
             </button>
             <button
               type="button"
-              onClick={() => onSetViewMode('ticket')}
+              onClick={() => onSetViewMode("ticket")}
               className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                viewMode === 'ticket'
-                  ? 'bg-violet-500/20 text-violet-300'
-                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+                viewMode === "ticket"
+                  ? "bg-violet-500/20 text-violet-300"
+                  : "text-[#565f89] hover:text-[#a9b1d6]"
               }`}
             >
               Ticket
             </button>
           </div>
         )}
-        {hasWorktree === false && messageStatus !== 'pending' && messageStatus !== 'creation' && selectedMessageId && (
-          <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
-            Worktree deleted
-          </span>
-        )}
+        {hasWorktree === false &&
+          messageStatus !== "pending" &&
+          messageStatus !== "creation" &&
+          selectedMessageId && (
+            <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
+              Worktree deleted
+            </span>
+          )}
       </div>
       <div className="flex items-center gap-2">
         {hasWorktree === true && scriptsAvailable && (
@@ -465,7 +548,7 @@ function ThreadHeader({
             </svg>
           </button>
         )}
-        {hasWorktree === true && messageStatus === 'in_progress' && (
+        {hasWorktree === true && messageStatus === "in_progress" && (
           <button
             id="thread-merge-to-main"
             type="button"
@@ -520,7 +603,9 @@ function ThreadHeader({
         <button
           id="thread-close"
           type="button"
-          onClick={isFullscreen && onExitFullscreen ? onExitFullscreen : onClose}
+          onClick={
+            isFullscreen && onExitFullscreen ? onExitFullscreen : onClose
+          }
           className="cursor-pointer text-xl leading-none text-[#565f89] hover:text-[#c0caf5]"
         >
           &times;
@@ -530,18 +615,26 @@ function ThreadHeader({
   );
 }
 
-function ThreadStatusMessage({ status, activeThreadId }: { status: ThreadStatus; activeThreadId: string | null }) {
-  if (status === 'loading') {
+function ThreadStatusMessage({
+  status,
+  activeThreadId,
+}: {
+  status: ThreadStatus;
+  activeThreadId: string | null;
+}) {
+  if (status === "loading") {
     return <div className="text-sm text-[#565f89]">Loading events...</div>;
   }
-  if (status === 'empty') {
+  if (status === "empty") {
     return (
       <div className="text-sm text-[#565f89]">
-        {activeThreadId ? 'No events yet' : 'No threads yet. Send a message to start.'}
+        {activeThreadId
+          ? "No events yet"
+          : "No threads yet. Send a message to start."}
       </div>
     );
   }
-  if (status === 'error') {
+  if (status === "error") {
     return <div className="text-sm text-red-400">Failed to load events</div>;
   }
   return null;
@@ -569,7 +662,7 @@ function RunButtons({
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             onRun(false, prompt);
           }
@@ -598,7 +691,9 @@ function RunButtons({
 
 function ElapsedTimer({ startTime }: { startTime: string }) {
   const startRef = useRef(new Date(startTime).getTime());
-  const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - startRef.current) / 1000));
+  const [elapsed, setElapsed] = useState(() =>
+    Math.floor((Date.now() - startRef.current) / 1000),
+  );
 
   useEffect(() => {
     startRef.current = new Date(startTime).getTime();
@@ -616,11 +711,14 @@ function ElapsedTimer({ startTime }: { startTime: string }) {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   const h = Math.floor(m / 60);
-  const display = h > 0
-    ? `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-    : `${m}:${String(s).padStart(2, '0')}`;
+  const display =
+    h > 0
+      ? `${h}:${String(m % 60).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      : `${m}:${String(s).padStart(2, "0")}`;
 
-  return <span className="tabular-nums text-xs text-violet-400/70">{display}</span>;
+  return (
+    <span className="tabular-nums text-xs text-violet-400/70">{display}</span>
+  );
 }
 
 function ThreadInput({
@@ -631,11 +729,17 @@ function ThreadInput({
 }: {
   isClaudeRunning: boolean;
   lastUserMessageTime: string | null;
-  onSendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
+  onSendThreadMessage: (
+    text: string,
+    attachmentIds?: string[],
+    filePaths?: string[],
+  ) => Promise<boolean>;
   onStopClaude: () => void;
 }) {
-  const [threadInput, setThreadInput] = useState('');
-  const textareaRef = useAutoResizeTextarea(threadInput, { observeResize: true });
+  const [threadInput, setThreadInput] = useState("");
+  const textareaRef = useAutoResizeTextarea(threadInput, {
+    observeResize: true,
+  });
   const slashCommands = useSlashCommands(threadInput, setThreadInput);
   const imageAttachments = useImageAttachments();
 
@@ -651,7 +755,7 @@ function ThreadInput({
       filePaths.length > 0 ? filePaths : undefined,
     );
     if (sent) {
-      setThreadInput('');
+      setThreadInput("");
       imageAttachments.clearAttachments();
     }
   }, [threadInput, isClaudeRunning, onSendThreadMessage, imageAttachments]);
@@ -666,19 +770,51 @@ function ThreadInput({
             fill="none"
             aria-hidden="true"
           >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="3"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
+            />
           </svg>
           <span className="text-xs text-violet-400">Claude is working...</span>
-          {lastUserMessageTime && <ElapsedTimer startTime={lastUserMessageTime} />}
+          {lastUserMessageTime && (
+            <ElapsedTimer startTime={lastUserMessageTime} />
+          )}
         </div>
       )}
-      <ImageThumbnails images={imageAttachments.attachments} onRemove={imageAttachments.removeAttachment} />
+      <ImageThumbnails
+        images={imageAttachments.attachments}
+        onRemove={imageAttachments.removeAttachment}
+      />
       {imageAttachments.uploading && (
         <div className="flex items-center gap-2 px-1 pb-2">
-          <svg className="h-3.5 w-3.5 animate-spin text-violet-400" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+          <svg
+            className="h-3.5 w-3.5 animate-spin text-violet-400"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="3"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
+            />
           </svg>
           <span className="text-xs text-[#565f89]">Uploading...</span>
         </div>
@@ -701,13 +837,15 @@ function ThreadInput({
             onPaste={(e) => void imageAttachments.handlePaste(e)}
             onKeyDown={(e) => {
               if (slashCommands.handleKeyDown(e)) return;
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (!isClaudeRunning) void handleSendThreadMessage();
               }
             }}
-            placeholder={isClaudeRunning ? 'Waiting for Claude...' : 'Send to Claude...'}
-            className={`w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
+            placeholder={
+              isClaudeRunning ? "Waiting for Claude..." : "Send to Claude..."
+            }
+            className={`w-full resize-none rounded-lg border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? "opacity-50 cursor-not-allowed" : ""}`}
           />
         </div>
         {isClaudeRunning ? (
@@ -718,7 +856,12 @@ function ThreadInput({
             title="Stop Claude"
             className="cursor-pointer rounded-lg bg-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="currentColor"
+              aria-hidden="true"
+            >
               <rect x="6" y="6" width="12" height="12" rx="1" />
             </svg>
           </button>
@@ -730,7 +873,14 @@ function ThreadInput({
             title="Send"
             className="cursor-pointer rounded-lg bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
               <path d="M22 2L11 13" />
               <path d="M22 2L15 22L11 13L2 9L22 2Z" />
             </svg>

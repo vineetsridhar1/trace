@@ -7,8 +7,26 @@ import {
   deleteColumn,
   moveTicket,
 } from '../services/ticketService';
+import { getStorage } from '../services/storageService';
 
 const router = Router();
+
+function resolveAttachmentUrls(columns: Awaited<ReturnType<typeof getBoard>>) {
+  const storage = getStorage();
+  return columns.map((col) => ({
+    ...col,
+    tickets: col.tickets.map((ticket) => ({
+      ...ticket,
+      message: {
+        ...ticket.message,
+        attachments: ticket.message.attachments.map((a) => ({
+          ...a,
+          url: storage.url(a.key),
+        })),
+      },
+    })),
+  }));
+}
 
 function isNotFound(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025';
@@ -17,7 +35,7 @@ function isNotFound(error: unknown): boolean {
 // GET /:id/board - get full kanban board
 router.get('/:id/board', async (req: Request<{ id: string }>, res: Response) => {
   const board = await getBoard(req.params.id);
-  res.json({ columns: board });
+  res.json({ columns: resolveAttachmentUrls(board) });
 });
 
 // POST /:id/board/columns - create column

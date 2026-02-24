@@ -184,6 +184,9 @@ export async function createUserMessage(channelId: string, text: string, attachm
         sessionId: USER_SESSION_ID,
         preview: text,
         importance: 'important',
+        ...(attachmentIds && attachmentIds.length > 0
+          ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
+          : {}),
       },
     });
 
@@ -195,7 +198,7 @@ export async function createUserMessage(channelId: string, text: string, attachm
       data: {
         sessionId: USER_SESSION_ID,
         hookEventName: 'UserPromptSubmit',
-        rawPayload: buildUserPromptPayload(text, attachmentMetas),
+        rawPayload: JSON.parse(JSON.stringify(buildUserPromptPayload(text, attachmentMetas))),
         threadId: thread.id,
         importance: 'important',
       },
@@ -244,7 +247,7 @@ export async function appendPromptToMessageThread(
       data: {
         sessionId: message.sessionId,
         hookEventName: 'UserPromptSubmit',
-        rawPayload: buildUserPromptPayload(text, attachmentMetas),
+        rawPayload: JSON.parse(JSON.stringify(buildUserPromptPayload(text, attachmentMetas))),
         threadId: thread.id,
         importance: 'important',
       },
@@ -255,6 +258,9 @@ export async function appendPromptToMessageThread(
       data: {
         preview: text,
         importance: 'important',
+        ...(attachmentIds && attachmentIds.length > 0
+          ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
+          : {}),
       },
     });
 

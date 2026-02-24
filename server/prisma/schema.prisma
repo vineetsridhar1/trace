@@ -49,10 +49,11 @@ model Message {
   claudeSessionId String?  @map("claude_session_id")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  channel Channel @relation(fields: [channelId], references: [id])
-  session Session @relation(fields: [sessionId], references: [sessionId])
-  threads Thread[]
-  ticket  Ticket?
+  channel     Channel      @relation(fields: [channelId], references: [id])
+  session     Session      @relation(fields: [sessionId], references: [sessionId])
+  threads     Thread[]
+  ticket      Ticket?
+  attachments Attachment[]
 
   @@index([channelId, createdAt])
   @@map("messages")
@@ -141,6 +142,8 @@ model Attachment {
   byteSize    Int      @map("byte_size")
   checksum    String
   createdAt   DateTime @default(now()) @map("created_at")
+
+  messages Message[]
 
   @@map("attachments")
 }

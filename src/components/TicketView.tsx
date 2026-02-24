@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import type { KanbanTicket } from '../types';
+import { SERVER_URL } from '../types';
+import { ImageLightbox } from './ImageLightbox';
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'text-yellow-400 bg-yellow-400/10' },
@@ -14,6 +17,8 @@ const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = 
 
 export function TicketView({ ticket }: { ticket: KanbanTicket }) {
   const statusConfig = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
+  const attachments = ticket.message.attachments ?? [];
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -75,6 +80,34 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
           </div>
         );
       })()}
+
+      {attachments.length > 0 && (
+        <div className="mb-4">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#565f89]">
+            Attachments
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setLightboxSrc(`${SERVER_URL}${a.url}`)}
+                className="h-16 w-16 overflow-hidden rounded-md border border-[#3b4261] transition-colors hover:border-[#7aa2f7]"
+              >
+                <img
+                  src={`${SERVER_URL}${a.url}`}
+                  alt={a.filename}
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} alt="Attached image" onClose={() => setLightboxSrc(null)} />
+      )}
     </div>
   );
 }

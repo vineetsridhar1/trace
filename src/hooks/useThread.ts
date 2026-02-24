@@ -188,6 +188,13 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     }));
   }, []);
 
+  const syncSelectedMessage = useCallback((message: ChannelMessage) => {
+    setSelectedMessage((current) => {
+      if (current && current.id === message.id) return message;
+      return current;
+    });
+  }, []);
+
   return {
     selectedMessageId,
     selectedMessage,
@@ -213,5 +220,6 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     deleteWorktree,
     mergeWorktree,
     toggleReadGroup,
+    syncSelectedMessage,
   };
 }

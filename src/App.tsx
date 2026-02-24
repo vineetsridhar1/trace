@@ -63,7 +63,17 @@ export default function App() {
     openThreadPanel,
     deleteWorktree,
     toggleReadGroup,
+    syncSelectedMessage,
   } = useThread({ getChannelRepoPath, getChannelBaseBranch });
+
+  // Wrap upsertMessage to also keep selectedMessage in sync
+  const upsertAndSyncMessage = useCallback(
+    (message: ChannelMessage) => {
+      upsertMessage(message);
+      syncSelectedMessage(message);
+    },
+    [upsertMessage, syncSelectedMessage],
+  );
 
   const {
     threadContentRef,
@@ -213,7 +223,7 @@ export default function App() {
 
   const { sseConnected } = useSse({
     activeChannelId,
-    upsertMessage,
+    upsertMessage: upsertAndSyncMessage,
     loadThreadEvents,
     reportClaudeActivity,
     selectedMessageIdRef,
@@ -237,12 +247,12 @@ export default function App() {
         );
         if (!response.ok) return;
         const { message } = (await response.json()) as { message: ChannelMessage };
-        upsertMessage(message);
+        upsertAndSyncMessage(message);
       } catch {
         console.error('Failed to update message status');
       }
     },
-    [activeChannelId, upsertMessage],
+    [activeChannelId, upsertAndSyncMessage],
   );
 
   const handleSetView = useCallback(
@@ -309,7 +319,7 @@ export default function App() {
     selectedMessageIdRef,
     onMessageCreated: handleOpenThread,
     loadThreadEvents,
-    upsertMessage,
+    upsertMessage: upsertAndSyncMessage,
     setHasWorktree,
     updateMessageStatus,
     getCreationCommands,

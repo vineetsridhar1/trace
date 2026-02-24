@@ -83,12 +83,14 @@ export async function spawnClaude(
   if (resumeSessionId) {
     args.push('--resume', resumeSessionId);
   }
+
+  let finalPrompt = effectivePrompt;
   if (filePaths && filePaths.length > 0) {
-    for (const filePath of filePaths) {
-      args.push('--file', filePath);
-    }
+    const imageList = filePaths.map((p) => `- ${p}`).join('\n');
+    finalPrompt += `\n\n<trace-internal>\nThe user has attached the following image files. Read them to see their contents:\n${imageList}\n</trace-internal>`;
   }
-  args.push('-p', effectivePrompt);
+
+  args.push('-p', finalPrompt);
 
   const child = spawn('claude', args, {
     cwd: worktreePath,

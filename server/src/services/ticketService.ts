@@ -1,6 +1,26 @@
 import prisma from '../lib/prisma';
 import { sseManager } from './sseManager';
 import { generateTicketFromMessage, updateTicketFromContext } from './ticketAiService';
+import { getStorage } from './storageService';
+
+function resolveTicketAttachmentUrls<T extends { message: { attachments: { id: string; key: string; filename: string; contentType: string }[] } }>(ticket: T) {
+  const storage = getStorage();
+  return {
+    ...ticket,
+    message: {
+      ...ticket.message,
+      attachments: ticket.message.attachments.map((a) => ({ ...a, url: storage.url(a.key) })),
+    },
+  };
+}
+
+const TICKET_MESSAGE_SELECT = {
+  id: true,
+  branch: true,
+  status: true,
+  createdAt: true,
+  attachments: { select: { id: true, key: true, filename: true, contentType: true } },
+} as const;
 
 const DEFAULT_COLUMNS = [
   { name: 'TODO', slug: 'todo', color: '#f7768e', sortOrder: 0 },
@@ -47,7 +67,7 @@ export async function getBoard(channelId: string) {
         orderBy: { sortOrder: 'asc' },
         include: {
           message: {
-            select: { id: true, branch: true, status: true, createdAt: true },
+            select: TICKET_MESSAGE_SELECT,
           },
         },
       },
@@ -96,14 +116,14 @@ export async function createTicketForMessage(
     },
     include: {
       message: {
-        select: { id: true, branch: true, status: true, createdAt: true },
+        select: TICKET_MESSAGE_SELECT,
       },
     },
   });
 
   sseManager.broadcastChannel(channelId, 'ticket-created', {
     channelId,
-    ticket: { ...ticket, columnSlug: todoColumn.slug },
+    ticket: { ...resolveTicketAttachmentUrls(ticket), columnSlug: todoColumn.slug },
   });
 
   return ticket;
@@ -143,14 +163,14 @@ export async function updateTicketFromEvent(
     include: {
       column: true,
       message: {
-        select: { id: true, branch: true, status: true, createdAt: true },
+        select: TICKET_MESSAGE_SELECT,
       },
     },
   });
 
   sseManager.broadcastChannel(channelId, 'ticket-updated', {
     channelId,
-    ticket: { ...updated, columnSlug: updated.column.slug },
+    ticket: { ...resolveTicketAttachmentUrls(updated), columnSlug: updated.column.slug },
   });
 
   return updated;
@@ -163,7 +183,7 @@ export async function moveTicket(ticketId: string, columnId: string, sortOrder: 
     include: {
       column: true,
       message: {
-        select: { id: true, branch: true, status: true, createdAt: true, channelId: true },
+        select: { ...TICKET_MESSAGE_SELECT, channelId: true },
       },
     },
   });
@@ -172,7 +192,7 @@ export async function moveTicket(ticketId: string, columnId: string, sortOrder: 
 
   sseManager.broadcastChannel(channelId, 'ticket-updated', {
     channelId,
-    ticket: { ...ticket, columnSlug: ticket.column.slug },
+    ticket: { ...resolveTicketAttachmentUrls(ticket), columnSlug: ticket.column.slug },
   });
 
   return ticket;
@@ -216,14 +236,14 @@ export async function syncTicketWithMessageStatus(
     include: {
       column: true,
       message: {
-        select: { id: true, branch: true, status: true, createdAt: true },
+        select: TICKET_MESSAGE_SELECT,
       },
     },
   });
 
   sseManager.broadcastChannel(channelId, 'ticket-updated', {
     channelId,
-    ticket: { ...updated, columnSlug: updated.column.slug },
+    ticket: { ...resolveTicketAttachmentUrls(updated), columnSlug: updated.column.slug },
   });
 
   return updated;

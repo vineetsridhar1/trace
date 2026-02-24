@@ -140,6 +140,14 @@ export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
 export type MiddlePanelView = 'feed' | 'board';
 
+export interface TicketAttachment {
+  id: string;
+  key: string;
+  filename: string;
+  contentType: string;
+  url: string;
+}
+
 export interface KanbanTicket {
   id: string;
   messageId: string;
@@ -158,6 +166,7 @@ export interface KanbanTicket {
     branch: string | null;
     status: string;
     createdAt: string;
+    attachments?: TicketAttachment[];
   };
 }
 
