@@ -219,27 +219,41 @@ export function ThreadPanel({
                     activeThreadId={activeThreadId}
                   />
 
-                  {threadNodes.map((node) => {
-                    if (node.kind === "readglob-group") {
+                  {(() => {
+                    let lastUserPromptTime: string | null = null;
+                    return threadNodes.map((node) => {
+                      if (node.kind === "readglob-group") {
+                        return (
+                          <ReadGlobGroup
+                            key={node.id}
+                            node={node}
+                            isExpanded={Boolean(expandedReadGroupIds[node.id])}
+                            onToggle={() => onToggleReadGroup(node.id)}
+                          />
+                        );
+                      }
+                      if (node.kind === "plan-review") {
+                        return <PlanReview key={node.id} node={node} />;
+                      }
+                      if (node.kind === "ask-user-question") {
+                        return null;
+                      }
+                      if (node.event.hookEventName === "UserPromptSubmit") {
+                        lastUserPromptTime = node.event.timestamp;
+                      }
+                      let duration: number | undefined;
+                      if (node.event.hookEventName === "Stop" && lastUserPromptTime) {
+                        duration = Math.floor(
+                          (new Date(node.event.timestamp).getTime() -
+                            new Date(lastUserPromptTime).getTime()) /
+                            1000,
+                        );
+                      }
                       return (
-                        <ReadGlobGroup
-                          key={node.id}
-                          node={node}
-                          isExpanded={Boolean(expandedReadGroupIds[node.id])}
-                          onToggle={() => onToggleReadGroup(node.id)}
-                        />
+                        <ThreadEvent key={node.event.id} event={node.event} duration={duration} />
                       );
-                    }
-                    if (node.kind === "plan-review") {
-                      return <PlanReview key={node.id} node={node} />;
-                    }
-                    if (node.kind === "ask-user-question") {
-                      return null;
-                    }
-                    return (
-                      <ThreadEvent key={node.event.id} event={node.event} />
-                    );
-                  })}
+                    });
+                  })()}
                 </div>
               </div>
 

@@ -1,9 +1,9 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ServerEvent, PlanReviewNode } from '../types';
 import { SERVER_URL } from '../types';
-import { extractPromptText, extractAttachments, formatTime, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath, stripTraceInternal } from '../utils';
+import { extractPromptText, extractAttachments, formatTime, formatDuration, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath, stripTraceInternal } from '../utils';
 import { ImageLightbox } from './ImageLightbox';
 import { EditDiffPreview } from './EditDiffPreview';
 import { SyntaxHighlightedCode } from './SyntaxHighlight';
@@ -54,7 +54,7 @@ function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: num
   );
 }
 
-export function ThreadEvent({ event }: { event: ServerEvent }) {
+export function ThreadEvent({ event, duration }: { event: ServerEvent; duration?: number }) {
   const time = formatTime(event.timestamp);
 
   if (event.hookEventName === 'UserPromptSubmit') {
@@ -66,7 +66,7 @@ export function ThreadEvent({ event }: { event: ServerEvent }) {
   }
 
   if (event.hookEventName === 'Stop') {
-    return <StopBubble event={event} time={time} />;
+    return <StopBubble event={event} time={time} duration={duration} />;
   }
 
   return <GenericEventRow event={event} time={time} />;
@@ -329,7 +329,49 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
   );
 }
 
-function StopBubble({ event, time }: { event: ServerEvent; time: string }) {
+function CopyMessageButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 2000);
+  }, [text]);
+
+  if (copied) {
+    return (
+      <button type="button" className="flex items-center gap-1 text-green-400 text-[11px]" disabled>
+        <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+        Copied
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy message"
+      className="flex cursor-pointer items-center gap-1 text-[11px] text-[#565f89] transition-colors hover:text-[#c0caf5]"
+    >
+      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <rect x="9" y="9" width="13" height="13" rx="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </svg>
+      Copy
+    </button>
+  );
+}
+
+function StopBubble({ event, time, duration }: { event: ServerEvent; time: string; duration?: number }) {
   const message = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage) : '';
   const stopReason = (event.rawPayload as Record<string, unknown>)?.stop_reason;
   const isUserStop = stopReason === 'user';
@@ -354,6 +396,12 @@ function StopBubble({ event, time }: { event: ServerEvent; time: string }) {
       </div>
       <div className="activity-row-note">
         <ExpandableText text={displayMessage} lineClamp={4} />
+      </div>
+      <div className="mt-1.5 flex items-center gap-3">
+        {duration != null && (
+          <span className="text-[11px] text-[#565f89]">{formatDuration(duration)}</span>
+        )}
+        {message && <CopyMessageButton text={message} />}
       </div>
     </div>
   );

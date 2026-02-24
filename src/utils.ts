@@ -382,6 +382,17 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
   return nodes;
 }
 
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m < 60) return rem > 0 ? `${m} min ${rem}s` : `${m} min`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return remM > 0 ? `${h} hr ${remM} min` : `${h} hr`;
+}
+
 export function extractEditDiffContent(event: ServerEvent): ExtractedDiffContent {
   const rawFilePath =
     findStringByKeys(event.toolInput, ['file_path', 'path', 'filepath', 'relative_path']) ??
