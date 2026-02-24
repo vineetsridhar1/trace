@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage, MiddlePanelView, StartupScript, TicketStatus } from './types';
+import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { SERVER_URL } from './types';
 import { buildThreadNodes } from './utils';
 import { useChannels } from './hooks/useChannels';
@@ -10,6 +10,7 @@ import { usePanelResize } from './hooks/usePanelResize';
 import { useSse } from './hooks/useSse';
 import { useChannelSettings } from './hooks/useChannelSettings';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
+import { useLocalConfig } from './hooks/useLocalConfig';
 import { useClaudeMessageActions } from './hooks/useClaudeMessageActions';
 import { useKanban } from './hooks/useKanban';
 import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
@@ -19,7 +20,7 @@ import { ThreadPanel } from './components/ThreadPanel';
 import { WorktreeChanges } from './components/WorktreeChanges';
 import { Terminal } from './components/Terminal';
 import { ChannelSettingsModal } from './components/ChannelSettingsModal';
-import type { DraftScript } from './components/ChannelSettingsModal';
+import { CreateChannelModal } from './components/CreateChannelModal';
 import { TerminalTabs } from './components/TerminalTabs';
 
 export default function App() {
@@ -37,6 +38,11 @@ export default function App() {
     refreshMessages,
     clearMessages,
   } = useMessages();
+
+  const activeChannelRef = useRef<Channel | null>(null);
+
+  const getChannelRepoPath = useCallback(() => activeChannelRef.current?.localRepoPath ?? '', []);
+  const getChannelBaseBranch = useCallback(() => activeChannelRef.current?.baseBranch ?? 'main', []);
 
   const {
     selectedMessageId,
@@ -57,7 +63,7 @@ export default function App() {
     openThreadPanel,
     deleteWorktree,
     toggleReadGroup,
-  } = useThread();
+  } = useThread({ getChannelRepoPath, getChannelBaseBranch });
 
   const {
     threadContentRef,
@@ -68,13 +74,66 @@ export default function App() {
   } = useThreadScroll(threadEvents, selectedMessageId);
 
   const {
-    scripts,
-    fetchScripts,
     updateChannel: updateChannelSettings,
-    addScript,
-    updateScript,
-    deleteScript,
   } = useChannelSettings();
+
+  const {
+    configs: localConfigs,
+    getConfig: getLocalConfig,
+    setConfig: setLocalConfig,
+  } = useLocalConfig();
+
+  const enrichedChannels: Channel[] = useMemo(
+    () =>
+      channels.map((ch) => {
+        const local = localConfigs[ch.id];
+        if (!local) return ch;
+        return {
+          ...ch,
+          localRepoPath: local.localRepoPath ?? ch.localRepoPath,
+          creationScript: local.creationScript ?? ch.creationScript,
+        };
+      }),
+    [channels, localConfigs],
+  );
+
+  const enrichedActiveChannel = useMemo(
+    () => enrichedChannels.find((ch) => ch.id === activeChannelId) ?? null,
+    [enrichedChannels, activeChannelId],
+  );
+  activeChannelRef.current = enrichedActiveChannel;
+
+  // One-time migration: copy DB localRepoPath/creationScript into local config
+  const migrationRanRef = useRef(false);
+  useEffect(() => {
+    if (migrationRanRef.current || channels.length === 0 || Object.keys(localConfigs).length > 0) return;
+    migrationRanRef.current = true;
+
+    const migrateChannels = async () => {
+      for (const ch of channels) {
+        if (ch.localRepoPath && !localConfigs[ch.id]) {
+          const config: LocalChannelConfig = {
+            localRepoPath: ch.localRepoPath,
+            creationScript: ch.creationScript ?? undefined,
+          };
+          // Fetch startup scripts from server for migration
+          try {
+            const res = await fetch(`${SERVER_URL}/channels/${ch.id}/startup-scripts`);
+            if (res.ok) {
+              const data = (await res.json()) as { scripts: { name: string; command: string }[] };
+              if (data.scripts.length > 0) {
+                config.startupScripts = data.scripts.map((s) => ({ name: s.name, command: s.command }));
+              }
+            }
+          } catch {
+            // ignore migration errors
+          }
+          await setLocalConfig(ch.id, config);
+        }
+      }
+    };
+    void migrateChannels();
+  }, [channels, localConfigs, setLocalConfig]);
 
   const {
     terminals: startupTerminalList,
@@ -108,6 +167,7 @@ export default function App() {
   const [settingsChannelId, setSettingsChannelId] = useState<string | null>(
     null,
   );
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
 
   const { dragging, startDragging } = usePanelResize(
@@ -203,7 +263,7 @@ export default function App() {
     [activeChannelId, moveTicket],
   );
 
-  const feedTitle = activeChannel ? `# ${activeChannel.name}` : 'Activity Feed';
+  const feedTitle = enrichedActiveChannel ? `# ${enrichedActiveChannel.name}` : 'Activity Feed';
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
   const selectedMessageStatus: TicketStatus = useMemo(() => {
     const selected = messages.find((message) => message.id === selectedMessageId);
@@ -235,12 +295,12 @@ export default function App() {
   );
 
   const getCreationCommands = useCallback((): string[] => {
-    if (!activeChannel?.creationScript) return [];
-    return activeChannel.creationScript
+    if (!enrichedActiveChannel?.creationScript) return [];
+    return enrichedActiveChannel.creationScript
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
-  }, [activeChannel]);
+  }, [enrichedActiveChannel]);
 
   const claudeActions = useClaudeMessageActions({
     activeChannelId,
@@ -253,6 +313,8 @@ export default function App() {
     setHasWorktree,
     updateMessageStatus,
     getCreationCommands,
+    getChannelRepoPath,
+    getChannelBaseBranch,
   });
 
   const claudeActionsContextValue = useMemo(
@@ -399,91 +461,44 @@ export default function App() {
   }, [addTerminal]);
 
   const settingsChannel = useMemo(
-    () => channels.find((channel) => channel.id === settingsChannelId) ?? null,
-    [channels, settingsChannelId],
+    () => enrichedChannels.find((channel) => channel.id === settingsChannelId) ?? null,
+    [enrichedChannels, settingsChannelId],
   );
 
   const handleOpenSettings = useCallback(
     (channelId: string) => {
       setSettingsChannelId(channelId);
-      void fetchScripts(channelId);
     },
-    [fetchScripts],
+    [],
   );
 
   const handleSaveSettings = useCallback(
-    async (cwd: string | null, creationScript: string | null, draftScripts: DraftScript[]) => {
+    async (baseBranch: string | null, localConfig: LocalChannelConfig | null) => {
       if (!settingsChannelId) return;
 
-      await updateChannelSettings(settingsChannelId, { cwd, creationScript });
+      await updateChannelSettings(settingsChannelId, { baseBranch });
 
-      const existingIds = new Set(scripts.map((script) => script.id));
-      const draftIds = new Set(
-        draftScripts
-          .map((script) => script.id)
-          .filter((id): id is string => Boolean(id)),
-      );
+      if (localConfig) {
+        await setLocalConfig(settingsChannelId, localConfig);
+      }
 
-      const deleteTasks = scripts
-        .filter((script) => !draftIds.has(script.id))
-        .map((script) => deleteScript(settingsChannelId, script.id));
-
-      const upsertTasks = draftScripts.flatMap((script, index) => {
-        const name = script.name.trim();
-        const command = script.command.trim();
-        if (!name && !command) return [];
-
-        if (script.id && existingIds.has(script.id)) {
-          return [
-            updateScript(settingsChannelId, script.id, {
-              name,
-              command,
-              sortOrder: index,
-            }),
-          ];
-        }
-
-        return [addScript(settingsChannelId, name, command)];
-      });
-
-      await Promise.all([...deleteTasks, ...upsertTasks]);
       void refreshChannels();
     },
-    [
-      addScript,
-      deleteScript,
-      refreshChannels,
-      scripts,
-      settingsChannelId,
-      updateChannelSettings,
-      updateScript,
-    ],
+    [refreshChannels, settingsChannelId, updateChannelSettings, setLocalConfig],
   );
 
-  const fetchChannelScripts = useCallback(async (channelId: string) => {
-    try {
-      const response = await fetch(`${SERVER_URL}/channels/${channelId}/startup-scripts`);
-      if (!response.ok) return [] as StartupScript[];
-      const { scripts: channelScripts } = (await response.json()) as {
-        scripts: StartupScript[];
-      };
-      return channelScripts;
-    } catch {
-      return [] as StartupScript[];
-    }
-  }, []);
-
   const handleRunStartupScripts = useCallback(
-    async (channelId: string) => {
-      const channel = channels.find((item) => item.id === channelId);
-      if (!channel?.cwd) return;
+    (channelId: string) => {
+      const channel = enrichedChannels.find((item) => item.id === channelId);
+      if (!channel?.localRepoPath) return;
 
-      const channelScripts = await fetchChannelScripts(channelId);
-      if (channelScripts.length === 0) return;
+      const config = getLocalConfig(channelId);
+      const scripts = config?.startupScripts ?? [];
+      if (scripts.length === 0) return;
 
-      runAllScripts(channelId, channel.cwd, channelScripts);
+      runAllScripts(channelId, channel.localRepoPath, scripts);
     },
-    [channels, fetchChannelScripts, runAllScripts],
+    [enrichedChannels, getLocalConfig, runAllScripts],
   );
 
   const handleRunMessageScripts = useCallback(async () => {
@@ -498,17 +513,18 @@ export default function App() {
       return;
     }
 
-    const channelScripts = await fetchChannelScripts(activeChannelId);
-    if (channelScripts.length === 0) return;
+    const config = getLocalConfig(activeChannelId);
+    const scripts = config?.startupScripts ?? [];
+    if (scripts.length === 0) return;
 
     const portResult = await window.traceAPI.allocatePorts(
       selectedMessageId,
-      channelScripts.length,
+      scripts.length,
     );
     if (!portResult.success || !portResult.ports) return;
 
     const ports = portResult.ports;
-    const envMaps: Record<string, string>[] = channelScripts.map((_, scriptIndex) => {
+    const envMaps: Record<string, string>[] = scripts.map((_, scriptIndex) => {
       const env: Record<string, string> = {
         PORT: String(ports[scriptIndex]),
         TRACE_BASE_PORT: String(ports[0]),
@@ -522,26 +538,28 @@ export default function App() {
     runAllScripts(
       selectedMessageId,
       worktreeResult.worktreePath,
-      channelScripts,
+      scripts,
       envMaps,
     );
-  }, [activeChannelId, fetchChannelScripts, runAllScripts, selectedMessageId]);
+  }, [activeChannelId, getLocalConfig, runAllScripts, selectedMessageId]);
 
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
   const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
-  const activeChannelCwd = activeChannel?.cwd ?? '';
+  const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
+  const activeChannelBaseBranch = enrichedActiveChannel?.baseBranch ?? 'main';
 
   return (
     <ClaudeActionsProvider value={claudeActionsContextValue}>
       <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
         <ChannelPanel
-          channels={channels}
+          channels={enrichedChannels}
           activeChannelId={activeChannelId}
           channelWidth={isFullscreen ? 0 : channelWidth}
           dragging={dragging}
           onSwitchChannel={handleSwitchChannel}
           onOpenSettings={handleOpenSettings}
-          onRunStartupScripts={(channelId) => void handleRunStartupScripts(channelId)}
+          onRunStartupScripts={handleRunStartupScripts}
+          onCreateChannel={() => setShowCreateChannel(true)}
           onStartDrag={() => startDragging('left')}
         />
 
@@ -587,7 +605,7 @@ export default function App() {
               <TerminalTabs
                 terminals={startupTerminalList}
                 activeTabId={activeTabId}
-                cwd={startupTerminalsCwd || activeChannelCwd}
+                cwd={startupTerminalsCwd || activeChannelRepoPath}
                 onSelectTab={setActiveTabId}
                 onCloseTab={killTerminal}
                 onCloseAll={killAllTerminals}
@@ -641,7 +659,7 @@ export default function App() {
           }}
         >
           <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
-            {isFullscreen && <WorktreeChanges messageId={selectedMessageId} />}
+            {isFullscreen && <WorktreeChanges messageId={selectedMessageId} baseBranch={activeChannelBaseBranch} />}
           </div>
           <div
             className="overflow-hidden"
@@ -654,7 +672,7 @@ export default function App() {
               <TerminalTabs
                 terminals={startupTerminalList}
                 activeTabId={activeTabId}
-                cwd={activeChannelCwd}
+                cwd={activeChannelRepoPath}
                 onSelectTab={setActiveTabId}
                 onCloseTab={killTerminal}
                 onCloseAll={killAllTerminals}
@@ -669,9 +687,20 @@ export default function App() {
         {settingsChannel && (
           <ChannelSettingsModal
             channel={settingsChannel}
-            scripts={scripts}
+            localConfig={getLocalConfig(settingsChannel.id)}
             onClose={() => setSettingsChannelId(null)}
             onSave={handleSaveSettings}
+          />
+        )}
+
+        {showCreateChannel && (
+          <CreateChannelModal
+            onClose={() => setShowCreateChannel(false)}
+            onCreated={() => {
+              setShowCreateChannel(false);
+              void refreshChannels();
+            }}
+            onLocalConfigSave={setLocalConfig}
           />
         )}
       </div>

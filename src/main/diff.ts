@@ -22,9 +22,9 @@ async function runGit(args: string[], cwd: string): Promise<string> {
   }
 }
 
-export async function getWorktreeDiff(worktreePath: string): Promise<WorktreeDiffResult> {
+export async function getWorktreeDiff(worktreePath: string, baseBranch: string = 'main'): Promise<WorktreeDiffResult> {
   const [branchDiff, uncommittedDiff, stagedDiff, status] = await Promise.all([
-    runGit(['diff', 'main...HEAD'], worktreePath),
+    runGit(['diff', `${baseBranch}...HEAD`], worktreePath),
     runGit(['diff'], worktreePath),
     runGit(['diff', '--cached'], worktreePath),
     runGit(['status', '--porcelain'], worktreePath),

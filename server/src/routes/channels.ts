@@ -2,12 +2,10 @@ import { Router, Request, Response } from 'express';
 import {
   listChannels,
   getChannel,
+  createChannel,
   updateChannel,
-  listStartupScripts,
-  createStartupScript,
-  updateStartupScript,
-  deleteStartupScript,
 } from '../services/channelService';
+import { validateGitRepo, getOriginRemoteUrl, listBranches } from '../services/gitService';
 import {
   getMessagesByChannel,
   getThreadsByMessage,
@@ -28,6 +26,54 @@ router.get('/', async (_req: Request, res: Response) => {
   res.json({ channels });
 });
 
+router.post('/', async (req: Request, res: Response) => {
+  const { name, githubUrl, baseBranch } = req.body;
+  if (!name || typeof name !== 'string') {
+    res.status(400).json({ error: 'name is required' });
+    return;
+  }
+
+  const channel = await createChannel({
+    name,
+    baseBranch: baseBranch || 'main',
+    githubUrl: githubUrl || null,
+  });
+  res.status(201).json({ channel });
+});
+
+router.post('/validate-repo', async (req: Request, res: Response) => {
+  const { localRepoPath } = req.body;
+  if (!localRepoPath || typeof localRepoPath !== 'string') {
+    res.json({ valid: false, error: 'Path is required' });
+    return;
+  }
+
+  const validation = await validateGitRepo(localRepoPath);
+  if (!validation.valid) {
+    res.json({ valid: false, error: validation.error });
+    return;
+  }
+
+  const originUrl = await getOriginRemoteUrl(localRepoPath);
+  if (!originUrl) {
+    res.json({ valid: false, error: 'No origin remote found. Please add an origin remote to this repository.' });
+    return;
+  }
+
+  res.json({ valid: true, originUrl });
+});
+
+router.post('/validate-repo/branches', async (req: Request, res: Response) => {
+  const { localRepoPath } = req.body;
+  if (!localRepoPath || typeof localRepoPath !== 'string') {
+    res.json({ branches: [] });
+    return;
+  }
+
+  const branches = await listBranches(localRepoPath);
+  res.json({ branches });
+});
+
 router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
   const channel = await getChannel(req.params.id);
   if (!channel) {
@@ -38,71 +84,26 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
 });
 
 router.patch('/:id', async (req: Request<{ id: string }>, res: Response) => {
-  const { name, cwd, creationScript } = req.body;
+  const { name, baseBranch, githubUrl } = req.body;
   if (name !== undefined && typeof name !== 'string') {
     res.status(400).json({ error: 'name must be a string' });
     return;
   }
-  if (cwd !== undefined && cwd !== null && typeof cwd !== 'string') {
-    res.status(400).json({ error: 'cwd must be a string or null' });
+  if (baseBranch !== undefined && baseBranch !== null && typeof baseBranch !== 'string') {
+    res.status(400).json({ error: 'baseBranch must be a string or null' });
     return;
   }
-  if (creationScript !== undefined && creationScript !== null && typeof creationScript !== 'string') {
-    res.status(400).json({ error: 'creationScript must be a string or null' });
+  if (githubUrl !== undefined && githubUrl !== null && typeof githubUrl !== 'string') {
+    res.status(400).json({ error: 'githubUrl must be a string or null' });
     return;
   }
-  const data: { name?: string; cwd?: string | null; creationScript?: string | null } = {};
+  const data: { name?: string; baseBranch?: string | null; githubUrl?: string | null } = {};
   if (name !== undefined) data.name = name;
-  if (cwd !== undefined) data.cwd = cwd;
-  if (creationScript !== undefined) data.creationScript = creationScript;
+  if (baseBranch !== undefined) data.baseBranch = baseBranch;
+  if (githubUrl !== undefined) data.githubUrl = githubUrl;
   const channel = await updateChannel(req.params.id, data);
   res.json(channel);
 });
-
-router.get('/:id/startup-scripts', async (req: Request<{ id: string }>, res: Response) => {
-  const scripts = await listStartupScripts(req.params.id);
-  res.json({ scripts });
-});
-
-router.post('/:id/startup-scripts', async (req: Request<{ id: string }>, res: Response) => {
-  const { name, command, scriptType } = req.body;
-  if (!name || typeof name !== 'string') {
-    res.status(400).json({ error: 'name is required' });
-    return;
-  }
-  if (!command || typeof command !== 'string') {
-    res.status(400).json({ error: 'command is required' });
-    return;
-  }
-  if (scriptType !== undefined && scriptType !== 'creation' && scriptType !== 'startup') {
-    res.status(400).json({ error: 'scriptType must be "creation" or "startup"' });
-    return;
-  }
-  const script = await createStartupScript(req.params.id, { name, command, scriptType });
-  res.status(201).json(script);
-});
-
-router.patch(
-  '/:id/startup-scripts/:scriptId',
-  async (req: Request<{ id: string; scriptId: string }>, res: Response) => {
-    const { name, command, scriptType, sortOrder } = req.body;
-    const data: { name?: string; command?: string; scriptType?: string; sortOrder?: number } = {};
-    if (name !== undefined) data.name = name;
-    if (command !== undefined) data.command = command;
-    if (scriptType !== undefined) data.scriptType = scriptType;
-    if (sortOrder !== undefined) data.sortOrder = sortOrder;
-    const script = await updateStartupScript(req.params.scriptId, data);
-    res.json(script);
-  },
-);
-
-router.delete(
-  '/:id/startup-scripts/:scriptId',
-  async (req: Request<{ id: string; scriptId: string }>, res: Response) => {
-    await deleteStartupScript(req.params.scriptId);
-    res.status(204).send();
-  },
-);
 
 router.get('/:id/messages', async (req: Request<{ id: string }>, res: Response) => {
   const { limit, offset } = req.query;

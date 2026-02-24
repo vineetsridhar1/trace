@@ -1,4 +1,6 @@
+import path from 'node:path';
 import prisma from '../lib/prisma';
+import { getOriginRemoteUrl } from './gitService';
 
 let defaultChannelId: string | null = null;
 
@@ -19,45 +21,20 @@ export async function getDefaultChannel() {
   }
   let channel = await prisma.channel.findFirst({ where: { name: 'general' } });
   if (!channel) {
-    channel = await prisma.channel.create({ data: { name: 'general' } });
+    const repoPath = path.resolve(process.cwd(), '..');
+    const githubUrl = await getOriginRemoteUrl(repoPath);
+    channel = await prisma.channel.create({
+      data: { name: 'general', baseBranch: 'main', githubUrl },
+    });
   }
   defaultChannelId = channel.id;
   return defaultChannelId;
 }
 
-export async function updateChannel(id: string, data: { name?: string; cwd?: string | null; creationScript?: string | null }) {
+export async function createChannel(data: { name: string; baseBranch?: string | null; githubUrl?: string | null }) {
+  return prisma.channel.create({ data });
+}
+
+export async function updateChannel(id: string, data: { name?: string; baseBranch?: string | null; githubUrl?: string | null }) {
   return prisma.channel.update({ where: { id }, data });
-}
-
-export async function listStartupScripts(channelId: string) {
-  return prisma.startupScript.findMany({
-    where: { channelId },
-    orderBy: { sortOrder: 'asc' },
-  });
-}
-
-export async function createStartupScript(
-  channelId: string,
-  data: { name: string; command: string; scriptType?: string },
-) {
-  const scriptType = data.scriptType ?? 'startup';
-  const maxOrder = await prisma.startupScript.aggregate({
-    where: { channelId },
-    _max: { sortOrder: true },
-  });
-  const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
-  return prisma.startupScript.create({
-    data: { channelId, name: data.name, command: data.command, scriptType, sortOrder },
-  });
-}
-
-export async function updateStartupScript(
-  id: string,
-  data: { name?: string; command?: string; scriptType?: string; sortOrder?: number },
-) {
-  return prisma.startupScript.update({ where: { id }, data });
-}
-
-export async function deleteStartupScript(id: string) {
-  return prisma.startupScript.delete({ where: { id } });
 }

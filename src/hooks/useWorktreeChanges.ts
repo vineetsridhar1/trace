@@ -3,7 +3,7 @@ import type { WorktreeDiffResult } from '../types';
 
 const POLL_INTERVAL = 5000;
 
-export function useWorktreeChanges(messageId: string | null) {
+export function useWorktreeChanges(messageId: string | null, baseBranch: string = 'main') {
   const [diffData, setDiffData] = useState<WorktreeDiffResult | null>(null);
   const [loading, setLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -12,14 +12,14 @@ export function useWorktreeChanges(messageId: string | null) {
     if (!messageId) return;
     setLoading(true);
     try {
-      const result = await window.traceAPI.getWorktreeDiff(messageId);
+      const result = await window.traceAPI.getWorktreeDiff(messageId, baseBranch);
       setDiffData(result);
     } catch {
       setDiffData(null);
     } finally {
       setLoading(false);
     }
-  }, [messageId]);
+  }, [messageId, baseBranch]);
 
   useEffect(() => {
     if (!messageId) return;

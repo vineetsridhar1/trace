@@ -26,32 +26,15 @@ model Session {
 model Channel {
   id             String   @id @default(uuid())
   name           String
-  cwd            String?
-  creationScript String?  @map("creation_script")
+  baseBranch     String?  @map("base_branch")
+  githubUrl      String?  @map("github_url")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   messages       Message[]
-  startupScripts StartupScript[]
   kanbanColumns  KanbanColumn[]
 
   @@map("channels")
-}
-
-model StartupScript {
-  id         String   @id @default(uuid())
-  channelId  String   @map("channel_id")
-  name       String
-  command    String
-  scriptType String   @default("startup") @map("script_type")
-  sortOrder  Int      @default(0) @map("sort_order")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-
-  @@index([channelId, sortOrder])
-  @@map("startup_scripts")
 }
 
 model Message {
