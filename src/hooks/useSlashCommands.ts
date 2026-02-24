@@ -11,6 +11,7 @@ const COMMANDS: SlashCommand[] = [
   // Custom commands first
   { name: 'create-pr', displayName: '/create-pr', description: 'Create a GitHub pull request', source: 'custom' },
   { name: 'merge-to-main', displayName: '/merge-to-main', description: 'Merge worktree branch to main', source: 'custom' },
+  { name: 'rebase-onto-main', displayName: '/rebase-onto-main', description: 'Rebase current branch onto latest main', source: 'custom' },
   // Built-in commands
   { name: 'compact', displayName: '/compact', description: 'Compact conversation history', source: 'built-in' },
   { name: 'config', displayName: '/config', description: 'Open configuration', source: 'built-in' },
