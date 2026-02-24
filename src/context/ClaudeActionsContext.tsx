@@ -3,6 +3,7 @@ import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import type { ClaudeModel, EffortLevel } from '../types';
 
 export interface ClaudeActionsContextValue {
+  repoPath: string;
   pendingRunMessageId: string | null;
   pendingRunInitialPrompt: string;
   selectedModel: ClaudeModel;

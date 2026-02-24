@@ -16,10 +16,12 @@ import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { TicketView } from "./TicketView";
 import { useSlashCommands } from "../hooks/useSlashCommands";
+import { useFileMention } from "../hooks/useFileMention";
 
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useImageAttachments } from "../hooks/useImageAttachments";
 import { SlashCommandMenu } from "./SlashCommandMenu";
+import { FileMentionMenu } from "./FileMentionMenu";
 import { ImageThumbnails } from "./ImageThumbnails";
 import { ModelEffortSelector } from "./ModelEffortSelector";
 import { normalizeToolName } from "../utils";
@@ -726,6 +728,7 @@ function ThreadInput({
   onStopClaude: () => void;
 }) {
   const {
+    repoPath,
     selectedModel,
     selectedEffort,
     setSelectedModel,
@@ -733,7 +736,9 @@ function ThreadInput({
   } = useClaudeActions();
   const [threadInput, setThreadInput] = useState("");
   const [planMode, setPlanMode] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashCommands = useSlashCommands(threadInput, setThreadInput);
+  const fileMention = useFileMention(threadInput, setThreadInput, repoPath, textareaRef);
   const imageAttachments = useImageAttachments();
 
   const handleSendThreadMessage = useCallback(async () => {
@@ -745,17 +750,20 @@ function ThreadInput({
       : text;
 
     const attachmentIds = imageAttachments.getAttachmentIds();
-    const filePaths = imageAttachments.getFilePaths();
+    const imageFilePaths = imageAttachments.getFilePaths();
+    const mentionedFiles = fileMention.getMentionedFiles();
+    const allFilePaths = [...imageFilePaths, ...mentionedFiles];
     const sent = await onSendThreadMessage(
       finalText,
       attachmentIds.length > 0 ? attachmentIds : undefined,
-      filePaths.length > 0 ? filePaths : undefined,
+      allFilePaths.length > 0 ? allFilePaths : undefined,
     );
     if (sent) {
       setThreadInput("");
       imageAttachments.clearAttachments();
+      fileMention.clearMentions();
     }
-  }, [threadInput, planMode, isClaudeRunning, onSendThreadMessage, imageAttachments]);
+  }, [threadInput, planMode, isClaudeRunning, onSendThreadMessage, imageAttachments, fileMention]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -824,12 +832,20 @@ function ThreadInput({
             selectedIndex={slashCommands.selectedIndex}
             onSelect={slashCommands.selectCommand}
           />
+          <FileMentionMenu
+            isOpen={fileMention.isOpen}
+            files={fileMention.filteredFiles}
+            selectedIndex={fileMention.selectedIndex}
+            onSelect={fileMention.selectFile}
+          />
           <textarea
+            ref={textareaRef}
             id="thread-input"
             rows={1}
             value={threadInput}
             disabled={isClaudeRunning}
             onChange={(e) => setThreadInput(e.target.value)}
+            onSelect={fileMention.handleSelect}
             onPaste={(e) => void imageAttachments.handlePaste(e)}
             onKeyDown={(e) => {
               if (e.key === "Tab" && e.shiftKey) {
@@ -837,6 +853,7 @@ function ThreadInput({
                 setPlanMode((p) => !p);
                 return;
               }
+              if (fileMention.handleKeyDown(e)) return;
               if (slashCommands.handleKeyDown(e)) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

@@ -331,8 +331,10 @@ export default function App() {
     getSystemInstructions,
   });
 
+  const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const claudeActionsContextValue = useMemo(
     () => ({
+      repoPath,
       pendingRunMessageId: claudeActions.pendingRunMessageId,
       pendingRunInitialPrompt: claudeActions.pendingRunInitialPrompt,
       selectedModel: claudeActions.selectedModel,
@@ -347,6 +349,7 @@ export default function App() {
       mergeToMain: claudeActions.mergeToMain,
     }),
     [
+      repoPath,
       claudeActions.pendingRunMessageId,
       claudeActions.pendingRunInitialPrompt,
       claudeActions.selectedModel,

@@ -110,8 +110,8 @@ export async function spawnClaude(
 
   let finalPrompt = effectivePrompt;
   if (filePaths && filePaths.length > 0) {
-    const imageList = filePaths.map((p) => `- ${p}`).join('\n');
-    finalPrompt += `\n\n<trace-internal>\nThe user has attached the following image files. Read them to see their contents:\n${imageList}\n</trace-internal>`;
+    const fileList = filePaths.map((p) => `- ${p}`).join('\n');
+    finalPrompt += `\n\n<trace-internal>\nThe user has referenced the following files. Read them to understand the context:\n${fileList}\n</trace-internal>`;
   }
 
   args.push('-p', finalPrompt);

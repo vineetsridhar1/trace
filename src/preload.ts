@@ -119,4 +119,7 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   deleteLocalConfig: (channelId: string) =>
     ipcRenderer.invoke('delete-local-config', channelId),
+
+  listRepoFiles: (repoPath: string) =>
+    ipcRenderer.invoke('list-repo-files', repoPath) as Promise<{ success: boolean; files: string[]; error?: string }>,
 });

@@ -6,10 +6,12 @@ import remarkGfm from 'remark-gfm';
 import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
 import { useSlashCommands } from '../hooks/useSlashCommands';
+import { useFileMention } from '../hooks/useFileMention';
 
 import { useClaudeActions } from '../context/ClaudeActionsContext';
 import { useImageAttachments } from '../hooks/useImageAttachments';
 import { SlashCommandMenu } from './SlashCommandMenu';
+import { FileMentionMenu } from './FileMentionMenu';
 import { ImageThumbnails } from './ImageThumbnails';
 import { KanbanBoard } from './KanbanBoard';
 
@@ -190,26 +192,31 @@ function ChatPlaceholder() {
 }
 
 function MessageInput() {
-  const { sendMessage } = useClaudeActions();
+  const { sendMessage, repoPath } = useClaudeActions();
   const [messageInput, setMessageInput] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashCommands = useSlashCommands(messageInput, setMessageInput);
+  const fileMention = useFileMention(messageInput, setMessageInput, repoPath, textareaRef);
   const imageAttachments = useImageAttachments();
 
   const handleSendMessage = useCallback(async () => {
     const text = messageInput.trim();
     if (!text) return;
     const attachmentIds = imageAttachments.getAttachmentIds();
-    const filePaths = imageAttachments.getFilePaths();
+    const imageFilePaths = imageAttachments.getFilePaths();
+    const mentionedFiles = fileMention.getMentionedFiles();
+    const allFilePaths = [...imageFilePaths, ...mentionedFiles];
     const sent = await sendMessage(
       text,
       attachmentIds.length > 0 ? attachmentIds : undefined,
-      filePaths.length > 0 ? filePaths : undefined,
+      allFilePaths.length > 0 ? allFilePaths : undefined,
     );
     if (sent) {
       setMessageInput('');
       imageAttachments.clearAttachments();
+      fileMention.clearMentions();
     }
-  }, [messageInput, sendMessage, imageAttachments]);
+  }, [messageInput, sendMessage, imageAttachments, fileMention]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -231,13 +238,22 @@ function MessageInput() {
             selectedIndex={slashCommands.selectedIndex}
             onSelect={slashCommands.selectCommand}
           />
+          <FileMentionMenu
+            isOpen={fileMention.isOpen}
+            files={fileMention.filteredFiles}
+            selectedIndex={fileMention.selectedIndex}
+            onSelect={fileMention.selectFile}
+          />
           <textarea
+            ref={textareaRef}
             id="message-input"
             rows={1}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
+            onSelect={fileMention.handleSelect}
             onPaste={(e) => void imageAttachments.handlePaste(e)}
             onKeyDown={(e) => {
+              if (fileMention.handleKeyDown(e)) return;
               if (slashCommands.handleKeyDown(e)) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();

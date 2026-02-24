@@ -7,6 +7,7 @@ import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
 import { getChannelLocalConfig, setChannelLocalConfig, getAllChannelLocalConfigs, deleteChannelLocalConfig } from './localConfig';
 import type { LocalChannelConfig } from './localConfig';
+import { runProcess } from './process';
 
 const SPAWN_CLAUDE_CHANNEL = 'spawn-claude';
 const DELETE_WORKTREE_CHANNEL = 'delete-worktree';
@@ -27,6 +28,7 @@ const GET_LOCAL_CONFIG_CHANNEL = 'get-local-config';
 const SET_LOCAL_CONFIG_CHANNEL = 'set-local-config';
 const GET_ALL_LOCAL_CONFIGS_CHANNEL = 'get-all-local-configs';
 const DELETE_LOCAL_CONFIG_CHANNEL = 'delete-local-config';
+const LIST_REPO_FILES_CHANNEL = 'list-repo-files';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -54,6 +56,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(SET_LOCAL_CONFIG_CHANNEL);
   ipcMain.removeHandler(GET_ALL_LOCAL_CONFIGS_CHANNEL);
   ipcMain.removeHandler(DELETE_LOCAL_CONFIG_CHANNEL);
+  ipcMain.removeHandler(LIST_REPO_FILES_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string) => {
     try {
@@ -228,5 +231,21 @@ export function registerIpcHandlers() {
   ipcMain.handle(DELETE_LOCAL_CONFIG_CHANNEL, (_event, channelId: string) => {
     deleteChannelLocalConfig(channelId);
     return { success: true };
+  });
+
+  ipcMain.handle(LIST_REPO_FILES_CHANNEL, async (_event, repoPath: string) => {
+    try {
+      const result = await runProcess('git', ['ls-files'], repoPath);
+      if (result.code !== 0) {
+        return { success: false, error: result.stderr, files: [] };
+      }
+      const files = result.stdout
+        .split('\n')
+        .map(f => f.trim())
+        .filter(f => f.length > 0);
+      return { success: true, files };
+    } catch (err) {
+      return { success: false, error: String(err), files: [] };
+    }
   });
 }

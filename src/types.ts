@@ -64,6 +64,7 @@ export interface TraceAPI {
   setLocalConfig: (channelId: string, data: LocalChannelConfig) => Promise<{ success: boolean }>;
   getAllLocalConfigs: () => Promise<Record<string, LocalChannelConfig>>;
   deleteLocalConfig: (channelId: string) => Promise<{ success: boolean }>;
+  listRepoFiles: (repoPath: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
 }
 
 declare global {
