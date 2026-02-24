@@ -11,7 +11,7 @@ import {
   updateMessageStatus,
   updateMessageSummaryAndBranch,
 } from './messageService';
-import { updateTicketFromEvent, syncTicketWithMessageStatus } from './ticketService';
+import { updateTicketFromEvent, syncTicketWithMessageStatus, refreshTicketBroadcast } from './ticketService';
 
 function extractMessageIdFromWorktreePath(worktreePath: string | undefined): string | null {
   if (!worktreePath) {
@@ -261,18 +261,28 @@ export async function ingestEvent(payload: HookEvent) {
     );
   }
 
-  // Update summary and branch
+  // Update summary and branch.
+  // Branch is only resolved on Stop events to avoid a race condition: earlier
+  // events (e.g. UserPromptSubmit) fire before Claude has renamed the branch,
+  // so resolving then would capture the hash-based default name. By waiting
+  // for Stop, the branch rename is guaranteed to have completed.
   const summaryText =
     payload.hook_event_name === 'Stop' && payload.last_assistant_message
       ? payload.last_assistant_message.slice(0, 500)
       : null;
   const branchName =
-    payload.cwd && (payload.hook_event_name === 'Stop' || !message.branch)
+    payload.cwd && payload.hook_event_name === 'Stop'
       ? resolveGitBranch(payload.cwd)
       : null;
 
   if (summaryText || branchName) {
     await updateMessageSummaryAndBranch(message.id, summaryText, branchName);
+  }
+
+  // Re-broadcast the ticket immediately so the board view picks up the
+  // updated message.branch without waiting for the AI-powered ticket update.
+  if (branchName) {
+    void refreshTicketBroadcast(message.id, channelId);
   }
 
   // Update kanban ticket on Stop events

@@ -250,6 +250,22 @@ export async function syncTicketWithMessageStatus(
   return updated;
 }
 
+export async function refreshTicketBroadcast(messageId: string, channelId: string) {
+  const ticket = await prisma.ticket.findUnique({
+    where: { messageId },
+    include: {
+      column: true,
+      message: { select: TICKET_MESSAGE_SELECT },
+    },
+  });
+  if (!ticket) return;
+
+  sseManager.broadcastChannel(channelId, 'ticket-updated', {
+    channelId,
+    ticket: { ...resolveTicketAttachmentUrls(ticket), columnSlug: ticket.column.slug },
+  });
+}
+
 export async function createColumn(channelId: string, name: string, slug: string, color?: string) {
   const maxSort = await prisma.kanbanColumn.aggregate({
     where: { channelId },
