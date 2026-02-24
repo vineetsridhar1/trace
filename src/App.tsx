@@ -608,6 +608,7 @@ export default function App() {
               kanbanColumns={kanbanColumns}
               kanbanLoading={kanbanLoading}
               onMoveTicket={handleMoveTicket}
+              onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
             />
           </div>
 

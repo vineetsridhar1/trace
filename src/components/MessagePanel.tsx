@@ -20,6 +20,7 @@ interface MessagePanelProps {
   kanbanColumns: KanbanColumnType[];
   kanbanLoading: boolean;
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
+  onOpenSettings: () => void;
 }
 
 export function MessagePanel({
@@ -33,6 +34,7 @@ export function MessagePanel({
   kanbanColumns,
   kanbanLoading,
   onMoveTicket,
+  onOpenSettings,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
 
@@ -85,28 +87,49 @@ export function MessagePanel({
         <h2 id="feed-title" className="text-sm font-semibold text-violet-300">
           {feedTitle}
         </h2>
-        <div className="flex rounded-lg bg-[#1f2335] p-0.5">
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg bg-[#1f2335] p-0.5">
+            <button
+              type="button"
+              onClick={() => onSetView('feed')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                middlePanelView === 'feed'
+                  ? 'bg-violet-500/20 text-violet-300'
+                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+              }`}
+            >
+              Feed
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetView('board')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                middlePanelView === 'board'
+                  ? 'bg-violet-500/20 text-violet-300'
+                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+              }`}
+            >
+              Board
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() => onSetView('feed')}
-            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-              middlePanelView === 'feed'
-                ? 'bg-violet-500/20 text-violet-300'
-                : 'text-[#565f89] hover:text-[#a9b1d6]'
-            }`}
+            title="Channel settings"
+            onClick={onOpenSettings}
+            className="cursor-pointer rounded p-1 text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5] transition-colors"
           >
-            Feed
-          </button>
-          <button
-            type="button"
-            onClick={() => onSetView('board')}
-            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-              middlePanelView === 'board'
-                ? 'bg-violet-500/20 text-violet-300'
-                : 'text-[#565f89] hover:text-[#a9b1d6]'
-            }`}
-          >
-            Board
+            <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M6 7.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
+                stroke="currentColor"
+                strokeWidth="1"
+              />
+              <path
+                d="M10.2 7.4l-.7-.4a.5.5 0 01-.2-.6l.3-.8a.5.5 0 00-.1-.5l-.6-.6a.5.5 0 00-.5-.1l-.8.3a.5.5 0 01-.6-.2l-.4-.7a.5.5 0 00-.4-.3h-.8a.5.5 0 00-.4.3l-.4.7a.5.5 0 01-.6.2l-.8-.3a.5.5 0 00-.5.1l-.6.6a.5.5 0 00-.1.5l.3.8a.5.5 0 01-.2.6l-.7.4a.5.5 0 00-.3.4v.8a.5.5 0 00.3.4l.7.4a.5.5 0 01.2.6l-.3.8a.5.5 0 00.1.5l.6.6a.5.5 0 00.5.1l.8-.3a.5.5 0 01.6.2l.4.7a.5.5 0 00.4.3h.8a.5.5 0 00.4-.3l.4-.7a.5.5 0 01.6-.2l.8.3a.5.5 0 00.5-.1l.6-.6a.5.5 0 00.1-.5l-.3-.8a.5.5 0 01.2-.6l.7-.4a.5.5 0 00.3-.4v-.8a.5.5 0 00-.3-.4z"
+                stroke="currentColor"
+                strokeWidth="1"
+              />
+            </svg>
           </button>
         </div>
       </div>
