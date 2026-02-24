@@ -53,6 +53,7 @@
     "react-diff-view": "^3.2.0",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "shiki": "^3.22.0"
   }
 }

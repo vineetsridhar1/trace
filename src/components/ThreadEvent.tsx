@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ServerEvent, PlanReviewNode } from '../types';
 import { SERVER_URL } from '../types';
 import { extractPromptText, extractAttachments, formatTime, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath, stripTraceInternal } from '../utils';
@@ -37,7 +38,7 @@ function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: num
         }}
       >
         <div ref={innerRef} className="markdown-body break-words text-sm text-[#c0caf5]">
-          <ReactMarkdown>{text}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
         </div>
       </div>
       {needsClamp && (
@@ -379,18 +380,20 @@ export function PlanReview({ node }: { node: PlanReviewNode }) {
 
   return (
     <div className="px-4 py-2">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-xs font-semibold text-violet-300">Plan Review</span>
-        <span className="text-xs text-[#565f89]">{time}</span>
-      </div>
-
-      {node.planContent ? (
-        <div className="markdown-body text-sm text-[#c0caf5]">
-          <ReactMarkdown>{node.planContent}</ReactMarkdown>
+      <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-xs font-semibold text-violet-300">Plan Review</span>
+          <span className="text-xs text-[#565f89]">{time}</span>
         </div>
-      ) : (
-        <div className="text-sm text-[#565f89]">No plan content available.</div>
-      )}
+
+        {node.planContent ? (
+          <div className="markdown-body text-sm text-[#c0caf5]">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{node.planContent}</ReactMarkdown>
+          </div>
+        ) : (
+          <div className="text-sm text-[#565f89]">No plan content available.</div>
+        )}
+      </div>
     </div>
   );
 }
