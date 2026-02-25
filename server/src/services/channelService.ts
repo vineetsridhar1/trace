@@ -6,7 +6,6 @@ import { getOriginRemoteUrl } from './gitService';
 import { getOrCreateDefaultServer } from './serverService';
 
 let defaultChannelId: string | null = null;
-
 /**
  * Ensure the default channel has an entry in the local config file
  * (~/.trace/local-config.json) so that startup scripts and @ searches work.
