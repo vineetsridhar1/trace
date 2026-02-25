@@ -45,6 +45,12 @@ CREATE TABLE "channel_members" (
     CONSTRAINT "channel_members_pkey" PRIMARY KEY ("id")
 );
 
+-- Clean up legacy seeded channel and any dependent rows (seed.ts will recreate properly)
+DELETE FROM "events" WHERE "thread_id" IN (SELECT t."id" FROM "threads" t JOIN "messages" m ON t."message_id" = m."id" WHERE m."channel_id" = '00000000-0000-0000-0000-000000000001');
+DELETE FROM "threads" WHERE "message_id" IN (SELECT "id" FROM "messages" WHERE "channel_id" = '00000000-0000-0000-0000-000000000001');
+DELETE FROM "messages" WHERE "channel_id" = '00000000-0000-0000-0000-000000000001';
+DELETE FROM "channels" WHERE "id" = '00000000-0000-0000-0000-000000000001';
+
 -- AlterTable
 ALTER TABLE "channels" ADD COLUMN "server_id" TEXT NOT NULL;
 
