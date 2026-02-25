@@ -130,6 +130,19 @@ export function ThreadHeader({
             </button>
           </Tooltip>
         )}
+        {hasWorktree === true && messageStatus === 'in_progress' && (
+          <Tooltip text="Merge to main" position="bottom">
+            <button
+              id="thread-merge-to-main"
+              type="button"
+              disabled={!selectedMessageId}
+              onClick={onMergeToMain}
+              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <FiGitMerge className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
         {hasWorktree === true && !isFullscreen && onEnterFullscreen && (
           <Tooltip text="Fullscreen" position="bottom">
             <button
@@ -151,20 +164,6 @@ export function ThreadHeader({
               <FiMinimize2 className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
-        )}
-        {hasWorktree === true && messageStatus === 'in_progress' && (
-          <button
-            id="thread-merge-to-main"
-            type="button"
-            disabled={!selectedMessageId}
-            onClick={onMergeToMain}
-            className="h-7 cursor-pointer rounded-md border border-[#292e42] px-2 text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <span className="flex items-center gap-1">
-              <FiGitMerge className="h-3.5 w-3.5" aria-hidden="true" />
-              Merge
-            </span>
-          </button>
         )}
         {hasWorktree === true && (
           <Tooltip text="Delete worktree" position="bottom">
