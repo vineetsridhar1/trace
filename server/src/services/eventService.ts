@@ -69,6 +69,60 @@ function extractPromptFromRawPayload(rawPayload: unknown): string | null {
   return null;
 }
 
+const TAIL_BYTES = 32_768; // 32 KB — enough for the last few JSONL entries
+
+export function extractUsageFromTranscript(
+  transcriptPath: string,
+): { input_tokens: number; output_tokens: number } | null {
+  try {
+    const fd = fs.openSync(transcriptPath, 'r');
+    try {
+      const stat = fs.fstatSync(fd);
+      const readFrom = Math.max(0, stat.size - TAIL_BYTES);
+      const buf = Buffer.alloc(Math.min(stat.size, TAIL_BYTES));
+      fs.readSync(fd, buf, 0, buf.length, readFrom);
+      const tail = buf.toString('utf-8');
+
+      // Split into lines; first line may be partial so we skip it when reading from mid-file
+      const lines = tail.split('\n');
+      if (readFrom > 0) lines.shift();
+
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+
+        const entry = parsed as Record<string, unknown>;
+        if (entry.type !== 'assistant') continue;
+
+        const message = entry.message as Record<string, unknown> | undefined;
+        const usage = message?.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+        if (usage?.input_tokens) {
+          return {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens ?? 0,
+          };
+        }
+
+        // Only check the most recent assistant message.
+        return null;
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    // Transcript file may not exist or be unreadable
+  }
+
+  return null;
+}
+
 export function extractAskUserQuestionFromTranscript(
   transcriptPath: string,
 ): { questions: unknown[] } | null {
@@ -218,13 +272,23 @@ export async function ingestEvent(payload: HookEvent) {
       : 'non-important';
 
   // Build event data
+  const rawPayload = JSON.parse(JSON.stringify(payload));
+
   const eventData: Parameters<typeof prisma.event.create>[0]['data'] = {
     sessionId: payload.session_id,
     hookEventName: payload.hook_event_name,
-    rawPayload: JSON.parse(JSON.stringify(payload)),
+    rawPayload,
     threadId: thread.id,
     importance,
   };
+
+  // Extract context usage from transcript for every event type
+  if (payload.transcript_path) {
+    const usage = extractUsageFromTranscript(payload.transcript_path);
+    if (usage) {
+      rawPayload.usage = usage;
+    }
+  }
 
   if (payload.hook_event_name === 'PostToolUse') {
     eventData.toolName = payload.tool_name;

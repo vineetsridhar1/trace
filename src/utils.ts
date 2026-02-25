@@ -471,6 +471,21 @@ export function computeThreadTokenUsage(events: ServerEvent[]): {
   return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
 }
 
+export function getLatestContextUsage(events: ServerEvent[]): number {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    const usage = (event.rawPayload as any)?.usage as
+      | { input_tokens?: number }
+      | undefined;
+
+    if (usage?.input_tokens) {
+      return usage.input_tokens;
+    }
+  }
+
+  return 0;
+}
+
 export function computeApproxCost(inputTokens: number, outputTokens: number): number {
   const inputCost = (inputTokens / 1_000_000) * 3;
   const outputCost = (outputTokens / 1_000_000) * 15;
