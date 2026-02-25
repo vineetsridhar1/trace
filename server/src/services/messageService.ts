@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../prisma/generated/prisma';
 import { extractAskUserQuestionFromTranscript } from './eventService';
 import { getStorage } from './storageService';
 

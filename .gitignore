@@ -94,6 +94,9 @@ out/
 # Server build output
 server/dist/
 
+# Prisma generated client
+server/prisma/generated/
+
 # Trace worktrees
 .trace-worktrees/
 

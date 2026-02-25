@@ -1,10 +1,71 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "./generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+model Server {
+  id        String   @id @default(uuid())
+  name      String
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channels Channel[]
+  members  ServerMember[]
+
+  @@map("servers")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  avatarUrl    String?  @map("avatar_url")
+  passwordHash String   @map("password_hash")
+  role         String   @default("member")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  serverMembers   ServerMember[]
+  channelMembers  ChannelMember[]
+  messages        Message[]
+  assignedTickets Ticket[]
+
+  @@map("users")
+}
+
+model ServerMember {
+  id       String   @id @default(uuid())
+  serverId String   @map("server_id")
+  userId   String   @map("user_id")
+  role     String   @default("member")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, userId])
+  @@index([userId])
+  @@map("server_members")
+}
+
+model ChannelMember {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  role      String   @default("member")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@map("channel_members")
 }
 
 model Session {
@@ -25,37 +86,43 @@ model Session {
 
 model Channel {
   id             String   @id @default(uuid())
+  serverId       String   @map("server_id")
   name           String
   baseBranch     String?  @map("base_branch")
   githubUrl      String?  @map("github_url")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
+  server         Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
   messages       Message[]
   kanbanColumns  KanbanColumn[]
+  members        ChannelMember[]
 
   @@map("channels")
 }
 
 model Message {
-  id         String   @id @default(uuid())
-  channelId  String   @map("channel_id")
-  sessionId  String   @map("session_id")
-  preview    String?
-  importance String   @default("non-important")
-  status     String   @default("pending")
-  summary        String?
-  branch         String?
+  id              String   @id @default(uuid())
+  channelId       String   @map("channel_id")
+  sessionId       String   @map("session_id")
+  userId          String?  @map("user_id")
+  preview         String?
+  importance      String   @default("non-important")
+  status          String   @default("pending")
+  summary         String?
+  branch          String?
   claudeSessionId String?  @map("claude_session_id")
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   channel     Channel      @relation(fields: [channelId], references: [id])
   session     Session      @relation(fields: [sessionId], references: [sessionId])
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   threads     Thread[]
   ticket      Ticket?
   attachments Attachment[]
 
   @@index([channelId, createdAt])
+  @@index([userId])
   @@map("messages")
 }
 
@@ -118,6 +185,7 @@ model Ticket {
   id               String   @id @default(uuid())
   messageId        String   @unique @map("message_id")
   columnId         String   @map("column_id")
+  assigneeId       String?  @map("assignee_id")
   title            String
   description      String?
   solutionApproach String?  @map("solution_approach")
@@ -127,10 +195,12 @@ model Ticket {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  message Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  column  KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  message  Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  column   KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  assignee User?        @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
 
   @@index([columnId, sortOrder])
+  @@index([assigneeId])
   @@map("tickets")
 }
 
