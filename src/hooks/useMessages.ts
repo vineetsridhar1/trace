@@ -1,7 +1,23 @@
 import { useCallback, useRef, useState } from 'react';
+import { gql } from '@apollo/client';
 import type { ChannelMessage } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { MESSAGES_QUERY } from '../graphql/documents/messages';
+import { MESSAGE_FIELDS } from '../graphql/fragments';
+import { MessagesDocument, type MessagesQuery } from './__generated__/useMessages.generated';
+
+const GQL_MESSAGES = gql`
+  query Messages($channelId: ID!, $limit: Int, $offset: Int) {
+    messages(channelId: $channelId, limit: $limit, offset: $offset) {
+      messages {
+        ...MessageFields
+      }
+      total
+      limit
+      offset
+    }
+  }
+  ${MESSAGE_FIELDS}
+`;
 
 export function useMessages() {
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
@@ -26,10 +42,13 @@ export function useMessages() {
 
   const refreshMessages = useCallback(async (channelId: string) => {
     try {
-      const result = await graphqlClient.query(MESSAGES_QUERY, { channelId, limit: 200 }, { requestPolicy: 'network-only' }).toPromise();
-      if (!result.data) return;
+      const { data } = await graphqlClient.query<MessagesQuery>({
+        query: MessagesDocument,
+        variables: { channelId, limit: 200 },
+      });
+      if (!data) return;
 
-      const fetched = (result.data.messages.messages as ChannelMessage[]).sort(
+      const fetched = (data.messages.messages as ChannelMessage[]).sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
       setMessages(fetched);

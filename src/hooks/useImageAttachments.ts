@@ -1,7 +1,22 @@
 import { useState, useCallback } from 'react';
+import { gql } from '@apollo/client';
 import { SERVER_URL } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { UPLOAD_ATTACHMENT_MUTATION } from '../graphql/documents/attachments';
+import { UploadAttachmentDocument, type UploadAttachmentMutation } from './__generated__/useImageAttachments.generated';
+
+const GQL_UPLOAD_ATTACHMENT = gql`
+  mutation UploadAttachment($data: String!, $filename: String!, $contentType: String!) {
+    uploadAttachment(data: $data, filename: $filename, contentType: $contentType) {
+      id
+      key
+      filename
+      contentType
+      byteSize
+      url
+      localPath
+    }
+  }
+`;
 
 export interface AttachedImage {
   id: string;
@@ -33,15 +48,18 @@ export function useImageAttachments() {
     const base64 = await readFileAsBase64(file);
 
     try {
-      const result = await graphqlClient.mutation(UPLOAD_ATTACHMENT_MUTATION, {
-        data: base64,
-        filename: file.name || 'pasted-image.png',
-        contentType: file.type || 'image/png',
-      }).toPromise();
+      const { data } = await graphqlClient.mutate<UploadAttachmentMutation>({
+        mutation: UploadAttachmentDocument,
+        variables: {
+          data: base64,
+          filename: file.name || 'pasted-image.png',
+          contentType: file.type || 'image/png',
+        },
+      });
 
-      if (result.error || !result.data) return null;
+      if (!data?.uploadAttachment) return null;
 
-      const attachment = result.data.uploadAttachment;
+      const attachment = data.uploadAttachment;
 
       return {
         id: attachment.id,

@@ -1,7 +1,12 @@
-import { Client, cacheExchange, fetchExchange } from 'urql';
+import { ApolloClient, InMemoryCache, HttpLink } from '@apollo/client';
 import { SERVER_URL } from '../types';
 
-export const graphqlClient = new Client({
-  url: `${SERVER_URL}/graphql`,
-  exchanges: [cacheExchange, fetchExchange],
+export const graphqlClient = new ApolloClient({
+  link: new HttpLink({ uri: `${SERVER_URL}/graphql` }),
+  cache: new InMemoryCache(),
+  defaultOptions: {
+    query: { fetchPolicy: 'network-only' },
+    watchQuery: { fetchPolicy: 'network-only' },
+    mutate: { fetchPolicy: 'no-cache' },
+  },
 });

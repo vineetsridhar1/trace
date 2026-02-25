@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
+import { gql } from '@apollo/client';
 import { graphqlClient } from './graphql/client';
-import { UPDATE_STATUS_MUTATION } from './graphql/documents/messages';
+import { MESSAGE_FIELDS } from './graphql/fragments';
+import { UpdateMessageStatusDocument, type UpdateMessageStatusMutation } from './__generated__/App.generated';
 import { buildThreadNodes } from './utils';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
@@ -24,6 +26,15 @@ import { CreateChannelModal } from './components/CreateChannelModal';
 import { CreateServerModal } from './components/CreateServerModal';
 import { ServerRail } from './components/ServerRail';
 import { TerminalTabs } from './components/TerminalTabs';
+
+const GQL_UPDATE_MESSAGE_STATUS = gql`
+  mutation UpdateMessageStatus($channelId: ID!, $messageId: ID!, $status: String!) {
+    updateMessageStatus(channelId: $channelId, messageId: $messageId, status: $status) {
+      ...MessageFields
+    }
+  }
+  ${MESSAGE_FIELDS}
+`;
 
 const SERVER_RAIL_WIDTH = 60;
 
@@ -184,14 +195,17 @@ function AppContent() {
     async (messageId: string, status: TicketStatus) => {
       if (!activeChannelId) return;
       try {
-        const result = await graphqlClient.mutation(UPDATE_STATUS_MUTATION, {
-          channelId: activeChannelId,
-          messageId,
-          status,
-        }).toPromise();
+        const { data } = await graphqlClient.mutate<UpdateMessageStatusMutation>({
+          mutation: UpdateMessageStatusDocument,
+          variables: {
+            channelId: activeChannelId,
+            messageId,
+            status,
+          },
+        });
 
-        if (result.error || !result.data) return;
-        upsertAndSyncMessage(result.data.updateMessageStatus as ChannelMessage);
+        if (!data) return;
+        upsertAndSyncMessage(data.updateMessageStatus as ChannelMessage);
       } catch {
         console.error('Failed to update message status');
       }

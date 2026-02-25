@@ -1,8 +1,42 @@
 import { useState, useCallback } from 'react';
-import { useMutation } from 'urql';
+import { gql } from '@apollo/client';
 import type { LocalChannelConfig } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { VALIDATE_REPO_QUERY, REPO_BRANCHES_QUERY, CREATE_CHANNEL_MUTATION } from '../graphql/documents/channels';
+import {
+  useCreateChannelMutation,
+  ValidateRepoDocument, type ValidateRepoQuery,
+  RepoBranchesDocument, type RepoBranchesQuery,
+} from './__generated__/CreateChannelModal.generated';
+
+const GQL_VALIDATE_REPO = gql`
+  query ValidateRepo($localRepoPath: String!) {
+    validateRepo(localRepoPath: $localRepoPath) {
+      valid
+      originUrl
+      error
+    }
+  }
+`;
+
+const GQL_REPO_BRANCHES = gql`
+  query RepoBranches($localRepoPath: String!) {
+    repoBranches(localRepoPath: $localRepoPath)
+  }
+`;
+
+const GQL_CREATE_CHANNEL = gql`
+  mutation CreateChannel($name: String!, $serverId: String, $githubUrl: String, $baseBranch: String) {
+    createChannel(name: $name, serverId: $serverId, githubUrl: $githubUrl, baseBranch: $baseBranch) {
+      id
+      serverId
+      name
+      baseBranch
+      githubUrl
+      createdAt
+      updatedAt
+    }
+  }
+`;
 
 interface CreateChannelModalProps {
   serverId: string | null;
@@ -21,7 +55,7 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
   const [validating, setValidating] = useState(false);
   const [repoValid, setRepoValid] = useState<boolean | null>(null);
   const [detectedOriginUrl, setDetectedOriginUrl] = useState<string | null>(null);
-  const [, executeCreateChannel] = useMutation(CREATE_CHANNEL_MUTATION);
+  const [executeCreateChannel] = useCreateChannelMutation();
 
   const handleSelectFolder = useCallback(async () => {
     const result = await window.traceAPI.selectFolder();
@@ -37,8 +71,11 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
     setBaseBranch('main');
 
     try {
-      const validateResult = await graphqlClient.query(VALIDATE_REPO_QUERY, { localRepoPath: selectedPath }).toPromise();
-      const data = validateResult.data?.validateRepo;
+      const { data: validateData } = await graphqlClient.query<ValidateRepoQuery>({
+        query: ValidateRepoDocument,
+        variables: { localRepoPath: selectedPath },
+      });
+      const data = validateData?.validateRepo;
 
       if (!data?.valid) {
         setRepoValid(false);
@@ -51,8 +88,11 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
       setDetectedOriginUrl(data.originUrl ?? null);
 
       // Fetch branches
-      const branchResult = await graphqlClient.query(REPO_BRANCHES_QUERY, { localRepoPath: selectedPath }).toPromise();
-      const fetchedBranches: string[] = branchResult.data?.repoBranches ?? [];
+      const { data: branchData } = await graphqlClient.query<RepoBranchesQuery>({
+        query: RepoBranchesDocument,
+        variables: { localRepoPath: selectedPath },
+      });
+      const fetchedBranches: string[] = branchData?.repoBranches ?? [];
       setBranches(fetchedBranches);
 
       if (fetchedBranches.length > 0) {
@@ -79,19 +119,21 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
     setCreating(true);
     setError(null);
     try {
-      const result = await executeCreateChannel({
-        name: trimmedName,
-        serverId,
-        githubUrl: detectedOriginUrl,
-        baseBranch: baseBranch.trim() || 'main',
+      const { data, errors } = await executeCreateChannel({
+        variables: {
+          name: trimmedName,
+          serverId,
+          githubUrl: detectedOriginUrl,
+          baseBranch: baseBranch.trim() || 'main',
+        },
       });
 
-      if (result.error) {
-        setError(result.error.message || 'Failed to create channel');
+      if (errors?.length) {
+        setError(errors[0].message || 'Failed to create channel');
         return;
       }
 
-      const channel = result.data.createChannel;
+      const channel = data!.createChannel;
 
       // Save local config
       if (localRepoPath) {

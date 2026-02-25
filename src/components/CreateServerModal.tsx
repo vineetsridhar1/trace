@@ -1,6 +1,21 @@
 import { useState, useCallback } from 'react';
-import { useMutation } from 'urql';
-import { CREATE_SERVER_MUTATION } from '../graphql/documents/servers';
+import { gql } from '@apollo/client';
+import { useCreateServerMutation } from './__generated__/CreateServerModal.generated';
+
+const GQL_CREATE_SERVER = gql`
+  mutation CreateServer($name: String!, $avatarUrl: String) {
+    createServer(name: $name, avatarUrl: $avatarUrl) {
+      id
+      name
+      avatarUrl
+      createdAt
+      updatedAt
+      channels {
+        id
+      }
+    }
+  }
+`;
 
 interface CreateServerModalProps {
   onClose: () => void;
@@ -11,7 +26,7 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [, executeCreateServer] = useMutation(CREATE_SERVER_MUTATION);
+  const [executeCreateServer] = useCreateServerMutation();
 
   const handleCreate = useCallback(async () => {
     const trimmedName = name.trim();
@@ -20,12 +35,12 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
     setCreating(true);
     setError(null);
     try {
-      const result = await executeCreateServer({ name: trimmedName });
-      if (result.error) {
-        setError(result.error.message || 'Failed to create server');
+      const { data, errors } = await executeCreateServer({ variables: { name: trimmedName } });
+      if (errors?.length) {
+        setError(errors[0].message || 'Failed to create server');
         return;
       }
-      onCreated(result.data.createServer);
+      onCreated(data!.createServer);
     } catch {
       setError('Failed to create server');
     } finally {

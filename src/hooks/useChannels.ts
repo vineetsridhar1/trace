@@ -1,13 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useQuery } from 'urql';
+import { gql } from '@apollo/client';
 import type { Channel } from '../types';
-import { CHANNELS_QUERY } from '../graphql/documents/channels';
+import { useChannelsQuery } from './__generated__/useChannels.generated';
+
+const GQL_CHANNELS = gql`
+  query Channels {
+    channels {
+      id
+      serverId
+      name
+      baseBranch
+      githubUrl
+      createdAt
+      updatedAt
+    }
+  }
+`;
 
 export function useChannels() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
 
-  const [{ data }, reexecuteQuery] = useQuery({ query: CHANNELS_QUERY });
-  const channels: Channel[] = data?.channels ?? [];
+  const { data, refetch } = useChannelsQuery();
+  const channels = (data?.channels ?? []) as Channel[];
 
   const activeChannel = channels.find((ch) => ch.id === activeChannelId) ?? null;
 
@@ -21,9 +35,9 @@ export function useChannels() {
     setActiveChannelId(channelId);
   }, []);
 
-  const refreshChannels = useCallback(() => {
-    reexecuteQuery({ requestPolicy: 'network-only' });
-  }, [reexecuteQuery]);
+  const refreshChannels = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   return { channels, activeChannelId, activeChannel, switchChannel, refreshChannels };
 }
