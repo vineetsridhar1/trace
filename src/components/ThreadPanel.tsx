@@ -9,6 +9,7 @@ import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
 import { RunButtons } from "./RunButtons";
 import { StickyTodoList } from "./StickyTodoList";
+import { ContextProgressBar } from "./ContextProgressBar";
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useThreadContext } from "../context/ThreadContext";
 import { normalizeToolName } from "../utils";
@@ -274,6 +275,8 @@ export function ThreadPanel() {
             onStopClaude={() => void stopClaude()}
           />
         )}
+
+        <ContextProgressBar events={threadEvents} />
       </div>
     </>
   );
