@@ -1,8 +1,45 @@
 import { useCallback, useRef, useState } from 'react';
+import { gql } from '@apollo/client';
 import type { ChannelMessage, ServerEvent, ThreadStatus } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { THREADS_QUERY, THREAD_EVENTS_QUERY } from '../graphql/documents/threads';
+import { ThreadsDocument, ThreadEventsDocument, type ThreadsQuery, type ThreadEventsQuery } from './__generated__/useThread.generated';
 import { clamp } from '../utils';
+
+const GQL_THREADS = gql`
+  query Threads($channelId: ID!, $messageId: ID!) {
+    threads(channelId: $channelId, messageId: $messageId) {
+      id
+      messageId
+      createdAt
+      eventCount
+    }
+  }
+`;
+
+const GQL_THREAD_EVENTS = gql`
+  query ThreadEvents($channelId: ID!, $messageId: ID!, $threadId: ID!, $limit: Int, $offset: Int, $after: String) {
+    threadEvents(channelId: $channelId, messageId: $messageId, threadId: $threadId, limit: $limit, offset: $offset, after: $after) {
+      events {
+        id
+        sessionId
+        hookEventName
+        timestamp
+        toolName
+        toolInput
+        toolResponse
+        toolUseId
+        stopHookActive
+        lastAssistantMessage
+        rawPayload
+        threadId
+        importance
+      }
+      total
+      limit
+      offset
+    }
+  }
+`;
 
 interface UseThreadOptions {
   getChannelRepoPath: () => string;
@@ -61,17 +98,15 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         // Only show "loading" on initial load, not on incremental SSE updates
         setThreadStatus((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
 
-        const threadsResult = await graphqlClient.query(THREADS_QUERY, {
-          channelId: message.channelId,
-          messageId: message.id,
-        }, { requestPolicy: 'network-only' }).toPromise();
+        const { data: threadsData } = await graphqlClient.query<ThreadsQuery>({
+          query: ThreadsDocument,
+          variables: {
+            channelId: message.channelId,
+            messageId: message.id,
+          },
+        });
 
-        if (threadsResult.error) {
-          setThreadStatus('error');
-          return;
-        }
-
-        const threads = threadsResult.data?.threads ?? [];
+        const threads = threadsData?.threads ?? [];
         if (threads.length === 0) {
           setActiveThreadId(null);
           setThreadEvents([]);
@@ -82,19 +117,17 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         const thread = threads[0];
         setActiveThreadId(thread.id);
 
-        const eventsResult = await graphqlClient.query(THREAD_EVENTS_QUERY, {
-          channelId: message.channelId,
-          messageId: message.id,
-          threadId: thread.id,
-          limit: 200,
-        }, { requestPolicy: 'network-only' }).toPromise();
+        const { data: eventsData } = await graphqlClient.query<ThreadEventsQuery>({
+          query: ThreadEventsDocument,
+          variables: {
+            channelId: message.channelId,
+            messageId: message.id,
+            threadId: thread.id,
+            limit: 200,
+          },
+        });
 
-        if (eventsResult.error) {
-          setThreadStatus('error');
-          return;
-        }
-
-        const events: ServerEvent[] = eventsResult.data?.threadEvents?.events ?? [];
+        const events: ServerEvent[] = (eventsData?.threadEvents?.events ?? []) as ServerEvent[];
         setThreadEvents(events);
         setThreadStatus(events.length === 0 ? 'empty' : 'ready');
 

@@ -88,7 +88,7 @@ export const MessageItem = memo(function MessageItem({
   onOpenThread,
   dimmed,
 }: MessageItemProps) {
-  const rawPreview = message.preview || message.session.cwd || message.sessionId;
+  const rawPreview = message.preview || message.session?.cwd || message.sessionId;
   const preview = stripTraceInternal(rawPreview);
   const threadCount = message.threadCount;
   const status = (message.status ?? 'pending') as TicketStatus;

@@ -135,10 +135,33 @@ export function MessagePanel({
       </div>
 
       {middlePanelView === 'chat' ? (
-        <ChatEmptyState
-          channelName={panelTitle.replace(/^#\s*/, '')}
-          channelCreatedAt={channelCreatedAt}
-        />
+        sortedMessages.length === 0 ? (
+          <ChatEmptyState
+            channelName={panelTitle.replace(/^#\s*/, '')}
+            channelCreatedAt={channelCreatedAt}
+          />
+        ) : (
+          <>
+            <div
+              ref={feedListRef}
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
+            >
+              <div className="flex-1" />
+              {sortedMessages.map((message) => (
+                <MessageItem
+                  key={message.id}
+                  message={message}
+                  ticket={ticketByMessageId.get(message.id) ?? null}
+                  isSelected={message.id === selectedMessageId}
+                  needsAttention={attentionMessageIds.has(message.id)}
+                  onOpenThread={onOpenThread}
+                  dimmed={message.status === 'completed'}
+                />
+              ))}
+            </div>
+            <MessageInput />
+          </>
+        )
       ) : middlePanelView === 'board' ? (
         <>
           <KanbanBoard

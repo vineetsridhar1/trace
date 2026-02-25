@@ -1,8 +1,73 @@
 import { useCallback, useRef, useState } from 'react';
+import { gql } from '@apollo/client';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { ChannelMessage, TicketStatus, ClaudeModel, EffortLevel } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { CREATE_MESSAGE_MUTATION, APPEND_PROMPT_MUTATION, UPDATE_PREVIEW_MUTATION } from '../graphql/documents/messages';
+import { MESSAGE_FIELDS } from '../graphql/fragments';
+import {
+  CreateMessageDocument, type CreateMessageMutation,
+  AppendPromptDocument, type AppendPromptMutation,
+  UpdateMessagePreviewDocument, type UpdateMessagePreviewMutation,
+} from './__generated__/useClaudeMessageActions.generated';
+
+const GQL_CREATE_MESSAGE = gql`
+  mutation CreateMessage($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
+    createMessage(channelId: $channelId, text: $text, attachmentIds: $attachmentIds) {
+      message {
+        ...MessageFields
+      }
+      thread {
+        id
+        messageId
+        createdAt
+        eventCount
+      }
+      event {
+        id
+        sessionId
+        hookEventName
+        timestamp
+        threadId
+        importance
+      }
+    }
+  }
+  ${MESSAGE_FIELDS}
+`;
+
+const GQL_APPEND_PROMPT = gql`
+  mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!]) {
+    appendPrompt(channelId: $channelId, messageId: $messageId, text: $text, attachmentIds: $attachmentIds) {
+      message {
+        ...MessageFields
+      }
+      thread {
+        id
+        messageId
+        createdAt
+        eventCount
+      }
+      event {
+        id
+        sessionId
+        hookEventName
+        timestamp
+        threadId
+        importance
+      }
+    }
+  }
+  ${MESSAGE_FIELDS}
+`;
+
+const GQL_UPDATE_PREVIEW = gql`
+  mutation UpdateMessagePreview($channelId: ID!, $messageId: ID!, $preview: String!) {
+    updateMessagePreview(channelId: $channelId, messageId: $messageId, preview: $preview) {
+      ...MessageFields
+    }
+  }
+  ${MESSAGE_FIELDS}
+`;
 
 interface UseClaudeMessageActionsOptions {
   activeChannelId: string | null;
@@ -92,14 +157,17 @@ export function useClaudeMessageActions({
       if (!activeChannelId) return;
 
       try {
-        const result = await graphqlClient.mutation(UPDATE_PREVIEW_MUTATION, {
-          channelId: activeChannelId,
-          messageId,
-          preview,
-        }).toPromise();
+        const { data } = await graphqlClient.mutate<UpdateMessagePreviewMutation>({
+          mutation: UpdateMessagePreviewDocument,
+          variables: {
+            channelId: activeChannelId,
+            messageId,
+            preview,
+          },
+        });
 
-        if (result.error || !result.data) return;
-        upsertMessage(result.data.updateMessagePreview as ChannelMessage);
+        if (!data) return;
+        upsertMessage(data.updateMessagePreview as ChannelMessage);
       } catch {
         // Preview updates are best-effort and should not block execution.
       }
@@ -112,19 +180,22 @@ export function useClaudeMessageActions({
       if (!activeChannelId) return null;
 
       try {
-        const result = await graphqlClient.mutation(APPEND_PROMPT_MUTATION, {
-          channelId: activeChannelId,
-          messageId,
-          text,
-          attachmentIds,
-        }).toPromise();
+        const { data } = await graphqlClient.mutate<AppendPromptMutation>({
+          mutation: AppendPromptDocument,
+          variables: {
+            channelId: activeChannelId,
+            messageId,
+            text,
+            attachmentIds,
+          },
+        });
 
-        if (result.error || !result.data) {
+        if (!data?.appendPrompt) {
           console.error(errorLabel);
           return null;
         }
 
-        const message = result.data.appendPrompt.message as ChannelMessage;
+        const message = data.appendPrompt.message as ChannelMessage;
         upsertMessage(message);
         if (selectedMessageIdRef.current === message.id) {
           void loadThreadEvents(message);
@@ -144,15 +215,18 @@ export function useClaudeMessageActions({
       if (!text || !activeChannelId) return false;
 
       try {
-        const result = await graphqlClient.mutation(CREATE_MESSAGE_MUTATION, {
-          channelId: activeChannelId,
-          text,
-          attachmentIds,
-        }).toPromise();
+        const { data } = await graphqlClient.mutate<CreateMessageMutation>({
+          mutation: CreateMessageDocument,
+          variables: {
+            channelId: activeChannelId,
+            text,
+            attachmentIds,
+          },
+        });
 
-        if (result.error || !result.data) return false;
+        if (!data?.createMessage) return false;
 
-        const message = result.data.createMessage.message as ChannelMessage;
+        const message = data.createMessage.message as ChannelMessage;
         upsertMessage(message);
         onMessageCreated(message);
         setPendingRunMessageId(message.id);

@@ -1,7 +1,59 @@
 import { useCallback, useState } from 'react';
+import { gql } from '@apollo/client';
 import type { KanbanColumn, KanbanTicket } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { BOARD_QUERY, MOVE_TICKET_MUTATION } from '../graphql/documents/kanban';
+import { BoardDocument, type BoardQuery, MoveTicketDocument } from './__generated__/useKanban.generated';
+
+const GQL_BOARD = gql`
+  query Board($channelId: ID!) {
+    board(channelId: $channelId) {
+      id
+      channelId
+      name
+      slug
+      color
+      sortOrder
+      tickets {
+        id
+        messageId
+        columnId
+        title
+        description
+        solutionApproach
+        status
+        metadata
+        sortOrder
+        createdAt
+        updatedAt
+        message {
+          id
+          branch
+          status
+          createdAt
+          attachments {
+            id
+            key
+            filename
+            contentType
+            url
+          }
+        }
+      }
+    }
+  }
+`;
+
+const GQL_MOVE_TICKET = gql`
+  mutation MoveTicket($ticketId: ID!, $columnId: ID!, $sortOrder: Int) {
+    moveTicket(ticketId: $ticketId, columnId: $columnId, sortOrder: $sortOrder) {
+      id
+      messageId
+      columnId
+      title
+      sortOrder
+    }
+  }
+`;
 
 export function useKanban() {
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
@@ -10,9 +62,12 @@ export function useKanban() {
   const fetchBoard = useCallback(async (channelId: string) => {
     setLoading(true);
     try {
-      const result = await graphqlClient.query(BOARD_QUERY, { channelId }, { requestPolicy: 'network-only' }).toPromise();
-      if (!result.data) return;
-      setColumns(result.data.board as KanbanColumn[]);
+      const { data } = await graphqlClient.query<BoardQuery>({
+        query: BoardDocument,
+        variables: { channelId },
+      });
+      if (!data) return;
+      setColumns(data.board as KanbanColumn[]);
     } catch {
       console.error('Failed to fetch kanban board');
     } finally {
@@ -65,7 +120,10 @@ export function useKanban() {
       });
 
       try {
-        await graphqlClient.mutation(MOVE_TICKET_MUTATION, { ticketId, columnId, sortOrder }).toPromise();
+        await graphqlClient.mutate({
+          mutation: MoveTicketDocument,
+          variables: { ticketId, columnId, sortOrder },
+        });
       } catch {
         // Revert on failure by refetching
         void fetchBoard(channelId);

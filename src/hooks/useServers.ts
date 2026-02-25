@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useQuery } from 'urql';
+import { gql } from '@apollo/client';
 import type { Server } from '../types';
-import { SERVERS_QUERY } from '../graphql/documents/servers';
+import { useServersQuery } from './__generated__/useServers.generated';
+
+const GQL_SERVERS = gql`
+  query Servers {
+    servers {
+      id
+      name
+      avatarUrl
+      createdAt
+      updatedAt
+    }
+  }
+`;
 
 export function useServers() {
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
 
-  const [{ data }, reexecuteQuery] = useQuery({ query: SERVERS_QUERY });
-  const servers: Server[] = data?.servers ?? [];
+  const { data, refetch } = useServersQuery();
+  const servers = (data?.servers ?? []) as Server[];
 
   const activeServer = servers.find((s) => s.id === activeServerId) ?? null;
 
@@ -21,9 +33,9 @@ export function useServers() {
     setActiveServerId(serverId);
   }, []);
 
-  const refreshServers = useCallback(() => {
-    reexecuteQuery({ requestPolicy: 'network-only' });
-  }, [reexecuteQuery]);
+  const refreshServers = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   return {
     servers,
