@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../prisma/generated/prisma';
 import {
   getBoard,
   createColumn,
