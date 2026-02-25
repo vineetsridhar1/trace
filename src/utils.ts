@@ -308,15 +308,15 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     }
   }
 
-  // Detect plan sequences: a Stop event preceded by a Write of a .md plan file
+  // Detect plan sequences: a Stop event preceded by a Write/Edit of a .md plan file
   // (Claude writes the plan, then exits — user sees plan review UI to approve/reject)
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
     if (n.kind !== 'event' || n.event.hookEventName !== 'Stop') continue;
 
-    // Look backwards for a Write event that wrote a plan .md file
+    // Look backwards for a Write or Edit event that modified a plan .md file
     let planContent = '';
-    let writeIdx = -1;
+    let planToolIdx = -1;
     for (let j = i - 1; j >= 0; j--) {
       const candidate = nodes[j];
       if (candidate.kind !== 'event') continue;
@@ -327,20 +327,20 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
       ) {
         break;
       }
-      if (
-        candidate.event.hookEventName === 'PostToolUse' &&
-        normalizeToolName(candidate.event.toolName) === 'write'
-      ) {
-        const filePath = findStringByKeys(candidate.event.toolInput, ['file_path', 'path', 'filepath']) ?? '';
-        if (filePath.includes('.claude/plans/') && filePath.endsWith('.md')) {
-          planContent = findStringByKeys(candidate.event.toolInput, ['content', 'text']) ?? '';
-          writeIdx = j;
-          break;
+      if (candidate.event.hookEventName === 'PostToolUse') {
+        const tool = normalizeToolName(candidate.event.toolName);
+        if (tool === 'write' || tool === 'edit') {
+          const filePath = findStringByKeys(candidate.event.toolInput, ['file_path', 'path', 'filepath']) ?? '';
+          if (filePath.includes('.claude/plans/') && filePath.endsWith('.md')) {
+            planContent = findStringByKeys(candidate.event.toolInput, ['content', 'text']) ?? '';
+            planToolIdx = j;
+            break;
+          }
         }
       }
     }
 
-    if (writeIdx < 0) continue;
+    if (planToolIdx < 0) continue;
 
     // Fallback to lastAssistantMessage if content extraction failed
     if (!planContent && n.event.lastAssistantMessage) {
@@ -356,8 +356,8 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     };
     nodes.splice(i, 1, planNode);
 
-    // Remove the Write .md node
-    nodes.splice(writeIdx, 1);
+    // Remove the Write/Edit .md node
+    nodes.splice(planToolIdx, 1);
   }
 
   // Detect Stop events enriched with AskUserQuestion data from the transcript

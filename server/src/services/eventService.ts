@@ -91,7 +91,10 @@ export function extractAskUserQuestionFromTranscript(
       if (entry.type !== 'assistant') continue;
 
       const message = entry.message as Record<string, unknown> | undefined;
-      if (!message?.content || !Array.isArray(message.content)) continue;
+      if (!message?.content || !Array.isArray(message.content)) {
+        // Most recent assistant message has no parseable content — stop searching.
+        return null;
+      }
 
       for (const block of message.content) {
         const b = block as Record<string, unknown>;
@@ -102,6 +105,10 @@ export function extractAskUserQuestionFromTranscript(
           }
         }
       }
+
+      // Most recent assistant message didn't contain AskUserQuestion — don't
+      // search older messages which would return stale question data.
+      return null;
     }
   } catch {
     // Transcript file may not exist or be unreadable
