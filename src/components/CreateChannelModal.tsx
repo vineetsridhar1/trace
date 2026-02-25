@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
+import { useMutation } from 'urql';
 import type { LocalChannelConfig } from '../types';
-import { SERVER_URL } from '../types';
+import { graphqlClient } from '../graphql/client';
+import { VALIDATE_REPO_QUERY, REPO_BRANCHES_QUERY, CREATE_CHANNEL_MUTATION } from '../graphql/documents/channels';
 
 interface CreateChannelModalProps {
   serverId: string | null;
@@ -19,6 +21,7 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
   const [validating, setValidating] = useState(false);
   const [repoValid, setRepoValid] = useState<boolean | null>(null);
   const [detectedOriginUrl, setDetectedOriginUrl] = useState<string | null>(null);
+  const [, executeCreateChannel] = useMutation(CREATE_CHANNEL_MUTATION);
 
   const handleSelectFolder = useCallback(async () => {
     const result = await window.traceAPI.selectFolder();
@@ -34,16 +37,12 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
     setBaseBranch('main');
 
     try {
-      const res = await fetch(`${SERVER_URL}/channels/validate-repo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ localRepoPath: selectedPath }),
-      });
-      const data = (await res.json()) as { valid: boolean; originUrl?: string; error?: string };
+      const validateResult = await graphqlClient.query(VALIDATE_REPO_QUERY, { localRepoPath: selectedPath }).toPromise();
+      const data = validateResult.data?.validateRepo;
 
-      if (!data.valid) {
+      if (!data?.valid) {
         setRepoValid(false);
-        setError(data.error ?? 'Invalid repository');
+        setError(data?.error ?? 'Invalid repository');
         setLocalRepoPath('');
         return;
       }
@@ -52,20 +51,16 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
       setDetectedOriginUrl(data.originUrl ?? null);
 
       // Fetch branches
-      const branchRes = await fetch(`${SERVER_URL}/channels/validate-repo/branches`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ localRepoPath: selectedPath }),
-      });
-      const branchData = (await branchRes.json()) as { branches: string[] };
-      setBranches(branchData.branches);
+      const branchResult = await graphqlClient.query(REPO_BRANCHES_QUERY, { localRepoPath: selectedPath }).toPromise();
+      const fetchedBranches: string[] = branchResult.data?.repoBranches ?? [];
+      setBranches(fetchedBranches);
 
-      if (branchData.branches.length > 0) {
-        const defaultBranch = branchData.branches.includes('main')
+      if (fetchedBranches.length > 0) {
+        const defaultBranch = fetchedBranches.includes('main')
           ? 'main'
-          : branchData.branches.includes('master')
+          : fetchedBranches.includes('master')
             ? 'master'
-            : branchData.branches[0];
+            : fetchedBranches[0];
         setBaseBranch(defaultBranch);
       }
     } catch {
@@ -84,24 +79,19 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch(`${SERVER_URL}/channels`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: trimmedName,
-          serverId,
-          githubUrl: detectedOriginUrl,
-          baseBranch: baseBranch.trim() || 'main',
-        }),
+      const result = await executeCreateChannel({
+        name: trimmedName,
+        serverId,
+        githubUrl: detectedOriginUrl,
+        baseBranch: baseBranch.trim() || 'main',
       });
 
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        setError(data.error ?? 'Failed to create channel');
+      if (result.error) {
+        setError(result.error.message || 'Failed to create channel');
         return;
       }
 
-      const { channel } = (await res.json()) as { channel: { id: string } };
+      const channel = result.data.createChannel;
 
       // Save local config
       if (localRepoPath) {
@@ -114,7 +104,7 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
     } finally {
       setCreating(false);
     }
-  }, [name, serverId, localRepoPath, baseBranch, detectedOriginUrl, onCreated, onLocalConfigSave]);
+  }, [name, serverId, localRepoPath, baseBranch, detectedOriginUrl, onCreated, onLocalConfigSave, executeCreateChannel]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>

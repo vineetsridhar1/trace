@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { ChannelMessage, TicketStatus, ClaudeModel, EffortLevel } from '../types';
-import { SERVER_URL } from '../types';
+import { graphqlClient } from '../graphql/client';
+import { CREATE_MESSAGE_MUTATION, APPEND_PROMPT_MUTATION, UPDATE_PREVIEW_MUTATION } from '../graphql/documents/messages';
 
 interface UseClaudeMessageActionsOptions {
   activeChannelId: string | null;
@@ -91,18 +92,14 @@ export function useClaudeMessageActions({
       if (!activeChannelId) return;
 
       try {
-        const response = await fetch(
-          `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/preview`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ preview }),
-          },
-        );
+        const result = await graphqlClient.mutation(UPDATE_PREVIEW_MUTATION, {
+          channelId: activeChannelId,
+          messageId,
+          preview,
+        }).toPromise();
 
-        if (!response.ok) return;
-        const { message } = (await response.json()) as { message: ChannelMessage };
-        upsertMessage(message);
+        if (result.error || !result.data) return;
+        upsertMessage(result.data.updateMessagePreview as ChannelMessage);
       } catch {
         // Preview updates are best-effort and should not block execution.
       }
@@ -115,21 +112,19 @@ export function useClaudeMessageActions({
       if (!activeChannelId) return null;
 
       try {
-        const response = await fetch(
-          `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/prompts`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, attachmentIds }),
-          },
-        );
+        const result = await graphqlClient.mutation(APPEND_PROMPT_MUTATION, {
+          channelId: activeChannelId,
+          messageId,
+          text,
+          attachmentIds,
+        }).toPromise();
 
-        if (!response.ok) {
+        if (result.error || !result.data) {
           console.error(errorLabel);
           return null;
         }
 
-        const { message } = (await response.json()) as { message: ChannelMessage };
+        const message = result.data.appendPrompt.message as ChannelMessage;
         upsertMessage(message);
         if (selectedMessageIdRef.current === message.id) {
           void loadThreadEvents(message);
@@ -149,14 +144,15 @@ export function useClaudeMessageActions({
       if (!text || !activeChannelId) return false;
 
       try {
-        const response = await fetch(`${SERVER_URL}/channels/${activeChannelId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, attachmentIds }),
-        });
-        if (!response.ok) return false;
+        const result = await graphqlClient.mutation(CREATE_MESSAGE_MUTATION, {
+          channelId: activeChannelId,
+          text,
+          attachmentIds,
+        }).toPromise();
 
-        const { message } = (await response.json()) as { message: ChannelMessage };
+        if (result.error || !result.data) return false;
+
+        const message = result.data.createMessage.message as ChannelMessage;
         upsertMessage(message);
         onMessageCreated(message);
         setPendingRunMessageId(message.id);

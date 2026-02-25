@@ -2,6 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChannelMessage, KanbanTicket, MessageEnvelope, ThreadEventEnvelope, TicketEnvelope } from '../types';
 import { SERVER_URL } from '../types';
 
+// SSE broadcasts send raw Prisma data with _count.threads, but our ChannelMessage type uses threadCount.
+// Normalize the shape at the SSE boundary.
+function normalizeMessage(raw: MessageEnvelope['message']): ChannelMessage {
+  const msg = raw as ChannelMessage & { _count?: { threads: number } };
+  return {
+    ...msg,
+    threadCount: msg.threadCount ?? msg._count?.threads ?? 0,
+  };
+}
+
 interface UseSseOptions {
   activeChannelId: string | null;
   upsertMessage: (message: ChannelMessage) => void;
@@ -47,25 +57,26 @@ export function useSse({
     source.addEventListener('message-created', (evt) => {
       const payload = JSON.parse((evt as MessageEvent).data) as MessageEnvelope;
       if (payload.channelId !== activeChannelRef.current) return;
-      upsertMessage(payload.message);
+      upsertMessage(normalizeMessage(payload.message));
     });
 
     source.addEventListener('message-upsert', (evt) => {
       const payload = JSON.parse((evt as MessageEvent).data) as MessageEnvelope;
       if (payload.channelId !== activeChannelRef.current) return;
+      const message = normalizeMessage(payload.message);
 
       // Detect completion transitions for attention notification
-      if (onNeedsAttention && payload.message.status === 'completed') {
-        const prev = messagesRef.current.find((m) => m.id === payload.message.id);
+      if (onNeedsAttention && message.status === 'completed') {
+        const prev = messagesRef.current.find((m) => m.id === message.id);
         if (prev && prev.status !== 'completed') {
-          const notViewing = selectedMessageIdRef.current !== payload.message.id || document.hidden;
+          const notViewing = selectedMessageIdRef.current !== message.id || document.hidden;
           if (notViewing) {
-            onNeedsAttention(payload.message.id, 'completed');
+            onNeedsAttention(message.id, 'completed');
           }
         }
       }
 
-      upsertMessage(payload.message);
+      upsertMessage(message);
     });
 
     source.addEventListener('thread-event-created', (evt) => {

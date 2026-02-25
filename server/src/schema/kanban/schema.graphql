@@ -1,0 +1,51 @@
+extend type Query {
+  board(channelId: ID!): [KanbanColumn!]!
+}
+
+extend type Mutation {
+  createColumn(channelId: ID!, name: String!, slug: String!, color: String): KanbanColumn!
+  updateColumn(columnId: ID!, name: String, color: String, sortOrder: Int): KanbanColumn!
+  deleteColumn(columnId: ID!): Boolean!
+  moveTicket(ticketId: ID!, columnId: ID!, sortOrder: Int): Ticket!
+}
+
+type KanbanColumn {
+  id: ID!
+  channelId: String!
+  name: String!
+  slug: String!
+  color: String
+  sortOrder: Int!
+  tickets: [Ticket!]!
+}
+
+type Ticket {
+  id: ID!
+  messageId: String!
+  columnId: String!
+  title: String!
+  description: String
+  solutionApproach: String
+  status: String!
+  metadata: JSON
+  sortOrder: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  message: TicketMessage
+}
+
+type TicketMessage {
+  id: ID!
+  branch: String
+  status: String!
+  createdAt: DateTime!
+  attachments: [TicketAttachment!]!
+}
+
+type TicketAttachment {
+  id: ID!
+  key: String!
+  filename: String!
+  contentType: String!
+  url: String!
+}

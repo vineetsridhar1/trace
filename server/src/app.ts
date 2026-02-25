@@ -1,27 +1,34 @@
 import express from 'express';
 import cors from 'cors';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@as-integrations/express4';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { resolvers } from './schema/resolvers.generated';
 import eventsRouter from './routes/events';
-import sessionsRouter from './routes/sessions';
 import sseRouter from './routes/sse';
-import channelsRouter from './routes/channels';
-import kanbanRouter from './routes/kanban';
 import attachmentsRouter from './routes/attachments';
-import serversRouter from './routes/servers';
 import { errorHandler } from './middleware/errorHandler';
 
-export function createApp() {
+export async function createApp() {
   const app = express();
 
   app.use(cors());
   app.use(express.json({ limit: '10mb' }));
 
+  // GraphQL
+  const typeDefs = readFileSync(
+    join(__dirname, './schema/schema.generated.graphqls'),
+    'utf8',
+  );
+  const server = new ApolloServer({ typeDefs, resolvers });
+  await server.start();
+  app.use('/graphql', expressMiddleware(server));
+
+  // REST endpoints that stay
   app.use('/events', eventsRouter);
-  app.use('/sessions', sessionsRouter);
   app.use('/sse', sseRouter);
-  app.use('/channels', channelsRouter);
-  app.use('/channels', kanbanRouter);
   app.use('/attachments', attachmentsRouter);
-  app.use('/servers', serversRouter);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });

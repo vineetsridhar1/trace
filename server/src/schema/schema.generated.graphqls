@@ -1,0 +1,194 @@
+type Attachment {
+  byteSize: Int!
+  contentType: String!
+  filename: String!
+  id: ID!
+  key: String!
+  localPath: String!
+  url: String!
+}
+
+type Channel {
+  baseBranch: String
+  createdAt: DateTime!
+  githubUrl: String
+  id: ID!
+  name: String!
+  serverId: String!
+  updatedAt: DateTime!
+}
+
+type CreateMessagePayload {
+  event: Event!
+  message: Message!
+  thread: Thread!
+}
+
+scalar DateTime
+
+type Event {
+  hookEventName: String!
+  id: ID!
+  importance: String!
+  lastAssistantMessage: String
+  rawPayload: JSON!
+  sessionId: String!
+  stopHookActive: Boolean
+  threadId: String!
+  timestamp: DateTime!
+  toolInput: JSON
+  toolName: String
+  toolResponse: JSON
+  toolUseId: String
+}
+
+type EventConnection {
+  events: [Event!]!
+  limit: Int!
+  offset: Int!
+  total: Int!
+}
+
+scalar JSON
+
+type KanbanColumn {
+  channelId: String!
+  color: String
+  id: ID!
+  name: String!
+  slug: String!
+  sortOrder: Int!
+  tickets: [Ticket!]!
+}
+
+type Message {
+  branch: String
+  channelId: String!
+  claudeSessionId: String
+  createdAt: DateTime!
+  id: ID!
+  importance: String!
+  preview: String
+  session: MessageSession
+  sessionId: String!
+  status: String!
+  summary: String
+  threadCount: Int!
+}
+
+type MessageConnection {
+  limit: Int!
+  messages: [Message!]!
+  offset: Int!
+  total: Int!
+}
+
+type MessageSession {
+  cwd: String
+  sessionId: String!
+  status: String!
+}
+
+type Mutation {
+  appendPrompt(attachmentIds: [String!], channelId: ID!, messageId: ID!, text: String!): CreateMessagePayload
+  createChannel(baseBranch: String, githubUrl: String, name: String!, serverId: String): Channel!
+  createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
+  createMessage(attachmentIds: [String!], channelId: ID!, text: String!): CreateMessagePayload!
+  createServer(avatarUrl: String, name: String!): Server!
+  deleteColumn(columnId: ID!): Boolean!
+  moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
+  updateChannel(baseBranch: String, githubUrl: String, id: ID!, name: String): Channel!
+  updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
+  updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
+  updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!
+  uploadAttachment(contentType: String!, data: String!, filename: String!): Attachment!
+}
+
+type Query {
+  board(channelId: ID!): [KanbanColumn!]!
+  channel(id: ID!): Channel
+  channels: [Channel!]!
+  event(id: ID!): Event
+  messages(channelId: ID!, limit: Int, offset: Int): MessageConnection!
+  repoBranches(localRepoPath: String!): [String!]!
+  servers: [Server!]!
+  session(sessionId: String!): Session
+  sessionEvents(after: String, hookEventName: String, limit: Int, offset: Int, sessionId: String!, toolName: String): EventConnection!
+  sessions(limit: Int, offset: Int, order: String, sort: String, status: String): SessionConnection!
+  threadEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int, threadId: ID!): EventConnection!
+  threads(channelId: ID!, messageId: ID!): [Thread!]!
+  validateRepo(localRepoPath: String!): RepoValidation!
+}
+
+type RepoValidation {
+  error: String
+  originUrl: String
+  valid: Boolean!
+}
+
+type Server {
+  avatarUrl: String
+  channels: [Channel!]!
+  createdAt: DateTime!
+  id: ID!
+  name: String!
+  updatedAt: DateTime!
+}
+
+type Session {
+  cwd: String
+  eventCount: Int!
+  firstSeenAt: DateTime!
+  id: ID!
+  lastSeenAt: DateTime!
+  permissionMode: String
+  sessionId: String!
+  status: String!
+  toolSummary: JSON
+  transcriptPath: String
+}
+
+type SessionConnection {
+  limit: Int!
+  offset: Int!
+  sessions: [Session!]!
+  total: Int!
+}
+
+type Thread {
+  createdAt: DateTime!
+  eventCount: Int!
+  id: ID!
+  messageId: String!
+}
+
+type Ticket {
+  columnId: String!
+  createdAt: DateTime!
+  description: String
+  id: ID!
+  message: TicketMessage
+  messageId: String!
+  metadata: JSON
+  solutionApproach: String
+  sortOrder: Int!
+  status: String!
+  title: String!
+  updatedAt: DateTime!
+}
+
+type TicketAttachment {
+  contentType: String!
+  filename: String!
+  id: ID!
+  key: String!
+  url: String!
+}
+
+type TicketMessage {
+  attachments: [TicketAttachment!]!
+  branch: String
+  createdAt: DateTime!
+  id: ID!
+  status: String!
+}

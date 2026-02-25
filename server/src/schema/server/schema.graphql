@@ -1,0 +1,16 @@
+extend type Query {
+  servers: [Server!]!
+}
+
+extend type Mutation {
+  createServer(name: String!, avatarUrl: String): Server!
+}
+
+type Server {
+  id: ID!
+  name: String!
+  avatarUrl: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  channels: [Channel!]!
+}

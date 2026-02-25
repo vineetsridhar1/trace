@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
-import type { ChannelMessage, ServerEvent, ThreadStatus, MessageThread } from '../types';
-import { SERVER_URL } from '../types';
+import type { ChannelMessage, ServerEvent, ThreadStatus } from '../types';
+import { graphqlClient } from '../graphql/client';
+import { THREADS_QUERY, THREAD_EVENTS_QUERY } from '../graphql/documents/threads';
 import { clamp } from '../utils';
 
 interface UseThreadOptions {
@@ -60,15 +61,17 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         // Only show "loading" on initial load, not on incremental SSE updates
         setThreadStatus((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
 
-        const threadsRes = await fetch(
-          `${SERVER_URL}/channels/${message.channelId}/messages/${message.id}/threads`,
-        );
-        if (!threadsRes.ok) {
+        const threadsResult = await graphqlClient.query(THREADS_QUERY, {
+          channelId: message.channelId,
+          messageId: message.id,
+        }, { requestPolicy: 'network-only' }).toPromise();
+
+        if (threadsResult.error) {
           setThreadStatus('error');
           return;
         }
 
-        const { threads } = (await threadsRes.json()) as { threads: MessageThread[] };
+        const threads = threadsResult.data?.threads ?? [];
         if (threads.length === 0) {
           setActiveThreadId(null);
           setThreadEvents([]);
@@ -79,15 +82,19 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         const thread = threads[0];
         setActiveThreadId(thread.id);
 
-        const eventsRes = await fetch(
-          `${SERVER_URL}/channels/${message.channelId}/messages/${message.id}/threads/${thread.id}/events?limit=200`,
-        );
-        if (!eventsRes.ok) {
+        const eventsResult = await graphqlClient.query(THREAD_EVENTS_QUERY, {
+          channelId: message.channelId,
+          messageId: message.id,
+          threadId: thread.id,
+          limit: 200,
+        }, { requestPolicy: 'network-only' }).toPromise();
+
+        if (eventsResult.error) {
           setThreadStatus('error');
           return;
         }
 
-        const { events } = (await eventsRes.json()) as { events: ServerEvent[] };
+        const events: ServerEvent[] = eventsResult.data?.threadEvents?.events ?? [];
         setThreadEvents(events);
         setThreadStatus(events.length === 0 ? 'empty' : 'ready');
 

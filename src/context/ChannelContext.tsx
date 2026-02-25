@@ -1,10 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { Channel, LocalChannelConfig, Server } from '../types';
-import { SERVER_URL } from '../types';
 import { useChannels } from '../hooks/useChannels';
 import { useServers } from '../hooks/useServers';
 import { useLocalConfig } from '../hooks/useLocalConfig';
+import { useChannelSettings } from '../hooks/useChannelSettings';
 
 export interface ChannelContextValue {
   // Servers
@@ -77,6 +77,8 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
     [enrichedChannels, activeChannelId],
   );
 
+  const { updateChannel: updateChannelSettings } = useChannelSettings();
+
   // One-time migration: copy DB localRepoPath/creationScript into local config
   const migrationRanRef = useRef(false);
   useEffect(() => {
@@ -90,38 +92,12 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
             localRepoPath: ch.localRepoPath,
             creationScript: ch.creationScript ?? undefined,
           };
-          try {
-            const res = await fetch(`${SERVER_URL}/channels/${ch.id}/startup-scripts`);
-            if (res.ok) {
-              const data = (await res.json()) as { scripts: { name: string; command: string }[] };
-              if (data.scripts.length > 0) {
-                config.startupScripts = data.scripts.map((s) => ({ name: s.name, command: s.command }));
-              }
-            }
-          } catch {
-            // ignore migration errors
-          }
           await setLocalConfig(ch.id, config);
         }
       }
     };
     void migrateChannels();
   }, [channels, localConfigs, setLocalConfig]);
-
-  const updateChannelSettings = useCallback(async (channelId: string, data: { baseBranch?: string | null }) => {
-    try {
-      const res = await fetch(`${SERVER_URL}/channels/${channelId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch {
-      console.error('Failed to update channel');
-      return null;
-    }
-  }, []);
 
   const value = useMemo<ChannelContextValue>(
     () => ({

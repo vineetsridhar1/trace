@@ -5,9 +5,13 @@ import { initStorage } from './services/storageService';
 
 initStorage(config.storagePath);
 
-const app = createApp();
+async function main() {
+  const app = await createApp();
 
-app.listen(config.port, async () => {
-  await getDefaultChannel();
-  console.log(`Trace server listening on http://localhost:${config.port}`);
-});
+  app.listen(config.port, async () => {
+    await getDefaultChannel();
+    console.log(`Trace server listening on http://localhost:${config.port}`);
+  });
+}
+
+void main();

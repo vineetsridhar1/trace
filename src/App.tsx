@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
-import { SERVER_URL } from './types';
+import { graphqlClient } from './graphql/client';
+import { UPDATE_STATUS_MUTATION } from './graphql/documents/messages';
 import { buildThreadNodes } from './utils';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
@@ -183,17 +184,14 @@ function AppContent() {
     async (messageId: string, status: TicketStatus) => {
       if (!activeChannelId) return;
       try {
-        const response = await fetch(
-          `${SERVER_URL}/channels/${activeChannelId}/messages/${messageId}/status`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status }),
-          },
-        );
-        if (!response.ok) return;
-        const { message } = (await response.json()) as { message: ChannelMessage };
-        upsertAndSyncMessage(message);
+        const result = await graphqlClient.mutation(UPDATE_STATUS_MUTATION, {
+          channelId: activeChannelId,
+          messageId,
+          status,
+        }).toPromise();
+
+        if (result.error || !result.data) return;
+        upsertAndSyncMessage(result.data.updateMessageStatus as ChannelMessage);
       } catch {
         console.error('Failed to update message status');
       }

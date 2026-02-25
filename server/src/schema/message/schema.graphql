@@ -1,0 +1,44 @@
+extend type Query {
+  messages(channelId: ID!, limit: Int, offset: Int): MessageConnection!
+}
+
+extend type Mutation {
+  createMessage(channelId: ID!, text: String!, attachmentIds: [String!]): CreateMessagePayload!
+  appendPrompt(channelId: ID!, messageId: ID!, text: String!, attachmentIds: [String!]): CreateMessagePayload!
+  updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
+  updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!
+}
+
+type Message {
+  id: ID!
+  channelId: String!
+  sessionId: String!
+  preview: String
+  importance: String!
+  status: String!
+  summary: String
+  branch: String
+  claudeSessionId: String
+  createdAt: DateTime!
+  session: MessageSession
+  threadCount: Int!
+}
+
+type MessageSession {
+  sessionId: String!
+  cwd: String
+  status: String!
+}
+
+type MessageConnection {
+  messages: [Message!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+
+type CreateMessagePayload {
+  message: Message!
+  thread: Thread!
+  event: Event!
+}

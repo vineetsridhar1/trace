@@ -1,0 +1,26 @@
+extend type Query {
+  event(id: ID!): Event
+}
+
+type Event {
+  id: ID!
+  sessionId: String!
+  hookEventName: String!
+  timestamp: DateTime!
+  toolName: String
+  toolInput: JSON
+  toolResponse: JSON
+  toolUseId: String
+  stopHookActive: Boolean
+  lastAssistantMessage: String
+  rawPayload: JSON!
+  threadId: String!
+  importance: String!
+}
+
+type EventConnection {
+  events: [Event!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}

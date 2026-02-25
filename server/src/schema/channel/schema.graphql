@@ -1,0 +1,27 @@
+extend type Query {
+  channels: [Channel!]!
+  channel(id: ID!): Channel
+  validateRepo(localRepoPath: String!): RepoValidation!
+  repoBranches(localRepoPath: String!): [String!]!
+}
+
+extend type Mutation {
+  createChannel(name: String!, serverId: String, githubUrl: String, baseBranch: String): Channel!
+  updateChannel(id: ID!, name: String, baseBranch: String, githubUrl: String): Channel!
+}
+
+type Channel {
+  id: ID!
+  serverId: String!
+  name: String!
+  baseBranch: String
+  githubUrl: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type RepoValidation {
+  valid: Boolean!
+  originUrl: String
+  error: String
+}

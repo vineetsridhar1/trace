@@ -1,0 +1,13 @@
+extend type Mutation {
+  uploadAttachment(data: String!, filename: String!, contentType: String!): Attachment!
+}
+
+type Attachment {
+  id: ID!
+  key: String!
+  filename: String!
+  contentType: String!
+  byteSize: Int!
+  url: String!
+  localPath: String!
+}

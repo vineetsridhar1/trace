@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { SERVER_URL } from '../types';
+import { useMutation } from 'urql';
+import { CREATE_SERVER_MUTATION } from '../graphql/documents/servers';
 
 interface CreateServerModalProps {
   onClose: () => void;
@@ -10,6 +11,7 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [, executeCreateServer] = useMutation(CREATE_SERVER_MUTATION);
 
   const handleCreate = useCallback(async () => {
     const trimmedName = name.trim();
@@ -18,26 +20,18 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch(`${SERVER_URL}/servers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName }),
-      });
-
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        setError(data.error ?? 'Failed to create server');
+      const result = await executeCreateServer({ name: trimmedName });
+      if (result.error) {
+        setError(result.error.message || 'Failed to create server');
         return;
       }
-
-      const data = (await res.json()) as { server: { id: string; channels: { id: string }[] } };
-      onCreated(data.server);
+      onCreated(result.data.createServer);
     } catch {
       setError('Failed to create server');
     } finally {
       setCreating(false);
     }
-  }, [name, onCreated]);
+  }, [name, onCreated, executeCreateServer]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>

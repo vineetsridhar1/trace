@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { KanbanColumn, KanbanTicket } from '../types';
-import { SERVER_URL } from '../types';
+import { graphqlClient } from '../graphql/client';
+import { BOARD_QUERY, MOVE_TICKET_MUTATION } from '../graphql/documents/kanban';
 
 export function useKanban() {
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
@@ -9,10 +10,9 @@ export function useKanban() {
   const fetchBoard = useCallback(async (channelId: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`${SERVER_URL}/channels/${channelId}/board`);
-      if (!response.ok) return;
-      const data = (await response.json()) as { columns: KanbanColumn[] };
-      setColumns(data.columns);
+      const result = await graphqlClient.query(BOARD_QUERY, { channelId }, { requestPolicy: 'network-only' }).toPromise();
+      if (!result.data) return;
+      setColumns(result.data.board as KanbanColumn[]);
     } catch {
       console.error('Failed to fetch kanban board');
     } finally {
@@ -65,11 +65,7 @@ export function useKanban() {
       });
 
       try {
-        await fetch(`${SERVER_URL}/channels/${channelId}/board/tickets/${ticketId}/move`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ columnId, sortOrder }),
-        });
+        await graphqlClient.mutation(MOVE_TICKET_MUTATION, { ticketId, columnId, sortOrder }).toPromise();
       } catch {
         // Revert on failure by refetching
         void fetchBoard(channelId);

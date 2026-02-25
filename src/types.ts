@@ -127,14 +127,14 @@ export interface ChannelMessage {
   claudeSessionId: string | null;
   createdAt: string;
   session: MessageSession;
-  _count: { threads: number };
+  threadCount: number;
 }
 
 export interface MessageThread {
   id: string;
   messageId: string;
   createdAt: string;
-  _count: { events: number };
+  eventCount: number;
 }
 
 export interface MessageEnvelope {

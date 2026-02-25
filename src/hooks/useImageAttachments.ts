@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react';
 import { SERVER_URL } from '../types';
+import { graphqlClient } from '../graphql/client';
+import { UPLOAD_ATTACHMENT_MUTATION } from '../graphql/documents/attachments';
 
 export interface AttachedImage {
   id: string;
@@ -31,28 +33,15 @@ export function useImageAttachments() {
     const base64 = await readFileAsBase64(file);
 
     try {
-      const response = await fetch(`${SERVER_URL}/attachments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          data: base64,
-          filename: file.name || 'pasted-image.png',
-          contentType: file.type || 'image/png',
-        }),
-      });
+      const result = await graphqlClient.mutation(UPLOAD_ATTACHMENT_MUTATION, {
+        data: base64,
+        filename: file.name || 'pasted-image.png',
+        contentType: file.type || 'image/png',
+      }).toPromise();
 
-      if (!response.ok) return null;
+      if (result.error || !result.data) return null;
 
-      const { attachment } = (await response.json()) as {
-        attachment: {
-          id: string;
-          key: string;
-          filename: string;
-          contentType: string;
-          url: string;
-          localPath: string;
-        };
-      };
+      const attachment = result.data.uploadAttachment;
 
       return {
         id: attachment.id,

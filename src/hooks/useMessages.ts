@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ChannelMessage } from '../types';
-import { SERVER_URL } from '../types';
+import { graphqlClient } from '../graphql/client';
+import { MESSAGES_QUERY } from '../graphql/documents/messages';
 
 export function useMessages() {
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
@@ -25,14 +26,13 @@ export function useMessages() {
 
   const refreshMessages = useCallback(async (channelId: string) => {
     try {
-      const res = await fetch(`${SERVER_URL}/channels/${channelId}/messages?limit=200`);
-      if (!res.ok) return;
+      const result = await graphqlClient.query(MESSAGES_QUERY, { channelId, limit: 200 }, { requestPolicy: 'network-only' }).toPromise();
+      if (!result.data) return;
 
-      const { messages: fetched } = await res.json();
-      const ordered = (fetched as ChannelMessage[]).sort(
+      const fetched = (result.data.messages.messages as ChannelMessage[]).sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
-      setMessages(ordered);
+      setMessages(fetched);
     } catch {
       // Server may not be up yet.
     }
