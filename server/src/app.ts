@@ -6,6 +6,7 @@ import sseRouter from './routes/sse';
 import channelsRouter from './routes/channels';
 import kanbanRouter from './routes/kanban';
 import attachmentsRouter from './routes/attachments';
+import serversRouter from './routes/servers';
 import { errorHandler } from './middleware/errorHandler';
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
   app.use('/channels', channelsRouter);
   app.use('/channels', kanbanRouter);
   app.use('/attachments', attachmentsRouter);
+  app.use('/servers', serversRouter);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });

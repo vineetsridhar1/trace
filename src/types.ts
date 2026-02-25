@@ -89,8 +89,17 @@ export interface ServerEvent {
   importance: string;
 }
 
+export interface Server {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Channel {
   id: string;
+  serverId: string;
   name: string;
   localRepoPath?: string | null;
   baseBranch: string | null;

@@ -3,6 +3,7 @@ import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, Tick
 import { SERVER_URL } from './types';
 import { buildThreadNodes } from './utils';
 import { useChannels } from './hooks/useChannels';
+import { useServers } from './hooks/useServers';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
 import { useThreadScroll } from './hooks/useThreadScroll';
@@ -21,7 +22,11 @@ import { WorktreeChanges } from './components/WorktreeChanges';
 import { Terminal } from './components/Terminal';
 import { ChannelSettingsModal } from './components/ChannelSettingsModal';
 import { CreateChannelModal } from './components/CreateChannelModal';
+import { CreateServerModal } from './components/CreateServerModal';
+import { ServerRail } from './components/ServerRail';
 import { TerminalTabs } from './components/TerminalTabs';
+
+const SERVER_RAIL_WIDTH = 60;
 
 export default function App() {
   const {
@@ -31,6 +36,13 @@ export default function App() {
     switchChannel,
     refreshChannels,
   } = useChannels();
+  const {
+    servers,
+    activeServerId,
+    activeServer,
+    switchServer,
+    refreshServers,
+  } = useServers();
   const {
     messages,
     messagesRef,
@@ -107,6 +119,11 @@ export default function App() {
     [channels, localConfigs],
   );
 
+  const serverChannels = useMemo(
+    () => (activeServerId ? enrichedChannels.filter((ch) => ch.serverId === activeServerId) : enrichedChannels),
+    [enrichedChannels, activeServerId],
+  );
+
   const enrichedActiveChannel = useMemo(
     () => enrichedChannels.find((ch) => ch.id === activeChannelId) ?? null,
     [enrichedChannels, activeChannelId],
@@ -178,11 +195,13 @@ export default function App() {
     null,
   );
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showCreateServer, setShowCreateServer] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
 
   const { dragging, startDragging } = usePanelResize(
     setChannelWidth,
     setThreadWidth,
+    SERVER_RAIL_WIDTH,
   );
 
   useEffect(() => {
@@ -424,6 +443,17 @@ export default function App() {
     ],
   );
 
+  const handleSwitchServer = useCallback(
+    (serverId: string) => {
+      switchServer(serverId);
+      const firstChannel = enrichedChannels.find((ch) => ch.serverId === serverId);
+      if (firstChannel) {
+        handleSwitchChannel(firstChannel.id);
+      }
+    },
+    [switchServer, enrichedChannels, handleSwitchChannel],
+  );
+
   const handleCloseThread = useCallback(() => {
     if (isFullscreen) {
       setIsFullscreen(false);
@@ -576,11 +606,21 @@ export default function App() {
   return (
     <ClaudeActionsProvider value={claudeActionsContextValue}>
       <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
+        {!isFullscreen && (
+          <ServerRail
+            servers={servers}
+            activeServerId={activeServerId}
+            onSwitchServer={handleSwitchServer}
+            onCreateServer={() => setShowCreateServer(true)}
+          />
+        )}
+
         <ChannelPanel
-          channels={enrichedChannels}
+          channels={serverChannels}
           activeChannelId={activeChannelId}
           channelWidth={isFullscreen ? 0 : channelWidth}
           dragging={dragging}
+          serverName={activeServer?.name}
           onSwitchChannel={handleSwitchChannel}
           onOpenSettings={handleOpenSettings}
           onRunStartupScripts={handleRunStartupScripts}
@@ -721,12 +761,23 @@ export default function App() {
 
         {showCreateChannel && (
           <CreateChannelModal
+            serverId={activeServerId}
             onClose={() => setShowCreateChannel(false)}
             onCreated={() => {
               setShowCreateChannel(false);
               void refreshChannels();
             }}
             onLocalConfigSave={setLocalConfig}
+          />
+        )}
+
+        {showCreateServer && (
+          <CreateServerModal
+            onClose={() => setShowCreateServer(false)}
+            onCreated={() => {
+              setShowCreateServer(false);
+              void refreshServers();
+            }}
           />
         )}
       </div>

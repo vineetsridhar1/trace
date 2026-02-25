@@ -6,6 +6,7 @@ import {
   updateChannel,
 } from '../services/channelService';
 import { validateGitRepo, getOriginRemoteUrl, listBranches } from '../services/gitService';
+import { getOrCreateDefaultServer } from '../services/serverService';
 import {
   getMessagesByChannel,
   getThreadsByMessage,
@@ -27,14 +28,17 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 router.post('/', async (req: Request, res: Response) => {
-  const { name, githubUrl, baseBranch } = req.body;
+  const { name, githubUrl, baseBranch, serverId } = req.body;
   if (!name || typeof name !== 'string') {
     res.status(400).json({ error: 'name is required' });
     return;
   }
 
+  const resolvedServerId = serverId || await getOrCreateDefaultServer();
+
   const channel = await createChannel({
     name,
+    serverId: resolvedServerId,
     baseBranch: baseBranch || 'main',
     githubUrl: githubUrl || null,
   });

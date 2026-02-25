@@ -5,6 +5,7 @@ import { clamp } from '../utils';
 export function usePanelResize(
   setChannelWidth: (w: number) => void,
   setThreadWidth: (w: number) => void,
+  leftOffset: number = 0,
 ) {
   const [dragging, setDragging] = useState<DragTarget>(null);
 
@@ -13,7 +14,7 @@ export function usePanelResize(
 
     const onMouseMove = (event: MouseEvent) => {
       if (dragging === 'left') {
-        setChannelWidth(clamp(event.clientX, 160, 400));
+        setChannelWidth(clamp(event.clientX - leftOffset, 160, 400));
         return;
       }
       setThreadWidth(clamp(window.innerWidth - event.clientX, 280, 600));
@@ -32,7 +33,7 @@ export function usePanelResize(
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [dragging, setChannelWidth, setThreadWidth]);
+  }, [dragging, setChannelWidth, setThreadWidth, leftOffset]);
 
   const startDragging = useCallback((target: DragTarget) => setDragging(target), []);
 

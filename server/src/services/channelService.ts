@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import prisma from '../lib/prisma';
 import { getOriginRemoteUrl } from './gitService';
+import { getOrCreateDefaultServer } from './serverService';
 
 let defaultChannelId: string | null = null;
 
@@ -55,8 +56,9 @@ export async function getDefaultChannel() {
   let channel = await prisma.channel.findFirst({ where: { name: 'general' } });
   if (!channel) {
     const githubUrl = await getOriginRemoteUrl(repoPath);
+    const serverId = await getOrCreateDefaultServer();
     channel = await prisma.channel.create({
-      data: { name: 'general', baseBranch: 'main', githubUrl },
+      data: { name: 'general', baseBranch: 'main', githubUrl, serverId },
     });
   }
   ensureDefaultChannelLocalConfig(channel.id, repoPath);
@@ -64,7 +66,7 @@ export async function getDefaultChannel() {
   return defaultChannelId;
 }
 
-export async function createChannel(data: { name: string; baseBranch?: string | null; githubUrl?: string | null }) {
+export async function createChannel(data: { name: string; serverId: string; baseBranch?: string | null; githubUrl?: string | null }) {
   return prisma.channel.create({ data });
 }
 

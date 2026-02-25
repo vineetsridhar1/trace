@@ -3,12 +3,13 @@ import type { LocalChannelConfig } from '../types';
 import { SERVER_URL } from '../types';
 
 interface CreateChannelModalProps {
+  serverId: string | null;
   onClose: () => void;
   onCreated: () => void;
   onLocalConfigSave: (channelId: string, data: LocalChannelConfig) => Promise<void>;
 }
 
-export function CreateChannelModal({ onClose, onCreated, onLocalConfigSave }: CreateChannelModalProps) {
+export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfigSave }: CreateChannelModalProps) {
   const [name, setName] = useState('');
   const [localRepoPath, setLocalRepoPath] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
@@ -88,6 +89,7 @@ export function CreateChannelModal({ onClose, onCreated, onLocalConfigSave }: Cr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: trimmedName,
+          serverId,
           githubUrl: detectedOriginUrl,
           baseBranch: baseBranch.trim() || 'main',
         }),
@@ -112,7 +114,7 @@ export function CreateChannelModal({ onClose, onCreated, onLocalConfigSave }: Cr
     } finally {
       setCreating(false);
     }
-  }, [name, localRepoPath, baseBranch, detectedOriginUrl, onCreated, onLocalConfigSave]);
+  }, [name, serverId, localRepoPath, baseBranch, detectedOriginUrl, onCreated, onLocalConfigSave]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
