@@ -18,7 +18,9 @@ const GQL_CHANNELS = gql`
 `;
 
 export function useChannels() {
-  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(
+    () => localStorage.getItem('activeChannelId'),
+  );
 
   const { data, refetch } = useChannelsQuery();
   const channels = (data?.channels ?? []) as Channel[];
@@ -26,12 +28,13 @@ export function useChannels() {
   const activeChannel = channels.find((ch) => ch.id === activeChannelId) ?? null;
 
   useEffect(() => {
-    if (channels.length > 0 && !activeChannelId) {
-      setActiveChannelId(channels[0].id);
-    }
+    if (channels.length === 0) return;
+    if (activeChannelId && channels.some((ch) => ch.id === activeChannelId)) return;
+    setActiveChannelId(channels[0].id);
   }, [channels, activeChannelId]);
 
   const switchChannel = useCallback((channelId: string) => {
+    localStorage.setItem('activeChannelId', channelId);
     setActiveChannelId(channelId);
   }, []);
 
