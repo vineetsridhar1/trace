@@ -7,6 +7,7 @@ import { extractPromptText, extractAttachments, formatTime, formatDuration, isEd
 import { ImageLightbox } from './ImageLightbox';
 import { EditDiffPreview } from './EditDiffPreview';
 import { SyntaxHighlightedCode } from './SyntaxHighlight';
+import { SubagentRow } from './SubagentRow';
 
 function ExpandableText({ text, lineClamp = 3 }: { text: string; lineClamp?: number }) {
   const innerRef = useRef<HTMLDivElement>(null);
@@ -194,6 +195,10 @@ function TodoListPreview({ event }: { event: ServerEvent }) {
   );
 }
 
+function isTaskEvent(event: ServerEvent): boolean {
+  return event.hookEventName === 'PostToolUse' && normalizeToolName(event.toolName) === 'task';
+}
+
 function isBashEvent(event: ServerEvent): boolean {
   return event.hookEventName === 'PostToolUse' && normalizeToolName(event.toolName) === 'bash';
 }
@@ -295,6 +300,11 @@ function ToolUseRow({ event, time }: { event: ServerEvent; time: string }) {
   const writeTool = isWriteEvent(event);
   const todoTool = isTodoWriteEvent(event);
   const bashTool = isBashEvent(event);
+  const taskTool = isTaskEvent(event);
+
+  if (taskTool) {
+    return <SubagentRow event={event} />;
+  }
 
   if (bashTool) {
     return <BashToolRow event={event} time={time} />;
