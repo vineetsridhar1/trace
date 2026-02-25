@@ -2,19 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { SERVER_URL } from './types';
 import { buildThreadNodes } from './utils';
-import { useChannels } from './hooks/useChannels';
-import { useServers } from './hooks/useServers';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
 import { useThreadScroll } from './hooks/useThreadScroll';
 import { usePanelResize } from './hooks/usePanelResize';
 import { useSse } from './hooks/useSse';
-import { useChannelSettings } from './hooks/useChannelSettings';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
-import { useLocalConfig } from './hooks/useLocalConfig';
 import { useClaudeMessageActions } from './hooks/useClaudeMessageActions';
 import { useKanban } from './hooks/useKanban';
 import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
+import { ChannelProvider, useChannelContext } from './context/ChannelContext';
+import { ThreadProvider } from './context/ThreadContext';
 import { ChannelPanel } from './components/ChannelPanel';
 import { MessagePanel } from './components/MessagePanel';
 import { ThreadPanel } from './components/ThreadPanel';
@@ -29,20 +27,32 @@ import { TerminalTabs } from './components/TerminalTabs';
 const SERVER_RAIL_WIDTH = 60;
 
 export default function App() {
-  const {
-    channels,
-    activeChannelId,
-    activeChannel,
-    switchChannel,
-    refreshChannels,
-  } = useChannels();
+  return (
+    <ChannelProvider>
+      <AppContent />
+    </ChannelProvider>
+  );
+}
+
+function AppContent() {
   const {
     servers,
     activeServerId,
     activeServer,
     switchServer,
     refreshServers,
-  } = useServers();
+    enrichedChannels,
+    serverChannels,
+    activeChannelId,
+    enrichedActiveChannel,
+    switchChannel,
+    refreshChannels,
+    localConfigs,
+    getLocalConfig,
+    setLocalConfig,
+    updateChannelSettings,
+  } = useChannelContext();
+
   const {
     messages,
     messagesRef,
@@ -52,6 +62,7 @@ export default function App() {
   } = useMessages();
 
   const activeChannelRef = useRef<Channel | null>(null);
+  activeChannelRef.current = enrichedActiveChannel;
 
   const getChannelRepoPath = useCallback(() => activeChannelRef.current?.localRepoPath ?? '', []);
   const getChannelBaseBranch = useCallback(() => activeChannelRef.current?.baseBranch ?? 'main', []);
@@ -78,7 +89,6 @@ export default function App() {
     syncSelectedMessage,
   } = useThread({ getChannelRepoPath, getChannelBaseBranch });
 
-  // Wrap upsertMessage to also keep selectedMessage in sync
   const upsertAndSyncMessage = useCallback(
     (message: ChannelMessage) => {
       upsertMessage(message);
@@ -94,73 +104,6 @@ export default function App() {
     onThreadScroll,
     resetScroll,
   } = useThreadScroll(threadEvents, selectedMessageId);
-
-  const {
-    updateChannel: updateChannelSettings,
-  } = useChannelSettings();
-
-  const {
-    configs: localConfigs,
-    getConfig: getLocalConfig,
-    setConfig: setLocalConfig,
-  } = useLocalConfig();
-
-  const enrichedChannels: Channel[] = useMemo(
-    () =>
-      channels.map((ch) => {
-        const local = localConfigs[ch.id];
-        if (!local) return ch;
-        return {
-          ...ch,
-          localRepoPath: local.localRepoPath ?? ch.localRepoPath,
-          creationScript: local.creationScript ?? ch.creationScript,
-        };
-      }),
-    [channels, localConfigs],
-  );
-
-  const serverChannels = useMemo(
-    () => (activeServerId ? enrichedChannels.filter((ch) => ch.serverId === activeServerId) : enrichedChannels),
-    [enrichedChannels, activeServerId],
-  );
-
-  const enrichedActiveChannel = useMemo(
-    () => enrichedChannels.find((ch) => ch.id === activeChannelId) ?? null,
-    [enrichedChannels, activeChannelId],
-  );
-  activeChannelRef.current = enrichedActiveChannel;
-
-  // One-time migration: copy DB localRepoPath/creationScript into local config
-  const migrationRanRef = useRef(false);
-  useEffect(() => {
-    if (migrationRanRef.current || channels.length === 0 || Object.keys(localConfigs).length > 0) return;
-    migrationRanRef.current = true;
-
-    const migrateChannels = async () => {
-      for (const ch of channels) {
-        if (ch.localRepoPath && !localConfigs[ch.id]) {
-          const config: LocalChannelConfig = {
-            localRepoPath: ch.localRepoPath,
-            creationScript: ch.creationScript ?? undefined,
-          };
-          // Fetch startup scripts from server for migration
-          try {
-            const res = await fetch(`${SERVER_URL}/channels/${ch.id}/startup-scripts`);
-            if (res.ok) {
-              const data = (await res.json()) as { scripts: { name: string; command: string }[] };
-              if (data.scripts.length > 0) {
-                config.startupScripts = data.scripts.map((s) => ({ name: s.name, command: s.command }));
-              }
-            }
-          } catch {
-            // ignore migration errors
-          }
-          await setLocalConfig(ch.id, config);
-        }
-      }
-    };
-    void migrateChannels();
-  }, [channels, localConfigs, setLocalConfig]);
 
   const {
     terminals: startupTerminalList,
@@ -188,21 +131,13 @@ export default function App() {
   const [channelWidth, setChannelWidth] = useState(220);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [worktreePath, setWorktreePath] = useState('');
-  const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(
-    new Set(),
-  );
-  const [settingsChannelId, setSettingsChannelId] = useState<string | null>(
-    null,
-  );
+  const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
+  const [settingsChannelId, setSettingsChannelId] = useState<string | null>(null);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
 
-  const { dragging, startDragging } = usePanelResize(
-    setChannelWidth,
-    setThreadWidth,
-    SERVER_RAIL_WIDTH,
-  );
+  const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth, SERVER_RAIL_WIDTH);
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -211,10 +146,7 @@ export default function App() {
   }, []);
 
   const handleNeedsAttention = useCallback(
-    (
-      messageId: string,
-      reason: 'stopped' | 'ask-user-question' | 'completed',
-    ) => {
+    (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => {
       setAttentionMessageIds((current) => {
         if (current.has(messageId)) return current;
         const next = new Set(current);
@@ -222,13 +154,8 @@ export default function App() {
         return next;
       });
 
-      if (
-        !document.hasFocus() &&
-        'Notification' in window &&
-        Notification.permission === 'granted'
-      ) {
-        const title =
-          reason === 'ask-user-question' ? 'Input needed' : 'Chat completed';
+      if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
+        const title = reason === 'ask-user-question' ? 'Input needed' : 'Chat completed';
         const message = messagesRef.current.find((item) => item.id === messageId);
         const body = message?.preview || message?.session.cwd || messageId;
         const notification = new Notification(title, { body });
@@ -292,7 +219,6 @@ export default function App() {
     [activeChannelId, moveTicket],
   );
 
-  const panelTitle = enrichedActiveChannel ? `# ${enrichedActiveChannel.name}` : 'Workspaces';
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
   const selectedMessageStatus: TicketStatus = useMemo(() => {
     const selected = messages.find((message) => message.id === selectedMessageId);
@@ -386,9 +312,7 @@ export default function App() {
 
   const isMessageSpawned = claudeActions.isMessageSpawned;
   const isClaudeRunning = useMemo(() => {
-    if (!selectedMessageId || !isMessageSpawned(selectedMessageId)) {
-      return false;
-    }
+    if (!selectedMessageId || !isMessageSpawned(selectedMessageId)) return false;
     const lastEvent = threadEvents[threadEvents.length - 1];
     if (lastEvent?.hookEventName === 'Stop') return false;
     const message = messages.find((item) => item.id === selectedMessageId);
@@ -410,15 +334,8 @@ export default function App() {
         void loadThreadEvents(selectedMessageRef.current);
       }
     }, 3000);
-
     return () => clearInterval(interval);
-  }, [
-    activeChannelId,
-    loadThreadEvents,
-    refreshMessages,
-    selectedMessageRef,
-    sseConnected,
-  ]);
+  }, [activeChannelId, loadThreadEvents, refreshMessages, selectedMessageRef, sseConnected]);
 
   const handleSwitchChannel = useCallback(
     (channelId: string) => {
@@ -433,14 +350,7 @@ export default function App() {
       setChannelWidth(220);
       killAllTerminals();
     },
-    [
-      switchChannel,
-      clearMessages,
-      clearBoard,
-      closeThreadPanel,
-      killAllTerminals,
-      selectedMessageId,
-    ],
+    [switchChannel, clearMessages, clearBoard, closeThreadPanel, killAllTerminals, selectedMessageId],
   );
 
   const handleSwitchServer = useCallback(
@@ -461,7 +371,6 @@ export default function App() {
       setThreadWidth(savedWidthsRef.current.thread);
       return;
     }
-
     closeThreadPanel();
     setChannelWidth(220);
   }, [closeThreadPanel, isFullscreen, setThreadWidth]);
@@ -478,13 +387,7 @@ export default function App() {
     if (startupTerminalList.length > 0) {
       showTerminals();
     }
-  }, [
-    channelWidth,
-    selectedMessageId,
-    showTerminals,
-    startupTerminalList.length,
-    threadWidth,
-  ]);
+  }, [channelWidth, selectedMessageId, showTerminals, startupTerminalList.length, threadWidth]);
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
@@ -500,17 +403,11 @@ export default function App() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (
-        event.key === 't' &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey
-      ) {
+      if (event.key === 't' && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         addTerminal();
       }
     };
-
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [addTerminal]);
@@ -520,23 +417,17 @@ export default function App() {
     [enrichedChannels, settingsChannelId],
   );
 
-  const handleOpenSettings = useCallback(
-    (channelId: string) => {
-      setSettingsChannelId(channelId);
-    },
-    [],
-  );
+  const handleOpenSettings = useCallback((channelId: string) => {
+    setSettingsChannelId(channelId);
+  }, []);
 
   const handleSaveSettings = useCallback(
     async (baseBranch: string | null, localConfig: LocalChannelConfig | null) => {
       if (!settingsChannelId) return;
-
       await updateChannelSettings(settingsChannelId, { baseBranch });
-
       if (localConfig) {
         await setLocalConfig(settingsChannelId, localConfig);
       }
-
       void refreshChannels();
     },
     [refreshChannels, settingsChannelId, updateChannelSettings, setLocalConfig],
@@ -546,11 +437,9 @@ export default function App() {
     (channelId: string) => {
       const channel = enrichedChannels.find((item) => item.id === channelId);
       if (!channel?.localRepoPath) return;
-
       const config = getLocalConfig(channelId);
       const scripts = config?.startupScripts ?? [];
       if (scripts.length === 0) return;
-
       runAllScripts(channelId, channel.localRepoPath, scripts);
     },
     [enrichedChannels, getLocalConfig, runAllScripts],
@@ -558,24 +447,14 @@ export default function App() {
 
   const handleRunMessageScripts = useCallback(async () => {
     if (!selectedMessageId || !activeChannelId) return;
-
     const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId);
-    if (
-      !worktreeResult.success ||
-      !worktreeResult.exists ||
-      !worktreeResult.worktreePath
-    ) {
-      return;
-    }
+    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
     const config = getLocalConfig(activeChannelId);
     const scripts = config?.startupScripts ?? [];
     if (scripts.length === 0) return;
 
-    const portResult = await window.traceAPI.allocatePorts(
-      selectedMessageId,
-      scripts.length,
-    );
+    const portResult = await window.traceAPI.allocatePorts(selectedMessageId, scripts.length);
     if (!portResult.success || !portResult.ports) return;
 
     const ports = portResult.ports;
@@ -590,203 +469,211 @@ export default function App() {
       return env;
     });
 
-    runAllScripts(
-      selectedMessageId,
-      worktreeResult.worktreePath,
-      scripts,
-      envMaps,
-    );
+    runAllScripts(selectedMessageId, worktreeResult.worktreePath, scripts, envMaps);
   }, [activeChannelId, getLocalConfig, runAllScripts, selectedMessageId]);
 
+  const handleDeleteWorktree = useCallback(() => {
+    killAllTerminals();
+    if (selectedMessageId) {
+      void window.traceAPI.releasePorts(selectedMessageId);
+    }
+    void deleteWorktree((messageId) => void updateMessageStatus(messageId, 'completed'));
+  }, [killAllTerminals, selectedMessageId, deleteWorktree, updateMessageStatus]);
+
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
+  const panelTitle = enrichedActiveChannel ? `# ${enrichedActiveChannel.name}` : 'Workspaces';
   const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
   const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const activeChannelBaseBranch = enrichedActiveChannel?.baseBranch ?? 'main';
 
+  const threadContextValue = useMemo(
+    () => ({
+      selectedMessageId,
+      activeThreadId,
+      threadEvents,
+      threadStatus,
+      threadWidth: isFullscreen ? 9999 : threadWidth,
+      deletingWorktree,
+      hasWorktree,
+      expandedReadGroupIds,
+      openThreadPanel,
+      closeThreadPanel,
+      toggleReadGroup,
+      setHasWorktree,
+      setThreadWidth,
+      loadThreadEvents,
+      deleteWorktree,
+      threadContentRef,
+      showJumpToLatest,
+      scrollToLatest: () => scrollThreadToBottom('smooth'),
+      onThreadScroll,
+      threadNodes,
+      isClaudeRunning,
+      messageStatus: selectedMessageStatus,
+      selectedTicket,
+      isFullscreen,
+      scriptsAvailable,
+      dragging,
+      onClose: handleCloseThread,
+      onDeleteWorktree: handleDeleteWorktree,
+      onRunScripts: (): void => { void handleRunMessageScripts(); },
+      onStartDrag: () => startDragging('right'),
+      onEnterFullscreen: (): void => { void enterFullscreen(); },
+      onExitFullscreen: exitFullscreen,
+    }),
+    [
+      selectedMessageId, activeThreadId, threadEvents, threadStatus, threadWidth,
+      deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
+      closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
+      loadThreadEvents, deleteWorktree, threadContentRef, showJumpToLatest,
+      scrollThreadToBottom, onThreadScroll, threadNodes, isClaudeRunning,
+      selectedMessageStatus, selectedTicket, isFullscreen, scriptsAvailable,
+      dragging, handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
+      startDragging, enterFullscreen, exitFullscreen,
+    ],
+  );
+
   return (
     <ClaudeActionsProvider value={claudeActionsContextValue}>
-      <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
-        {!isFullscreen && (
-          <ServerRail
-            servers={servers}
-            activeServerId={activeServerId}
-            onSwitchServer={handleSwitchServer}
-            onCreateServer={() => setShowCreateServer(true)}
-          />
-        )}
-
-        <ChannelPanel
-          channels={serverChannels}
-          activeChannelId={activeChannelId}
-          channelWidth={isFullscreen ? 0 : channelWidth}
-          dragging={dragging}
-          serverName={activeServer?.name}
-          onSwitchChannel={handleSwitchChannel}
-          onOpenSettings={handleOpenSettings}
-          onRunStartupScripts={handleRunStartupScripts}
-          onCreateChannel={() => setShowCreateChannel(true)}
-          onStartDrag={() => startDragging('left')}
-        />
-
-        <div
-          className="flex min-h-0 min-w-0 flex-col panel-animate"
-          style={{
-            flex: isFullscreen ? '0 0 0px' : '1 1 0%',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            className={
-              startupTerminalsVisible &&
-              startupTerminalList.length > 0 &&
-              !isFullscreen
-                ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
-                : 'flex min-h-0 flex-1 flex-col'
-            }
-          >
-            <MessagePanel
-              panelTitle={panelTitle}
-              channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
-              messages={messages}
-              selectedMessageId={selectedMessageId}
-              attentionMessageIds={attentionMessageIds}
-              onOpenThread={handleOpenThread}
-              middlePanelView={middlePanelView}
-              onSetView={handleSetView}
-              kanbanColumns={kanbanColumns}
-              kanbanLoading={kanbanLoading}
-              onMoveTicket={handleMoveTicket}
-              onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
+      <ThreadProvider value={threadContextValue}>
+        <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
+          {!isFullscreen && (
+            <ServerRail
+              servers={servers}
+              activeServerId={activeServerId}
+              onSwitchServer={handleSwitchServer}
+              onCreateServer={() => setShowCreateServer(true)}
             />
-          </div>
+          )}
 
-          {startupTerminalList.length > 0 && !isFullscreen && (
+          <ChannelPanel
+            channels={serverChannels}
+            activeChannelId={activeChannelId}
+            channelWidth={isFullscreen ? 0 : channelWidth}
+            dragging={dragging}
+            serverName={activeServer?.name}
+            onSwitchChannel={handleSwitchChannel}
+            onOpenSettings={handleOpenSettings}
+            onRunStartupScripts={handleRunStartupScripts}
+            onCreateChannel={() => setShowCreateChannel(true)}
+            onStartDrag={() => startDragging('left')}
+          />
+
+          <div
+            className="flex min-h-0 min-w-0 flex-col panel-animate"
+            style={{ flex: isFullscreen ? '0 0 0px' : '1 1 0%', overflow: 'hidden' }}
+          >
             <div
-              className="shrink-0 border-t border-[#292e42]"
-              style={{
-                height: startupTerminalsVisible ? '35%' : '0',
-                minHeight: startupTerminalsVisible ? '150px' : '0',
-                overflow: 'hidden',
-              }}
+              className={
+                startupTerminalsVisible && startupTerminalList.length > 0 && !isFullscreen
+                  ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
+                  : 'flex min-h-0 flex-1 flex-col'
+              }
             >
-              <TerminalTabs
-                terminals={startupTerminalList}
-                activeTabId={activeTabId}
-                cwd={startupTerminalsCwd || activeChannelRepoPath}
-                onSelectTab={setActiveTabId}
-                onCloseTab={killTerminal}
-                onCloseAll={killAllTerminals}
-                onAddTab={addTerminal}
+              <MessagePanel
+                panelTitle={panelTitle}
+                channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
+                messages={messages}
+                selectedMessageId={selectedMessageId}
+                attentionMessageIds={attentionMessageIds}
+                onOpenThread={handleOpenThread}
+                middlePanelView={middlePanelView}
+                onSetView={handleSetView}
+                kanbanColumns={kanbanColumns}
+                kanbanLoading={kanbanLoading}
+                onMoveTicket={handleMoveTicket}
+                onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
               />
             </div>
+
+            {startupTerminalList.length > 0 && !isFullscreen && (
+              <div
+                className="shrink-0 border-t border-[#292e42]"
+                style={{
+                  height: startupTerminalsVisible ? '35%' : '0',
+                  minHeight: startupTerminalsVisible ? '150px' : '0',
+                  overflow: 'hidden',
+                }}
+              >
+                <TerminalTabs
+                  terminals={startupTerminalList}
+                  activeTabId={activeTabId}
+                  cwd={startupTerminalsCwd || activeChannelRepoPath}
+                  onSelectTab={setActiveTabId}
+                  onCloseTab={killTerminal}
+                  onCloseAll={killAllTerminals}
+                  onAddTab={addTerminal}
+                />
+              </div>
+            )}
+          </div>
+
+          <ThreadPanel />
+
+          <div
+            className="flex min-h-0 flex-col panel-animate"
+            style={{ flex: isFullscreen ? '1 1 50%' : '0 0 0px', overflow: 'hidden' }}
+          >
+            <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
+              {isFullscreen && <WorktreeChanges messageId={selectedMessageId} baseBranch={activeChannelBaseBranch} />}
+            </div>
+            <div
+              className="overflow-hidden"
+              style={{ height: isFullscreen ? '40%' : '0', minHeight: isFullscreen ? '150px' : '0' }}
+            >
+              {isFullscreen && startupTerminalList.length > 0 ? (
+                <TerminalTabs
+                  terminals={startupTerminalList}
+                  activeTabId={activeTabId}
+                  cwd={activeChannelRepoPath}
+                  onSelectTab={setActiveTabId}
+                  onCloseTab={killTerminal}
+                  onCloseAll={killAllTerminals}
+                  onAddTab={addTerminal}
+                />
+              ) : isFullscreen ? (
+                <Terminal terminalId={terminalId} cwd={worktreePath} />
+              ) : null}
+            </div>
+          </div>
+
+          {settingsChannel && (
+            <ChannelSettingsModal
+              channel={settingsChannel}
+              localConfig={getLocalConfig(settingsChannel.id)}
+              onClose={() => setSettingsChannelId(null)}
+              onSave={handleSaveSettings}
+            />
+          )}
+
+          {showCreateChannel && (
+            <CreateChannelModal
+              serverId={activeServerId}
+              onClose={() => setShowCreateChannel(false)}
+              onCreated={() => {
+                setShowCreateChannel(false);
+                void refreshChannels();
+              }}
+              onLocalConfigSave={setLocalConfig}
+            />
+          )}
+
+          {showCreateServer && (
+            <CreateServerModal
+              onClose={() => setShowCreateServer(false)}
+              onCreated={(server) => {
+                setShowCreateServer(false);
+                void refreshServers();
+                void refreshChannels();
+                switchServer(server.id);
+                if (server.channels.length > 0) {
+                  handleSwitchChannel(server.channels[0].id);
+                }
+              }}
+            />
           )}
         </div>
-
-        <ThreadPanel
-          threadWidth={isFullscreen ? 9999 : threadWidth}
-          dragging={dragging}
-          threadStatus={threadStatus}
-          activeThreadId={activeThreadId}
-          threadNodes={threadNodes}
-          expandedReadGroupIds={expandedReadGroupIds}
-          selectedMessageId={selectedMessageId}
-          messageStatus={selectedMessageStatus}
-          ticket={selectedTicket}
-          deletingWorktree={deletingWorktree}
-          hasWorktree={hasWorktree}
-          showJumpToLatest={showJumpToLatest}
-          isClaudeRunning={isClaudeRunning}
-          threadContentRef={threadContentRef}
-          scriptsAvailable={scriptsAvailable}
-          onRunScripts={() => void handleRunMessageScripts()}
-          onThreadScroll={onThreadScroll}
-          onToggleReadGroup={toggleReadGroup}
-          onScrollToLatest={() => scrollThreadToBottom('smooth')}
-          onClose={handleCloseThread}
-          onDeleteWorktree={() => {
-            killAllTerminals();
-            if (selectedMessageId) {
-              void window.traceAPI.releasePorts(selectedMessageId);
-            }
-            void deleteWorktree((messageId) =>
-              void updateMessageStatus(messageId, 'completed'),
-            );
-          }}
-          onStartDrag={() => startDragging('right')}
-          isFullscreen={isFullscreen}
-          onEnterFullscreen={() => void enterFullscreen()}
-          onExitFullscreen={exitFullscreen}
-        />
-
-        <div
-          className="flex min-h-0 flex-col panel-animate"
-          style={{
-            flex: isFullscreen ? '1 1 50%' : '0 0 0px',
-            overflow: 'hidden',
-          }}
-        >
-          <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
-            {isFullscreen && <WorktreeChanges messageId={selectedMessageId} baseBranch={activeChannelBaseBranch} />}
-          </div>
-          <div
-            className="overflow-hidden"
-            style={{
-              height: isFullscreen ? '40%' : '0',
-              minHeight: isFullscreen ? '150px' : '0',
-            }}
-          >
-            {isFullscreen && startupTerminalList.length > 0 ? (
-              <TerminalTabs
-                terminals={startupTerminalList}
-                activeTabId={activeTabId}
-                cwd={activeChannelRepoPath}
-                onSelectTab={setActiveTabId}
-                onCloseTab={killTerminal}
-                onCloseAll={killAllTerminals}
-                onAddTab={addTerminal}
-              />
-            ) : isFullscreen ? (
-              <Terminal terminalId={terminalId} cwd={worktreePath} />
-            ) : null}
-          </div>
-        </div>
-
-        {settingsChannel && (
-          <ChannelSettingsModal
-            channel={settingsChannel}
-            localConfig={getLocalConfig(settingsChannel.id)}
-            onClose={() => setSettingsChannelId(null)}
-            onSave={handleSaveSettings}
-          />
-        )}
-
-        {showCreateChannel && (
-          <CreateChannelModal
-            serverId={activeServerId}
-            onClose={() => setShowCreateChannel(false)}
-            onCreated={() => {
-              setShowCreateChannel(false);
-              void refreshChannels();
-            }}
-            onLocalConfigSave={setLocalConfig}
-          />
-        )}
-
-        {showCreateServer && (
-          <CreateServerModal
-            onClose={() => setShowCreateServer(false)}
-            onCreated={(server) => {
-              setShowCreateServer(false);
-              void refreshServers();
-              void refreshChannels();
-              switchServer(server.id);
-              if (server.channels.length > 0) {
-                handleSwitchChannel(server.channels[0].id);
-              }
-            }}
-          />
-        )}
-      </div>
+      </ThreadProvider>
     </ClaudeActionsProvider>
   );
 }
