@@ -140,6 +140,7 @@ export function findStringByKeys(
   value: unknown,
   keys: string[],
   depth = 5,
+  allowEmpty = false,
 ): string | null {
   if (depth < 0 || value === null || value === undefined) {
     return null;
@@ -147,8 +148,8 @@ export function findStringByKeys(
 
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findStringByKeys(item, keys, depth - 1);
-      if (found) {
+      const found = findStringByKeys(item, keys, depth - 1, allowEmpty);
+      if (found !== null && (allowEmpty || found)) {
         return found;
       }
     }
@@ -167,8 +168,10 @@ export function findStringByKeys(
       continue;
     }
 
-    if (typeof nested === 'string' && nested.trim()) {
-      return nested.trim();
+    if (typeof nested === 'string') {
+      if (allowEmpty || nested.trim()) {
+        return allowEmpty ? nested : nested.trim();
+      }
     }
 
     const nestedFromMatch = findFirstString(nested, depth - 1);
@@ -178,8 +181,8 @@ export function findStringByKeys(
   }
 
   for (const nested of Object.values(record)) {
-    const found = findStringByKeys(nested, keys, depth - 1);
-    if (found) {
+    const found = findStringByKeys(nested, keys, depth - 1, allowEmpty);
+    if (found !== null && (allowEmpty || found)) {
       return found;
     }
   }
@@ -409,12 +412,12 @@ export function extractEditDiffContent(event: ServerEvent): ExtractedDiffContent
 
   if (!diffText) {
     const before =
-      findStringByKeys(event.toolInput, ['old_string', 'oldText', 'before', 'original']) ??
-      findStringByKeys(event.toolResponse, ['old_string', 'oldText', 'before', 'original']);
+      findStringByKeys(event.toolInput, ['old_string', 'oldText', 'before', 'original'], 5, true) ??
+      findStringByKeys(event.toolResponse, ['old_string', 'oldText', 'before', 'original'], 5, true);
 
     const after =
-      findStringByKeys(event.toolInput, ['new_string', 'newText', 'after', 'replacement']) ??
-      findStringByKeys(event.toolResponse, ['new_string', 'newText', 'after', 'replacement']);
+      findStringByKeys(event.toolInput, ['new_string', 'newText', 'after', 'replacement'], 5, true) ??
+      findStringByKeys(event.toolResponse, ['new_string', 'newText', 'after', 'replacement'], 5, true);
 
     if (before !== null && after !== null) {
       diffText = buildUnifiedDiffFromBeforeAfter(filePath, before, after);
