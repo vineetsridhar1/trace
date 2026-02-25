@@ -6,6 +6,9 @@ An Electron desktop app for monitoring and managing Claude Code sessions.
 
 - [Node.js](https://nodejs.org/) (v18+)
 - [PostgreSQL](https://www.postgresql.org/) running locally on port 5432
+- **macOS:** Xcode Command Line Tools (`xcode-select --install`) — required by `node-pty` native bindings
+- **Linux:** `make`, `python3`, and `build-essential`
+- **Windows:** Python 3 and a C++ compiler (e.g. via `npm install -g windows-build-tools`)
 
 ## Getting Started
 
@@ -50,15 +53,30 @@ OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### 4. Run database migrations and generate the Prisma client
+### 4. Run database migrations, generate the Prisma client, and seed
 
 ```bash
 cd server
 npx prisma migrate dev
 npx prisma generate
+npx prisma db seed
 ```
 
-### 5. Start the app
+This creates all tables, generates the Prisma client into `server/prisma/generated/`, and seeds a default server and channel.
+
+### 5. Generate GraphQL types
+
+Run codegen for both the server and client:
+
+```bash
+# Server — generates resolver types from schema
+cd server && npm run codegen
+
+# Client — generates React Apollo hooks and types
+cd .. && npm run codegen
+```
+
+### 6. Start the app
 
 You need to run **two processes** — the backend server and the Electron app:
 
