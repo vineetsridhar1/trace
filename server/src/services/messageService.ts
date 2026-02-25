@@ -304,7 +304,7 @@ export async function getEventsByThread(
   const where: Record<string, unknown> = { threadId };
   if (after) where.timestamp = { gt: new Date(after) };
 
-  const [rawEvents, total] = await Promise.all([
+  const [rawEvents, total, allEventsForAggregation] = await Promise.all([
     prisma.event.findMany({
       where,
       orderBy: { timestamp: 'desc' },
@@ -312,6 +312,12 @@ export async function getEventsByThread(
       take: limit,
     }),
     prisma.event.count({ where }),
+    // Fetch ALL events (minimal columns) for token aggregation across the full thread
+    prisma.event.findMany({
+      where: { threadId },
+      select: { rawPayload: true },
+      orderBy: { timestamp: 'asc' },
+    }),
   ]);
 
   // Reverse to chronological order (query fetches newest-first so the latest
@@ -347,5 +353,41 @@ export async function getEventsByThread(
     }
   }
 
-  return { events, total, limit, offset };
+  // Compute token aggregates from ALL events in the thread.
+  // Multiple events within the same API turn share the same usage snapshot,
+  // so we deduplicate by only counting when usage values change.
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let latestContextTokens = 0;
+  let prevInputTokens = 0;
+  let prevOutputTokens = 0;
+
+  for (const evt of allEventsForAggregation) {
+    const usage = (evt.rawPayload as Record<string, unknown>)?.usage as
+      | { input_tokens?: number; output_tokens?: number }
+      | undefined;
+    if (usage) {
+      const curInput = usage.input_tokens ?? 0;
+      const curOutput = usage.output_tokens ?? 0;
+      if (curInput !== prevInputTokens || curOutput !== prevOutputTokens) {
+        inputTokens += curInput;
+        outputTokens += curOutput;
+        prevInputTokens = curInput;
+        prevOutputTokens = curOutput;
+      }
+      // Track the latest context window size (last event with usage wins)
+      if (curInput) {
+        latestContextTokens = curInput;
+      }
+    }
+  }
+
+  return {
+    events,
+    total,
+    limit,
+    offset,
+    tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+    latestContextTokens,
+  };
 }

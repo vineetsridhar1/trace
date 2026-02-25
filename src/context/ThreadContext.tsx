@@ -35,6 +35,9 @@ export interface ThreadContextValue {
   // Pagination state
   hasMoreEvents: boolean;
   loadingOlderEvents: boolean;
+  // Token usage (server-computed aggregates)
+  tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  latestContextTokens: number;
   // Derived state
   threadNodes: ThreadRenderNode[];
   isClaudeRunning: boolean;

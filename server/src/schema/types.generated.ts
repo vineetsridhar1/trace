@@ -2,7 +2,7 @@ import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from '
 import { AttachmentMapper } from './attachment/schema.mappers';
 import { ChannelMapper, RepoValidationMapper } from './channel/schema.mappers';
 import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageSessionMapper } from './message/schema.mappers';
-import { EventMapper, EventConnectionMapper } from './event/schema.mappers';
+import { EventMapper, EventConnectionMapper, TokenUsageMapper } from './event/schema.mappers';
 import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketMessageMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
 import { SessionMapper, SessionConnectionMapper } from './session/schema.mappers';
@@ -75,8 +75,10 @@ export type Event = {
 export type EventConnection = {
   __typename?: 'EventConnection';
   events: Array<Event>;
+  latestContextTokens: Scalars['Int']['output'];
   limit: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
+  tokenUsage: TokenUsage;
   total: Scalars['Int']['output'];
 };
 
@@ -124,7 +126,7 @@ export type MessageSession = {
 
 export type Mutation = {
   __typename?: 'Mutation';
-  appendPrompt?: Maybe<CreateMessagePayload>;
+  appendPrompt: CreateMessagePayload;
   createChannel: Channel;
   createColumn: KanbanColumn;
   createMessage: CreateMessagePayload;
@@ -394,6 +396,13 @@ export type TicketMessage = {
   status: Scalars['String']['output'];
 };
 
+export type TokenUsage = {
+  __typename?: 'TokenUsage';
+  inputTokens: Scalars['Int']['output'];
+  outputTokens: Scalars['Int']['output'];
+  totalTokens: Scalars['Int']['output'];
+};
+
 
 
 export type ResolverTypeWrapper<T> = Promise<T> | T;
@@ -492,6 +501,7 @@ export type ResolversTypes = {
   Ticket: ResolverTypeWrapper<TicketMapper>;
   TicketAttachment: ResolverTypeWrapper<TicketAttachmentMapper>;
   TicketMessage: ResolverTypeWrapper<TicketMessageMapper>;
+  TokenUsage: ResolverTypeWrapper<TokenUsageMapper>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -521,6 +531,7 @@ export type ResolversParentTypes = {
   Ticket: TicketMapper;
   TicketAttachment: TicketAttachmentMapper;
   TicketMessage: TicketMessageMapper;
+  TokenUsage: TokenUsageMapper;
 };
 
 export type AttachmentResolvers<ContextType = any, ParentType extends ResolversParentTypes['Attachment'] = ResolversParentTypes['Attachment']> = {
@@ -571,8 +582,10 @@ export type EventResolvers<ContextType = any, ParentType extends ResolversParent
 
 export type EventConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['EventConnection'] = ResolversParentTypes['EventConnection']> = {
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType>;
+  latestContextTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  tokenUsage?: Resolver<ResolversTypes['TokenUsage'], ParentType, ContextType>;
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
@@ -619,7 +632,7 @@ export type MessageSessionResolvers<ContextType = any, ParentType extends Resolv
 };
 
 export type MutationResolvers<ContextType = any, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = {
-  appendPrompt?: Resolver<Maybe<ResolversTypes['CreateMessagePayload']>, ParentType, ContextType, RequireFields<MutationappendPromptArgs, 'channelId' | 'messageId' | 'text'>>;
+  appendPrompt?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationappendPromptArgs, 'channelId' | 'messageId' | 'text'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationcreateChannelArgs, 'name'>>;
   createColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationcreateColumnArgs, 'channelId' | 'name' | 'slug'>>;
   createMessage?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationcreateMessageArgs, 'channelId' | 'text'>>;
@@ -722,6 +735,12 @@ export type TicketMessageResolvers<ContextType = any, ParentType extends Resolve
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type TokenUsageResolvers<ContextType = any, ParentType extends ResolversParentTypes['TokenUsage'] = ResolversParentTypes['TokenUsage']> = {
+  inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  outputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  totalTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+};
+
 export type Resolvers<ContextType = any> = {
   Attachment?: AttachmentResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
@@ -744,5 +763,6 @@ export type Resolvers<ContextType = any> = {
   Ticket?: TicketResolvers<ContextType>;
   TicketAttachment?: TicketAttachmentResolvers<ContextType>;
   TicketMessage?: TicketMessageResolvers<ContextType>;
+  TokenUsage?: TokenUsageResolvers<ContextType>;
 };
 

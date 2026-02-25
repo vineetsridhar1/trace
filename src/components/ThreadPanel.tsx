@@ -23,7 +23,6 @@ export function ThreadPanel() {
     threadStatus,
     activeThreadId,
     threadNodes,
-    threadEvents,
     expandedReadGroupIds,
     selectedMessageId,
     messageStatus,
@@ -36,6 +35,8 @@ export function ThreadPanel() {
     scriptsAvailable,
     isFullscreen,
     loadingOlderEvents,
+    tokenUsage,
+    latestContextTokens,
     onRunScripts,
     onThreadScroll,
     toggleReadGroup,
@@ -161,7 +162,7 @@ export function ThreadPanel() {
           onMergeToMain={() => void mergeToMain()}
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
-          threadEvents={threadEvents}
+          tokenUsage={tokenUsage}
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
@@ -276,7 +277,7 @@ export function ThreadPanel() {
           />
         )}
 
-        <ContextProgressBar events={threadEvents} />
+        <ContextProgressBar latestContextTokens={latestContextTokens} />
       </div>
     </>
   );

@@ -18,9 +18,17 @@ type Event {
   importance: String!
 }
 
+type TokenUsage {
+  inputTokens: Int!
+  outputTokens: Int!
+  totalTokens: Int!
+}
+
 type EventConnection {
   events: [Event!]!
   total: Int!
   limit: Int!
   offset: Int!
+  tokenUsage: TokenUsage!
+  latestContextTokens: Int!
 }

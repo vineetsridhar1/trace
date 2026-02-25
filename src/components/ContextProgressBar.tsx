@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react';
-import type { ServerEvent } from '../types';
-import { getLatestContextUsage, formatTokens } from '../utils';
+import { useState } from 'react';
+import { formatTokens } from '../utils';
 
 const CONTEXT_WINDOW_LIMIT = 200_000;
 
-export function ContextProgressBar({ events }: { events: ServerEvent[] }) {
-  const inputTokens = useMemo(() => getLatestContextUsage(events), [events]);
+export function ContextProgressBar({ latestContextTokens }: { latestContextTokens: number }) {
+  const inputTokens = latestContextTokens;
   const [hovered, setHovered] = useState(false);
 
   if (inputTokens === 0) return null;
