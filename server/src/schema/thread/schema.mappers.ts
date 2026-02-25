@@ -3,5 +3,5 @@ export interface ThreadMapper {
   id: string;
   messageId: string;
   createdAt: Date;
-  _count: { events: number };
+  _count?: { events: number };
 }

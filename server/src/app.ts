@@ -13,7 +13,7 @@ import { errorHandler } from './middleware/errorHandler';
 export async function createApp() {
   const app = express();
 
-  app.use(cors());
+  app.use(cors({ origin: '*' }));
   app.use(express.json({ limit: '10mb' }));
 
   // GraphQL
@@ -23,7 +23,11 @@ export async function createApp() {
   );
   const server = new ApolloServer({ typeDefs, resolvers });
   await server.start();
-  app.use('/graphql', expressMiddleware(server));
+  app.use(
+    '/graphql',
+    cors({ origin: '*' }),
+    expressMiddleware(server),
+  );
 
   // REST endpoints that stay
   app.use('/events', eventsRouter);

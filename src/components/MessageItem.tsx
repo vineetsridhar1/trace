@@ -90,7 +90,7 @@ export const MessageItem = memo(function MessageItem({
 }: MessageItemProps) {
   const rawPreview = message.preview || message.session.cwd || message.sessionId;
   const preview = stripTraceInternal(rawPreview);
-  const threadCount = message._count.threads;
+  const threadCount = message.threadCount;
   const status = (message.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
 
