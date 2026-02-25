@@ -184,7 +184,7 @@ export default function App() {
     clearBoard,
   } = useKanban();
 
-  const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('workspaces');
+  const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('chat');
   const [channelWidth, setChannelWidth] = useState(220);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [worktreePath, setWorktreePath] = useState('');
@@ -428,7 +428,7 @@ export default function App() {
       switchChannel(channelId);
       clearMessages();
       clearBoard();
-      setMiddlePanelView('workspaces');
+      setMiddlePanelView('chat');
       closeThreadPanel();
       setChannelWidth(220);
       killAllTerminals();
@@ -646,6 +646,7 @@ export default function App() {
           >
             <MessagePanel
               panelTitle={panelTitle}
+              channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
               messages={messages}
               selectedMessageId={selectedMessageId}
               attentionMessageIds={attentionMessageIds}
@@ -774,9 +775,14 @@ export default function App() {
         {showCreateServer && (
           <CreateServerModal
             onClose={() => setShowCreateServer(false)}
-            onCreated={() => {
+            onCreated={(server) => {
               setShowCreateServer(false);
               void refreshServers();
+              void refreshChannels();
+              switchServer(server.id);
+              if (server.channels.length > 0) {
+                handleSwitchChannel(server.channels[0].id);
+              }
             }}
           />
         )}

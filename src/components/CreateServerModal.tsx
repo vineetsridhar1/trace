@@ -3,7 +3,7 @@ import { SERVER_URL } from '../types';
 
 interface CreateServerModalProps {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (server: { id: string; channels: { id: string }[] }) => void;
 }
 
 export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps) {
@@ -30,7 +30,8 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
         return;
       }
 
-      onCreated();
+      const data = (await res.json()) as { server: { id: string; channels: { id: string }[] } };
+      onCreated(data.server);
     } catch {
       setError('Failed to create server');
     } finally {

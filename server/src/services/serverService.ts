@@ -7,7 +7,15 @@ export async function listServers() {
 }
 
 export async function createServer(data: { name: string; avatarUrl?: string | null }) {
-  return prisma.server.create({ data });
+  return prisma.server.create({
+    data: {
+      ...data,
+      channels: {
+        create: { name: 'general' },
+      },
+    },
+    include: { channels: true },
+  });
 }
 
 export async function getOrCreateDefaultServer(): Promise<string> {
