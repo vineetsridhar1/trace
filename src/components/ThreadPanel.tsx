@@ -22,6 +22,7 @@ export function ThreadPanel() {
     threadStatus,
     activeThreadId,
     threadNodes,
+    threadEvents,
     expandedReadGroupIds,
     selectedMessageId,
     messageStatus,
@@ -158,6 +159,7 @@ export function ThreadPanel() {
           onMergeToMain={() => void mergeToMain()}
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
+          threadEvents={threadEvents}
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">

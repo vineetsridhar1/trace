@@ -439,6 +439,44 @@ export function extractEditDiffContent(event: ServerEvent): ExtractedDiffContent
   };
 }
 
+export function formatTokens(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+export function computeThreadTokenUsage(events: ServerEvent[]): {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+} {
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  for (const event of events) {
+    if (event.hookEventName === 'PostToolUse') {
+      const usage = (event.toolResponse as any)?.usage;
+      if (usage) {
+        inputTokens += usage.input_tokens ?? 0;
+        outputTokens += usage.output_tokens ?? 0;
+      }
+    } else if (event.hookEventName === 'Stop') {
+      const usage = (event.rawPayload as any)?.usage;
+      if (usage) {
+        inputTokens += usage.input_tokens ?? 0;
+        outputTokens += usage.output_tokens ?? 0;
+      }
+    }
+  }
+
+  return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
+}
+
+export function computeApproxCost(inputTokens: number, outputTokens: number): number {
+  const inputCost = (inputTokens / 1_000_000) * 3;
+  const outputCost = (outputTokens / 1_000_000) * 15;
+  return inputCost + outputCost;
+}
+
 let diffRuntimePromise: Promise<DiffRuntime | null> | null = null;
 
 export async function loadDiffRuntime(): Promise<DiffRuntime | null> {

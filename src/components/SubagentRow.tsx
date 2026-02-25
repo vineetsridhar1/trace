@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { FiCpu, FiCheck, FiChevronRight } from 'react-icons/fi';
 import type { ServerEvent } from '../types';
-import { formatTime, serializeUnknown } from '../utils';
+import { formatTime, formatTokens, serializeUnknown } from '../utils';
 
 interface SubagentInput {
   description?: string;
@@ -31,11 +31,6 @@ const TYPE_COLORS: Record<string, { text: string; bg: string }> = {
 
 function getTypeStyle(subagentType: string) {
   return TYPE_COLORS[subagentType] ?? { text: 'text-[#a9b1d6]', bg: 'bg-[#a9b1d6]/10' };
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
 }
 
 export function SubagentRow({ event }: { event: ServerEvent }) {
