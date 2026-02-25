@@ -16,7 +16,9 @@ const GQL_SERVERS = gql`
 `;
 
 export function useServers() {
-  const [activeServerId, setActiveServerId] = useState<string | null>(null);
+  const [activeServerId, setActiveServerId] = useState<string | null>(
+    () => localStorage.getItem('activeServerId'),
+  );
 
   const { data, refetch } = useServersQuery();
   const servers = (data?.servers ?? []) as Server[];
@@ -24,12 +26,13 @@ export function useServers() {
   const activeServer = servers.find((s) => s.id === activeServerId) ?? null;
 
   useEffect(() => {
-    if (servers.length > 0 && !activeServerId) {
-      setActiveServerId(servers[0].id);
-    }
+    if (servers.length === 0) return;
+    if (activeServerId && servers.some((s) => s.id === activeServerId)) return;
+    setActiveServerId(servers[0].id);
   }, [servers, activeServerId]);
 
   const switchServer = useCallback((serverId: string) => {
+    localStorage.setItem('activeServerId', serverId);
     setActiveServerId(serverId);
   }, []);
 
