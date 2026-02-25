@@ -65,8 +65,10 @@ export type Event = {
 export type EventConnection = {
   __typename?: 'EventConnection';
   events: Array<Event>;
+  latestContextTokens: Scalars['Int']['output'];
   limit: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
+  tokenUsage: TokenUsage;
   total: Scalars['Int']['output'];
 };
 
@@ -114,7 +116,7 @@ export type MessageSession = {
 
 export type Mutation = {
   __typename?: 'Mutation';
-  appendPrompt?: Maybe<CreateMessagePayload>;
+  appendPrompt: CreateMessagePayload;
   createChannel: Channel;
   createColumn: KanbanColumn;
   createMessage: CreateMessagePayload;
@@ -382,4 +384,11 @@ export type TicketMessage = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   status: Scalars['String']['output'];
+};
+
+export type TokenUsage = {
+  __typename?: 'TokenUsage';
+  inputTokens: Scalars['Int']['output'];
+  outputTokens: Scalars['Int']['output'];
+  totalTokens: Scalars['Int']['output'];
 };

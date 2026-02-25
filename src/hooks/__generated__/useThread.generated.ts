@@ -21,7 +21,7 @@ export type ThreadEventsQueryVariables = Types.Exact<{
 }>;
 
 
-export type ThreadEventsQuery = { __typename?: 'Query', threadEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, events: Array<{ __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string }> } };
+export type ThreadEventsQuery = { __typename?: 'Query', threadEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, latestContextTokens: number, events: Array<{ __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string }>, tokenUsage: { __typename?: 'TokenUsage', inputTokens: number, outputTokens: number, totalTokens: number } } };
 
 
 export const ThreadsDocument = gql`
@@ -99,6 +99,12 @@ export const ThreadEventsDocument = gql`
     total
     limit
     offset
+    tokenUsage {
+      inputTokens
+      outputTokens
+      totalTokens
+    }
+    latestContextTokens
   }
 }
     `;

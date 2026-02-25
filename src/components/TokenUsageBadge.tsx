@@ -1,9 +1,12 @@
-import type { ServerEvent } from '../types';
-import { computeThreadTokenUsage, computeApproxCost, formatTokens } from '../utils';
+import { computeApproxCost, formatTokens } from '../utils';
 import { Tooltip } from './Tooltip';
 
-export function TokenUsageBadge({ events }: { events: ServerEvent[] }) {
-  const { inputTokens, outputTokens, totalTokens } = computeThreadTokenUsage(events);
+interface TokenUsageBadgeProps {
+  tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
+}
+
+export function TokenUsageBadge({ tokenUsage }: TokenUsageBadgeProps) {
+  const { inputTokens, outputTokens, totalTokens } = tokenUsage;
 
   if (totalTokens === 0) return null;
 

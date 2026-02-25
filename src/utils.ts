@@ -447,48 +447,6 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
-export function computeThreadTokenUsage(events: ServerEvent[]): {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-} {
-  let inputTokens = 0;
-  let outputTokens = 0;
-
-  for (const event of events) {
-    if (event.hookEventName === 'PostToolUse') {
-      const usage = (event.toolResponse as any)?.usage;
-      if (usage) {
-        inputTokens += usage.input_tokens ?? 0;
-        outputTokens += usage.output_tokens ?? 0;
-      }
-    } else if (event.hookEventName === 'Stop') {
-      const usage = (event.rawPayload as any)?.usage;
-      if (usage) {
-        inputTokens += usage.input_tokens ?? 0;
-        outputTokens += usage.output_tokens ?? 0;
-      }
-    }
-  }
-
-  return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
-}
-
-export function getLatestContextUsage(events: ServerEvent[]): number {
-  for (let i = events.length - 1; i >= 0; i--) {
-    const event = events[i];
-    const usage = (event.rawPayload as any)?.usage as
-      | { input_tokens?: number }
-      | undefined;
-
-    if (usage?.input_tokens) {
-      return usage.input_tokens;
-    }
-  }
-
-  return 0;
-}
-
 export function computeApproxCost(inputTokens: number, outputTokens: number): number {
   const inputCost = (inputTokens / 1_000_000) * 3;
   const outputCost = (outputTokens / 1_000_000) * 15;

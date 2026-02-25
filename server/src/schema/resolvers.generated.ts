@@ -42,6 +42,7 @@ import    { Thread } from './thread/resolvers/Thread';
 import    { Ticket } from './kanban/resolvers/Ticket';
 import    { TicketAttachment } from './kanban/resolvers/TicketAttachment';
 import    { TicketMessage } from './kanban/resolvers/TicketMessage';
+import    { TokenUsage } from './event/resolvers/TokenUsage';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
@@ -65,6 +66,7 @@ Thread: Thread,
 Ticket: Ticket,
 TicketAttachment: TicketAttachment,
 TicketMessage: TicketMessage,
+TokenUsage: TokenUsage,
 DateTime: DateTime,
 JSON: JSON
     }

@@ -1,7 +1,7 @@
 import { FiGitMerge, FiMaximize2, FiMinimize2, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { TokenUsageBadge } from './TokenUsageBadge';
-import type { ServerEvent, TicketStatus } from '../types';
+import type { TicketStatus } from '../types';
 
 type ViewMode = 'agent' | 'ticket';
 
@@ -40,7 +40,7 @@ interface ThreadHeaderProps {
   onMergeToMain: () => void;
   onEnterFullscreen?: () => void;
   onExitFullscreen?: () => void;
-  threadEvents: ServerEvent[];
+  tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
 }
 
 export function ThreadHeader({
@@ -59,7 +59,7 @@ export function ThreadHeader({
   onMergeToMain,
   onEnterFullscreen,
   onExitFullscreen,
-  threadEvents,
+  tokenUsage,
 }: ThreadHeaderProps) {
   const statusConfig =
     HEADER_STATUS_CONFIG[messageStatus] ?? HEADER_STATUS_CONFIG.pending;
@@ -116,7 +116,7 @@ export function ThreadHeader({
               Worktree deleted
             </span>
           )}
-        <TokenUsageBadge events={threadEvents} />
+        <TokenUsageBadge tokenUsage={tokenUsage} />
       </div>
       <div className="flex items-center gap-2">
         {hasWorktree === true && scriptsAvailable && (

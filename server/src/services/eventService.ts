@@ -420,5 +420,12 @@ export async function getEventsBySession(
     prisma.event.count({ where }),
   ]);
 
-  return { events, total, limit, offset };
+  return {
+    events,
+    total,
+    limit,
+    offset,
+    tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    latestContextTokens: 0,
+  };
 }

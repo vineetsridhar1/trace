@@ -21,7 +21,7 @@ export type AppendPromptMutationVariables = Types.Exact<{
 }>;
 
 
-export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt?: { __typename?: 'CreateMessagePayload', message: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null }, thread: { __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, threadId: string, importance: string } } | null };
+export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt: { __typename?: 'CreateMessagePayload', message: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null }, thread: { __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, threadId: string, importance: string } } };
 
 export type UpdateMessagePreviewMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];

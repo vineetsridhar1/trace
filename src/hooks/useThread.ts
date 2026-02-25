@@ -37,6 +37,12 @@ const GQL_THREAD_EVENTS = gql`
       total
       limit
       offset
+      tokenUsage {
+        inputTokens
+        outputTokens
+        totalTokens
+      }
+      latestContextTokens
     }
   }
 `;
@@ -62,6 +68,9 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
   const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<Record<string, boolean>>({});
   const [threadTotal, setThreadTotal] = useState(0);
   const [loadingOlderEvents, setLoadingOlderEvents] = useState(false);
+  const [tokenUsage, setTokenUsage] = useState<{ inputTokens: number; outputTokens: number; totalTokens: number }>({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+  const [latestContextTokens, setLatestContextTokens] = useState(0);
+  const lastSeenUsageRef = useRef<{ input: number; output: number }>({ input: 0, output: 0 });
 
   const selectedMessageRef = useRef<ChannelMessage | null>(null);
   const selectedMessageIdRef = useRef<string | null>(null);
@@ -92,6 +101,9 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     setLoadingOlderEvents(false);
     loadingOlderRef.current = false;
     threadQueryRef.current = null;
+    setTokenUsage({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+    setLatestContextTokens(0);
+    lastSeenUsageRef.current = { input: 0, output: 0 };
   }, []);
 
   const closeThreadPanel = useCallback(() => {
@@ -146,6 +158,25 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         threadQueryRef.current = { channelId: message.channelId, messageId: message.id, threadId: thread.id };
         setThreadStatus(events.length === 0 ? 'empty' : 'ready');
 
+        // Set server-computed token aggregates
+        const tu = eventsData?.threadEvents?.tokenUsage;
+        if (tu) {
+          setTokenUsage({ inputTokens: tu.inputTokens, outputTokens: tu.outputTokens, totalTokens: tu.totalTokens });
+        }
+        setLatestContextTokens(eventsData?.threadEvents?.latestContextTokens ?? 0);
+
+        // Set baseline for SSE dedup from the last event's usage
+        const lastLoadedEvent = events[events.length - 1];
+        if (lastLoadedEvent) {
+          const lastUsage = (lastLoadedEvent.rawPayload as Record<string, unknown>)?.usage as
+            | { input_tokens?: number; output_tokens?: number }
+            | undefined;
+          lastSeenUsageRef.current = {
+            input: lastUsage?.input_tokens ?? 0,
+            output: lastUsage?.output_tokens ?? 0,
+          };
+        }
+
         const latestEvent = events[events.length - 1];
         if (latestEvent) {
           const lastReportedId = lastReportedThreadEventIdByMessageRef.current.get(message.id);
@@ -192,6 +223,27 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
   const appendThreadEvent = useCallback((event: ServerEvent) => {
     setThreadEvents((prev) => [...prev, event]);
     setThreadTotal((prev) => prev + 1);
+
+    // Incrementally update token aggregates from the new event.
+    // Deduplicate: multiple events in the same API turn share the same usage snapshot.
+    const usage = (event.rawPayload as Record<string, unknown>)?.usage as
+      | { input_tokens?: number; output_tokens?: number }
+      | undefined;
+    if (usage) {
+      const curInput = usage.input_tokens ?? 0;
+      const curOutput = usage.output_tokens ?? 0;
+      if (curInput !== lastSeenUsageRef.current.input || curOutput !== lastSeenUsageRef.current.output) {
+        lastSeenUsageRef.current = { input: curInput, output: curOutput };
+        setTokenUsage((prev) => ({
+          inputTokens: prev.inputTokens + curInput,
+          outputTokens: prev.outputTokens + curOutput,
+          totalTokens: prev.totalTokens + curInput + curOutput,
+        }));
+      }
+      if (curInput) {
+        setLatestContextTokens(curInput);
+      }
+    }
   }, []);
 
   const hasMoreEvents = threadTotal > threadEvents.length;
@@ -315,5 +367,7 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     mergeWorktree,
     toggleReadGroup,
     syncSelectedMessage,
+    tokenUsage,
+    latestContextTokens,
   };
 }

@@ -103,6 +103,8 @@ function AppContent() {
     deleteWorktree,
     toggleReadGroup,
     syncSelectedMessage,
+    tokenUsage,
+    latestContextTokens,
   } = useThread({ getChannelRepoPath, getChannelBaseBranch });
 
   const upsertAndSyncMessage = useCallback(
@@ -531,6 +533,8 @@ function AppContent() {
       onThreadScroll,
       hasMoreEvents,
       loadingOlderEvents,
+      tokenUsage,
+      latestContextTokens,
       threadNodes,
       isClaudeRunning,
       messageStatus: selectedMessageStatus,
@@ -551,7 +555,7 @@ function AppContent() {
       closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
       loadThreadEvents, deleteWorktree, threadContentRef, showJumpToLatest,
       scrollThreadToBottom, onThreadScroll, hasMoreEvents, loadingOlderEvents,
-      threadNodes, isClaudeRunning,
+      tokenUsage, latestContextTokens, threadNodes, isClaudeRunning,
       selectedMessageStatus, selectedTicket, isFullscreen, scriptsAvailable,
       dragging, handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
       startDragging, enterFullscreen, exitFullscreen,
