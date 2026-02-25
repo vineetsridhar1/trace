@@ -3,7 +3,7 @@ import { useRef, useState, useLayoutEffect } from 'react';
 const GAP = 8;
 
 export function Tooltip({ text, children, position = 'top' }: {
-  text: string;
+  text: React.ReactNode;
   children: React.ReactNode;
   position?: 'top' | 'bottom';
 }) {
@@ -20,7 +20,12 @@ export function Tooltip({ text, children, position = 'top' }: {
 
     const tr = trigger.getBoundingClientRect();
     const tt = tip.getBoundingClientRect();
-    const top = position === 'top' ? tr.top - tt.height - GAP : tr.bottom + GAP;
+    const preferTop = position === 'top';
+    const aboveTop = tr.top - tt.height - GAP;
+    const belowTop = tr.bottom + GAP;
+    const top = preferTop
+      ? (aboveTop < 4 ? belowTop : aboveTop)
+      : (belowTop + tt.height > window.innerHeight - 4 ? aboveTop : belowTop);
     let left = tr.left + tr.width / 2 - tt.width / 2;
     left = Math.max(4, Math.min(left, window.innerWidth - tt.width - 4));
 
