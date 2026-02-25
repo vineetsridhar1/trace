@@ -48,12 +48,12 @@ export function useMessages() {
       });
       if (!data) return;
 
-      const fetched = (data.messages.messages as ChannelMessage[]).sort(
+      const fetched = [...data.messages.messages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      );
+      ) as ChannelMessage[];
       setMessages(fetched);
-    } catch {
-      // Server may not be up yet.
+    } catch (err) {
+      console.error('[useMessages] refreshMessages failed:', err);
     }
   }, []);
 
