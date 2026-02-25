@@ -95,6 +95,10 @@ function AppContent() {
     reportClaudeActivity,
     closeThreadPanel,
     loadThreadEvents,
+    loadOlderEvents,
+    appendThreadEvent,
+    hasMoreEvents,
+    loadingOlderEvents,
     openThreadPanel,
     deleteWorktree,
     toggleReadGroup,
@@ -115,7 +119,13 @@ function AppContent() {
     scrollThreadToBottom,
     onThreadScroll,
     resetScroll,
-  } = useThreadScroll(threadEvents, selectedMessageId);
+  } = useThreadScroll({
+    threadEvents,
+    selectedMessageId,
+    hasMoreEvents,
+    loadingOlderEvents,
+    loadOlderEvents,
+  });
 
   const {
     terminals: startupTerminalList,
@@ -182,7 +192,7 @@ function AppContent() {
   const { sseConnected } = useSse({
     activeChannelId,
     upsertMessage: upsertAndSyncMessage,
-    loadThreadEvents,
+    appendThreadEvent,
     reportClaudeActivity,
     selectedMessageIdRef,
     messagesRef,
@@ -519,6 +529,8 @@ function AppContent() {
       showJumpToLatest,
       scrollToLatest: () => scrollThreadToBottom('smooth'),
       onThreadScroll,
+      hasMoreEvents,
+      loadingOlderEvents,
       threadNodes,
       isClaudeRunning,
       messageStatus: selectedMessageStatus,
@@ -538,7 +550,8 @@ function AppContent() {
       deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
       closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
       loadThreadEvents, deleteWorktree, threadContentRef, showJumpToLatest,
-      scrollThreadToBottom, onThreadScroll, threadNodes, isClaudeRunning,
+      scrollThreadToBottom, onThreadScroll, hasMoreEvents, loadingOlderEvents,
+      threadNodes, isClaudeRunning,
       selectedMessageStatus, selectedTicket, isFullscreen, scriptsAvailable,
       dragging, handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
       startDragging, enterFullscreen, exitFullscreen,

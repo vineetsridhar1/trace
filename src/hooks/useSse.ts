@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ChannelMessage, KanbanTicket, MessageEnvelope, ThreadEventEnvelope, TicketEnvelope } from '../types';
+import type { ChannelMessage, KanbanTicket, MessageEnvelope, ServerEvent, ThreadEventEnvelope, TicketEnvelope } from '../types';
 import { SERVER_URL } from '../types';
 
 // SSE broadcasts send raw Prisma data with _count.threads, but our ChannelMessage type uses threadCount.
@@ -15,7 +15,7 @@ function normalizeMessage(raw: MessageEnvelope['message']): ChannelMessage {
 interface UseSseOptions {
   activeChannelId: string | null;
   upsertMessage: (message: ChannelMessage) => void;
-  loadThreadEvents: (message: ChannelMessage) => Promise<void>;
+  appendThreadEvent: (event: ServerEvent) => void;
   reportClaudeActivity: (messageId: string, eventType: string) => Promise<void>;
   selectedMessageIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
@@ -27,7 +27,7 @@ interface UseSseOptions {
 export function useSse({
   activeChannelId,
   upsertMessage,
-  loadThreadEvents,
+  appendThreadEvent,
   reportClaudeActivity,
   selectedMessageIdRef,
   messagesRef,
@@ -107,9 +107,7 @@ export function useSse({
 
       if (selectedMessageIdRef.current !== payload.messageId) return;
 
-      const message =
-        messagesRef.current.find((item) => item.id === payload.messageId) ?? selectedMessageRef.current;
-      if (message) void loadThreadEvents(message);
+      appendThreadEvent(payload.event);
     });
 
     source.addEventListener('ticket-created', (evt) => {
@@ -132,7 +130,7 @@ export function useSse({
       source.close();
       if (activeSseRef.current === source) activeSseRef.current = null;
     };
-  }, [activeChannelId, loadThreadEvents, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention, upsertTicket]);
+  }, [activeChannelId, appendThreadEvent, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention, upsertTicket]);
 
   return { sseConnected, activeChannelRef };
 }

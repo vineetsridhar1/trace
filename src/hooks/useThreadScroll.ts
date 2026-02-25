@@ -2,12 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ServerEvent } from '../types';
 
 const THREAD_NEAR_BOTTOM_THRESHOLD_PX = 100;
+const THREAD_NEAR_TOP_THRESHOLD_PX = 100;
 
-export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: string | null) {
+interface UseThreadScrollOptions {
+  threadEvents: ServerEvent[];
+  selectedMessageId: string | null;
+  hasMoreEvents: boolean;
+  loadingOlderEvents: boolean;
+  loadOlderEvents: () => Promise<number>;
+}
+
+export function useThreadScroll({
+  threadEvents,
+  selectedMessageId,
+  hasMoreEvents,
+  loadingOlderEvents,
+  loadOlderEvents,
+}: UseThreadScrollOptions) {
   const threadContentRef = useRef<HTMLDivElement | null>(null);
   const threadNearBottomRef = useRef(true);
   const prevThreadEventCountRef = useRef(0);
   const mountedMessageRef = useRef<string | null>(null);
+  const isPrependingRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
   const isThreadNearBottom = useCallback((): boolean => {
@@ -39,6 +55,9 @@ export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: 
 
   // Auto-scroll when new events arrive, but only if user is near the bottom
   useEffect(() => {
+    // Skip scroll logic when we're prepending older events
+    if (isPrependingRef.current) return;
+
     const previousCount = prevThreadEventCountRef.current;
     const nextCount = threadEvents.length;
     const hasNew = nextCount > previousCount;
@@ -68,16 +87,41 @@ export function useThreadScroll(threadEvents: ServerEvent[], selectedMessageId: 
   }, [threadEvents, scrollThreadToBottom]);
 
   const onThreadScroll = useCallback(() => {
+    const el = threadContentRef.current;
+    if (!el) return;
+
     const nearBottom = isThreadNearBottom();
     threadNearBottomRef.current = nearBottom;
     if (nearBottom) setShowJumpToLatest(false);
-  }, [isThreadNearBottom]);
+
+    // Trigger loading older events when scrolled near the top
+    if (el.scrollTop < THREAD_NEAR_TOP_THRESHOLD_PX && hasMoreEvents && !loadingOlderEvents) {
+      const prevScrollHeight = el.scrollHeight;
+      isPrependingRef.current = true;
+
+      void loadOlderEvents().then((count) => {
+        if (count > 0) {
+          // Preserve scroll position after older events are prepended
+          requestAnimationFrame(() => {
+            const newScrollHeight = el.scrollHeight;
+            el.scrollTop += newScrollHeight - prevScrollHeight;
+            // Update the event count ref to avoid triggering auto-scroll
+            prevThreadEventCountRef.current = prevThreadEventCountRef.current + count;
+            isPrependingRef.current = false;
+          });
+        } else {
+          isPrependingRef.current = false;
+        }
+      });
+    }
+  }, [isThreadNearBottom, hasMoreEvents, loadingOlderEvents, loadOlderEvents]);
 
   const resetScroll = useCallback(() => {
     setShowJumpToLatest(false);
     threadNearBottomRef.current = true;
     prevThreadEventCountRef.current = 0;
     mountedMessageRef.current = null;
+    isPrependingRef.current = false;
   }, []);
 
   return {

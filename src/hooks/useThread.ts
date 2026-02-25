@@ -46,6 +46,8 @@ interface UseThreadOptions {
   getChannelBaseBranch: () => string;
 }
 
+const THREAD_PAGE_SIZE = 100;
+
 export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThreadOptions) {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ChannelMessage | null>(null);
@@ -58,10 +60,16 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
   const [hasWorktree, setHasWorktree] = useState<boolean | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<Record<string, boolean>>({});
+  const [threadTotal, setThreadTotal] = useState(0);
+  const [loadingOlderEvents, setLoadingOlderEvents] = useState(false);
 
   const selectedMessageRef = useRef<ChannelMessage | null>(null);
   const selectedMessageIdRef = useRef<string | null>(null);
   const lastReportedThreadEventIdByMessageRef = useRef<Map<string, string>>(new Map());
+  const loadingOlderRef = useRef(false);
+  const threadQueryRef = useRef<{ channelId: string; messageId: string; threadId: string } | null>(null);
+  const threadEventsLengthRef = useRef(0);
+  threadEventsLengthRef.current = threadEvents.length;
 
   selectedMessageRef.current = selectedMessage;
   selectedMessageIdRef.current = selectedMessageId;
@@ -80,6 +88,10 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
   const resetThreadViewState = useCallback(() => {
     setShowJumpToLatest(false);
     setExpandedReadGroupIds({});
+    setThreadTotal(0);
+    setLoadingOlderEvents(false);
+    loadingOlderRef.current = false;
+    threadQueryRef.current = null;
   }, []);
 
   const closeThreadPanel = useCallback(() => {
@@ -123,12 +135,15 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
             channelId: message.channelId,
             messageId: message.id,
             threadId: thread.id,
-            limit: 200,
+            limit: THREAD_PAGE_SIZE,
           },
         });
 
         const events: ServerEvent[] = (eventsData?.threadEvents?.events ?? []) as ServerEvent[];
+        const total = eventsData?.threadEvents?.total ?? events.length;
         setThreadEvents(events);
+        setThreadTotal(total);
+        threadQueryRef.current = { channelId: message.channelId, messageId: message.id, threadId: thread.id };
         setThreadStatus(events.length === 0 ? 'empty' : 'ready');
 
         const latestEvent = events[events.length - 1];
@@ -145,6 +160,41 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     },
     [reportClaudeActivity],
   );
+
+  const loadOlderEvents = useCallback(async (): Promise<number> => {
+    const query = threadQueryRef.current;
+    if (loadingOlderRef.current || !query) return 0;
+    loadingOlderRef.current = true;
+    setLoadingOlderEvents(true);
+    try {
+      const { data } = await graphqlClient.query<ThreadEventsQuery>({
+        query: ThreadEventsDocument,
+        variables: {
+          ...query,
+          limit: THREAD_PAGE_SIZE,
+          offset: threadEventsLengthRef.current,
+        },
+      });
+
+      const olderEvents: ServerEvent[] = (data?.threadEvents?.events ?? []) as ServerEvent[];
+      const total = data?.threadEvents?.total;
+      if (total != null) setThreadTotal(total);
+      if (olderEvents.length > 0) {
+        setThreadEvents((prev) => [...olderEvents, ...prev]);
+      }
+      return olderEvents.length;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlderEvents(false);
+    }
+  }, []);
+
+  const appendThreadEvent = useCallback((event: ServerEvent) => {
+    setThreadEvents((prev) => [...prev, event]);
+    setThreadTotal((prev) => prev + 1);
+  }, []);
+
+  const hasMoreEvents = threadTotal > threadEvents.length;
 
   const checkWorktree = useCallback(async (messageId: string) => {
     if (!window.traceAPI || typeof window.traceAPI.checkWorktreeExists !== 'function') {
@@ -256,6 +306,10 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     reportClaudeActivity,
     closeThreadPanel,
     loadThreadEvents,
+    loadOlderEvents,
+    appendThreadEvent,
+    hasMoreEvents,
+    loadingOlderEvents,
     openThreadPanel,
     deleteWorktree,
     mergeWorktree,

@@ -32,6 +32,9 @@ export interface ThreadContextValue {
   showJumpToLatest: boolean;
   scrollToLatest: () => void;
   onThreadScroll: () => void;
+  // Pagination state
+  hasMoreEvents: boolean;
+  loadingOlderEvents: boolean;
   // Derived state
   threadNodes: ThreadRenderNode[];
   isClaudeRunning: boolean;

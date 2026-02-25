@@ -34,6 +34,7 @@ export function ThreadPanel() {
     threadContentRef,
     scriptsAvailable,
     isFullscreen,
+    loadingOlderEvents,
     onRunScripts,
     onThreadScroll,
     toggleReadGroup,
@@ -174,6 +175,9 @@ export function ThreadPanel() {
                 className="thread-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3"
               >
                 <div className="thread-events-list">
+                  {loadingOlderEvents && (
+                    <div className="py-2 text-center text-xs text-[#565f89]">Loading older events...</div>
+                  )}
                   <ThreadStatusMessage
                     status={threadStatus}
                     activeThreadId={activeThreadId}
