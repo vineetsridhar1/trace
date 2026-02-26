@@ -82,7 +82,7 @@ interface UseClaudeMessageActionsOptions {
   upsertMessage: (message: ChannelMessage) => void;
   setHasWorktree: Dispatch<SetStateAction<boolean | null>>;
   updateMessageStatus: (messageId: string, status: TicketStatus) => Promise<void>;
-  getCreationCommands: () => string[];
+  getSetupCommands: () => string[];
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
   getSystemInstructions: () => string | undefined;
@@ -113,7 +113,7 @@ export function useClaudeMessageActions({
   upsertMessage,
   setHasWorktree,
   updateMessageStatus,
-  getCreationCommands,
+  getSetupCommands,
   getChannelRepoPath,
   getChannelBaseBranch,
   getSystemInstructions,
@@ -265,36 +265,44 @@ export function useClaudeMessageActions({
       setPendingRunInitialPrompt('');
       setPendingRunFilePaths([]);
 
-      const creationCommands = getCreationCommands();
+      const setupCommands = getSetupCommands();
 
-      if (creationCommands.length > 0) {
+      if (setupCommands.length > 0) {
         await updateMessageStatus(messageId, 'creation');
       }
 
       await updatePreviewForPendingRun(messageId, editedPrompt);
+
+      // Allocate 10 ports for this workspace
+      const portResult = await window.traceAPI.allocatePorts(messageId, 10);
+      const ports = portResult.success && portResult.ports ? portResult.ports : [];
 
       const baseBranch = getChannelBaseBranch();
       const userInstructions = getSystemInstructions();
       const instructionParts = [
         `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
       ];
+      if (ports.length > 0) {
+        const portLines = ports.map((p, i) => `TRACE_PORT_${i}=${p}`).join(', ');
+        instructionParts.push(`Available ports: ${portLines}`);
+      }
       if (userInstructions) instructionParts.push(userInstructions);
 
       const success = await spawnClaudeForMessage(messageId, prompt, {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
-        creationCommands,
+        creationCommands: setupCommands,
         filePaths: filePaths.length > 0 ? filePaths : undefined,
         model: selectedModel,
         effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
         systemInstructions: instructionParts.join('\n\n'),
       });
 
-      if (!success && creationCommands.length > 0) {
+      if (!success && setupCommands.length > 0) {
         await updateMessageStatus(messageId, 'pending');
       }
     },
-    [getChannelBaseBranch, getCreationCommands, getSystemInstructions, pendingRunMessageId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, pendingRunMessageId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
   );
 
   const autoRunQueuedTicket = useCallback(
@@ -363,7 +371,7 @@ export function useClaudeMessageActions({
       const spawnOptions: SpawnOptions = {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
-        creationCommands: getCreationCommands(),
+        creationCommands: getSetupCommands(),
         filePaths: filePaths && filePaths.length > 0 ? filePaths : undefined,
         model: selectedModel,
         effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
@@ -386,7 +394,7 @@ export function useClaudeMessageActions({
       await spawnClaudeForMessage(selectedMessage.id, text, spawnOptions);
       return true;
     },
-    [activeChannelId, activeThreadIdRef, threadEventsRef, getChannelBaseBranch, getCreationCommands, getSystemInstructions, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
+    [activeChannelId, activeThreadIdRef, threadEventsRef, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
   );
 
   const sendPlanResponse = useCallback(

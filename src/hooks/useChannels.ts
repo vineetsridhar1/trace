@@ -11,6 +11,9 @@ const GQL_CHANNELS = gql`
       name
       baseBranch
       githubUrl
+      defaultRepoPath
+      defaultSetupScript
+      defaultRunScript
       createdAt
       updatedAt
     }

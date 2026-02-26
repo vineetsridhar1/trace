@@ -17,15 +17,24 @@ export type RepoBranchesQueryVariables = Types.Exact<{
 
 export type RepoBranchesQuery = { __typename?: 'Query', repoBranches: Array<string> };
 
+export type SuggestScriptsQueryVariables = Types.Exact<{
+  localRepoPath: Types.Scalars['String']['input'];
+}>;
+
+
+export type SuggestScriptsQuery = { __typename?: 'Query', suggestScripts: { __typename?: 'ScriptSuggestion', setupScript?: string | null, runScript?: string | null } };
+
 export type CreateChannelMutationVariables = Types.Exact<{
   name: Types.Scalars['String']['input'];
   serverId?: Types.InputMaybe<Types.Scalars['String']['input']>;
   githubUrl?: Types.InputMaybe<Types.Scalars['String']['input']>;
   baseBranch?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultSetupScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultRunScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
 }>;
 
 
-export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, createdAt: string, updatedAt: string } };
+export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
 
 
 export const ValidateRepoDocument = gql`
@@ -114,19 +123,67 @@ export type RepoBranchesQueryHookResult = ReturnType<typeof useRepoBranchesQuery
 export type RepoBranchesLazyQueryHookResult = ReturnType<typeof useRepoBranchesLazyQuery>;
 export type RepoBranchesSuspenseQueryHookResult = ReturnType<typeof useRepoBranchesSuspenseQuery>;
 export type RepoBranchesQueryResult = Apollo.QueryResult<RepoBranchesQuery, RepoBranchesQueryVariables>;
+export const SuggestScriptsDocument = gql`
+    query SuggestScripts($localRepoPath: String!) {
+  suggestScripts(localRepoPath: $localRepoPath) {
+    setupScript
+    runScript
+  }
+}
+    `;
+
+/**
+ * __useSuggestScriptsQuery__
+ *
+ * To run a query within a React component, call `useSuggestScriptsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSuggestScriptsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSuggestScriptsQuery({
+ *   variables: {
+ *      localRepoPath: // value for 'localRepoPath'
+ *   },
+ * });
+ */
+export function useSuggestScriptsQuery(baseOptions: Apollo.QueryHookOptions<SuggestScriptsQuery, SuggestScriptsQueryVariables> & ({ variables: SuggestScriptsQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<SuggestScriptsQuery, SuggestScriptsQueryVariables>(SuggestScriptsDocument, options);
+      }
+export function useSuggestScriptsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SuggestScriptsQuery, SuggestScriptsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<SuggestScriptsQuery, SuggestScriptsQueryVariables>(SuggestScriptsDocument, options);
+        }
+// @ts-ignore
+export function useSuggestScriptsSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<SuggestScriptsQuery, SuggestScriptsQueryVariables>): Apollo.UseSuspenseQueryResult<SuggestScriptsQuery, SuggestScriptsQueryVariables>;
+export function useSuggestScriptsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SuggestScriptsQuery, SuggestScriptsQueryVariables>): Apollo.UseSuspenseQueryResult<SuggestScriptsQuery | undefined, SuggestScriptsQueryVariables>;
+export function useSuggestScriptsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SuggestScriptsQuery, SuggestScriptsQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<SuggestScriptsQuery, SuggestScriptsQueryVariables>(SuggestScriptsDocument, options);
+        }
+export type SuggestScriptsQueryHookResult = ReturnType<typeof useSuggestScriptsQuery>;
+export type SuggestScriptsLazyQueryHookResult = ReturnType<typeof useSuggestScriptsLazyQuery>;
+export type SuggestScriptsSuspenseQueryHookResult = ReturnType<typeof useSuggestScriptsSuspenseQuery>;
+export type SuggestScriptsQueryResult = Apollo.QueryResult<SuggestScriptsQuery, SuggestScriptsQueryVariables>;
 export const CreateChannelDocument = gql`
-    mutation CreateChannel($name: String!, $serverId: String, $githubUrl: String, $baseBranch: String) {
+    mutation CreateChannel($name: String!, $serverId: String, $githubUrl: String, $baseBranch: String, $defaultSetupScript: String, $defaultRunScript: String) {
   createChannel(
     name: $name
     serverId: $serverId
     githubUrl: $githubUrl
     baseBranch: $baseBranch
+    defaultSetupScript: $defaultSetupScript
+    defaultRunScript: $defaultRunScript
   ) {
     id
     serverId
     name
     baseBranch
     githubUrl
+    defaultSetupScript
+    defaultRunScript
     createdAt
     updatedAt
   }
@@ -151,6 +208,8 @@ export type CreateChannelMutationFn = Apollo.MutationFunction<CreateChannelMutat
  *      serverId: // value for 'serverId'
  *      githubUrl: // value for 'githubUrl'
  *      baseBranch: // value for 'baseBranch'
+ *      defaultSetupScript: // value for 'defaultSetupScript'
+ *      defaultRunScript: // value for 'defaultRunScript'
  *   },
  * });
  */

@@ -65,10 +65,25 @@ export async function getDefaultChannel() {
   return defaultChannelId;
 }
 
-export async function createChannel(data: { name: string; serverId: string; baseBranch?: string | null; githubUrl?: string | null }) {
+export async function createChannel(data: {
+  name: string;
+  serverId: string;
+  baseBranch?: string | null;
+  githubUrl?: string | null;
+  defaultRepoPath?: string | null;
+  defaultSetupScript?: string | null;
+  defaultRunScript?: string | null;
+}) {
   return prisma.channel.create({ data });
 }
 
-export async function updateChannel(id: string, data: { name?: string; baseBranch?: string | null; githubUrl?: string | null }) {
+export async function updateChannel(id: string, data: {
+  name?: string;
+  baseBranch?: string | null;
+  githubUrl?: string | null;
+  defaultRepoPath?: string | null;
+  defaultSetupScript?: string | null;
+  defaultRunScript?: string | null;
+}) {
   return prisma.channel.update({ where: { id }, data });
 }

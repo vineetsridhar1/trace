@@ -387,9 +387,9 @@ function AppContent() {
     [openThreadPanel, resetScroll],
   );
 
-  const getCreationCommands = useCallback((): string[] => {
-    if (!enrichedActiveChannel?.creationScript) return [];
-    return enrichedActiveChannel.creationScript
+  const getSetupCommands = useCallback((): string[] => {
+    if (!enrichedActiveChannel?.setupScript) return [];
+    return enrichedActiveChannel.setupScript
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
@@ -411,7 +411,7 @@ function AppContent() {
     upsertMessage: upsertAndSyncMessage,
     setHasWorktree,
     updateMessageStatus,
-    getCreationCommands,
+    getSetupCommands,
     getChannelRepoPath,
     getChannelBaseBranch,
     getSystemInstructions,
@@ -620,27 +620,32 @@ function AppContent() {
   }, []);
 
   const handleSaveSettings = useCallback(
-    async (baseBranch: string | null, localConfig: LocalChannelConfig | null) => {
+    async (
+      channelData: {
+        defaultSetupScript?: string | null;
+        defaultRunScript?: string | null;
+      },
+      localCfg: LocalChannelConfig | null,
+    ) => {
       if (!settingsChannelId) return;
-      await updateChannelSettings(settingsChannelId, { baseBranch });
-      if (localConfig) {
-        await setLocalConfig(settingsChannelId, localConfig);
+      await updateChannelSettings(settingsChannelId, channelData);
+      if (localCfg) {
+        await setLocalConfig(settingsChannelId, localCfg);
       }
       void refreshChannels();
     },
     [refreshChannels, settingsChannelId, updateChannelSettings, setLocalConfig],
   );
 
-  const handleRunStartupScripts = useCallback(
+  const handleRunChannelScript = useCallback(
     (channelId: string) => {
       const channel = enrichedChannels.find((item) => item.id === channelId);
       if (!channel?.localRepoPath) return;
-      const config = getLocalConfig(channelId);
-      const scripts = config?.startupScripts ?? [];
-      if (scripts.length === 0) return;
-      runAllScripts(channelId, channel.localRepoPath, scripts);
+      const script = channel.runScript;
+      if (!script?.trim()) return;
+      runAllScripts(channelId, channel.localRepoPath, [{ name: 'Run', command: script }]);
     },
-    [enrichedChannels, getLocalConfig, runAllScripts],
+    [enrichedChannels, runAllScripts],
   );
 
   const handleRunMessageScripts = useCallback(async () => {
@@ -648,27 +653,25 @@ function AppContent() {
     const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
-    const config = getLocalConfig(activeChannelId);
-    const scripts = config?.startupScripts ?? [];
-    if (scripts.length === 0) return;
+    const channel = enrichedChannels.find((item) => item.id === activeChannelId);
+    const script = channel?.runScript;
+    if (!script?.trim()) return;
 
-    const portResult = await window.traceAPI.allocatePorts(selectedMessageId, scripts.length);
+    const portResult = await window.traceAPI.allocatePorts(selectedMessageId, 10);
     if (!portResult.success || !portResult.ports) return;
 
     const ports = portResult.ports;
-    const envMaps: Record<string, string>[] = scripts.map((_, scriptIndex) => {
-      const env: Record<string, string> = {
-        PORT: String(ports[scriptIndex]),
-        TRACE_BASE_PORT: String(ports[0]),
-      };
-      for (let portIndex = 0; portIndex < ports.length; portIndex += 1) {
-        env[`TRACE_PORT_${portIndex}`] = String(ports[portIndex]);
-      }
-      return env;
-    });
+    const env: Record<string, string> = {
+      PORT: String(ports[0]),
+      TRACE_BASE_PORT: String(ports[0]),
+      REPO_FOLDER: worktreeResult.worktreePath,
+    };
+    for (let i = 0; i < ports.length; i += 1) {
+      env[`TRACE_PORT_${i}`] = String(ports[i]);
+    }
 
-    runAllScripts(selectedMessageId, worktreeResult.worktreePath, scripts, envMaps);
-  }, [activeChannelId, getLocalConfig, repoPath, runAllScripts, selectedMessageId]);
+    runAllScripts(selectedMessageId, worktreeResult.worktreePath, [{ name: 'Run', command: script }], [env]);
+  }, [activeChannelId, enrichedChannels, repoPath, runAllScripts, selectedMessageId]);
 
   const handleDeleteWorktree = useCallback(() => {
     killAllTerminals();
@@ -773,7 +776,7 @@ function AppContent() {
             activeAiChatId={activeAiChatId}
             onSwitchChannel={handleSwitchChannel}
             onOpenSettings={handleOpenSettings}
-            onRunStartupScripts={handleRunStartupScripts}
+            onRunStartupScripts={handleRunChannelScript}
             onCreateChannel={() => setShowCreateChannel(true)}
             onSwitchAiChat={handleSwitchAiChat}
             onCreateAiChat={() => { void handleCreateAiChat(); }}

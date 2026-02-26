@@ -25,12 +25,12 @@ function resolveServerUrl(): string {
 const SERVER_URL = resolveServerUrl();
 const MAX_CAPTURE_CHARS = 20_000;
 
-async function runCreationScripts(worktreePath: string, commands: string[]): Promise<void> {
+async function runSetupScripts(worktreePath: string, commands: string[]): Promise<void> {
   const script = commands.join('\n');
   if (!script.trim()) return;
   const result = await runProcess('sh', ['-c', `set -e\n${script}`], worktreePath);
   if (result.code !== 0) {
-    console.error(`[creation-script] script failed (exit ${result.code}):\n${result.stderr}`);
+    console.error(`[setup-script] script failed (exit ${result.code}):\n${result.stderr}`);
   }
 }
 
@@ -48,9 +48,9 @@ export async function spawnClaude(
   const { worktreePath, created } = await ensureWorktree(messageId, repoPath);
 
   if (created && creationCommands && creationCommands.length > 0) {
-    appendClaudeDebugLog(messageId, `running ${creationCommands.length} creation script(s)`);
-    await runCreationScripts(worktreePath, creationCommands);
-    appendClaudeDebugLog(messageId, 'creation scripts completed');
+    appendClaudeDebugLog(messageId, `running ${creationCommands.length} setup script(s)`);
+    await runSetupScripts(worktreePath, creationCommands);
+    appendClaudeDebugLog(messageId, 'setup scripts completed');
   }
   const startedAt = Date.now();
   appendClaudeDebugLog(
