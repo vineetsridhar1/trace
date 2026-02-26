@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { FiCpu, FiCheck, FiChevronRight } from 'react-icons/fi';
+import { FiCpu, FiCheck, FiChevronRight, FiLoader } from 'react-icons/fi';
 import type { ServerEvent } from '../types';
 import { formatTime, formatTokens, serializeUnknown } from '../utils';
+import { ElapsedTimer } from './ElapsedTimer';
 
 interface SubagentInput {
   description?: string;
@@ -38,13 +39,14 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(0);
 
+  const isLoading = event.hookEventName === 'PreToolUse';
   const input = (event.toolInput ?? {}) as SubagentInput;
   const response = (event.toolResponse ?? {}) as SubagentResponse;
 
   const description = input.description ?? 'Subagent';
   const subagentType = input.subagent_type ?? 'agent';
   const status = response.status ?? 'completed';
-  const isCompleted = status === 'completed';
+  const isCompleted = !isLoading && status === 'completed';
 
   const resultText = response.content
     ?.map((block) => block.text)
@@ -65,8 +67,9 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
     <div className="activity-row">
       <button
         type="button"
-        className="flex w-full cursor-pointer items-center gap-2 text-left"
-        onClick={() => setExpanded(!expanded)}
+        disabled={isLoading}
+        className={`flex w-full items-center gap-2 text-left${isLoading ? ' cursor-default' : ' cursor-pointer'}`}
+        onClick={isLoading ? undefined : () => setExpanded(!expanded)}
       >
         <FiCpu className="h-3.5 w-3.5 flex-shrink-0 text-[#565f89]" />
 
@@ -76,40 +79,50 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
 
         <span className="flex-1 truncate text-xs text-[#a9b1d6]">{description}</span>
 
-        {isCompleted && (
+        {isLoading ? (
+          <FiLoader className="h-3 w-3 flex-shrink-0 animate-spin text-violet-400" />
+        ) : isCompleted ? (
           <FiCheck className="h-3 w-3 flex-shrink-0 text-green-400" />
-        )}
+        ) : null}
 
-        {usage && (
+        {!isLoading && usage && (
           <span className="text-[10px] text-[#565f89]">
             {formatTokens((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0))} tokens
           </span>
         )}
 
-        <span className="text-[10px] text-[#565f89]">{time}</span>
+        {isLoading ? (
+          <ElapsedTimer startTime={event.timestamp} />
+        ) : (
+          <span className="text-[10px] text-[#565f89]">{time}</span>
+        )}
 
-        <FiChevronRight
-          className="h-3 w-3 flex-shrink-0 text-[#565f89] transition-transform duration-150"
-          style={{ transform: expanded ? 'rotate(90deg)' : undefined }}
-        />
+        {!isLoading && (
+          <FiChevronRight
+            className="h-3 w-3 flex-shrink-0 text-[#565f89] transition-transform duration-150"
+            style={{ transform: expanded ? 'rotate(90deg)' : undefined }}
+          />
+        )}
       </button>
 
-      <div
-        className="overflow-hidden transition-[max-height] duration-200 ease-in-out"
-        style={{ maxHeight: expanded ? `${bodyHeight}px` : '0px' }}
-      >
-        <div ref={bodyRef}>
-          {resultText ? (
-            <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-[#292e42] bg-[#1a1b26] p-2 text-[11px] leading-relaxed text-[#9aa5ce]">
-              {resultText.length > 3000 ? `${resultText.slice(0, 3000)}...` : resultText}
-            </pre>
-          ) : (
-            <pre className="mt-1.5 rounded border border-[#292e42] bg-[#1a1b26] p-2 text-[11px] text-[#565f89]">
-              {serializeUnknown(event.toolResponse, 2000)}
-            </pre>
-          )}
+      {!isLoading && (
+        <div
+          className="overflow-hidden transition-[max-height] duration-200 ease-in-out"
+          style={{ maxHeight: expanded ? `${bodyHeight}px` : '0px' }}
+        >
+          <div ref={bodyRef}>
+            {resultText ? (
+              <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-[#292e42] bg-[#1a1b26] p-2 text-[11px] leading-relaxed text-[#9aa5ce]">
+                {resultText.length > 3000 ? `${resultText.slice(0, 3000)}...` : resultText}
+              </pre>
+            ) : (
+              <pre className="mt-1.5 rounded border border-[#292e42] bg-[#1a1b26] p-2 text-[11px] text-[#565f89]">
+                {serializeUnknown(event.toolResponse, 2000)}
+              </pre>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

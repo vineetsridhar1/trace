@@ -342,6 +342,12 @@ export async function ingestEvent(payload: HookEvent) {
     }
   }
 
+  if (payload.hook_event_name === 'PreToolUse') {
+    eventData.toolName = payload.tool_name;
+    eventData.toolInput = payload.tool_input ? JSON.parse(JSON.stringify(payload.tool_input)) : undefined;
+    eventData.toolUseId = payload.tool_use_id;
+  }
+
   if (payload.hook_event_name === 'PostToolUse') {
     eventData.toolName = payload.tool_name;
     eventData.toolInput = payload.tool_input ? JSON.parse(JSON.stringify(payload.tool_input)) : undefined;

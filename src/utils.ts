@@ -259,6 +259,15 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
   const nodes: ThreadRenderNode[] = [];
   let bucket: ServerEvent[] = [];
 
+  // Build a set of toolUseIds that have a PostToolUse (completed subagents).
+  // PreToolUse events whose toolUseId is in this set are superseded and should be skipped.
+  const completedToolUseIds = new Set<string>();
+  for (const event of events) {
+    if (event.hookEventName === 'PostToolUse' && event.toolUseId) {
+      completedToolUseIds.add(event.toolUseId);
+    }
+  }
+
   const flushBucket = () => {
     if (bucket.length === 0) {
       return;
@@ -293,6 +302,11 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
       });
     }
     currentThreadId = event.threadId;
+
+    // Skip PreToolUse events that already have a matching PostToolUse (completed)
+    if (event.hookEventName === 'PreToolUse' && event.toolUseId && completedToolUseIds.has(event.toolUseId)) {
+      continue;
+    }
 
     if (isReadLikeEvent(event)) {
       bucket.push(event);

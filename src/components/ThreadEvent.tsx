@@ -22,6 +22,10 @@ export const ThreadEvent = memo(function ThreadEvent({
     return <UserPromptBubble event={event} time={time} />;
   }
 
+  if (event.hookEventName === 'PreToolUse') {
+    return <ToolUseRow event={event} time={time} />;
+  }
+
   if (event.hookEventName === 'PostToolUse') {
     return <ToolUseRow event={event} time={time} />;
   }

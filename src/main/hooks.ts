@@ -12,6 +12,7 @@ export function injectHooks(dir: string) {
 
   const hookHandlers = [{ type: 'command', command: curlCmd }];
   const desiredHooks = {
+    PreToolUse:       [{ matcher: 'Task', hooks: hookHandlers }],
     PostToolUse:      [{ matcher: '.*', hooks: hookHandlers }],
     UserPromptSubmit: [{ hooks: hookHandlers }],
     Stop:             [{ hooks: hookHandlers }],
