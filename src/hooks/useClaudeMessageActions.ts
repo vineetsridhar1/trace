@@ -311,7 +311,7 @@ export function useClaudeMessageActions({
         ? `<trace-internal>\nBefore implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n</trace-internal>\n\n${runConfig.prompt}`
         : runConfig.prompt;
 
-      const creationCommands = getCreationCommands();
+      const creationCommands = getSetupCommands();
 
       await updatePreviewForPendingRun(messageId, runConfig.prompt);
 
@@ -339,7 +339,7 @@ export function useClaudeMessageActions({
         await updateMessageStatus(messageId, 'pending');
       }
     },
-    [getChannelBaseBranch, getCreationCommands, getSystemInstructions, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
   );
 
   const stopClaude = useCallback(async () => {
