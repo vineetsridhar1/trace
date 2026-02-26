@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { gql, useSubscription } from '@apollo/client';
 import { MESSAGE_FIELDS } from '../graphql/fragments';
+import { onWsConnectionChange } from '../graphql/client';
 import type { ChannelMessage, KanbanTicket, ServerEvent } from '../types';
 
 const MESSAGE_UPSERTED_SUBSCRIPTION = gql`
@@ -78,8 +79,8 @@ interface UseChannelSubscriptionsOptions {
   appendThreadEvent: (event: ServerEvent) => void;
   reportClaudeActivity: (messageId: string, eventType: string) => Promise<void>;
   selectedMessageIdRef: React.RefObject<string | null>;
+  activeThreadIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
-  selectedMessageRef: React.RefObject<ChannelMessage | null>;
   onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => void;
   upsertTicket?: (ticket: KanbanTicket) => void;
 }
@@ -90,6 +91,7 @@ export function useChannelSubscriptions({
   appendThreadEvent,
   reportClaudeActivity,
   selectedMessageIdRef,
+  activeThreadIdRef,
   messagesRef,
   onNeedsAttention,
   upsertTicket,
@@ -156,8 +158,13 @@ export function useChannelSubscriptions({
     }
 
     if (selectedMessageIdRef.current !== payload.messageId) return;
+
+    // Only append events belonging to the active thread
+    const currentThreadId = activeThreadIdRef.current;
+    if (currentThreadId && payload.event.threadId !== currentThreadId) return;
+
     appendThreadEvent(payload.event as ServerEvent);
-  }, [threadEventData, activeChannelId, reportClaudeActivity, messagesRef, upsertMessage, selectedMessageIdRef, onNeedsAttention, appendThreadEvent]);
+  }, [threadEventData, activeChannelId, reportClaudeActivity, messagesRef, upsertMessage, selectedMessageIdRef, activeThreadIdRef, onNeedsAttention, appendThreadEvent]);
 
   // --- Ticket upserted ---
   const { data: ticketData } = useSubscription(TICKET_UPSERTED_SUBSCRIPTION, {
@@ -171,10 +178,10 @@ export function useChannelSubscriptions({
     upsertTicket({ ...payload.ticket, columnSlug: payload.columnSlug } as KanbanTicket);
   }, [ticketData, activeChannelId, upsertTicket]);
 
-  // Track connection status
+  // Track actual WebSocket connection state
   useEffect(() => {
-    setSubscriptionsActive(!skip);
-  }, [skip]);
+    return onWsConnectionChange(setSubscriptionsActive);
+  }, []);
 
   return { subscriptionsActive };
 }

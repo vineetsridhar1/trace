@@ -4,6 +4,21 @@ import { getMainDefinition } from "@apollo/client/utilities";
 import { createClient } from "graphql-ws";
 import { getServerUrl } from "../types";
 
+type ConnectionListener = (connected: boolean) => void;
+const _connectionListeners = new Set<ConnectionListener>();
+let _wsConnected = false;
+
+function notifyConnectionListeners(connected: boolean) {
+  _wsConnected = connected;
+  _connectionListeners.forEach((l) => l(connected));
+}
+
+export function onWsConnectionChange(listener: ConnectionListener): () => void {
+  _connectionListeners.add(listener);
+  listener(_wsConnected);
+  return () => { _connectionListeners.delete(listener); };
+}
+
 export function createGraphqlClient(): ApolloClient<unknown> {
   const serverUrl = getServerUrl();
 
@@ -14,6 +29,10 @@ export function createGraphqlClient(): ApolloClient<unknown> {
       url: serverUrl.replace(/^http/, "ws") + "/graphql",
       retryAttempts: Infinity,
       shouldRetry: () => true,
+      on: {
+        connected: () => notifyConnectionListeners(true),
+        closed: () => notifyConnectionListeners(false),
+      },
     }),
   );
 

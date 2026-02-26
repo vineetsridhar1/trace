@@ -236,7 +236,6 @@ function AppContent() {
     selectedMessageIdRef,
     activeThreadIdRef,
     messagesRef,
-    selectedMessageRef,
     onNeedsAttention: handleNeedsAttention,
     upsertTicket,
   });
