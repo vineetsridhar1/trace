@@ -572,8 +572,9 @@ function AppContent() {
   }, [closeThreadPanel, isFullscreen, setThreadWidth]);
 
   const enterFullscreen = useCallback(async () => {
-    if (!selectedMessageId || !repoPath) return;
-    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
+    const currentRepoPath = getChannelRepoPath();
+    if (!selectedMessageId || !currentRepoPath) return;
+    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId, currentRepoPath);
     if (!result.success || !result.exists || !result.worktreePath) return;
 
     savedWidthsRef.current = { channel: channelWidth, thread: threadWidth };
@@ -583,7 +584,7 @@ function AppContent() {
     if (startupTerminalList.length > 0) {
       showTerminals();
     }
-  }, [channelWidth, repoPath, selectedMessageId, showTerminals, startupTerminalList.length, threadWidth]);
+  }, [channelWidth, getChannelRepoPath, selectedMessageId, showTerminals, startupTerminalList.length, threadWidth]);
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
