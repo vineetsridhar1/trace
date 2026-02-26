@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { gql, useApolloClient } from '@apollo/client';
+import { gql } from '@apollo/client';
 import type { KanbanColumn, KanbanTicket } from '../types';
-import { BoardDocument, type BoardQuery, useMoveTicketMutation } from './__generated__/useKanban.generated';
+import { type BoardQuery, useBoardLazyQuery, useMoveTicketMutation } from './__generated__/useKanban.generated';
 
 const GQL_BOARD = gql`
   query Board($channelId: ID!) {
@@ -55,7 +55,7 @@ const GQL_MOVE_TICKET = gql`
 `;
 
 export function useKanban() {
-  const client = useApolloClient();
+  const [executeBoard] = useBoardLazyQuery();
   const [executeMoveTicket] = useMoveTicketMutation();
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,8 +63,7 @@ export function useKanban() {
   const fetchBoard = useCallback(async (channelId: string) => {
     setLoading(true);
     try {
-      const { data } = await client.query<BoardQuery>({
-        query: BoardDocument,
+      const { data } = await executeBoard({
         variables: { channelId },
       });
       if (!data) return;
@@ -74,7 +73,7 @@ export function useKanban() {
     } finally {
       setLoading(false);
     }
-  }, [client]);
+  }, [executeBoard]);
 
   const upsertTicket = useCallback((ticket: KanbanTicket) => {
     setColumns((prev) => {
