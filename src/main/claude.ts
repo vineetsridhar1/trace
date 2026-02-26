@@ -26,13 +26,11 @@ const SERVER_URL = resolveServerUrl();
 const MAX_CAPTURE_CHARS = 20_000;
 
 async function runCreationScripts(worktreePath: string, commands: string[]): Promise<void> {
-  for (const command of commands) {
-    const trimmed = command.trim();
-    if (!trimmed) continue;
-    const result = await runProcess('sh', ['-c', trimmed], worktreePath);
-    if (result.code !== 0) {
-      console.error(`[creation-script] command failed: ${trimmed}\n${result.stderr}`);
-    }
+  const script = commands.join('\n');
+  if (!script.trim()) return;
+  const result = await runProcess('sh', ['-c', `set -e\n${script}`], worktreePath);
+  if (result.code !== 0) {
+    console.error(`[creation-script] script failed (exit ${result.code}):\n${result.stderr}`);
   }
 }
 
