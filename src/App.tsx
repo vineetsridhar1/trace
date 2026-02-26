@@ -350,11 +350,13 @@ function AppContent() {
   const isMessageSpawned = claudeActions.isMessageSpawned;
   const isClaudeRunning = useMemo(() => {
     if (!selectedMessageId || !isMessageSpawned(selectedMessageId)) return false;
+    // After /clear, the thread is empty – Claude isn't running on it
+    if (threadStatus === 'empty') return false;
     const lastEvent = threadEvents[threadEvents.length - 1];
     if (lastEvent?.hookEventName === 'Stop') return false;
     const message = messages.find((item) => item.id === selectedMessageId);
     return message ? message.session.status !== 'stopped' : false;
-  }, [isMessageSpawned, messages, selectedMessageId, threadEvents]);
+  }, [isMessageSpawned, messages, selectedMessageId, threadEvents, threadStatus]);
 
   useEffect(() => {
     if (activeChannelId) {

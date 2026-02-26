@@ -1,15 +1,15 @@
-import * as net from 'net';
+import * as net from "net";
 
 const allocations = new Map<string, number[]>();
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.once('error', () => resolve(false));
-    server.once('listening', () => {
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
       server.close(() => resolve(true));
     });
-    server.listen(port, '127.0.0.1');
+    server.listen(port, "127.0.0.1");
   });
 }
 
@@ -21,16 +21,19 @@ function getAllAllocatedPorts(): Set<number> {
   return all;
 }
 
-export async function allocatePorts(messageId: string, count: number): Promise<number[]> {
+export async function allocatePorts(
+  messageId: string,
+  count: number,
+): Promise<number[]> {
   // Release any previous allocation for this message
   allocations.delete(messageId);
 
   const allocated: number[] = [];
   const reserved = getAllAllocatedPorts();
-  let candidate = 3001;
+  let candidate = 3100;
 
   while (allocated.length < count) {
-    if (!reserved.has(candidate) && await isPortAvailable(candidate)) {
+    if (!reserved.has(candidate) && (await isPortAvailable(candidate))) {
       allocated.push(candidate);
       reserved.add(candidate);
     }
