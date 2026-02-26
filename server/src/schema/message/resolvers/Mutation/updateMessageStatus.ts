@@ -1,13 +1,14 @@
 import type { MutationResolvers } from './../../../types.generated';
 import { updateMessageStatus as updateStatus, getMessageByIdForFeed } from '../../../../services/messageService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
-import { syncTicketWithMessageStatus } from '../../../../services/ticketService';
+import { syncTicketWithMessageStatus, checkAndTriggerDependents } from '../../../../services/ticketService';
 import { GraphQLError } from 'graphql';
 
-const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input'];
+const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued'];
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  pending: ['creation', 'in_progress'],
+  pending: ['creation', 'in_progress', 'queued'],
+  queued: ['creation', 'in_progress', 'pending'],
   creation: ['in_progress', 'pending'],
   in_progress: ['completed', 'needs_input'],
   needs_input: ['in_progress'],
@@ -46,6 +47,10 @@ export const updateMessageStatus: NonNullable<MutationResolvers['updateMessageSt
   });
 
   void syncTicketWithMessageStatus(messageId, channelId, status);
+
+  if (status === 'completed') {
+    void checkAndTriggerDependents(messageId, channelId);
+  }
 
   return message;
 };

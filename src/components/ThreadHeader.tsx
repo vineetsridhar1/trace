@@ -32,6 +32,10 @@ const HEADER_STATUS_CONFIG: Record<
     label: 'Needs Input',
     className: 'text-amber-400 bg-amber-400/10',
   },
+  queued: {
+    label: 'Queued',
+    className: 'text-cyan-400 bg-cyan-400/10',
+  },
 };
 
 interface ThreadHeaderProps {

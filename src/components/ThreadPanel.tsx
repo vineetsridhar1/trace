@@ -32,6 +32,8 @@ export function ThreadPanel() {
     isClaudeRunning,
     scriptsAvailable,
     isFullscreen,
+    channelTickets,
+    setTicketDependencies,
     clearThread,
     switchThread,
     onRunScripts,
@@ -281,6 +283,13 @@ export function ThreadPanel() {
             initialPrompt={pendingRunInitialPrompt}
             onRun={(planMode, prompt) => {
               void runPendingMessage(planMode, prompt);
+            }}
+            channelTickets={channelTickets}
+            currentMessageId={pendingRunMessageId}
+            onRunAfter={(depIds, runConfig) => {
+              if (pendingRunMessageId) {
+                setTicketDependencies(pendingRunMessageId, depIds, runConfig);
+              }
             }}
           />
         ) : showQuestion ? (

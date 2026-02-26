@@ -7,6 +7,12 @@ extend type Mutation {
   updateColumn(columnId: ID!, name: String, color: String, sortOrder: Int): KanbanColumn!
   deleteColumn(columnId: ID!): Boolean!
   moveTicket(ticketId: ID!, columnId: ID!, sortOrder: Int): Ticket!
+  setTicketDependencies(channelId: ID!, messageId: ID!, dependsOnMessageIds: [ID!]!, runConfig: JSON!): Message!
+  removeTicketDependency(channelId: ID!, messageId: ID!, dependsOnMessageId: ID!): Boolean!
+}
+
+extend type Query {
+  ticketDependencies(messageId: ID!): [TicketDependency!]!
 }
 
 type KanbanColumn {
@@ -52,10 +58,25 @@ type TicketAttachment {
 
 extend type Subscription {
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
+  ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
 }
 
 type TicketUpsertPayload {
   channelId: String!
   ticket: Ticket!
   columnSlug: String!
+}
+
+type TicketDependency {
+  id: ID!
+  ticketMessageId: String!
+  dependsOnMessageId: String!
+  dependsOnTicketTitle: String
+  createdAt: DateTime!
+}
+
+type TicketReadyToRunPayload {
+  channelId: String!
+  messageId: String!
+  runConfig: JSON!
 }

@@ -116,12 +116,16 @@ model Message {
   claudeSessionId String?  @map("claude_session_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  channel     Channel      @relation(fields: [channelId], references: [id])
-  session     Session      @relation(fields: [sessionId], references: [sessionId])
-  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  threads     Thread[]
-  ticket      Ticket?
-  attachments Attachment[]
+  queuedRunConfig Json?    @map("queued_run_config")
+
+  channel      Channel            @relation(fields: [channelId], references: [id])
+  session      Session            @relation(fields: [sessionId], references: [sessionId])
+  user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  threads      Thread[]
+  ticket       Ticket?
+  attachments  Attachment[]
+  dependencies TicketDependency[] @relation("ticketDeps")
+  dependedOnBy TicketDependency[] @relation("depTarget")
 
   @@index([channelId, createdAt])
   @@index([userId])
@@ -247,4 +251,18 @@ model AiChatMessage {
 
   @@index([chatId, createdAt])
   @@map("ai_chat_messages")
+}
+
+model TicketDependency {
+  id                 String   @id @default(uuid())
+  ticketMessageId    String   @map("ticket_message_id")
+  dependsOnMessageId String   @map("depends_on_message_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  ticket    Message @relation("ticketDeps", fields: [ticketMessageId], references: [id], onDelete: Cascade)
+  dependsOn Message @relation("depTarget", fields: [dependsOnMessageId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketMessageId, dependsOnMessageId])
+  @@index([dependsOnMessageId])
+  @@map("ticket_dependencies")
 }

@@ -1,9 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { gql } from '@apollo/client';
+import { FiLink } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { KanbanTicket } from '../types';
 import { getServerUrl } from '../types';
 import { ImageLightbox } from './ImageLightbox';
+import { useTicketDependenciesLazyQuery } from './__generated__/TicketView.generated';
+
+const GQL_TICKET_DEPENDENCIES = gql`
+  query TicketDependencies($messageId: ID!) {
+    ticketDependencies(messageId: $messageId) {
+      id
+      dependsOnMessageId
+      dependsOnTicketTitle
+    }
+  }
+`;
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'text-yellow-400 bg-yellow-400/10' },
@@ -11,6 +24,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   completed: { label: 'Completed', className: 'text-green-400 bg-green-400/10' },
   merged: { label: 'Merged', className: 'text-purple-400 bg-purple-400/10' },
   needs_input: { label: 'Needs Input', className: 'text-amber-400 bg-amber-400/10' },
+  queued: { label: 'Queued', className: 'text-cyan-400 bg-cyan-400/10' },
 };
 
 const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = {
@@ -20,9 +34,18 @@ const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = 
 };
 
 export function TicketView({ ticket }: { ticket: KanbanTicket }) {
-  const statusConfig = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
+  const statusConfig = STATUS_CONFIG[ticket.message.status] ?? STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
   const attachments = ticket.message.attachments ?? [];
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [fetchDeps, { data: depsData }] = useTicketDependenciesLazyQuery();
+
+  useEffect(() => {
+    if (ticket.message.status === 'queued') {
+      void fetchDeps({ variables: { messageId: ticket.messageId } });
+    }
+  }, [ticket.messageId, ticket.message.status, fetchDeps]);
+
+  const deps = depsData?.ticketDependencies ?? [];
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -38,6 +61,22 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
           </span>
         )}
       </div>
+
+      {deps.length > 0 && (
+        <div className="mb-4">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#565f89]">
+            <FiLink className="mr-1 inline h-3 w-3" />
+            Waiting On
+          </h4>
+          <div className="space-y-1">
+            {deps.map((dep) => (
+              <div key={dep.id} className="flex items-center gap-2 rounded bg-[#1f2335] px-2 py-1.5 text-sm text-[#a9b1d6]">
+                <span className="truncate">{dep.dependsOnTicketTitle ?? dep.dependsOnMessageId}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {ticket.description && (
         <div className="mb-4">

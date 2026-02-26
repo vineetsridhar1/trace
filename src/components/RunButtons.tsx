@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { FiEdit3, FiMap, FiHelpCircle } from 'react-icons/fi';
+import { FiEdit3, FiMap, FiHelpCircle, FiChevronDown } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { ModelEffortSelector } from './ModelEffortSelector';
+import { TicketDependencySelector } from './TicketDependencySelector';
 import { useClaudeActions } from '../context/ClaudeActionsContext';
 
 export type InteractionMode = 'code' | 'plan' | 'ask';
@@ -102,12 +103,24 @@ function InteractionModeToggle({
 
 export { InteractionModeToggle };
 
+export interface ChannelTicketInfo {
+  messageId: string;
+  title: string;
+  status: string;
+}
+
 export function RunButtons({
   initialPrompt,
   onRun,
+  channelTickets,
+  currentMessageId,
+  onRunAfter,
 }: {
   initialPrompt: string;
   onRun: (planMode: boolean, prompt: string) => Promise<void> | void;
+  channelTickets?: ChannelTicketInfo[];
+  currentMessageId?: string;
+  onRunAfter?: (dependsOnMessageIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
 }) {
   const {
     selectedModel,
@@ -117,9 +130,24 @@ export function RunButtons({
   } = useClaudeActions();
   const [prompt, setPrompt] = useState(initialPrompt);
   const [mode, setMode] = useState<InteractionMode>('code');
+  const [showRunAfter, setShowRunAfter] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setPrompt(initialPrompt);
   }, [initialPrompt]);
+
+  useEffect(() => {
+    if (!showDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showDropdown]);
 
   const cycleMode = () => setMode((m) => MODE_CYCLE[(MODE_CYCLE.indexOf(m) + 1) % 3]);
 
@@ -130,6 +158,23 @@ export function RunButtons({
     }
     onRun(mode === 'plan', finalPrompt);
   };
+
+  const handleRunAfter = (depIds: string[]) => {
+    if (!onRunAfter) return;
+    let finalPrompt = prompt;
+    if (mode === 'ask') {
+      finalPrompt = `Do NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n\n${prompt}`;
+    }
+    onRunAfter(depIds, {
+      prompt: finalPrompt,
+      model: selectedModel,
+      effort: selectedEffort,
+      planMode: mode === 'plan',
+    });
+    setShowRunAfter(false);
+  };
+
+  const hasRunAfter = channelTickets && channelTickets.length > 0 && onRunAfter;
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -155,13 +200,47 @@ export function RunButtons({
         />
         <InteractionModeToggle mode={mode} onCycle={cycleMode} />
       </div>
-      <button
-        type="button"
-        onClick={handleRun}
-        className="w-full cursor-pointer rounded-md bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
-      >
-        Run
-      </button>
+      <div className="relative flex">
+        <button
+          type="button"
+          onClick={handleRun}
+          className={`flex-1 cursor-pointer bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 ${hasRunAfter ? 'rounded-l-md' : 'rounded-md'}`}
+        >
+          Run
+        </button>
+        {hasRunAfter && (
+          <div ref={dropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="cursor-pointer rounded-r-md border-l border-violet-400/30 bg-violet-500 px-2 py-2 text-white transition-colors hover:bg-violet-700"
+            >
+              <FiChevronDown className="h-4 w-4" />
+            </button>
+            {showDropdown && (
+              <div className="absolute bottom-full right-0 mb-1 w-40 rounded-md border border-[#292e42] bg-[#1f2335] py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDropdown(false);
+                    setShowRunAfter(true);
+                  }}
+                  className="w-full cursor-pointer px-3 py-1.5 text-left text-sm text-[#c0caf5] hover:bg-[#292e42]"
+                >
+                  Run After...
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {showRunAfter && channelTickets && currentMessageId && (
+        <TicketDependencySelector
+          tickets={channelTickets.filter((t) => t.messageId !== currentMessageId)}
+          onConfirm={handleRunAfter}
+          onCancel={() => setShowRunAfter(false)}
+        />
+      )}
     </div>
   );
 }

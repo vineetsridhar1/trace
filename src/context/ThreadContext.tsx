@@ -29,6 +29,9 @@ export interface ThreadContextValue {
   deleteWorktree: (onDeleted?: (messageId: string) => void) => Promise<void>;
   switchThread: (threadId: string) => Promise<void>;
   clearThread: () => Promise<string | null>;
+  // Ticket dependency support
+  channelTickets: { messageId: string; title: string; status: string }[];
+  setTicketDependencies: (messageId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
   // Derived state
   isClaudeRunning: boolean;
   messageStatus: TicketStatus;

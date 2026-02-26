@@ -142,8 +142,10 @@ type Mutation {
   deleteColumn(columnId: ID!): Boolean!
   deleteMessage(channelId: ID!, messageId: ID!): Boolean!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
+  removeTicketDependency(channelId: ID!, dependsOnMessageId: ID!, messageId: ID!): Boolean!
   renameAiChat(id: ID!, title: String!): AiChat!
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
+  setTicketDependencies(channelId: ID!, dependsOnMessageIds: [ID!]!, messageId: ID!, runConfig: JSON!): Message!
   updateChannel(baseBranch: String, githubUrl: String, id: ID!, name: String): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
@@ -167,6 +169,7 @@ type Query {
   sessions(limit: Int, offset: Int, order: String, sort: String, status: String): SessionConnection!
   threadEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int, threadId: ID!): EventConnection!
   threads(channelId: ID!, messageId: ID!): [Thread!]!
+  ticketDependencies(messageId: ID!): [TicketDependency!]!
   validateRepo(localRepoPath: String!): RepoValidation!
 }
 
@@ -211,6 +214,7 @@ type Subscription {
   messageUpserted(channelId: ID!): Message!
   threadEventCreated(channelId: ID!): ThreadEventPayload!
   threadEventUpdated(channelId: ID!): ThreadEventPayload!
+  ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
 }
 
@@ -251,12 +255,26 @@ type TicketAttachment {
   url: String!
 }
 
+type TicketDependency {
+  createdAt: DateTime!
+  dependsOnMessageId: String!
+  dependsOnTicketTitle: String
+  id: ID!
+  ticketMessageId: String!
+}
+
 type TicketMessage {
   attachments: [TicketAttachment!]!
   branch: String
   createdAt: DateTime!
   id: ID!
   status: String!
+}
+
+type TicketReadyToRunPayload {
+  channelId: String!
+  messageId: String!
+  runConfig: JSON!
 }
 
 type TicketUpsertPayload {

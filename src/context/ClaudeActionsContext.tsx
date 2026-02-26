@@ -14,6 +14,7 @@ export interface ClaudeActionsContextValue {
   setSelectedEffort: Dispatch<SetStateAction<EffortLevel>>;
   sendMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
   runPendingMessage: (planMode: boolean, prompt: string) => Promise<void>;
+  autoRunQueuedTicket: (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => Promise<void>;
   stopClaude: () => Promise<void>;
   sendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
   sendPlanResponse: (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => Promise<void>;

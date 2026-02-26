@@ -182,8 +182,10 @@ export type Mutation = {
   deleteColumn: Scalars['Boolean']['output'];
   deleteMessage: Scalars['Boolean']['output'];
   moveTicket: Ticket;
+  removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   sendAiChatMessage: AiChatMessage;
+  setTicketDependencies: Message;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateMessagePreview: Message;
@@ -267,6 +269,13 @@ export type MutationmoveTicketArgs = {
 };
 
 
+export type MutationremoveTicketDependencyArgs = {
+  channelId: Scalars['ID']['input'];
+  dependsOnMessageId: Scalars['ID']['input'];
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type MutationrenameAiChatArgs = {
   id: Scalars['ID']['input'];
   title: Scalars['String']['input'];
@@ -276,6 +285,14 @@ export type MutationrenameAiChatArgs = {
 export type MutationsendAiChatMessageArgs = {
   chatId: Scalars['ID']['input'];
   content: Scalars['String']['input'];
+};
+
+
+export type MutationsetTicketDependenciesArgs = {
+  channelId: Scalars['ID']['input'];
+  dependsOnMessageIds: Array<Scalars['ID']['input']>;
+  messageId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
 };
 
 
@@ -332,6 +349,7 @@ export type Query = {
   sessions: SessionConnection;
   threadEvents: EventConnection;
   threads: Array<Thread>;
+  ticketDependencies: Array<TicketDependency>;
   validateRepo: RepoValidation;
 };
 
@@ -424,6 +442,11 @@ export type QuerythreadsArgs = {
 };
 
 
+export type QueryticketDependenciesArgs = {
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type QueryvalidateRepoArgs = {
   localRepoPath: Scalars['String']['input'];
 };
@@ -474,6 +497,7 @@ export type Subscription = {
   messageUpserted: Message;
   threadEventCreated: ThreadEventPayload;
   threadEventUpdated: ThreadEventPayload;
+  ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
 };
 
@@ -499,6 +523,11 @@ export type SubscriptionthreadEventCreatedArgs = {
 
 
 export type SubscriptionthreadEventUpdatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionticketReadyToRunArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -548,6 +577,15 @@ export type TicketAttachment = {
   url: Scalars['String']['output'];
 };
 
+export type TicketDependency = {
+  __typename?: 'TicketDependency';
+  createdAt: Scalars['DateTime']['output'];
+  dependsOnMessageId: Scalars['String']['output'];
+  dependsOnTicketTitle?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  ticketMessageId: Scalars['String']['output'];
+};
+
 export type TicketMessage = {
   __typename?: 'TicketMessage';
   attachments: Array<TicketAttachment>;
@@ -555,6 +593,13 @@ export type TicketMessage = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   status: Scalars['String']['output'];
+};
+
+export type TicketReadyToRunPayload = {
+  __typename?: 'TicketReadyToRunPayload';
+  channelId: Scalars['String']['output'];
+  messageId: Scalars['String']['output'];
+  runConfig: Scalars['JSON']['output'];
 };
 
 export type TicketUpsertPayload = {
@@ -676,7 +721,9 @@ export type ResolversTypes = {
   ThreadEventPayload: ResolverTypeWrapper<ThreadEventPayloadMapper>;
   Ticket: ResolverTypeWrapper<TicketMapper>;
   TicketAttachment: ResolverTypeWrapper<TicketAttachmentMapper>;
+  TicketDependency: ResolverTypeWrapper<TicketDependency>;
   TicketMessage: ResolverTypeWrapper<TicketMessageMapper>;
+  TicketReadyToRunPayload: ResolverTypeWrapper<TicketReadyToRunPayload>;
   TicketUpsertPayload: ResolverTypeWrapper<TicketUpsertPayloadMapper>;
   TokenUsage: ResolverTypeWrapper<TokenUsageMapper>;
 };
@@ -715,7 +762,9 @@ export type ResolversParentTypes = {
   ThreadEventPayload: ThreadEventPayloadMapper;
   Ticket: TicketMapper;
   TicketAttachment: TicketAttachmentMapper;
+  TicketDependency: TicketDependency;
   TicketMessage: TicketMessageMapper;
+  TicketReadyToRunPayload: TicketReadyToRunPayload;
   TicketUpsertPayload: TicketUpsertPayloadMapper;
   TokenUsage: TokenUsageMapper;
 };
@@ -868,8 +917,10 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   deleteColumn?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteColumnArgs, 'columnId'>>;
   deleteMessage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteMessageArgs, 'channelId' | 'messageId'>>;
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
+  removeTicketDependency?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationremoveTicketDependencyArgs, 'channelId' | 'dependsOnMessageId' | 'messageId'>>;
   renameAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationrenameAiChatArgs, 'id' | 'title'>>;
   sendAiChatMessage?: Resolver<ResolversTypes['AiChatMessage'], ParentType, ContextType, RequireFields<MutationsendAiChatMessageArgs, 'chatId' | 'content'>>;
+  setTicketDependencies?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationsetTicketDependenciesArgs, 'channelId' | 'dependsOnMessageIds' | 'messageId' | 'runConfig'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationupdateChannelArgs, 'id'>>;
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;
   updateMessagePreview?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationupdateMessagePreviewArgs, 'channelId' | 'messageId' | 'preview'>>;
@@ -893,6 +944,7 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   sessions?: Resolver<ResolversTypes['SessionConnection'], ParentType, ContextType, Partial<QuerysessionsArgs>>;
   threadEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerythreadEventsArgs, 'channelId' | 'messageId' | 'threadId'>>;
   threads?: Resolver<Array<ResolversTypes['Thread']>, ParentType, ContextType, RequireFields<QuerythreadsArgs, 'channelId' | 'messageId'>>;
+  ticketDependencies?: Resolver<Array<ResolversTypes['TicketDependency']>, ParentType, ContextType, RequireFields<QueryticketDependenciesArgs, 'messageId'>>;
   validateRepo?: Resolver<ResolversTypes['RepoValidation'], ParentType, ContextType, RequireFields<QueryvalidateRepoArgs, 'localRepoPath'>>;
 };
 
@@ -937,6 +989,7 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   messageUpserted?: SubscriptionResolver<ResolversTypes['Message'], "messageUpserted", ParentType, ContextType, RequireFields<SubscriptionmessageUpsertedArgs, 'channelId'>>;
   threadEventCreated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventCreated", ParentType, ContextType, RequireFields<SubscriptionthreadEventCreatedArgs, 'channelId'>>;
   threadEventUpdated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventUpdated", ParentType, ContextType, RequireFields<SubscriptionthreadEventUpdatedArgs, 'channelId'>>;
+  ticketReadyToRun?: SubscriptionResolver<ResolversTypes['TicketReadyToRunPayload'], "ticketReadyToRun", ParentType, ContextType, RequireFields<SubscriptionticketReadyToRunArgs, 'channelId'>>;
   ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
 };
 
@@ -977,12 +1030,26 @@ export type TicketAttachmentResolvers<ContextType = any, ParentType extends Reso
   url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type TicketDependencyResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketDependency'] = ResolversParentTypes['TicketDependency']> = {
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  dependsOnMessageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  dependsOnTicketTitle?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  ticketMessageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
 export type TicketMessageResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketMessage'] = ResolversParentTypes['TicketMessage']> = {
   attachments?: Resolver<Array<ResolversTypes['TicketAttachment']>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type TicketReadyToRunPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketReadyToRunPayload'] = ResolversParentTypes['TicketReadyToRunPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  runConfig?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
 };
 
 export type TicketUpsertPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketUpsertPayload'] = ResolversParentTypes['TicketUpsertPayload']> = {
@@ -1025,7 +1092,9 @@ export type Resolvers<ContextType = any> = {
   ThreadEventPayload?: ThreadEventPayloadResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
   TicketAttachment?: TicketAttachmentResolvers<ContextType>;
+  TicketDependency?: TicketDependencyResolvers<ContextType>;
   TicketMessage?: TicketMessageResolvers<ContextType>;
+  TicketReadyToRunPayload?: TicketReadyToRunPayloadResolvers<ContextType>;
   TicketUpsertPayload?: TicketUpsertPayloadResolvers<ContextType>;
   TokenUsage?: TokenUsageResolvers<ContextType>;
 };

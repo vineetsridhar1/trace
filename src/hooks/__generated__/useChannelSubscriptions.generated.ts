@@ -32,6 +32,13 @@ export type ThreadEventUpdatedSubscriptionVariables = Types.Exact<{
 
 export type ThreadEventUpdatedSubscription = { __typename?: 'Subscription', threadEventUpdated: { __typename?: 'ThreadEventPayload', channelId: string, messageId: string, threadId: string, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string } } };
 
+export type TicketReadyToRunSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type TicketReadyToRunSubscription = { __typename?: 'Subscription', ticketReadyToRun: { __typename?: 'TicketReadyToRunPayload', channelId: string, messageId: string, runConfig: unknown } };
+
 export type TicketUpsertedSubscriptionVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
 }>;
@@ -161,6 +168,38 @@ export function useThreadEventUpdatedSubscription(baseOptions: Apollo.Subscripti
       }
 export type ThreadEventUpdatedSubscriptionHookResult = ReturnType<typeof useThreadEventUpdatedSubscription>;
 export type ThreadEventUpdatedSubscriptionResult = Apollo.SubscriptionResult<ThreadEventUpdatedSubscription>;
+export const TicketReadyToRunDocument = gql`
+    subscription TicketReadyToRun($channelId: ID!) {
+  ticketReadyToRun(channelId: $channelId) {
+    channelId
+    messageId
+    runConfig
+  }
+}
+    `;
+
+/**
+ * __useTicketReadyToRunSubscription__
+ *
+ * To run a query within a React component, call `useTicketReadyToRunSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useTicketReadyToRunSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useTicketReadyToRunSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useTicketReadyToRunSubscription(baseOptions: Apollo.SubscriptionHookOptions<TicketReadyToRunSubscription, TicketReadyToRunSubscriptionVariables> & ({ variables: TicketReadyToRunSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<TicketReadyToRunSubscription, TicketReadyToRunSubscriptionVariables>(TicketReadyToRunDocument, options);
+      }
+export type TicketReadyToRunSubscriptionHookResult = ReturnType<typeof useTicketReadyToRunSubscription>;
+export type TicketReadyToRunSubscriptionResult = Apollo.SubscriptionResult<TicketReadyToRunSubscription>;
 export const TicketUpsertedDocument = gql`
     subscription TicketUpserted($channelId: ID!) {
   ticketUpserted(channelId: $channelId) {

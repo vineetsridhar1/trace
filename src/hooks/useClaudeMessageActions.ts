@@ -297,6 +297,43 @@ export function useClaudeMessageActions({
     [getChannelBaseBranch, getCreationCommands, getSystemInstructions, pendingRunMessageId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
   );
 
+  const autoRunQueuedTicket = useCallback(
+    async (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+      const prompt = runConfig.planMode
+        ? `<trace-internal>\nBefore implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n</trace-internal>\n\n${runConfig.prompt}`
+        : runConfig.prompt;
+
+      const creationCommands = getCreationCommands();
+
+      await updatePreviewForPendingRun(messageId, runConfig.prompt);
+
+      if (creationCommands.length > 0) {
+        await updateMessageStatus(messageId, 'creation');
+      }
+
+      const baseBranch = getChannelBaseBranch();
+      const userInstructions = getSystemInstructions();
+      const instructionParts = [
+        `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
+      ];
+      if (userInstructions) instructionParts.push(userInstructions);
+
+      const success = await spawnClaudeForMessage(messageId, prompt, {
+        statusOnSuccess: 'in_progress',
+        errorPrefix: 'Failed to auto-run queued ticket',
+        creationCommands,
+        model: runConfig.model,
+        effort: runConfig.model !== 'haiku' ? runConfig.effort : undefined,
+        systemInstructions: instructionParts.join('\n\n'),
+      });
+
+      if (!success && creationCommands.length > 0) {
+        await updateMessageStatus(messageId, 'pending');
+      }
+    },
+    [getChannelBaseBranch, getCreationCommands, getSystemInstructions, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+  );
+
   const stopClaude = useCallback(async () => {
     if (!selectedMessageId) return;
     await window.traceAPI.stopClaude(selectedMessageId);
@@ -471,6 +508,7 @@ export function useClaudeMessageActions({
     setSelectedEffort,
     sendMessage,
     runPendingMessage,
+    autoRunQueuedTicket,
     stopClaude,
     sendThreadMessage,
     sendPlanResponse,

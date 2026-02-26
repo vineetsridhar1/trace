@@ -40,6 +40,16 @@ const THREAD_EVENT_UPDATED_SUBSCRIPTION = gql`
   ${THREAD_EVENT_PAYLOAD_FIELDS}
 `;
 
+const TICKET_READY_TO_RUN_SUBSCRIPTION = gql`
+  subscription TicketReadyToRun($channelId: ID!) {
+    ticketReadyToRun(channelId: $channelId) {
+      channelId
+      messageId
+      runConfig
+    }
+  }
+`;
+
 const TICKET_UPSERTED_SUBSCRIPTION = gql`
   subscription TicketUpserted($channelId: ID!) {
     ticketUpserted(channelId: $channelId) {
@@ -87,6 +97,7 @@ interface UseChannelSubscriptionsOptions {
   messagesRef: React.RefObject<ChannelMessage[]>;
   onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   upsertTicket?: (ticket: KanbanTicket) => void;
+  onTicketReadyToRun?: (messageId: string, runConfig: unknown) => void;
 }
 
 export function useChannelSubscriptions({
@@ -101,6 +112,7 @@ export function useChannelSubscriptions({
   messagesRef,
   onNeedsAttention,
   upsertTicket,
+  onTicketReadyToRun,
 }: UseChannelSubscriptionsOptions) {
   const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
 
@@ -219,6 +231,18 @@ export function useChannelSubscriptions({
     const payload = ticketData.ticketUpserted;
     upsertTicket({ ...payload.ticket, columnSlug: payload.columnSlug } as KanbanTicket);
   }, [ticketData, activeChannelId, upsertTicket]);
+
+  // --- Ticket ready to run ---
+  const { data: ticketReadyData } = useSubscription(TICKET_READY_TO_RUN_SUBSCRIPTION, {
+    variables,
+    skip,
+  });
+
+  useEffect(() => {
+    if (!ticketReadyData?.ticketReadyToRun || !activeChannelId || !onTicketReadyToRun) return;
+    const { messageId, runConfig } = ticketReadyData.ticketReadyToRun;
+    onTicketReadyToRun(messageId, runConfig);
+  }, [ticketReadyData, activeChannelId, onTicketReadyToRun]);
 
   return { subscriptionsActive };
 }

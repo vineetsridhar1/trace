@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
 import { MESSAGE_FIELDS } from './graphql/fragments';
-import { useUpdateMessageStatusMutation, useDeleteMessageMutation } from './__generated__/App.generated';
+import { useUpdateMessageStatusMutation, useDeleteMessageMutation, useSetTicketDependenciesMutation } from './__generated__/App.generated';
 import { buildThreadNodes } from './utils';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
@@ -41,6 +41,15 @@ const GQL_DELETE_MESSAGE = gql`
   mutation DeleteMessage($channelId: ID!, $messageId: ID!) {
     deleteMessage(channelId: $channelId, messageId: $messageId)
   }
+`;
+
+const GQL_SET_TICKET_DEPENDENCIES = gql`
+  mutation SetTicketDependencies($channelId: ID!, $messageId: ID!, $dependsOnMessageIds: [ID!]!, $runConfig: JSON!) {
+    setTicketDependencies(channelId: $channelId, messageId: $messageId, dependsOnMessageIds: $dependsOnMessageIds, runConfig: $runConfig) {
+      ...MessageFields
+    }
+  }
+  ${MESSAGE_FIELDS}
 `;
 
 const SERVER_RAIL_WIDTH = 60;
@@ -180,6 +189,7 @@ function AppContent() {
 
   const [executeUpdateMessageStatus] = useUpdateMessageStatusMutation();
   const [executeDeleteMessage] = useDeleteMessageMutation();
+  const [executeSetTicketDependencies] = useSetTicketDependenciesMutation();
 
   const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('chat');
   const [channelWidth, setChannelWidth] = useState(220);
@@ -190,6 +200,7 @@ function AppContent() {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
+  const autoRunRef = useRef<((messageId: string, runConfig: unknown) => void) | null>(null);
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth, SERVER_RAIL_WIDTH);
 
@@ -238,6 +249,9 @@ function AppContent() {
     messagesRef,
     onNeedsAttention: handleNeedsAttention,
     upsertTicket,
+    onTicketReadyToRun: useCallback((messageId: string, runConfig: unknown) => {
+      autoRunRef.current?.(messageId, runConfig);
+    }, []),
   });
 
   const updateMessageStatus = useCallback(
@@ -318,6 +332,40 @@ function AppContent() {
     return null;
   }, [kanbanColumns, selectedMessageId]);
 
+  const channelTickets = useMemo(
+    () =>
+      kanbanColumns.flatMap((col) =>
+        col.tickets.map((t) => ({
+          messageId: t.messageId,
+          title: t.title,
+          status: t.message?.status ?? 'pending',
+        })),
+      ),
+    [kanbanColumns],
+  );
+
+  const handleSetTicketDependencies = useCallback(
+    async (messageId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+      if (!activeChannelId) return;
+      try {
+        const { data } = await executeSetTicketDependencies({
+          variables: {
+            channelId: activeChannelId,
+            messageId,
+            dependsOnMessageIds: depIds,
+            runConfig,
+          },
+        });
+        if (data?.setTicketDependencies) {
+          upsertAndSyncMessage(data.setTicketDependencies as ChannelMessage);
+        }
+      } catch {
+        console.error('Failed to set ticket dependencies');
+      }
+    },
+    [activeChannelId, executeSetTicketDependencies, upsertAndSyncMessage],
+  );
+
   const handleOpenThread = useCallback(
     (message: ChannelMessage) => {
       setChannelWidth(0);
@@ -363,6 +411,14 @@ function AppContent() {
     getSystemInstructions,
   });
 
+  // Populate autoRunRef so the subscription callback can call autoRunQueuedTicket
+  useEffect(() => {
+    autoRunRef.current = (messageId: string, runConfig: unknown) => {
+      const config = runConfig as { prompt: string; model: string; effort: string; planMode: boolean };
+      void claudeActions.autoRunQueuedTicket(messageId, config);
+    };
+  }, [claudeActions.autoRunQueuedTicket]);
+
   const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const claudeActionsContextValue = useMemo(
     () => ({
@@ -375,6 +431,7 @@ function AppContent() {
       setSelectedEffort: claudeActions.setSelectedEffort,
       sendMessage: claudeActions.sendMessage,
       runPendingMessage: claudeActions.runPendingMessage,
+      autoRunQueuedTicket: claudeActions.autoRunQueuedTicket,
       stopClaude: claudeActions.stopClaude,
       sendThreadMessage: claudeActions.sendThreadMessage,
       sendPlanResponse: claudeActions.sendPlanResponse,
@@ -390,6 +447,7 @@ function AppContent() {
       claudeActions.setSelectedEffort,
       claudeActions.sendMessage,
       claudeActions.runPendingMessage,
+      claudeActions.autoRunQueuedTicket,
       claudeActions.stopClaude,
       claudeActions.sendThreadMessage,
       claudeActions.sendPlanResponse,
@@ -661,6 +719,8 @@ function AppContent() {
       deleteWorktree,
       switchThread,
       clearThread,
+      channelTickets,
+      setTicketDependencies: handleSetTicketDependencies,
       isClaudeRunning,
       messageStatus: selectedMessageStatus,
       selectedTicket,
@@ -679,6 +739,7 @@ function AppContent() {
       deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
       closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
       loadThreadEvents, deleteWorktree, switchThread, clearThread,
+      channelTickets, handleSetTicketDependencies,
       isClaudeRunning, selectedMessageStatus, selectedTicket,
       isFullscreen, scriptsAvailable, dragging,
       handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,

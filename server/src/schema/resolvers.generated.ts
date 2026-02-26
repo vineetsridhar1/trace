@@ -15,6 +15,7 @@ import    { sessionEvents as Query_sessionEvents } from './session/resolvers/Que
 import    { sessions as Query_sessions } from './session/resolvers/Query/sessions';
 import    { threadEvents as Query_threadEvents } from './thread/resolvers/Query/threadEvents';
 import    { threads as Query_threads } from './thread/resolvers/Query/threads';
+import    { ticketDependencies as Query_ticketDependencies } from './kanban/resolvers/Query/ticketDependencies';
 import    { validateRepo as Query_validateRepo } from './channel/resolvers/Query/validateRepo';
 import    { appendPrompt as Mutation_appendPrompt } from './message/resolvers/Mutation/appendPrompt';
 import    { createAiChat as Mutation_createAiChat } from './aiChat/resolvers/Mutation/createAiChat';
@@ -27,8 +28,10 @@ import    { deleteAiChat as Mutation_deleteAiChat } from './aiChat/resolvers/Mut
 import    { deleteColumn as Mutation_deleteColumn } from './kanban/resolvers/Mutation/deleteColumn';
 import    { deleteMessage as Mutation_deleteMessage } from './message/resolvers/Mutation/deleteMessage';
 import    { moveTicket as Mutation_moveTicket } from './kanban/resolvers/Mutation/moveTicket';
+import    { removeTicketDependency as Mutation_removeTicketDependency } from './kanban/resolvers/Mutation/removeTicketDependency';
 import    { renameAiChat as Mutation_renameAiChat } from './aiChat/resolvers/Mutation/renameAiChat';
 import    { sendAiChatMessage as Mutation_sendAiChatMessage } from './aiChat/resolvers/Mutation/sendAiChatMessage';
+import    { setTicketDependencies as Mutation_setTicketDependencies } from './kanban/resolvers/Mutation/setTicketDependencies';
 import    { updateChannel as Mutation_updateChannel } from './channel/resolvers/Mutation/updateChannel';
 import    { updateColumn as Mutation_updateColumn } from './kanban/resolvers/Mutation/updateColumn';
 import    { updateMessagePreview as Mutation_updateMessagePreview } from './message/resolvers/Mutation/updateMessagePreview';
@@ -39,6 +42,7 @@ import    { messageDeleted as Subscription_messageDeleted } from './message/reso
 import    { messageUpserted as Subscription_messageUpserted } from './message/resolvers/Subscription/messageUpserted';
 import    { threadEventCreated as Subscription_threadEventCreated } from './event/resolvers/Subscription/threadEventCreated';
 import    { threadEventUpdated as Subscription_threadEventUpdated } from './event/resolvers/Subscription/threadEventUpdated';
+import    { ticketReadyToRun as Subscription_ticketReadyToRun } from './kanban/resolvers/Subscription/ticketReadyToRun';
 import    { ticketUpserted as Subscription_ticketUpserted } from './kanban/resolvers/Subscription/ticketUpserted';
 import    { AiChat } from './aiChat/resolvers/AiChat';
 import    { AiChatMessage } from './aiChat/resolvers/AiChatMessage';
@@ -62,15 +66,17 @@ import    { Thread } from './thread/resolvers/Thread';
 import    { ThreadEventPayload } from './event/resolvers/ThreadEventPayload';
 import    { Ticket } from './kanban/resolvers/Ticket';
 import    { TicketAttachment } from './kanban/resolvers/TicketAttachment';
+import    { TicketDependency } from './kanban/resolvers/TicketDependency';
 import    { TicketMessage } from './kanban/resolvers/TicketMessage';
+import    { TicketReadyToRunPayload } from './kanban/resolvers/TicketReadyToRunPayload';
 import    { TicketUpsertPayload } from './kanban/resolvers/TicketUpsertPayload';
 import    { TokenUsage } from './event/resolvers/TokenUsage';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
-      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteAiChat: Mutation_deleteAiChat,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
-      Subscription: { aiChatStream: Subscription_aiChatStream,messageDeleted: Subscription_messageDeleted,messageUpserted: Subscription_messageUpserted,threadEventCreated: Subscription_threadEventCreated,threadEventUpdated: Subscription_threadEventUpdated,ticketUpserted: Subscription_ticketUpserted },
+      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,ticketDependencies: Query_ticketDependencies,validateRepo: Query_validateRepo },
+      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteAiChat: Mutation_deleteAiChat,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,setTicketDependencies: Mutation_setTicketDependencies,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
+      Subscription: { aiChatStream: Subscription_aiChatStream,messageDeleted: Subscription_messageDeleted,messageUpserted: Subscription_messageUpserted,threadEventCreated: Subscription_threadEventCreated,threadEventUpdated: Subscription_threadEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted },
       AiChat: AiChat,
 AiChatMessage: AiChatMessage,
 AiChatMessageConnection: AiChatMessageConnection,
@@ -93,7 +99,9 @@ Thread: Thread,
 ThreadEventPayload: ThreadEventPayload,
 Ticket: Ticket,
 TicketAttachment: TicketAttachment,
+TicketDependency: TicketDependency,
 TicketMessage: TicketMessage,
+TicketReadyToRunPayload: TicketReadyToRunPayload,
 TicketUpsertPayload: TicketUpsertPayload,
 TokenUsage: TokenUsage,
 DateTime: DateTime,

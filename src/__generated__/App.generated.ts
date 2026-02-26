@@ -21,6 +21,16 @@ export type DeleteMessageMutationVariables = Types.Exact<{
 
 export type DeleteMessageMutation = { __typename?: 'Mutation', deleteMessage: boolean };
 
+export type SetTicketDependenciesMutationVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+  messageId: Types.Scalars['ID']['input'];
+  dependsOnMessageIds: Array<Types.Scalars['ID']['input']> | Types.Scalars['ID']['input'];
+  runConfig: Types.Scalars['JSON']['input'];
+}>;
+
+
+export type SetTicketDependenciesMutation = { __typename?: 'Mutation', setTicketDependencies: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
+
 
 export const UpdateMessageStatusDocument = gql`
     mutation UpdateMessageStatus($channelId: ID!, $messageId: ID!, $status: String!) {
@@ -93,3 +103,44 @@ export function useDeleteMessageMutation(baseOptions?: Apollo.MutationHookOption
 export type DeleteMessageMutationHookResult = ReturnType<typeof useDeleteMessageMutation>;
 export type DeleteMessageMutationResult = Apollo.MutationResult<DeleteMessageMutation>;
 export type DeleteMessageMutationOptions = Apollo.BaseMutationOptions<DeleteMessageMutation, DeleteMessageMutationVariables>;
+export const SetTicketDependenciesDocument = gql`
+    mutation SetTicketDependencies($channelId: ID!, $messageId: ID!, $dependsOnMessageIds: [ID!]!, $runConfig: JSON!) {
+  setTicketDependencies(
+    channelId: $channelId
+    messageId: $messageId
+    dependsOnMessageIds: $dependsOnMessageIds
+    runConfig: $runConfig
+  ) {
+    ...MessageFields
+  }
+}
+    ${MessageFieldsFragmentDoc}`;
+export type SetTicketDependenciesMutationFn = Apollo.MutationFunction<SetTicketDependenciesMutation, SetTicketDependenciesMutationVariables>;
+
+/**
+ * __useSetTicketDependenciesMutation__
+ *
+ * To run a mutation, you first call `useSetTicketDependenciesMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useSetTicketDependenciesMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [setTicketDependenciesMutation, { data, loading, error }] = useSetTicketDependenciesMutation({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *      messageId: // value for 'messageId'
+ *      dependsOnMessageIds: // value for 'dependsOnMessageIds'
+ *      runConfig: // value for 'runConfig'
+ *   },
+ * });
+ */
+export function useSetTicketDependenciesMutation(baseOptions?: Apollo.MutationHookOptions<SetTicketDependenciesMutation, SetTicketDependenciesMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<SetTicketDependenciesMutation, SetTicketDependenciesMutationVariables>(SetTicketDependenciesDocument, options);
+      }
+export type SetTicketDependenciesMutationHookResult = ReturnType<typeof useSetTicketDependenciesMutation>;
+export type SetTicketDependenciesMutationResult = Apollo.MutationResult<SetTicketDependenciesMutation>;
+export type SetTicketDependenciesMutationOptions = Apollo.BaseMutationOptions<SetTicketDependenciesMutation, SetTicketDependenciesMutationVariables>;

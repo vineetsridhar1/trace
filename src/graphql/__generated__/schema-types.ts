@@ -171,8 +171,10 @@ export type Mutation = {
   deleteColumn: Scalars['Boolean']['output'];
   deleteMessage: Scalars['Boolean']['output'];
   moveTicket: Ticket;
+  removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   sendAiChatMessage: AiChatMessage;
+  setTicketDependencies: Message;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateMessagePreview: Message;
@@ -256,6 +258,13 @@ export type MutationMoveTicketArgs = {
 };
 
 
+export type MutationRemoveTicketDependencyArgs = {
+  channelId: Scalars['ID']['input'];
+  dependsOnMessageId: Scalars['ID']['input'];
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type MutationRenameAiChatArgs = {
   id: Scalars['ID']['input'];
   title: Scalars['String']['input'];
@@ -265,6 +274,14 @@ export type MutationRenameAiChatArgs = {
 export type MutationSendAiChatMessageArgs = {
   chatId: Scalars['ID']['input'];
   content: Scalars['String']['input'];
+};
+
+
+export type MutationSetTicketDependenciesArgs = {
+  channelId: Scalars['ID']['input'];
+  dependsOnMessageIds: Array<Scalars['ID']['input']>;
+  messageId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
 };
 
 
@@ -321,6 +338,7 @@ export type Query = {
   sessions: SessionConnection;
   threadEvents: EventConnection;
   threads: Array<Thread>;
+  ticketDependencies: Array<TicketDependency>;
   validateRepo: RepoValidation;
 };
 
@@ -413,6 +431,11 @@ export type QueryThreadsArgs = {
 };
 
 
+export type QueryTicketDependenciesArgs = {
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type QueryValidateRepoArgs = {
   localRepoPath: Scalars['String']['input'];
 };
@@ -463,6 +486,7 @@ export type Subscription = {
   messageUpserted: Message;
   threadEventCreated: ThreadEventPayload;
   threadEventUpdated: ThreadEventPayload;
+  ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
 };
 
@@ -488,6 +512,11 @@ export type SubscriptionThreadEventCreatedArgs = {
 
 
 export type SubscriptionThreadEventUpdatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionTicketReadyToRunArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -537,6 +566,15 @@ export type TicketAttachment = {
   url: Scalars['String']['output'];
 };
 
+export type TicketDependency = {
+  __typename?: 'TicketDependency';
+  createdAt: Scalars['DateTime']['output'];
+  dependsOnMessageId: Scalars['String']['output'];
+  dependsOnTicketTitle?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  ticketMessageId: Scalars['String']['output'];
+};
+
 export type TicketMessage = {
   __typename?: 'TicketMessage';
   attachments: Array<TicketAttachment>;
@@ -544,6 +582,13 @@ export type TicketMessage = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   status: Scalars['String']['output'];
+};
+
+export type TicketReadyToRunPayload = {
+  __typename?: 'TicketReadyToRunPayload';
+  channelId: Scalars['String']['output'];
+  messageId: Scalars['String']['output'];
+  runConfig: Scalars['JSON']['output'];
 };
 
 export type TicketUpsertPayload = {

@@ -32,6 +32,7 @@ const DEFAULT_COLUMNS = [
 
 const STATUS_TO_SLUG: Record<string, string> = {
   pending: 'todo',
+  queued: 'todo',
   creation: 'in_progress',
   in_progress: 'in_progress',
   needs_input: 'in_review',
@@ -299,6 +300,58 @@ export async function refreshTicketBroadcast(messageId: string, channelId: strin
       columnSlug: ticket.column.slug,
     },
   });
+}
+
+export async function checkAndTriggerDependents(completedMessageId: string, channelId: string) {
+  try {
+    // Find all dependencies where the completed message is a dependency target
+    const waitingDeps = await prisma.ticketDependency.findMany({
+      where: { dependsOnMessageId: completedMessageId },
+      select: { ticketMessageId: true },
+    });
+
+    const uniqueTicketIds = [...new Set(waitingDeps.map((d) => d.ticketMessageId))];
+
+    for (const ticketMessageId of uniqueTicketIds) {
+      // Get all deps for this waiting ticket
+      const allDeps = await prisma.ticketDependency.findMany({
+        where: { ticketMessageId },
+        include: {
+          dependsOn: { select: { status: true } },
+        },
+      });
+
+      // Check if ALL dependencies are completed
+      const allMet = allDeps.every((dep) => dep.dependsOn.status === 'completed');
+      if (!allMet) continue;
+
+      // Atomically claim the ticket: only proceed if status is still 'queued'.
+      // This prevents double-fire when two deps complete near-simultaneously.
+      const { count } = await prisma.message.updateMany({
+        where: { id: ticketMessageId, status: 'queued' },
+        data: { status: 'creation' },
+      });
+      if (count === 0) continue;
+
+      const message = await prisma.message.findUnique({
+        where: { id: ticketMessageId },
+        select: { queuedRunConfig: true },
+      });
+
+      if (!message?.queuedRunConfig) continue;
+
+      // Publish ready-to-run event
+      pubsub.publish(TOPICS.TICKET_READY_TO_RUN(channelId), {
+        ticketReadyToRun: {
+          channelId,
+          messageId: ticketMessageId,
+          runConfig: message.queuedRunConfig,
+        },
+      });
+    }
+  } catch (err) {
+    console.error('[ticketService] checkAndTriggerDependents failed:', err);
+  }
 }
 
 export async function createColumn(channelId: string, name: string, slug: string, color?: string) {

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { FiLink } from 'react-icons/fi';
 import type { KanbanTicket } from '../types';
 import { formatTime } from '../utils';
 import { CopyableBranch } from './CopyableBranch';
@@ -27,6 +28,13 @@ export const KanbanCard = memo(function KanbanCard({
       className="group cursor-pointer rounded-md border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
     >
       <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]">{ticket.title}</h4>
+
+      {ticket.message.status === 'queued' && (
+        <div className="mt-1 flex items-center gap-1 text-[10px] text-cyan-400">
+          <FiLink className="h-3 w-3" />
+          <span>Queued</span>
+        </div>
+      )}
 
       {ticket.description && (
         <div className="markdown-body mt-1 line-clamp-2 text-xs text-[#565f89]">
