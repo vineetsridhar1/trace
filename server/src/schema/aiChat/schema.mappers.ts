@@ -22,3 +22,11 @@ export interface AiChatMessageConnectionMapper {
   limit: number;
   offset: number;
 }
+
+export interface AiChatStreamPayloadMapper {
+  chatId: string;
+  type: string;
+  delta?: string | null;
+  content?: string | null;
+  error?: string | null;
+}

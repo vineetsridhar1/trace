@@ -20,6 +20,13 @@ export type SendAiChatMessageMutationVariables = Types.Exact<{
 
 export type SendAiChatMessageMutation = { __typename?: 'Mutation', sendAiChatMessage: { __typename?: 'AiChatMessage', id: string, chatId: string, role: string, content: string, createdAt: string } };
 
+export type AiChatStreamSubscriptionVariables = Types.Exact<{
+  chatId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type AiChatStreamSubscription = { __typename?: 'Subscription', aiChatStream: { __typename?: 'AiChatStreamPayload', chatId: string, type: string, delta?: string | null, content?: string | null, error?: string | null } };
+
 
 export const AiChatMessagesDocument = gql`
     query AiChatMessages($chatId: ID!, $limit: Int, $offset: Int) {
@@ -113,3 +120,37 @@ export function useSendAiChatMessageMutation(baseOptions?: Apollo.MutationHookOp
 export type SendAiChatMessageMutationHookResult = ReturnType<typeof useSendAiChatMessageMutation>;
 export type SendAiChatMessageMutationResult = Apollo.MutationResult<SendAiChatMessageMutation>;
 export type SendAiChatMessageMutationOptions = Apollo.BaseMutationOptions<SendAiChatMessageMutation, SendAiChatMessageMutationVariables>;
+export const AiChatStreamDocument = gql`
+    subscription AiChatStream($chatId: ID!) {
+  aiChatStream(chatId: $chatId) {
+    chatId
+    type
+    delta
+    content
+    error
+  }
+}
+    `;
+
+/**
+ * __useAiChatStreamSubscription__
+ *
+ * To run a query within a React component, call `useAiChatStreamSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useAiChatStreamSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useAiChatStreamSubscription({
+ *   variables: {
+ *      chatId: // value for 'chatId'
+ *   },
+ * });
+ */
+export function useAiChatStreamSubscription(baseOptions: Apollo.SubscriptionHookOptions<AiChatStreamSubscription, AiChatStreamSubscriptionVariables> & ({ variables: AiChatStreamSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<AiChatStreamSubscription, AiChatStreamSubscriptionVariables>(AiChatStreamDocument, options);
+      }
+export type AiChatStreamSubscriptionHookResult = ReturnType<typeof useAiChatStreamSubscription>;
+export type AiChatStreamSubscriptionResult = Apollo.SubscriptionResult<AiChatStreamSubscription>;

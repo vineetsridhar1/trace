@@ -467,11 +467,13 @@ export async function ingestEvent(payload: HookEvent) {
               toolInput: JSON.parse(JSON.stringify(askData)),
             },
           });
-          sseManager.broadcastChannel(channelId, 'thread-event-updated', {
-            channelId,
-            messageId: message.id,
-            threadId: thread.id,
-            event: updated,
+          pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
+            threadEventUpdated: {
+              channelId,
+              messageId: message.id,
+              threadId: thread.id,
+              event: updated,
+            },
           });
           // Auto-transition to needs_input on delayed AskUserQuestion detection
           const currentMsg = await prisma.message.findUnique({ where: { id: message.id }, select: { status: true } });
@@ -480,7 +482,9 @@ export async function ingestEvent(payload: HookEvent) {
             void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
             const hydratedMsg = await getMessageByIdForFeed(message.id);
             if (hydratedMsg) {
-              sseManager.broadcastChannel(channelId, 'message-upsert', { channelId, message: hydratedMsg });
+              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+                messageUpserted: hydratedMsg,
+              });
             }
           }
           return;
@@ -491,11 +495,13 @@ export async function ingestEvent(payload: HookEvent) {
             where: { id: eventId },
             data: { toolName: 'ExitPlanMode' },
           });
-          sseManager.broadcastChannel(channelId, 'thread-event-updated', {
-            channelId,
-            messageId: message.id,
-            threadId: thread.id,
-            event: updated,
+          pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
+            threadEventUpdated: {
+              channelId,
+              messageId: message.id,
+              threadId: thread.id,
+              event: updated,
+            },
           });
         }
       } catch {
@@ -541,11 +547,13 @@ export async function updateStopEventUsage(
 
   // Broadcast so the client picks up the merged usage data
   const channelId = message.channelId;
-  sseManager.broadcastChannel(channelId, 'thread-event-updated', {
-    channelId,
-    messageId: message.id,
-    threadId: latestThread.id,
-    event: updated,
+  pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
+    threadEventUpdated: {
+      channelId,
+      messageId: message.id,
+      threadId: latestThread.id,
+      event: updated,
+    },
   });
 
   return updated;

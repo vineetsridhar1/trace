@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { gql, useApolloClient } from '@apollo/client';
-import { getServerUrl } from '../types';
+import { gql, useApolloClient, useSubscription } from '@apollo/client';
 import type { AiChatMessage } from '../types';
 
 const GQL_AI_CHAT_MESSAGES = gql`
@@ -32,12 +31,23 @@ const GQL_SEND_AI_CHAT_MESSAGE = gql`
   }
 `;
 
+const AI_CHAT_STREAM_SUBSCRIPTION = gql`
+  subscription AiChatStream($chatId: ID!) {
+    aiChatStream(chatId: $chatId) {
+      chatId
+      type
+      delta
+      content
+      error
+    }
+  }
+`;
+
 export function useAiChat(chatId: string | null) {
   const client = useApolloClient();
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
   const streamingContentRef = useRef('');
 
   // Fetch messages when chatId changes
@@ -64,27 +74,26 @@ export function useAiChat(chatId: string | null) {
     })();
   }, [chatId, client]);
 
-  // SSE connection for streaming
+  // Subscribe to AI chat stream via GraphQL subscription
+  const { data: streamData } = useSubscription(AI_CHAT_STREAM_SUBSCRIPTION, {
+    variables: { chatId: chatId ?? '' },
+    skip: !chatId,
+  });
+
   useEffect(() => {
-    if (!chatId) return;
+    if (!streamData?.aiChatStream || !chatId) return;
+    const payload = streamData.aiChatStream;
 
-    const es = new EventSource(`${getServerUrl()}/sse/ai-chats/${chatId}`);
-    eventSourceRef.current = es;
-
-    es.addEventListener('token', (e) => {
-      const data = JSON.parse(e.data) as { delta: string };
-      streamingContentRef.current += data.delta;
+    if (payload.type === 'token' && payload.delta) {
+      streamingContentRef.current += payload.delta;
       setStreamingContent(streamingContentRef.current);
-    });
-
-    es.addEventListener('done', (e) => {
-      const data = JSON.parse(e.data) as { content: string };
-      if (data.content) {
+    } else if (payload.type === 'done') {
+      if (payload.content) {
         const assistantMessage: AiChatMessage = {
           id: `msg-${Date.now()}`,
           chatId,
           role: 'assistant',
-          content: data.content,
+          content: payload.content,
           createdAt: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, assistantMessage]);
@@ -92,19 +101,12 @@ export function useAiChat(chatId: string | null) {
       streamingContentRef.current = '';
       setStreamingContent('');
       setIsStreaming(false);
-    });
-
-    es.addEventListener('error', () => {
+    } else if (payload.type === 'error') {
       streamingContentRef.current = '';
       setStreamingContent('');
       setIsStreaming(false);
-    });
-
-    return () => {
-      es.close();
-      eventSourceRef.current = null;
-    };
-  }, [chatId]);
+    }
+  }, [streamData, chatId]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!chatId || !content.trim()) return;

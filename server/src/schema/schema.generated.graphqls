@@ -23,6 +23,14 @@ type AiChatMessageConnection {
   total: Int!
 }
 
+type AiChatStreamPayload {
+  chatId: String!
+  content: String
+  delta: String
+  error: String
+  type: String!
+}
+
 type Attachment {
   byteSize: Int!
   contentType: String!
@@ -111,6 +119,11 @@ type MessageConnection {
   total: Int!
 }
 
+type MessageDeletedPayload {
+  channelId: String!
+  messageId: String!
+}
+
 type MessageSession {
   cwd: String
   sessionId: String!
@@ -193,8 +206,11 @@ type SessionConnection {
 }
 
 type Subscription {
+  aiChatStream(chatId: ID!): AiChatStreamPayload!
+  messageDeleted(channelId: ID!): MessageDeletedPayload!
   messageUpserted(channelId: ID!): Message!
   threadEventCreated(channelId: ID!): ThreadEventPayload!
+  threadEventUpdated(channelId: ID!): ThreadEventPayload!
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
 }
 

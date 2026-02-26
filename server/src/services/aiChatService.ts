@@ -2,7 +2,7 @@ import prisma from '../lib/prisma';
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import { generateText } from './aiService';
-import { sseManager } from './sseManager';
+import { pubsub, TOPICS } from './pubsub';
 
 const AI_CHAT_SYSTEM_PROMPT = `You are a helpful coding assistant in the Trace development environment. You can read and understand code but you CANNOT modify any files.
 
@@ -95,7 +95,9 @@ export async function addUserMessage(chatId: string, content: string) {
 export async function streamAiResponse(chatId: string) {
   const client = getAnthropicClient();
   if (!client) {
-    sseManager.broadcastAiChat(chatId, 'error', { error: 'Anthropic API key not configured' });
+    pubsub.publish(TOPICS.AI_CHAT_STREAM(chatId), {
+      aiChatStream: { chatId, type: 'error', error: 'Anthropic API key not configured' },
+    });
     return;
   }
 
@@ -133,12 +135,16 @@ export async function streamAiResponse(chatId: string) {
 
     stream.on('text', (text) => {
       fullContent += text;
-      sseManager.broadcastAiChat(chatId, 'token', { delta: text });
+      pubsub.publish(TOPICS.AI_CHAT_STREAM(chatId), {
+        aiChatStream: { chatId, type: 'token', delta: text },
+      });
     });
 
     stream.on('error', (error) => {
       console.error('[aiChatService] Stream error:', error);
-      sseManager.broadcastAiChat(chatId, 'error', { error: 'Stream error' });
+      pubsub.publish(TOPICS.AI_CHAT_STREAM(chatId), {
+        aiChatStream: { chatId, type: 'error', error: 'Stream error' },
+      });
     });
 
     stream.on('end', async () => {
@@ -151,11 +157,15 @@ export async function streamAiResponse(chatId: string) {
           data: { updatedAt: new Date() },
         });
       }
-      sseManager.broadcastAiChat(chatId, 'done', { content: fullContent });
+      pubsub.publish(TOPICS.AI_CHAT_STREAM(chatId), {
+        aiChatStream: { chatId, type: 'done', content: fullContent },
+      });
     });
   } catch (error) {
     console.error('[aiChatService] streamAiResponse error:', error);
-    sseManager.broadcastAiChat(chatId, 'error', { error: 'Failed to start stream' });
+    pubsub.publish(TOPICS.AI_CHAT_STREAM(chatId), {
+      aiChatStream: { chatId, type: 'error', error: 'Failed to start stream' },
+    });
   }
 }
 

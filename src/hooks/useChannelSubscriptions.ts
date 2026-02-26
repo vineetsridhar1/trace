@@ -13,9 +13,43 @@ const MESSAGE_UPSERTED_SUBSCRIPTION = gql`
   ${MESSAGE_FIELDS}
 `;
 
+const MESSAGE_DELETED_SUBSCRIPTION = gql`
+  subscription MessageDeleted($channelId: ID!) {
+    messageDeleted(channelId: $channelId) {
+      channelId
+      messageId
+    }
+  }
+`;
+
 const THREAD_EVENT_CREATED_SUBSCRIPTION = gql`
   subscription ThreadEventCreated($channelId: ID!) {
     threadEventCreated(channelId: $channelId) {
+      channelId
+      messageId
+      threadId
+      event {
+        id
+        sessionId
+        hookEventName
+        timestamp
+        toolName
+        toolInput
+        toolResponse
+        toolUseId
+        stopHookActive
+        lastAssistantMessage
+        rawPayload
+        threadId
+        importance
+      }
+    }
+  }
+`;
+
+const THREAD_EVENT_UPDATED_SUBSCRIPTION = gql`
+  subscription ThreadEventUpdated($channelId: ID!) {
+    threadEventUpdated(channelId: $channelId) {
       channelId
       messageId
       threadId
@@ -76,19 +110,23 @@ const TICKET_UPSERTED_SUBSCRIPTION = gql`
 interface UseChannelSubscriptionsOptions {
   activeChannelId: string | null;
   upsertMessage: (message: ChannelMessage) => void;
+  removeMessage: (messageId: string) => void;
   appendThreadEvent: (event: ServerEvent) => void;
+  updateThreadEvent: (event: ServerEvent) => void;
   reportClaudeActivity: (messageId: string, eventType: string) => Promise<void>;
   selectedMessageIdRef: React.RefObject<string | null>;
   activeThreadIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
-  onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => void;
+  onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   upsertTicket?: (ticket: KanbanTicket) => void;
 }
 
 export function useChannelSubscriptions({
   activeChannelId,
   upsertMessage,
+  removeMessage,
   appendThreadEvent,
+  updateThreadEvent,
   reportClaudeActivity,
   selectedMessageIdRef,
   activeThreadIdRef,
@@ -111,19 +149,30 @@ export function useChannelSubscriptions({
     if (!messageData?.messageUpserted || !activeChannelId) return;
     const message = messageData.messageUpserted as ChannelMessage;
 
-    // Detect completion transitions for attention notification
-    if (message.status === 'completed') {
+    // Detect completion/needs_input/merged transitions for attention notification
+    if (message.status === 'completed' || message.status === 'merged' || message.status === 'needs_input') {
       const prev = messagesRef.current.find((m) => m.id === message.id);
-      if (prev && prev.status !== 'completed') {
+      if (prev && prev.status !== message.status) {
         const notViewing = selectedMessageIdRef.current !== message.id || document.hidden;
         if (notViewing) {
-          onNeedsAttention(message.id, 'completed');
+          onNeedsAttention(message.id, message.status as 'completed' | 'merged' | 'needs_input');
         }
       }
     }
 
     upsertMessage(message);
   }, [messageData, activeChannelId, upsertMessage, messagesRef, selectedMessageIdRef, onNeedsAttention]);
+
+  // --- Message deleted ---
+  const { data: messageDeletedData } = useSubscription(MESSAGE_DELETED_SUBSCRIPTION, {
+    variables,
+    skip,
+  });
+
+  useEffect(() => {
+    if (!messageDeletedData?.messageDeleted || !activeChannelId) return;
+    removeMessage(messageDeletedData.messageDeleted.messageId);
+  }, [messageDeletedData, activeChannelId, removeMessage]);
 
   // --- Thread event created ---
   const { data: threadEventData } = useSubscription(THREAD_EVENT_CREATED_SUBSCRIPTION, {
@@ -165,6 +214,31 @@ export function useChannelSubscriptions({
 
     appendThreadEvent(payload.event as ServerEvent);
   }, [threadEventData, activeChannelId, reportClaudeActivity, messagesRef, upsertMessage, selectedMessageIdRef, activeThreadIdRef, onNeedsAttention, appendThreadEvent]);
+
+  // --- Thread event updated ---
+  const { data: threadEventUpdatedData } = useSubscription(THREAD_EVENT_UPDATED_SUBSCRIPTION, {
+    variables,
+    skip,
+  });
+
+  useEffect(() => {
+    if (!threadEventUpdatedData?.threadEventUpdated || !activeChannelId) return;
+    const payload = threadEventUpdatedData.threadEventUpdated;
+
+    if (selectedMessageIdRef.current !== payload.messageId) return;
+
+    const currentThreadId = activeThreadIdRef.current;
+    if (currentThreadId && payload.event.threadId !== currentThreadId) return;
+
+    updateThreadEvent(payload.event as ServerEvent);
+
+    // Trigger attention notification for enriched AskUserQuestion events
+    if (payload.event.toolName === 'AskUserQuestion') {
+      if (selectedMessageIdRef.current !== payload.messageId) {
+        onNeedsAttention(payload.messageId, 'ask-user-question');
+      }
+    }
+  }, [threadEventUpdatedData, activeChannelId, selectedMessageIdRef, activeThreadIdRef, updateThreadEvent, onNeedsAttention]);
 
   // --- Ticket upserted ---
   const { data: ticketData } = useSubscription(TICKET_UPSERTED_SUBSCRIPTION, {

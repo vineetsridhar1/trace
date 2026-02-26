@@ -11,12 +11,26 @@ export type MessageUpsertedSubscriptionVariables = Types.Exact<{
 
 export type MessageUpsertedSubscription = { __typename?: 'Subscription', messageUpserted: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
 
+export type MessageDeletedSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type MessageDeletedSubscription = { __typename?: 'Subscription', messageDeleted: { __typename?: 'MessageDeletedPayload', channelId: string, messageId: string } };
+
 export type ThreadEventCreatedSubscriptionVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
 }>;
 
 
 export type ThreadEventCreatedSubscription = { __typename?: 'Subscription', threadEventCreated: { __typename?: 'ThreadEventPayload', channelId: string, messageId: string, threadId: string, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string } } };
+
+export type ThreadEventUpdatedSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type ThreadEventUpdatedSubscription = { __typename?: 'Subscription', threadEventUpdated: { __typename?: 'ThreadEventPayload', channelId: string, messageId: string, threadId: string, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string } } };
 
 export type TicketUpsertedSubscriptionVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
@@ -56,6 +70,37 @@ export function useMessageUpsertedSubscription(baseOptions: Apollo.SubscriptionH
       }
 export type MessageUpsertedSubscriptionHookResult = ReturnType<typeof useMessageUpsertedSubscription>;
 export type MessageUpsertedSubscriptionResult = Apollo.SubscriptionResult<MessageUpsertedSubscription>;
+export const MessageDeletedDocument = gql`
+    subscription MessageDeleted($channelId: ID!) {
+  messageDeleted(channelId: $channelId) {
+    channelId
+    messageId
+  }
+}
+    `;
+
+/**
+ * __useMessageDeletedSubscription__
+ *
+ * To run a query within a React component, call `useMessageDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useMessageDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useMessageDeletedSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useMessageDeletedSubscription(baseOptions: Apollo.SubscriptionHookOptions<MessageDeletedSubscription, MessageDeletedSubscriptionVariables> & ({ variables: MessageDeletedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<MessageDeletedSubscription, MessageDeletedSubscriptionVariables>(MessageDeletedDocument, options);
+      }
+export type MessageDeletedSubscriptionHookResult = ReturnType<typeof useMessageDeletedSubscription>;
+export type MessageDeletedSubscriptionResult = Apollo.SubscriptionResult<MessageDeletedSubscription>;
 export const ThreadEventCreatedDocument = gql`
     subscription ThreadEventCreated($channelId: ID!) {
   threadEventCreated(channelId: $channelId) {
@@ -103,6 +148,53 @@ export function useThreadEventCreatedSubscription(baseOptions: Apollo.Subscripti
       }
 export type ThreadEventCreatedSubscriptionHookResult = ReturnType<typeof useThreadEventCreatedSubscription>;
 export type ThreadEventCreatedSubscriptionResult = Apollo.SubscriptionResult<ThreadEventCreatedSubscription>;
+export const ThreadEventUpdatedDocument = gql`
+    subscription ThreadEventUpdated($channelId: ID!) {
+  threadEventUpdated(channelId: $channelId) {
+    channelId
+    messageId
+    threadId
+    event {
+      id
+      sessionId
+      hookEventName
+      timestamp
+      toolName
+      toolInput
+      toolResponse
+      toolUseId
+      stopHookActive
+      lastAssistantMessage
+      rawPayload
+      threadId
+      importance
+    }
+  }
+}
+    `;
+
+/**
+ * __useThreadEventUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useThreadEventUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useThreadEventUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useThreadEventUpdatedSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useThreadEventUpdatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<ThreadEventUpdatedSubscription, ThreadEventUpdatedSubscriptionVariables> & ({ variables: ThreadEventUpdatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<ThreadEventUpdatedSubscription, ThreadEventUpdatedSubscriptionVariables>(ThreadEventUpdatedDocument, options);
+      }
+export type ThreadEventUpdatedSubscriptionHookResult = ReturnType<typeof useThreadEventUpdatedSubscription>;
+export type ThreadEventUpdatedSubscriptionResult = Apollo.SubscriptionResult<ThreadEventUpdatedSubscription>;
 export const TicketUpsertedDocument = gql`
     subscription TicketUpserted($channelId: ID!) {
   ticketUpserted(channelId: $channelId) {

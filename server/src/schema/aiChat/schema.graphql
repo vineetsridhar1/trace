@@ -34,3 +34,15 @@ type AiChatMessageConnection {
   limit: Int!
   offset: Int!
 }
+
+extend type Subscription {
+  aiChatStream(chatId: ID!): AiChatStreamPayload!
+}
+
+type AiChatStreamPayload {
+  chatId: String!
+  type: String!
+  delta: String
+  content: String
+  error: String
+}

@@ -36,6 +36,7 @@ type EventConnection {
 
 extend type Subscription {
   threadEventCreated(channelId: ID!): ThreadEventPayload!
+  threadEventUpdated(channelId: ID!): ThreadEventPayload!
 }
 
 type ThreadEventPayload {

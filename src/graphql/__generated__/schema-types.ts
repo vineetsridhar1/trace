@@ -44,6 +44,15 @@ export type AiChatMessageConnection = {
   total: Scalars['Int']['output'];
 };
 
+export type AiChatStreamPayload = {
+  __typename?: 'AiChatStreamPayload';
+  chatId: Scalars['String']['output'];
+  content?: Maybe<Scalars['String']['output']>;
+  delta?: Maybe<Scalars['String']['output']>;
+  error?: Maybe<Scalars['String']['output']>;
+  type: Scalars['String']['output'];
+};
+
 export type Attachment = {
   __typename?: 'Attachment';
   byteSize: Scalars['Int']['output'];
@@ -134,6 +143,12 @@ export type MessageConnection = {
   messages: Array<Message>;
   offset: Scalars['Int']['output'];
   total: Scalars['Int']['output'];
+};
+
+export type MessageDeletedPayload = {
+  __typename?: 'MessageDeletedPayload';
+  channelId: Scalars['String']['output'];
+  messageId: Scalars['String']['output'];
 };
 
 export type MessageSession = {
@@ -443,9 +458,22 @@ export type SessionConnection = {
 
 export type Subscription = {
   __typename?: 'Subscription';
+  aiChatStream: AiChatStreamPayload;
+  messageDeleted: MessageDeletedPayload;
   messageUpserted: Message;
   threadEventCreated: ThreadEventPayload;
+  threadEventUpdated: ThreadEventPayload;
   ticketUpserted: TicketUpsertPayload;
+};
+
+
+export type SubscriptionAiChatStreamArgs = {
+  chatId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionMessageDeletedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -455,6 +483,11 @@ export type SubscriptionMessageUpsertedArgs = {
 
 
 export type SubscriptionThreadEventCreatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionThreadEventUpdatedArgs = {
   channelId: Scalars['ID']['input'];
 };
 

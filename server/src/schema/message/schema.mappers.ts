@@ -35,3 +35,8 @@ export interface CreateMessagePayloadMapper {
   thread: ThreadMapper;
   event: EventMapper;
 }
+
+export interface MessageDeletedPayloadMapper {
+  channelId: string;
+  messageId: string;
+}

@@ -34,12 +34,16 @@ import    { updateColumn as Mutation_updateColumn } from './kanban/resolvers/Mut
 import    { updateMessagePreview as Mutation_updateMessagePreview } from './message/resolvers/Mutation/updateMessagePreview';
 import    { updateMessageStatus as Mutation_updateMessageStatus } from './message/resolvers/Mutation/updateMessageStatus';
 import    { uploadAttachment as Mutation_uploadAttachment } from './attachment/resolvers/Mutation/uploadAttachment';
+import    { aiChatStream as Subscription_aiChatStream } from './aiChat/resolvers/Subscription/aiChatStream';
+import    { messageDeleted as Subscription_messageDeleted } from './message/resolvers/Subscription/messageDeleted';
 import    { messageUpserted as Subscription_messageUpserted } from './message/resolvers/Subscription/messageUpserted';
 import    { threadEventCreated as Subscription_threadEventCreated } from './event/resolvers/Subscription/threadEventCreated';
+import    { threadEventUpdated as Subscription_threadEventUpdated } from './event/resolvers/Subscription/threadEventUpdated';
 import    { ticketUpserted as Subscription_ticketUpserted } from './kanban/resolvers/Subscription/ticketUpserted';
 import    { AiChat } from './aiChat/resolvers/AiChat';
 import    { AiChatMessage } from './aiChat/resolvers/AiChatMessage';
 import    { AiChatMessageConnection } from './aiChat/resolvers/AiChatMessageConnection';
+import    { AiChatStreamPayload } from './aiChat/resolvers/AiChatStreamPayload';
 import    { Attachment } from './attachment/resolvers/Attachment';
 import    { Channel } from './channel/resolvers/Channel';
 import    { CreateMessagePayload } from './message/resolvers/CreateMessagePayload';
@@ -48,6 +52,7 @@ import    { EventConnection } from './event/resolvers/EventConnection';
 import    { KanbanColumn } from './kanban/resolvers/KanbanColumn';
 import    { Message } from './message/resolvers/Message';
 import    { MessageConnection } from './message/resolvers/MessageConnection';
+import    { MessageDeletedPayload } from './message/resolvers/MessageDeletedPayload';
 import    { MessageSession } from './message/resolvers/MessageSession';
 import    { RepoValidation } from './channel/resolvers/RepoValidation';
 import    { Server } from './server/resolvers/Server';
@@ -65,10 +70,11 @@ import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
       Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
       Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteAiChat: Mutation_deleteAiChat,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
-      Subscription: { messageUpserted: Subscription_messageUpserted,threadEventCreated: Subscription_threadEventCreated,ticketUpserted: Subscription_ticketUpserted },
+      Subscription: { aiChatStream: Subscription_aiChatStream,messageDeleted: Subscription_messageDeleted,messageUpserted: Subscription_messageUpserted,threadEventCreated: Subscription_threadEventCreated,threadEventUpdated: Subscription_threadEventUpdated,ticketUpserted: Subscription_ticketUpserted },
       AiChat: AiChat,
 AiChatMessage: AiChatMessage,
 AiChatMessageConnection: AiChatMessageConnection,
+AiChatStreamPayload: AiChatStreamPayload,
 Attachment: Attachment,
 Channel: Channel,
 CreateMessagePayload: CreateMessagePayload,
@@ -77,6 +83,7 @@ EventConnection: EventConnection,
 KanbanColumn: KanbanColumn,
 Message: Message,
 MessageConnection: MessageConnection,
+MessageDeletedPayload: MessageDeletedPayload,
 MessageSession: MessageSession,
 RepoValidation: RepoValidation,
 Server: Server,

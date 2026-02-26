@@ -1,6 +1,6 @@
 import type { MutationResolvers } from './../../../types.generated';
 import { softDeleteMessage, getMessageByIdForFeed } from '../../../../services/messageService';
-import { sseManager } from '../../../../services/sseManager';
+import { pubsub, TOPICS } from '../../../../services/pubsub';
 import { GraphQLError } from 'graphql';
 
 export const deleteMessage: NonNullable<MutationResolvers['deleteMessage']> = async (_parent, { channelId, messageId }) => {
@@ -11,9 +11,8 @@ export const deleteMessage: NonNullable<MutationResolvers['deleteMessage']> = as
 
   await softDeleteMessage(messageId);
 
-  sseManager.broadcastChannel(channelId, 'message-deleted', {
-    channelId,
-    messageId,
+  pubsub.publish(TOPICS.MESSAGE_DELETED(channelId), {
+    messageDeleted: { channelId, messageId },
   });
 
   return true;

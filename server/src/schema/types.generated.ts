@@ -1,8 +1,8 @@
 import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from 'graphql';
-import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper } from './aiChat/schema.mappers';
+import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper, AiChatStreamPayloadMapper } from './aiChat/schema.mappers';
 import { AttachmentMapper } from './attachment/schema.mappers';
 import { ChannelMapper, RepoValidationMapper } from './channel/schema.mappers';
-import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageSessionMapper } from './message/schema.mappers';
+import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageDeletedPayloadMapper, MessageSessionMapper } from './message/schema.mappers';
 import { EventMapper, EventConnectionMapper, ThreadEventPayloadMapper, TokenUsageMapper } from './event/schema.mappers';
 import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketMessageMapper, TicketUpsertPayloadMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
@@ -53,6 +53,15 @@ export type AiChatMessageConnection = {
   messages: Array<AiChatMessage>;
   offset: Scalars['Int']['output'];
   total: Scalars['Int']['output'];
+};
+
+export type AiChatStreamPayload = {
+  __typename?: 'AiChatStreamPayload';
+  chatId: Scalars['String']['output'];
+  content?: Maybe<Scalars['String']['output']>;
+  delta?: Maybe<Scalars['String']['output']>;
+  error?: Maybe<Scalars['String']['output']>;
+  type: Scalars['String']['output'];
 };
 
 export type Attachment = {
@@ -145,6 +154,12 @@ export type MessageConnection = {
   messages: Array<Message>;
   offset: Scalars['Int']['output'];
   total: Scalars['Int']['output'];
+};
+
+export type MessageDeletedPayload = {
+  __typename?: 'MessageDeletedPayload';
+  channelId: Scalars['String']['output'];
+  messageId: Scalars['String']['output'];
 };
 
 export type MessageSession = {
@@ -454,9 +469,22 @@ export type SessionConnection = {
 
 export type Subscription = {
   __typename?: 'Subscription';
+  aiChatStream: AiChatStreamPayload;
+  messageDeleted: MessageDeletedPayload;
   messageUpserted: Message;
   threadEventCreated: ThreadEventPayload;
+  threadEventUpdated: ThreadEventPayload;
   ticketUpserted: TicketUpsertPayload;
+};
+
+
+export type SubscriptionaiChatStreamArgs = {
+  chatId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionmessageDeletedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -466,6 +494,11 @@ export type SubscriptionmessageUpsertedArgs = {
 
 
 export type SubscriptionthreadEventCreatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionthreadEventUpdatedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -617,6 +650,7 @@ export type ResolversTypes = {
   AiChatMessage: ResolverTypeWrapper<AiChatMessageMapper>;
   AiChatMessageConnection: ResolverTypeWrapper<AiChatMessageConnectionMapper>;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
+  AiChatStreamPayload: ResolverTypeWrapper<AiChatStreamPayloadMapper>;
   Attachment: ResolverTypeWrapper<AttachmentMapper>;
   Channel: ResolverTypeWrapper<ChannelMapper>;
   CreateMessagePayload: ResolverTypeWrapper<CreateMessagePayloadMapper>;
@@ -629,6 +663,7 @@ export type ResolversTypes = {
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Message: ResolverTypeWrapper<MessageMapper>;
   MessageConnection: ResolverTypeWrapper<MessageConnectionMapper>;
+  MessageDeletedPayload: ResolverTypeWrapper<MessageDeletedPayloadMapper>;
   MessageSession: ResolverTypeWrapper<MessageSessionMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
@@ -654,6 +689,7 @@ export type ResolversParentTypes = {
   AiChatMessage: AiChatMessageMapper;
   AiChatMessageConnection: AiChatMessageConnectionMapper;
   Int: Scalars['Int']['output'];
+  AiChatStreamPayload: AiChatStreamPayloadMapper;
   Attachment: AttachmentMapper;
   Channel: ChannelMapper;
   CreateMessagePayload: CreateMessagePayloadMapper;
@@ -666,6 +702,7 @@ export type ResolversParentTypes = {
   KanbanColumn: KanbanColumnMapper;
   Message: MessageMapper;
   MessageConnection: MessageConnectionMapper;
+  MessageDeletedPayload: MessageDeletedPayloadMapper;
   MessageSession: MessageSessionMapper;
   Mutation: Record<PropertyKey, never>;
   Query: Record<PropertyKey, never>;
@@ -706,6 +743,14 @@ export type AiChatMessageConnectionResolvers<ContextType = any, ParentType exten
   messages?: Resolver<Array<ResolversTypes['AiChatMessage']>, ParentType, ContextType>;
   offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+};
+
+export type AiChatStreamPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['AiChatStreamPayload'] = ResolversParentTypes['AiChatStreamPayload']> = {
+  chatId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  content?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  delta?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  error?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type AttachmentResolvers<ContextType = any, ParentType extends ResolversParentTypes['Attachment'] = ResolversParentTypes['Attachment']> = {
@@ -800,6 +845,11 @@ export type MessageConnectionResolvers<ContextType = any, ParentType extends Res
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
+export type MessageDeletedPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageDeletedPayload'] = ResolversParentTypes['MessageDeletedPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
 export type MessageSessionResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageSession'] = ResolversParentTypes['MessageSession']> = {
   cwd?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -882,8 +932,11 @@ export type SessionConnectionResolvers<ContextType = any, ParentType extends Res
 };
 
 export type SubscriptionResolvers<ContextType = any, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
+  aiChatStream?: SubscriptionResolver<ResolversTypes['AiChatStreamPayload'], "aiChatStream", ParentType, ContextType, RequireFields<SubscriptionaiChatStreamArgs, 'chatId'>>;
+  messageDeleted?: SubscriptionResolver<ResolversTypes['MessageDeletedPayload'], "messageDeleted", ParentType, ContextType, RequireFields<SubscriptionmessageDeletedArgs, 'channelId'>>;
   messageUpserted?: SubscriptionResolver<ResolversTypes['Message'], "messageUpserted", ParentType, ContextType, RequireFields<SubscriptionmessageUpsertedArgs, 'channelId'>>;
   threadEventCreated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventCreated", ParentType, ContextType, RequireFields<SubscriptionthreadEventCreatedArgs, 'channelId'>>;
+  threadEventUpdated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventUpdated", ParentType, ContextType, RequireFields<SubscriptionthreadEventUpdatedArgs, 'channelId'>>;
   ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
 };
 
@@ -948,6 +1001,7 @@ export type Resolvers<ContextType = any> = {
   AiChat?: AiChatResolvers<ContextType>;
   AiChatMessage?: AiChatMessageResolvers<ContextType>;
   AiChatMessageConnection?: AiChatMessageConnectionResolvers<ContextType>;
+  AiChatStreamPayload?: AiChatStreamPayloadResolvers<ContextType>;
   Attachment?: AttachmentResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   CreateMessagePayload?: CreateMessagePayloadResolvers<ContextType>;
@@ -958,6 +1012,7 @@ export type Resolvers<ContextType = any> = {
   KanbanColumn?: KanbanColumnResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   MessageConnection?: MessageConnectionResolvers<ContextType>;
+  MessageDeletedPayload?: MessageDeletedPayloadResolvers<ContextType>;
   MessageSession?: MessageSessionResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
