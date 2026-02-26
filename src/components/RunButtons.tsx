@@ -213,7 +213,7 @@ export function RunButtons({
             <button
               type="button"
               onClick={() => setShowDropdown(!showDropdown)}
-              className="cursor-pointer rounded-r-md border-l border-violet-400/30 bg-violet-500 px-2 py-2 text-white transition-colors hover:bg-violet-700"
+              className="flex cursor-pointer items-center rounded-r-md border-l border-violet-400/30 bg-violet-500 px-2 py-2 text-white transition-colors hover:bg-violet-700"
             >
               <FiChevronDown className="h-4 w-4" />
             </button>
