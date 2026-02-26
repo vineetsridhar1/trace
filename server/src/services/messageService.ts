@@ -344,8 +344,7 @@ export async function getEventsByMessage(
   if (
     lastEvent &&
     lastEvent.hookEventName === 'Stop' &&
-    !lastEvent.toolName &&
-    lastEvent.stopHookActive
+    !lastEvent.toolName
   ) {
     const session = await prisma.session.findUnique({
       where: { sessionId: lastEvent.sessionId },
@@ -462,8 +461,7 @@ export async function getEventsByThread(
   if (
     lastEvent &&
     lastEvent.hookEventName === 'Stop' &&
-    !lastEvent.toolName &&
-    lastEvent.stopHookActive
+    !lastEvent.toolName
   ) {
     const session = await prisma.session.findUnique({
       where: { sessionId: lastEvent.sessionId },

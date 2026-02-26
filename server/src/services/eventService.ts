@@ -440,7 +440,6 @@ export async function ingestEvent(payload: HookEvent) {
   // or ExitPlanMode tool_use) to the transcript AFTER firing the Stop hook.
   if (
     payload.hook_event_name === 'Stop' &&
-    payload.stop_hook_active &&
     !eventData.toolName &&
     payload.transcript_path
   ) {

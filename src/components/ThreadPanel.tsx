@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AskUserQuestionNode, PlanReviewNode, ThreadStatus } from "../types";
-import { ThreadEvent, PlanReview } from "./ThreadEvent";
+import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
@@ -96,8 +96,18 @@ export function ThreadPanel() {
 
   const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
     if (isClaudeRunning) return null;
-    const last = threadNodes[threadNodes.length - 1];
-    if (last?.kind === "ask-user-question") return last;
+    // Scan backward for the most recent unanswered question,
+    // stopping at a UserPromptSubmit boundary (which means it was answered)
+    for (let i = threadNodes.length - 1; i >= 0; i--) {
+      const node = threadNodes[i];
+      if (node.kind === "ask-user-question") return node;
+      if (
+        node.kind === "event" &&
+        node.event.hookEventName === "UserPromptSubmit"
+      ) {
+        break;
+      }
+    }
     return null;
   }, [threadNodes, isClaudeRunning]);
 
@@ -221,7 +231,7 @@ export function ThreadPanel() {
                         return <PlanReview key={node.id} node={node} />;
                       }
                       if (node.kind === "ask-user-question") {
-                        return null;
+                        return <AskUserQuestionInline key={node.id} node={node} />;
                       }
                       if (node.kind !== "event") {
                         return null;
