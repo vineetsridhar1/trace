@@ -20,3 +20,26 @@ export const MESSAGE_FIELDS = gql`
     threadCount
   }
 `;
+
+export const THREAD_EVENT_PAYLOAD_FIELDS = gql`
+  fragment ThreadEventPayloadFields on ThreadEventPayload {
+    channelId
+    messageId
+    threadId
+    event {
+      id
+      sessionId
+      hookEventName
+      timestamp
+      toolName
+      toolInput
+      toolResponse
+      toolUseId
+      stopHookActive
+      lastAssistantMessage
+      rawPayload
+      threadId
+      importance
+    }
+  }
+`;

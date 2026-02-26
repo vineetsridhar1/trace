@@ -1,7 +1,7 @@
 import * as Types from '../../graphql/__generated__/schema-types';
 
 import { gql } from '@apollo/client';
-import { MessageFieldsFragmentDoc } from '../../graphql/__generated__/fragments.generated';
+import { MessageFieldsFragmentDoc, ThreadEventPayloadFieldsFragmentDoc } from '../../graphql/__generated__/fragments.generated';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
 export type MessageUpsertedSubscriptionVariables = Types.Exact<{
@@ -104,27 +104,10 @@ export type MessageDeletedSubscriptionResult = Apollo.SubscriptionResult<Message
 export const ThreadEventCreatedDocument = gql`
     subscription ThreadEventCreated($channelId: ID!) {
   threadEventCreated(channelId: $channelId) {
-    channelId
-    messageId
-    threadId
-    event {
-      id
-      sessionId
-      hookEventName
-      timestamp
-      toolName
-      toolInput
-      toolResponse
-      toolUseId
-      stopHookActive
-      lastAssistantMessage
-      rawPayload
-      threadId
-      importance
-    }
+    ...ThreadEventPayloadFields
   }
 }
-    `;
+    ${ThreadEventPayloadFieldsFragmentDoc}`;
 
 /**
  * __useThreadEventCreatedSubscription__
@@ -151,27 +134,10 @@ export type ThreadEventCreatedSubscriptionResult = Apollo.SubscriptionResult<Thr
 export const ThreadEventUpdatedDocument = gql`
     subscription ThreadEventUpdated($channelId: ID!) {
   threadEventUpdated(channelId: $channelId) {
-    channelId
-    messageId
-    threadId
-    event {
-      id
-      sessionId
-      hookEventName
-      timestamp
-      toolName
-      toolInput
-      toolResponse
-      toolUseId
-      stopHookActive
-      lastAssistantMessage
-      rawPayload
-      threadId
-      importance
-    }
+    ...ThreadEventPayloadFields
   }
 }
-    `;
+    ${ThreadEventPayloadFieldsFragmentDoc}`;
 
 /**
  * __useThreadEventUpdatedSubscription__

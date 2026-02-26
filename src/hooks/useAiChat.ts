@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { gql, useApolloClient, useSubscription } from '@apollo/client';
+import { gql, useSubscription } from '@apollo/client';
+import { useAiChatMessagesLazyQuery, useSendAiChatMessageMutation } from './__generated__/useAiChat.generated';
 import type { AiChatMessage } from '../types';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const GQL_AI_CHAT_MESSAGES = gql`
   query AiChatMessages($chatId: ID!, $limit: Int, $offset: Int) {
     aiChatMessages(chatId: $chatId, limit: $limit, offset: $offset) {
@@ -19,6 +21,7 @@ const GQL_AI_CHAT_MESSAGES = gql`
   }
 `;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const GQL_SEND_AI_CHAT_MESSAGE = gql`
   mutation SendAiChatMessage($chatId: ID!, $content: String!) {
     sendAiChatMessage(chatId: $chatId, content: $content) {
@@ -44,7 +47,8 @@ const AI_CHAT_STREAM_SUBSCRIPTION = gql`
 `;
 
 export function useAiChat(chatId: string | null) {
-  const client = useApolloClient();
+  const [fetchMessages] = useAiChatMessagesLazyQuery();
+  const [executeSendMessage] = useSendAiChatMessageMutation();
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -59,20 +63,15 @@ export function useAiChat(chatId: string | null) {
 
     void (async () => {
       try {
-        const { data } = await client.query<{
-          aiChatMessages: { messages: AiChatMessage[]; total: number };
-        }>({
-          query: GQL_AI_CHAT_MESSAGES,
-          variables: { chatId, limit: 100 },
-        });
+        const { data } = await fetchMessages({ variables: { chatId, limit: 100 } });
         if (data) {
-          setMessages(data.aiChatMessages.messages);
+          setMessages(data.aiChatMessages.messages as AiChatMessage[]);
         }
       } catch (err) {
         console.error('[useAiChat] fetch messages failed:', err);
       }
     })();
-  }, [chatId, client]);
+  }, [chatId, fetchMessages]);
 
   // Subscribe to AI chat stream via GraphQL subscription
   const { data: streamData } = useSubscription(AI_CHAT_STREAM_SUBSCRIPTION, {
@@ -116,18 +115,17 @@ export function useAiChat(chatId: string | null) {
     setStreamingContent('');
 
     try {
-      const { data } = await client.mutate<{ sendAiChatMessage: AiChatMessage }>({
-        mutation: GQL_SEND_AI_CHAT_MESSAGE,
+      const { data } = await executeSendMessage({
         variables: { chatId, content: content.trim() },
       });
       if (data) {
-        setMessages((prev) => [...prev, data.sendAiChatMessage]);
+        setMessages((prev) => [...prev, data.sendAiChatMessage as AiChatMessage]);
       }
     } catch (err) {
       console.error('[useAiChat] sendMessage failed:', err);
       setIsStreaming(false);
     }
-  }, [chatId, client]);
+  }, [chatId, executeSendMessage]);
 
   return { messages, streamingContent, isStreaming, sendMessage };
 }

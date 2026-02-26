@@ -4,19 +4,24 @@ import { getMainDefinition } from "@apollo/client/utilities";
 import { createClient } from "graphql-ws";
 import { getServerUrl } from "../types";
 
-type ConnectionListener = (connected: boolean) => void;
-const _connectionListeners = new Set<ConnectionListener>();
+const _connectionListeners = new Set<() => void>();
 let _wsConnected = false;
 
-function notifyConnectionListeners(connected: boolean) {
+function setWsConnected(connected: boolean) {
+  if (_wsConnected === connected) return;
   _wsConnected = connected;
-  _connectionListeners.forEach((l) => l(connected));
+  _connectionListeners.forEach((l) => l());
 }
 
-export function onWsConnectionChange(listener: ConnectionListener): () => void {
+/** Subscribe to WS connection state changes (useSyncExternalStore-compatible). */
+export function subscribeWsConnection(listener: () => void): () => void {
   _connectionListeners.add(listener);
-  listener(_wsConnected);
   return () => { _connectionListeners.delete(listener); };
+}
+
+/** Get current WS connection snapshot (useSyncExternalStore-compatible). */
+export function getWsConnectionSnapshot(): boolean {
+  return _wsConnected;
 }
 
 export function createGraphqlClient(): ApolloClient<unknown> {
@@ -30,8 +35,8 @@ export function createGraphqlClient(): ApolloClient<unknown> {
       retryAttempts: Infinity,
       shouldRetry: () => true,
       on: {
-        connected: () => notifyConnectionListeners(true),
-        closed: () => notifyConnectionListeners(false),
+        connected: () => setWsConnected(true),
+        closed: () => setWsConnected(false),
       },
     }),
   );

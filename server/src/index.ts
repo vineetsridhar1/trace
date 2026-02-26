@@ -21,7 +21,15 @@ async function main() {
     path: '/graphql',
   });
 
-  useServer({ schema }, wsServer);
+  const wsCleanup = useServer({ schema }, wsServer);
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    await wsCleanup.dispose();
+    httpServer.close();
+  };
+  process.on('SIGTERM', () => void shutdown());
+  process.on('SIGINT', () => void shutdown());
 }
 
 void main();

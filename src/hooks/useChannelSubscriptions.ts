@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { gql, useSubscription } from '@apollo/client';
-import { MESSAGE_FIELDS } from '../graphql/fragments';
-import { onWsConnectionChange } from '../graphql/client';
+import { MESSAGE_FIELDS, THREAD_EVENT_PAYLOAD_FIELDS } from '../graphql/fragments';
+import { subscribeWsConnection, getWsConnectionSnapshot } from '../graphql/client';
 import type { ChannelMessage, KanbanTicket, ServerEvent } from '../types';
 
 const MESSAGE_UPSERTED_SUBSCRIPTION = gql`
@@ -25,51 +25,19 @@ const MESSAGE_DELETED_SUBSCRIPTION = gql`
 const THREAD_EVENT_CREATED_SUBSCRIPTION = gql`
   subscription ThreadEventCreated($channelId: ID!) {
     threadEventCreated(channelId: $channelId) {
-      channelId
-      messageId
-      threadId
-      event {
-        id
-        sessionId
-        hookEventName
-        timestamp
-        toolName
-        toolInput
-        toolResponse
-        toolUseId
-        stopHookActive
-        lastAssistantMessage
-        rawPayload
-        threadId
-        importance
-      }
+      ...ThreadEventPayloadFields
     }
   }
+  ${THREAD_EVENT_PAYLOAD_FIELDS}
 `;
 
 const THREAD_EVENT_UPDATED_SUBSCRIPTION = gql`
   subscription ThreadEventUpdated($channelId: ID!) {
     threadEventUpdated(channelId: $channelId) {
-      channelId
-      messageId
-      threadId
-      event {
-        id
-        sessionId
-        hookEventName
-        timestamp
-        toolName
-        toolInput
-        toolResponse
-        toolUseId
-        stopHookActive
-        lastAssistantMessage
-        rawPayload
-        threadId
-        importance
-      }
+      ...ThreadEventPayloadFields
     }
   }
+  ${THREAD_EVENT_PAYLOAD_FIELDS}
 `;
 
 const TICKET_UPSERTED_SUBSCRIPTION = gql`
@@ -134,7 +102,7 @@ export function useChannelSubscriptions({
   onNeedsAttention,
   upsertTicket,
 }: UseChannelSubscriptionsOptions) {
-  const [subscriptionsActive, setSubscriptionsActive] = useState(false);
+  const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
 
   const skip = !activeChannelId;
   const variables = { channelId: activeChannelId ?? '' };
@@ -225,19 +193,19 @@ export function useChannelSubscriptions({
     if (!threadEventUpdatedData?.threadEventUpdated || !activeChannelId) return;
     const payload = threadEventUpdatedData.threadEventUpdated;
 
+    // Trigger attention notification for enriched AskUserQuestion events (before filtering)
+    if (payload.event.toolName === 'AskUserQuestion') {
+      if (selectedMessageIdRef.current !== payload.messageId) {
+        onNeedsAttention(payload.messageId, 'ask-user-question');
+      }
+    }
+
     if (selectedMessageIdRef.current !== payload.messageId) return;
 
     const currentThreadId = activeThreadIdRef.current;
     if (currentThreadId && payload.event.threadId !== currentThreadId) return;
 
     updateThreadEvent(payload.event as ServerEvent);
-
-    // Trigger attention notification for enriched AskUserQuestion events
-    if (payload.event.toolName === 'AskUserQuestion') {
-      if (selectedMessageIdRef.current !== payload.messageId) {
-        onNeedsAttention(payload.messageId, 'ask-user-question');
-      }
-    }
   }, [threadEventUpdatedData, activeChannelId, selectedMessageIdRef, activeThreadIdRef, updateThreadEvent, onNeedsAttention]);
 
   // --- Ticket upserted ---
@@ -251,11 +219,6 @@ export function useChannelSubscriptions({
     const payload = ticketData.ticketUpserted;
     upsertTicket({ ...payload.ticket, columnSlug: payload.columnSlug } as KanbanTicket);
   }, [ticketData, activeChannelId, upsertTicket]);
-
-  // Track actual WebSocket connection state
-  useEffect(() => {
-    return onWsConnectionChange(setSubscriptionsActive);
-  }, []);
 
   return { subscriptionsActive };
 }
