@@ -1,6 +1,7 @@
 extend type Query {
   threads(channelId: ID!, messageId: ID!): [Thread!]!
   threadEvents(channelId: ID!, messageId: ID!, threadId: ID!, limit: Int, offset: Int, after: String): EventConnection!
+  messageEvents(channelId: ID!, messageId: ID!, limit: Int, offset: Int, after: String): EventConnection!
 }
 
 type Thread {

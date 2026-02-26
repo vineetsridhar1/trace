@@ -188,6 +188,17 @@ export function ThreadPanel() {
                   {(() => {
                     let lastUserPromptTime: string | null = null;
                     return threadNodes.map((node) => {
+                      if (node.kind === "thread-divider") {
+                        return (
+                          <div key={node.id} className="my-3 flex items-center gap-3 px-2">
+                            <div className="h-px flex-1 bg-violet-500/20" />
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-violet-400/60">
+                              New Context
+                            </span>
+                            <div className="h-px flex-1 bg-violet-500/20" />
+                          </div>
+                        );
+                      }
                       if (node.kind === "readglob-group") {
                         return (
                           <ReadGlobGroup
@@ -249,7 +260,7 @@ export function ThreadPanel() {
           <AskUserQuestionBar
             node={showQuestion}
             onResponse={(text) => {
-              void sendPlanResponse(text);
+              void sendPlanResponse(text, 'keep-context');
             }}
             onDismiss={() => {
               setDismissedQuestionId(showQuestion.id);
@@ -259,9 +270,14 @@ export function ThreadPanel() {
         ) : showPlan ? (
           <PlanResponseBar
             node={showPlan}
-            onPlanResponse={(text) => {
+            onPlanResponse={(text, mode) => {
               setDismissedPlanId(showPlan.id);
-              void sendPlanResponse(text);
+              void sendPlanResponse(
+                text,
+                mode,
+                showPlan.planContent,
+                showPlan.planFilePath,
+              );
             }}
             onDismiss={() => {
               setDismissedPlanId(showPlan.id);

@@ -18,6 +18,7 @@ export type AppendPromptMutationVariables = Types.Exact<{
   messageId: Types.Scalars['ID']['input'];
   text: Types.Scalars['String']['input'];
   attachmentIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
+  createNewThread?: Types.InputMaybe<Types.Scalars['Boolean']['input']>;
 }>;
 
 
@@ -85,12 +86,13 @@ export type CreateMessageMutationHookResult = ReturnType<typeof useCreateMessage
 export type CreateMessageMutationResult = Apollo.MutationResult<CreateMessageMutation>;
 export type CreateMessageMutationOptions = Apollo.BaseMutationOptions<CreateMessageMutation, CreateMessageMutationVariables>;
 export const AppendPromptDocument = gql`
-    mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!]) {
+    mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!], $createNewThread: Boolean) {
   appendPrompt(
     channelId: $channelId
     messageId: $messageId
     text: $text
     attachmentIds: $attachmentIds
+    createNewThread: $createNewThread
   ) {
     message {
       ...MessageFields
@@ -131,6 +133,7 @@ export type AppendPromptMutationFn = Apollo.MutationFunction<AppendPromptMutatio
  *      messageId: // value for 'messageId'
  *      text: // value for 'text'
  *      attachmentIds: // value for 'attachmentIds'
+ *      createNewThread: // value for 'createNewThread'
  *   },
  * });
  */

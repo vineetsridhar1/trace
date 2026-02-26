@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { ChannelMessage, TicketStatus, ClaudeModel, EffortLevel } from '../types';
+import type { PlanResponseMode } from '../context/ClaudeActionsContext';
 import { graphqlClient } from '../graphql/client';
 import { MESSAGE_FIELDS } from '../graphql/fragments';
 import {
@@ -36,8 +37,8 @@ const GQL_CREATE_MESSAGE = gql`
 `;
 
 const GQL_APPEND_PROMPT = gql`
-  mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!]) {
-    appendPrompt(channelId: $channelId, messageId: $messageId, text: $text, attachmentIds: $attachmentIds) {
+  mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!], $createNewThread: Boolean) {
+    appendPrompt(channelId: $channelId, messageId: $messageId, text: $text, attachmentIds: $attachmentIds, createNewThread: $createNewThread) {
       message {
         ...MessageFields
       }
@@ -176,7 +177,7 @@ export function useClaudeMessageActions({
   );
 
   const persistPrompt = useCallback(
-    async (messageId: string, text: string, errorLabel: string, attachmentIds?: string[]) => {
+    async (messageId: string, text: string, errorLabel: string, attachmentIds?: string[], createNewThread?: boolean) => {
       if (!activeChannelId) return null;
 
       try {
@@ -187,6 +188,7 @@ export function useClaudeMessageActions({
             messageId,
             text,
             attachmentIds,
+            createNewThread,
           },
         });
 
@@ -322,26 +324,85 @@ export function useClaudeMessageActions({
   );
 
   const sendPlanResponse = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
+    async (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => {
       const selectedMessage = selectedMessageRef.current;
-      if (!trimmed || !selectedMessage || !activeChannelId) return;
+      if (!selectedMessage || !activeChannelId) return;
 
-      const persisted = await persistPrompt(
-        selectedMessage.id,
-        trimmed,
-        'Failed to persist plan response prompt',
-      );
-      if (!persisted) return;
+      if (mode === 'clear-context') {
+        // Build prompt with the plan content for a fresh Claude process
+        const implementPrompt = planFilePath
+          ? `Implement the following approved plan. The plan file is at ${planFilePath}.\n\n${planContent ?? text}`
+          : `Implement the following approved plan:\n\n${planContent ?? text}`;
 
-      await spawnClaudeForMessage(selectedMessage.id, trimmed, {
-        errorPrefix: 'Failed to spawn claude for plan response',
-        resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
-        model: selectedModel,
-        effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
-      });
+        // Create a new thread for the implementation phase
+        const persisted = await persistPrompt(
+          selectedMessage.id,
+          implementPrompt,
+          'Failed to persist plan approval prompt',
+          undefined,
+          true, // createNewThread
+        );
+        if (!persisted) return;
+
+        // Spawn a brand new Claude process (no resumeSessionId)
+        const baseBranch = getChannelBaseBranch();
+        const userInstructions = getSystemInstructions();
+        const instructionParts = [
+          `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
+        ];
+        if (userInstructions) instructionParts.push(userInstructions);
+
+        await spawnClaudeForMessage(selectedMessage.id, implementPrompt, {
+          errorPrefix: 'Failed to spawn claude for plan implementation',
+          statusOnSuccess: 'in_progress',
+          model: selectedModel,
+          effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+          systemInstructions: instructionParts.join('\n\n'),
+          // No resumeSessionId — fresh process with clear context
+        });
+
+      } else if (mode === 'keep-context') {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+
+        const persisted = await persistPrompt(
+          selectedMessage.id,
+          'yes, and keep the context window as-is',
+          'Failed to persist plan response prompt',
+        );
+        if (!persisted) return;
+
+        await spawnClaudeForMessage(selectedMessage.id, 'yes, and keep the context window as-is', {
+          errorPrefix: 'Failed to spawn claude for plan response',
+          resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
+          model: selectedModel,
+          effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+        });
+
+      } else if (mode === 'revise') {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+
+        // Persist the clean user text for display in the thread
+        const persisted = await persistPrompt(
+          selectedMessage.id,
+          trimmed,
+          'Failed to persist plan revision prompt',
+        );
+        if (!persisted) return;
+
+        // Wrap with trace-internal instructions so Claude revises the plan
+        const wrappedPrompt = `<trace-internal>\nThe user has provided feedback on your plan. Go back into plan mode and revise the plan based on their suggestions below. Only revise the plan — do not start implementing yet.\n</trace-internal>\n\n${trimmed}`;
+
+        await spawnClaudeForMessage(selectedMessage.id, wrappedPrompt, {
+          errorPrefix: 'Failed to spawn claude for plan revision',
+          resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
+          model: selectedModel,
+          effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+        });
+      }
     },
-    [activeChannelId, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
+    [activeChannelId, getChannelBaseBranch, getSystemInstructions, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
   );
 
   const mergeToMain = useCallback(async () => {

@@ -134,6 +134,7 @@ export type Mutation = {
 export type MutationAppendPromptArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
+  createNewThread?: InputMaybe<Scalars['Boolean']['input']>;
   messageId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
 };
@@ -222,6 +223,7 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   event?: Maybe<Event>;
+  messageEvents: EventConnection;
   messages: MessageConnection;
   repoBranches: Array<Scalars['String']['output']>;
   servers: Array<Server>;
@@ -246,6 +248,15 @@ export type QueryChannelArgs = {
 
 export type QueryEventArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryMessageEventsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  messageId: Scalars['ID']['input'];
+  offset?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
