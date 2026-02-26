@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import type { ChannelMessage, ServerEvent, ThreadStatus } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { ThreadsDocument, type ThreadsQuery, MessageEventsDocument, type MessageEventsQuery, type ThreadEventsQuery } from './__generated__/useThread.generated';
+import { ThreadsDocument, type ThreadsQuery, type ThreadEventsQuery } from './__generated__/useThread.generated';
 import { clamp } from '../utils';
 
 export interface ThreadInfo {
@@ -19,37 +19,6 @@ const GQL_THREADS = gql`
       messageId
       createdAt
       eventCount
-    }
-  }
-`;
-
-const GQL_MESSAGE_EVENTS = gql`
-  query MessageEvents($channelId: ID!, $messageId: ID!, $limit: Int, $offset: Int, $after: String) {
-    messageEvents(channelId: $channelId, messageId: $messageId, limit: $limit, offset: $offset, after: $after) {
-      events {
-        id
-        sessionId
-        hookEventName
-        timestamp
-        toolName
-        toolInput
-        toolResponse
-        toolUseId
-        stopHookActive
-        lastAssistantMessage
-        rawPayload
-        threadId
-        importance
-      }
-      total
-      limit
-      offset
-      tokenUsage {
-        inputTokens
-        outputTokens
-        totalTokens
-      }
-      latestContextTokens
     }
   }
 `;
@@ -299,6 +268,14 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
   const appendThreadEvent = useCallback((event: ServerEvent) => {
     setThreadEvents((prev) => [...prev, event]);
     setThreadTotal((prev) => prev + 1);
+
+    // Keep the active thread's eventCount in sync for the history dropdown
+    const currentThreadId = activeThreadIdRef.current;
+    if (currentThreadId) {
+      setThreads((prev) =>
+        prev.map((t) => (t.id === currentThreadId ? { ...t, eventCount: t.eventCount + 1 } : t)),
+      );
+    }
 
     // Incrementally update token aggregates from the new event.
     // Deduplicate: multiple events in the same API turn share the same usage snapshot.
