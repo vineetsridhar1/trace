@@ -129,7 +129,7 @@ export function RunButtons({
     setSelectedEffort,
   } = useClaudeActions();
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [mode, setMode] = useState<InteractionMode>('code');
+  const [mode, setMode] = useState<InteractionMode>('plan');
   const [showRunAfter, setShowRunAfter] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
