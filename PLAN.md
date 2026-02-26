@@ -1,61 +1,50 @@
-# Plan: Delete Messages (Soft Delete + Worktree Cleanup)
+# Plan: Update Task Statuses + Worktree Check
 
 ## Summary
-Add the ability to soft-delete messages via a hover trash icon on each message item, with a `window.confirm()` confirmation dialog. Deleting a message hides it from the UI (sets `status = 'deleted'`), deletes the associated worktree if one exists, and broadcasts an SSE event so other clients stay in sync. No Prisma migration needed since we reuse the existing `status` field.
+
+Add `merged` as a new message status and replace the filesystem-based worktree check with `git worktree list`.
+
+**Final status flow:** `pending` → `creation` → `in_progress` → `completed` → `merged`
+
+---
 
 ## Changes
 
-### 1. Server: Message Service (`server/src/services/messageService.ts`)
-- Add `softDeleteMessage(messageId)` — sets `status = 'deleted'` via Prisma update
-- Update `getMessagesByChannel` — add `status: { not: 'deleted' }` filter to exclude soft-deleted messages from the query and count
+### 1. Add `merged` to TicketStatus type
+**File:** `src/types.ts:160`
+- Change: `'pending' | 'in_progress' | 'completed' | 'creation'` → `'pending' | 'in_progress' | 'completed' | 'creation' | 'merged'`
 
-### 2. Server: GraphQL Schema (`server/src/schema/message/schema.graphql`)
-- Add mutation: `deleteMessage(channelId: ID!, messageId: ID!): Boolean!`
+### 2. Add `merged` to server VALID_STATUSES
+**File:** `server/src/schema/message/resolvers/Mutation/updateMessageStatus.ts:7`
+- Add `'merged'` to the VALID_STATUSES array
 
-### 3. Server: Mutation Resolver (`server/src/schema/message/resolvers/Mutation/deleteMessage.ts`)
-- New file following the existing resolver pattern (e.g., `updateMessageStatus.ts`)
-- Calls `softDeleteMessage` from the service
-- Broadcasts `message-deleted` SSE event with `{ channelId, messageId }`
-- Returns `true`
+### 3. Add `merged` to MessageItem STATUS_CONFIG
+**File:** `src/components/MessageItem.tsx:8-13`
+- Add merged entry with purple styling (matching the kanban column color `#bb9af7`)
 
-### 4. Client: useMessages Hook (`src/hooks/useMessages.ts`)
-- Add `removeMessage(messageId)` — filters the message out of local state
+### 4. Add `merged` to TicketView STATUS_CONFIG
+**File:** `src/components/TicketView.tsx:8-12`
+- Add merged entry with purple styling
 
-### 5. Client: SSE Handler (`src/hooks/useSse.ts`)
-- Listen for `message-deleted` event
-- Call `removeMessage` to remove from local state
-- Add `removeMessage` to the `UseSseOptions` interface
+### 5. Change merge-to-main to set status `merged`
+**File:** `src/hooks/useClaudeMessageActions.ts:454`
+- Change `statusOnSuccess: 'completed'` → `statusOnSuccess: 'merged'`
 
-### 6. Client: MessageItem Component (`src/components/MessageItem.tsx`)
-- Add `onDeleteMessage` callback prop
-- Add a trash icon (`FiTrash2` from `react-icons/fi`) that appears on hover (positioned at top-right)
-- Clicking the trash icon calls `onDeleteMessage(message.id)` (stops event propagation so it doesn't open the thread)
+### 6. Update SSE completion detection to include `merged`
+**File:** `src/hooks/useSse.ts:74`
+- The `onNeedsAttention` check currently only fires for `completed`. Update it to also fire for `merged` transitions.
 
-### 7. Client: MessagePanel Component (`src/components/MessagePanel.tsx`)
-- Accept new `onDeleteMessage` prop
-- Pass it through to each `MessageItem`
+### 7. Update `checkWorktreeExists` to use `git worktree list`
+**File:** `src/main/worktree.ts:107-110`
+- Replace the `fs.existsSync(worktreePath)` check with spawning `git worktree list` and checking if the worktree path appears in the output
+- Need the repo path to run git commands — add it as a parameter or derive from worktreeBase
 
-### 8. Client: App.tsx
-- Add `GQL_DELETE_MESSAGE` mutation (alongside existing `GQL_UPDATE_MESSAGE_STATUS`)
-- Add `handleDeleteMessage(messageId)` function that:
-  1. Shows `window.confirm("Delete this message? It will be hidden from the list.")`
-  2. If the deleted message is currently selected, closes the thread panel
-  3. Calls `window.traceAPI.releasePorts(messageId)` and `window.traceAPI.deleteWorktree(messageId, repoPath)` to clean up the worktree
-  4. Calls the `deleteMessage` GraphQL mutation
-  5. Removes message from local state via `removeMessage`
-- Pass `onDeleteMessage={handleDeleteMessage}` through to `MessagePanel`
-- Run codegen after server schema change
+### 8. Kanban mapping (already done)
+**File:** `server/src/services/ticketService.ts:33-39`
+- Already has `merged: 'merged'` in STATUS_TO_SLUG — no change needed
 
-## File Changes Summary
+---
 
-| File | Change |
-|------|--------|
-| `server/src/services/messageService.ts` | Add `softDeleteMessage`, filter deleted in `getMessagesByChannel` |
-| `server/src/schema/message/schema.graphql` | Add `deleteMessage` mutation |
-| `server/src/schema/message/resolvers/Mutation/deleteMessage.ts` | New resolver |
-| `src/hooks/useMessages.ts` | Add `removeMessage` |
-| `src/hooks/useSse.ts` | Handle `message-deleted` SSE event |
-| `src/components/MessageItem.tsx` | Add hover trash icon + `onDeleteMessage` prop |
-| `src/components/MessagePanel.tsx` | Pass through `onDeleteMessage` prop |
-| `src/App.tsx` | Add delete mutation, `handleDeleteMessage`, wire everything |
-| Run codegen | Regenerate types for new mutation |
+## Not changing
+- Internal value `creation` stays as-is (already displays as "Creating" in UI)
+- No database migration needed (status is a free-form String field)

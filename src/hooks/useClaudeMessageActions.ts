@@ -451,7 +451,7 @@ export function useClaudeMessageActions({
     if (!persisted) return;
 
     await spawnClaudeForMessage(selectedMessage.id, prompt, {
-      statusOnSuccess: 'completed',
+      statusOnSuccess: 'merged',
       errorPrefix: 'Failed to spawn claude for merge-to-main',
       setHasWorktreeOnSuccess: false,
     });

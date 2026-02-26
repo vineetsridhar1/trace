@@ -24,6 +24,14 @@ const HEADER_STATUS_CONFIG: Record<
     label: 'Completed',
     className: 'text-green-400 bg-green-400/10',
   },
+  merged: {
+    label: 'Merged',
+    className: 'text-purple-400 bg-purple-400/10',
+  },
+  needs_input: {
+    label: 'Needs Input',
+    className: 'text-amber-400 bg-amber-400/10',
+  },
 };
 
 interface ThreadHeaderProps {

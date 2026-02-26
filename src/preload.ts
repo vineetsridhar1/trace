@@ -40,9 +40,10 @@ contextBridge.exposeInMainWorld('traceAPI', {
   },
   checkWorktreeExists: async (
     messageId: string,
+    repoPath: string,
   ): Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('check-worktree', messageId);
+      return await ipcRenderer.invoke('check-worktree', messageId, repoPath);
     } catch (err) {
       return { success: false, exists: false, error: String(err) };
     }

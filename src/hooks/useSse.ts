@@ -23,7 +23,7 @@ interface UseSseOptions {
   activeThreadIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
   selectedMessageRef: React.RefObject<ChannelMessage | null>;
-  onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => void;
+  onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   upsertTicket?: (ticket: KanbanTicket) => void;
 }
 
@@ -71,13 +71,13 @@ export function useSse({
       if (payload.channelId !== activeChannelRef.current) return;
       const message = normalizeMessage(payload.message);
 
-      // Detect completion transitions for attention notification
-      if (onNeedsAttention && message.status === 'completed') {
+      // Detect completion/needs_input transitions for attention notification
+      if (onNeedsAttention && (message.status === 'completed' || message.status === 'merged' || message.status === 'needs_input')) {
         const prev = messagesRef.current.find((m) => m.id === message.id);
-        if (prev && prev.status !== 'completed') {
+        if (prev && prev.status !== message.status) {
           const notViewing = selectedMessageIdRef.current !== message.id || document.hidden;
           if (notViewing) {
-            onNeedsAttention(message.id, 'completed');
+            onNeedsAttention(message.id, message.status as 'completed' | 'merged' | 'needs_input');
           }
         }
       }
