@@ -20,6 +20,7 @@ export interface ClaudeActionsContextValue {
   sendPlanResponse: (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => Promise<void>;
   mergeToMain: () => Promise<void>;
   clearPendingRun: () => void;
+  autoReviewMessage: (messageId: string, claudeSessionId: string | null) => Promise<void>;
 }
 
 const ClaudeActionsContext = createContext<ClaudeActionsContextValue | null>(null);

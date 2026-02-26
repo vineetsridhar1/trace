@@ -47,9 +47,16 @@ type CreateMessagePayload {
 extend type Subscription {
   messageUpserted(channelId: ID!): Message!
   messageDeleted(channelId: ID!): MessageDeletedPayload!
+  messageReadyForReview(channelId: ID!): MessageReadyForReviewPayload!
 }
 
 type MessageDeletedPayload {
   channelId: String!
   messageId: String!
+}
+
+type MessageReadyForReviewPayload {
+  channelId: String!
+  messageId: String!
+  claudeSessionId: String
 }

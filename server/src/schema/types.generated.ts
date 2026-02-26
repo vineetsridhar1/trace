@@ -159,6 +159,13 @@ export type MessageDeletedPayload = {
   messageId: Scalars['String']['output'];
 };
 
+export type MessageReadyForReviewPayload = {
+  __typename?: 'MessageReadyForReviewPayload';
+  channelId: Scalars['String']['output'];
+  claudeSessionId?: Maybe<Scalars['String']['output']>;
+  messageId: Scalars['String']['output'];
+};
+
 export type MessageSession = {
   __typename?: 'MessageSession';
   cwd?: Maybe<Scalars['String']['output']>;
@@ -472,6 +479,7 @@ export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
   messageDeleted: MessageDeletedPayload;
+  messageReadyForReview: MessageReadyForReviewPayload;
   messageUpserted: Message;
   threadEventCreated: ThreadEventPayload;
   threadEventUpdated: ThreadEventPayload;
@@ -486,6 +494,11 @@ export type SubscriptionaiChatStreamArgs = {
 
 
 export type SubscriptionmessageDeletedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionmessageReadyForReviewArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -679,6 +692,7 @@ export type ResolversTypes = {
   Message: ResolverTypeWrapper<MessageMapper>;
   MessageConnection: ResolverTypeWrapper<MessageConnectionMapper>;
   MessageDeletedPayload: ResolverTypeWrapper<MessageDeletedPayloadMapper>;
+  MessageReadyForReviewPayload: ResolverTypeWrapper<MessageReadyForReviewPayload>;
   MessageSession: ResolverTypeWrapper<MessageSessionMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
@@ -717,6 +731,7 @@ export type ResolversParentTypes = {
   Message: MessageMapper;
   MessageConnection: MessageConnectionMapper;
   MessageDeletedPayload: MessageDeletedPayloadMapper;
+  MessageReadyForReviewPayload: MessageReadyForReviewPayload;
   MessageSession: MessageSessionMapper;
   Mutation: Record<PropertyKey, never>;
   Query: Record<PropertyKey, never>;
@@ -861,6 +876,12 @@ export type MessageDeletedPayloadResolvers<ContextType = any, ParentType extends
   messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type MessageReadyForReviewPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageReadyForReviewPayload'] = ResolversParentTypes['MessageReadyForReviewPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  claudeSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
 export type MessageSessionResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageSession'] = ResolversParentTypes['MessageSession']> = {
   cwd?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -940,6 +961,7 @@ export type SessionConnectionResolvers<ContextType = any, ParentType extends Res
 export type SubscriptionResolvers<ContextType = any, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
   aiChatStream?: SubscriptionResolver<ResolversTypes['AiChatStreamPayload'], "aiChatStream", ParentType, ContextType, RequireFields<SubscriptionaiChatStreamArgs, 'chatId'>>;
   messageDeleted?: SubscriptionResolver<ResolversTypes['MessageDeletedPayload'], "messageDeleted", ParentType, ContextType, RequireFields<SubscriptionmessageDeletedArgs, 'channelId'>>;
+  messageReadyForReview?: SubscriptionResolver<ResolversTypes['MessageReadyForReviewPayload'], "messageReadyForReview", ParentType, ContextType, RequireFields<SubscriptionmessageReadyForReviewArgs, 'channelId'>>;
   messageUpserted?: SubscriptionResolver<ResolversTypes['Message'], "messageUpserted", ParentType, ContextType, RequireFields<SubscriptionmessageUpsertedArgs, 'channelId'>>;
   threadEventCreated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventCreated", ParentType, ContextType, RequireFields<SubscriptionthreadEventCreatedArgs, 'channelId'>>;
   threadEventUpdated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventUpdated", ParentType, ContextType, RequireFields<SubscriptionthreadEventUpdatedArgs, 'channelId'>>;
@@ -1028,6 +1050,7 @@ export type Resolvers<ContextType = any> = {
   Message?: MessageResolvers<ContextType>;
   MessageConnection?: MessageConnectionResolvers<ContextType>;
   MessageDeletedPayload?: MessageDeletedPayloadResolvers<ContextType>;
+  MessageReadyForReviewPayload?: MessageReadyForReviewPayloadResolvers<ContextType>;
   MessageSession?: MessageSessionResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;

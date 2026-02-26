@@ -199,6 +199,7 @@ function AppContent() {
   const [showCreateServer, setShowCreateServer] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const autoRunRef = useRef<((messageId: string, runConfig: unknown) => void) | null>(null);
+  const autoReviewRef = useRef<((messageId: string, claudeSessionId: string | null) => void) | null>(null);
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth, SERVER_RAIL_WIDTH);
 
@@ -277,6 +278,9 @@ function AppContent() {
     upsertTicket,
     onTicketReadyToRun: useCallback((messageId: string, runConfig: unknown) => {
       autoRunRef.current?.(messageId, runConfig);
+    }, []),
+    onMessageReadyForReview: useCallback((messageId: string, claudeSessionId: string | null) => {
+      autoReviewRef.current?.(messageId, claudeSessionId);
     }, []),
     onMessageCompleted: triggerMergeCheck,
   });
@@ -425,6 +429,13 @@ function AppContent() {
     };
   }, [claudeActions.autoRunQueuedTicket]);
 
+  // Populate autoReviewRef so the subscription callback can call autoReviewMessage
+  useEffect(() => {
+    autoReviewRef.current = (messageId: string, claudeSessionId: string | null) => {
+      void claudeActions.autoReviewMessage(messageId, claudeSessionId);
+    };
+  }, [claudeActions.autoReviewMessage]);
+
   const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const claudeActionsContextValue = useMemo(
     () => ({
@@ -443,6 +454,7 @@ function AppContent() {
       sendPlanResponse: claudeActions.sendPlanResponse,
       mergeToMain: claudeActions.mergeToMain,
       clearPendingRun: claudeActions.clearPendingRun,
+      autoReviewMessage: claudeActions.autoReviewMessage,
     }),
     [
       repoPath,
@@ -460,6 +472,7 @@ function AppContent() {
       claudeActions.sendPlanResponse,
       claudeActions.mergeToMain,
       claudeActions.clearPendingRun,
+      claudeActions.autoReviewMessage,
     ],
   );
 

@@ -35,6 +35,10 @@ const HEADER_STATUS_CONFIG: Record<
     label: 'Queued',
     className: 'text-cyan-400 bg-cyan-400/10',
   },
+  auto_review: {
+    label: 'Auto-Reviewing',
+    className: 'text-teal-400 bg-teal-400/10',
+  },
 };
 
 interface ThreadHeaderProps {
@@ -215,7 +219,7 @@ export const ThreadHeader = memo(function ThreadHeader({
             </button>
           </Tooltip>
         )}
-        {hasWorktree === true && (messageStatus === 'in_progress' || messageStatus === 'completed') && (
+        {hasWorktree === true && (messageStatus === 'in_progress' || messageStatus === 'completed' || messageStatus === 'auto_review') && (
           <Tooltip text="Merge to main" position="bottom">
             <button
               id="thread-merge-to-main"
