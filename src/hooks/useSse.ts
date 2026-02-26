@@ -16,6 +16,7 @@ interface UseSseOptions {
   activeChannelId: string | null;
   upsertMessage: (message: ChannelMessage) => void;
   appendThreadEvent: (event: ServerEvent) => void;
+  updateThreadEvent: (event: ServerEvent) => void;
   reportClaudeActivity: (messageId: string, eventType: string) => Promise<void>;
   selectedMessageIdRef: React.RefObject<string | null>;
   activeThreadIdRef: React.RefObject<string | null>;
@@ -29,6 +30,7 @@ export function useSse({
   activeChannelId,
   upsertMessage,
   appendThreadEvent,
+  updateThreadEvent,
   reportClaudeActivity,
   selectedMessageIdRef,
   activeThreadIdRef,
@@ -116,6 +118,24 @@ export function useSse({
       appendThreadEvent(payload.event);
     });
 
+    source.addEventListener('thread-event-updated', (evt) => {
+      const payload = JSON.parse((evt as MessageEvent).data) as ThreadEventEnvelope;
+      if (payload.channelId !== activeChannelRef.current) return;
+      if (selectedMessageIdRef.current !== payload.messageId) return;
+
+      const currentThreadId = activeThreadIdRef.current;
+      if (currentThreadId && payload.event.threadId !== currentThreadId) return;
+
+      updateThreadEvent(payload.event);
+
+      // Trigger attention notification for enriched AskUserQuestion events
+      if (payload.event.toolName === 'AskUserQuestion') {
+        if (selectedMessageIdRef.current !== payload.messageId) {
+          onNeedsAttention(payload.messageId, 'ask-user-question');
+        }
+      }
+    });
+
     source.addEventListener('ticket-created', (evt) => {
       if (!upsertTicket) return;
       const payload = JSON.parse((evt as MessageEvent).data) as TicketEnvelope;
@@ -136,7 +156,7 @@ export function useSse({
       source.close();
       if (activeSseRef.current === source) activeSseRef.current = null;
     };
-  }, [activeChannelId, appendThreadEvent, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention, upsertTicket]);
+  }, [activeChannelId, appendThreadEvent, updateThreadEvent, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention, upsertTicket]);
 
   return { sseConnected, activeChannelRef };
 }

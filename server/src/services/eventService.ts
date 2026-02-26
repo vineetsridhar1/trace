@@ -435,6 +435,61 @@ export async function ingestEvent(payload: HookEvent) {
   }
   sseManager.broadcastChannel(channelId, 'message-update', { messageId: message.id, channelId });
 
+  // Schedule a delayed retry when the transcript wasn't ready at ingestion time.
+  // The Claude Code SDK may write the assistant message (containing AskUserQuestion
+  // or ExitPlanMode tool_use) to the transcript AFTER firing the Stop hook.
+  if (
+    payload.hook_event_name === 'Stop' &&
+    payload.stop_hook_active &&
+    !eventData.toolName &&
+    payload.transcript_path
+  ) {
+    const transcriptPath = payload.transcript_path;
+    const eventId = event.id;
+    const retryEnrichment = async () => {
+      try {
+        // Skip if already enriched by a prior retry
+        const current = await prisma.event.findUnique({ where: { id: eventId }, select: { toolName: true } });
+        if (current?.toolName) return;
+
+        const askData = extractAskUserQuestionFromTranscript(transcriptPath);
+        if (askData) {
+          const updated = await prisma.event.update({
+            where: { id: eventId },
+            data: {
+              toolName: 'AskUserQuestion',
+              toolInput: JSON.parse(JSON.stringify(askData)),
+            },
+          });
+          sseManager.broadcastChannel(channelId, 'thread-event-updated', {
+            channelId,
+            messageId: message.id,
+            threadId: thread.id,
+            event: updated,
+          });
+          return;
+        }
+        const exitPlanData = extractExitPlanModeFromTranscript(transcriptPath);
+        if (exitPlanData) {
+          const updated = await prisma.event.update({
+            where: { id: eventId },
+            data: { toolName: 'ExitPlanMode' },
+          });
+          sseManager.broadcastChannel(channelId, 'thread-event-updated', {
+            channelId,
+            messageId: message.id,
+            threadId: thread.id,
+            event: updated,
+          });
+        }
+      } catch {
+        // Silent failure — lazy enrichment on fetch will still work as fallback
+      }
+    };
+    setTimeout(() => void retryEnrichment(), 1500);
+    setTimeout(() => void retryEnrichment(), 4000);
+  }
+
   return { id: event.id, session_id: session.sessionId };
 }
 

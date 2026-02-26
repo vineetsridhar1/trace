@@ -365,6 +365,12 @@ export function useThread({
     }
   }, []);
 
+  const updateThreadEvent = useCallback((event: ServerEvent) => {
+    setThreadEvents((prev) =>
+      prev.map((e) => (e.id === event.id ? event : e)),
+    );
+  }, []);
+
   const hasMoreEvents = threadTotal > threadEvents.length;
 
   const checkWorktree = useCallback(async (messageId: string) => {
@@ -552,6 +558,7 @@ export function useThread({
     loadThreadEvents,
     loadOlderEvents,
     appendThreadEvent,
+    updateThreadEvent,
     hasMoreEvents,
     loadingOlderEvents,
     openThreadPanel,
