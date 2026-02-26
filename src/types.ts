@@ -47,6 +47,7 @@ export interface TraceAPI {
   ) => Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }>;
   checkWorktreeExists: (
     messageId: string,
+    repoPath: string,
   ) => Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }>;
   mergeWorktree: (
     messageId: string,
@@ -157,7 +158,7 @@ export interface ThreadEventEnvelope {
   event: ServerEvent;
 }
 
-export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation';
+export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input';
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';
 export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';

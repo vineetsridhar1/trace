@@ -187,7 +187,7 @@ function AppContent() {
   }, []);
 
   const handleNeedsAttention = useCallback(
-    (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => {
+    (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => {
       setAttentionMessageIds((current) => {
         if (current.has(messageId)) return current;
         const next = new Set(current);
@@ -196,7 +196,12 @@ function AppContent() {
       });
 
       if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
-        const title = reason === 'ask-user-question' ? 'Input needed' : 'Chat completed';
+        const NOTIFICATION_TITLES: Record<string, string> = {
+          'ask-user-question': 'Input needed',
+          'needs_input': 'Input needed',
+          'merged': 'Branch merged',
+        };
+        const title = NOTIFICATION_TITLES[reason] ?? 'Chat completed';
         const message = messagesRef.current.find((item) => item.id === messageId);
         const body = message?.preview || message?.session.cwd || messageId;
         const notification = new Notification(title, { body });
@@ -448,8 +453,8 @@ function AppContent() {
   }, [closeThreadPanel, isFullscreen, setThreadWidth]);
 
   const enterFullscreen = useCallback(async () => {
-    if (!selectedMessageId) return;
-    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId);
+    if (!selectedMessageId || !repoPath) return;
+    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
     if (!result.success || !result.exists || !result.worktreePath) return;
 
     savedWidthsRef.current = { channel: channelWidth, thread: threadWidth };
@@ -459,7 +464,7 @@ function AppContent() {
     if (startupTerminalList.length > 0) {
       showTerminals();
     }
-  }, [channelWidth, selectedMessageId, showTerminals, startupTerminalList.length, threadWidth]);
+  }, [channelWidth, repoPath, selectedMessageId, showTerminals, startupTerminalList.length, threadWidth]);
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
@@ -518,8 +523,8 @@ function AppContent() {
   );
 
   const handleRunMessageScripts = useCallback(async () => {
-    if (!selectedMessageId || !activeChannelId) return;
-    const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId);
+    if (!selectedMessageId || !activeChannelId || !repoPath) return;
+    const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
     const config = getLocalConfig(activeChannelId);
@@ -542,7 +547,7 @@ function AppContent() {
     });
 
     runAllScripts(selectedMessageId, worktreeResult.worktreePath, scripts, envMaps);
-  }, [activeChannelId, getLocalConfig, runAllScripts, selectedMessageId]);
+  }, [activeChannelId, getLocalConfig, repoPath, runAllScripts, selectedMessageId]);
 
   const handleDeleteWorktree = useCallback(() => {
     killAllTerminals();

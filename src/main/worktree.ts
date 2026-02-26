@@ -104,9 +104,16 @@ export async function getWorktreeBranch(messageId: string): Promise<string> {
   return branch;
 }
 
-export function checkWorktreeExists(messageId: string): { exists: boolean; worktreePath: string } {
+export async function checkWorktreeExists(messageId: string, repoPath: string): Promise<{ exists: boolean; worktreePath: string }> {
   const worktreePath = getWorktreePath(messageId);
-  return { exists: fs.existsSync(worktreePath), worktreePath };
+  const result = await runProcess('git', ['worktree', 'list', '--porcelain'], repoPath);
+  if (result.code !== 0) {
+    return { exists: false, worktreePath };
+  }
+  const exists = result.stdout.split('\n').some(
+    (line) => line.startsWith('worktree ') && line.slice('worktree '.length) === worktreePath,
+  );
+  return { exists, worktreePath };
 }
 
 export async function mergeWorktree(messageId: string, repoPath: string, baseBranch: string): Promise<{ success: boolean; branch: string }> {

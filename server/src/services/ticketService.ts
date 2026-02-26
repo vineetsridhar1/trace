@@ -34,6 +34,7 @@ const STATUS_TO_SLUG: Record<string, string> = {
   pending: 'todo',
   creation: 'in_progress',
   in_progress: 'in_progress',
+  needs_input: 'in_review',
   completed: 'completed',
   merged: 'merged',
 };

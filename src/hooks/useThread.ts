@@ -382,12 +382,13 @@ export function useThread({
       return;
     }
     try {
-      const result = await window.traceAPI.checkWorktreeExists(messageId);
+      const repoPath = getChannelRepoPath();
+      const result = await window.traceAPI.checkWorktreeExists(messageId, repoPath);
       setHasWorktree(result.success && result.exists === true);
     } catch {
       setHasWorktree(false);
     }
-  }, []);
+  }, [getChannelRepoPath]);
 
   const openThreadPanel = useCallback(
     (message: ChannelMessage) => {

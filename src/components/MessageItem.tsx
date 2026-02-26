@@ -10,6 +10,8 @@ const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColo
   creation: { label: 'Creating', color: 'text-orange-400', bgColor: 'bg-orange-400/10', avatarBg: 'bg-orange-500/20', avatarText: 'text-orange-400' },
   in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-400/10', avatarBg: 'bg-blue-500', avatarText: 'text-white' },
   completed: { label: 'Completed', color: 'text-green-400', bgColor: 'bg-green-400/10', avatarBg: 'bg-green-500/20', avatarText: 'text-green-400' },
+  merged: { label: 'Merged', color: 'text-purple-400', bgColor: 'bg-purple-400/10', avatarBg: 'bg-purple-500/20', avatarText: 'text-purple-400' },
+  needs_input: { label: 'Needs Input', color: 'text-amber-400', bgColor: 'bg-amber-400/10', avatarBg: 'bg-amber-500/20', avatarText: 'text-amber-400' },
 };
 
 function StatusBadge({ status }: { status: TicketStatus }) {

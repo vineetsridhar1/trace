@@ -90,9 +90,9 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(CHECK_WORKTREE_CHANNEL, async (_event, messageId: string) => {
+  ipcMain.handle(CHECK_WORKTREE_CHANNEL, async (_event, messageId: string, repoPath: string) => {
     try {
-      const result = checkWorktreeExists(messageId);
+      const result = await checkWorktreeExists(messageId, repoPath);
       return { success: true, ...result };
     } catch (err) {
       return { success: false, exists: false, error: String(err) };

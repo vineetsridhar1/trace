@@ -269,6 +269,7 @@ export async function ingestEvent(payload: HookEvent) {
   }
 
   const channelId = message.channelId;
+  let currentStatus = message.status;
   const thread =
     message.threads[message.threads.length - 1] ??
     (await prisma.thread.create({
@@ -304,9 +305,17 @@ export async function ingestEvent(payload: HookEvent) {
   }
 
   // Auto-transition pending -> in_progress on first non-UserPromptSubmit event
-  if (message.status === 'pending' && payload.hook_event_name !== 'UserPromptSubmit') {
+  if (currentStatus === 'pending' && payload.hook_event_name !== 'UserPromptSubmit') {
     await updateMessageStatus(message.id, 'in_progress');
     void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
+    currentStatus = 'in_progress';
+  }
+
+  // Auto-transition needs_input -> in_progress when user responds
+  if (currentStatus === 'needs_input' && payload.hook_event_name === 'UserPromptSubmit') {
+    await updateMessageStatus(message.id, 'in_progress');
+    void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
+    currentStatus = 'in_progress';
   }
 
   // Compute importance
@@ -360,6 +369,13 @@ export async function ingestEvent(payload: HookEvent) {
   }
 
   const event = await prisma.event.create({ data: eventData });
+
+  // Auto-transition in_progress -> needs_input when AskUserQuestion is detected
+  if (eventData.toolName === 'AskUserQuestion' && currentStatus === 'in_progress') {
+    await updateMessageStatus(message.id, 'needs_input');
+    void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
+    currentStatus = 'needs_input';
+  }
 
   // Update message preview and importance
   const preview =
@@ -467,6 +483,16 @@ export async function ingestEvent(payload: HookEvent) {
             threadId: thread.id,
             event: updated,
           });
+          // Auto-transition to needs_input on delayed AskUserQuestion detection
+          const currentMsg = await prisma.message.findUnique({ where: { id: message.id }, select: { status: true } });
+          if (currentMsg?.status === 'in_progress') {
+            await updateMessageStatus(message.id, 'needs_input');
+            void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
+            const hydratedMsg = await getMessageByIdForFeed(message.id);
+            if (hydratedMsg) {
+              sseManager.broadcastChannel(channelId, 'message-upsert', { channelId, message: hydratedMsg });
+            }
+          }
           return;
         }
         const exitPlanData = extractExitPlanModeFromTranscript(transcriptPath);
