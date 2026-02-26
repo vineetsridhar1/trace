@@ -401,6 +401,26 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     nodes.splice(i, 1, askNode);
   }
 
+  // Detect PostToolUse events with AskUserQuestion tool
+  // (when stdin='ignore', AskUserQuestion fires as PostToolUse, not Stop)
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (n.kind !== 'event' || n.event.hookEventName !== 'PostToolUse') continue;
+    if (normalizeToolName(n.event.toolName) !== 'askuserquestion') continue;
+
+    const toolInput = n.event.toolInput as Record<string, unknown> | null;
+    const questions = toolInput?.questions as Question[] | undefined;
+    if (!questions || !Array.isArray(questions) || questions.length === 0) continue;
+
+    const askNode: ThreadRenderNode = {
+      kind: 'ask-user-question',
+      id: `ask-question-${n.event.id}`,
+      questions,
+      event: n.event,
+    };
+    nodes.splice(i, 1, askNode);
+  }
+
   return nodes;
 }
 
