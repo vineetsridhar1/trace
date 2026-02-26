@@ -99,6 +99,7 @@ type Mutation {
   createServer(avatarUrl: String, name: String!): Server!
   createThread(channelId: ID!, messageId: ID!): Thread!
   deleteColumn(columnId: ID!): Boolean!
+  deleteMessage(channelId: ID!, messageId: ID!): Boolean!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
   updateChannel(baseBranch: String, githubUrl: String, id: ID!, name: String): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!

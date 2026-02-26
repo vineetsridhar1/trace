@@ -98,9 +98,11 @@ export async function getMessagesByChannel(
 ) {
   const { limit = 50, offset = 0 } = options;
 
+  const where = { channelId, status: { not: 'deleted' } };
+
   const [messages, total] = await Promise.all([
     prisma.message.findMany({
-      where: { channelId },
+      where,
       orderBy: { createdAt: 'desc' },
       skip: offset,
       take: limit,
@@ -109,7 +111,7 @@ export async function getMessagesByChannel(
         _count: { select: { threads: true } },
       },
     }),
-    prisma.message.count({ where: { channelId } }),
+    prisma.message.count({ where }),
   ]);
 
   return { messages, total, limit, offset };
@@ -141,6 +143,13 @@ export async function updateMessageStatus(messageId: string, status: string) {
   return prisma.message.update({
     where: { id: messageId },
     data: { status },
+  });
+}
+
+export async function softDeleteMessage(messageId: string) {
+  return prisma.message.update({
+    where: { id: messageId },
+    data: { status: 'deleted' },
   });
 }
 

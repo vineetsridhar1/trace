@@ -57,9 +57,13 @@ export function useMessages() {
     }
   }, [client]);
 
+  const removeMessage = useCallback((messageId: string) => {
+    setMessages((current) => current.filter((item) => item.id !== messageId));
+  }, []);
+
   const clearMessages = useCallback(() => {
     setMessages([]);
   }, []);
 
-  return { messages, messagesRef, upsertMessage, refreshMessages, clearMessages };
+  return { messages, messagesRef, upsertMessage, removeMessage, refreshMessages, clearMessages };
 }

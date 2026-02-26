@@ -1,135 +1,61 @@
-# Plan: Clear & Resume Threads
+# Plan: Delete Messages (Soft Delete + Worktree Cleanup)
 
 ## Summary
-Add `/clear` command and thread history to visually separate conversation segments. Each "clear" creates a new thread within the same message, and the next message spawns a fresh Claude process. A history button in the thread header allows switching between threads and fully resuming old conversations.
-
-## Answers to Design Questions
-1. **Clear behavior**: Hide and preserve (new thread, old events stay in DB)
-2. **Resume mode**: Full resume (can switch back and continue)
-3. **Button placement**: Thread panel header
-4. **Claude session**: Fresh Claude process (no prior context after `/clear`)
-
-## Key Design Insight
-How does `sendThreadMessage` know whether to resume or spawn fresh?
-- **If the active thread has events** → resume (pass `resumeSessionId`)
-- **If the active thread is empty** (just created by `/clear`) → spawn fresh (no `resumeSessionId`)
-
-This elegantly handles all cases:
-- After `/clear`: empty thread → fresh spawn
-- Resuming old thread: has events → resume current session
-- Normal follow-up message: has events → resume
-
----
+Add the ability to soft-delete messages via a hover trash icon on each message item, with a `window.confirm()` confirmation dialog. Deleting a message hides it from the UI (sets `status = 'deleted'`), deletes the associated worktree if one exists, and broadcasts an SSE event so other clients stay in sync. No Prisma migration needed since we reuse the existing `status` field.
 
 ## Changes
 
-### 1. Backend: Add `createThread` mutation
+### 1. Server: Message Service (`server/src/services/messageService.ts`)
+- Add `softDeleteMessage(messageId)` — sets `status = 'deleted'` via Prisma update
+- Update `getMessagesByChannel` — add `status: { not: 'deleted' }` filter to exclude soft-deleted messages from the query and count
 
-**`server/src/schema/thread/schema.graphql`** — Add:
-```graphql
-extend type Mutation {
-  createThread(channelId: ID!, messageId: ID!): Thread!
-}
-```
+### 2. Server: GraphQL Schema (`server/src/schema/message/schema.graphql`)
+- Add mutation: `deleteMessage(channelId: ID!, messageId: ID!): Boolean!`
 
-**`server/src/services/messageService.ts`** — Add:
-```typescript
-export async function createEmptyThread(messageId: string) {
-  return prisma.thread.create({ data: { messageId } });
-}
-```
+### 3. Server: Mutation Resolver (`server/src/schema/message/resolvers/Mutation/deleteMessage.ts`)
+- New file following the existing resolver pattern (e.g., `updateMessageStatus.ts`)
+- Calls `softDeleteMessage` from the service
+- Broadcasts `message-deleted` SSE event with `{ channelId, messageId }`
+- Returns `true`
 
-**`server/src/schema/thread/resolvers/Mutation/createThread.ts`** — New resolver file.
+### 4. Client: useMessages Hook (`src/hooks/useMessages.ts`)
+- Add `removeMessage(messageId)` — filters the message out of local state
 
-### 2. Backend: Add `threadId` param to `appendPrompt`
+### 5. Client: SSE Handler (`src/hooks/useSse.ts`)
+- Listen for `message-deleted` event
+- Call `removeMessage` to remove from local state
+- Add `removeMessage` to the `UseSseOptions` interface
 
-**`server/src/schema/message/schema.graphql`** — Add optional `threadId`:
-```graphql
-appendPrompt(..., threadId: ID): CreateMessagePayload!
-```
+### 6. Client: MessageItem Component (`src/components/MessageItem.tsx`)
+- Add `onDeleteMessage` callback prop
+- Add a trash icon (`FiTrash2` from `react-icons/fi`) that appears on hover (positioned at top-right)
+- Clicking the trash icon calls `onDeleteMessage(message.id)` (stops event propagation so it doesn't open the thread)
 
-**`server/src/services/messageService.ts`** — Update `appendPromptToMessageThread`:
-- If `threadId` provided → use that thread
-- Otherwise → current behavior (first thread or create new)
+### 7. Client: MessagePanel Component (`src/components/MessagePanel.tsx`)
+- Accept new `onDeleteMessage` prop
+- Pass it through to each `MessageItem`
 
-**`server/src/schema/message/resolvers/Mutation/appendPrompt.ts`** — Pass `threadId` through.
-
-### 3. Frontend: Thread-scoped event loading in `useThread.ts`
-
-Add `GQL_THREAD_EVENTS` query (the `threadEvents` query already exists on the server).
-
-Change `loadThreadEvents` to:
-1. Fetch threads list → populate `threads` state
-2. Load events from the **latest thread only** (via `threadEvents` query, not `messageEvents`)
-
-Change `loadOlderEvents` to use `threadEvents` with the active thread ID.
-
-### 4. Frontend: Thread list, switching, and clearing in `useThread.ts`
-
-New state:
-- `threads: Thread[]` — all threads for the current message
-
-New functions:
-- `clearThread()` — calls `createThread` mutation, sets new empty thread as active, clears events
-- `switchThread(threadId)` — loads events for a specific thread via `threadEvents` query
-
-### 5. Frontend: Add `/clear` command
-
-**`src/hooks/useSlashCommands.ts`** — Add to commands list.
-
-**`src/components/ThreadInput.tsx`** — Intercept `/clear` in `handleSendThreadMessage`:
-- If input starts with `/clear`, call `clearThread()` instead of sending to Claude
-- Clear the input
-
-### 6. Frontend: Update `ThreadContext.tsx`
-
-Expose: `threads`, `clearThread`, `switchThread`.
-
-### 7. Frontend: Conditional resume in `sendThreadMessage`
-
-**`src/hooks/useClaudeMessageActions.ts`**:
-- `sendThreadMessage` checks if the active thread has events
-  - Has events → pass `resumeSessionId` (resume)
-  - Empty thread → don't pass `resumeSessionId` (fresh spawn), include system instructions
-- Pass `activeThreadId` as `threadId` to `persistPrompt` so events go to the correct thread
-
-### 8. Frontend: SSE filtering by active thread
-
-**`src/hooks/useSse.ts`**:
-- Only call `appendThreadEvent` if `event.threadId` matches the active thread
-- Pass `activeThreadIdRef` into `useSse`
-
-### 9. Frontend: Thread History UI
-
-**`src/components/ThreadHeader.tsx`** — Add `FiClock` history icon button (visible when `threads.length > 1`).
-
-**`src/components/ThreadHistoryDropdown.tsx`** (new file):
-- Dropdown anchored to the history button
-- Lists threads: index number, creation time, event count
-- Highlights active thread
-- Click to switch via `switchThread()`
-
-### 10. Plan approval — no change needed
-
-The current "Approve (clear context)" already creates a new thread and spawns a fresh Claude process. This matches the user's desired behavior. No modifications needed.
-
----
+### 8. Client: App.tsx
+- Add `GQL_DELETE_MESSAGE` mutation (alongside existing `GQL_UPDATE_MESSAGE_STATUS`)
+- Add `handleDeleteMessage(messageId)` function that:
+  1. Shows `window.confirm("Delete this message? It will be hidden from the list.")`
+  2. If the deleted message is currently selected, closes the thread panel
+  3. Calls `window.traceAPI.releasePorts(messageId)` and `window.traceAPI.deleteWorktree(messageId, repoPath)` to clean up the worktree
+  4. Calls the `deleteMessage` GraphQL mutation
+  5. Removes message from local state via `removeMessage`
+- Pass `onDeleteMessage={handleDeleteMessage}` through to `MessagePanel`
+- Run codegen after server schema change
 
 ## File Changes Summary
 
 | File | Change |
 |------|--------|
-| `server/src/schema/thread/schema.graphql` | Add `createThread` mutation |
-| `server/src/schema/thread/resolvers/Mutation/createThread.ts` | New resolver |
-| `server/src/services/messageService.ts` | Add `createEmptyThread`, update `appendPromptToMessageThread` for `threadId` |
-| `server/src/schema/message/schema.graphql` | Add `threadId` to `appendPrompt` |
-| `server/src/schema/message/resolvers/Mutation/appendPrompt.ts` | Pass `threadId` |
-| `src/hooks/useThread.ts` | Thread list state, `switchThread`, `clearThread`, thread-scoped loading |
-| `src/hooks/useSlashCommands.ts` | Add `/clear` command |
-| `src/hooks/useClaudeMessageActions.ts` | Conditional resume, pass `threadId` to `persistPrompt` |
-| `src/context/ThreadContext.tsx` | Expose new thread state/functions |
-| `src/components/ThreadInput.tsx` | Intercept `/clear` |
-| `src/components/ThreadHeader.tsx` | Add history button |
-| `src/components/ThreadHistoryDropdown.tsx` | New component |
-| `src/hooks/useSse.ts` | Filter events by active thread |
-| Run codegen for server + frontend | Regenerate types |
+| `server/src/services/messageService.ts` | Add `softDeleteMessage`, filter deleted in `getMessagesByChannel` |
+| `server/src/schema/message/schema.graphql` | Add `deleteMessage` mutation |
+| `server/src/schema/message/resolvers/Mutation/deleteMessage.ts` | New resolver |
+| `src/hooks/useMessages.ts` | Add `removeMessage` |
+| `src/hooks/useSse.ts` | Handle `message-deleted` SSE event |
+| `src/components/MessageItem.tsx` | Add hover trash icon + `onDeleteMessage` prop |
+| `src/components/MessagePanel.tsx` | Pass through `onDeleteMessage` prop |
+| `src/App.tsx` | Add delete mutation, `handleDeleteMessage`, wire everything |
+| Run codegen | Regenerate types for new mutation |

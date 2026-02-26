@@ -7,6 +7,7 @@ extend type Mutation {
   appendPrompt(channelId: ID!, messageId: ID!, text: String!, attachmentIds: [String!], createNewThread: Boolean, threadId: ID): CreateMessagePayload!
   updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
   updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!
+  deleteMessage(channelId: ID!, messageId: ID!): Boolean!
 }
 
 type Message {

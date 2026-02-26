@@ -1,4 +1,5 @@
 import { memo, useRef, useState, useEffect } from 'react';
+import { FiTrash2 } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChannelMessage, KanbanTicket, TicketStatus } from '../types';
@@ -77,6 +78,7 @@ interface MessageItemProps {
   isSelected: boolean;
   needsAttention?: boolean;
   onOpenThread: (message: ChannelMessage) => void;
+  onDeleteMessage?: (messageId: string) => void;
   dimmed?: boolean;
 }
 
@@ -86,6 +88,7 @@ export const MessageItem = memo(function MessageItem({
   isSelected,
   needsAttention,
   onOpenThread,
+  onDeleteMessage,
   dimmed,
 }: MessageItemProps) {
   const rawPreview = message.preview || message.session?.cwd || message.sessionId;
@@ -97,7 +100,7 @@ export const MessageItem = memo(function MessageItem({
   return (
     <button
       type="button"
-      className={`message-item flex cursor-pointer items-start gap-3 border-l-2 border-transparent px-3 py-3 text-left transition-colors ${
+      className={`message-item group flex cursor-pointer items-start gap-3 border-l-2 border-transparent px-3 py-3 text-left transition-colors ${
         isSelected ? 'selected' : ''
       } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
       onClick={() => onOpenThread(message)}
@@ -119,7 +122,28 @@ export const MessageItem = memo(function MessageItem({
               {message.branch.replace(/^trace\//, '')}
             </span>
           )}
-          <span className="ml-auto text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
+          <span className="ml-auto flex items-center gap-1">
+            <span className="text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
+            {onDeleteMessage && (
+              <div
+                role="button"
+                tabIndex={-1}
+                className="hidden cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteMessage(message.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    onDeleteMessage(message.id);
+                  }
+                }}
+              >
+                <FiTrash2 className="h-3.5 w-3.5" />
+              </div>
+            )}
+          </span>
         </div>
         {ticket ? (
           <>
@@ -155,6 +179,7 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.isSelected === next.isSelected &&
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
-    prev.onOpenThread === next.onOpenThread
+    prev.onOpenThread === next.onOpenThread &&
+    prev.onDeleteMessage === next.onDeleteMessage
   );
 }

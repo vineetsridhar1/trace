@@ -15,6 +15,7 @@ function normalizeMessage(raw: MessageEnvelope['message']): ChannelMessage {
 interface UseSseOptions {
   activeChannelId: string | null;
   upsertMessage: (message: ChannelMessage) => void;
+  removeMessage: (messageId: string) => void;
   appendThreadEvent: (event: ServerEvent) => void;
   reportClaudeActivity: (messageId: string, eventType: string) => Promise<void>;
   selectedMessageIdRef: React.RefObject<string | null>;
@@ -28,6 +29,7 @@ interface UseSseOptions {
 export function useSse({
   activeChannelId,
   upsertMessage,
+  removeMessage,
   appendThreadEvent,
   reportClaudeActivity,
   selectedMessageIdRef,
@@ -79,6 +81,12 @@ export function useSse({
       }
 
       upsertMessage(message);
+    });
+
+    source.addEventListener('message-deleted', (evt) => {
+      const payload = JSON.parse((evt as MessageEvent).data) as { channelId: string; messageId: string };
+      if (payload.channelId !== activeChannelRef.current) return;
+      removeMessage(payload.messageId);
     });
 
     source.addEventListener('thread-event-created', (evt) => {
@@ -136,7 +144,7 @@ export function useSse({
       source.close();
       if (activeSseRef.current === source) activeSseRef.current = null;
     };
-  }, [activeChannelId, appendThreadEvent, reportClaudeActivity, upsertMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention, upsertTicket]);
+  }, [activeChannelId, appendThreadEvent, reportClaudeActivity, upsertMessage, removeMessage, selectedMessageIdRef, messagesRef, selectedMessageRef, onNeedsAttention, upsertTicket]);
 
   return { sseConnected, activeChannelRef };
 }

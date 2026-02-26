@@ -123,6 +123,7 @@ export type Mutation = {
   createServer: Server;
   createThread: Thread;
   deleteColumn: Scalars['Boolean']['output'];
+  deleteMessage: Scalars['Boolean']['output'];
   moveTicket: Ticket;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
@@ -179,6 +180,12 @@ export type MutationCreateThreadArgs = {
 
 export type MutationDeleteColumnArgs = {
   columnId: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteMessageArgs = {
+  channelId: Scalars['ID']['input'];
+  messageId: Scalars['ID']['input'];
 };
 
 

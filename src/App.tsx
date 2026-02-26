@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
 import { MESSAGE_FIELDS } from './graphql/fragments';
-import { useUpdateMessageStatusMutation } from './__generated__/App.generated';
+import { useUpdateMessageStatusMutation, useDeleteMessageMutation } from './__generated__/App.generated';
 import { buildThreadNodes } from './utils';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
@@ -33,6 +33,12 @@ const GQL_UPDATE_MESSAGE_STATUS = gql`
     }
   }
   ${MESSAGE_FIELDS}
+`;
+
+const GQL_DELETE_MESSAGE = gql`
+  mutation DeleteMessage($channelId: ID!, $messageId: ID!) {
+    deleteMessage(channelId: $channelId, messageId: $messageId)
+  }
 `;
 
 const SERVER_RAIL_WIDTH = 60;
@@ -68,6 +74,7 @@ function AppContent() {
     messages,
     messagesRef,
     upsertMessage,
+    removeMessage,
     refreshMessages,
     clearMessages,
   } = useMessages();
@@ -158,6 +165,7 @@ function AppContent() {
   } = useKanban();
 
   const [executeUpdateMessageStatus] = useUpdateMessageStatusMutation();
+  const [executeDeleteMessage] = useDeleteMessageMutation();
 
   const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('chat');
   const [channelWidth, setChannelWidth] = useState(220);
@@ -202,6 +210,7 @@ function AppContent() {
   const { sseConnected } = useSse({
     activeChannelId,
     upsertMessage: upsertAndSyncMessage,
+    removeMessage,
     appendThreadEvent,
     reportClaudeActivity,
     selectedMessageIdRef,
@@ -249,6 +258,30 @@ function AppContent() {
       void moveTicket(activeChannelId, ticketId, columnId, sortOrder);
     },
     [activeChannelId, moveTicket],
+  );
+
+  const handleDeleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!activeChannelId) return;
+      if (!window.confirm('Delete this message?')) return;
+
+      if (selectedMessageId === messageId) {
+        closeThreadPanel();
+        setChannelWidth(220);
+      }
+
+      try {
+        await executeDeleteMessage({
+          variables: { channelId: activeChannelId, messageId },
+        });
+        removeMessage(messageId);
+        void window.traceAPI.releasePorts(messageId);
+        void window.traceAPI.deleteWorktree(messageId, getChannelRepoPath());
+      } catch {
+        console.error('Failed to delete message');
+      }
+    },
+    [activeChannelId, selectedMessageId, closeThreadPanel, executeDeleteMessage, removeMessage, getChannelRepoPath],
   );
 
   const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
@@ -621,6 +654,7 @@ function AppContent() {
                 selectedMessageId={selectedMessageId}
                 attentionMessageIds={attentionMessageIds}
                 onOpenThread={handleOpenThread}
+                onDeleteMessage={handleDeleteMessage}
                 middlePanelView={middlePanelView}
                 onSetView={handleSetView}
                 kanbanColumns={kanbanColumns}

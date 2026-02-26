@@ -19,6 +19,7 @@ interface MessagePanelProps {
   kanbanColumns: KanbanColumnType[];
   kanbanLoading: boolean;
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
+  onDeleteMessage?: (messageId: string) => void;
   onOpenSettings: () => void;
 }
 
@@ -33,6 +34,7 @@ export function MessagePanel({
   onSetView,
   kanbanColumns,
   kanbanLoading,
+  onDeleteMessage,
   onMoveTicket,
   onOpenSettings,
 }: MessagePanelProps) {
@@ -155,6 +157,7 @@ export function MessagePanel({
                   isSelected={message.id === selectedMessageId}
                   needsAttention={attentionMessageIds.has(message.id)}
                   onOpenThread={onOpenThread}
+                  onDeleteMessage={onDeleteMessage}
                   dimmed={message.status === 'completed'}
                 />
               ))}
