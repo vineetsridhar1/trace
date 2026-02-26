@@ -2,13 +2,13 @@ import { useState, type KeyboardEvent } from 'react';
 import { FiSend, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { PlanReviewNode } from '../types';
+import type { PlanResponseMode } from '../context/ClaudeActionsContext';
 import { QuestionOptionPill } from './QuestionOptionPill';
 
-const PLAN_PRESETS = [
-  { label: 'Approve (clear context)', value: 'yes, and clear the context window when you start' },
-  { label: 'Approve (keep context)', value: 'yes, and keep the context window as-is' },
-  { label: 'Approve (manual review)', value: 'yes, but pause after each file so I can review' },
-] as const;
+const PLAN_PRESETS: { label: string; mode: PlanResponseMode }[] = [
+  { label: 'Approve (clear context)', mode: 'clear-context' },
+  { label: 'Approve (keep context)', mode: 'keep-context' },
+];
 
 export function PlanResponseBar({
   node,
@@ -16,7 +16,7 @@ export function PlanResponseBar({
   onDismiss,
 }: {
   node: PlanReviewNode;
-  onPlanResponse: (text: string) => void;
+  onPlanResponse: (text: string, mode: PlanResponseMode) => void;
   onDismiss: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -26,10 +26,10 @@ export function PlanResponseBar({
     if (selected) {
       const preset = PLAN_PRESETS.find((p) => p.label === selected);
       if (preset) {
-        onPlanResponse(preset.value);
+        onPlanResponse(preset.label, preset.mode);
       }
     } else if (feedback.trim()) {
-      onPlanResponse(feedback.trim());
+      onPlanResponse(feedback.trim(), 'revise');
     }
   };
 
@@ -38,7 +38,7 @@ export function PlanResponseBar({
       e.preventDefault();
       if (feedback.trim()) {
         setSelected(null);
-        onPlanResponse(feedback.trim());
+        onPlanResponse(feedback.trim(), 'revise');
       }
     }
   };
@@ -71,7 +71,7 @@ export function PlanResponseBar({
           <QuestionOptionPill
             key={preset.label}
             label={preset.label}
-            description={preset.value}
+            description={preset.mode === 'clear-context' ? 'Start a new session with fresh context' : 'Continue with existing context'}
             selected={selected === preset.label}
             multiSelect={false}
             onClick={() => {

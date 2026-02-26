@@ -4,6 +4,7 @@
 import    { channel as Query_channel } from './channel/resolvers/Query/channel';
 import    { channels as Query_channels } from './channel/resolvers/Query/channels';
 import    { event as Query_event } from './event/resolvers/Query/event';
+import    { messageEvents as Query_messageEvents } from './thread/resolvers/Query/messageEvents';
 import    { messages as Query_messages } from './message/resolvers/Query/messages';
 import    { repoBranches as Query_repoBranches } from './channel/resolvers/Query/repoBranches';
 import    { servers as Query_servers } from './server/resolvers/Query/servers';
@@ -45,7 +46,7 @@ import    { TicketMessage } from './kanban/resolvers/TicketMessage';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
+      Query: { board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
       Mutation: { appendPrompt: Mutation_appendPrompt,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,deleteColumn: Mutation_deleteColumn,moveTicket: Mutation_moveTicket,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
       
       Attachment: Attachment,

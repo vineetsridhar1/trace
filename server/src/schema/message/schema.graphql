@@ -4,7 +4,7 @@ extend type Query {
 
 extend type Mutation {
   createMessage(channelId: ID!, text: String!, attachmentIds: [String!]): CreateMessagePayload!
-  appendPrompt(channelId: ID!, messageId: ID!, text: String!, attachmentIds: [String!]): CreateMessagePayload!
+  appendPrompt(channelId: ID!, messageId: ID!, text: String!, attachmentIds: [String!], createNewThread: Boolean): CreateMessagePayload!
   updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
   updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!
 }

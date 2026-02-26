@@ -226,7 +226,7 @@ export async function ingestEvent(payload: HookEvent) {
 
   const channelId = message.channelId;
   const thread =
-    message.threads[0] ??
+    message.threads[message.threads.length - 1] ??
     (await prisma.thread.create({
       data: { messageId: message.id },
     }));

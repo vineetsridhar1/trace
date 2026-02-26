@@ -5,8 +5,10 @@ export function injectHooks(dir: string) {
   const claudeDir = path.join(dir, '.claude');
   const settingsPath = path.join(claudeDir, 'settings.json');
 
+  const rawEnv = process.env.TRACE_SERVER_URL;
+  const serverUrl = rawEnv ? (rawEnv.startsWith('http') ? rawEnv : `http://localhost:${rawEnv}`) : 'http://localhost:3001';
   const curlCmd =
-    'curl -sS --connect-timeout 1 --max-time 2 -X POST http://localhost:3100/events -H "Content-Type: application/json" -d "$(cat)" >/dev/null 2>&1 || true';
+    `curl -sS --connect-timeout 1 --max-time 2 -X POST ${serverUrl}/events -H "Content-Type: application/json" -d "$(cat)" >/dev/null 2>&1 || true`;
 
   const hookHandlers = [{ type: 'command', command: curlCmd }];
   const desiredHooks = {

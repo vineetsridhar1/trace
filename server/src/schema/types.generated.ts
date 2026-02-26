@@ -124,7 +124,7 @@ export type MessageSession = {
 
 export type Mutation = {
   __typename?: 'Mutation';
-  appendPrompt?: Maybe<CreateMessagePayload>;
+  appendPrompt: CreateMessagePayload;
   createChannel: Channel;
   createColumn: KanbanColumn;
   createMessage: CreateMessagePayload;
@@ -142,6 +142,7 @@ export type Mutation = {
 export type MutationappendPromptArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
+  createNewThread?: InputMaybe<Scalars['Boolean']['input']>;
   messageId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
 };
@@ -230,6 +231,7 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   event?: Maybe<Event>;
+  messageEvents: EventConnection;
   messages: MessageConnection;
   repoBranches: Array<Scalars['String']['output']>;
   servers: Array<Server>;
@@ -254,6 +256,15 @@ export type QuerychannelArgs = {
 
 export type QueryeventArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerymessageEventsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  messageId: Scalars['ID']['input'];
+  offset?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -619,7 +630,7 @@ export type MessageSessionResolvers<ContextType = any, ParentType extends Resolv
 };
 
 export type MutationResolvers<ContextType = any, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = {
-  appendPrompt?: Resolver<Maybe<ResolversTypes['CreateMessagePayload']>, ParentType, ContextType, RequireFields<MutationappendPromptArgs, 'channelId' | 'messageId' | 'text'>>;
+  appendPrompt?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationappendPromptArgs, 'channelId' | 'messageId' | 'text'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationcreateChannelArgs, 'name'>>;
   createColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationcreateColumnArgs, 'channelId' | 'name' | 'slug'>>;
   createMessage?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationcreateMessageArgs, 'channelId' | 'text'>>;
@@ -638,6 +649,7 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QuerychannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
+  messageEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerymessageEventsArgs, 'channelId' | 'messageId'>>;
   messages?: Resolver<ResolversTypes['MessageConnection'], ParentType, ContextType, RequireFields<QuerymessagesArgs, 'channelId'>>;
   repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryrepoBranchesArgs, 'localRepoPath'>>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;

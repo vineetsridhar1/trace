@@ -224,6 +224,7 @@ export async function appendPromptToMessageThread(
   messageId: string,
   text: string,
   attachmentIds?: string[],
+  createNewThread?: boolean,
 ) {
   const attachmentMetas = await resolveAttachmentMetas(attachmentIds ?? []);
 
@@ -237,11 +238,12 @@ export async function appendPromptToMessageThread(
       return null;
     }
 
-    const thread =
-      message.threads[0] ??
-      (await tx.thread.create({
-        data: { messageId: message.id },
-      }));
+    const thread = createNewThread
+      ? await tx.thread.create({ data: { messageId: message.id } })
+      : message.threads[0] ??
+        (await tx.thread.create({
+          data: { messageId: message.id },
+        }));
 
     const event = await tx.event.create({
       data: {
@@ -285,6 +287,68 @@ export async function appendPromptToMessageThread(
     thread: created.thread,
     event: created.event,
   };
+}
+
+export async function getEventsByMessage(
+  messageId: string,
+  options: { limit?: number; offset?: number; after?: string } = {},
+) {
+  const { limit = 50, offset = 0, after } = options;
+
+  const threads = await prisma.thread.findMany({
+    where: { messageId },
+    select: { id: true },
+  });
+  const threadIds = threads.map((t) => t.id);
+
+  if (threadIds.length === 0) {
+    return { events: [], total: 0, limit, offset };
+  }
+
+  const where: Record<string, unknown> = { threadId: { in: threadIds } };
+  if (after) where.timestamp = { gt: new Date(after) };
+
+  const [rawEvents, total] = await Promise.all([
+    prisma.event.findMany({
+      where,
+      orderBy: { timestamp: 'desc' },
+      skip: offset,
+      take: limit,
+    }),
+    prisma.event.count({ where }),
+  ]);
+
+  const events = rawEvents.reverse();
+
+  // Lazily enrich the last Stop event with AskUserQuestion data
+  const lastEvent = events.length > 0 ? events[events.length - 1] : null;
+  if (
+    lastEvent &&
+    lastEvent.hookEventName === 'Stop' &&
+    !lastEvent.toolName &&
+    lastEvent.stopHookActive
+  ) {
+    const session = await prisma.session.findUnique({
+      where: { sessionId: lastEvent.sessionId },
+      select: { transcriptPath: true },
+    });
+    if (session?.transcriptPath) {
+      const askData = extractAskUserQuestionFromTranscript(session.transcriptPath);
+      if (askData) {
+        await prisma.event.update({
+          where: { id: lastEvent.id },
+          data: {
+            toolName: 'AskUserQuestion',
+            toolInput: JSON.parse(JSON.stringify(askData)),
+          },
+        });
+        (lastEvent as Record<string, unknown>).toolName = 'AskUserQuestion';
+        (lastEvent as Record<string, unknown>).toolInput = askData;
+      }
+    }
+  }
+
+  return { events, total, limit, offset };
 }
 
 export async function getThreadsByMessage(messageId: string) {

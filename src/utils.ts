@@ -281,7 +281,19 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     bucket = [];
   };
 
+  let currentThreadId: string | null = null;
   for (const event of events) {
+    // Insert thread divider when threadId changes (multi-thread boundary)
+    if (currentThreadId !== null && event.threadId !== currentThreadId) {
+      flushBucket();
+      nodes.push({
+        kind: 'thread-divider',
+        id: `thread-divider-${event.id}`,
+        timestamp: event.timestamp,
+      });
+    }
+    currentThreadId = event.threadId;
+
     if (isReadLikeEvent(event)) {
       bucket.push(event);
       continue;
@@ -319,6 +331,7 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
 
     // Look backwards for a Write or Edit event that modified a plan .md file
     let planContent = '';
+    let planFilePath = '';
     let planToolIdx = -1;
     for (let j = i - 1; j >= 0; j--) {
       const candidate = nodes[j];
@@ -336,6 +349,7 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
           const filePath = findStringByKeys(candidate.event.toolInput, ['file_path', 'path', 'filepath']) ?? '';
           if (filePath.includes('.claude/plans/') && filePath.endsWith('.md')) {
             planContent = findStringByKeys(candidate.event.toolInput, ['content', 'text']) ?? '';
+            planFilePath = filePath;
             planToolIdx = j;
             break;
           }
@@ -355,6 +369,7 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
       kind: 'plan-review',
       id: `plan-review-${n.event.id}`,
       planContent,
+      planFilePath,
       event: n.event,
     };
     nodes.splice(i, 1, planNode);

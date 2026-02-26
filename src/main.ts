@@ -42,6 +42,10 @@ const createWindow = () => {
 };
 
 app.on('ready', () => {
+  const rawEnv = process.env.TRACE_SERVER_URL;
+  const backendUrl = rawEnv ? (rawEnv.startsWith('http') ? rawEnv : `http://localhost:${rawEnv}`) : 'http://localhost:3001';
+  console.log(`[Trace] Backend server URL: ${backendUrl}`);
+  console.log(`[Trace] TRACE_SERVER_URL env: ${rawEnv ?? '(not set, using default)'}`);
   setWorktreeBase(path.join(app.getPath('userData'), 'worktrees'));
   createWindow();
 });

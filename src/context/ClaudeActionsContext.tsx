@@ -2,6 +2,8 @@ import { createContext, useContext } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import type { ClaudeModel, EffortLevel } from '../types';
 
+export type PlanResponseMode = 'clear-context' | 'keep-context' | 'revise';
+
 export interface ClaudeActionsContextValue {
   repoPath: string;
   pendingRunMessageId: string | null;
@@ -14,7 +16,7 @@ export interface ClaudeActionsContextValue {
   runPendingMessage: (planMode: boolean, prompt: string) => Promise<void>;
   stopClaude: () => Promise<void>;
   sendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
-  sendPlanResponse: (text: string) => Promise<void>;
+  sendPlanResponse: (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => Promise<void>;
   mergeToMain: () => Promise<void>;
 }
 

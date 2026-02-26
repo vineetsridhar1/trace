@@ -18,10 +18,11 @@ export type AppendPromptMutationVariables = Types.Exact<{
   messageId: Types.Scalars['ID']['input'];
   text: Types.Scalars['String']['input'];
   attachmentIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
+  createNewThread?: Types.InputMaybe<Types.Scalars['Boolean']['input']>;
 }>;
 
 
-export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt?: { __typename?: 'CreateMessagePayload', message: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null }, thread: { __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, threadId: string, importance: string } } | null };
+export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt: { __typename?: 'CreateMessagePayload', message: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null }, thread: { __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, threadId: string, importance: string } } };
 
 export type UpdateMessagePreviewMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
@@ -85,12 +86,13 @@ export type CreateMessageMutationHookResult = ReturnType<typeof useCreateMessage
 export type CreateMessageMutationResult = Apollo.MutationResult<CreateMessageMutation>;
 export type CreateMessageMutationOptions = Apollo.BaseMutationOptions<CreateMessageMutation, CreateMessageMutationVariables>;
 export const AppendPromptDocument = gql`
-    mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!]) {
+    mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!], $createNewThread: Boolean) {
   appendPrompt(
     channelId: $channelId
     messageId: $messageId
     text: $text
     attachmentIds: $attachmentIds
+    createNewThread: $createNewThread
   ) {
     message {
       ...MessageFields
@@ -131,6 +133,7 @@ export type AppendPromptMutationFn = Apollo.MutationFunction<AppendPromptMutatio
  *      messageId: // value for 'messageId'
  *      text: // value for 'text'
  *      attachmentIds: // value for 'attachmentIds'
+ *      createNewThread: // value for 'createNewThread'
  *   },
  * });
  */

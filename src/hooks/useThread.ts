@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import type { ChannelMessage, ServerEvent, ThreadStatus } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { ThreadsDocument, ThreadEventsDocument, type ThreadsQuery, type ThreadEventsQuery } from './__generated__/useThread.generated';
+import { ThreadsDocument, type ThreadsQuery, MessageEventsDocument, type MessageEventsQuery } from './__generated__/useThread.generated';
 import { clamp } from '../utils';
 
 const GQL_THREADS = gql`
@@ -16,9 +16,9 @@ const GQL_THREADS = gql`
   }
 `;
 
-const GQL_THREAD_EVENTS = gql`
-  query ThreadEvents($channelId: ID!, $messageId: ID!, $threadId: ID!, $limit: Int, $offset: Int, $after: String) {
-    threadEvents(channelId: $channelId, messageId: $messageId, threadId: $threadId, limit: $limit, offset: $offset, after: $after) {
+const GQL_MESSAGE_EVENTS = gql`
+  query MessageEvents($channelId: ID!, $messageId: ID!, $limit: Int, $offset: Int, $after: String) {
+    messageEvents(channelId: $channelId, messageId: $messageId, limit: $limit, offset: $offset, after: $after) {
       events {
         id
         sessionId
@@ -110,8 +110,10 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         // Only show "loading" on initial load, not on incremental SSE updates
         setThreadStatus((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
 
+        // Fetch threads to get the latest thread ID (for SSE routing)
         const { data: threadsData } = await graphqlClient.query<ThreadsQuery>({
           query: ThreadsDocument,
+          fetchPolicy: 'network-only',
           variables: {
             channelId: message.channelId,
             messageId: message.id,
@@ -126,24 +128,26 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
           return;
         }
 
-        const thread = threads[0];
-        setActiveThreadId(thread.id);
+        // Set active thread to the latest thread
+        const latestThread = threads[threads.length - 1];
+        setActiveThreadId(latestThread.id);
 
-        const { data: eventsData } = await graphqlClient.query<ThreadEventsQuery>({
-          query: ThreadEventsDocument,
+        // Load events from ALL threads via messageEvents query
+        const { data: eventsData } = await graphqlClient.query<MessageEventsQuery>({
+          query: MessageEventsDocument,
+          fetchPolicy: 'network-only',
           variables: {
             channelId: message.channelId,
             messageId: message.id,
-            threadId: thread.id,
             limit: THREAD_PAGE_SIZE,
           },
         });
 
-        const events: ServerEvent[] = (eventsData?.threadEvents?.events ?? []) as ServerEvent[];
-        const total = eventsData?.threadEvents?.total ?? events.length;
+        const events: ServerEvent[] = (eventsData?.messageEvents?.events ?? []) as ServerEvent[];
+        const total = eventsData?.messageEvents?.total ?? events.length;
         setThreadEvents(events);
         setThreadTotal(total);
-        threadQueryRef.current = { channelId: message.channelId, messageId: message.id, threadId: thread.id };
+        threadQueryRef.current = { channelId: message.channelId, messageId: message.id, threadId: '__all__' };
         setThreadStatus(events.length === 0 ? 'empty' : 'ready');
 
         const latestEvent = events[events.length - 1];
@@ -167,17 +171,19 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     loadingOlderRef.current = true;
     setLoadingOlderEvents(true);
     try {
-      const { data } = await graphqlClient.query<ThreadEventsQuery>({
-        query: ThreadEventsDocument,
+      const { data } = await graphqlClient.query<MessageEventsQuery>({
+        query: MessageEventsDocument,
+        fetchPolicy: 'network-only',
         variables: {
-          ...query,
+          channelId: query.channelId,
+          messageId: query.messageId,
           limit: THREAD_PAGE_SIZE,
           offset: threadEventsLengthRef.current,
         },
       });
 
-      const olderEvents: ServerEvent[] = (data?.threadEvents?.events ?? []) as ServerEvent[];
-      const total = data?.threadEvents?.total;
+      const olderEvents: ServerEvent[] = (data?.messageEvents?.events ?? []) as ServerEvent[];
+      const total = data?.messageEvents?.total;
       if (total != null) setThreadTotal(total);
       if (olderEvents.length > 0) {
         setThreadEvents((prev) => [...olderEvents, ...prev]);

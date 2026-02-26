@@ -90,7 +90,7 @@ type MessageSession {
 }
 
 type Mutation {
-  appendPrompt(attachmentIds: [String!], channelId: ID!, messageId: ID!, text: String!): CreateMessagePayload
+  appendPrompt(attachmentIds: [String!], channelId: ID!, createNewThread: Boolean, messageId: ID!, text: String!): CreateMessagePayload!
   createChannel(baseBranch: String, githubUrl: String, name: String!, serverId: String): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createMessage(attachmentIds: [String!], channelId: ID!, text: String!): CreateMessagePayload!
@@ -109,6 +109,7 @@ type Query {
   channel(id: ID!): Channel
   channels: [Channel!]!
   event(id: ID!): Event
+  messageEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int): EventConnection!
   messages(channelId: ID!, limit: Int, offset: Int): MessageConnection!
   repoBranches(localRepoPath: String!): [String!]!
   servers: [Server!]!

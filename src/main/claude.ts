@@ -15,7 +15,14 @@ import {
 } from './worktree';
 import { runProcess } from './process';
 
-const SERVER_URL = process.env.TRACE_SERVER_URL ?? 'http://localhost:3100';
+function resolveServerUrl(): string {
+  const raw = process.env.TRACE_SERVER_URL;
+  if (!raw) return 'http://localhost:3001';
+  if (raw.startsWith('http')) return raw;
+  // Support bare port numbers like "3001"
+  return `http://localhost:${raw}`;
+}
+const SERVER_URL = resolveServerUrl();
 const MAX_CAPTURE_CHARS = 20_000;
 
 async function runCreationScripts(worktreePath: string, commands: string[]): Promise<void> {

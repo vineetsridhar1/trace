@@ -1,6 +1,6 @@
 import { type ComponentType, type ReactNode } from 'react';
 
-export const SERVER_URL = 'http://localhost:3100';
+export const SERVER_URL = 'http://localhost:3001';
 
 export interface WorktreeDiffResult {
   success: boolean;
@@ -220,6 +220,7 @@ export interface PlanReviewNode {
   kind: 'plan-review';
   id: string;
   planContent: string;
+  planFilePath: string;
   event: ServerEvent;
 }
 
@@ -242,7 +243,13 @@ export interface AskUserQuestionNode {
   event: ServerEvent;
 }
 
-export type ThreadRenderNode = ThreadEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode;
+export interface ThreadDividerNode {
+  kind: 'thread-divider';
+  id: string;
+  timestamp: string;
+}
+
+export type ThreadRenderNode = ThreadEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode | ThreadDividerNode;
 
 export interface ExtractedDiffContent {
   title: string;
