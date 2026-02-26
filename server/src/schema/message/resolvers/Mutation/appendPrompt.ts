@@ -1,6 +1,6 @@
 import type { MutationResolvers } from './../../../types.generated';
 import { appendPromptToMessageThread } from '../../../../services/messageService';
-import { sseManager } from '../../../../services/sseManager';
+import { pubsub, TOPICS } from '../../../../services/pubsub';
 import { GraphQLError } from 'graphql';
 
 export const appendPrompt: NonNullable<MutationResolvers['appendPrompt']> = async (_parent, { channelId, messageId, text, attachmentIds, createNewThread, threadId }, _ctx) => {
@@ -17,21 +17,17 @@ export const appendPrompt: NonNullable<MutationResolvers['appendPrompt']> = asyn
     throw new GraphQLError('Message or thread not found', { extensions: { code: 'NOT_FOUND' } });
   }
 
-  sseManager.broadcastChannel(channelId, 'message-upsert', {
-    channelId,
-    message: created.message,
+  pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+    messageUpserted: created.message,
   });
-  sseManager.broadcastChannel(channelId, 'thread-event-created', {
-    channelId,
-    messageId: created.message.id,
-    threadId: created.thread.id,
-    event: created.event,
+  pubsub.publish(TOPICS.THREAD_EVENT_CREATED(channelId), {
+    threadEventCreated: {
+      channelId,
+      messageId: created.message.id,
+      threadId: created.thread.id,
+      event: created.event,
+    },
   });
-  sseManager.broadcastChannel(channelId, 'message-update', {
-    messageId: created.message.id,
-    channelId,
-  });
-  sseManager.broadcastChannel(channelId, 'new-event', created.event);
 
   return created;
 };

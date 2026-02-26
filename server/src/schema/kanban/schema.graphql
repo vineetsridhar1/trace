@@ -49,3 +49,13 @@ type TicketAttachment {
   contentType: String!
   url: String!
 }
+
+extend type Subscription {
+  ticketUpserted(channelId: ID!): TicketUpsertPayload!
+}
+
+type TicketUpsertPayload {
+  channelId: String!
+  ticket: Ticket!
+  columnSlug: String!
+}

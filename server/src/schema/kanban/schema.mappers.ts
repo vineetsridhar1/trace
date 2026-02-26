@@ -38,3 +38,9 @@ export interface TicketAttachmentMapper {
   contentType: string;
   url: string;
 }
+
+export interface TicketUpsertPayloadMapper {
+  channelId: string;
+  ticket: TicketMapper;
+  columnSlug: string;
+}

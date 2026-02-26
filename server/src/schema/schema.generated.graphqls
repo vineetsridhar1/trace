@@ -192,11 +192,24 @@ type SessionConnection {
   total: Int!
 }
 
+type Subscription {
+  messageUpserted(channelId: ID!): Message!
+  threadEventCreated(channelId: ID!): ThreadEventPayload!
+  ticketUpserted(channelId: ID!): TicketUpsertPayload!
+}
+
 type Thread {
   createdAt: DateTime!
   eventCount: Int!
   id: ID!
   messageId: String!
+}
+
+type ThreadEventPayload {
+  channelId: String!
+  event: Event!
+  messageId: String!
+  threadId: String!
 }
 
 type Ticket {
@@ -228,6 +241,12 @@ type TicketMessage {
   createdAt: DateTime!
   id: ID!
   status: String!
+}
+
+type TicketUpsertPayload {
+  channelId: String!
+  columnSlug: String!
+  ticket: Ticket!
 }
 
 type TokenUsage {

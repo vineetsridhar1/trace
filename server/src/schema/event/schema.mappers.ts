@@ -28,3 +28,10 @@ export interface EventConnectionMapper {
   tokenUsage: TokenUsageMapper;
   latestContextTokens: number;
 }
+
+export interface ThreadEventPayloadMapper {
+  channelId: string;
+  messageId: string;
+  threadId: string;
+  event: EventMapper;
+}

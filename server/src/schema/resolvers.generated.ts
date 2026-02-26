@@ -34,6 +34,9 @@ import    { updateColumn as Mutation_updateColumn } from './kanban/resolvers/Mut
 import    { updateMessagePreview as Mutation_updateMessagePreview } from './message/resolvers/Mutation/updateMessagePreview';
 import    { updateMessageStatus as Mutation_updateMessageStatus } from './message/resolvers/Mutation/updateMessageStatus';
 import    { uploadAttachment as Mutation_uploadAttachment } from './attachment/resolvers/Mutation/uploadAttachment';
+import    { messageUpserted as Subscription_messageUpserted } from './message/resolvers/Subscription/messageUpserted';
+import    { threadEventCreated as Subscription_threadEventCreated } from './event/resolvers/Subscription/threadEventCreated';
+import    { ticketUpserted as Subscription_ticketUpserted } from './kanban/resolvers/Subscription/ticketUpserted';
 import    { AiChat } from './aiChat/resolvers/AiChat';
 import    { AiChatMessage } from './aiChat/resolvers/AiChatMessage';
 import    { AiChatMessageConnection } from './aiChat/resolvers/AiChatMessageConnection';
@@ -51,16 +54,18 @@ import    { Server } from './server/resolvers/Server';
 import    { Session } from './session/resolvers/Session';
 import    { SessionConnection } from './session/resolvers/SessionConnection';
 import    { Thread } from './thread/resolvers/Thread';
+import    { ThreadEventPayload } from './event/resolvers/ThreadEventPayload';
 import    { Ticket } from './kanban/resolvers/Ticket';
 import    { TicketAttachment } from './kanban/resolvers/TicketAttachment';
 import    { TicketMessage } from './kanban/resolvers/TicketMessage';
+import    { TicketUpsertPayload } from './kanban/resolvers/TicketUpsertPayload';
 import    { TokenUsage } from './event/resolvers/TokenUsage';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
       Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
       Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteAiChat: Mutation_deleteAiChat,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
-      
+      Subscription: { messageUpserted: Subscription_messageUpserted,threadEventCreated: Subscription_threadEventCreated,ticketUpserted: Subscription_ticketUpserted },
       AiChat: AiChat,
 AiChatMessage: AiChatMessage,
 AiChatMessageConnection: AiChatMessageConnection,
@@ -78,9 +83,11 @@ Server: Server,
 Session: Session,
 SessionConnection: SessionConnection,
 Thread: Thread,
+ThreadEventPayload: ThreadEventPayload,
 Ticket: Ticket,
 TicketAttachment: TicketAttachment,
 TicketMessage: TicketMessage,
+TicketUpsertPayload: TicketUpsertPayload,
 TokenUsage: TokenUsage,
 DateTime: DateTime,
 JSON: JSON

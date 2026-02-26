@@ -33,3 +33,14 @@ type EventConnection {
   latestContextTokens: Int!
   cliCostUsd: Float
 }
+
+extend type Subscription {
+  threadEventCreated(channelId: ID!): ThreadEventPayload!
+}
+
+type ThreadEventPayload {
+  channelId: String!
+  messageId: String!
+  threadId: String!
+  event: Event!
+}

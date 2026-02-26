@@ -4,11 +4,18 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { makeExecutableSchema } from '@graphql-tools/schema';
 import { resolvers } from './schema/resolvers.generated';
 import eventsRouter from './routes/events';
-import sseRouter from './routes/sse';
 import attachmentsRouter from './routes/attachments';
 import { errorHandler } from './middleware/errorHandler';
+
+const typeDefs = readFileSync(
+  join(__dirname, './schema/schema.generated.graphqls'),
+  'utf8',
+);
+
+export const schema = makeExecutableSchema({ typeDefs, resolvers });
 
 export async function createApp() {
   const app = express();
@@ -16,12 +23,8 @@ export async function createApp() {
   app.use(cors({ origin: '*' }));
   app.use(express.json({ limit: '10mb' }));
 
-  // GraphQL
-  const typeDefs = readFileSync(
-    join(__dirname, './schema/schema.generated.graphqls'),
-    'utf8',
-  );
-  const server = new ApolloServer({ typeDefs, resolvers });
+  // GraphQL (HTTP)
+  const server = new ApolloServer({ schema });
   await server.start();
   app.use(
     '/graphql',
@@ -31,7 +34,6 @@ export async function createApp() {
 
   // REST endpoints that stay
   app.use('/events', eventsRouter);
-  app.use('/sse', sseRouter);
   app.use('/attachments', attachmentsRouter);
 
   app.get('/health', (_req, res) => {

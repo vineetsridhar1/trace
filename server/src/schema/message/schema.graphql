@@ -43,3 +43,7 @@ type CreateMessagePayload {
   thread: Thread!
   event: Event!
 }
+
+extend type Subscription {
+  messageUpserted(channelId: ID!): Message!
+}

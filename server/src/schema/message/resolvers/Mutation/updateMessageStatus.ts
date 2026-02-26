@@ -1,6 +1,6 @@
 import type { MutationResolvers } from './../../../types.generated';
 import { updateMessageStatus as updateStatus, getMessageByIdForFeed } from '../../../../services/messageService';
-import { sseManager } from '../../../../services/sseManager';
+import { pubsub, TOPICS } from '../../../../services/pubsub';
 import { syncTicketWithMessageStatus } from '../../../../services/ticketService';
 import { GraphQLError } from 'graphql';
 
@@ -41,9 +41,8 @@ export const updateMessageStatus: NonNullable<MutationResolvers['updateMessageSt
     throw new GraphQLError('Message not found after update', { extensions: { code: 'NOT_FOUND' } });
   }
 
-  sseManager.broadcastChannel(channelId, 'message-upsert', {
-    channelId,
-    message,
+  pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+    messageUpserted: message,
   });
 
   void syncTicketWithMessageStatus(messageId, channelId, status);

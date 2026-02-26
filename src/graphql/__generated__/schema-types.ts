@@ -16,6 +16,34 @@ export type Scalars = {
   JSON: { input: unknown; output: unknown; }
 };
 
+export type AiChat = {
+  __typename?: 'AiChat';
+  channelId?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  lastMessage?: Maybe<Scalars['String']['output']>;
+  serverId: Scalars['String']['output'];
+  title: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type AiChatMessage = {
+  __typename?: 'AiChatMessage';
+  chatId: Scalars['String']['output'];
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  role: Scalars['String']['output'];
+};
+
+export type AiChatMessageConnection = {
+  __typename?: 'AiChatMessageConnection';
+  limit: Scalars['Int']['output'];
+  messages: Array<AiChatMessage>;
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+};
+
 export type Attachment = {
   __typename?: 'Attachment';
   byteSize: Scalars['Int']['output'];
@@ -118,14 +146,18 @@ export type MessageSession = {
 export type Mutation = {
   __typename?: 'Mutation';
   appendPrompt: CreateMessagePayload;
+  createAiChat: AiChat;
   createChannel: Channel;
   createColumn: KanbanColumn;
   createMessage: CreateMessagePayload;
   createServer: Server;
   createThread: Thread;
+  deleteAiChat: Scalars['Boolean']['output'];
   deleteColumn: Scalars['Boolean']['output'];
   deleteMessage: Scalars['Boolean']['output'];
   moveTicket: Ticket;
+  renameAiChat: AiChat;
+  sendAiChatMessage: AiChatMessage;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateMessagePreview: Message;
@@ -141,6 +173,13 @@ export type MutationAppendPromptArgs = {
   messageId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
   threadId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type MutationCreateAiChatArgs = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
+  serverId: Scalars['ID']['input'];
+  title?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -179,6 +218,11 @@ export type MutationCreateThreadArgs = {
 };
 
 
+export type MutationDeleteAiChatArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationDeleteColumnArgs = {
   columnId: Scalars['ID']['input'];
 };
@@ -194,6 +238,18 @@ export type MutationMoveTicketArgs = {
   columnId: Scalars['ID']['input'];
   sortOrder?: InputMaybe<Scalars['Int']['input']>;
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationRenameAiChatArgs = {
+  id: Scalars['ID']['input'];
+  title: Scalars['String']['input'];
+};
+
+
+export type MutationSendAiChatMessageArgs = {
+  chatId: Scalars['ID']['input'];
+  content: Scalars['String']['input'];
 };
 
 
@@ -235,6 +291,8 @@ export type MutationUploadAttachmentArgs = {
 
 export type Query = {
   __typename?: 'Query';
+  aiChatMessages: AiChatMessageConnection;
+  aiChats: Array<AiChat>;
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
@@ -249,6 +307,18 @@ export type Query = {
   threadEvents: EventConnection;
   threads: Array<Thread>;
   validateRepo: RepoValidation;
+};
+
+
+export type QueryAiChatMessagesArgs = {
+  chatId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryAiChatsArgs = {
+  serverId: Scalars['ID']['input'];
 };
 
 
@@ -371,12 +441,42 @@ export type SessionConnection = {
   total: Scalars['Int']['output'];
 };
 
+export type Subscription = {
+  __typename?: 'Subscription';
+  messageUpserted: Message;
+  threadEventCreated: ThreadEventPayload;
+  ticketUpserted: TicketUpsertPayload;
+};
+
+
+export type SubscriptionMessageUpsertedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionThreadEventCreatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionTicketUpsertedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
 export type Thread = {
   __typename?: 'Thread';
   createdAt: Scalars['DateTime']['output'];
   eventCount: Scalars['Int']['output'];
   id: Scalars['ID']['output'];
   messageId: Scalars['String']['output'];
+};
+
+export type ThreadEventPayload = {
+  __typename?: 'ThreadEventPayload';
+  channelId: Scalars['String']['output'];
+  event: Event;
+  messageId: Scalars['String']['output'];
+  threadId: Scalars['String']['output'];
 };
 
 export type Ticket = {
@@ -411,6 +511,13 @@ export type TicketMessage = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   status: Scalars['String']['output'];
+};
+
+export type TicketUpsertPayload = {
+  __typename?: 'TicketUpsertPayload';
+  channelId: Scalars['String']['output'];
+  columnSlug: Scalars['String']['output'];
+  ticket: Ticket;
 };
 
 export type TokenUsage = {

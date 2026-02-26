@@ -8,7 +8,7 @@ import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
 import { useThreadScroll } from './hooks/useThreadScroll';
 import { usePanelResize } from './hooks/usePanelResize';
-import { useSse } from './hooks/useSse';
+import { useChannelSubscriptions } from './hooks/useChannelSubscriptions';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
 import { useClaudeMessageActions } from './hooks/useClaudeMessageActions';
 import { useKanban } from './hooks/useKanban';
@@ -226,7 +226,7 @@ function AppContent() {
     [messagesRef],
   );
 
-  const { sseConnected } = useSse({
+  const { subscriptionsActive } = useChannelSubscriptions({
     activeChannelId,
     upsertMessage: upsertAndSyncMessage,
     removeMessage,
@@ -425,14 +425,14 @@ function AppContent() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!activeChannelId || sseConnected) return;
+      if (!activeChannelId || subscriptionsActive) return;
       void refreshMessages(activeChannelId);
       if (selectedMessageRef.current) {
         void loadThreadEvents(selectedMessageRef.current);
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [activeChannelId, loadThreadEvents, refreshMessages, selectedMessageRef, sseConnected]);
+  }, [activeChannelId, loadThreadEvents, refreshMessages, selectedMessageRef, subscriptionsActive]);
 
   const handleSwitchChannel = useCallback(
     (channelId: string) => {

@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma';
-import { sseManager } from './sseManager';
+import { pubsub, TOPICS } from './pubsub';
 import { generateTicketFromMessage, updateTicketFromContext } from './ticketAiService';
 import { getStorage } from './storageService';
 
@@ -142,9 +142,12 @@ export async function createTicketForMessage(
     },
   });
 
-  sseManager.broadcastChannel(channelId, 'ticket-created', {
-    channelId,
-    ticket: { ...resolveTicketAttachmentUrls(ticket), columnSlug: todoColumn.slug },
+  pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+    ticketUpserted: {
+      channelId,
+      ticket: resolveTicketAttachmentUrls(ticket),
+      columnSlug: todoColumn.slug,
+    },
   });
 
   return ticket;
@@ -189,9 +192,12 @@ export async function updateTicketFromEvent(
     },
   });
 
-  sseManager.broadcastChannel(channelId, 'ticket-updated', {
-    channelId,
-    ticket: { ...resolveTicketAttachmentUrls(updated), columnSlug: updated.column.slug },
+  pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+    ticketUpserted: {
+      channelId,
+      ticket: resolveTicketAttachmentUrls(updated),
+      columnSlug: updated.column.slug,
+    },
   });
 
   return updated;
@@ -211,9 +217,12 @@ export async function moveTicket(ticketId: string, columnId: string, sortOrder: 
 
   const { channelId } = ticket.message;
 
-  sseManager.broadcastChannel(channelId, 'ticket-updated', {
-    channelId,
-    ticket: { ...resolveTicketAttachmentUrls(ticket), columnSlug: ticket.column.slug },
+  pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+    ticketUpserted: {
+      channelId,
+      ticket: resolveTicketAttachmentUrls(ticket),
+      columnSlug: ticket.column.slug,
+    },
   });
 
   return ticket;
@@ -262,9 +271,12 @@ export async function syncTicketWithMessageStatus(
     },
   });
 
-  sseManager.broadcastChannel(channelId, 'ticket-updated', {
-    channelId,
-    ticket: { ...resolveTicketAttachmentUrls(updated), columnSlug: updated.column.slug },
+  pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+    ticketUpserted: {
+      channelId,
+      ticket: resolveTicketAttachmentUrls(updated),
+      columnSlug: updated.column.slug,
+    },
   });
 
   return updated;
@@ -280,9 +292,12 @@ export async function refreshTicketBroadcast(messageId: string, channelId: strin
   });
   if (!ticket) return;
 
-  sseManager.broadcastChannel(channelId, 'ticket-updated', {
-    channelId,
-    ticket: { ...resolveTicketAttachmentUrls(ticket), columnSlug: ticket.column.slug },
+  pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+    ticketUpserted: {
+      channelId,
+      ticket: resolveTicketAttachmentUrls(ticket),
+      columnSlug: ticket.column.slug,
+    },
   });
 }
 

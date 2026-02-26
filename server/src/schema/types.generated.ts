@@ -3,8 +3,8 @@ import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper } from
 import { AttachmentMapper } from './attachment/schema.mappers';
 import { ChannelMapper, RepoValidationMapper } from './channel/schema.mappers';
 import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageSessionMapper } from './message/schema.mappers';
-import { EventMapper, EventConnectionMapper, TokenUsageMapper } from './event/schema.mappers';
-import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketMessageMapper } from './kanban/schema.mappers';
+import { EventMapper, EventConnectionMapper, ThreadEventPayloadMapper, TokenUsageMapper } from './event/schema.mappers';
+import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketMessageMapper, TicketUpsertPayloadMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
 import { SessionMapper, SessionConnectionMapper } from './session/schema.mappers';
 import { ThreadMapper } from './thread/schema.mappers';
@@ -452,12 +452,42 @@ export type SessionConnection = {
   total: Scalars['Int']['output'];
 };
 
+export type Subscription = {
+  __typename?: 'Subscription';
+  messageUpserted: Message;
+  threadEventCreated: ThreadEventPayload;
+  ticketUpserted: TicketUpsertPayload;
+};
+
+
+export type SubscriptionmessageUpsertedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionthreadEventCreatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionticketUpsertedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
 export type Thread = {
   __typename?: 'Thread';
   createdAt: Scalars['DateTime']['output'];
   eventCount: Scalars['Int']['output'];
   id: Scalars['ID']['output'];
   messageId: Scalars['String']['output'];
+};
+
+export type ThreadEventPayload = {
+  __typename?: 'ThreadEventPayload';
+  channelId: Scalars['String']['output'];
+  event: Event;
+  messageId: Scalars['String']['output'];
+  threadId: Scalars['String']['output'];
 };
 
 export type Ticket = {
@@ -492,6 +522,13 @@ export type TicketMessage = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   status: Scalars['String']['output'];
+};
+
+export type TicketUpsertPayload = {
+  __typename?: 'TicketUpsertPayload';
+  channelId: Scalars['String']['output'];
+  columnSlug: Scalars['String']['output'];
+  ticket: Ticket;
 };
 
 export type TokenUsage = {
@@ -575,7 +612,6 @@ export type DirectiveResolverFn<TResult = Record<PropertyKey, never>, TParent = 
 /** Mapping between all available schema types and the resolvers types */
 export type ResolversTypes = {
   AiChat: ResolverTypeWrapper<AiChatMapper>;
-  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   AiChatMessage: ResolverTypeWrapper<AiChatMessageMapper>;
@@ -588,6 +624,7 @@ export type ResolversTypes = {
   Event: ResolverTypeWrapper<EventMapper>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   EventConnection: ResolverTypeWrapper<EventConnectionMapper>;
+  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Message: ResolverTypeWrapper<MessageMapper>;
@@ -599,17 +636,19 @@ export type ResolversTypes = {
   Server: ResolverTypeWrapper<ServerMapper>;
   Session: ResolverTypeWrapper<SessionMapper>;
   SessionConnection: ResolverTypeWrapper<SessionConnectionMapper>;
+  Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Thread: ResolverTypeWrapper<ThreadMapper>;
+  ThreadEventPayload: ResolverTypeWrapper<ThreadEventPayloadMapper>;
   Ticket: ResolverTypeWrapper<TicketMapper>;
   TicketAttachment: ResolverTypeWrapper<TicketAttachmentMapper>;
   TicketMessage: ResolverTypeWrapper<TicketMessageMapper>;
+  TicketUpsertPayload: ResolverTypeWrapper<TicketUpsertPayloadMapper>;
   TokenUsage: ResolverTypeWrapper<TokenUsageMapper>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = {
   AiChat: AiChatMapper;
-  Float: Scalars['Float']['output'];
   String: Scalars['String']['output'];
   ID: Scalars['ID']['output'];
   AiChatMessage: AiChatMessageMapper;
@@ -622,6 +661,7 @@ export type ResolversParentTypes = {
   Event: EventMapper;
   Boolean: Scalars['Boolean']['output'];
   EventConnection: EventConnectionMapper;
+  Float: Scalars['Float']['output'];
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
   Message: MessageMapper;
@@ -633,10 +673,13 @@ export type ResolversParentTypes = {
   Server: ServerMapper;
   Session: SessionMapper;
   SessionConnection: SessionConnectionMapper;
+  Subscription: Record<PropertyKey, never>;
   Thread: ThreadMapper;
+  ThreadEventPayload: ThreadEventPayloadMapper;
   Ticket: TicketMapper;
   TicketAttachment: TicketAttachmentMapper;
   TicketMessage: TicketMessageMapper;
+  TicketUpsertPayload: TicketUpsertPayloadMapper;
   TokenUsage: TokenUsageMapper;
 };
 
@@ -838,11 +881,24 @@ export type SessionConnectionResolvers<ContextType = any, ParentType extends Res
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
+export type SubscriptionResolvers<ContextType = any, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
+  messageUpserted?: SubscriptionResolver<ResolversTypes['Message'], "messageUpserted", ParentType, ContextType, RequireFields<SubscriptionmessageUpsertedArgs, 'channelId'>>;
+  threadEventCreated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventCreated", ParentType, ContextType, RequireFields<SubscriptionthreadEventCreatedArgs, 'channelId'>>;
+  ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
+};
+
 export type ThreadResolvers<ContextType = any, ParentType extends ResolversParentTypes['Thread'] = ResolversParentTypes['Thread']> = {
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   eventCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type ThreadEventPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['ThreadEventPayload'] = ResolversParentTypes['ThreadEventPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  event?: Resolver<ResolversTypes['Event'], ParentType, ContextType>;
+  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  threadId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type TicketResolvers<ContextType = any, ParentType extends ResolversParentTypes['Ticket'] = ResolversParentTypes['Ticket']> = {
@@ -876,6 +932,12 @@ export type TicketMessageResolvers<ContextType = any, ParentType extends Resolve
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type TicketUpsertPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketUpsertPayload'] = ResolversParentTypes['TicketUpsertPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  columnSlug?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  ticket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType>;
+};
+
 export type TokenUsageResolvers<ContextType = any, ParentType extends ResolversParentTypes['TokenUsage'] = ResolversParentTypes['TokenUsage']> = {
   inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   outputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
@@ -903,10 +965,13 @@ export type Resolvers<ContextType = any> = {
   Server?: ServerResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
+  Subscription?: SubscriptionResolvers<ContextType>;
   Thread?: ThreadResolvers<ContextType>;
+  ThreadEventPayload?: ThreadEventPayloadResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
   TicketAttachment?: TicketAttachmentResolvers<ContextType>;
   TicketMessage?: TicketMessageResolvers<ContextType>;
+  TicketUpsertPayload?: TicketUpsertPayloadResolvers<ContextType>;
   TokenUsage?: TokenUsageResolvers<ContextType>;
 };
 

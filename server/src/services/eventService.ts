@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import prisma from '../lib/prisma';
 import { HookEvent } from '../types/hookEvents';
-import { sseManager } from './sseManager';
+import { pubsub, TOPICS } from './pubsub';
 import { execSync } from 'node:child_process';
 import {
   getMessageByIdForFeed,
@@ -298,7 +298,6 @@ export async function ingestEvent(payload: HookEvent) {
         : null;
 
       if (existingPromptEvent && existingPrompt && existingPrompt === incomingPrompt) {
-        sseManager.broadcast(payload.session_id, 'session-update', session);
         return { id: existingPromptEvent.id, session_id: session.sessionId };
       }
     }
@@ -433,23 +432,15 @@ export async function ingestEvent(payload: HookEvent) {
 
   const hydratedMessage = await getMessageByIdForFeed(message.id);
 
-  // Broadcast via SSE
-  sseManager.broadcast(payload.session_id, 'new-event', event);
-  sseManager.broadcast(payload.session_id, 'session-update', session);
-  sseManager.broadcastChannel(channelId, 'new-event', event);
-  sseManager.broadcastChannel(channelId, 'thread-event-created', {
-    channelId,
-    messageId: message.id,
-    threadId: thread.id,
-    event,
+  // Broadcast via GraphQL subscriptions
+  pubsub.publish(TOPICS.THREAD_EVENT_CREATED(channelId), {
+    threadEventCreated: { channelId, messageId: message.id, threadId: thread.id, event },
   });
   if (hydratedMessage) {
-    sseManager.broadcastChannel(channelId, 'message-upsert', {
-      channelId,
-      message: hydratedMessage,
+    pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+      messageUpserted: hydratedMessage,
     });
   }
-  sseManager.broadcastChannel(channelId, 'message-update', { messageId: message.id, channelId });
 
   // Schedule a delayed retry when the transcript wasn't ready at ingestion time.
   // The Claude Code SDK may write the assistant message (containing AskUserQuestion
