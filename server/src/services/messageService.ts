@@ -390,6 +390,9 @@ export async function getEventsByMessage(
       hasCliUsage = true;
       inputTokens += cliUsage.input_tokens ?? 0;
       outputTokens += cliUsage.output_tokens ?? 0;
+      if (cliUsage.input_tokens) {
+        latestContextTokens = cliUsage.input_tokens;
+      }
       if (typeof payload?.cli_cost_usd === 'number') {
         cliCostUsd = (cliCostUsd ?? 0) + payload.cli_cost_usd;
       }
@@ -531,6 +534,9 @@ export async function getEventsByThread(
       hasCliUsage = true;
       inputTokens += cliUsage.input_tokens ?? 0;
       outputTokens += cliUsage.output_tokens ?? 0;
+      if (cliUsage.input_tokens) {
+        latestContextTokens = cliUsage.input_tokens;
+      }
       if (typeof payload?.cli_cost_usd === 'number') {
         cliCostUsd = (cliCostUsd ?? 0) + payload.cli_cost_usd;
       }
