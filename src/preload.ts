@@ -124,4 +124,19 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   listRepoFiles: (repoPath: string) =>
     ipcRenderer.invoke('list-repo-files', repoPath) as Promise<{ success: boolean; files: string[]; error?: string }>,
+
+  checkBranchesMerged: (repoPath: string, branches: string[], baseBranch: string) =>
+    ipcRenderer.invoke('check-branches-merged', repoPath, branches, baseBranch) as Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>,
+
+  watchBaseBranch: (repoPath: string, baseBranch: string) =>
+    ipcRenderer.invoke('watch-base-branch', repoPath, baseBranch) as Promise<{ success: boolean }>,
+
+  unwatchBaseBranch: () =>
+    ipcRenderer.invoke('unwatch-base-branch') as Promise<{ success: boolean }>,
+
+  onBaseBranchChanged: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('base-branch-changed', handler);
+    return () => ipcRenderer.removeListener('base-branch-changed', handler);
+  },
 });

@@ -11,6 +11,7 @@ import { usePanelResize } from './hooks/usePanelResize';
 import { useChannelSubscriptions } from './hooks/useChannelSubscriptions';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
 import { useClaudeMessageActions } from './hooks/useClaudeMessageActions';
+import { useMergePolling } from './hooks/useMergePolling';
 import { useKanban } from './hooks/useKanban';
 import { useAiChats } from './hooks/useAiChats';
 import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
@@ -271,6 +272,13 @@ function AppContent() {
     },
     [activeChannelId, executeUpdateMessageStatus, upsertAndSyncMessage],
   );
+
+  useMergePolling({
+    messagesRef,
+    repoPath: enrichedActiveChannel?.localRepoPath ?? '',
+    baseBranch: enrichedActiveChannel?.baseBranch ?? 'main',
+    updateMessageStatus,
+  });
 
   const handleSetView = useCallback(
     (view: MiddlePanelView) => {

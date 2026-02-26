@@ -78,6 +78,10 @@ export interface TraceAPI {
   getAllLocalConfigs: () => Promise<Record<string, LocalChannelConfig>>;
   deleteLocalConfig: (channelId: string) => Promise<{ success: boolean }>;
   listRepoFiles: (repoPath: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
+  checkBranchesMerged: (repoPath: string, branches: string[], baseBranch: string) => Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>;
+  watchBaseBranch: (repoPath: string, baseBranch: string) => Promise<{ success: boolean }>;
+  unwatchBaseBranch: () => Promise<{ success: boolean }>;
+  onBaseBranchChanged: (callback: () => void) => () => void;
 }
 
 declare global {

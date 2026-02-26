@@ -11,7 +11,7 @@ import {
   updateMessageStatus,
   updateMessageSummaryAndBranch,
 } from './messageService';
-import { updateTicketFromEvent, syncTicketWithMessageStatus, refreshTicketBroadcast } from './ticketService';
+import { updateTicketFromEvent, syncTicketWithMessageStatus, refreshTicketBroadcast, checkAndTriggerDependents } from './ticketService';
 
 function extractMessageIdFromWorktreePath(worktreePath: string | undefined): string | null {
   if (!worktreePath) {
@@ -303,8 +303,8 @@ export async function ingestEvent(payload: HookEvent) {
     }
   }
 
-  // Auto-transition pending -> in_progress on first non-UserPromptSubmit event
-  if (currentStatus === 'pending' && payload.hook_event_name !== 'UserPromptSubmit') {
+  // Auto-transition pending/completed -> in_progress on first non-UserPromptSubmit event
+  if ((currentStatus === 'pending' || currentStatus === 'completed') && payload.hook_event_name !== 'UserPromptSubmit') {
     await updateMessageStatus(message.id, 'in_progress');
     void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
     currentStatus = 'in_progress';
@@ -369,8 +369,8 @@ export async function ingestEvent(payload: HookEvent) {
 
   const event = await prisma.event.create({ data: eventData });
 
-  // Auto-transition in_progress -> needs_input when AskUserQuestion is detected
-  if (eventData.toolName === 'AskUserQuestion' && currentStatus === 'in_progress') {
+  // Auto-transition in_progress -> needs_input when AskUserQuestion or ExitPlanMode is detected
+  if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && currentStatus === 'in_progress') {
     await updateMessageStatus(message.id, 'needs_input');
     void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
     currentStatus = 'needs_input';
@@ -503,6 +503,18 @@ export async function ingestEvent(payload: HookEvent) {
               event: updated,
             },
           });
+          // Auto-transition to needs_input on delayed ExitPlanMode detection
+          const currentMsg = await prisma.message.findUnique({ where: { id: message.id }, select: { status: true } });
+          if (currentMsg?.status === 'in_progress') {
+            await updateMessageStatus(message.id, 'needs_input');
+            void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
+            const hydratedMsg = await getMessageByIdForFeed(message.id);
+            if (hydratedMsg) {
+              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+                messageUpserted: hydratedMsg,
+              });
+            }
+          }
         }
       } catch {
         // Silent failure — lazy enrichment on fetch will still work as fallback
@@ -510,6 +522,36 @@ export async function ingestEvent(payload: HookEvent) {
     };
     setTimeout(() => void retryEnrichment(), 1500);
     setTimeout(() => void retryEnrichment(), 4000);
+
+    // Auto-complete: if after 5s the event still has no toolName (Claude is NOT
+    // waiting on the user) and the message is still in_progress with the same
+    // session, transition to completed.
+    const autoCompleteSessionId = payload.session_id;
+    setTimeout(async () => {
+      try {
+        const [currentEvent, currentMsg] = await Promise.all([
+          prisma.event.findUnique({ where: { id: event.id }, select: { toolName: true } }),
+          prisma.message.findUnique({ where: { id: message.id }, select: { status: true, claudeSessionId: true } }),
+        ]);
+        if (
+          currentEvent && !currentEvent.toolName &&
+          currentMsg?.status === 'in_progress' &&
+          currentMsg.claudeSessionId === autoCompleteSessionId
+        ) {
+          await updateMessageStatus(message.id, 'completed');
+          void syncTicketWithMessageStatus(message.id, channelId, 'completed');
+          void checkAndTriggerDependents(message.id, channelId);
+          const hydratedMsg = await getMessageByIdForFeed(message.id);
+          if (hydratedMsg) {
+            pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+              messageUpserted: hydratedMsg,
+            });
+          }
+        }
+      } catch {
+        // Silent failure — status will remain in_progress
+      }
+    }, 5000);
   }
 
   return { id: event.id, session_id: session.sessionId };

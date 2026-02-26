@@ -215,7 +215,7 @@ export const ThreadHeader = memo(function ThreadHeader({
             </button>
           </Tooltip>
         )}
-        {hasWorktree === true && messageStatus === 'in_progress' && (
+        {hasWorktree === true && (messageStatus === 'in_progress' || messageStatus === 'completed') && (
           <Tooltip text="Merge to main" position="bottom">
             <button
               id="thread-merge-to-main"

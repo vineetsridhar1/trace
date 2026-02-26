@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { ipcMain, dialog, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
@@ -29,8 +31,12 @@ const SET_LOCAL_CONFIG_CHANNEL = 'set-local-config';
 const GET_ALL_LOCAL_CONFIGS_CHANNEL = 'get-all-local-configs';
 const DELETE_LOCAL_CONFIG_CHANNEL = 'delete-local-config';
 const LIST_REPO_FILES_CHANNEL = 'list-repo-files';
+const CHECK_BRANCHES_MERGED_CHANNEL = 'check-branches-merged';
+const WATCH_BASE_BRANCH_CHANNEL = 'watch-base-branch';
+const UNWATCH_BASE_BRANCH_CHANNEL = 'unwatch-base-branch';
 
 let mainWindowRef: BrowserWindow | null = null;
+let branchWatchers: fs.FSWatcher[] = [];
 
 export function setMainWindow(win: BrowserWindow) {
   mainWindowRef = win;
@@ -69,6 +75,9 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(GET_ALL_LOCAL_CONFIGS_CHANNEL);
   ipcMain.removeHandler(DELETE_LOCAL_CONFIG_CHANNEL);
   ipcMain.removeHandler(LIST_REPO_FILES_CHANNEL);
+  ipcMain.removeHandler(CHECK_BRANCHES_MERGED_CHANNEL);
+  ipcMain.removeHandler(WATCH_BASE_BRANCH_CHANNEL);
+  ipcMain.removeHandler(UNWATCH_BASE_BRANCH_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string) => {
     try {
@@ -259,5 +268,76 @@ export function registerIpcHandlers() {
     } catch (err) {
       return { success: false, error: String(err), files: [] };
     }
+  });
+
+  ipcMain.handle(CHECK_BRANCHES_MERGED_CHANNEL, async (_event, repoPath: string, branches: string[], baseBranch: string) => {
+    try {
+      const merged: Record<string, boolean> = {};
+      for (const branch of branches) {
+        try {
+          // Check against local base branch (covers local merges)
+          const local = await runProcess('git', ['merge-base', '--is-ancestor', branch, baseBranch], repoPath);
+          if (local.code === 0) {
+            merged[branch] = true;
+            continue;
+          }
+          // Check against remote base branch (covers pushed merges after fetch)
+          const remote = await runProcess('git', ['merge-base', '--is-ancestor', branch, `origin/${baseBranch}`], repoPath);
+          merged[branch] = remote.code === 0;
+        } catch {
+          merged[branch] = false;
+        }
+      }
+      return { success: true, merged };
+    } catch (err) {
+      return { success: false, merged: {}, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(WATCH_BASE_BRANCH_CHANNEL, (_event, repoPath: string, baseBranch: string) => {
+    // Close any existing watchers
+    for (const w of branchWatchers) w.close();
+    branchWatchers = [];
+
+    const gitDir = path.join(repoPath, '.git');
+    // Watch directories (not specific files) so we catch newly-created refs
+    // e.g. after the first `git fetch` creates refs/remotes/origin/main
+    const watchPaths = [
+      path.join(gitDir, 'refs', 'heads'),
+      path.join(gitDir, 'refs', 'remotes', 'origin'),
+      path.join(gitDir, 'packed-refs'),
+    ];
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const notify = (_eventType: string, filename: string | null) => {
+      // For directories, only fire when the base branch file changes
+      // For packed-refs (a file), always fire
+      if (filename && filename !== baseBranch && filename !== 'packed-refs') return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+          mainWindowRef.webContents.send('base-branch-changed');
+        }
+      }, 500);
+    };
+
+    for (const watchPath of watchPaths) {
+      try {
+        if (fs.existsSync(watchPath)) {
+          const watcher = fs.watch(watchPath, notify);
+          watcher.on('error', () => {}); // Ignore watch errors
+          branchWatchers.push(watcher);
+        }
+      } catch {
+        // Path doesn't exist or can't be watched — skip
+      }
+    }
+    return { success: true };
+  });
+
+  ipcMain.handle(UNWATCH_BASE_BRANCH_CHANNEL, () => {
+    for (const w of branchWatchers) w.close();
+    branchWatchers = [];
+    return { success: true };
   });
 }
