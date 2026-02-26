@@ -620,13 +620,35 @@ function AppContent() {
   const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const activeChannelBaseBranch = enrichedActiveChannel?.baseBranch ?? 'main';
 
+  // High-frequency context: changes on every SSE event
+  const threadEventsContextValue = useMemo(
+    () => ({
+      threadEvents,
+      threadNodes,
+      threadStatus,
+      hasMoreEvents,
+      loadingOlderEvents,
+      threadContentRef,
+      showJumpToLatest,
+      scrollToLatest: () => scrollThreadToBottom('smooth'),
+      onThreadScroll,
+      tokenUsage,
+      latestContextTokens,
+      cliCostUsd,
+    }),
+    [
+      threadEvents, threadNodes, threadStatus, hasMoreEvents, loadingOlderEvents,
+      threadContentRef, showJumpToLatest, scrollThreadToBottom, onThreadScroll,
+      tokenUsage, latestContextTokens, cliCostUsd,
+    ],
+  );
+
+  // Session-level context: changes infrequently
   const threadContextValue = useMemo(
     () => ({
       selectedMessageId,
       activeThreadId,
       threads,
-      threadEvents,
-      threadStatus,
       threadWidth: isFullscreen ? 9999 : threadWidth,
       deletingWorktree,
       hasWorktree,
@@ -640,16 +662,6 @@ function AppContent() {
       deleteWorktree,
       switchThread,
       clearThread,
-      threadContentRef,
-      showJumpToLatest,
-      scrollToLatest: () => scrollThreadToBottom('smooth'),
-      onThreadScroll,
-      hasMoreEvents,
-      loadingOlderEvents,
-      tokenUsage,
-      latestContextTokens,
-      cliCostUsd,
-      threadNodes,
       isClaudeRunning,
       messageStatus: selectedMessageStatus,
       selectedTicket,
@@ -664,22 +676,20 @@ function AppContent() {
       onExitFullscreen: exitFullscreen,
     }),
     [
-      selectedMessageId, activeThreadId, threads, threadEvents, threadStatus, threadWidth,
+      selectedMessageId, activeThreadId, threads, threadWidth,
       deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
       closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
       loadThreadEvents, deleteWorktree, switchThread, clearThread,
-      threadContentRef, showJumpToLatest,
-      scrollThreadToBottom, onThreadScroll, hasMoreEvents, loadingOlderEvents,
-      tokenUsage, latestContextTokens, cliCostUsd, threadNodes, isClaudeRunning,
-      selectedMessageStatus, selectedTicket, isFullscreen, scriptsAvailable,
-      dragging, handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
+      isClaudeRunning, selectedMessageStatus, selectedTicket,
+      isFullscreen, scriptsAvailable, dragging,
+      handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
       startDragging, enterFullscreen, exitFullscreen,
     ],
   );
 
   return (
     <ClaudeActionsProvider value={claudeActionsContextValue}>
-      <ThreadProvider value={threadContextValue}>
+      <ThreadProvider value={threadContextValue} eventsValue={threadEventsContextValue}>
         <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
           {!isFullscreen && (
             <ServerRail

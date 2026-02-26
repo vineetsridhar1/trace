@@ -2,9 +2,13 @@ import { type ComponentType, type ReactNode } from 'react';
 
 const DEFAULT_SERVER_URL = 'http://localhost:3100';
 
+let cachedServerUrl: string | null = null;
+
 export function getServerUrl(): string {
+  if (cachedServerUrl) return cachedServerUrl;
   if (typeof window !== 'undefined' && window.traceAPI?.getServerUrl) {
-    return window.traceAPI.getServerUrl();
+    cachedServerUrl = window.traceAPI.getServerUrl();
+    return cachedServerUrl;
   }
   return DEFAULT_SERVER_URL;
 }
@@ -268,6 +272,11 @@ export interface AskUserQuestionNode {
   id: string;
   questions: Question[];
   event: ServerEvent;
+}
+
+export interface TodoItem {
+  content: string;
+  status: string;
 }
 
 export interface ThreadDividerNode {

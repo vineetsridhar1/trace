@@ -2,13 +2,14 @@ import { useCallback, useRef, useState } from "react";
 import { gql } from "@apollo/client";
 import type { ChannelMessage, ServerEvent, ThreadStatus } from "../types";
 import {
-  type ThreadsQuery,
-  type ThreadEventsQuery,
   useCreateThreadMutation,
   useThreadsLazyQuery,
   useThreadEventsLazyQuery,
 } from "./__generated__/useThread.generated";
 import { clamp } from "../utils";
+import { useTokenTracking } from "./useTokenTracking";
+import { useWorktreeState } from "./useWorktreeState";
+import { useThreadSelection } from "./useThreadSelection";
 
 export interface ThreadInfo {
   id: string;
@@ -102,47 +103,51 @@ export function useThread({
   const [executeThreadEvents] = useThreadEventsLazyQuery();
   const [executeCreateThread] = useCreateThreadMutation();
 
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
-    null,
-  );
-  const [selectedMessage, setSelectedMessage] = useState<ChannelMessage | null>(
-    null,
-  );
+  // Composed hooks
+  const {
+    selectedMessageId,
+    selectedMessage,
+    selectedMessageRef,
+    selectedMessageIdRef,
+    syncSelectedMessage,
+    clearSelection,
+    selectMessage,
+  } = useThreadSelection();
+  const {
+    tokenUsage,
+    latestContextTokens,
+    cliCostUsd,
+    trackEventTokens,
+    trackEventTokenUpdate,
+    resetTokenTracking,
+    applyLoadedTokenData,
+  } = useTokenTracking();
+  const {
+    hasWorktree,
+    setHasWorktree,
+    deletingWorktree,
+    mergingWorktree,
+    checkWorktree,
+    deleteWorktree,
+    mergeWorktree,
+  } = useWorktreeState({
+    getChannelRepoPath,
+    getChannelBaseBranch,
+    selectedMessageRef,
+  });
+
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<ThreadInfo[]>([]);
   const [threadEvents, setThreadEvents] = useState<ServerEvent[]>([]);
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>("idle");
   const [threadWidth, setThreadWidth] = useState(0);
-  const [deletingWorktree, setDeletingWorktree] = useState(false);
-  const [mergingWorktree, setMergingWorktree] = useState(false);
-  const [hasWorktree, setHasWorktree] = useState<boolean | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<
     Record<string, boolean>
   >({});
   const [threadTotal, setThreadTotal] = useState(0);
   const [loadingOlderEvents, setLoadingOlderEvents] = useState(false);
-  const [tokenUsage, setTokenUsage] = useState<{
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  }>({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
-  const [latestContextTokens, setLatestContextTokens] = useState(0);
-  const [cliCostUsd, setCliCostUsd] = useState<number | null>(null);
-  const lastSeenUsageRef = useRef<{ input: number; output: number }>({
-    input: 0,
-    output: 0,
-  });
-  // Track tokens accumulated from per-event usage during the current run,
-  // so we can subtract them when the authoritative cli_usage Stop arrives.
-  const runAccumulatedRef = useRef<{ input: number; output: number; total: number }>({
-    input: 0,
-    output: 0,
-    total: 0,
-  });
 
-  const selectedMessageRef = useRef<ChannelMessage | null>(null);
-  const selectedMessageIdRef = useRef<string | null>(null);
   const activeThreadIdRef = useRef<string | null>(null);
   const lastReportedThreadEventIdByMessageRef = useRef<Map<string, string>>(
     new Map(),
@@ -158,8 +163,6 @@ export function useThread({
   threadEventsLengthRef.current = threadEvents.length;
   threadEventsRef.current = threadEvents;
 
-  selectedMessageRef.current = selectedMessage;
-  selectedMessageIdRef.current = selectedMessageId;
   activeThreadIdRef.current = activeThreadId;
 
   const threadOpen = threadWidth > 0;
@@ -187,23 +190,18 @@ export function useThread({
     setLoadingOlderEvents(false);
     loadingOlderRef.current = false;
     threadQueryRef.current = null;
-    setTokenUsage({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
-    setLatestContextTokens(0);
-    setCliCostUsd(null);
-    lastSeenUsageRef.current = { input: 0, output: 0 };
-    runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
-  }, []);
+    resetTokenTracking();
+  }, [resetTokenTracking]);
 
   const closeThreadPanel = useCallback(() => {
-    setSelectedMessageId(null);
-    setSelectedMessage(null);
+    clearSelection();
     setActiveThreadId(null);
     setThreads([]);
     setThreadEvents([]);
     setThreadStatus("idle");
     setThreadWidth(0);
     resetThreadViewState();
-  }, [resetThreadViewState]);
+  }, [resetThreadViewState, clearSelection]);
 
   // Load events for a specific thread by ID
   const loadEventsForThread = useCallback(
@@ -227,42 +225,23 @@ export function useThread({
       threadQueryRef.current = { channelId, messageId, threadId };
       setThreadStatus(events.length === 0 ? "empty" : "ready");
 
-      const tu = result?.tokenUsage;
-      if (tu) {
-        setTokenUsage({
-          inputTokens: tu.inputTokens,
-          outputTokens: tu.outputTokens,
-          totalTokens: tu.totalTokens,
-        });
-      }
-      setLatestContextTokens(result?.latestContextTokens ?? 0);
-      setCliCostUsd(result?.cliCostUsd ?? null);
-
-      const lastLoadedEvent = events[events.length - 1];
-      if (lastLoadedEvent) {
-        const lastUsage = (
-          lastLoadedEvent.rawPayload as Record<string, unknown>
-        )?.usage as
-          | { input_tokens?: number; output_tokens?: number }
-          | undefined;
-        lastSeenUsageRef.current = {
-          input: lastUsage?.input_tokens ?? 0,
-          output: lastUsage?.output_tokens ?? 0,
-        };
-      }
+      applyLoadedTokenData({
+        tokenUsage: result?.tokenUsage,
+        latestContextTokens: result?.latestContextTokens,
+        cliCostUsd: result?.cliCostUsd,
+        lastEvent: events[events.length - 1] ?? null,
+      });
     },
-    [executeThreadEvents, resetThreadViewState],
+    [executeThreadEvents, resetThreadViewState, applyLoadedTokenData],
   );
 
   const loadThreadEvents = useCallback(
     async (message: ChannelMessage) => {
       try {
-        // Only show "loading" on initial load, not on incremental SSE updates
         setThreadStatus((prev) =>
           prev === "idle" || prev === "error" ? "loading" : prev,
         );
 
-        // Fetch threads to get the latest thread ID (for SSE routing)
         const { data: threadsData } = await executeThreads({
           variables: {
             channelId: message.channelId,
@@ -280,7 +259,6 @@ export function useThread({
           return;
         }
 
-        // Set active thread to the latest thread and load its events
         const latestThread = threadList[threadList.length - 1];
         setActiveThreadId(latestThread.id);
         await loadEventsForThread(message.channelId, message.id, latestThread.id);
@@ -336,146 +314,47 @@ export function useThread({
     }
   }, [executeThreadEvents]);
 
-  const appendThreadEvent = useCallback((event: ServerEvent) => {
-    setThreadEvents((prev) => [...prev, event]);
-    setThreadTotal((prev) => prev + 1);
+  const appendThreadEvent = useCallback(
+    (event: ServerEvent) => {
+      setThreadEvents((prev) => [...prev, event]);
+      setThreadTotal((prev) => prev + 1);
 
-    // Keep the active thread's eventCount in sync for the history dropdown
-    const currentThreadId = activeThreadIdRef.current;
-    if (currentThreadId) {
-      setThreads((prev) =>
-        prev.map((t) =>
-          t.id === currentThreadId ? { ...t, eventCount: t.eventCount + 1 } : t,
-        ),
+      const currentThreadId = activeThreadIdRef.current;
+      if (currentThreadId) {
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === currentThreadId ? { ...t, eventCount: t.eventCount + 1 } : t,
+          ),
+        );
+      }
+
+      trackEventTokens(event);
+    },
+    [trackEventTokens],
+  );
+
+  const updateThreadEvent = useCallback(
+    (event: ServerEvent) => {
+      setThreadEvents((prev) =>
+        prev.map((e) => (e.id === event.id ? event : e)),
       );
-    }
-
-    // Check for authoritative CLI usage from Stop events (--output-format json)
-    const payload = event.rawPayload as Record<string, unknown>;
-    const cliUsage = payload?.cli_usage as
-      | { input_tokens?: number; output_tokens?: number }
-      | undefined;
-
-    if (cliUsage) {
-      // Authoritative totals from CLI — subtract tokens accumulated from
-      // individual usage events during this run, then add the real totals.
-      const runInput = cliUsage.input_tokens ?? 0;
-      const runOutput = cliUsage.output_tokens ?? 0;
-      const acc = runAccumulatedRef.current;
-      setTokenUsage((prev) => ({
-        inputTokens: prev.inputTokens - acc.input + runInput,
-        outputTokens: prev.outputTokens - acc.output + runOutput,
-        totalTokens: prev.totalTokens - acc.total + runInput + runOutput,
-      }));
-      runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
-      // Use per-call usage for context tokens (context window size), not
-      // cli_usage which is the cumulative session total.
-      const perCallUsage = payload?.usage as
-        | { input_tokens?: number }
-        | undefined;
-      if (perCallUsage?.input_tokens) {
-        setLatestContextTokens(perCallUsage.input_tokens);
-      }
-      if (typeof payload?.cli_cost_usd === 'number') {
-        setCliCostUsd((prev) => (prev ?? 0) + (payload.cli_cost_usd as number));
-      }
-    } else {
-      // Fall back to per-event incremental tracking (dedup-based).
-      const usage = payload?.usage as
-        | { input_tokens?: number; output_tokens?: number }
-        | undefined;
-      if (usage) {
-        const curInput = usage.input_tokens ?? 0;
-        const curOutput = usage.output_tokens ?? 0;
-        if (
-          curInput !== lastSeenUsageRef.current.input ||
-          curOutput !== lastSeenUsageRef.current.output
-        ) {
-          lastSeenUsageRef.current = { input: curInput, output: curOutput };
-          setTokenUsage((prev) => ({
-            inputTokens: prev.inputTokens + curInput,
-            outputTokens: prev.outputTokens + curOutput,
-            totalTokens: prev.totalTokens + curInput + curOutput,
-          }));
-          // Track accumulated so we can correct when cli_usage arrives
-          runAccumulatedRef.current = {
-            input: runAccumulatedRef.current.input + curInput,
-            output: runAccumulatedRef.current.output + curOutput,
-            total: runAccumulatedRef.current.total + curInput + curOutput,
-          };
-        }
-        if (curInput) {
-          setLatestContextTokens(curInput);
-        }
-      }
-    }
-  }, []);
-
-  const updateThreadEvent = useCallback((event: ServerEvent) => {
-    setThreadEvents((prev) =>
-      prev.map((e) => (e.id === event.id ? event : e)),
-    );
-
-    // When a Stop event is updated with cli_usage (via the PATCH endpoint),
-    // apply the authoritative token data.
-    const payload = event.rawPayload as Record<string, unknown>;
-    const cliUsage = payload?.cli_usage as
-      | { input_tokens?: number; output_tokens?: number }
-      | undefined;
-    if (cliUsage) {
-      const runInput = cliUsage.input_tokens ?? 0;
-      const runOutput = cliUsage.output_tokens ?? 0;
-      const acc = runAccumulatedRef.current;
-      setTokenUsage((prev) => ({
-        inputTokens: prev.inputTokens - acc.input + runInput,
-        outputTokens: prev.outputTokens - acc.output + runOutput,
-        totalTokens: prev.totalTokens - acc.total + runInput + runOutput,
-      }));
-      runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
-      // Use per-call usage for context tokens (context window size), not
-      // cli_usage which is the cumulative session total.
-      const perCallUsage = payload?.usage as
-        | { input_tokens?: number }
-        | undefined;
-      if (perCallUsage?.input_tokens) {
-        setLatestContextTokens(perCallUsage.input_tokens);
-      }
-      if (typeof payload?.cli_cost_usd === 'number') {
-        setCliCostUsd((prev) => (prev ?? 0) + (payload.cli_cost_usd as number));
-      }
-    }
-  }, []);
+      trackEventTokenUpdate(event);
+    },
+    [trackEventTokenUpdate],
+  );
 
   const hasMoreEvents = threadTotal > threadEvents.length;
 
-  const checkWorktree = useCallback(async (messageId: string) => {
-    if (
-      !window.traceAPI ||
-      typeof window.traceAPI.checkWorktreeExists !== "function"
-    ) {
-      setHasWorktree(false);
-      return;
-    }
-    try {
-      const repoPath = getChannelRepoPath();
-      const result = await window.traceAPI.checkWorktreeExists(messageId, repoPath);
-      setHasWorktree(result.success && result.exists === true);
-    } catch {
-      setHasWorktree(false);
-    }
-  }, [getChannelRepoPath]);
-
   const openThreadPanel = useCallback(
     (message: ChannelMessage) => {
-      setSelectedMessageId(message.id);
-      setSelectedMessage(message);
+      selectMessage(message);
       setHasWorktree(null);
       setThreadWidth(clamp(Math.floor(window.innerWidth * 0.5), 280, 600));
       resetThreadViewState();
       void loadThreadEvents(message);
       void checkWorktree(message.id);
     },
-    [loadThreadEvents, resetThreadViewState, checkWorktree],
+    [loadThreadEvents, resetThreadViewState, checkWorktree, selectMessage],
   );
 
   const switchThread = useCallback(
@@ -511,10 +390,9 @@ export function useThread({
       const newThread = data?.createThread as ThreadInfo | undefined;
       if (!newThread) return null;
 
-      // Add the new thread to the list and switch to it
       setThreads((prev) => [...prev, newThread]);
       setActiveThreadId(newThread.id);
-      activeThreadIdRef.current = newThread.id; // sync ref immediately for callers that read it after await
+      activeThreadIdRef.current = newThread.id;
       setThreadEvents([]);
       setThreadTotal(0);
       setThreadStatus("empty");
@@ -531,81 +409,11 @@ export function useThread({
     }
   }, [executeCreateThread, getActiveChannelId, resetThreadViewState]);
 
-  const deleteWorktree = useCallback(
-    async (onDeleted?: (messageId: string) => void) => {
-      const message = selectedMessageRef.current;
-      if (!message) return;
-
-      const confirmed = window.confirm(
-        "Delete this worktree? This removes local files for this workspace.",
-      );
-      if (!confirmed) return;
-
-      setDeletingWorktree(true);
-      try {
-        const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.deleteWorktree(
-          message.id,
-          repoPath,
-        );
-        if (!result.success) {
-          console.error("Failed to delete worktree:", result.error);
-          return;
-        }
-        console.log(
-          result.removed
-            ? `Deleted worktree: ${result.worktreePath}`
-            : `Worktree already missing: ${result.worktreePath}`,
-        );
-        setHasWorktree(false);
-        onDeleted?.(message.id);
-      } finally {
-        setDeletingWorktree(false);
-      }
-    },
-    [getChannelRepoPath],
-  );
-
-  const mergeWorktree = useCallback(async () => {
-    const message = selectedMessageRef.current;
-    if (!message) return;
-
-    const baseBranch = getChannelBaseBranch();
-    const confirmed = window.confirm(
-      `Merge this worktree branch into ${baseBranch}?`,
-    );
-    if (!confirmed) return;
-
-    setMergingWorktree(true);
-    try {
-      const repoPath = getChannelRepoPath();
-      const result = await window.traceAPI.mergeWorktree(
-        message.id,
-        repoPath,
-        baseBranch,
-      );
-      if (!result.success) {
-        console.error("Failed to merge worktree:", result.error);
-        return;
-      }
-      console.log(`Merged branch ${result.branch} into ${baseBranch}`);
-    } finally {
-      setMergingWorktree(false);
-    }
-  }, [getChannelBaseBranch, getChannelRepoPath]);
-
   const toggleReadGroup = useCallback((groupId: string) => {
     setExpandedReadGroupIds((current) => ({
       ...current,
       [groupId]: !current[groupId],
     }));
-  }, []);
-
-  const syncSelectedMessage = useCallback((message: ChannelMessage) => {
-    setSelectedMessage((current) => {
-      if (current && current.id === message.id) return message;
-      return current;
-    });
   }, []);
 
   return {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorktreeDiffResult } from '../types';
 
-const POLL_INTERVAL = 5000;
+const POLL_INTERVAL = 10000;
 
-export function useWorktreeChanges(messageId: string | null, baseBranch: string = 'main') {
+export function useWorktreeChanges(messageId: string | null, baseBranch = 'main', enabled = true) {
   const [diffData, setDiffData] = useState<WorktreeDiffResult | null>(null);
   const [loading, setLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -22,7 +22,7 @@ export function useWorktreeChanges(messageId: string | null, baseBranch: string 
   }, [messageId, baseBranch]);
 
   useEffect(() => {
-    if (!messageId) return;
+    if (!messageId || !enabled) return;
 
     void fetchDiff();
     intervalRef.current = setInterval(() => void fetchDiff(), POLL_INTERVAL);
@@ -30,7 +30,7 @@ export function useWorktreeChanges(messageId: string | null, baseBranch: string 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [messageId, fetchDiff]);
+  }, [messageId, enabled, fetchDiff]);
 
   return { diffData, loading, refresh: fetchDiff };
 }

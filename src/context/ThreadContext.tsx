@@ -4,24 +4,22 @@ import type {
   ChannelMessage,
   DragTarget,
   KanbanTicket,
-  ServerEvent,
-  ThreadRenderNode,
-  ThreadStatus,
   TicketStatus,
 } from '../types';
 import type { ThreadInfo } from '../hooks/useThread';
+import { ThreadEventsContext } from './ThreadEventsContext';
+import type { ThreadEventsContextValue } from './ThreadEventsContext';
 
 export interface ThreadContextValue {
-  // Core thread state
+  // Core thread state (session-level, changes infrequently)
   selectedMessageId: string | null;
   activeThreadId: string | null;
   threads: ThreadInfo[];
-  threadEvents: ServerEvent[];
-  threadStatus: ThreadStatus;
   threadWidth: number;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   expandedReadGroupIds: Record<string, boolean>;
+  // Session-level callbacks
   openThreadPanel: (message: ChannelMessage) => void;
   closeThreadPanel: () => void;
   toggleReadGroup: (groupId: string) => void;
@@ -31,20 +29,7 @@ export interface ThreadContextValue {
   deleteWorktree: (onDeleted?: (messageId: string) => void) => Promise<void>;
   switchThread: (threadId: string) => Promise<void>;
   clearThread: () => Promise<string | null>;
-  // Scroll state
-  threadContentRef: React.RefObject<HTMLDivElement | null>;
-  showJumpToLatest: boolean;
-  scrollToLatest: () => void;
-  onThreadScroll: () => void;
-  // Pagination state
-  hasMoreEvents: boolean;
-  loadingOlderEvents: boolean;
-  // Token usage (server-computed aggregates)
-  tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
-  latestContextTokens: number;
-  cliCostUsd: number | null;
   // Derived state
-  threadNodes: ThreadRenderNode[];
   isClaudeRunning: boolean;
   messageStatus: TicketStatus;
   selectedTicket: KanbanTicket | null;
@@ -52,7 +37,7 @@ export interface ThreadContextValue {
   isFullscreen: boolean;
   scriptsAvailable: boolean;
   dragging: DragTarget;
-  // Callbacks
+  // UI callbacks
   onClose: () => void;
   onDeleteWorktree: () => void;
   onRunScripts: () => void;
@@ -65,14 +50,18 @@ const ThreadContext = createContext<ThreadContextValue | null>(null);
 
 export function ThreadProvider({
   value,
+  eventsValue,
   children,
 }: {
   value: ThreadContextValue;
+  eventsValue: ThreadEventsContextValue;
   children: ReactNode;
 }) {
   return (
     <ThreadContext.Provider value={value}>
-      {children}
+      <ThreadEventsContext.Provider value={eventsValue}>
+        {children}
+      </ThreadEventsContext.Provider>
     </ThreadContext.Provider>
   );
 }

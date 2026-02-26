@@ -12,6 +12,7 @@ import { StickyTodoList } from "./StickyTodoList";
 import { ContextProgressBar } from "./ContextProgressBar";
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useThreadContext } from "../context/ThreadContext";
+import { useThreadEventsContext } from "../context/ThreadEventsContext";
 import { normalizeToolName } from "../utils";
 
 type ViewMode = "agent" | "ticket";
@@ -20,37 +21,40 @@ export function ThreadPanel() {
   const {
     threadWidth,
     dragging,
-    threadStatus,
     activeThreadId,
     threads,
-    threadNodes,
     expandedReadGroupIds,
     selectedMessageId,
     messageStatus,
     selectedTicket: ticket,
     deletingWorktree,
     hasWorktree,
-    showJumpToLatest,
     isClaudeRunning,
-    threadContentRef,
     scriptsAvailable,
     isFullscreen,
-    loadingOlderEvents,
-    tokenUsage,
-    latestContextTokens,
-    cliCostUsd,
     clearThread,
     switchThread,
     onRunScripts,
-    onThreadScroll,
     toggleReadGroup,
-    scrollToLatest,
     onClose,
     onDeleteWorktree,
     onStartDrag,
     onEnterFullscreen,
     onExitFullscreen,
   } = useThreadContext();
+
+  const {
+    threadNodes,
+    threadStatus,
+    showJumpToLatest,
+    threadContentRef,
+    loadingOlderEvents,
+    tokenUsage,
+    latestContextTokens,
+    cliCostUsd,
+    onThreadScroll,
+    scrollToLatest,
+  } = useThreadEventsContext();
 
   const {
     pendingRunMessageId,

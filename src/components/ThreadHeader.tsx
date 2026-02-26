@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { TokenUsageBadge } from './TokenUsageBadge';
@@ -57,7 +57,7 @@ interface ThreadHeaderProps {
   onSwitchThread: (threadId: string) => Promise<void>;
 }
 
-export function ThreadHeader({
+export const ThreadHeader = memo(function ThreadHeader({
   selectedMessageId,
   messageStatus,
   hasTicket,
@@ -280,4 +280,4 @@ export function ThreadHeader({
       </div>
     </div>
   );
-}
+});
