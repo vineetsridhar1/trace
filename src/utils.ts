@@ -329,6 +329,8 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     const n = nodes[i];
     if (n.kind !== 'event' || n.event.hookEventName !== 'Stop') continue;
 
+    const hasExitPlanMode = n.event.toolName === 'ExitPlanMode';
+
     // Look backwards for a Write or Edit event that modified a plan .md file
     let planContent = '';
     let planFilePath = '';
@@ -347,7 +349,9 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
         const tool = normalizeToolName(candidate.event.toolName);
         if (tool === 'write' || tool === 'edit') {
           const filePath = findStringByKeys(candidate.event.toolInput, ['file_path', 'path', 'filepath']) ?? '';
-          if (filePath.includes('.claude/plans/') && filePath.endsWith('.md')) {
+          const isStrictPlanPath = filePath.includes('.claude/plans/') && filePath.endsWith('.md');
+          const isBroadPlanPath = hasExitPlanMode && filePath.endsWith('.md');
+          if (isStrictPlanPath || isBroadPlanPath) {
             planContent = findStringByKeys(candidate.event.toolInput, ['content', 'text']) ?? '';
             planFilePath = filePath;
             planToolIdx = j;

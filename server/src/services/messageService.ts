@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma';
 import { Prisma } from '../../prisma/generated/prisma/client';
-import { extractAskUserQuestionFromTranscript } from './eventService';
+import { extractAskUserQuestionFromTranscript, extractExitPlanModeFromTranscript } from './eventService';
 import { getStorage } from './storageService';
 
 const USER_SESSION_ID = 'user-manual-input';
@@ -320,7 +320,7 @@ export async function getEventsByMessage(
 
   const events = rawEvents.reverse();
 
-  // Lazily enrich the last Stop event with AskUserQuestion data
+  // Lazily enrich the last Stop event with AskUserQuestion or ExitPlanMode data
   const lastEvent = events.length > 0 ? events[events.length - 1] : null;
   if (
     lastEvent &&
@@ -344,6 +344,15 @@ export async function getEventsByMessage(
         });
         (lastEvent as Record<string, unknown>).toolName = 'AskUserQuestion';
         (lastEvent as Record<string, unknown>).toolInput = askData;
+      } else {
+        const exitPlanData = extractExitPlanModeFromTranscript(session.transcriptPath);
+        if (exitPlanData) {
+          await prisma.event.update({
+            where: { id: lastEvent.id },
+            data: { toolName: 'ExitPlanMode' },
+          });
+          (lastEvent as Record<string, unknown>).toolName = 'ExitPlanMode';
+        }
       }
     }
   }
@@ -388,7 +397,7 @@ export async function getEventsByThread(
   // events are always included, even when total exceeds the limit).
   const events = rawEvents.reverse();
 
-  // Lazily enrich the last Stop event if it hasn't been enriched with AskUserQuestion data.
+  // Lazily enrich the last Stop event if it hasn't been enriched with AskUserQuestion or ExitPlanMode data.
   // Only enrich the final Stop event (which is the one Claude is currently waiting on).
   const lastEvent = events.length > 0 ? events[events.length - 1] : null;
   if (
@@ -413,6 +422,15 @@ export async function getEventsByThread(
         });
         (lastEvent as Record<string, unknown>).toolName = 'AskUserQuestion';
         (lastEvent as Record<string, unknown>).toolInput = askData;
+      } else {
+        const exitPlanData = extractExitPlanModeFromTranscript(session.transcriptPath);
+        if (exitPlanData) {
+          await prisma.event.update({
+            where: { id: lastEvent.id },
+            data: { toolName: 'ExitPlanMode' },
+          });
+          (lastEvent as Record<string, unknown>).toolName = 'ExitPlanMode';
+        }
       }
     }
   }

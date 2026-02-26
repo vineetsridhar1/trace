@@ -171,6 +171,50 @@ export function extractAskUserQuestionFromTranscript(
   return null;
 }
 
+export function extractExitPlanModeFromTranscript(
+  transcriptPath: string,
+): { input: unknown } | null {
+  try {
+    const content = fs.readFileSync(transcriptPath, 'utf-8');
+    const lines = content.trim().split('\n');
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        continue;
+      }
+
+      const entry = parsed as Record<string, unknown>;
+      if (entry.type !== 'assistant') continue;
+
+      const message = entry.message as Record<string, unknown> | undefined;
+      if (!message?.content || !Array.isArray(message.content)) {
+        return null;
+      }
+
+      for (const block of message.content) {
+        const b = block as Record<string, unknown>;
+        if (b.type === 'tool_use' && b.name === 'ExitPlanMode') {
+          return { input: b.input };
+        }
+      }
+
+      // Most recent assistant message didn't contain ExitPlanMode — don't
+      // search older messages which would return stale data.
+      return null;
+    }
+  } catch {
+    // Transcript file may not exist or be unreadable
+  }
+
+  return null;
+}
+
 function resolveGitBranch(cwd: string): string | null {
   try {
     return execSync('git rev-parse --abbrev-ref HEAD', {
@@ -306,6 +350,11 @@ export async function ingestEvent(payload: HookEvent) {
       if (askData) {
         eventData.toolName = 'AskUserQuestion';
         eventData.toolInput = JSON.parse(JSON.stringify(askData));
+      } else {
+        const exitPlanData = extractExitPlanModeFromTranscript(payload.transcript_path);
+        if (exitPlanData) {
+          eventData.toolName = 'ExitPlanMode';
+        }
       }
     }
   }
