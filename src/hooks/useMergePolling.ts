@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { ChannelMessage, TicketStatus } from '../types';
 
 interface UseMergePollingOptions {
@@ -17,34 +17,43 @@ export function useMergePolling({
   const updateStatusRef = useRef(updateMessageStatus);
   updateStatusRef.current = updateMessageStatus;
 
+  const repoPathRef = useRef(repoPath);
+  repoPathRef.current = repoPath;
+
+  const baseBranchRef = useRef(baseBranch);
+  baseBranchRef.current = baseBranch;
+
+  const checkMerged = useCallback(async () => {
+    const currentRepoPath = repoPathRef.current;
+    if (!currentRepoPath) return;
+
+    const messages = messagesRef.current;
+    const completed = messages.filter(
+      (m) => m.status === 'completed' && m.branch,
+    );
+    if (completed.length === 0) return;
+
+    const branches = completed.map((m) => m.branch!);
+    try {
+      const result = await window.traceAPI.checkBranchesMerged(
+        currentRepoPath,
+        branches,
+        baseBranchRef.current,
+      );
+      if (!result.success) return;
+
+      for (const msg of completed) {
+        if (result.merged[msg.branch!]) {
+          await updateStatusRef.current(msg.id, 'merged');
+        }
+      }
+    } catch {
+      // Silent failure
+    }
+  }, [messagesRef]);
+
   useEffect(() => {
     if (!repoPath) return;
-
-    const checkMerged = async () => {
-      const messages = messagesRef.current;
-      const completed = messages.filter(
-        (m) => m.status === 'completed' && m.branch,
-      );
-      if (completed.length === 0) return;
-
-      const branches = completed.map((m) => m.branch!);
-      try {
-        const result = await window.traceAPI.checkBranchesMerged(
-          repoPath,
-          branches,
-          baseBranch,
-        );
-        if (!result.success) return;
-
-        for (const msg of completed) {
-          if (result.merged[msg.branch!]) {
-            await updateStatusRef.current(msg.id, 'merged');
-          }
-        }
-      } catch {
-        // Silent failure
-      }
-    };
 
     // Run once on startup
     void checkMerged();
@@ -61,5 +70,7 @@ export function useMergePolling({
       unsubscribe();
       void window.traceAPI.unwatchBaseBranch();
     };
-  }, [messagesRef, repoPath, baseBranch]);
+  }, [checkMerged, repoPath, baseBranch]);
+
+  return { triggerCheck: checkMerged };
 }

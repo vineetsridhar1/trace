@@ -98,6 +98,7 @@ interface UseChannelSubscriptionsOptions {
   onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   upsertTicket?: (ticket: KanbanTicket) => void;
   onTicketReadyToRun?: (messageId: string, runConfig: unknown) => void;
+  onMessageCompleted?: () => void;
 }
 
 export function useChannelSubscriptions({
@@ -113,6 +114,7 @@ export function useChannelSubscriptions({
   onNeedsAttention,
   upsertTicket,
   onTicketReadyToRun,
+  onMessageCompleted,
 }: UseChannelSubscriptionsOptions) {
   const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
 
@@ -130,6 +132,7 @@ export function useChannelSubscriptions({
     const message = messageData.messageUpserted as ChannelMessage;
 
     // Detect completion/needs_input/merged transitions for attention notification
+    let transitionedToCompleted = false;
     if (message.status === 'completed' || message.status === 'merged' || message.status === 'needs_input') {
       const prev = messagesRef.current.find((m) => m.id === message.id);
       if (prev && prev.status !== message.status) {
@@ -137,11 +140,20 @@ export function useChannelSubscriptions({
         if (notViewing) {
           onNeedsAttention(message.id, message.status as 'completed' | 'merged' | 'needs_input');
         }
+        if (message.status === 'completed' && message.branch) {
+          transitionedToCompleted = true;
+        }
       }
     }
 
     upsertMessage(message);
-  }, [messageData, activeChannelId, upsertMessage, messagesRef, selectedMessageIdRef, onNeedsAttention]);
+
+    // Trigger merge check after React flushes the upsertMessage state update
+    // so messagesRef reflects the new "completed" status when checkMerged reads it
+    if (transitionedToCompleted && onMessageCompleted) {
+      setTimeout(onMessageCompleted, 0);
+    }
+  }, [messageData, activeChannelId, upsertMessage, messagesRef, selectedMessageIdRef, onNeedsAttention, onMessageCompleted]);
 
   // --- Message deleted ---
   const { data: messageDeletedData } = useSubscription(MESSAGE_DELETED_SUBSCRIPTION, {

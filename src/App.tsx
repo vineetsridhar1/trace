@@ -235,23 +235,6 @@ function AppContent() {
     [messagesRef],
   );
 
-  const { subscriptionsActive } = useChannelSubscriptions({
-    activeChannelId,
-    upsertMessage: upsertAndSyncMessage,
-    removeMessage,
-    appendThreadEvent,
-    updateThreadEvent,
-    reportClaudeActivity,
-    selectedMessageIdRef,
-    activeThreadIdRef,
-    messagesRef,
-    onNeedsAttention: handleNeedsAttention,
-    upsertTicket,
-    onTicketReadyToRun: useCallback((messageId: string, runConfig: unknown) => {
-      autoRunRef.current?.(messageId, runConfig);
-    }, []),
-  });
-
   const updateMessageStatus = useCallback(
     async (messageId: string, status: TicketStatus) => {
       if (!activeChannelId) return;
@@ -273,11 +256,29 @@ function AppContent() {
     [activeChannelId, executeUpdateMessageStatus, upsertAndSyncMessage],
   );
 
-  useMergePolling({
+  const { triggerCheck: triggerMergeCheck } = useMergePolling({
     messagesRef,
     repoPath: enrichedActiveChannel?.localRepoPath ?? '',
     baseBranch: enrichedActiveChannel?.baseBranch ?? 'main',
     updateMessageStatus,
+  });
+
+  const { subscriptionsActive } = useChannelSubscriptions({
+    activeChannelId,
+    upsertMessage: upsertAndSyncMessage,
+    removeMessage,
+    appendThreadEvent,
+    updateThreadEvent,
+    reportClaudeActivity,
+    selectedMessageIdRef,
+    activeThreadIdRef,
+    messagesRef,
+    onNeedsAttention: handleNeedsAttention,
+    upsertTicket,
+    onTicketReadyToRun: useCallback((messageId: string, runConfig: unknown) => {
+      autoRunRef.current?.(messageId, runConfig);
+    }, []),
+    onMessageCompleted: triggerMergeCheck,
   });
 
   const handleSetView = useCallback(
