@@ -50,6 +50,16 @@ const TICKET_READY_TO_RUN_SUBSCRIPTION = gql`
   }
 `;
 
+const MESSAGE_READY_FOR_REVIEW_SUBSCRIPTION = gql`
+  subscription MessageReadyForReview($channelId: ID!) {
+    messageReadyForReview(channelId: $channelId) {
+      channelId
+      messageId
+      claudeSessionId
+    }
+  }
+`;
+
 const TICKET_UPSERTED_SUBSCRIPTION = gql`
   subscription TicketUpserted($channelId: ID!) {
     ticketUpserted(channelId: $channelId) {
@@ -98,6 +108,7 @@ interface UseChannelSubscriptionsOptions {
   onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   upsertTicket?: (ticket: KanbanTicket) => void;
   onTicketReadyToRun?: (messageId: string, runConfig: unknown) => void;
+  onMessageReadyForReview?: (messageId: string, claudeSessionId: string | null) => void;
   onMessageCompleted?: () => void;
 }
 
@@ -114,6 +125,7 @@ export function useChannelSubscriptions({
   onNeedsAttention,
   upsertTicket,
   onTicketReadyToRun,
+  onMessageReadyForReview,
   onMessageCompleted,
 }: UseChannelSubscriptionsOptions) {
   const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
@@ -255,6 +267,18 @@ export function useChannelSubscriptions({
     const { messageId, runConfig } = ticketReadyData.ticketReadyToRun;
     onTicketReadyToRun(messageId, runConfig);
   }, [ticketReadyData, activeChannelId, onTicketReadyToRun]);
+
+  // --- Message ready for review ---
+  const { data: reviewReadyData } = useSubscription(MESSAGE_READY_FOR_REVIEW_SUBSCRIPTION, {
+    variables,
+    skip,
+  });
+
+  useEffect(() => {
+    if (!reviewReadyData?.messageReadyForReview || !activeChannelId || !onMessageReadyForReview) return;
+    const { messageId, claudeSessionId } = reviewReadyData.messageReadyForReview;
+    onMessageReadyForReview(messageId, claudeSessionId);
+  }, [reviewReadyData, activeChannelId, onMessageReadyForReview]);
 
   return { subscriptionsActive };
 }

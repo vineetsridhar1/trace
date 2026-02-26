@@ -173,7 +173,7 @@ export interface ThreadEventEnvelope {
   event: ServerEvent;
 }
 
-export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued';
+export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'auto_review';
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';
 export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';

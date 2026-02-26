@@ -9,5 +9,6 @@ export const TOPICS = {
   THREAD_EVENT_UPDATED: (channelId: string) => `THREAD_EVENT_UPDATED.${channelId}`,
   TICKET_UPSERTED: (channelId: string) => `TICKET_UPSERTED.${channelId}`,
   TICKET_READY_TO_RUN: (channelId: string) => `TICKET_READY_TO_RUN.${channelId}`,
+  MESSAGE_READY_FOR_REVIEW: (channelId: string) => `MESSAGE_READY_FOR_REVIEW.${channelId}`,
   AI_CHAT_STREAM: (chatId: string) => `AI_CHAT_STREAM.${chatId}`,
 } as const;

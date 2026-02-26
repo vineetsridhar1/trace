@@ -305,8 +305,8 @@ export async function ingestEvent(payload: HookEvent) {
 
   const event = await prisma.event.create({ data: eventData });
 
-  // Auto-transition in_progress -> needs_input when AskUserQuestion or ExitPlanMode is detected
-  if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && currentStatus === 'in_progress') {
+  // Auto-transition in_progress/auto_review -> needs_input when AskUserQuestion or ExitPlanMode is detected
+  if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && (currentStatus === 'in_progress' || currentStatus === 'auto_review')) {
     await updateMessageStatus(message.id, 'needs_input');
     void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
     currentStatus = 'needs_input';
@@ -371,10 +371,10 @@ export async function ingestEvent(payload: HookEvent) {
     });
   }
 
-  // Auto-complete: if the Stop event has no toolName (Claude is NOT waiting on the
-  // user) and the message is still in_progress with the same session after a delay,
-  // transition to completed. Enrichment data may arrive in a follow-up event from
-  // Electron, so we wait before auto-completing.
+  // Auto-complete / auto-review: if the Stop event has no toolName (Claude is NOT
+  // waiting on the user) and the message is still in_progress or auto_review after
+  // a delay, handle the transition. Enrichment data may arrive in a follow-up event
+  // from Electron, so we wait before auto-completing.
   if (
     payload.hook_event_name === 'Stop' &&
     !eventData.toolName
@@ -386,11 +386,12 @@ export async function ingestEvent(payload: HookEvent) {
           prisma.event.findUnique({ where: { id: event.id }, select: { toolName: true } }),
           prisma.message.findUnique({ where: { id: message.id }, select: { status: true, claudeSessionId: true } }),
         ]);
-        if (
-          currentEvent && !currentEvent.toolName &&
-          currentMsg?.status === 'in_progress' &&
-          currentMsg.claudeSessionId === autoCompleteSessionId
-        ) {
+        if (!currentEvent || currentEvent.toolName || !currentMsg || currentMsg.claudeSessionId !== autoCompleteSessionId) {
+          return;
+        }
+
+        // If the review Claude just finished, transition to completed
+        if (currentMsg.status === 'auto_review') {
           await updateMessageStatus(message.id, 'completed');
           void syncTicketWithMessageStatus(message.id, channelId, 'completed');
           void checkAndTriggerDependents(message.id, channelId);
@@ -400,9 +401,70 @@ export async function ingestEvent(payload: HookEvent) {
               messageUpserted: hydratedMsg,
             });
           }
+          return;
+        }
+
+        if (currentMsg.status === 'in_progress') {
+          // Check if the session made any file changes (Write, Edit, MultiEdit)
+          const writeToolCount = await prisma.event.count({
+            where: {
+              thread: { messageId: message.id },
+              hookEventName: 'PostToolUse',
+              toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
+            },
+          });
+
+          if (writeToolCount > 0) {
+            // File changes detected — trigger auto-review
+            await updateMessageStatus(message.id, 'auto_review');
+            void syncTicketWithMessageStatus(message.id, channelId, 'auto_review');
+
+            // Create a synthetic AutoReview event in the thread
+            const reviewEvent = await prisma.event.create({
+              data: {
+                sessionId: eventData.sessionId,
+                threadId: eventData.threadId,
+                hookEventName: 'AutoReview',
+                importance: 'important',
+                timestamp: new Date(),
+                rawPayload: {},
+              },
+            });
+
+            // Broadcast the review event and updated message status
+            pubsub.publish(TOPICS.THREAD_EVENT_CREATED(channelId), {
+              threadEventCreated: { channelId, messageId: message.id, threadId: eventData.threadId, event: reviewEvent },
+            });
+            const hydratedMsg = await getMessageByIdForFeed(message.id);
+            if (hydratedMsg) {
+              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+                messageUpserted: hydratedMsg,
+              });
+            }
+
+            // Publish subscription to trigger client-side Claude spawn
+            pubsub.publish(TOPICS.MESSAGE_READY_FOR_REVIEW(channelId), {
+              messageReadyForReview: {
+                channelId,
+                messageId: message.id,
+                claudeSessionId: currentMsg.claudeSessionId,
+              },
+            });
+          } else {
+            // No file changes — complete directly
+            await updateMessageStatus(message.id, 'completed');
+            void syncTicketWithMessageStatus(message.id, channelId, 'completed');
+            void checkAndTriggerDependents(message.id, channelId);
+            const hydratedMsg = await getMessageByIdForFeed(message.id);
+            if (hydratedMsg) {
+              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+                messageUpserted: hydratedMsg,
+              });
+            }
+          }
         }
       } catch {
-        // Silent failure — status will remain in_progress
+        // Silent failure — status will remain as-is
       }
     }, 5000);
   }

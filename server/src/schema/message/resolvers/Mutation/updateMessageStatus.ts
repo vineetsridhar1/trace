@@ -4,14 +4,15 @@ import { pubsub, TOPICS } from '../../../../services/pubsub';
 import { syncTicketWithMessageStatus, checkAndTriggerDependents } from '../../../../services/ticketService';
 import { GraphQLError } from 'graphql';
 
-const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued'];
+const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued', 'auto_review'];
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ['creation', 'in_progress', 'queued'],
   queued: ['creation', 'in_progress', 'pending'],
   creation: ['in_progress', 'pending'],
-  in_progress: ['completed', 'needs_input'],
+  in_progress: ['completed', 'needs_input', 'auto_review'],
   needs_input: ['in_progress'],
+  auto_review: ['completed', 'in_progress', 'needs_input'],
   completed: ['merged', 'in_progress'],
   merged: [],
 };
