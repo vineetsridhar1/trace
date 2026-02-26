@@ -43,6 +43,7 @@ type Event {
 }
 
 type EventConnection {
+  cliCostUsd: Float
   events: [Event!]!
   latestContextTokens: Int!
   limit: Int!

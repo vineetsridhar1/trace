@@ -69,6 +69,7 @@ const GQL_THREAD_EVENTS = gql`
         totalTokens
       }
       latestContextTokens
+      cliCostUsd
     }
   }
 `;
@@ -126,9 +127,17 @@ export function useThread({
     totalTokens: number;
   }>({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
   const [latestContextTokens, setLatestContextTokens] = useState(0);
+  const [cliCostUsd, setCliCostUsd] = useState<number | null>(null);
   const lastSeenUsageRef = useRef<{ input: number; output: number }>({
     input: 0,
     output: 0,
+  });
+  // Track tokens accumulated from per-event usage during the current run,
+  // so we can subtract them when the authoritative cli_usage Stop arrives.
+  const runAccumulatedRef = useRef<{ input: number; output: number; total: number }>({
+    input: 0,
+    output: 0,
+    total: 0,
   });
 
   const selectedMessageRef = useRef<ChannelMessage | null>(null);
@@ -179,7 +188,9 @@ export function useThread({
     threadQueryRef.current = null;
     setTokenUsage({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
     setLatestContextTokens(0);
+    setCliCostUsd(null);
     lastSeenUsageRef.current = { input: 0, output: 0 };
+    runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
   }, []);
 
   const closeThreadPanel = useCallback(() => {
@@ -225,6 +236,7 @@ export function useThread({
         });
       }
       setLatestContextTokens(result?.latestContextTokens ?? 0);
+      setCliCostUsd(result?.cliCostUsd ?? null);
 
       const lastLoadedEvent = events[events.length - 1];
       if (lastLoadedEvent) {
@@ -340,27 +352,55 @@ export function useThread({
       );
     }
 
-    // Incrementally update token aggregates from the new event.
-    // Deduplicate: multiple events in the same API turn share the same usage snapshot.
-    const usage = (event.rawPayload as Record<string, unknown>)?.usage as
+    // Check for authoritative CLI usage from Stop events (--output-format json)
+    const payload = event.rawPayload as Record<string, unknown>;
+    const cliUsage = payload?.cli_usage as
       | { input_tokens?: number; output_tokens?: number }
       | undefined;
-    if (usage) {
-      const curInput = usage.input_tokens ?? 0;
-      const curOutput = usage.output_tokens ?? 0;
-      if (
-        curInput !== lastSeenUsageRef.current.input ||
-        curOutput !== lastSeenUsageRef.current.output
-      ) {
-        lastSeenUsageRef.current = { input: curInput, output: curOutput };
-        setTokenUsage((prev) => ({
-          inputTokens: prev.inputTokens + curInput,
-          outputTokens: prev.outputTokens + curOutput,
-          totalTokens: prev.totalTokens + curInput + curOutput,
-        }));
+
+    if (cliUsage) {
+      // Authoritative totals from CLI — subtract tokens accumulated from
+      // individual usage events during this run, then add the real totals.
+      const runInput = cliUsage.input_tokens ?? 0;
+      const runOutput = cliUsage.output_tokens ?? 0;
+      const acc = runAccumulatedRef.current;
+      setTokenUsage((prev) => ({
+        inputTokens: prev.inputTokens - acc.input + runInput,
+        outputTokens: prev.outputTokens - acc.output + runOutput,
+        totalTokens: prev.totalTokens - acc.total + runInput + runOutput,
+      }));
+      runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
+      if (typeof payload?.cli_cost_usd === 'number') {
+        setCliCostUsd((prev) => (prev ?? 0) + (payload.cli_cost_usd as number));
       }
-      if (curInput) {
-        setLatestContextTokens(curInput);
+    } else {
+      // Fall back to per-event incremental tracking (dedup-based).
+      const usage = payload?.usage as
+        | { input_tokens?: number; output_tokens?: number }
+        | undefined;
+      if (usage) {
+        const curInput = usage.input_tokens ?? 0;
+        const curOutput = usage.output_tokens ?? 0;
+        if (
+          curInput !== lastSeenUsageRef.current.input ||
+          curOutput !== lastSeenUsageRef.current.output
+        ) {
+          lastSeenUsageRef.current = { input: curInput, output: curOutput };
+          setTokenUsage((prev) => ({
+            inputTokens: prev.inputTokens + curInput,
+            outputTokens: prev.outputTokens + curOutput,
+            totalTokens: prev.totalTokens + curInput + curOutput,
+          }));
+          // Track accumulated so we can correct when cli_usage arrives
+          runAccumulatedRef.current = {
+            input: runAccumulatedRef.current.input + curInput,
+            output: runAccumulatedRef.current.output + curOutput,
+            total: runAccumulatedRef.current.total + curInput + curOutput,
+          };
+        }
+        if (curInput) {
+          setLatestContextTokens(curInput);
+        }
       }
     }
   }, []);
@@ -570,5 +610,6 @@ export function useThread({
     syncSelectedMessage,
     tokenUsage,
     latestContextTokens,
+    cliCostUsd,
   };
 }

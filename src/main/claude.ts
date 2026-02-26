@@ -121,6 +121,7 @@ export async function spawnClaude(
     finalPrompt += `\n\n<trace-internal>\nThe user has referenced the following files. Read them to understand the context:\n${fileList}\n</trace-internal>`;
   }
 
+  args.push('--output-format', 'json');
   args.push('-p', finalPrompt);
 
   const child = spawn('claude', args, {
@@ -135,6 +136,7 @@ export async function spawnClaude(
   runningProcesses.set(messageId, child);
   startWatchdog(messageId, child);
   let stdoutBuffer = '';
+  const stdoutChunks: string[] = [];  // Full stdout for JSON parsing (no truncation)
   let stderrBuffer = '';
   let failedToSpawn: string | null = null;
 
@@ -149,6 +151,8 @@ export async function spawnClaude(
     assistantText: string,
     exitCode: number | null,
     stopReason?: string,
+    cliUsage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number },
+    cliCostUsd?: number,
   ) => {
     const payload = {
       session_id: `trace-local-${messageId}`,
@@ -159,6 +163,8 @@ export async function spawnClaude(
       source: 'electron-main',
       exit_code: exitCode,
       ...(stopReason && { stop_reason: stopReason }),
+      ...(cliUsage && { cli_usage: cliUsage }),
+      ...(cliCostUsd !== undefined && { cli_cost_usd: cliCostUsd }),
     };
 
     try {
@@ -177,6 +183,7 @@ export async function spawnClaude(
   child.stdout?.on('data', (data) => {
     const chunk = data.toString();
     stdoutBuffer = appendToBuffer(stdoutBuffer, chunk);
+    stdoutChunks.push(chunk);
     resetWatchdog(messageId, 'stdout');
     appendClaudeDebugLog(messageId, `stdout bytes=${Buffer.byteLength(chunk)}`);
     console.log(`[claude:${messageId.slice(0, 8)}] ${chunk.trim()}`);
@@ -211,15 +218,33 @@ export async function spawnClaude(
     stopWatchdog(messageId, 'process-close');
     runStateByMessageId.delete(messageId);
 
-    const assistantOutput = stdoutBuffer.trim();
     const stderrOutput = stderrBuffer.trim();
     const suppressed = suppressSyntheticStopFor.delete(messageId);
     const shouldPostSyntheticStop = !suppressed && !hookStopReceived;
 
     if (!shouldPostSyntheticStop) return;
 
+    // Attempt to parse JSON output from --output-format json.
+    // Use the full untruncated stdout (stdoutChunks) since stdoutBuffer may
+    // be truncated at MAX_CAPTURE_CHARS and corrupt the JSON.
+    const fullStdout = stdoutChunks.join('');
+    let assistantOutput = stdoutBuffer.trim();
+    let cliUsage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } | undefined;
+    let cliCost: number | undefined;
+
+    try {
+      const parsed = JSON.parse(fullStdout);
+      assistantOutput = parsed.result ?? assistantOutput;
+      cliUsage = parsed.usage;
+      cliCost = parsed.cost_usd ?? parsed.cost;
+      appendClaudeDebugLog(messageId, `parsed JSON output: usage=${JSON.stringify(cliUsage)} cost=${cliCost}`);
+    } catch {
+      // Not JSON — fall back to raw stdout (backwards compatible)
+      appendClaudeDebugLog(messageId, 'stdout not JSON, using raw output');
+    }
+
     if (userStopped || code === 143) {
-      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user');
+      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user', cliUsage, cliCost);
       return;
     }
 
@@ -235,7 +260,7 @@ export async function spawnClaude(
       .trim();
 
     const messageToPersist = fallbackMessage || 'Claude run completed without textual output.';
-    await postSyntheticStopEvent(messageToPersist, code);
+    await postSyntheticStopEvent(messageToPersist, code, undefined, cliUsage, cliCost);
   });
 
   return worktreePath;

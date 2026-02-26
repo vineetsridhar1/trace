@@ -377,27 +377,50 @@ export async function getEventsByMessage(
   }
 
   // Compute token aggregates from ALL events across threads.
+  // Prefer authoritative cli_usage from Stop events (set by --output-format json).
   let inputTokens = 0;
   let outputTokens = 0;
   let latestContextTokens = 0;
-  let prevInputTokens = 0;
-  let prevOutputTokens = 0;
+  let cliCostUsd: number | undefined;
+  let hasCliUsage = false;
 
   for (const evt of allEventsForAggregation) {
-    const usage = (evt.rawPayload as Record<string, unknown>)?.usage as
-      | { input_tokens?: number; output_tokens?: number }
-      | undefined;
-    if (usage) {
-      const curInput = usage.input_tokens ?? 0;
-      const curOutput = usage.output_tokens ?? 0;
-      if (curInput !== prevInputTokens || curOutput !== prevOutputTokens) {
-        inputTokens += curInput;
-        outputTokens += curOutput;
-        prevInputTokens = curInput;
-        prevOutputTokens = curOutput;
+    const payload = evt.rawPayload as Record<string, unknown>;
+    const cliUsage = payload?.cli_usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    if (cliUsage) {
+      hasCliUsage = true;
+      inputTokens += cliUsage.input_tokens ?? 0;
+      outputTokens += cliUsage.output_tokens ?? 0;
+      if (typeof payload?.cli_cost_usd === 'number') {
+        cliCostUsd = (cliCostUsd ?? 0) + payload.cli_cost_usd;
       }
-      if (curInput) {
-        latestContextTokens = curInput;
+    }
+    const usage = payload?.usage as { input_tokens?: number } | undefined;
+    if (usage?.input_tokens) {
+      latestContextTokens = usage.input_tokens;
+    }
+  }
+
+  // Fall back to old dedup logic if no cli_usage found
+  if (!hasCliUsage) {
+    let prevInputTokens = 0;
+    let prevOutputTokens = 0;
+    for (const evt of allEventsForAggregation) {
+      const usage = (evt.rawPayload as Record<string, unknown>)?.usage as
+        | { input_tokens?: number; output_tokens?: number }
+        | undefined;
+      if (usage) {
+        const curInput = usage.input_tokens ?? 0;
+        const curOutput = usage.output_tokens ?? 0;
+        if (curInput !== prevInputTokens || curOutput !== prevOutputTokens) {
+          inputTokens += curInput;
+          outputTokens += curOutput;
+          prevInputTokens = curInput;
+          prevOutputTokens = curOutput;
+        }
+        if (curInput) {
+          latestContextTokens = curInput;
+        }
       }
     }
   }
@@ -409,6 +432,7 @@ export async function getEventsByMessage(
     offset,
     tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     latestContextTokens,
+    ...(cliCostUsd !== undefined && { cliCostUsd }),
   };
 }
 
@@ -495,30 +519,50 @@ export async function getEventsByThread(
   }
 
   // Compute token aggregates from ALL events in the thread.
-  // Multiple events within the same API turn share the same usage snapshot,
-  // so we deduplicate by only counting when usage values change.
+  // Prefer authoritative cli_usage from Stop events (set by --output-format json).
   let inputTokens = 0;
   let outputTokens = 0;
   let latestContextTokens = 0;
-  let prevInputTokens = 0;
-  let prevOutputTokens = 0;
+  let cliCostUsd: number | undefined;
+  let hasCliUsage = false;
 
   for (const evt of allEventsForAggregation) {
-    const usage = (evt.rawPayload as Record<string, unknown>)?.usage as
-      | { input_tokens?: number; output_tokens?: number }
-      | undefined;
-    if (usage) {
-      const curInput = usage.input_tokens ?? 0;
-      const curOutput = usage.output_tokens ?? 0;
-      if (curInput !== prevInputTokens || curOutput !== prevOutputTokens) {
-        inputTokens += curInput;
-        outputTokens += curOutput;
-        prevInputTokens = curInput;
-        prevOutputTokens = curOutput;
+    const payload = evt.rawPayload as Record<string, unknown>;
+    const cliUsage = payload?.cli_usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    if (cliUsage) {
+      hasCliUsage = true;
+      inputTokens += cliUsage.input_tokens ?? 0;
+      outputTokens += cliUsage.output_tokens ?? 0;
+      if (typeof payload?.cli_cost_usd === 'number') {
+        cliCostUsd = (cliCostUsd ?? 0) + payload.cli_cost_usd;
       }
-      // Track the latest context window size (last event with usage wins)
-      if (curInput) {
-        latestContextTokens = curInput;
+    }
+    const usage = payload?.usage as { input_tokens?: number } | undefined;
+    if (usage?.input_tokens) {
+      latestContextTokens = usage.input_tokens;
+    }
+  }
+
+  // Fall back to old dedup logic if no cli_usage found
+  if (!hasCliUsage) {
+    let prevInputTokens = 0;
+    let prevOutputTokens = 0;
+    for (const evt of allEventsForAggregation) {
+      const usage = (evt.rawPayload as Record<string, unknown>)?.usage as
+        | { input_tokens?: number; output_tokens?: number }
+        | undefined;
+      if (usage) {
+        const curInput = usage.input_tokens ?? 0;
+        const curOutput = usage.output_tokens ?? 0;
+        if (curInput !== prevInputTokens || curOutput !== prevOutputTokens) {
+          inputTokens += curInput;
+          outputTokens += curOutput;
+          prevInputTokens = curInput;
+          prevOutputTokens = curOutput;
+        }
+        if (curInput) {
+          latestContextTokens = curInput;
+        }
       }
     }
   }
@@ -530,5 +574,6 @@ export async function getEventsByThread(
     offset,
     tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
     latestContextTokens,
+    ...(cliCostUsd !== undefined && { cliCostUsd }),
   };
 }

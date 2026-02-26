@@ -64,6 +64,7 @@ export type Event = {
 
 export type EventConnection = {
   __typename?: 'EventConnection';
+  cliCostUsd?: Maybe<Scalars['Float']['output']>;
   events: Array<Event>;
   latestContextTokens: Scalars['Int']['output'];
   limit: Scalars['Int']['output'];

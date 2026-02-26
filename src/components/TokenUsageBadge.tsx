@@ -3,14 +3,16 @@ import { Tooltip } from './Tooltip';
 
 interface TokenUsageBadgeProps {
   tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  cliCostUsd?: number | null;
 }
 
-export function TokenUsageBadge({ tokenUsage }: TokenUsageBadgeProps) {
+export function TokenUsageBadge({ tokenUsage, cliCostUsd }: TokenUsageBadgeProps) {
   const { inputTokens, outputTokens, totalTokens } = tokenUsage;
 
   if (totalTokens === 0) return null;
 
-  const cost = computeApproxCost(inputTokens, outputTokens);
+  const hasRealCost = cliCostUsd != null;
+  const cost = hasRealCost ? cliCostUsd : computeApproxCost(inputTokens, outputTokens);
   const displayCost = cost < 0.01 ? '0.01' : cost.toFixed(2);
 
   return (
@@ -21,7 +23,7 @@ export function TokenUsageBadge({ tokenUsage }: TokenUsageBadgeProps) {
           <div>Input: {formatTokens(inputTokens)} tokens</div>
           <div>Output: {formatTokens(outputTokens)} tokens</div>
           <div className="my-1 border-t border-[#292e42]" />
-          <div>Est. cost: ~${displayCost}</div>
+          <div>{hasRealCost ? 'Cost' : 'Est. cost'}: {hasRealCost ? '' : '~'}${displayCost}</div>
         </>
       }
     >

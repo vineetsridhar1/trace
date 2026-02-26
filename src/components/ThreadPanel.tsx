@@ -38,6 +38,7 @@ export function ThreadPanel() {
     loadingOlderEvents,
     tokenUsage,
     latestContextTokens,
+    cliCostUsd,
     clearThread,
     switchThread,
     onRunScripts,
@@ -168,6 +169,7 @@ export function ThreadPanel() {
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
           tokenUsage={tokenUsage}
+          cliCostUsd={cliCostUsd}
           threads={threads}
           activeThreadId={activeThreadId}
           onSwitchThread={switchThread}

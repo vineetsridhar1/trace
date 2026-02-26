@@ -74,6 +74,7 @@ export type Event = {
 
 export type EventConnection = {
   __typename?: 'EventConnection';
+  cliCostUsd?: Maybe<Scalars['Float']['output']>;
   events: Array<Event>;
   latestContextTokens: Scalars['Int']['output'];
   limit: Scalars['Int']['output'];
@@ -504,6 +505,7 @@ export type DirectiveResolverFn<TResult = Record<PropertyKey, never>, TParent = 
 export type ResolversTypes = {
   Attachment: ResolverTypeWrapper<AttachmentMapper>;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
+  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   Channel: ResolverTypeWrapper<ChannelMapper>;
@@ -534,6 +536,7 @@ export type ResolversTypes = {
 export type ResolversParentTypes = {
   Attachment: AttachmentMapper;
   Int: Scalars['Int']['output'];
+  Float: Scalars['Float']['output'];
   String: Scalars['String']['output'];
   ID: Scalars['ID']['output'];
   Channel: ChannelMapper;
@@ -607,6 +610,7 @@ export type EventResolvers<ContextType = any, ParentType extends ResolversParent
 };
 
 export type EventConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['EventConnection'] = ResolversParentTypes['EventConnection']> = {
+  cliCostUsd?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType>;
   latestContextTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;

@@ -42,6 +42,7 @@ export interface ThreadContextValue {
   // Token usage (server-computed aggregates)
   tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
   latestContextTokens: number;
+  cliCostUsd: number | null;
   // Derived state
   threadNodes: ThreadRenderNode[];
   isClaudeRunning: boolean;

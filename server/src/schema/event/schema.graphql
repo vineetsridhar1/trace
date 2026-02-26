@@ -31,4 +31,5 @@ type EventConnection {
   offset: Int!
   tokenUsage: TokenUsage!
   latestContextTokens: Int!
+  cliCostUsd: Float
 }

@@ -43,6 +43,7 @@ interface ThreadHeaderProps {
   onEnterFullscreen?: () => void;
   onExitFullscreen?: () => void;
   tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  cliCostUsd?: number | null;
   threads: ThreadInfo[];
   activeThreadId: string | null;
   onSwitchThread: (threadId: string) => Promise<void>;
@@ -65,6 +66,7 @@ export function ThreadHeader({
   onEnterFullscreen,
   onExitFullscreen,
   tokenUsage,
+  cliCostUsd,
   threads,
   activeThreadId,
   onSwitchThread,
@@ -138,7 +140,7 @@ export function ThreadHeader({
               Worktree deleted
             </span>
           )}
-        <TokenUsageBadge tokenUsage={tokenUsage} />
+        <TokenUsageBadge tokenUsage={tokenUsage} cliCostUsd={cliCostUsd} />
       </div>
       <div className="flex items-center gap-2">
         {threads.length > 1 && (
