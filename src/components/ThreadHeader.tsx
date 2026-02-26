@@ -147,13 +147,13 @@ export function ThreadHeader({
               <button
                 type="button"
                 onClick={() => setHistoryOpen((prev) => !prev)}
-                className={`h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
+                className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
                   historyOpen
                     ? 'border-violet-400/50 text-violet-300'
                     : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
                 }`}
               >
-                <FiClock className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+                <FiClock className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </Tooltip>
             {historyOpen && (
@@ -201,9 +201,9 @@ export function ThreadHeader({
             <button
               type="button"
               onClick={onRunScripts}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300"
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300"
             >
-              <FiPlay className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+              <FiPlay className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         )}
@@ -214,9 +214,9 @@ export function ThreadHeader({
               type="button"
               disabled={!selectedMessageId}
               onClick={onMergeToMain}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <FiGitMerge className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+              <FiGitMerge className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         )}
@@ -225,9 +225,9 @@ export function ThreadHeader({
             <button
               type="button"
               onClick={onEnterFullscreen}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
             >
-              <FiMaximize2 className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+              <FiMaximize2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         )}
@@ -236,9 +236,9 @@ export function ThreadHeader({
             <button
               type="button"
               onClick={onExitFullscreen}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
             >
-              <FiMinimize2 className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+              <FiMinimize2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         )}
@@ -249,9 +249,9 @@ export function ThreadHeader({
               type="button"
               disabled={!selectedMessageId || deletingWorktree}
               onClick={onDeleteWorktree}
-              className="h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <FiTrash2 className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+              <FiTrash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         )}
