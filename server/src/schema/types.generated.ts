@@ -133,6 +133,7 @@ export type Mutation = {
   createServer: Server;
   createThread: Thread;
   deleteColumn: Scalars['Boolean']['output'];
+  deleteMessage: Scalars['Boolean']['output'];
   moveTicket: Ticket;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
@@ -189,6 +190,12 @@ export type MutationcreateThreadArgs = {
 
 export type MutationdeleteColumnArgs = {
   columnId: Scalars['ID']['input'];
+};
+
+
+export type MutationdeleteMessageArgs = {
+  channelId: Scalars['ID']['input'];
+  messageId: Scalars['ID']['input'];
 };
 
 
@@ -658,6 +665,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   createServer?: Resolver<ResolversTypes['Server'], ParentType, ContextType, RequireFields<MutationcreateServerArgs, 'name'>>;
   createThread?: Resolver<ResolversTypes['Thread'], ParentType, ContextType, RequireFields<MutationcreateThreadArgs, 'channelId' | 'messageId'>>;
   deleteColumn?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteColumnArgs, 'columnId'>>;
+  deleteMessage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteMessageArgs, 'channelId' | 'messageId'>>;
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationupdateChannelArgs, 'id'>>;
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;

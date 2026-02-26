@@ -11,17 +11,6 @@ export type ThreadsQueryVariables = Types.Exact<{
 
 export type ThreadsQuery = { __typename?: 'Query', threads: Array<{ __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number }> };
 
-export type MessageEventsQueryVariables = Types.Exact<{
-  channelId: Types.Scalars['ID']['input'];
-  messageId: Types.Scalars['ID']['input'];
-  limit?: Types.InputMaybe<Types.Scalars['Int']['input']>;
-  offset?: Types.InputMaybe<Types.Scalars['Int']['input']>;
-  after?: Types.InputMaybe<Types.Scalars['String']['input']>;
-}>;
-
-
-export type MessageEventsQuery = { __typename?: 'Query', messageEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, latestContextTokens: number, events: Array<{ __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string }>, tokenUsage: { __typename?: 'TokenUsage', inputTokens: number, outputTokens: number, totalTokens: number } } };
-
 export type ThreadEventsQueryVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
   messageId: Types.Scalars['ID']['input'];
@@ -90,82 +79,6 @@ export type ThreadsQueryHookResult = ReturnType<typeof useThreadsQuery>;
 export type ThreadsLazyQueryHookResult = ReturnType<typeof useThreadsLazyQuery>;
 export type ThreadsSuspenseQueryHookResult = ReturnType<typeof useThreadsSuspenseQuery>;
 export type ThreadsQueryResult = Apollo.QueryResult<ThreadsQuery, ThreadsQueryVariables>;
-export const MessageEventsDocument = gql`
-    query MessageEvents($channelId: ID!, $messageId: ID!, $limit: Int, $offset: Int, $after: String) {
-  messageEvents(
-    channelId: $channelId
-    messageId: $messageId
-    limit: $limit
-    offset: $offset
-    after: $after
-  ) {
-    events {
-      id
-      sessionId
-      hookEventName
-      timestamp
-      toolName
-      toolInput
-      toolResponse
-      toolUseId
-      stopHookActive
-      lastAssistantMessage
-      rawPayload
-      threadId
-      importance
-    }
-    total
-    limit
-    offset
-    tokenUsage {
-      inputTokens
-      outputTokens
-      totalTokens
-    }
-    latestContextTokens
-  }
-}
-    `;
-
-/**
- * __useMessageEventsQuery__
- *
- * To run a query within a React component, call `useMessageEventsQuery` and pass it any options that fit your needs.
- * When your component renders, `useMessageEventsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useMessageEventsQuery({
- *   variables: {
- *      channelId: // value for 'channelId'
- *      messageId: // value for 'messageId'
- *      limit: // value for 'limit'
- *      offset: // value for 'offset'
- *      after: // value for 'after'
- *   },
- * });
- */
-export function useMessageEventsQuery(baseOptions: Apollo.QueryHookOptions<MessageEventsQuery, MessageEventsQueryVariables> & ({ variables: MessageEventsQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<MessageEventsQuery, MessageEventsQueryVariables>(MessageEventsDocument, options);
-      }
-export function useMessageEventsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<MessageEventsQuery, MessageEventsQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<MessageEventsQuery, MessageEventsQueryVariables>(MessageEventsDocument, options);
-        }
-// @ts-ignore
-export function useMessageEventsSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<MessageEventsQuery, MessageEventsQueryVariables>): Apollo.UseSuspenseQueryResult<MessageEventsQuery, MessageEventsQueryVariables>;
-export function useMessageEventsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<MessageEventsQuery, MessageEventsQueryVariables>): Apollo.UseSuspenseQueryResult<MessageEventsQuery | undefined, MessageEventsQueryVariables>;
-export function useMessageEventsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<MessageEventsQuery, MessageEventsQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<MessageEventsQuery, MessageEventsQueryVariables>(MessageEventsDocument, options);
-        }
-export type MessageEventsQueryHookResult = ReturnType<typeof useMessageEventsQuery>;
-export type MessageEventsLazyQueryHookResult = ReturnType<typeof useMessageEventsLazyQuery>;
-export type MessageEventsSuspenseQueryHookResult = ReturnType<typeof useMessageEventsSuspenseQuery>;
-export type MessageEventsQueryResult = Apollo.QueryResult<MessageEventsQuery, MessageEventsQueryVariables>;
 export const ThreadEventsDocument = gql`
     query ThreadEvents($channelId: ID!, $messageId: ID!, $threadId: ID!, $limit: Int, $offset: Int, $after: String) {
   threadEvents(
