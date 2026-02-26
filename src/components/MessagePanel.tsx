@@ -51,18 +51,18 @@ export function MessagePanel({
   }, [kanbanColumns]);
 
   const sortedMessages = useMemo(() => {
-    const completed: ChannelMessage[] = [];
+    const merged: ChannelMessage[] = [];
     const active: ChannelMessage[] = [];
 
     for (const msg of messages) {
-      if (msg.status === 'completed') {
-        completed.push(msg);
+      if (msg.status === 'merged') {
+        merged.push(msg);
       } else {
         active.push(msg);
       }
     }
 
-    return [...completed, ...active];
+    return [...merged, ...active];
   }, [messages]);
 
   const scrollFeedToBottom = useCallback(() => {
@@ -158,7 +158,7 @@ export function MessagePanel({
                   needsAttention={attentionMessageIds.has(message.id)}
                   onOpenThread={onOpenThread}
                   onDeleteMessage={onDeleteMessage}
-                  dimmed={message.status === 'completed'}
+                  dimmed={message.status === 'merged'}
                 />
               ))}
             </div>
@@ -191,7 +191,7 @@ export function MessagePanel({
                 isSelected={message.id === selectedMessageId}
                 needsAttention={attentionMessageIds.has(message.id)}
                 onOpenThread={onOpenThread}
-                dimmed={message.status === 'completed'}
+                dimmed={message.status === 'merged'}
               />
             ))}
           </div>
