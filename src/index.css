@@ -492,3 +492,7 @@ body,
   font-weight: 600;
   color: #a9b1d6;
 }
+
+input[list]::-webkit-calendar-picker-indicator {
+  display: none !important;
+}

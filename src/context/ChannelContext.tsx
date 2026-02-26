@@ -26,7 +26,12 @@ export interface ChannelContextValue {
   getLocalConfig: (channelId: string) => LocalChannelConfig | null;
   setLocalConfig: (channelId: string, data: LocalChannelConfig) => Promise<void>;
   // Channel settings
-  updateChannelSettings: (channelId: string, data: { baseBranch?: string | null }) => Promise<unknown>;
+  updateChannelSettings: (channelId: string, data: {
+    baseBranch?: string | null;
+    defaultRepoPath?: string | null;
+    defaultSetupScript?: string | null;
+    defaultRunScript?: string | null;
+  }) => Promise<unknown>;
 }
 
 const ChannelContext = createContext<ChannelContextValue | null>(null);
@@ -61,7 +66,8 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
         return {
           ...ch,
           localRepoPath: local.localRepoPath ?? ch.localRepoPath,
-          creationScript: local.creationScript ?? ch.creationScript,
+          setupScript: local.setupScript ?? ch.defaultSetupScript ?? undefined,
+          runScript: local.runScript ?? ch.defaultRunScript ?? undefined,
         };
       }),
     [channels, localConfigs],
@@ -90,7 +96,6 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
         if (ch.localRepoPath && !localConfigs[ch.id]) {
           const config: LocalChannelConfig = {
             localRepoPath: ch.localRepoPath,
-            creationScript: ch.creationScript ?? undefined,
           };
           await setLocalConfig(ch.id, config);
         }

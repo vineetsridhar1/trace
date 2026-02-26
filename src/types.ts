@@ -24,8 +24,8 @@ export interface WorktreeDiffResult {
 
 export interface LocalChannelConfig {
   localRepoPath: string;
-  creationScript?: string;
-  startupScripts?: { name: string; command: string }[];
+  setupScript?: string;
+  runScript?: string;
   systemInstructions?: string;
 }
 
@@ -121,7 +121,11 @@ export interface Channel {
   localRepoPath?: string | null;
   baseBranch: string | null;
   githubUrl: string | null;
-  creationScript?: string | null;
+  defaultRepoPath?: string | null;
+  defaultSetupScript?: string | null;
+  defaultRunScript?: string | null;
+  setupScript?: string | null;
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -8,25 +8,34 @@ export type UpdateChannelMutationVariables = Types.Exact<{
   name?: Types.InputMaybe<Types.Scalars['String']['input']>;
   baseBranch?: Types.InputMaybe<Types.Scalars['String']['input']>;
   githubUrl?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultRepoPath?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultSetupScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultRunScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
 }>;
 
 
-export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, createdAt: string, updatedAt: string } };
+export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
 
 
 export const UpdateChannelDocument = gql`
-    mutation UpdateChannel($id: ID!, $name: String, $baseBranch: String, $githubUrl: String) {
+    mutation UpdateChannel($id: ID!, $name: String, $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String) {
   updateChannel(
     id: $id
     name: $name
     baseBranch: $baseBranch
     githubUrl: $githubUrl
+    defaultRepoPath: $defaultRepoPath
+    defaultSetupScript: $defaultSetupScript
+    defaultRunScript: $defaultRunScript
   ) {
     id
     serverId
     name
     baseBranch
     githubUrl
+    defaultRepoPath
+    defaultSetupScript
+    defaultRunScript
     createdAt
     updatedAt
   }
@@ -51,6 +60,9 @@ export type UpdateChannelMutationFn = Apollo.MutationFunction<UpdateChannelMutat
  *      name: // value for 'name'
  *      baseBranch: // value for 'baseBranch'
  *      githubUrl: // value for 'githubUrl'
+ *      defaultRepoPath: // value for 'defaultRepoPath'
+ *      defaultSetupScript: // value for 'defaultSetupScript'
+ *      defaultRunScript: // value for 'defaultRunScript'
  *   },
  * });
  */

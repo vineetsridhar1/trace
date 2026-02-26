@@ -1,269 +1,194 @@
-# Plan: Ticket Dependencies (Run After)
+# Plan: Channel Run Script & Port Allocation
 
 ## Summary
 
-Add the ability for tickets to depend on other tickets. Users can click a dropdown arrow on the Run button, select "Run After...", pick one or more pending/in-progress tickets as dependencies, and the ticket will automatically start when all dependencies complete.
-
-## Design Decisions
-
-- **Auto-run**: Save prompt/model/effort settings at queue time; auto-run when all deps complete
-- **Multiple dependencies**: A ticket can depend on multiple tickets (all must complete)
-- **UI**: Split button — main "Run" works as before, dropdown arrow reveals "Run After..."
-- **Status**: New "Queued" status badge (cyan/teal) while waiting for dependencies
+Rename "creation script" to "setup script", rename "startup scripts" to "run script" (single block), add admin-set channel defaults vs user overrides, allocate 10 ports per workspace on creation, and add AI script suggestion.
 
 ---
 
-## Current State Machine (on main)
+## 1. Database Schema Changes
 
-```
-STATUS_TRANSITIONS = {
-  pending:     ['creation', 'in_progress'],
-  creation:    ['in_progress', 'pending'],
-  in_progress: ['completed', 'needs_input'],
-  needs_input: ['in_progress'],
-  completed:   ['merged'],
-  merged:      [],
-}
-```
+### Add default script fields to Channel model
 
-**Updated with `queued`:**
+**File:** `server/prisma/schema.prisma` — Channel model
 
+Add these fields:
 ```
-STATUS_TRANSITIONS = {
-  pending:     ['creation', 'in_progress', 'queued'],  // + queued
-  queued:      ['creation', 'in_progress', 'pending'],  // NEW
-  creation:    ['in_progress', 'pending'],
-  in_progress: ['completed', 'needs_input'],
-  needs_input: ['in_progress'],
-  completed:   ['merged'],
-  merged:      [],
-}
+defaultRepoPath    String?  @map("default_repo_path")
+defaultSetupScript String?  @map("default_setup_script")
+defaultRunScript   String?  @map("default_run_script")
 ```
 
-Existing statuses on main: `pending`, `creation`, `in_progress`, `needs_input`, `completed`, `merged`
+These are the **admin-set channel defaults** shared across all users.
+
+**Migration:** New migration `add_channel_default_scripts`
+
+### GraphQL Schema
+
+**File:** `server/src/schema/channel/schema.graphql`
+
+- Add `defaultRepoPath`, `defaultSetupScript`, `defaultRunScript` to `Channel` type
+- Add these fields to `createChannel` and `updateChannel` mutations
+- Add new query: `suggestScripts(localRepoPath: String!): ScriptSuggestion!`
+- Add `ScriptSuggestion` type with `setupScript: String`, `runScript: String`
 
 ---
 
-## Step 1: Database Schema
+## 2. Rename Creation Script -> Setup Script, Startup Scripts -> Run Script
 
-**File: `server/prisma/schema.prisma`**
+### Local config changes
 
-Add a `TicketDependency` join table:
-```prisma
-model TicketDependency {
-  id                 String   @id @default(uuid())
-  ticketMessageId    String   @map("ticket_message_id")
-  dependsOnMessageId String   @map("depends_on_message_id")
-  createdAt          DateTime @default(now()) @map("created_at")
+**File:** `src/main/localConfig.ts` — `LocalChannelConfig` interface
 
-  ticket    Message @relation("ticketDeps", fields: [ticketMessageId], references: [id], onDelete: Cascade)
-  dependsOn Message @relation("depTarget", fields: [dependsOnMessageId], references: [id], onDelete: Cascade)
-
-  @@unique([ticketMessageId, dependsOnMessageId])
-  @@index([dependsOnMessageId])
-  @@map("ticket_dependencies")
-}
+Change from:
+```ts
+{ localRepoPath, creationScript?, startupScripts?: {name, command}[] }
+```
+To:
+```ts
+{ localRepoPath, setupScript?, runScript?, systemInstructions? }
 ```
 
-Add `queuedRunConfig Json?` field to the `Message` model (stores prompt, model, effort, planMode when queued via "Run After").
+- `setupScript` replaces `creationScript` (runs once on worktree creation)
+- `runScript` replaces `startupScripts` (single script block, runs servers with port env vars)
+- Add migration logic to convert old format on read
 
-Add reverse relations on `Message`:
-```prisma
-dependencies   TicketDependency[] @relation("ticketDeps")
-dependedOnBy   TicketDependency[] @relation("depTarget")
-```
+**File:** `src/types.ts` — `LocalChannelConfig` and `Channel` interfaces
 
-Run `prisma migrate dev` to create the migration.
+- Rename `creationScript` to `setupScript` in both
+- Remove `startupScripts` from local config
+- Add `runScript` field
+- Add `defaultRepoPath`, `defaultSetupScript`, `defaultRunScript` to Channel
 
-## Step 2: Add "queued" to the Status State Machine
+### All references to update
 
-**File: `server/src/schema/message/resolvers/Mutation/updateMessageStatus.ts`**
-- Add `'queued'` to `VALID_STATUSES` array
-- Add `queued` to `STATUS_TRANSITIONS`:
-  - `pending` can transition to `queued` (user clicks "Run After")
-  - `queued` can transition to `creation`, `in_progress` (auto-run starts), or `pending` (user cancels)
-
-**File: `server/src/services/ticketService.ts`**
-- Add `queued: 'todo'` to `STATUS_TO_SLUG` (queued tickets stay in TODO column)
-
-**File: `src/types.ts`**
-- Add `'queued'` to `TicketStatus` union (currently: `'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input'`)
-
-**File: `src/components/MessageItem.tsx`**
-- Add `queued` entry to `STATUS_CONFIG` with cyan styling:
-  ```ts
-  queued: { label: 'Queued', color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', avatarBg: 'bg-cyan-500/20', avatarText: 'text-cyan-400' }
-  ```
-
-**File: `src/components/TicketView.tsx`**
-- Add matching `queued` entry to its `STATUS_CONFIG`
-
-## Step 3: GraphQL Schema & Resolvers
-
-**File: `server/src/schema/kanban/schema.graphql`**
-
-Add new types and mutations:
-```graphql
-type TicketDependency {
-  id: ID!
-  ticketMessageId: String!
-  dependsOnMessageId: String!
-  dependsOnTicketTitle: String
-  createdAt: DateTime!
-}
-
-extend type Mutation {
-  setTicketDependencies(
-    channelId: ID!
-    messageId: ID!
-    dependsOnMessageIds: [ID!]!
-    runConfig: JSON!
-  ): Message!
-  removeTicketDependency(
-    channelId: ID!
-    messageId: ID!
-    dependsOnMessageId: ID!
-  ): Boolean!
-}
-
-extend type Query {
-  ticketDependencies(messageId: ID!): [TicketDependency!]!
-}
-```
-
-**New resolver: `setTicketDependencies`**
-1. Delete existing dependencies for this message
-2. Create new `TicketDependency` rows
-3. Save `queuedRunConfig` JSON on the Message
-4. Update message status to "queued" (bypassing state machine check since this is a system transition)
-5. Broadcast `message-upsert` SSE
-
-**New resolver: `removeTicketDependency`**
-1. Delete the specific dependency row
-2. If no deps remain, reset status to "pending" and clear `queuedRunConfig`
-
-**New resolver: `ticketDependencies`**
-1. Query dependencies with joined ticket title for display
-
-## Step 4: Server-side Auto-Run Trigger
-
-**File: `server/src/services/ticketService.ts`**
-
-New function `checkAndTriggerDependents(completedMessageId, channelId)`:
-1. Find all `TicketDependency` rows where `dependsOnMessageId = completedMessageId`
-2. For each dependent ticket's `ticketMessageId`, check if ALL its dependencies have `message.status = 'completed'`
-3. If all deps are met, broadcast SSE event `ticket-ready-to-run` with `{ channelId, messageId, runConfig }`
-
-**Hook into completion flow:**
-- `server/src/schema/message/resolvers/Mutation/updateMessageStatus.ts` — call `checkAndTriggerDependents` after status transitions to `'completed'`
-- The state machine already enforces that only `in_progress` can transition to `completed`, so no guard needed
-
-## Step 5: Frontend Types & SSE
-
-**File: `src/types.ts`**
-- `'queued'` added to `TicketStatus` (from Step 2)
-
-**File: `src/hooks/useSse.ts`**
-- Add listener for `ticket-ready-to-run` SSE event
-- New callback prop: `onTicketReadyToRun: (messageId: string, runConfig: unknown) => void`
-- Add `'queued'` to the `onNeedsAttention` reason type (alongside existing `'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input'`)
-
-## Step 6: Auto-Run Handler
-
-**File: `src/hooks/useClaudeMessageActions.ts`**
-- Add `autoRunQueuedTicket(messageId, runConfig)` that:
-  1. Extracts prompt, model, effort, planMode from runConfig
-  2. Gets creation commands via `getCreationCommands()`
-  3. Calls `updatePreviewForPendingRun` with the saved prompt
-  4. Updates status to `creation` if creation commands exist
-  5. Spawns Claude with saved config via `spawnClaudeForMessage`
-  6. Status moves to `in_progress` on success
-
-**File: `src/App.tsx`**
-- Wire `onTicketReadyToRun` SSE callback to call `autoRunQueuedTicket`
-
-## Step 7: Split Button UI
-
-**File: `src/components/RunButtons.tsx`**
-
-Transform Run button into a split button:
-```
-[     Run     ][v]
-```
-- Left: "Run" (existing behavior)
-- Right: Dropdown arrow that shows a popover with "Run After..." option
-- "Run After..." opens a ticket selector
-
-New props:
-- `channelTickets: { messageId: string; title: string; status: string }[]`
-- `currentMessageId: string`
-- `onRunAfter: (dependsOnMessageIds: string[], runConfig: RunConfig) => void`
-
-**New component: `src/components/TicketDependencySelector.tsx`**
-- Popover listing pending & in-progress tickets (excluding current)
-- Checkboxes for multi-select
-- "Queue" confirm button
-- Shows ticket title + status badge per item
-
-## Step 8: Wire Up in ThreadPanel
-
-**File: `src/components/ThreadPanel.tsx`**
-- Pass channel tickets and `onRunAfter` handler to `RunButtons`
-- `onRunAfter` calls the `setTicketDependencies` GraphQL mutation
-- Channel tickets come from the kanban `columns` state (passed via context)
-
-## Step 9: Visual Indicators
-
-**File: `src/components/KanbanCard.tsx`**
-- Show a small chain icon (FiLink from react-icons/fi) when ticket has dependencies
-- Subtle text: "Queued" or "Waiting on N tickets"
-
-**File: `src/components/TicketView.tsx`**
-- Add "Dependencies" section showing what this ticket waits on
-- Add "Depended on by" section if other tickets depend on this one
-
-## Step 10: Codegen & Build
-
-- `cd server && npm run codegen` — server resolver types
-- `npm run codegen` — client Apollo hooks (uses `useBoardLazyQuery` pattern, not `useApolloClient`)
-- Build and verify
+- `src/context/ChannelContext.tsx` — enrichment logic: merge `setupScript` instead of `creationScript`
+- `src/App.tsx` — `getCreationCommands` to `getSetupCommands`, update `handleRunStartupScripts` and `handleRunMessageScripts` to use single `runScript`
+- `src/hooks/useClaudeMessageActions.ts` — `getCreationCommands` to `getSetupCommands`
+- `src/main/claude.ts` — rename `runCreationScripts` to `runSetupScripts`, update log messages
 
 ---
 
-## Architecture Flow
+## 3. Port Allocation on Workspace Creation
 
-```
-User clicks "Run After" → selects deps → confirms
-  → setTicketDependencies mutation
-  → Server: creates TicketDependency rows + saves runConfig
-  → Server: status transitions pending → queued (state machine)
-  → SSE: message-upsert (UI shows "Queued" badge)
+Currently ports are only allocated when the user clicks "Run Scripts". Change: **allocate 10 ports automatically when spawning a new workspace**.
 
-Dependency ticket completes (user clicks Delete Worktree)
-  → updateMessageStatus("completed")   [in_progress → completed per state machine]
-  → Server: checkAndTriggerDependents()
-    → All deps met? → SSE: "ticket-ready-to-run" { messageId, runConfig }
+**File:** `src/hooks/useClaudeMessageActions.ts` — `runPendingMessage`
 
-  → Frontend SSE listener → autoRunQueuedTicket()
-    → status: queued → creation → in_progress (state machine transitions)
-    → spawnClaude() with saved config
+Before spawning, allocate 10 ports:
+```ts
+const portResult = await window.traceAPI.allocatePorts(messageId, 10);
 ```
 
-## Key Files
+Inject port info into the system instructions so the run script and Claude know about them.
 
-| File | Changes |
-|------|---------|
-| `server/prisma/schema.prisma` | New `TicketDependency` model, `queuedRunConfig` on Message |
-| `server/src/services/ticketService.ts` | `checkAndTriggerDependents()`, STATUS_TO_SLUG |
-| `server/src/schema/kanban/schema.graphql` | New types, mutations, queries |
-| `server/src/schema/message/resolvers/Mutation/updateMessageStatus.ts` | Add `queued` to state machine, hook dependency check |
-| `src/types.ts` | Add `queued` to TicketStatus |
-| `src/hooks/useSse.ts` | `ticket-ready-to-run` listener |
-| `src/hooks/useClaudeMessageActions.ts` | `autoRunQueuedTicket()` |
-| `src/App.tsx` | Wire auto-run handler |
-| `src/components/RunButtons.tsx` | Split button UI |
-| `src/components/TicketDependencySelector.tsx` | New: ticket selector popover |
-| `src/components/ThreadPanel.tsx` | Pass new props |
-| `src/components/KanbanCard.tsx` | Dependency indicator |
-| `src/components/MessageItem.tsx` | Queued status config |
-| `src/components/TicketView.tsx` | Queued status config + dependencies section |
+**File:** `src/App.tsx` — `handleRunMessageScripts`
+
+Simplify to use single `runScript`. Run the single script in one terminal tab with all port env vars.
+
+---
+
+## 4. Channel Settings UI — Admin Defaults vs User Settings
+
+**File:** `src/components/ChannelSettingsModal.tsx` — Redesign
+
+Split into two clearly labeled sections:
+
+### Section 1: "Channel Defaults" (admin-only)
+- **Base Branch** — existing field, moved here
+- **Default Repo Path** — optional text input
+- **Default Setup Script** — textarea (runs once on workspace creation)
+- **Default Run Script** — textarea (runs servers with `$PORT`, `$TRACE_PORT_0`, etc.)
+- **"Suggest Scripts" button** — calls AI to analyze repo and pre-fill
+- These fields are **disabled/read-only for non-admin users** with a note like "Only channel admins can change defaults"
+- Saved to the database via `updateChannel` mutation
+
+### Section 2: "My Settings" (per-user overrides)
+- **Local Repo Path** — folder picker (existing)
+- **Setup Script** — textarea, placeholder shows channel default, empty means "use default"
+- **Run Script** — textarea, placeholder shows channel default, empty means "use default"
+- **System Instructions** — textarea (existing)
+- Saved to local config
+
+### Admin detection
+- For now hardcode `isAdmin = true` since auth/membership isn't fully wired yet
+- When membership is ready, check `ChannelMember.role === 'admin'`
+
+---
+
+## 5. Create Channel Modal — Admin Sets Defaults
+
+**File:** `src/components/CreateChannelModal.tsx`
+
+After repo is selected and validated, show:
+- **Default Setup Script** — textarea
+- **Default Run Script** — textarea
+- **"Suggest Scripts" button** — calls `suggestScripts` query
+- Save these to the channel via the `createChannel` mutation (new fields)
+
+---
+
+## 6. AI Script Suggestion
+
+### Server-side resolver
+
+**File:** `server/src/schema/channel/resolvers/Query/suggestScripts.ts` (new)
+
+Reads the repo's package.json, Makefile, docker-compose.yml, Cargo.toml, go.mod, requirements.txt, etc. and returns suggested scripts:
+
+- If `package.json` with scripts.dev -> setup: `npm install`, run: `npm run dev -- --port $PORT`
+- If `package.json` with scripts.start -> run: `PORT=$PORT npm start`
+- If `docker-compose.yml` -> run: `docker compose up`
+- If Python project -> setup: `pip install -r requirements.txt`
+- If Go -> setup: `go mod download`, run: `go run . --port $PORT`
+
+### Client-side
+
+Both `CreateChannelModal` and `ChannelSettingsModal` get a "Suggest Scripts" button.
+
+---
+
+## 7. Run Script Execution
+
+When the user runs scripts on a workspace:
+1. Check worktree exists
+2. Allocate 10 ports (or reuse existing allocation)
+3. Set env vars: `PORT`, `TRACE_BASE_PORT`, `TRACE_PORT_0` through `TRACE_PORT_9`, `REPO_FOLDER`
+4. Run the single run script in one terminal tab named "Run Script"
+
+The effective run script is: user's local override if set, otherwise channel default.
+
+---
+
+## 8. Effective Script Resolution
+
+When determining which scripts to use for a workspace:
+
+```
+effectiveSetupScript = user.setupScript ?? channel.defaultSetupScript ?? ""
+effectiveRunScript = user.runScript ?? channel.defaultRunScript ?? ""
+effectiveRepoPath = user.localRepoPath (always user-set, required)
+```
+
+This happens in `ChannelContext.tsx` enrichment.
+
+---
+
+## File Change Summary
+
+| File | Change |
+|------|--------|
+| `server/prisma/schema.prisma` | Add 3 default fields to Channel |
+| New migration SQL | Add columns |
+| `server/src/schema/channel/schema.graphql` | Add fields, ScriptSuggestion type, suggestScripts query |
+| `server/src/schema/channel/resolvers/...` | Update create/update, add suggestScripts |
+| `server/src/services/channelService.ts` | Accept new fields |
+| `src/types.ts` | Rename creationScript, add runScript, add channel default fields |
+| `src/main/localConfig.ts` | Update interface + old format migration |
+| `src/components/ChannelSettingsModal.tsx` | Redesign with admin/user sections |
+| `src/components/CreateChannelModal.tsx` | Add default scripts + AI suggestion |
+| `src/context/ChannelContext.tsx` | Update enrichment |
+| `src/App.tsx` | Update script handling, port allocation |
+| `src/hooks/useClaudeMessageActions.ts` | Rename, add port allocation |
+| `src/hooks/useStartupTerminals.ts` | Simplify for single run script |
+| `src/main/claude.ts` | Rename creation to setup |

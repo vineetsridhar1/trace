@@ -3,11 +3,12 @@ extend type Query {
   channel(id: ID!): Channel
   validateRepo(localRepoPath: String!): RepoValidation!
   repoBranches(localRepoPath: String!): [String!]!
+  suggestScripts(localRepoPath: String!): ScriptSuggestion!
 }
 
 extend type Mutation {
-  createChannel(name: String!, serverId: String, githubUrl: String, baseBranch: String): Channel!
-  updateChannel(id: ID!, name: String, baseBranch: String, githubUrl: String): Channel!
+  createChannel(name: String!, serverId: String, githubUrl: String, baseBranch: String, defaultRepoPath: String, defaultSetupScript: String, defaultRunScript: String): Channel!
+  updateChannel(id: ID!, name: String, baseBranch: String, githubUrl: String, defaultRepoPath: String, defaultSetupScript: String, defaultRunScript: String): Channel!
 }
 
 type Channel {
@@ -16,6 +17,9 @@ type Channel {
   name: String!
   baseBranch: String
   githubUrl: String
+  defaultRepoPath: String
+  defaultSetupScript: String
+  defaultRunScript: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -24,4 +28,9 @@ type RepoValidation {
   valid: Boolean!
   originUrl: String
   error: String
+}
+
+type ScriptSuggestion {
+  setupScript: String
+  runScript: String
 }

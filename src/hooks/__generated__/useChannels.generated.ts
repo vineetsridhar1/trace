@@ -6,7 +6,7 @@ const defaultOptions = {} as const;
 export type ChannelsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type ChannelsQuery = { __typename?: 'Query', channels: Array<{ __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, createdAt: string, updatedAt: string }> };
+export type ChannelsQuery = { __typename?: 'Query', channels: Array<{ __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string }> };
 
 
 export const ChannelsDocument = gql`
@@ -17,6 +17,9 @@ export const ChannelsDocument = gql`
     name
     baseBranch
     githubUrl
+    defaultRepoPath
+    defaultSetupScript
+    defaultRunScript
     createdAt
     updatedAt
   }

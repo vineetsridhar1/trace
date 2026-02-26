@@ -4,8 +4,18 @@ import os from 'node:os';
 
 export interface LocalChannelConfig {
   localRepoPath: string;
+  setupScript?: string;
+  runScript?: string;
+  systemInstructions?: string;
+}
+
+interface LegacyChannelConfig {
+  localRepoPath: string;
   creationScript?: string;
   startupScripts?: { name: string; command: string }[];
+  setupScript?: string;
+  runScript?: string;
+  systemInstructions?: string;
 }
 
 interface LocalConfigFile {
@@ -15,10 +25,25 @@ interface LocalConfigFile {
 const CONFIG_DIR = path.join(os.homedir(), '.trace');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'local-config.json');
 
+/** Migrate legacy field names (creationScript, startupScripts) to new ones */
+function migrateEntry(cfg: LegacyChannelConfig): LocalChannelConfig {
+  return {
+    localRepoPath: cfg.localRepoPath,
+    setupScript: cfg.setupScript ?? cfg.creationScript,
+    runScript: cfg.runScript ?? (cfg.startupScripts?.map((s) => s.command).join('\n') || undefined),
+    systemInstructions: cfg.systemInstructions,
+  };
+}
+
 function readConfig(): LocalConfigFile {
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
-    return JSON.parse(raw) as LocalConfigFile;
+    const parsed = JSON.parse(raw) as { channels: Record<string, LegacyChannelConfig> };
+    const channels: Record<string, LocalChannelConfig> = {};
+    for (const [id, cfg] of Object.entries(parsed.channels)) {
+      channels[id] = migrateEntry(cfg);
+    }
+    return { channels };
   } catch {
     return { channels: {} };
   }

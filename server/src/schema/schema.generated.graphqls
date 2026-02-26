@@ -44,6 +44,9 @@ type Attachment {
 type Channel {
   baseBranch: String
   createdAt: DateTime!
+  defaultRepoPath: String
+  defaultRunScript: String
+  defaultSetupScript: String
   githubUrl: String
   id: ID!
   name: String!
@@ -130,7 +133,7 @@ type MessageSession {
 type Mutation {
   appendPrompt(attachmentIds: [String!], channelId: ID!, createNewThread: Boolean, messageId: ID!, text: String!, threadId: ID): CreateMessagePayload!
   createAiChat(channelId: ID, serverId: ID!, title: String): AiChat!
-  createChannel(baseBranch: String, githubUrl: String, name: String!, serverId: String): Channel!
+  createChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, name: String!, serverId: String): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createMessage(attachmentIds: [String!], channelId: ID!, text: String!): CreateMessagePayload!
   createServer(avatarUrl: String, name: String!): Server!
@@ -143,7 +146,7 @@ type Mutation {
   renameAiChat(id: ID!, title: String!): AiChat!
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
   setTicketDependencies(channelId: ID!, dependsOnMessageIds: [ID!]!, messageId: ID!, runConfig: JSON!): Message!
-  updateChannel(baseBranch: String, githubUrl: String, id: ID!, name: String): Channel!
+  updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, id: ID!, name: String): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
   updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!
@@ -164,6 +167,7 @@ type Query {
   session(sessionId: String!): Session
   sessionEvents(after: String, hookEventName: String, limit: Int, offset: Int, sessionId: String!, toolName: String): EventConnection!
   sessions(limit: Int, offset: Int, order: String, sort: String, status: String): SessionConnection!
+  suggestScripts(localRepoPath: String!): ScriptSuggestion!
   threadEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int, threadId: ID!): EventConnection!
   threads(channelId: ID!, messageId: ID!): [Thread!]!
   ticketDependencies(messageId: ID!): [TicketDependency!]!
@@ -174,6 +178,11 @@ type RepoValidation {
   error: String
   originUrl: String
   valid: Boolean!
+}
+
+type ScriptSuggestion {
+  runScript: String
+  setupScript: String
 }
 
 type Server {
