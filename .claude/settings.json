@@ -30,6 +30,17 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -sS --connect-timeout 1 --max-time 2 -X POST http://localhost:3100/events -H \"Content-Type: application/json\" -d \"$(cat)\" >/dev/null 2>&1 || true"
+          }
+        ]
+      }
     ]
   }
 }

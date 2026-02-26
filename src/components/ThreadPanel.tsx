@@ -8,6 +8,7 @@ import { TicketView } from "./TicketView";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
 import { RunButtons } from "./RunButtons";
+import { CreationStatusBar } from "./CreationStatusBar";
 import { StickyTodoList } from "./StickyTodoList";
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useThreadContext } from "../context/ThreadContext";
@@ -286,6 +287,8 @@ export function ThreadPanel() {
               }
             }}
           />
+        ) : messageStatus === 'creation' ? (
+          <CreationStatusBar />
         ) : showQuestion ? (
           <AskUserQuestionBar
             node={showQuestion}
