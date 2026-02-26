@@ -370,8 +370,13 @@ export function useThread({
         totalTokens: prev.totalTokens - acc.total + runInput + runOutput,
       }));
       runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
-      if (runInput) {
-        setLatestContextTokens(runInput);
+      // Use per-call usage for context tokens (context window size), not
+      // cli_usage which is the cumulative session total.
+      const perCallUsage = payload?.usage as
+        | { input_tokens?: number }
+        | undefined;
+      if (perCallUsage?.input_tokens) {
+        setLatestContextTokens(perCallUsage.input_tokens);
       }
       if (typeof payload?.cli_cost_usd === 'number') {
         setCliCostUsd((prev) => (prev ?? 0) + (payload.cli_cost_usd as number));
@@ -429,8 +434,13 @@ export function useThread({
         totalTokens: prev.totalTokens - acc.total + runInput + runOutput,
       }));
       runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
-      if (runInput) {
-        setLatestContextTokens(runInput);
+      // Use per-call usage for context tokens (context window size), not
+      // cli_usage which is the cumulative session total.
+      const perCallUsage = payload?.usage as
+        | { input_tokens?: number }
+        | undefined;
+      if (perCallUsage?.input_tokens) {
+        setLatestContextTokens(perCallUsage.input_tokens);
       }
       if (typeof payload?.cli_cost_usd === 'number') {
         setCliCostUsd((prev) => (prev ?? 0) + (payload.cli_cost_usd as number));
