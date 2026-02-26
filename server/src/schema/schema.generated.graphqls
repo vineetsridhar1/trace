@@ -1,3 +1,28 @@
+type AiChat {
+  channelId: String
+  createdAt: DateTime!
+  id: ID!
+  lastMessage: String
+  serverId: String!
+  title: String!
+  updatedAt: DateTime!
+}
+
+type AiChatMessage {
+  chatId: String!
+  content: String!
+  createdAt: DateTime!
+  id: ID!
+  role: String!
+}
+
+type AiChatMessageConnection {
+  limit: Int!
+  messages: [AiChatMessage!]!
+  offset: Int!
+  total: Int!
+}
+
 type Attachment {
   byteSize: Int!
   contentType: String!
@@ -94,14 +119,18 @@ type MessageSession {
 
 type Mutation {
   appendPrompt(attachmentIds: [String!], channelId: ID!, createNewThread: Boolean, messageId: ID!, text: String!, threadId: ID): CreateMessagePayload!
+  createAiChat(channelId: ID, serverId: ID!, title: String): AiChat!
   createChannel(baseBranch: String, githubUrl: String, name: String!, serverId: String): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createMessage(attachmentIds: [String!], channelId: ID!, text: String!): CreateMessagePayload!
   createServer(avatarUrl: String, name: String!): Server!
   createThread(channelId: ID!, messageId: ID!): Thread!
+  deleteAiChat(id: ID!): Boolean!
   deleteColumn(columnId: ID!): Boolean!
   deleteMessage(channelId: ID!, messageId: ID!): Boolean!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
+  renameAiChat(id: ID!, title: String!): AiChat!
+  sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
   updateChannel(baseBranch: String, githubUrl: String, id: ID!, name: String): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
@@ -110,6 +139,8 @@ type Mutation {
 }
 
 type Query {
+  aiChatMessages(chatId: ID!, limit: Int, offset: Int): AiChatMessageConnection!
+  aiChats(serverId: ID!): [AiChat!]!
   board(channelId: ID!): [KanbanColumn!]!
   channel(id: ID!): Channel
   channels: [Channel!]!

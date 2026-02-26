@@ -1,0 +1,36 @@
+extend type Query {
+  aiChats(serverId: ID!): [AiChat!]!
+  aiChatMessages(chatId: ID!, limit: Int, offset: Int): AiChatMessageConnection!
+}
+
+extend type Mutation {
+  createAiChat(serverId: ID!, channelId: ID, title: String): AiChat!
+  deleteAiChat(id: ID!): Boolean!
+  sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
+  renameAiChat(id: ID!, title: String!): AiChat!
+}
+
+type AiChat {
+  id: ID!
+  serverId: String!
+  channelId: String
+  title: String!
+  lastMessage: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type AiChatMessage {
+  id: ID!
+  chatId: String!
+  role: String!
+  content: String!
+  createdAt: DateTime!
+}
+
+type AiChatMessageConnection {
+  messages: [AiChatMessage!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}

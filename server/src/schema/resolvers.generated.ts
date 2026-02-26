@@ -1,6 +1,8 @@
 /* This file was automatically generated. DO NOT UPDATE MANUALLY. */
     import type   { Resolvers } from './types.generated';
-    import    { board as Query_board } from './kanban/resolvers/Query/board';
+    import    { aiChatMessages as Query_aiChatMessages } from './aiChat/resolvers/Query/aiChatMessages';
+import    { aiChats as Query_aiChats } from './aiChat/resolvers/Query/aiChats';
+import    { board as Query_board } from './kanban/resolvers/Query/board';
 import    { channel as Query_channel } from './channel/resolvers/Query/channel';
 import    { channels as Query_channels } from './channel/resolvers/Query/channels';
 import    { event as Query_event } from './event/resolvers/Query/event';
@@ -15,19 +17,26 @@ import    { threadEvents as Query_threadEvents } from './thread/resolvers/Query/
 import    { threads as Query_threads } from './thread/resolvers/Query/threads';
 import    { validateRepo as Query_validateRepo } from './channel/resolvers/Query/validateRepo';
 import    { appendPrompt as Mutation_appendPrompt } from './message/resolvers/Mutation/appendPrompt';
+import    { createAiChat as Mutation_createAiChat } from './aiChat/resolvers/Mutation/createAiChat';
 import    { createChannel as Mutation_createChannel } from './channel/resolvers/Mutation/createChannel';
 import    { createColumn as Mutation_createColumn } from './kanban/resolvers/Mutation/createColumn';
 import    { createMessage as Mutation_createMessage } from './message/resolvers/Mutation/createMessage';
 import    { createServer as Mutation_createServer } from './server/resolvers/Mutation/createServer';
 import    { createThread as Mutation_createThread } from './thread/resolvers/Mutation/createThread';
+import    { deleteAiChat as Mutation_deleteAiChat } from './aiChat/resolvers/Mutation/deleteAiChat';
 import    { deleteColumn as Mutation_deleteColumn } from './kanban/resolvers/Mutation/deleteColumn';
 import    { deleteMessage as Mutation_deleteMessage } from './message/resolvers/Mutation/deleteMessage';
 import    { moveTicket as Mutation_moveTicket } from './kanban/resolvers/Mutation/moveTicket';
+import    { renameAiChat as Mutation_renameAiChat } from './aiChat/resolvers/Mutation/renameAiChat';
+import    { sendAiChatMessage as Mutation_sendAiChatMessage } from './aiChat/resolvers/Mutation/sendAiChatMessage';
 import    { updateChannel as Mutation_updateChannel } from './channel/resolvers/Mutation/updateChannel';
 import    { updateColumn as Mutation_updateColumn } from './kanban/resolvers/Mutation/updateColumn';
 import    { updateMessagePreview as Mutation_updateMessagePreview } from './message/resolvers/Mutation/updateMessagePreview';
 import    { updateMessageStatus as Mutation_updateMessageStatus } from './message/resolvers/Mutation/updateMessageStatus';
 import    { uploadAttachment as Mutation_uploadAttachment } from './attachment/resolvers/Mutation/uploadAttachment';
+import    { AiChat } from './aiChat/resolvers/AiChat';
+import    { AiChatMessage } from './aiChat/resolvers/AiChatMessage';
+import    { AiChatMessageConnection } from './aiChat/resolvers/AiChatMessageConnection';
 import    { Attachment } from './attachment/resolvers/Attachment';
 import    { Channel } from './channel/resolvers/Channel';
 import    { CreateMessagePayload } from './message/resolvers/CreateMessagePayload';
@@ -49,10 +58,13 @@ import    { TokenUsage } from './event/resolvers/TokenUsage';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
-      Mutation: { appendPrompt: Mutation_appendPrompt,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
+      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
+      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteAiChat: Mutation_deleteAiChat,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
       
-      Attachment: Attachment,
+      AiChat: AiChat,
+AiChatMessage: AiChatMessage,
+AiChatMessageConnection: AiChatMessageConnection,
+Attachment: Attachment,
 Channel: Channel,
 CreateMessagePayload: CreateMessagePayload,
 Event: Event,

@@ -27,4 +27,16 @@ router.get('/channels/:channelId', (req: Request, res: Response) => {
   sseManager.addChannelClient(req.params.channelId as string, res);
 });
 
+router.get('/ai-chats/:chatId', (req: Request, res: Response) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+
+  res.write('event: connected\ndata: {}\n\n');
+
+  sseManager.addAiChatClient(req.params.chatId as string, res);
+});
+
 export default router;

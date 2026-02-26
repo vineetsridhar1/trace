@@ -210,6 +210,24 @@ export interface TicketEnvelope {
   ticket: KanbanTicket;
 }
 
+export interface AiChat {
+  id: string;
+  serverId: string;
+  channelId: string | null;
+  title: string;
+  lastMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiChatMessage {
+  id: string;
+  chatId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
 export interface ThreadEventNode {
   kind: 'event';
   event: ServerEvent;

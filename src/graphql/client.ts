@@ -13,6 +13,7 @@ export function createGraphqlClient(): ApolloClient<unknown> {
         SessionConnection: { keyFields: false },
         RepoValidation: { keyFields: false },
         CreateMessagePayload: { keyFields: false },
+        AiChatMessageConnection: { keyFields: false },
       },
     }),
     defaultOptions: {

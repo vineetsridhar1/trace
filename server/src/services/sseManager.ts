@@ -12,9 +12,16 @@ type ChannelSSEClient = {
   res: Response;
 };
 
+type AiChatSSEClient = {
+  id: string;
+  chatId: string;
+  res: Response;
+};
+
 class SSEManager {
   private clients: SSEClient[] = [];
   private channelClients: ChannelSSEClient[] = [];
+  private aiChatClients: AiChatSSEClient[] = [];
 
   addClient(sessionId: string, res: Response): string {
     const id = Math.random().toString(36).slice(2);
@@ -48,6 +55,25 @@ class SSEManager {
 
   broadcastChannel(channelId: string, eventName: string, data: unknown) {
     const targets = this.channelClients.filter((c) => c.channelId === channelId);
+    const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of targets) {
+      client.res.write(payload);
+    }
+  }
+
+  addAiChatClient(chatId: string, res: Response): string {
+    const id = Math.random().toString(36).slice(2);
+    this.aiChatClients.push({ id, chatId, res });
+
+    res.on('close', () => {
+      this.aiChatClients = this.aiChatClients.filter((c) => c.id !== id);
+    });
+
+    return id;
+  }
+
+  broadcastAiChat(chatId: string, eventName: string, data: unknown) {
+    const targets = this.aiChatClients.filter((c) => c.chatId === chatId);
     const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const client of targets) {
       client.res.write(payload);

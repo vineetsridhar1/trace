@@ -1,4 +1,5 @@
 import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from 'graphql';
+import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper } from './aiChat/schema.mappers';
 import { AttachmentMapper } from './attachment/schema.mappers';
 import { ChannelMapper, RepoValidationMapper } from './channel/schema.mappers';
 import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageSessionMapper } from './message/schema.mappers';
@@ -24,6 +25,34 @@ export type Scalars = {
   Float: { input: number; output: number; }
   DateTime: { input: string; output: Date; }
   JSON: { input: any; output: any; }
+};
+
+export type AiChat = {
+  __typename?: 'AiChat';
+  channelId?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  lastMessage?: Maybe<Scalars['String']['output']>;
+  serverId: Scalars['String']['output'];
+  title: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type AiChatMessage = {
+  __typename?: 'AiChatMessage';
+  chatId: Scalars['String']['output'];
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  role: Scalars['String']['output'];
+};
+
+export type AiChatMessageConnection = {
+  __typename?: 'AiChatMessageConnection';
+  limit: Scalars['Int']['output'];
+  messages: Array<AiChatMessage>;
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
 };
 
 export type Attachment = {
@@ -128,14 +157,18 @@ export type MessageSession = {
 export type Mutation = {
   __typename?: 'Mutation';
   appendPrompt: CreateMessagePayload;
+  createAiChat: AiChat;
   createChannel: Channel;
   createColumn: KanbanColumn;
   createMessage: CreateMessagePayload;
   createServer: Server;
   createThread: Thread;
+  deleteAiChat: Scalars['Boolean']['output'];
   deleteColumn: Scalars['Boolean']['output'];
   deleteMessage: Scalars['Boolean']['output'];
   moveTicket: Ticket;
+  renameAiChat: AiChat;
+  sendAiChatMessage: AiChatMessage;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateMessagePreview: Message;
@@ -151,6 +184,13 @@ export type MutationappendPromptArgs = {
   messageId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
   threadId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type MutationcreateAiChatArgs = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
+  serverId: Scalars['ID']['input'];
+  title?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -189,6 +229,11 @@ export type MutationcreateThreadArgs = {
 };
 
 
+export type MutationdeleteAiChatArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationdeleteColumnArgs = {
   columnId: Scalars['ID']['input'];
 };
@@ -204,6 +249,18 @@ export type MutationmoveTicketArgs = {
   columnId: Scalars['ID']['input'];
   sortOrder?: InputMaybe<Scalars['Int']['input']>;
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationrenameAiChatArgs = {
+  id: Scalars['ID']['input'];
+  title: Scalars['String']['input'];
+};
+
+
+export type MutationsendAiChatMessageArgs = {
+  chatId: Scalars['ID']['input'];
+  content: Scalars['String']['input'];
 };
 
 
@@ -245,6 +302,8 @@ export type MutationuploadAttachmentArgs = {
 
 export type Query = {
   __typename?: 'Query';
+  aiChatMessages: AiChatMessageConnection;
+  aiChats: Array<AiChat>;
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
@@ -259,6 +318,18 @@ export type Query = {
   threadEvents: EventConnection;
   threads: Array<Thread>;
   validateRepo: RepoValidation;
+};
+
+
+export type QueryaiChatMessagesArgs = {
+  chatId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryaiChatsArgs = {
+  serverId: Scalars['ID']['input'];
 };
 
 
@@ -503,11 +574,14 @@ export type DirectiveResolverFn<TResult = Record<PropertyKey, never>, TParent = 
 
 /** Mapping between all available schema types and the resolvers types */
 export type ResolversTypes = {
-  Attachment: ResolverTypeWrapper<AttachmentMapper>;
-  Int: ResolverTypeWrapper<Scalars['Int']['output']>;
+  AiChat: ResolverTypeWrapper<AiChatMapper>;
   Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
+  AiChatMessage: ResolverTypeWrapper<AiChatMessageMapper>;
+  AiChatMessageConnection: ResolverTypeWrapper<AiChatMessageConnectionMapper>;
+  Int: ResolverTypeWrapper<Scalars['Int']['output']>;
+  Attachment: ResolverTypeWrapper<AttachmentMapper>;
   Channel: ResolverTypeWrapper<ChannelMapper>;
   CreateMessagePayload: ResolverTypeWrapper<CreateMessagePayloadMapper>;
   DateTime: ResolverTypeWrapper<Scalars['DateTime']['output']>;
@@ -534,11 +608,14 @@ export type ResolversTypes = {
 
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = {
-  Attachment: AttachmentMapper;
-  Int: Scalars['Int']['output'];
+  AiChat: AiChatMapper;
   Float: Scalars['Float']['output'];
   String: Scalars['String']['output'];
   ID: Scalars['ID']['output'];
+  AiChatMessage: AiChatMessageMapper;
+  AiChatMessageConnection: AiChatMessageConnectionMapper;
+  Int: Scalars['Int']['output'];
+  Attachment: AttachmentMapper;
   Channel: ChannelMapper;
   CreateMessagePayload: CreateMessagePayloadMapper;
   DateTime: Scalars['DateTime']['output'];
@@ -561,6 +638,31 @@ export type ResolversParentTypes = {
   TicketAttachment: TicketAttachmentMapper;
   TicketMessage: TicketMessageMapper;
   TokenUsage: TokenUsageMapper;
+};
+
+export type AiChatResolvers<ContextType = any, ParentType extends ResolversParentTypes['AiChat'] = ResolversParentTypes['AiChat']> = {
+  channelId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  lastMessage?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  serverId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+};
+
+export type AiChatMessageResolvers<ContextType = any, ParentType extends ResolversParentTypes['AiChatMessage'] = ResolversParentTypes['AiChatMessage']> = {
+  chatId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  content?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  role?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type AiChatMessageConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['AiChatMessageConnection'] = ResolversParentTypes['AiChatMessageConnection']> = {
+  limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  messages?: Resolver<Array<ResolversTypes['AiChatMessage']>, ParentType, ContextType>;
+  offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
 export type AttachmentResolvers<ContextType = any, ParentType extends ResolversParentTypes['Attachment'] = ResolversParentTypes['Attachment']> = {
@@ -663,14 +765,18 @@ export type MessageSessionResolvers<ContextType = any, ParentType extends Resolv
 
 export type MutationResolvers<ContextType = any, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = {
   appendPrompt?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationappendPromptArgs, 'channelId' | 'messageId' | 'text'>>;
+  createAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationcreateAiChatArgs, 'serverId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationcreateChannelArgs, 'name'>>;
   createColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationcreateColumnArgs, 'channelId' | 'name' | 'slug'>>;
   createMessage?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationcreateMessageArgs, 'channelId' | 'text'>>;
   createServer?: Resolver<ResolversTypes['Server'], ParentType, ContextType, RequireFields<MutationcreateServerArgs, 'name'>>;
   createThread?: Resolver<ResolversTypes['Thread'], ParentType, ContextType, RequireFields<MutationcreateThreadArgs, 'channelId' | 'messageId'>>;
+  deleteAiChat?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteAiChatArgs, 'id'>>;
   deleteColumn?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteColumnArgs, 'columnId'>>;
   deleteMessage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteMessageArgs, 'channelId' | 'messageId'>>;
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
+  renameAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationrenameAiChatArgs, 'id' | 'title'>>;
+  sendAiChatMessage?: Resolver<ResolversTypes['AiChatMessage'], ParentType, ContextType, RequireFields<MutationsendAiChatMessageArgs, 'chatId' | 'content'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationupdateChannelArgs, 'id'>>;
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;
   updateMessagePreview?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationupdateMessagePreviewArgs, 'channelId' | 'messageId' | 'preview'>>;
@@ -679,6 +785,8 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
 };
 
 export type QueryResolvers<ContextType = any, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = {
+  aiChatMessages?: Resolver<ResolversTypes['AiChatMessageConnection'], ParentType, ContextType, RequireFields<QueryaiChatMessagesArgs, 'chatId'>>;
+  aiChats?: Resolver<Array<ResolversTypes['AiChat']>, ParentType, ContextType, RequireFields<QueryaiChatsArgs, 'serverId'>>;
   board?: Resolver<Array<ResolversTypes['KanbanColumn']>, ParentType, ContextType, RequireFields<QueryboardArgs, 'channelId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QuerychannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
@@ -775,6 +883,9 @@ export type TokenUsageResolvers<ContextType = any, ParentType extends ResolversP
 };
 
 export type Resolvers<ContextType = any> = {
+  AiChat?: AiChatResolvers<ContextType>;
+  AiChatMessage?: AiChatMessageResolvers<ContextType>;
+  AiChatMessageConnection?: AiChatMessageConnectionResolvers<ContextType>;
   Attachment?: AttachmentResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   CreateMessagePayload?: CreateMessagePayloadResolvers<ContextType>;

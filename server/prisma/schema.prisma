@@ -16,6 +16,7 @@ model Server {
 
   channels Channel[]
   members  ServerMember[]
+  aiChats  AiChat[]
 
   @@map("servers")
 }
@@ -97,6 +98,7 @@ model Channel {
   messages       Message[]
   kanbanColumns  KanbanColumn[]
   members        ChannelMember[]
+  aiChats        AiChat[]
 
   @@map("channels")
 }
@@ -216,4 +218,33 @@ model Attachment {
   messages Message[]
 
   @@map("attachments")
+}
+
+model AiChat {
+  id        String   @id @default(uuid())
+  serverId  String   @map("server_id")
+  channelId String?  @map("channel_id")
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  server   Server          @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  channel  Channel?        @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  messages AiChatMessage[]
+
+  @@index([serverId, createdAt])
+  @@map("ai_chats")
+}
+
+model AiChatMessage {
+  id        String   @id @default(uuid())
+  chatId    String   @map("chat_id")
+  role      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  chat AiChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("ai_chat_messages")
 }

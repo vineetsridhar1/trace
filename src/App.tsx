@@ -12,6 +12,7 @@ import { useSse } from './hooks/useSse';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
 import { useClaudeMessageActions } from './hooks/useClaudeMessageActions';
 import { useKanban } from './hooks/useKanban';
+import { useAiChats } from './hooks/useAiChats';
 import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
 import { ChannelProvider, useChannelContext } from './context/ChannelContext';
 import { ThreadProvider } from './context/ThreadContext';
@@ -25,6 +26,7 @@ import { CreateChannelModal } from './components/CreateChannelModal';
 import { CreateServerModal } from './components/CreateServerModal';
 import { ServerRail } from './components/ServerRail';
 import { TerminalTabs } from './components/TerminalTabs';
+import { AiChatPanel } from './components/AiChatPanel';
 
 const GQL_UPDATE_MESSAGE_STATUS = gql`
   mutation UpdateMessageStatus($channelId: ID!, $messageId: ID!, $status: String!) {
@@ -165,6 +167,16 @@ function AppContent() {
     moveTicket,
     clearBoard,
   } = useKanban();
+
+  const {
+    aiChats,
+    fetchAiChats,
+    createAiChat,
+    deleteAiChat: deleteAiChatMutation,
+    updateAiChatInList,
+  } = useAiChats();
+
+  const [activeAiChatId, setActiveAiChatId] = useState<string | null>(null);
 
   const [executeUpdateMessageStatus] = useUpdateMessageStatusMutation();
   const [executeDeleteMessage] = useDeleteMessageMutation();
@@ -404,6 +416,13 @@ function AppContent() {
     }
   }, [activeChannelId, refreshMessages, fetchBoard]);
 
+  // Fetch AI chats when server changes
+  useEffect(() => {
+    if (activeServerId) {
+      void fetchAiChats(activeServerId);
+    }
+  }, [activeServerId, fetchAiChats]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (!activeChannelId || sseConnected) return;
@@ -420,6 +439,7 @@ function AppContent() {
       if (selectedMessageId) {
         void window.traceAPI.releasePorts(selectedMessageId);
       }
+      setActiveAiChatId(null);
       switchChannel(channelId);
       clearMessages();
       clearBoard();
@@ -440,6 +460,42 @@ function AppContent() {
       }
     },
     [switchServer, enrichedChannels, handleSwitchChannel],
+  );
+
+  const handleSwitchAiChat = useCallback(
+    (chatId: string) => {
+      setActiveAiChatId(chatId);
+      closeThreadPanel();
+      setChannelWidth(220);
+    },
+    [closeThreadPanel],
+  );
+
+  const handleCreateAiChat = useCallback(async () => {
+    if (!activeServerId) {
+      console.warn('[App] handleCreateAiChat: no activeServerId');
+      return;
+    }
+    try {
+      const chat = await createAiChat(activeServerId);
+      if (chat) {
+        setActiveAiChatId(chat.id);
+        closeThreadPanel();
+        setChannelWidth(220);
+      }
+    } catch (err) {
+      console.error('[App] handleCreateAiChat failed:', err);
+    }
+  }, [activeServerId, createAiChat, closeThreadPanel]);
+
+  const handleDeleteAiChat = useCallback(
+    async (id: string) => {
+      await deleteAiChatMutation(id);
+      if (activeAiChatId === id) {
+        setActiveAiChatId(null);
+      }
+    },
+    [deleteAiChatMutation, activeAiChatId],
   );
 
   const handleCloseThread = useCallback(() => {
@@ -640,10 +696,15 @@ function AppContent() {
             channelWidth={isFullscreen ? 0 : channelWidth}
             dragging={dragging}
             serverName={activeServer?.name}
+            aiChats={aiChats}
+            activeAiChatId={activeAiChatId}
             onSwitchChannel={handleSwitchChannel}
             onOpenSettings={handleOpenSettings}
             onRunStartupScripts={handleRunStartupScripts}
             onCreateChannel={() => setShowCreateChannel(true)}
+            onSwitchAiChat={handleSwitchAiChat}
+            onCreateAiChat={() => { void handleCreateAiChat(); }}
+            onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
             onStartDrag={() => startDragging('left')}
           />
 
@@ -658,21 +719,28 @@ function AppContent() {
                   : 'flex min-h-0 flex-1 flex-col'
               }
             >
-              <MessagePanel
-                panelTitle={panelTitle}
-                channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
-                messages={messages}
-                selectedMessageId={selectedMessageId}
-                attentionMessageIds={attentionMessageIds}
-                onOpenThread={handleOpenThread}
-                onDeleteMessage={handleDeleteMessage}
-                middlePanelView={middlePanelView}
-                onSetView={handleSetView}
-                kanbanColumns={kanbanColumns}
-                kanbanLoading={kanbanLoading}
-                onMoveTicket={handleMoveTicket}
-                onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
-              />
+              {activeAiChatId ? (
+                <AiChatPanel
+                  chatId={activeAiChatId}
+                  chatTitle={aiChats.find((c) => c.id === activeAiChatId)?.title ?? 'AI Chat'}
+                />
+              ) : (
+                <MessagePanel
+                  panelTitle={panelTitle}
+                  channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
+                  messages={messages}
+                  selectedMessageId={selectedMessageId}
+                  attentionMessageIds={attentionMessageIds}
+                  onOpenThread={handleOpenThread}
+                  onDeleteMessage={handleDeleteMessage}
+                  middlePanelView={middlePanelView}
+                  onSetView={handleSetView}
+                  kanbanColumns={kanbanColumns}
+                  kanbanLoading={kanbanLoading}
+                  onMoveTicket={handleMoveTicket}
+                  onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
+                />
+              )}
             </div>
 
             {startupTerminalList.length > 0 && !isFullscreen && (
