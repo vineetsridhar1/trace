@@ -240,7 +240,7 @@ export async function appendPromptToMessageThread(
 
     const thread = createNewThread
       ? await tx.thread.create({ data: { messageId: message.id } })
-      : message.threads[0] ??
+      : message.threads[message.threads.length - 1] ??
         (await tx.thread.create({
           data: { messageId: message.id },
         }));
