@@ -128,9 +128,6 @@ function AppContent() {
     deleteWorktree,
     toggleReadGroup,
     syncSelectedMessage,
-    tokenUsage,
-    latestContextTokens,
-    cliCostUsd,
   } = useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveChannelId });
 
   const upsertAndSyncMessage = useCallback(
@@ -689,14 +686,10 @@ function AppContent() {
       showJumpToLatest,
       scrollToLatest: () => scrollThreadToBottom('smooth'),
       onThreadScroll,
-      tokenUsage,
-      latestContextTokens,
-      cliCostUsd,
     }),
     [
       threadEvents, threadNodes, threadStatus, hasMoreEvents, loadingOlderEvents,
       threadContentRef, showJumpToLatest, scrollThreadToBottom, onThreadScroll,
-      tokenUsage, latestContextTokens, cliCostUsd,
     ],
   );
 

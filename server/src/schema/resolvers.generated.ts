@@ -70,7 +70,6 @@ import    { TicketDependency } from './kanban/resolvers/TicketDependency';
 import    { TicketMessage } from './kanban/resolvers/TicketMessage';
 import    { TicketReadyToRunPayload } from './kanban/resolvers/TicketReadyToRunPayload';
 import    { TicketUpsertPayload } from './kanban/resolvers/TicketUpsertPayload';
-import    { TokenUsage } from './event/resolvers/TokenUsage';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
@@ -103,7 +102,6 @@ TicketDependency: TicketDependency,
 TicketMessage: TicketMessage,
 TicketReadyToRunPayload: TicketReadyToRunPayload,
 TicketUpsertPayload: TicketUpsertPayload,
-TokenUsage: TokenUsage,
 DateTime: DateTime,
 JSON: JSON
     }

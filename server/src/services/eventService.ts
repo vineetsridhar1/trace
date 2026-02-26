@@ -515,50 +515,6 @@ export async function ingestEvent(payload: HookEvent) {
   return { id: event.id, session_id: session.sessionId };
 }
 
-export async function updateStopEventUsage(
-  messageId: string,
-  cliUsage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number },
-  cliCostUsd?: number,
-) {
-  const message = await getMessageByIdWithThreads(messageId);
-  if (!message) return null;
-
-  const latestThread = message.threads[message.threads.length - 1];
-  if (!latestThread) return null;
-
-  // Find the latest Stop event in this thread
-  const stopEvent = await prisma.event.findFirst({
-    where: { threadId: latestThread.id, hookEventName: 'Stop' },
-    orderBy: { timestamp: 'desc' },
-  });
-  if (!stopEvent) return null;
-
-  // Merge cli_usage and cli_cost_usd into rawPayload
-  const rawPayload = (stopEvent.rawPayload as Record<string, unknown>) ?? {};
-  rawPayload.cli_usage = cliUsage;
-  if (cliCostUsd !== undefined) {
-    rawPayload.cli_cost_usd = cliCostUsd;
-  }
-
-  const updated = await prisma.event.update({
-    where: { id: stopEvent.id },
-    data: { rawPayload: JSON.parse(JSON.stringify(rawPayload)) },
-  });
-
-  // Broadcast so the client picks up the merged usage data
-  const channelId = message.channelId;
-  pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
-    threadEventUpdated: {
-      channelId,
-      messageId: message.id,
-      threadId: latestThread.id,
-      event: updated,
-    },
-  });
-
-  return updated;
-}
-
 export async function getEventById(id: string) {
   return prisma.event.findUnique({ where: { id } });
 }
@@ -595,7 +551,5 @@ export async function getEventsBySession(
     total,
     limit,
     offset,
-    tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-    latestContextTokens: 0,
   };
 }

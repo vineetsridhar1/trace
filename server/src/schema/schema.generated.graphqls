@@ -76,12 +76,9 @@ type Event {
 }
 
 type EventConnection {
-  cliCostUsd: Float
   events: [Event!]!
-  latestContextTokens: Int!
   limit: Int!
   offset: Int!
-  tokenUsage: TokenUsage!
   total: Int!
 }
 
@@ -281,10 +278,4 @@ type TicketUpsertPayload {
   channelId: String!
   columnSlug: String!
   ticket: Ticket!
-}
-
-type TokenUsage {
-  inputTokens: Int!
-  outputTokens: Int!
-  totalTokens: Int!
 }

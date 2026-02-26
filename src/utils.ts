@@ -486,12 +486,6 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
-export function computeApproxCost(inputTokens: number, outputTokens: number): number {
-  const inputCost = (inputTokens / 1_000_000) * 3;
-  const outputCost = (outputTokens / 1_000_000) * 15;
-  return inputCost + outputCost;
-}
-
 let diffRuntimePromise: Promise<DiffRuntime | null> | null = null;
 
 export async function loadDiffRuntime(): Promise<DiffRuntime | null> {
