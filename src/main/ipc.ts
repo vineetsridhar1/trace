@@ -394,12 +394,31 @@ export function registerIpcHandlers() {
           // Check against local base branch (covers local merges)
           const local = await runProcess('git', ['merge-base', '--is-ancestor', branch, baseBranch], repoPath);
           if (local.code === 0) {
-            merged[branch] = true;
+            // Verify the branch actually diverged — if branch and base resolve to the
+            // same commit, the branch was just created from base and never had unique
+            // commits, so it's not truly merged.
+            const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
+            const baseRev = await runProcess('git', ['rev-parse', baseBranch], repoPath);
+            if (branchRev.code === 0 && baseRev.code === 0 && branchRev.stdout.trim() === baseRev.stdout.trim()) {
+              merged[branch] = false;
+            } else {
+              merged[branch] = true;
+            }
             continue;
           }
           // Check against remote base branch (covers pushed merges after fetch)
           const remote = await runProcess('git', ['merge-base', '--is-ancestor', branch, `origin/${baseBranch}`], repoPath);
-          merged[branch] = remote.code === 0;
+          if (remote.code === 0) {
+            const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
+            const remoteBaseRev = await runProcess('git', ['rev-parse', `origin/${baseBranch}`], repoPath);
+            if (branchRev.code === 0 && remoteBaseRev.code === 0 && branchRev.stdout.trim() === remoteBaseRev.stdout.trim()) {
+              merged[branch] = false;
+            } else {
+              merged[branch] = true;
+            }
+          } else {
+            merged[branch] = false;
+          }
         } catch {
           merged[branch] = false;
         }

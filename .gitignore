@@ -101,3 +101,5 @@ server/prisma/generated/
 .trace-worktrees/
 
 dist/
+
+server/data/storage/
