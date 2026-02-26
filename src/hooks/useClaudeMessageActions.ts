@@ -367,12 +367,12 @@ export function useClaudeMessageActions({
 
         const persisted = await persistPrompt(
           selectedMessage.id,
-          'yes, and keep the context window as-is',
+          trimmed,
           'Failed to persist plan response prompt',
         );
         if (!persisted) return;
 
-        await spawnClaudeForMessage(selectedMessage.id, 'yes, and keep the context window as-is', {
+        await spawnClaudeForMessage(selectedMessage.id, trimmed, {
           errorPrefix: 'Failed to spawn claude for plan response',
           resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
           model: selectedModel,
