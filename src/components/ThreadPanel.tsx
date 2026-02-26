@@ -130,6 +130,8 @@ export function ThreadPanel() {
     }
   }, [selectedMessageId]);
 
+  if (!threadOpen) return null;
+
   return (
     <>
       {threadOpen && !isFullscreen && (
@@ -219,6 +221,9 @@ export function ThreadPanel() {
                         return <PlanReview key={node.id} node={node} />;
                       }
                       if (node.kind === "ask-user-question") {
+                        return null;
+                      }
+                      if (node.kind !== "event") {
                         return null;
                       }
                       if (node.event.hookEventName === "UserPromptSubmit") {
