@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
-import { gql, useApolloClient } from '@apollo/client';
+import { gql } from '@apollo/client';
 import type { LocalChannelConfig } from '../types';
 import {
   useCreateChannelMutation,
-  ValidateRepoDocument,
   type ValidateRepoQuery,
-  RepoBranchesDocument,
   type RepoBranchesQuery,
+  useValidateRepoLazyQuery,
+  useRepoBranchesLazyQuery,
 } from './__generated__/CreateChannelModal.generated';
 
 const GQL_VALIDATE_REPO = gql`
@@ -56,7 +56,8 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
   const [validating, setValidating] = useState(false);
   const [repoValid, setRepoValid] = useState<boolean | null>(null);
   const [detectedOriginUrl, setDetectedOriginUrl] = useState<string | null>(null);
-  const client = useApolloClient();
+  const [executeValidateRepo] = useValidateRepoLazyQuery();
+  const [executeRepoBranches] = useRepoBranchesLazyQuery();
   const [executeCreateChannel] = useCreateChannelMutation();
 
   const handleSelectFolder = useCallback(async () => {
@@ -73,8 +74,7 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
     setBaseBranch('main');
 
     try {
-      const { data: validateData } = await client.query<ValidateRepoQuery>({
-        query: ValidateRepoDocument,
+      const { data: validateData } = await executeValidateRepo({
         variables: { localRepoPath: selectedPath },
       });
       const data = validateData?.validateRepo;
@@ -90,8 +90,7 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
       setDetectedOriginUrl(data.originUrl ?? null);
 
       // Fetch branches
-      const { data: branchData } = await client.query<RepoBranchesQuery>({
-        query: RepoBranchesDocument,
+      const { data: branchData } = await executeRepoBranches({
         variables: { localRepoPath: selectedPath },
       });
       const fetchedBranches: string[] = branchData?.repoBranches ?? [];
@@ -112,7 +111,7 @@ export function CreateChannelModal({ serverId, onClose, onCreated, onLocalConfig
     } finally {
       setValidating(false);
     }
-  }, [client]);
+  }, [executeValidateRepo, executeRepoBranches]);
 
   const handleCreate = useCallback(async () => {
     const trimmedName = name.trim();

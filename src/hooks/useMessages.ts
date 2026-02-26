@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import { gql, useApolloClient } from '@apollo/client';
+import { gql } from '@apollo/client';
 import type { ChannelMessage } from '../types';
 import { MESSAGE_FIELDS } from '../graphql/fragments';
-import { MessagesDocument, type MessagesQuery } from './__generated__/useMessages.generated';
+import { type MessagesQuery, useMessagesLazyQuery } from './__generated__/useMessages.generated';
 
 const GQL_MESSAGES = gql`
   query Messages($channelId: ID!, $limit: Int, $offset: Int) {
@@ -19,7 +19,7 @@ const GQL_MESSAGES = gql`
 `;
 
 export function useMessages() {
-  const client = useApolloClient();
+  const [executeMessages] = useMessagesLazyQuery();
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const messagesRef = useRef<ChannelMessage[]>([]);
   messagesRef.current = messages;
@@ -42,8 +42,7 @@ export function useMessages() {
 
   const refreshMessages = useCallback(async (channelId: string) => {
     try {
-      const { data } = await client.query<MessagesQuery>({
-        query: MessagesDocument,
+      const { data } = await executeMessages({
         variables: { channelId, limit: 200 },
       });
       if (!data) return;
@@ -55,7 +54,7 @@ export function useMessages() {
     } catch (err) {
       console.error('[useMessages] refreshMessages failed:', err);
     }
-  }, [client]);
+  }, [executeMessages]);
 
   const removeMessage = useCallback((messageId: string) => {
     setMessages((current) => current.filter((item) => item.id !== messageId));

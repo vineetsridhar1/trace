@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState } from "react";
-import { gql, useApolloClient } from "@apollo/client";
+import { gql } from "@apollo/client";
 import type { ChannelMessage, ServerEvent, ThreadStatus } from "../types";
 import {
-  ThreadsDocument,
   type ThreadsQuery,
-  ThreadEventsDocument,
   type ThreadEventsQuery,
   useCreateThreadMutation,
+  useThreadsLazyQuery,
+  useThreadEventsLazyQuery,
 } from "./__generated__/useThread.generated";
 import { clamp } from "../utils";
 
@@ -98,7 +98,8 @@ export function useThread({
   getChannelBaseBranch,
   getActiveChannelId,
 }: UseThreadOptions) {
-  const client = useApolloClient();
+  const [executeThreads] = useThreadsLazyQuery();
+  const [executeThreadEvents] = useThreadEventsLazyQuery();
   const [executeCreateThread] = useCreateThreadMutation();
 
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
@@ -209,8 +210,7 @@ export function useThread({
     async (channelId: string, messageId: string, threadId: string) => {
       resetThreadViewState();
 
-      const { data: eventsData } = await client.query<ThreadEventsQuery>({
-        query: ThreadEventsDocument,
+      const { data: eventsData } = await executeThreadEvents({
         variables: {
           channelId,
           messageId,
@@ -251,7 +251,7 @@ export function useThread({
         };
       }
     },
-    [client, resetThreadViewState],
+    [executeThreadEvents, resetThreadViewState],
   );
 
   const loadThreadEvents = useCallback(
@@ -263,8 +263,7 @@ export function useThread({
         );
 
         // Fetch threads to get the latest thread ID (for SSE routing)
-        const { data: threadsData } = await client.query<ThreadsQuery>({
-          query: ThreadsDocument,
+        const { data: threadsData } = await executeThreads({
           variables: {
             channelId: message.channelId,
             messageId: message.id,
@@ -303,7 +302,7 @@ export function useThread({
         setThreadStatus("error");
       }
     },
-    [client, loadEventsForThread, reportClaudeActivity],
+    [executeThreads, loadEventsForThread, reportClaudeActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
@@ -312,8 +311,7 @@ export function useThread({
     loadingOlderRef.current = true;
     setLoadingOlderEvents(true);
     try {
-      const { data } = await client.query<ThreadEventsQuery>({
-        query: ThreadEventsDocument,
+      const { data } = await executeThreadEvents({
         variables: {
           channelId: query.channelId,
           messageId: query.messageId,
@@ -336,7 +334,7 @@ export function useThread({
       loadingOlderRef.current = false;
       setLoadingOlderEvents(false);
     }
-  }, [client]);
+  }, [executeThreadEvents]);
 
   const appendThreadEvent = useCallback((event: ServerEvent) => {
     setThreadEvents((prev) => [...prev, event]);
