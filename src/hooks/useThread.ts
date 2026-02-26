@@ -2,8 +2,15 @@ import { useCallback, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import type { ChannelMessage, ServerEvent, ThreadStatus } from '../types';
 import { graphqlClient } from '../graphql/client';
-import { ThreadsDocument, type ThreadsQuery, MessageEventsDocument, type MessageEventsQuery } from './__generated__/useThread.generated';
+import { ThreadsDocument, type ThreadsQuery, MessageEventsDocument, type MessageEventsQuery, type ThreadEventsQuery } from './__generated__/useThread.generated';
 import { clamp } from '../utils';
+
+export interface ThreadInfo {
+  id: string;
+  messageId: string;
+  createdAt: string;
+  eventCount: number;
+}
 
 const GQL_THREADS = gql`
   query Threads($channelId: ID!, $messageId: ID!) {
@@ -47,17 +54,61 @@ const GQL_MESSAGE_EVENTS = gql`
   }
 `;
 
+const GQL_THREAD_EVENTS = gql`
+  query ThreadEvents($channelId: ID!, $messageId: ID!, $threadId: ID!, $limit: Int, $offset: Int, $after: String) {
+    threadEvents(channelId: $channelId, messageId: $messageId, threadId: $threadId, limit: $limit, offset: $offset, after: $after) {
+      events {
+        id
+        sessionId
+        hookEventName
+        timestamp
+        toolName
+        toolInput
+        toolResponse
+        toolUseId
+        stopHookActive
+        lastAssistantMessage
+        rawPayload
+        threadId
+        importance
+      }
+      total
+      limit
+      offset
+      tokenUsage {
+        inputTokens
+        outputTokens
+        totalTokens
+      }
+      latestContextTokens
+    }
+  }
+`;
+
+const GQL_CREATE_THREAD = gql`
+  mutation CreateThread($channelId: ID!, $messageId: ID!) {
+    createThread(channelId: $channelId, messageId: $messageId) {
+      id
+      messageId
+      createdAt
+      eventCount
+    }
+  }
+`;
+
 interface UseThreadOptions {
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
+  getActiveChannelId: () => string | null;
 }
 
 const THREAD_PAGE_SIZE = 100;
 
-export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThreadOptions) {
+export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveChannelId }: UseThreadOptions) {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ChannelMessage | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<ThreadInfo[]>([]);
   const [threadEvents, setThreadEvents] = useState<ServerEvent[]>([]);
   const [threadStatus, setThreadStatus] = useState<ThreadStatus>('idle');
   const [threadWidth, setThreadWidth] = useState(0);
@@ -74,14 +125,18 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
 
   const selectedMessageRef = useRef<ChannelMessage | null>(null);
   const selectedMessageIdRef = useRef<string | null>(null);
+  const activeThreadIdRef = useRef<string | null>(null);
   const lastReportedThreadEventIdByMessageRef = useRef<Map<string, string>>(new Map());
   const loadingOlderRef = useRef(false);
   const threadQueryRef = useRef<{ channelId: string; messageId: string; threadId: string } | null>(null);
   const threadEventsLengthRef = useRef(0);
+  const threadEventsRef = useRef<ServerEvent[]>([]);
   threadEventsLengthRef.current = threadEvents.length;
+  threadEventsRef.current = threadEvents;
 
   selectedMessageRef.current = selectedMessage;
   selectedMessageIdRef.current = selectedMessageId;
+  activeThreadIdRef.current = activeThreadId;
 
   const threadOpen = threadWidth > 0;
 
@@ -110,11 +165,56 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     setSelectedMessageId(null);
     setSelectedMessage(null);
     setActiveThreadId(null);
+    setThreads([]);
     setThreadEvents([]);
     setThreadStatus('idle');
     setThreadWidth(0);
     resetThreadViewState();
   }, [resetThreadViewState]);
+
+  // Load events for a specific thread by ID
+  const loadEventsForThread = useCallback(
+    async (channelId: string, messageId: string, threadId: string) => {
+      resetThreadViewState();
+
+      const { data: eventsData } = await graphqlClient.query<ThreadEventsQuery>({
+        query: GQL_THREAD_EVENTS,
+        fetchPolicy: 'network-only',
+        variables: {
+          channelId,
+          messageId,
+          threadId,
+          limit: THREAD_PAGE_SIZE,
+        },
+      });
+
+      const result = eventsData?.threadEvents;
+      const events: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
+      const total = result?.total ?? events.length;
+      setThreadEvents(events);
+      setThreadTotal(total);
+      threadQueryRef.current = { channelId, messageId, threadId };
+      setThreadStatus(events.length === 0 ? 'empty' : 'ready');
+
+      const tu = result?.tokenUsage;
+      if (tu) {
+        setTokenUsage({ inputTokens: tu.inputTokens, outputTokens: tu.outputTokens, totalTokens: tu.totalTokens });
+      }
+      setLatestContextTokens(result?.latestContextTokens ?? 0);
+
+      const lastLoadedEvent = events[events.length - 1];
+      if (lastLoadedEvent) {
+        const lastUsage = (lastLoadedEvent.rawPayload as Record<string, unknown>)?.usage as
+          | { input_tokens?: number; output_tokens?: number }
+          | undefined;
+        lastSeenUsageRef.current = {
+          input: lastUsage?.input_tokens ?? 0,
+          output: lastUsage?.output_tokens ?? 0,
+        };
+      }
+    },
+    [resetThreadViewState],
+  );
 
   const loadThreadEvents = useCallback(
     async (message: ChannelMessage) => {
@@ -122,7 +222,7 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         // Only show "loading" on initial load, not on incremental SSE updates
         setThreadStatus((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
 
-        // Fetch threads to get the latest thread ID (for SSE routing)
+        // Fetch threads to get the list and latest thread ID
         const { data: threadsData } = await graphqlClient.query<ThreadsQuery>({
           query: ThreadsDocument,
           fetchPolicy: 'network-only',
@@ -132,8 +232,10 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
           },
         });
 
-        const threads = threadsData?.threads ?? [];
-        if (threads.length === 0) {
+        const threadList = (threadsData?.threads ?? []) as ThreadInfo[];
+        setThreads(threadList);
+
+        if (threadList.length === 0) {
           setActiveThreadId(null);
           setThreadEvents([]);
           setThreadStatus('empty');
@@ -141,47 +243,13 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         }
 
         // Set active thread to the latest thread
-        const latestThread = threads[threads.length - 1];
+        const latestThread = threadList[threadList.length - 1];
         setActiveThreadId(latestThread.id);
 
-        // Load events from ALL threads via messageEvents query
-        const { data: eventsData } = await graphqlClient.query<MessageEventsQuery>({
-          query: MessageEventsDocument,
-          fetchPolicy: 'network-only',
-          variables: {
-            channelId: message.channelId,
-            messageId: message.id,
-            limit: THREAD_PAGE_SIZE,
-          },
-        });
+        // Load events from the latest thread only
+        await loadEventsForThread(message.channelId, message.id, latestThread.id);
 
-        const events: ServerEvent[] = (eventsData?.messageEvents?.events ?? []) as ServerEvent[];
-        const total = eventsData?.messageEvents?.total ?? events.length;
-        setThreadEvents(events);
-        setThreadTotal(total);
-        threadQueryRef.current = { channelId: message.channelId, messageId: message.id, threadId: '__all__' };
-        setThreadStatus(events.length === 0 ? 'empty' : 'ready');
-
-        // Set server-computed token aggregates
-        const tu = eventsData?.threadEvents?.tokenUsage;
-        if (tu) {
-          setTokenUsage({ inputTokens: tu.inputTokens, outputTokens: tu.outputTokens, totalTokens: tu.totalTokens });
-        }
-        setLatestContextTokens(eventsData?.threadEvents?.latestContextTokens ?? 0);
-
-        // Set baseline for SSE dedup from the last event's usage
-        const lastLoadedEvent = events[events.length - 1];
-        if (lastLoadedEvent) {
-          const lastUsage = (lastLoadedEvent.rawPayload as Record<string, unknown>)?.usage as
-            | { input_tokens?: number; output_tokens?: number }
-            | undefined;
-          lastSeenUsageRef.current = {
-            input: lastUsage?.input_tokens ?? 0,
-            output: lastUsage?.output_tokens ?? 0,
-          };
-        }
-
-        const latestEvent = events[events.length - 1];
+        const latestEvent = threadEventsRef.current[threadEventsRef.current.length - 1];
         if (latestEvent) {
           const lastReportedId = lastReportedThreadEventIdByMessageRef.current.get(message.id);
           if (lastReportedId !== latestEvent.id) {
@@ -193,7 +261,7 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
         setThreadStatus('error');
       }
     },
-    [reportClaudeActivity],
+    [loadEventsForThread, reportClaudeActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
@@ -202,19 +270,21 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     loadingOlderRef.current = true;
     setLoadingOlderEvents(true);
     try {
-      const { data } = await graphqlClient.query<MessageEventsQuery>({
-        query: MessageEventsDocument,
+      const { data } = await graphqlClient.query<ThreadEventsQuery>({
+        query: GQL_THREAD_EVENTS,
         fetchPolicy: 'network-only',
         variables: {
           channelId: query.channelId,
           messageId: query.messageId,
+          threadId: query.threadId,
           limit: THREAD_PAGE_SIZE,
           offset: threadEventsLengthRef.current,
         },
       });
 
-      const olderEvents: ServerEvent[] = (data?.messageEvents?.events ?? []) as ServerEvent[];
-      const total = data?.messageEvents?.total;
+      const result = data?.threadEvents;
+      const olderEvents: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
+      const total = result?.total;
       if (total != null) setThreadTotal(total);
       if (olderEvents.length > 0) {
         setThreadEvents((prev) => [...olderEvents, ...prev]);
@@ -279,6 +349,56 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     },
     [loadThreadEvents, resetThreadViewState, checkWorktree],
   );
+
+  const switchThread = useCallback(
+    async (threadId: string) => {
+      const message = selectedMessageRef.current;
+      if (!message) return;
+
+      setActiveThreadId(threadId);
+      setThreadStatus('loading');
+
+      try {
+        await loadEventsForThread(message.channelId, message.id, threadId);
+      } catch {
+        setThreadStatus('error');
+      }
+    },
+    [loadEventsForThread],
+  );
+
+  const clearThread = useCallback(async (): Promise<string | null> => {
+    const message = selectedMessageRef.current;
+    const channelId = getActiveChannelId();
+    if (!message || !channelId) return null;
+
+    try {
+      const { data } = await graphqlClient.mutate({
+        mutation: GQL_CREATE_THREAD,
+        variables: {
+          channelId,
+          messageId: message.id,
+        },
+      });
+
+      const newThread = data?.createThread as ThreadInfo | undefined;
+      if (!newThread) return null;
+
+      // Add the new thread to the list and switch to it
+      setThreads((prev) => [...prev, newThread]);
+      setActiveThreadId(newThread.id);
+      activeThreadIdRef.current = newThread.id; // sync ref immediately for callers that read it after await
+      setThreadEvents([]);
+      setThreadTotal(0);
+      setThreadStatus('empty');
+      resetThreadViewState();
+      threadQueryRef.current = { channelId, messageId: message.id, threadId: newThread.id };
+      return newThread.id;
+    } catch (err) {
+      console.error('Failed to clear thread:', err);
+      return null;
+    }
+  }, [getActiveChannelId, resetThreadViewState]);
 
   const deleteWorktree = useCallback(async (onDeleted?: (messageId: string) => void) => {
     const message = selectedMessageRef.current;
@@ -349,7 +469,10 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     selectedMessageRef,
     selectedMessageIdRef,
     activeThreadId,
+    activeThreadIdRef,
+    threads,
     threadEvents,
+    threadEventsRef,
     threadStatus,
     threadWidth,
     setThreadWidth,
@@ -369,6 +492,8 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch }: UseThrea
     hasMoreEvents,
     loadingOlderEvents,
     openThreadPanel,
+    switchThread,
+    clearThread,
     deleteWorktree,
     mergeWorktree,
     toggleReadGroup,

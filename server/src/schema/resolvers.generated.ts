@@ -19,6 +19,7 @@ import    { createChannel as Mutation_createChannel } from './channel/resolvers/
 import    { createColumn as Mutation_createColumn } from './kanban/resolvers/Mutation/createColumn';
 import    { createMessage as Mutation_createMessage } from './message/resolvers/Mutation/createMessage';
 import    { createServer as Mutation_createServer } from './server/resolvers/Mutation/createServer';
+import    { createThread as Mutation_createThread } from './thread/resolvers/Mutation/createThread';
 import    { deleteColumn as Mutation_deleteColumn } from './kanban/resolvers/Mutation/deleteColumn';
 import    { moveTicket as Mutation_moveTicket } from './kanban/resolvers/Mutation/moveTicket';
 import    { updateChannel as Mutation_updateChannel } from './channel/resolvers/Mutation/updateChannel';
@@ -48,7 +49,7 @@ import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
       Query: { board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,validateRepo: Query_validateRepo },
-      Mutation: { appendPrompt: Mutation_appendPrompt,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,deleteColumn: Mutation_deleteColumn,moveTicket: Mutation_moveTicket,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
+      Mutation: { appendPrompt: Mutation_appendPrompt,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteColumn: Mutation_deleteColumn,moveTicket: Mutation_moveTicket,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
       
       Attachment: Attachment,
 Channel: Channel,

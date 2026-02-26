@@ -44,8 +44,10 @@ type Event {
 
 type EventConnection {
   events: [Event!]!
+  latestContextTokens: Int!
   limit: Int!
   offset: Int!
+  tokenUsage: TokenUsage!
   total: Int!
 }
 
@@ -90,11 +92,12 @@ type MessageSession {
 }
 
 type Mutation {
-  appendPrompt(attachmentIds: [String!], channelId: ID!, createNewThread: Boolean, messageId: ID!, text: String!): CreateMessagePayload!
+  appendPrompt(attachmentIds: [String!], channelId: ID!, createNewThread: Boolean, messageId: ID!, text: String!, threadId: ID): CreateMessagePayload!
   createChannel(baseBranch: String, githubUrl: String, name: String!, serverId: String): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createMessage(attachmentIds: [String!], channelId: ID!, text: String!): CreateMessagePayload!
   createServer(avatarUrl: String, name: String!): Server!
+  createThread(channelId: ID!, messageId: ID!): Thread!
   deleteColumn(columnId: ID!): Boolean!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
   updateChannel(baseBranch: String, githubUrl: String, id: ID!, name: String): Channel!
@@ -192,4 +195,10 @@ type TicketMessage {
   createdAt: DateTime!
   id: ID!
   status: String!
+}
+
+type TokenUsage {
+  inputTokens: Int!
+  outputTokens: Int!
+  totalTokens: Int!
 }

@@ -9,11 +9,13 @@ import type {
   ThreadStatus,
   TicketStatus,
 } from '../types';
+import type { ThreadInfo } from '../hooks/useThread';
 
 export interface ThreadContextValue {
   // Core thread state
   selectedMessageId: string | null;
   activeThreadId: string | null;
+  threads: ThreadInfo[];
   threadEvents: ServerEvent[];
   threadStatus: ThreadStatus;
   threadWidth: number;
@@ -27,6 +29,8 @@ export interface ThreadContextValue {
   setThreadWidth: (width: number) => void;
   loadThreadEvents: (message: ChannelMessage) => Promise<void>;
   deleteWorktree: (onDeleted?: (messageId: string) => void) => Promise<void>;
+  switchThread: (threadId: string) => Promise<void>;
+  clearThread: () => Promise<string | null>;
   // Scroll state
   threadContentRef: React.RefObject<HTMLDivElement | null>;
   showJumpToLatest: boolean;

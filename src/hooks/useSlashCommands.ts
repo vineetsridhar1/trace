@@ -13,6 +13,7 @@ const COMMANDS: SlashCommand[] = [
   { name: 'merge-to-main', displayName: '/merge-to-main', description: 'Merge worktree branch to main', source: 'custom' },
   { name: 'rebase-onto-main', displayName: '/rebase-onto-main', description: 'Rebase current branch onto latest main', source: 'custom' },
   // Built-in commands
+  { name: 'clear', displayName: '/clear', description: 'Clear thread and start fresh', source: 'built-in' },
   { name: 'compact', displayName: '/compact', description: 'Compact conversation history', source: 'built-in' },
   { name: 'config', displayName: '/config', description: 'Open configuration', source: 'built-in' },
   { name: 'cost', displayName: '/cost', description: 'Show token usage and cost', source: 'built-in' },

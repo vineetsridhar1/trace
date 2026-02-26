@@ -20,7 +20,27 @@ export type MessageEventsQueryVariables = Types.Exact<{
 }>;
 
 
-export type MessageEventsQuery = { __typename?: 'Query', messageEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, events: Array<{ __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string }> } };
+export type MessageEventsQuery = { __typename?: 'Query', messageEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, latestContextTokens: number, events: Array<{ __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string }>, tokenUsage: { __typename?: 'TokenUsage', inputTokens: number, outputTokens: number, totalTokens: number } } };
+
+export type ThreadEventsQueryVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+  messageId: Types.Scalars['ID']['input'];
+  threadId: Types.Scalars['ID']['input'];
+  limit?: Types.InputMaybe<Types.Scalars['Int']['input']>;
+  offset?: Types.InputMaybe<Types.Scalars['Int']['input']>;
+  after?: Types.InputMaybe<Types.Scalars['String']['input']>;
+}>;
+
+
+export type ThreadEventsQuery = { __typename?: 'Query', threadEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, latestContextTokens: number, events: Array<{ __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string }>, tokenUsage: { __typename?: 'TokenUsage', inputTokens: number, outputTokens: number, totalTokens: number } } };
+
+export type CreateThreadMutationVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+  messageId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type CreateThreadMutation = { __typename?: 'Mutation', createThread: { __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number } };
 
 
 export const ThreadsDocument = gql`
@@ -97,6 +117,12 @@ export const MessageEventsDocument = gql`
     total
     limit
     offset
+    tokenUsage {
+      inputTokens
+      outputTokens
+      totalTokens
+    }
+    latestContextTokens
   }
 }
     `;
@@ -140,3 +166,118 @@ export type MessageEventsQueryHookResult = ReturnType<typeof useMessageEventsQue
 export type MessageEventsLazyQueryHookResult = ReturnType<typeof useMessageEventsLazyQuery>;
 export type MessageEventsSuspenseQueryHookResult = ReturnType<typeof useMessageEventsSuspenseQuery>;
 export type MessageEventsQueryResult = Apollo.QueryResult<MessageEventsQuery, MessageEventsQueryVariables>;
+export const ThreadEventsDocument = gql`
+    query ThreadEvents($channelId: ID!, $messageId: ID!, $threadId: ID!, $limit: Int, $offset: Int, $after: String) {
+  threadEvents(
+    channelId: $channelId
+    messageId: $messageId
+    threadId: $threadId
+    limit: $limit
+    offset: $offset
+    after: $after
+  ) {
+    events {
+      id
+      sessionId
+      hookEventName
+      timestamp
+      toolName
+      toolInput
+      toolResponse
+      toolUseId
+      stopHookActive
+      lastAssistantMessage
+      rawPayload
+      threadId
+      importance
+    }
+    total
+    limit
+    offset
+    tokenUsage {
+      inputTokens
+      outputTokens
+      totalTokens
+    }
+    latestContextTokens
+  }
+}
+    `;
+
+/**
+ * __useThreadEventsQuery__
+ *
+ * To run a query within a React component, call `useThreadEventsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useThreadEventsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useThreadEventsQuery({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *      messageId: // value for 'messageId'
+ *      threadId: // value for 'threadId'
+ *      limit: // value for 'limit'
+ *      offset: // value for 'offset'
+ *      after: // value for 'after'
+ *   },
+ * });
+ */
+export function useThreadEventsQuery(baseOptions: Apollo.QueryHookOptions<ThreadEventsQuery, ThreadEventsQueryVariables> & ({ variables: ThreadEventsQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<ThreadEventsQuery, ThreadEventsQueryVariables>(ThreadEventsDocument, options);
+      }
+export function useThreadEventsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<ThreadEventsQuery, ThreadEventsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<ThreadEventsQuery, ThreadEventsQueryVariables>(ThreadEventsDocument, options);
+        }
+// @ts-ignore
+export function useThreadEventsSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<ThreadEventsQuery, ThreadEventsQueryVariables>): Apollo.UseSuspenseQueryResult<ThreadEventsQuery, ThreadEventsQueryVariables>;
+export function useThreadEventsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ThreadEventsQuery, ThreadEventsQueryVariables>): Apollo.UseSuspenseQueryResult<ThreadEventsQuery | undefined, ThreadEventsQueryVariables>;
+export function useThreadEventsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ThreadEventsQuery, ThreadEventsQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<ThreadEventsQuery, ThreadEventsQueryVariables>(ThreadEventsDocument, options);
+        }
+export type ThreadEventsQueryHookResult = ReturnType<typeof useThreadEventsQuery>;
+export type ThreadEventsLazyQueryHookResult = ReturnType<typeof useThreadEventsLazyQuery>;
+export type ThreadEventsSuspenseQueryHookResult = ReturnType<typeof useThreadEventsSuspenseQuery>;
+export type ThreadEventsQueryResult = Apollo.QueryResult<ThreadEventsQuery, ThreadEventsQueryVariables>;
+export const CreateThreadDocument = gql`
+    mutation CreateThread($channelId: ID!, $messageId: ID!) {
+  createThread(channelId: $channelId, messageId: $messageId) {
+    id
+    messageId
+    createdAt
+    eventCount
+  }
+}
+    `;
+export type CreateThreadMutationFn = Apollo.MutationFunction<CreateThreadMutation, CreateThreadMutationVariables>;
+
+/**
+ * __useCreateThreadMutation__
+ *
+ * To run a mutation, you first call `useCreateThreadMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateThreadMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createThreadMutation, { data, loading, error }] = useCreateThreadMutation({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *      messageId: // value for 'messageId'
+ *   },
+ * });
+ */
+export function useCreateThreadMutation(baseOptions?: Apollo.MutationHookOptions<CreateThreadMutation, CreateThreadMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreateThreadMutation, CreateThreadMutationVariables>(CreateThreadDocument, options);
+      }
+export type CreateThreadMutationHookResult = ReturnType<typeof useCreateThreadMutation>;
+export type CreateThreadMutationResult = Apollo.MutationResult<CreateThreadMutation>;
+export type CreateThreadMutationOptions = Apollo.BaseMutationOptions<CreateThreadMutation, CreateThreadMutationVariables>;

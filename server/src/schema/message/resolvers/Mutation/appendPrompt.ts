@@ -3,13 +3,14 @@ import { appendPromptToMessageThread } from '../../../../services/messageService
 import { sseManager } from '../../../../services/sseManager';
 import { GraphQLError } from 'graphql';
 
-export const appendPrompt: NonNullable<MutationResolvers['appendPrompt']> = async (_parent, { channelId, messageId, text, attachmentIds, createNewThread }, _ctx) => {
+export const appendPrompt: NonNullable<MutationResolvers['appendPrompt']> = async (_parent, { channelId, messageId, text, attachmentIds, createNewThread, threadId }, _ctx) => {
   const created = await appendPromptToMessageThread(
     channelId,
     messageId,
     text.trim(),
     attachmentIds ?? undefined,
     createNewThread ?? undefined,
+    threadId ?? undefined,
   );
 
   if (!created) {

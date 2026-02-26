@@ -121,6 +121,7 @@ export type Mutation = {
   createColumn: KanbanColumn;
   createMessage: CreateMessagePayload;
   createServer: Server;
+  createThread: Thread;
   deleteColumn: Scalars['Boolean']['output'];
   moveTicket: Ticket;
   updateChannel: Channel;
@@ -137,6 +138,7 @@ export type MutationAppendPromptArgs = {
   createNewThread?: InputMaybe<Scalars['Boolean']['input']>;
   messageId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
+  threadId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 
@@ -166,6 +168,12 @@ export type MutationCreateMessageArgs = {
 export type MutationCreateServerArgs = {
   avatarUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
+};
+
+
+export type MutationCreateThreadArgs = {
+  channelId: Scalars['ID']['input'];
+  messageId: Scalars['ID']['input'];
 };
 
 

@@ -1,7 +1,9 @@
-import { FiGitMerge, FiMaximize2, FiMinimize2, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
+import { useState, useRef, useEffect } from 'react';
+import { FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { TokenUsageBadge } from './TokenUsageBadge';
 import type { TicketStatus } from '../types';
+import type { ThreadInfo } from '../hooks/useThread';
 
 type ViewMode = 'agent' | 'ticket';
 
@@ -41,6 +43,9 @@ interface ThreadHeaderProps {
   onEnterFullscreen?: () => void;
   onExitFullscreen?: () => void;
   tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  threads: ThreadInfo[];
+  activeThreadId: string | null;
+  onSwitchThread: (threadId: string) => Promise<void>;
 }
 
 export function ThreadHeader({
@@ -60,9 +65,26 @@ export function ThreadHeader({
   onEnterFullscreen,
   onExitFullscreen,
   tokenUsage,
+  threads,
+  activeThreadId,
+  onSwitchThread,
 }: ThreadHeaderProps) {
   const statusConfig =
     HEADER_STATUS_CONFIG[messageStatus] ?? HEADER_STATUS_CONFIG.pending;
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (historyRef.current && !historyRef.current.contains(e.target as Node)) {
+        setHistoryOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [historyOpen]);
 
   return (
     <div
@@ -119,6 +141,61 @@ export function ThreadHeader({
         <TokenUsageBadge tokenUsage={tokenUsage} />
       </div>
       <div className="flex items-center gap-2">
+        {threads.length > 1 && (
+          <div className="relative" ref={historyRef}>
+            <Tooltip text="Thread history" position="bottom">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((prev) => !prev)}
+                className={`h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
+                  historyOpen
+                    ? 'border-violet-400/50 text-violet-300'
+                    : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
+                }`}
+              >
+                <FiClock className="mx-auto h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </Tooltip>
+            {historyOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#565f89]">
+                  Thread History
+                </div>
+                {threads.map((thread, index) => {
+                  const isActive = thread.id === activeThreadId;
+                  const time = new Date(thread.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  return (
+                    <button
+                      key={thread.id}
+                      type="button"
+                      onClick={() => {
+                        void onSwitchThread(thread.id);
+                        setHistoryOpen(false);
+                      }}
+                      className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
+                        isActive
+                          ? 'bg-violet-500/10 text-violet-300'
+                          : 'text-[#a9b1d6] hover:bg-[#1f2335]'
+                      }`}
+                    >
+                      <span className="font-medium">#{index + 1}</span>
+                      <span className="flex-1 truncate text-[#565f89]">{time}</span>
+                      <span className="text-[#565f89]">
+                        {thread.eventCount} {thread.eventCount === 1 ? 'event' : 'events'}
+                      </span>
+                      {isActive && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {hasWorktree === true && scriptsAvailable && (
           <Tooltip text="Run startup scripts" position="bottom">
             <button

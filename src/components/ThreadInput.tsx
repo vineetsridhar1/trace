@@ -17,6 +17,7 @@ export function ThreadInput({
   lastUserMessageTime,
   onSendThreadMessage,
   onStopClaude,
+  onClearThread,
 }: {
   isClaudeRunning: boolean;
   lastUserMessageTime: string | null;
@@ -26,6 +27,7 @@ export function ThreadInput({
     filePaths?: string[],
   ) => Promise<boolean>;
   onStopClaude: () => void;
+  onClearThread: () => Promise<string | null>;
 }) {
   const {
     repoPath,
@@ -45,6 +47,13 @@ export function ThreadInput({
     const text = threadInput.trim();
     if (!text || isClaudeRunning) return;
 
+    // Intercept /clear command
+    if (text === '/clear' || text.startsWith('/clear ')) {
+      setThreadInput('');
+      await onClearThread();
+      return;
+    }
+
     const finalText = planMode
       ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${text}`
       : text;
@@ -63,7 +72,7 @@ export function ThreadInput({
       imageAttachments.clearAttachments();
       fileMention.clearMentions();
     }
-  }, [threadInput, planMode, isClaudeRunning, onSendThreadMessage, imageAttachments, fileMention]);
+  }, [threadInput, planMode, isClaudeRunning, onSendThreadMessage, onClearThread, imageAttachments, fileMention]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">

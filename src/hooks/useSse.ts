@@ -18,6 +18,7 @@ interface UseSseOptions {
   appendThreadEvent: (event: ServerEvent) => void;
   reportClaudeActivity: (messageId: string, eventType: string) => Promise<void>;
   selectedMessageIdRef: React.RefObject<string | null>;
+  activeThreadIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
   selectedMessageRef: React.RefObject<ChannelMessage | null>;
   onNeedsAttention: (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed') => void;
@@ -30,6 +31,7 @@ export function useSse({
   appendThreadEvent,
   reportClaudeActivity,
   selectedMessageIdRef,
+  activeThreadIdRef,
   messagesRef,
   selectedMessageRef,
   onNeedsAttention,
@@ -106,6 +108,10 @@ export function useSse({
       }
 
       if (selectedMessageIdRef.current !== payload.messageId) return;
+
+      // Only append events belonging to the active thread
+      const currentThreadId = activeThreadIdRef.current;
+      if (currentThreadId && payload.event.threadId !== currentThreadId) return;
 
       appendThreadEvent(payload.event);
     });

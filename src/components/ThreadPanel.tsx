@@ -22,6 +22,7 @@ export function ThreadPanel() {
     dragging,
     threadStatus,
     activeThreadId,
+    threads,
     threadNodes,
     expandedReadGroupIds,
     selectedMessageId,
@@ -37,6 +38,8 @@ export function ThreadPanel() {
     loadingOlderEvents,
     tokenUsage,
     latestContextTokens,
+    clearThread,
+    switchThread,
     onRunScripts,
     onThreadScroll,
     toggleReadGroup,
@@ -163,6 +166,9 @@ export function ThreadPanel() {
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
           tokenUsage={tokenUsage}
+          threads={threads}
+          activeThreadId={activeThreadId}
+          onSwitchThread={switchThread}
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
@@ -290,6 +296,7 @@ export function ThreadPanel() {
             lastUserMessageTime={lastUserMessageTime}
             onSendThreadMessage={sendThreadMessage}
             onStopClaude={() => void stopClaude()}
+            onClearThread={clearThread}
           />
         )}
 

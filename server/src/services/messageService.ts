@@ -225,6 +225,7 @@ export async function appendPromptToMessageThread(
   text: string,
   attachmentIds?: string[],
   createNewThread?: boolean,
+  threadId?: string,
 ) {
   const attachmentMetas = await resolveAttachmentMetas(attachmentIds ?? []);
 
@@ -238,12 +239,16 @@ export async function appendPromptToMessageThread(
       return null;
     }
 
-    const thread = createNewThread
-      ? await tx.thread.create({ data: { messageId: message.id } })
-      : message.threads[message.threads.length - 1] ??
-        (await tx.thread.create({
-          data: { messageId: message.id },
-        }));
+    let thread;
+    if (threadId) {
+      // Use the specified thread
+      const existing = message.threads.find((t) => t.id === threadId);
+      thread = existing ?? await tx.thread.create({ data: { messageId: message.id } });
+    } else if (createNewThread) {
+      thread = await tx.thread.create({ data: { messageId: message.id } });
+    } else {
+      thread = message.threads[message.threads.length - 1] ?? await tx.thread.create({ data: { messageId: message.id } });
+    }
 
     const event = await tx.event.create({
       data: {
@@ -302,13 +307,13 @@ export async function getEventsByMessage(
   const threadIds = threads.map((t) => t.id);
 
   if (threadIds.length === 0) {
-    return { events: [], total: 0, limit, offset };
+    return { events: [], total: 0, limit, offset, tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, latestContextTokens: 0 };
   }
 
   const where: Record<string, unknown> = { threadId: { in: threadIds } };
   if (after) where.timestamp = { gt: new Date(after) };
 
-  const [rawEvents, total] = await Promise.all([
+  const [rawEvents, total, allEventsForAggregation] = await Promise.all([
     prisma.event.findMany({
       where,
       orderBy: { timestamp: 'desc' },
@@ -316,6 +321,11 @@ export async function getEventsByMessage(
       take: limit,
     }),
     prisma.event.count({ where }),
+    prisma.event.findMany({
+      where: { threadId: { in: threadIds } },
+      select: { rawPayload: true },
+      orderBy: { timestamp: 'asc' },
+    }),
   ]);
 
   const events = rawEvents.reverse();
@@ -357,7 +367,47 @@ export async function getEventsByMessage(
     }
   }
 
-  return { events, total, limit, offset };
+  // Compute token aggregates from ALL events across threads.
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let latestContextTokens = 0;
+  let prevInputTokens = 0;
+  let prevOutputTokens = 0;
+
+  for (const evt of allEventsForAggregation) {
+    const usage = (evt.rawPayload as Record<string, unknown>)?.usage as
+      | { input_tokens?: number; output_tokens?: number }
+      | undefined;
+    if (usage) {
+      const curInput = usage.input_tokens ?? 0;
+      const curOutput = usage.output_tokens ?? 0;
+      if (curInput !== prevInputTokens || curOutput !== prevOutputTokens) {
+        inputTokens += curInput;
+        outputTokens += curOutput;
+        prevInputTokens = curInput;
+        prevOutputTokens = curOutput;
+      }
+      if (curInput) {
+        latestContextTokens = curInput;
+      }
+    }
+  }
+
+  return {
+    events,
+    total,
+    limit,
+    offset,
+    tokenUsage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
+    latestContextTokens,
+  };
+}
+
+export async function createEmptyThread(messageId: string) {
+  return prisma.thread.create({
+    data: { messageId },
+    include: { _count: { select: { events: true } } },
+  });
 }
 
 export async function getThreadsByMessage(messageId: string) {

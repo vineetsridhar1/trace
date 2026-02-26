@@ -4,6 +4,10 @@ extend type Query {
   messageEvents(channelId: ID!, messageId: ID!, limit: Int, offset: Int, after: String): EventConnection!
 }
 
+extend type Mutation {
+  createThread(channelId: ID!, messageId: ID!): Thread!
+}
+
 type Thread {
   id: ID!
   messageId: String!

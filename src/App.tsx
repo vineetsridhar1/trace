@@ -79,14 +79,19 @@ function AppContent() {
   const getChannelRepoPath = useCallback(() => activeChannelRef.current?.localRepoPath ?? '', []);
   const getChannelBaseBranch = useCallback(() => activeChannelRef.current?.baseBranch ?? 'main', []);
 
+  const getActiveChannelId = useCallback(() => activeChannelId, [activeChannelId]);
+
   const {
     selectedMessageId,
     selectedMessageRef,
     selectedMessageIdRef,
     threadEvents,
+    threadEventsRef,
     threadWidth,
     setThreadWidth,
     activeThreadId,
+    activeThreadIdRef,
+    threads,
     threadStatus,
     deletingWorktree,
     hasWorktree,
@@ -100,12 +105,14 @@ function AppContent() {
     hasMoreEvents,
     loadingOlderEvents,
     openThreadPanel,
+    switchThread,
+    clearThread,
     deleteWorktree,
     toggleReadGroup,
     syncSelectedMessage,
     tokenUsage,
     latestContextTokens,
-  } = useThread({ getChannelRepoPath, getChannelBaseBranch });
+  } = useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveChannelId });
 
   const upsertAndSyncMessage = useCallback(
     (message: ChannelMessage) => {
@@ -197,6 +204,7 @@ function AppContent() {
     appendThreadEvent,
     reportClaudeActivity,
     selectedMessageIdRef,
+    activeThreadIdRef,
     messagesRef,
     selectedMessageRef,
     onNeedsAttention: handleNeedsAttention,
@@ -289,6 +297,9 @@ function AppContent() {
     selectedMessageId,
     selectedMessageRef,
     selectedMessageIdRef,
+    activeThreadIdRef,
+    threadEventsRef,
+    clearThread,
     onMessageCreated: handleOpenThread,
     loadThreadEvents,
     upsertMessage: upsertAndSyncMessage,
@@ -514,6 +525,7 @@ function AppContent() {
     () => ({
       selectedMessageId,
       activeThreadId,
+      threads,
       threadEvents,
       threadStatus,
       threadWidth: isFullscreen ? 9999 : threadWidth,
@@ -527,6 +539,8 @@ function AppContent() {
       setThreadWidth,
       loadThreadEvents,
       deleteWorktree,
+      switchThread,
+      clearThread,
       threadContentRef,
       showJumpToLatest,
       scrollToLatest: () => scrollThreadToBottom('smooth'),
@@ -550,10 +564,11 @@ function AppContent() {
       onExitFullscreen: exitFullscreen,
     }),
     [
-      selectedMessageId, activeThreadId, threadEvents, threadStatus, threadWidth,
+      selectedMessageId, activeThreadId, threads, threadEvents, threadStatus, threadWidth,
       deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
       closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
-      loadThreadEvents, deleteWorktree, threadContentRef, showJumpToLatest,
+      loadThreadEvents, deleteWorktree, switchThread, clearThread,
+      threadContentRef, showJumpToLatest,
       scrollThreadToBottom, onThreadScroll, hasMoreEvents, loadingOlderEvents,
       tokenUsage, latestContextTokens, threadNodes, isClaudeRunning,
       selectedMessageStatus, selectedTicket, isFullscreen, scriptsAvailable,
