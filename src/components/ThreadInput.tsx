@@ -10,7 +10,7 @@ import { SlashCommandMenu } from './SlashCommandMenu';
 import { FileMentionMenu } from './FileMentionMenu';
 import { ImageThumbnails } from './ImageThumbnails';
 import { ElapsedTimer } from './ElapsedTimer';
-import { PlanModeToggle } from './RunButtons';
+import { InteractionModeToggle, type InteractionMode } from './RunButtons';
 
 export function ThreadInput({
   isClaudeRunning,
@@ -37,7 +37,11 @@ export function ThreadInput({
     setSelectedEffort,
   } = useClaudeActions();
   const [threadInput, setThreadInput] = useState('');
-  const [planMode, setPlanMode] = useState(false);
+  const [mode, setMode] = useState<InteractionMode>('code');
+  const cycleMode = () => {
+    const modes: InteractionMode[] = ['code', 'plan', 'ask'];
+    setMode((m) => modes[(modes.indexOf(m) + 1) % 3]);
+  };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashCommands = useSlashCommands(threadInput, setThreadInput);
   const fileMention = useFileMention(threadInput, setThreadInput, repoPath, textareaRef);
@@ -54,9 +58,12 @@ export function ThreadInput({
       return;
     }
 
-    const finalText = planMode
-      ? `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${text}`
-      : text;
+    let finalText = text;
+    if (mode === 'plan') {
+      finalText = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${text}`;
+    } else if (mode === 'ask') {
+      finalText = `Do NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n\n${text}`;
+    }
 
     const attachmentIds = imageAttachments.getAttachmentIds();
     const imageFilePaths = imageAttachments.getFilePaths();
@@ -72,7 +79,7 @@ export function ThreadInput({
       imageAttachments.clearAttachments();
       fileMention.clearMentions();
     }
-  }, [threadInput, planMode, isClaudeRunning, onSendThreadMessage, onClearThread, imageAttachments, fileMention]);
+  }, [threadInput, mode, isClaudeRunning, onSendThreadMessage, onClearThread, imageAttachments, fileMention]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -159,7 +166,7 @@ export function ThreadInput({
             onKeyDown={(e) => {
               if (e.key === 'Tab' && e.shiftKey) {
                 e.preventDefault();
-                setPlanMode((p) => !p);
+                cycleMode();
                 return;
               }
               if (fileMention.handleKeyDown(e)) return;
@@ -215,10 +222,7 @@ export function ThreadInput({
             onModelChange={setSelectedModel}
             onEffortChange={setSelectedEffort}
           />
-          <PlanModeToggle
-            active={planMode}
-            onToggle={() => setPlanMode((p) => !p)}
-          />
+          <InteractionModeToggle mode={mode} onCycle={cycleMode} />
         </div>
       )}
     </div>
