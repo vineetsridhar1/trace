@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
-import { graphqlClient } from './graphql/client';
 import { MESSAGE_FIELDS } from './graphql/fragments';
-import { UpdateMessageStatusDocument, type UpdateMessageStatusMutation } from './__generated__/App.generated';
+import { useUpdateMessageStatusMutation } from './__generated__/App.generated';
 import { buildThreadNodes } from './utils';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
@@ -158,6 +157,8 @@ function AppContent() {
     clearBoard,
   } = useKanban();
 
+  const [executeUpdateMessageStatus] = useUpdateMessageStatusMutation();
+
   const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('chat');
   const [channelWidth, setChannelWidth] = useState(220);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -215,8 +216,7 @@ function AppContent() {
     async (messageId: string, status: TicketStatus) => {
       if (!activeChannelId) return;
       try {
-        const { data } = await graphqlClient.mutate<UpdateMessageStatusMutation>({
-          mutation: UpdateMessageStatusDocument,
+        const { data } = await executeUpdateMessageStatus({
           variables: {
             channelId: activeChannelId,
             messageId,
@@ -230,7 +230,7 @@ function AppContent() {
         console.error('Failed to update message status');
       }
     },
-    [activeChannelId, upsertAndSyncMessage],
+    [activeChannelId, executeUpdateMessageStatus, upsertAndSyncMessage],
   );
 
   const handleSetView = useCallback(

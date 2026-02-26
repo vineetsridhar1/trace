@@ -1,6 +1,13 @@
 import { type ComponentType, type ReactNode } from 'react';
 
-export const SERVER_URL = 'http://localhost:3001';
+const DEFAULT_SERVER_URL = 'http://localhost:3100';
+
+export function getServerUrl(): string {
+  if (typeof window !== 'undefined' && window.traceAPI?.getServerUrl) {
+    return window.traceAPI.getServerUrl();
+  }
+  return DEFAULT_SERVER_URL;
+}
 
 export interface WorktreeDiffResult {
   success: boolean;
@@ -19,6 +26,7 @@ export interface LocalChannelConfig {
 }
 
 export interface TraceAPI {
+  getServerUrl: () => string;
   spawnClaude: (
     messageId: string,
     prompt: string,

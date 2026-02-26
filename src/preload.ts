@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('traceAPI', {
+  getServerUrl: () => ipcRenderer.sendSync('get-server-url') as string,
   spawnClaude: async (
     messageId: string,
     prompt: string,

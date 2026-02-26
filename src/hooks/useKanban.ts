@@ -1,8 +1,7 @@
 import { useCallback, useState } from 'react';
-import { gql } from '@apollo/client';
+import { gql, useApolloClient } from '@apollo/client';
 import type { KanbanColumn, KanbanTicket } from '../types';
-import { graphqlClient } from '../graphql/client';
-import { BoardDocument, type BoardQuery, MoveTicketDocument } from './__generated__/useKanban.generated';
+import { BoardDocument, type BoardQuery, useMoveTicketMutation } from './__generated__/useKanban.generated';
 
 const GQL_BOARD = gql`
   query Board($channelId: ID!) {
@@ -56,13 +55,15 @@ const GQL_MOVE_TICKET = gql`
 `;
 
 export function useKanban() {
+  const client = useApolloClient();
+  const [executeMoveTicket] = useMoveTicketMutation();
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchBoard = useCallback(async (channelId: string) => {
     setLoading(true);
     try {
-      const { data } = await graphqlClient.query<BoardQuery>({
+      const { data } = await client.query<BoardQuery>({
         query: BoardDocument,
         variables: { channelId },
       });
@@ -73,7 +74,7 @@ export function useKanban() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [client]);
 
   const upsertTicket = useCallback((ticket: KanbanTicket) => {
     setColumns((prev) => {
@@ -120,16 +121,13 @@ export function useKanban() {
       });
 
       try {
-        await graphqlClient.mutate({
-          mutation: MoveTicketDocument,
-          variables: { ticketId, columnId, sortOrder },
-        });
+        await executeMoveTicket({ variables: { ticketId, columnId, sortOrder } });
       } catch {
         // Revert on failure by refetching
         void fetchBoard(channelId);
       }
     },
-    [fetchBoard],
+    [executeMoveTicket, fetchBoard],
   );
 
   const clearBoard = useCallback(() => {

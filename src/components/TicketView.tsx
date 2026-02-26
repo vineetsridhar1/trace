@@ -2,7 +2,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { KanbanTicket } from '../types';
-import { SERVER_URL } from '../types';
+import { getServerUrl } from '../types';
 import { ImageLightbox } from './ImageLightbox';
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -93,11 +93,11 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
               <button
                 key={a.id}
                 type="button"
-                onClick={() => setLightboxSrc(`${SERVER_URL}${a.url}`)}
+                onClick={() => setLightboxSrc(`${getServerUrl()}${a.url}`)}
                 className="h-16 w-16 overflow-hidden rounded-md border border-[#3b4261] transition-colors hover:border-[#7aa2f7]"
               >
                 <img
-                  src={`${SERVER_URL}${a.url}`}
+                  src={`${getServerUrl()}${a.url}`}
                   alt={a.filename}
                   className="h-full w-full object-cover"
                 />

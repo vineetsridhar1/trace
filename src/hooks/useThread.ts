@@ -1,9 +1,14 @@
-import { useCallback, useRef, useState } from 'react';
-import { gql } from '@apollo/client';
-import type { ChannelMessage, ServerEvent, ThreadStatus } from '../types';
-import { graphqlClient } from '../graphql/client';
-import { ThreadsDocument, type ThreadsQuery, type ThreadEventsQuery } from './__generated__/useThread.generated';
-import { clamp } from '../utils';
+import { useCallback, useRef, useState } from "react";
+import { gql, useApolloClient } from "@apollo/client";
+import type { ChannelMessage, ServerEvent, ThreadStatus } from "../types";
+import {
+  ThreadsDocument,
+  type ThreadsQuery,
+  ThreadEventsDocument,
+  type ThreadEventsQuery,
+  useCreateThreadMutation,
+} from "./__generated__/useThread.generated";
+import { clamp } from "../utils";
 
 export interface ThreadInfo {
   id: string;
@@ -24,8 +29,22 @@ const GQL_THREADS = gql`
 `;
 
 const GQL_THREAD_EVENTS = gql`
-  query ThreadEvents($channelId: ID!, $messageId: ID!, $threadId: ID!, $limit: Int, $offset: Int, $after: String) {
-    threadEvents(channelId: $channelId, messageId: $messageId, threadId: $threadId, limit: $limit, offset: $offset, after: $after) {
+  query ThreadEvents(
+    $channelId: ID!
+    $messageId: ID!
+    $threadId: ID!
+    $limit: Int
+    $offset: Int
+    $after: String
+  ) {
+    threadEvents(
+      channelId: $channelId
+      messageId: $messageId
+      threadId: $threadId
+      limit: $limit
+      offset: $offset
+      after: $after
+    ) {
       events {
         id
         sessionId
@@ -73,31 +92,57 @@ interface UseThreadOptions {
 
 const THREAD_PAGE_SIZE = 100;
 
-export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveChannelId }: UseThreadOptions) {
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-  const [selectedMessage, setSelectedMessage] = useState<ChannelMessage | null>(null);
+export function useThread({
+  getChannelRepoPath,
+  getChannelBaseBranch,
+  getActiveChannelId,
+}: UseThreadOptions) {
+  const client = useApolloClient();
+  const [executeCreateThread] = useCreateThreadMutation();
+
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
+  const [selectedMessage, setSelectedMessage] = useState<ChannelMessage | null>(
+    null,
+  );
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<ThreadInfo[]>([]);
   const [threadEvents, setThreadEvents] = useState<ServerEvent[]>([]);
-  const [threadStatus, setThreadStatus] = useState<ThreadStatus>('idle');
+  const [threadStatus, setThreadStatus] = useState<ThreadStatus>("idle");
   const [threadWidth, setThreadWidth] = useState(0);
   const [deletingWorktree, setDeletingWorktree] = useState(false);
   const [mergingWorktree, setMergingWorktree] = useState(false);
   const [hasWorktree, setHasWorktree] = useState<boolean | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-  const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<Record<string, boolean>>({});
+  const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<
+    Record<string, boolean>
+  >({});
   const [threadTotal, setThreadTotal] = useState(0);
   const [loadingOlderEvents, setLoadingOlderEvents] = useState(false);
-  const [tokenUsage, setTokenUsage] = useState<{ inputTokens: number; outputTokens: number; totalTokens: number }>({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+  const [tokenUsage, setTokenUsage] = useState<{
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  }>({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
   const [latestContextTokens, setLatestContextTokens] = useState(0);
-  const lastSeenUsageRef = useRef<{ input: number; output: number }>({ input: 0, output: 0 });
+  const lastSeenUsageRef = useRef<{ input: number; output: number }>({
+    input: 0,
+    output: 0,
+  });
 
   const selectedMessageRef = useRef<ChannelMessage | null>(null);
   const selectedMessageIdRef = useRef<string | null>(null);
   const activeThreadIdRef = useRef<string | null>(null);
-  const lastReportedThreadEventIdByMessageRef = useRef<Map<string, string>>(new Map());
+  const lastReportedThreadEventIdByMessageRef = useRef<Map<string, string>>(
+    new Map(),
+  );
   const loadingOlderRef = useRef(false);
-  const threadQueryRef = useRef<{ channelId: string; messageId: string; threadId: string } | null>(null);
+  const threadQueryRef = useRef<{
+    channelId: string;
+    messageId: string;
+    threadId: string;
+  } | null>(null);
   const threadEventsLengthRef = useRef(0);
   const threadEventsRef = useRef<ServerEvent[]>([]);
   threadEventsLengthRef.current = threadEvents.length;
@@ -109,14 +154,21 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
 
   const threadOpen = threadWidth > 0;
 
-  const reportClaudeActivity = useCallback(async (messageId: string, eventType: string) => {
-    if (!window.traceAPI || typeof window.traceAPI.reportClaudeActivity !== 'function') return;
-    try {
-      await window.traceAPI.reportClaudeActivity(messageId, eventType);
-    } catch {
-      // best-effort
-    }
-  }, []);
+  const reportClaudeActivity = useCallback(
+    async (messageId: string, eventType: string) => {
+      if (
+        !window.traceAPI ||
+        typeof window.traceAPI.reportClaudeActivity !== "function"
+      )
+        return;
+      try {
+        await window.traceAPI.reportClaudeActivity(messageId, eventType);
+      } catch {
+        // best-effort
+      }
+    },
+    [],
+  );
 
   const resetThreadViewState = useCallback(() => {
     setShowJumpToLatest(false);
@@ -136,7 +188,7 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
     setActiveThreadId(null);
     setThreads([]);
     setThreadEvents([]);
-    setThreadStatus('idle');
+    setThreadStatus("idle");
     setThreadWidth(0);
     resetThreadViewState();
   }, [resetThreadViewState]);
@@ -146,9 +198,8 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
     async (channelId: string, messageId: string, threadId: string) => {
       resetThreadViewState();
 
-      const { data: eventsData } = await graphqlClient.query<ThreadEventsQuery>({
-        query: GQL_THREAD_EVENTS,
-        fetchPolicy: 'network-only',
+      const { data: eventsData } = await client.query<ThreadEventsQuery>({
+        query: ThreadEventsDocument,
         variables: {
           channelId,
           messageId,
@@ -163,17 +214,23 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
       setThreadEvents(events);
       setThreadTotal(total);
       threadQueryRef.current = { channelId, messageId, threadId };
-      setThreadStatus(events.length === 0 ? 'empty' : 'ready');
+      setThreadStatus(events.length === 0 ? "empty" : "ready");
 
       const tu = result?.tokenUsage;
       if (tu) {
-        setTokenUsage({ inputTokens: tu.inputTokens, outputTokens: tu.outputTokens, totalTokens: tu.totalTokens });
+        setTokenUsage({
+          inputTokens: tu.inputTokens,
+          outputTokens: tu.outputTokens,
+          totalTokens: tu.totalTokens,
+        });
       }
       setLatestContextTokens(result?.latestContextTokens ?? 0);
 
       const lastLoadedEvent = events[events.length - 1];
       if (lastLoadedEvent) {
-        const lastUsage = (lastLoadedEvent.rawPayload as Record<string, unknown>)?.usage as
+        const lastUsage = (
+          lastLoadedEvent.rawPayload as Record<string, unknown>
+        )?.usage as
           | { input_tokens?: number; output_tokens?: number }
           | undefined;
         lastSeenUsageRef.current = {
@@ -182,19 +239,20 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
         };
       }
     },
-    [resetThreadViewState],
+    [client, resetThreadViewState],
   );
 
   const loadThreadEvents = useCallback(
     async (message: ChannelMessage) => {
       try {
         // Only show "loading" on initial load, not on incremental SSE updates
-        setThreadStatus((prev) => (prev === 'idle' || prev === 'error' ? 'loading' : prev));
+        setThreadStatus((prev) =>
+          prev === "idle" || prev === "error" ? "loading" : prev,
+        );
 
-        // Fetch threads to get the list and latest thread ID
-        const { data: threadsData } = await graphqlClient.query<ThreadsQuery>({
+        // Fetch threads to get the latest thread ID (for SSE routing)
+        const { data: threadsData } = await client.query<ThreadsQuery>({
           query: ThreadsDocument,
-          fetchPolicy: 'network-only',
           variables: {
             channelId: message.channelId,
             messageId: message.id,
@@ -207,30 +265,33 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
         if (threadList.length === 0) {
           setActiveThreadId(null);
           setThreadEvents([]);
-          setThreadStatus('empty');
+          setThreadStatus("empty");
           return;
         }
 
-        // Set active thread to the latest thread
+        // Set active thread to the latest thread and load its events
         const latestThread = threadList[threadList.length - 1];
         setActiveThreadId(latestThread.id);
-
-        // Load events from the latest thread only
         await loadEventsForThread(message.channelId, message.id, latestThread.id);
 
-        const latestEvent = threadEventsRef.current[threadEventsRef.current.length - 1];
+        const latestEvent =
+          threadEventsRef.current[threadEventsRef.current.length - 1];
         if (latestEvent) {
-          const lastReportedId = lastReportedThreadEventIdByMessageRef.current.get(message.id);
+          const lastReportedId =
+            lastReportedThreadEventIdByMessageRef.current.get(message.id);
           if (lastReportedId !== latestEvent.id) {
-            lastReportedThreadEventIdByMessageRef.current.set(message.id, latestEvent.id);
+            lastReportedThreadEventIdByMessageRef.current.set(
+              message.id,
+              latestEvent.id,
+            );
             void reportClaudeActivity(message.id, latestEvent.hookEventName);
           }
         }
       } catch {
-        setThreadStatus('error');
+        setThreadStatus("error");
       }
     },
-    [loadEventsForThread, reportClaudeActivity],
+    [client, loadEventsForThread, reportClaudeActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
@@ -239,9 +300,8 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
     loadingOlderRef.current = true;
     setLoadingOlderEvents(true);
     try {
-      const { data } = await graphqlClient.query<ThreadEventsQuery>({
-        query: GQL_THREAD_EVENTS,
-        fetchPolicy: 'network-only',
+      const { data } = await client.query<ThreadEventsQuery>({
+        query: ThreadEventsDocument,
         variables: {
           channelId: query.channelId,
           messageId: query.messageId,
@@ -252,7 +312,8 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
       });
 
       const result = data?.threadEvents;
-      const olderEvents: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
+      const olderEvents: ServerEvent[] = (result?.events ??
+        []) as ServerEvent[];
       const total = result?.total;
       if (total != null) setThreadTotal(total);
       if (olderEvents.length > 0) {
@@ -263,7 +324,7 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
       loadingOlderRef.current = false;
       setLoadingOlderEvents(false);
     }
-  }, []);
+  }, [client]);
 
   const appendThreadEvent = useCallback((event: ServerEvent) => {
     setThreadEvents((prev) => [...prev, event]);
@@ -273,7 +334,9 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
     const currentThreadId = activeThreadIdRef.current;
     if (currentThreadId) {
       setThreads((prev) =>
-        prev.map((t) => (t.id === currentThreadId ? { ...t, eventCount: t.eventCount + 1 } : t)),
+        prev.map((t) =>
+          t.id === currentThreadId ? { ...t, eventCount: t.eventCount + 1 } : t,
+        ),
       );
     }
 
@@ -285,7 +348,10 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
     if (usage) {
       const curInput = usage.input_tokens ?? 0;
       const curOutput = usage.output_tokens ?? 0;
-      if (curInput !== lastSeenUsageRef.current.input || curOutput !== lastSeenUsageRef.current.output) {
+      if (
+        curInput !== lastSeenUsageRef.current.input ||
+        curOutput !== lastSeenUsageRef.current.output
+      ) {
         lastSeenUsageRef.current = { input: curInput, output: curOutput };
         setTokenUsage((prev) => ({
           inputTokens: prev.inputTokens + curInput,
@@ -302,7 +368,10 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
   const hasMoreEvents = threadTotal > threadEvents.length;
 
   const checkWorktree = useCallback(async (messageId: string) => {
-    if (!window.traceAPI || typeof window.traceAPI.checkWorktreeExists !== 'function') {
+    if (
+      !window.traceAPI ||
+      typeof window.traceAPI.checkWorktreeExists !== "function"
+    ) {
       setHasWorktree(false);
       return;
     }
@@ -333,12 +402,12 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
       if (!message) return;
 
       setActiveThreadId(threadId);
-      setThreadStatus('loading');
+      setThreadStatus("loading");
 
       try {
         await loadEventsForThread(message.channelId, message.id, threadId);
       } catch {
-        setThreadStatus('error');
+        setThreadStatus("error");
       }
     },
     [loadEventsForThread],
@@ -350,8 +419,7 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
     if (!message || !channelId) return null;
 
     try {
-      const { data } = await graphqlClient.mutate({
-        mutation: GQL_CREATE_THREAD,
+      const { data } = await executeCreateThread({
         variables: {
           channelId,
           messageId: message.id,
@@ -367,57 +435,75 @@ export function useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveC
       activeThreadIdRef.current = newThread.id; // sync ref immediately for callers that read it after await
       setThreadEvents([]);
       setThreadTotal(0);
-      setThreadStatus('empty');
+      setThreadStatus("empty");
       resetThreadViewState();
-      threadQueryRef.current = { channelId, messageId: message.id, threadId: newThread.id };
+      threadQueryRef.current = {
+        channelId,
+        messageId: message.id,
+        threadId: newThread.id,
+      };
       return newThread.id;
     } catch (err) {
-      console.error('Failed to clear thread:', err);
+      console.error("Failed to clear thread:", err);
       return null;
     }
-  }, [getActiveChannelId, resetThreadViewState]);
+  }, [executeCreateThread, getActiveChannelId, resetThreadViewState]);
 
-  const deleteWorktree = useCallback(async (onDeleted?: (messageId: string) => void) => {
-    const message = selectedMessageRef.current;
-    if (!message) return;
+  const deleteWorktree = useCallback(
+    async (onDeleted?: (messageId: string) => void) => {
+      const message = selectedMessageRef.current;
+      if (!message) return;
 
-    const confirmed = window.confirm('Delete this worktree? This removes local files for this workspace.');
-    if (!confirmed) return;
-
-    setDeletingWorktree(true);
-    try {
-      const repoPath = getChannelRepoPath();
-      const result = await window.traceAPI.deleteWorktree(message.id, repoPath);
-      if (!result.success) {
-        console.error('Failed to delete worktree:', result.error);
-        return;
-      }
-      console.log(
-        result.removed
-          ? `Deleted worktree: ${result.worktreePath}`
-          : `Worktree already missing: ${result.worktreePath}`,
+      const confirmed = window.confirm(
+        "Delete this worktree? This removes local files for this workspace.",
       );
-      setHasWorktree(false);
-      onDeleted?.(message.id);
-    } finally {
-      setDeletingWorktree(false);
-    }
-  }, [getChannelRepoPath]);
+      if (!confirmed) return;
+
+      setDeletingWorktree(true);
+      try {
+        const repoPath = getChannelRepoPath();
+        const result = await window.traceAPI.deleteWorktree(
+          message.id,
+          repoPath,
+        );
+        if (!result.success) {
+          console.error("Failed to delete worktree:", result.error);
+          return;
+        }
+        console.log(
+          result.removed
+            ? `Deleted worktree: ${result.worktreePath}`
+            : `Worktree already missing: ${result.worktreePath}`,
+        );
+        setHasWorktree(false);
+        onDeleted?.(message.id);
+      } finally {
+        setDeletingWorktree(false);
+      }
+    },
+    [getChannelRepoPath],
+  );
 
   const mergeWorktree = useCallback(async () => {
     const message = selectedMessageRef.current;
     if (!message) return;
 
     const baseBranch = getChannelBaseBranch();
-    const confirmed = window.confirm(`Merge this worktree branch into ${baseBranch}?`);
+    const confirmed = window.confirm(
+      `Merge this worktree branch into ${baseBranch}?`,
+    );
     if (!confirmed) return;
 
     setMergingWorktree(true);
     try {
       const repoPath = getChannelRepoPath();
-      const result = await window.traceAPI.mergeWorktree(message.id, repoPath, baseBranch);
+      const result = await window.traceAPI.mergeWorktree(
+        message.id,
+        repoPath,
+        baseBranch,
+      );
       if (!result.success) {
-        console.error('Failed to merge worktree:', result.error);
+        console.error("Failed to merge worktree:", result.error);
         return;
       }
       console.log(`Merged branch ${result.branch} into ${baseBranch}`);

@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ServerEvent, PlanReviewNode } from '../types';
-import { SERVER_URL } from '../types';
+import { getServerUrl } from '../types';
 import { extractPromptText, extractAttachments, formatTime, formatDuration, isEditLikeEvent, normalizeToolName, serializeUnknown, findStringByKeys, toRelativeDisplayPath, stripTraceInternal } from '../utils';
 import { ImageLightbox } from './ImageLightbox';
 import { EditDiffPreview } from './EditDiffPreview';
@@ -95,11 +95,11 @@ function UserPromptBubble({ event, time }: { event: ServerEvent; time: string })
                 <button
                   key={a.key}
                   type="button"
-                  onClick={() => setLightboxSrc(`${SERVER_URL}/attachments/file/${a.key}`)}
+                  onClick={() => setLightboxSrc(`${getServerUrl()}/attachments/file/${a.key}`)}
                   className="h-16 w-16 overflow-hidden rounded-md border border-violet-500/30 transition-colors hover:border-violet-500/60"
                 >
                   <img
-                    src={`${SERVER_URL}/attachments/file/${a.key}`}
+                    src={`${getServerUrl()}/attachments/file/${a.key}`}
                     alt={a.filename}
                     className="h-full w-full object-cover"
                   />

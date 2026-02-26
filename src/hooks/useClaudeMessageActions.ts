@@ -3,12 +3,11 @@ import { gql } from '@apollo/client';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { ChannelMessage, ServerEvent, TicketStatus, ClaudeModel, EffortLevel } from '../types';
 import type { PlanResponseMode } from '../context/ClaudeActionsContext';
-import { graphqlClient } from '../graphql/client';
 import { MESSAGE_FIELDS } from '../graphql/fragments';
 import {
-  CreateMessageDocument, type CreateMessageMutation,
-  AppendPromptDocument, type AppendPromptMutation,
-  UpdateMessagePreviewDocument, type UpdateMessagePreviewMutation,
+  useCreateMessageMutation,
+  useAppendPromptMutation,
+  useUpdateMessagePreviewMutation,
 } from './__generated__/useClaudeMessageActions.generated';
 
 const GQL_CREATE_MESSAGE = gql`
@@ -119,6 +118,10 @@ export function useClaudeMessageActions({
   getChannelBaseBranch,
   getSystemInstructions,
 }: UseClaudeMessageActionsOptions) {
+  const [executeCreateMessage] = useCreateMessageMutation();
+  const [executeAppendPrompt] = useAppendPromptMutation();
+  const [executeUpdatePreview] = useUpdateMessagePreviewMutation();
+
   const spawnedMessageIdsRef = useRef(new Set<string>());
   const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(
     null,
@@ -164,8 +167,7 @@ export function useClaudeMessageActions({
       if (!activeChannelId) return;
 
       try {
-        const { data } = await graphqlClient.mutate<UpdateMessagePreviewMutation>({
-          mutation: UpdateMessagePreviewDocument,
+        const { data } = await executeUpdatePreview({
           variables: {
             channelId: activeChannelId,
             messageId,
@@ -179,7 +181,7 @@ export function useClaudeMessageActions({
         // Preview updates are best-effort and should not block execution.
       }
     },
-    [activeChannelId, upsertMessage],
+    [activeChannelId, executeUpdatePreview, upsertMessage],
   );
 
   const persistPrompt = useCallback(
@@ -187,8 +189,7 @@ export function useClaudeMessageActions({
       if (!activeChannelId) return null;
 
       try {
-        const { data } = await graphqlClient.mutate<AppendPromptMutation>({
-          mutation: AppendPromptDocument,
+        const { data } = await executeAppendPrompt({
           variables: {
             channelId: activeChannelId,
             messageId,
@@ -215,7 +216,7 @@ export function useClaudeMessageActions({
         return null;
       }
     },
-    [activeChannelId, loadThreadEvents, selectedMessageIdRef, upsertMessage],
+    [activeChannelId, executeAppendPrompt, loadThreadEvents, selectedMessageIdRef, upsertMessage],
   );
 
   const sendMessage = useCallback(
@@ -224,8 +225,7 @@ export function useClaudeMessageActions({
       if (!text || !activeChannelId) return false;
 
       try {
-        const { data } = await graphqlClient.mutate<CreateMessageMutation>({
-          mutation: CreateMessageDocument,
+        const { data } = await executeCreateMessage({
           variables: {
             channelId: activeChannelId,
             text,
@@ -247,7 +247,7 @@ export function useClaudeMessageActions({
         return false;
       }
     },
-    [activeChannelId, onMessageCreated, upsertMessage],
+    [activeChannelId, executeCreateMessage, onMessageCreated, upsertMessage],
   );
 
   const runPendingMessage = useCallback(

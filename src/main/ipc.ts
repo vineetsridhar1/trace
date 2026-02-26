@@ -36,7 +36,19 @@ export function setMainWindow(win: BrowserWindow) {
   mainWindowRef = win;
 }
 
+function resolveServerUrl(): string {
+  const raw = process.env.TRACE_SERVER_URL;
+  if (!raw) return 'http://localhost:3100';
+  if (raw.startsWith('http')) return raw;
+  return `http://localhost:${raw}`;
+}
+
 export function registerIpcHandlers() {
+  // Sync handler so the renderer can get the server URL synchronously via preload
+  ipcMain.removeAllListeners('get-server-url');
+  ipcMain.on('get-server-url', (event) => {
+    event.returnValue = resolveServerUrl();
+  });
   ipcMain.removeHandler(SPAWN_CLAUDE_CHANNEL);
   ipcMain.removeHandler(DELETE_WORKTREE_CHANNEL);
   ipcMain.removeHandler(CHECK_WORKTREE_CHANNEL);

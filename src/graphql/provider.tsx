@@ -1,7 +1,9 @@
 import { ApolloProvider } from '@apollo/client';
-import { graphqlClient } from './client';
+import { useMemo } from 'react';
+import { createGraphqlClient } from './client';
 import type { ReactNode } from 'react';
 
 export function GraphQLProvider({ children }: { children: ReactNode }) {
-  return <ApolloProvider client={graphqlClient}>{children}</ApolloProvider>;
+  const client = useMemo(() => createGraphqlClient(), []);
+  return <ApolloProvider client={client}>{children}</ApolloProvider>;
 }

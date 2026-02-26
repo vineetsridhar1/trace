@@ -6,7 +6,7 @@ export function injectHooks(dir: string) {
   const settingsPath = path.join(claudeDir, 'settings.json');
 
   const rawEnv = process.env.TRACE_SERVER_URL;
-  const serverUrl = rawEnv ? (rawEnv.startsWith('http') ? rawEnv : `http://localhost:${rawEnv}`) : 'http://localhost:3001';
+  const serverUrl = rawEnv ? (rawEnv.startsWith('http') ? rawEnv : `http://localhost:${rawEnv}`) : 'http://localhost:3100';
   const curlCmd =
     `curl -sS --connect-timeout 1 --max-time 2 -X POST ${serverUrl}/events -H "Content-Type: application/json" -d "$(cat)" >/dev/null 2>&1 || true`;
 

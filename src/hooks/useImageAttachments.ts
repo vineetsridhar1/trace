@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import { gql } from '@apollo/client';
-import { SERVER_URL } from '../types';
-import { graphqlClient } from '../graphql/client';
-import { UploadAttachmentDocument, type UploadAttachmentMutation } from './__generated__/useImageAttachments.generated';
+import { getServerUrl } from '../types';
+import { useUploadAttachmentMutation } from './__generated__/useImageAttachments.generated';
 
 const GQL_UPLOAD_ATTACHMENT = gql`
   mutation UploadAttachment($data: String!, $filename: String!, $contentType: String!) {
@@ -41,6 +40,7 @@ function readFileAsBase64(file: File): Promise<string> {
 }
 
 export function useImageAttachments() {
+  const [executeUploadAttachment] = useUploadAttachmentMutation();
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -48,8 +48,7 @@ export function useImageAttachments() {
     const base64 = await readFileAsBase64(file);
 
     try {
-      const { data } = await graphqlClient.mutate<UploadAttachmentMutation>({
-        mutation: UploadAttachmentDocument,
+      const { data } = await executeUploadAttachment({
         variables: {
           data: base64,
           filename: file.name || 'pasted-image.png',
@@ -67,13 +66,13 @@ export function useImageAttachments() {
         filename: attachment.filename,
         contentType: attachment.contentType,
         previewUrl: URL.createObjectURL(file),
-        serverUrl: `${SERVER_URL}${attachment.url}`,
+        serverUrl: `${getServerUrl()}${attachment.url}`,
         localPath: attachment.localPath,
       };
     } catch {
       return null;
     }
-  }, []);
+  }, [executeUploadAttachment]);
 
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent) => {

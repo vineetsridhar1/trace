@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChannelMessage, KanbanTicket, MessageEnvelope, ServerEvent, ThreadEventEnvelope, TicketEnvelope } from '../types';
-import { SERVER_URL } from '../types';
+import { getServerUrl } from '../types';
 
 // SSE broadcasts send raw Prisma data with _count.threads, but our ChannelMessage type uses threadCount.
 // Normalize the shape at the SSE boundary.
@@ -50,7 +50,7 @@ export function useSse({
 
     if (!activeChannelId) return;
 
-    const source = new EventSource(`${SERVER_URL}/sse/channels/${activeChannelId}`);
+    const source = new EventSource(`${getServerUrl()}/sse/channels/${activeChannelId}`);
     activeSseRef.current = source;
     setSseConnected(false);
 

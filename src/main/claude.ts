@@ -17,7 +17,7 @@ import { runProcess } from './process';
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
-  if (!raw) return 'http://localhost:3001';
+  if (!raw) return 'http://localhost:3100';
   if (raw.startsWith('http')) return raw;
   // Support bare port numbers like "3001"
   return `http://localhost:${raw}`;
