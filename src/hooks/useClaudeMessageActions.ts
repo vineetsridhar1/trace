@@ -406,6 +406,7 @@ export function useClaudeMessageActions({
 
         await spawnClaudeForMessage(selectedMessage.id, trimmed, {
           errorPrefix: 'Failed to spawn claude for plan response',
+          statusOnSuccess: 'in_progress',
           resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
           model: selectedModel,
           effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
