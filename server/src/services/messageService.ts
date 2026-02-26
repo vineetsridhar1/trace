@@ -390,13 +390,12 @@ export async function getEventsByMessage(
       hasCliUsage = true;
       inputTokens += cliUsage.input_tokens ?? 0;
       outputTokens += cliUsage.output_tokens ?? 0;
-      if (cliUsage.input_tokens) {
-        latestContextTokens = cliUsage.input_tokens;
-      }
       if (typeof payload?.cli_cost_usd === 'number') {
         cliCostUsd = (cliCostUsd ?? 0) + payload.cli_cost_usd;
       }
     }
+    // Always use per-call usage for latestContextTokens (context window size),
+    // NOT cli_usage which is the cumulative session total.
     const usage = payload?.usage as { input_tokens?: number } | undefined;
     if (usage?.input_tokens) {
       latestContextTokens = usage.input_tokens;
@@ -534,13 +533,12 @@ export async function getEventsByThread(
       hasCliUsage = true;
       inputTokens += cliUsage.input_tokens ?? 0;
       outputTokens += cliUsage.output_tokens ?? 0;
-      if (cliUsage.input_tokens) {
-        latestContextTokens = cliUsage.input_tokens;
-      }
       if (typeof payload?.cli_cost_usd === 'number') {
         cliCostUsd = (cliCostUsd ?? 0) + payload.cli_cost_usd;
       }
     }
+    // Always use per-call usage for latestContextTokens (context window size),
+    // NOT cli_usage which is the cumulative session total.
     const usage = payload?.usage as { input_tokens?: number } | undefined;
     if (usage?.input_tokens) {
       latestContextTokens = usage.input_tokens;
