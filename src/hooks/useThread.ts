@@ -7,7 +7,6 @@ import {
   useThreadEventsLazyQuery,
 } from "./__generated__/useThread.generated";
 import { clamp } from "../utils";
-import { useTokenTracking } from "./useTokenTracking";
 import { useWorktreeState } from "./useWorktreeState";
 import { useThreadSelection } from "./useThreadSelection";
 
@@ -64,13 +63,6 @@ const GQL_THREAD_EVENTS = gql`
       total
       limit
       offset
-      tokenUsage {
-        inputTokens
-        outputTokens
-        totalTokens
-      }
-      latestContextTokens
-      cliCostUsd
     }
   }
 `;
@@ -113,15 +105,6 @@ export function useThread({
     clearSelection,
     selectMessage,
   } = useThreadSelection();
-  const {
-    tokenUsage,
-    latestContextTokens,
-    cliCostUsd,
-    trackEventTokens,
-    trackEventTokenUpdate,
-    resetTokenTracking,
-    applyLoadedTokenData,
-  } = useTokenTracking();
   const {
     hasWorktree,
     setHasWorktree,
@@ -190,8 +173,7 @@ export function useThread({
     setLoadingOlderEvents(false);
     loadingOlderRef.current = false;
     threadQueryRef.current = null;
-    resetTokenTracking();
-  }, [resetTokenTracking]);
+  }, []);
 
   const closeThreadPanel = useCallback(() => {
     clearSelection();
@@ -224,15 +206,8 @@ export function useThread({
       setThreadTotal(total);
       threadQueryRef.current = { channelId, messageId, threadId };
       setThreadStatus(events.length === 0 ? "empty" : "ready");
-
-      applyLoadedTokenData({
-        tokenUsage: result?.tokenUsage,
-        latestContextTokens: result?.latestContextTokens,
-        cliCostUsd: result?.cliCostUsd,
-        lastEvent: events[events.length - 1] ?? null,
-      });
     },
-    [executeThreadEvents, resetThreadViewState, applyLoadedTokenData],
+    [executeThreadEvents, resetThreadViewState],
   );
 
   const loadThreadEvents = useCallback(
@@ -328,9 +303,8 @@ export function useThread({
         );
       }
 
-      trackEventTokens(event);
     },
-    [trackEventTokens],
+    [],
   );
 
   const updateThreadEvent = useCallback(
@@ -338,9 +312,8 @@ export function useThread({
       setThreadEvents((prev) =>
         prev.map((e) => (e.id === event.id ? event : e)),
       );
-      trackEventTokenUpdate(event);
     },
-    [trackEventTokenUpdate],
+    [],
   );
 
   const hasMoreEvents = threadTotal > threadEvents.length;
@@ -452,8 +425,5 @@ export function useThread({
     mergeWorktree,
     toggleReadGroup,
     syncSelectedMessage,
-    tokenUsage,
-    latestContextTokens,
-    cliCostUsd,
   };
 }

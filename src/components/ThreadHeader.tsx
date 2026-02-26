@@ -1,7 +1,6 @@
 import { memo, useState, useRef, useEffect } from 'react';
 import { FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
-import { TokenUsageBadge } from './TokenUsageBadge';
 import type { TicketStatus } from '../types';
 import type { ThreadInfo } from '../hooks/useThread';
 
@@ -54,8 +53,6 @@ interface ThreadHeaderProps {
   onMergeToMain: () => void;
   onEnterFullscreen?: () => void;
   onExitFullscreen?: () => void;
-  tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
-  cliCostUsd?: number | null;
   threads: ThreadInfo[];
   activeThreadId: string | null;
   onSwitchThread: (threadId: string) => Promise<void>;
@@ -77,8 +74,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   onMergeToMain,
   onEnterFullscreen,
   onExitFullscreen,
-  tokenUsage,
-  cliCostUsd,
   threads,
   activeThreadId,
   onSwitchThread,
@@ -152,7 +147,6 @@ export const ThreadHeader = memo(function ThreadHeader({
               Worktree deleted
             </span>
           )}
-        <TokenUsageBadge tokenUsage={tokenUsage} cliCostUsd={cliCostUsd} />
       </div>
       <div className="flex items-center gap-2">
         {threads.length > 1 && (

@@ -149,8 +149,6 @@ export async function spawnClaude(
     assistantText: string,
     exitCode: number | null,
     stopReason?: string,
-    cliUsage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number },
-    cliCostUsd?: number,
   ) => {
     const payload = {
       session_id: `trace-local-${messageId}`,
@@ -161,8 +159,6 @@ export async function spawnClaude(
       source: 'electron-main',
       exit_code: exitCode,
       ...(stopReason && { stop_reason: stopReason }),
-      ...(cliUsage && { cli_usage: cliUsage }),
-      ...(cliCostUsd !== undefined && { cli_cost_usd: cliCostUsd }),
     };
 
     try {
@@ -225,44 +221,22 @@ export async function spawnClaude(
     // be truncated at MAX_CAPTURE_CHARS and corrupt the JSON.
     const fullStdout = stdoutChunks.join('');
     let assistantOutput = stdoutBuffer.trim();
-    let cliUsage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } | undefined;
-    let cliCost: number | undefined;
 
     try {
       const parsed = JSON.parse(fullStdout);
       assistantOutput = parsed.result ?? assistantOutput;
-      cliUsage = parsed.usage;
-      cliCost = parsed.cost_usd ?? parsed.cost;
-      appendClaudeDebugLog(messageId, `parsed JSON output: usage=${JSON.stringify(cliUsage)} cost=${cliCost}`);
+      appendClaudeDebugLog(messageId, 'parsed JSON output');
     } catch {
       // Not JSON — fall back to raw stdout (backwards compatible)
       appendClaudeDebugLog(messageId, 'stdout not JSON, using raw output');
     }
 
     if (!shouldPostSyntheticStop) {
-      // The hook already delivered a Stop event, but the authoritative usage
-      // data lives in the JSON output. PATCH it into the existing Stop event.
-      if (cliUsage) {
-        try {
-          await fetch(`${SERVER_URL}/events/usage`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message_id: messageId,
-              cli_usage: cliUsage,
-              ...(cliCost !== undefined && { cli_cost_usd: cliCost }),
-            }),
-          });
-          appendClaudeDebugLog(messageId, 'patched usage into existing Stop event');
-        } catch (err) {
-          appendClaudeDebugLog(messageId, `usage patch failed error=${String(err)}`);
-        }
-      }
       return;
     }
 
     if (userStopped || code === 143) {
-      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user', cliUsage, cliCost);
+      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user');
       return;
     }
 
@@ -278,7 +252,7 @@ export async function spawnClaude(
       .trim();
 
     const messageToPersist = fallbackMessage || 'Claude run completed without textual output.';
-    await postSyntheticStopEvent(messageToPersist, code, undefined, cliUsage, cliCost);
+    await postSyntheticStopEvent(messageToPersist, code);
   });
 
   return worktreePath;

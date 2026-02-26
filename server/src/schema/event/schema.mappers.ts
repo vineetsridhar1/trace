@@ -14,19 +14,11 @@ export interface EventMapper {
   importance: string;
 }
 
-export interface TokenUsageMapper {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-}
-
 export interface EventConnectionMapper {
   events: EventMapper[];
   total: number;
   limit: number;
   offset: number;
-  tokenUsage: TokenUsageMapper;
-  latestContextTokens: number;
 }
 
 export interface ThreadEventPayloadMapper {

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { validate } from '../middleware/validate';
 import { HookEventSchema } from '../types/hookEvents';
-import { ingestEvent, getEventById, updateStopEventUsage } from '../services/eventService';
+import { ingestEvent, getEventById } from '../services/eventService';
 
 const router = Router();
 
@@ -16,25 +16,6 @@ router.post('/', validate(HookEventSchema), async (req: Request, res: Response) 
   } catch (err) {
     console.error('Error ingesting event:', err);
     res.status(500).json({ error: 'Failed to ingest event' });
-  }
-});
-
-router.patch('/usage', async (req: Request, res: Response) => {
-  try {
-    const { message_id, cli_usage, cli_cost_usd } = req.body;
-    if (!message_id || !cli_usage) {
-      res.status(400).json({ error: 'message_id and cli_usage are required' });
-      return;
-    }
-    const result = await updateStopEventUsage(message_id, cli_usage, cli_cost_usd);
-    if (!result) {
-      res.status(404).json({ error: 'Stop event not found for message' });
-      return;
-    }
-    res.status(200).json(result);
-  } catch (err) {
-    console.error('Error patching usage:', err);
-    res.status(500).json({ error: 'Failed to patch usage' });
   }
 });
 

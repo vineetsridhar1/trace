@@ -101,12 +101,9 @@ export type Event = {
 
 export type EventConnection = {
   __typename?: 'EventConnection';
-  cliCostUsd?: Maybe<Scalars['Float']['output']>;
   events: Array<Event>;
-  latestContextTokens: Scalars['Int']['output'];
   limit: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
-  tokenUsage: TokenUsage;
   total: Scalars['Int']['output'];
 };
 
@@ -596,11 +593,4 @@ export type TicketUpsertPayload = {
   channelId: Scalars['String']['output'];
   columnSlug: Scalars['String']['output'];
   ticket: Ticket;
-};
-
-export type TokenUsage = {
-  __typename?: 'TokenUsage';
-  inputTokens: Scalars['Int']['output'];
-  outputTokens: Scalars['Int']['output'];
-  totalTokens: Scalars['Int']['output'];
 };

@@ -12,10 +12,6 @@ export interface ThreadEventsContextValue {
   showJumpToLatest: boolean;
   scrollToLatest: () => void;
   onThreadScroll: () => void;
-  // Token usage
-  tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
-  latestContextTokens: number;
-  cliCostUsd: number | null;
 }
 
 export const ThreadEventsContext = createContext<ThreadEventsContextValue | null>(null);

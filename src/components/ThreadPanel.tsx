@@ -9,7 +9,6 @@ import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
 import { RunButtons } from "./RunButtons";
 import { StickyTodoList } from "./StickyTodoList";
-import { ContextProgressBar } from "./ContextProgressBar";
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useThreadContext } from "../context/ThreadContext";
 import { useThreadEventsContext } from "../context/ThreadEventsContext";
@@ -51,9 +50,6 @@ export function ThreadPanel() {
     showJumpToLatest,
     threadContentRef,
     loadingOlderEvents,
-    tokenUsage,
-    latestContextTokens,
-    cliCostUsd,
     onThreadScroll,
     scrollToLatest,
   } = useThreadEventsContext();
@@ -184,8 +180,6 @@ export function ThreadPanel() {
           onMergeToMain={() => void mergeToMain()}
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
-          tokenUsage={tokenUsage}
-          cliCostUsd={cliCostUsd}
           threads={threads}
           activeThreadId={activeThreadId}
           onSwitchThread={switchThread}
@@ -330,7 +324,6 @@ export function ThreadPanel() {
           />
         )}
 
-        <ContextProgressBar latestContextTokens={latestContextTokens} />
       </div>
     </>
   );

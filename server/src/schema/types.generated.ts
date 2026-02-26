@@ -3,7 +3,7 @@ import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper, AiCha
 import { AttachmentMapper } from './attachment/schema.mappers';
 import { ChannelMapper, RepoValidationMapper } from './channel/schema.mappers';
 import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageDeletedPayloadMapper, MessageSessionMapper } from './message/schema.mappers';
-import { EventMapper, EventConnectionMapper, ThreadEventPayloadMapper, TokenUsageMapper } from './event/schema.mappers';
+import { EventMapper, EventConnectionMapper, ThreadEventPayloadMapper } from './event/schema.mappers';
 import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketMessageMapper, TicketUpsertPayloadMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
 import { SessionMapper, SessionConnectionMapper } from './session/schema.mappers';
@@ -112,12 +112,9 @@ export type Event = {
 
 export type EventConnection = {
   __typename?: 'EventConnection';
-  cliCostUsd?: Maybe<Scalars['Float']['output']>;
   events: Array<Event>;
-  latestContextTokens: Scalars['Int']['output'];
   limit: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
-  tokenUsage: TokenUsage;
   total: Scalars['Int']['output'];
 };
 
@@ -609,13 +606,6 @@ export type TicketUpsertPayload = {
   ticket: Ticket;
 };
 
-export type TokenUsage = {
-  __typename?: 'TokenUsage';
-  inputTokens: Scalars['Int']['output'];
-  outputTokens: Scalars['Int']['output'];
-  totalTokens: Scalars['Int']['output'];
-};
-
 
 
 export type ResolverTypeWrapper<T> = Promise<T> | T;
@@ -703,7 +693,6 @@ export type ResolversTypes = {
   Event: ResolverTypeWrapper<EventMapper>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   EventConnection: ResolverTypeWrapper<EventConnectionMapper>;
-  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Message: ResolverTypeWrapper<MessageMapper>;
@@ -725,7 +714,6 @@ export type ResolversTypes = {
   TicketMessage: ResolverTypeWrapper<TicketMessageMapper>;
   TicketReadyToRunPayload: ResolverTypeWrapper<TicketReadyToRunPayload>;
   TicketUpsertPayload: ResolverTypeWrapper<TicketUpsertPayloadMapper>;
-  TokenUsage: ResolverTypeWrapper<TokenUsageMapper>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -744,7 +732,6 @@ export type ResolversParentTypes = {
   Event: EventMapper;
   Boolean: Scalars['Boolean']['output'];
   EventConnection: EventConnectionMapper;
-  Float: Scalars['Float']['output'];
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
   Message: MessageMapper;
@@ -766,7 +753,6 @@ export type ResolversParentTypes = {
   TicketMessage: TicketMessageMapper;
   TicketReadyToRunPayload: TicketReadyToRunPayload;
   TicketUpsertPayload: TicketUpsertPayloadMapper;
-  TokenUsage: TokenUsageMapper;
 };
 
 export type AiChatResolvers<ContextType = any, ParentType extends ResolversParentTypes['AiChat'] = ResolversParentTypes['AiChat']> = {
@@ -849,12 +835,9 @@ export type EventResolvers<ContextType = any, ParentType extends ResolversParent
 };
 
 export type EventConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['EventConnection'] = ResolversParentTypes['EventConnection']> = {
-  cliCostUsd?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType>;
-  latestContextTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  tokenUsage?: Resolver<ResolversTypes['TokenUsage'], ParentType, ContextType>;
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
@@ -1058,12 +1041,6 @@ export type TicketUpsertPayloadResolvers<ContextType = any, ParentType extends R
   ticket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType>;
 };
 
-export type TokenUsageResolvers<ContextType = any, ParentType extends ResolversParentTypes['TokenUsage'] = ResolversParentTypes['TokenUsage']> = {
-  inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  outputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  totalTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-};
-
 export type Resolvers<ContextType = any> = {
   AiChat?: AiChatResolvers<ContextType>;
   AiChatMessage?: AiChatMessageResolvers<ContextType>;
@@ -1096,6 +1073,5 @@ export type Resolvers<ContextType = any> = {
   TicketMessage?: TicketMessageResolvers<ContextType>;
   TicketReadyToRunPayload?: TicketReadyToRunPayloadResolvers<ContextType>;
   TicketUpsertPayload?: TicketUpsertPayloadResolvers<ContextType>;
-  TokenUsage?: TokenUsageResolvers<ContextType>;
 };
 
