@@ -370,6 +370,9 @@ export function useThread({
         totalTokens: prev.totalTokens - acc.total + runInput + runOutput,
       }));
       runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
+      if (runInput) {
+        setLatestContextTokens(runInput);
+      }
       if (typeof payload?.cli_cost_usd === 'number') {
         setCliCostUsd((prev) => (prev ?? 0) + (payload.cli_cost_usd as number));
       }
@@ -409,6 +412,30 @@ export function useThread({
     setThreadEvents((prev) =>
       prev.map((e) => (e.id === event.id ? event : e)),
     );
+
+    // When a Stop event is updated with cli_usage (via the PATCH endpoint),
+    // apply the authoritative token data.
+    const payload = event.rawPayload as Record<string, unknown>;
+    const cliUsage = payload?.cli_usage as
+      | { input_tokens?: number; output_tokens?: number }
+      | undefined;
+    if (cliUsage) {
+      const runInput = cliUsage.input_tokens ?? 0;
+      const runOutput = cliUsage.output_tokens ?? 0;
+      const acc = runAccumulatedRef.current;
+      setTokenUsage((prev) => ({
+        inputTokens: prev.inputTokens - acc.input + runInput,
+        outputTokens: prev.outputTokens - acc.output + runOutput,
+        totalTokens: prev.totalTokens - acc.total + runInput + runOutput,
+      }));
+      runAccumulatedRef.current = { input: 0, output: 0, total: 0 };
+      if (runInput) {
+        setLatestContextTokens(runInput);
+      }
+      if (typeof payload?.cli_cost_usd === 'number') {
+        setCliCostUsd((prev) => (prev ?? 0) + (payload.cli_cost_usd as number));
+      }
+    }
   }, []);
 
   const hasMoreEvents = threadTotal > threadEvents.length;
