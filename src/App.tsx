@@ -442,6 +442,7 @@ function AppContent() {
       sendThreadMessage: claudeActions.sendThreadMessage,
       sendPlanResponse: claudeActions.sendPlanResponse,
       mergeToMain: claudeActions.mergeToMain,
+      clearPendingRun: claudeActions.clearPendingRun,
     }),
     [
       repoPath,
@@ -458,6 +459,7 @@ function AppContent() {
       claudeActions.sendThreadMessage,
       claudeActions.sendPlanResponse,
       claudeActions.mergeToMain,
+      claudeActions.clearPendingRun,
     ],
   );
 

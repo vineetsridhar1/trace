@@ -9,6 +9,7 @@ import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
 import { RunButtons } from "./RunButtons";
 import { CreationStatusBar } from "./CreationStatusBar";
+import { QueuedStatusBar } from "./QueuedStatusBar";
 import { StickyTodoList } from "./StickyTodoList";
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useThreadContext } from "../context/ThreadContext";
@@ -63,6 +64,7 @@ export function ThreadPanel() {
     sendThreadMessage,
     sendPlanResponse,
     mergeToMain,
+    clearPendingRun,
   } = useClaudeActions();
 
   const threadOpen = threadWidth > 0;
@@ -273,7 +275,7 @@ export function ThreadPanel() {
           <StickyTodoList todos={latestTodos} />
         )}
 
-        {pendingRunMessageId === selectedMessageId ? (
+        {pendingRunMessageId === selectedMessageId && !isClaudeRunning ? (
           <RunButtons
             initialPrompt={pendingRunInitialPrompt}
             onRun={(planMode, prompt) => {
@@ -284,11 +286,14 @@ export function ThreadPanel() {
             onRunAfter={(depIds, runConfig) => {
               if (pendingRunMessageId) {
                 setTicketDependencies(pendingRunMessageId, depIds, runConfig);
+                clearPendingRun();
               }
             }}
           />
         ) : messageStatus === 'creation' ? (
           <CreationStatusBar />
+        ) : messageStatus === 'queued' ? (
+          <QueuedStatusBar messageId={selectedMessageId!} />
         ) : showQuestion ? (
           <AskUserQuestionBar
             node={showQuestion}

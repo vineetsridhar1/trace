@@ -321,8 +321,8 @@ export async function checkAndTriggerDependents(completedMessageId: string, chan
         },
       });
 
-      // Check if ALL dependencies are completed
-      const allMet = allDeps.every((dep) => dep.dependsOn.status === 'completed');
+      // Check if ALL dependencies are merged
+      const allMet = allDeps.every((dep) => dep.dependsOn.status === 'merged');
       if (!allMet) continue;
 
       // Atomically claim the ticket: only proceed if status is still 'queued'.

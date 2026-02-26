@@ -19,6 +19,7 @@ export interface ClaudeActionsContextValue {
   sendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
   sendPlanResponse: (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => Promise<void>;
   mergeToMain: () => Promise<void>;
+  clearPendingRun: () => void;
 }
 
 const ClaudeActionsContext = createContext<ClaudeActionsContextValue | null>(null);

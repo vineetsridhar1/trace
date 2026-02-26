@@ -502,6 +502,12 @@ export function useClaudeMessageActions({
     });
   }, [activeChannelId, getChannelBaseBranch, persistPrompt, selectedMessageRef, spawnClaudeForMessage]);
 
+  const clearPendingRun = useCallback(() => {
+    setPendingRunMessageId(null);
+    setPendingRunInitialPrompt('');
+    setPendingRunFilePaths([]);
+  }, []);
+
   const isMessageSpawned = useCallback((messageId: string) => {
     return spawnedMessageIdsRef.current.has(messageId);
   }, []);
@@ -520,6 +526,7 @@ export function useClaudeMessageActions({
     sendThreadMessage,
     sendPlanResponse,
     mergeToMain,
+    clearPendingRun,
     isMessageSpawned,
   };
 }

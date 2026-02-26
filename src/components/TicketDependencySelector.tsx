@@ -28,10 +28,8 @@ export function TicketDependencySelector({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // Only show tickets that are pending or in_progress (not already completed/merged)
-  const eligibleTickets = tickets.filter(
-    (t) => t.status === 'pending' || t.status === 'in_progress' || t.status === 'creation' || t.status === 'queued',
-  );
+  // Show tickets that haven't been merged yet (completed tickets are valid dependencies)
+  const eligibleTickets = tickets.filter((t) => t.status !== 'merged');
 
   const toggle = (id: string) => {
     setSelected((prev) => {

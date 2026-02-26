@@ -48,7 +48,7 @@ export const updateMessageStatus: NonNullable<MutationResolvers['updateMessageSt
 
   void syncTicketWithMessageStatus(messageId, channelId, status);
 
-  if (status === 'completed') {
+  if (status === 'merged') {
     void checkAndTriggerDependents(messageId, channelId);
   }
 
