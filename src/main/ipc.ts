@@ -3,7 +3,8 @@ import path from 'node:path';
 import { ipcMain, dialog, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
-import { resetWatchdog, stopWatchdog, markHookStopReceived } from './watchdog';
+import { resetWatchdog, stopWatchdog, markHookStopReceived, appendClaudeDebugLog } from './watchdog';
+import { resolveTranscriptPath, extractUsageFromTranscript, extractAskUserQuestionFromTranscript, extractExitPlanModeFromTranscript } from './transcript';
 import { createPty, writePty, resizePty, killPty, getPtyCwd } from './pty';
 import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
@@ -31,6 +32,8 @@ const SET_LOCAL_CONFIG_CHANNEL = 'set-local-config';
 const GET_ALL_LOCAL_CONFIGS_CHANNEL = 'get-all-local-configs';
 const DELETE_LOCAL_CONFIG_CHANNEL = 'delete-local-config';
 const LIST_REPO_FILES_CHANNEL = 'list-repo-files';
+const VALIDATE_REPO_CHANNEL = 'validate-repo';
+const LIST_REPO_BRANCHES_CHANNEL = 'list-repo-branches';
 const CHECK_BRANCHES_MERGED_CHANNEL = 'check-branches-merged';
 const WATCH_BASE_BRANCH_CHANNEL = 'watch-base-branch';
 const UNWATCH_BASE_BRANCH_CHANNEL = 'unwatch-base-branch';
@@ -47,6 +50,75 @@ function resolveServerUrl(): string {
   if (!raw) return 'http://localhost:3100';
   if (raw.startsWith('http')) return raw;
   return `http://localhost:${raw}`;
+}
+
+/**
+ * Extract enrichment data from the transcript and POST it to the server.
+ * Called when a Stop hook event is received while the process is still alive
+ * (e.g., Claude is waiting at AskUserQuestion or ExitPlanMode).
+ */
+async function extractAndPostEnrichment(messageId: string, sessionId: string) {
+  const serverUrl = resolveServerUrl();
+  const transcriptPath = resolveTranscriptPath(sessionId);
+  if (!transcriptPath) {
+    appendClaudeDebugLog(messageId, `enrichment-on-stop: transcript not found for session=${sessionId}`);
+    return;
+  }
+
+  const extract = () => {
+    const enrichment: Record<string, unknown> = {};
+
+    const usage = extractUsageFromTranscript(transcriptPath);
+    if (usage) enrichment.extracted_usage = usage;
+
+    const askData = extractAskUserQuestionFromTranscript(transcriptPath);
+    if (askData) {
+      enrichment.extracted_tool_name = 'AskUserQuestion';
+      enrichment.extracted_tool_input = askData;
+    } else {
+      const exitPlanData = extractExitPlanModeFromTranscript(transcriptPath);
+      if (exitPlanData) {
+        enrichment.extracted_tool_name = 'ExitPlanMode';
+      }
+    }
+
+    return enrichment;
+  };
+
+  // First attempt: immediate
+  let enrichment = extract();
+
+  // Retry after 1.5s if no tool detected (transcript may not be fully flushed)
+  if (!enrichment.extracted_tool_name) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    enrichment = extract();
+  }
+
+  if (!enrichment.extracted_tool_name && !enrichment.extracted_usage) {
+    appendClaudeDebugLog(messageId, 'enrichment-on-stop: no enrichment data found');
+    return;
+  }
+
+  const payload = {
+    session_id: sessionId,
+    cwd: getWorktreePath(messageId),
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: '',
+    source: 'electron-enrichment',
+    ...enrichment,
+  };
+
+  try {
+    const response = await fetch(`${serverUrl}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    appendClaudeDebugLog(messageId, `enrichment-on-stop: posted status=${response.status} tool=${enrichment.extracted_tool_name ?? 'none'}`);
+  } catch (err) {
+    appendClaudeDebugLog(messageId, `enrichment-on-stop: post failed error=${String(err)}`);
+  }
 }
 
 export function registerIpcHandlers() {
@@ -75,6 +147,8 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(GET_ALL_LOCAL_CONFIGS_CHANNEL);
   ipcMain.removeHandler(DELETE_LOCAL_CONFIG_CHANNEL);
   ipcMain.removeHandler(LIST_REPO_FILES_CHANNEL);
+  ipcMain.removeHandler(VALIDATE_REPO_CHANNEL);
+  ipcMain.removeHandler(LIST_REPO_BRANCHES_CHANNEL);
   ipcMain.removeHandler(CHECK_BRANCHES_MERGED_CHANNEL);
   ipcMain.removeHandler(WATCH_BASE_BRANCH_CHANNEL);
   ipcMain.removeHandler(UNWATCH_BASE_BRANCH_CHANNEL);
@@ -129,11 +203,20 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(
     CLAUDE_ACTIVITY_PING_CHANNEL,
-    async (_event, messageId: string, eventType: string) => {
+    async (_event, messageId: string, eventType: string, sessionId?: string) => {
       try {
         if ((eventType ?? '').toLowerCase() === 'stop') {
           markHookStopReceived(messageId);
           stopWatchdog(messageId, 'activity-stop-event');
+
+          // When a Stop hook fires (Claude is waiting for input), extract
+          // enrichment data from the transcript immediately and POST it to the
+          // server. The process is still alive so child.on('close') hasn't
+          // fired yet — this is the only opportunity to detect AskUserQuestion
+          // and ExitPlanMode before the auto-complete timer fires.
+          if (sessionId) {
+            void extractAndPostEnrichment(messageId, sessionId);
+          }
         } else {
           resetWatchdog(messageId, `activity-event:${eventType}`);
         }
@@ -267,6 +350,39 @@ export function registerIpcHandlers() {
       return { success: true, files };
     } catch (err) {
       return { success: false, error: String(err), files: [] };
+    }
+  });
+
+  ipcMain.handle(VALIDATE_REPO_CHANNEL, async (_event, repoPath: string) => {
+    try {
+      const revParse = await runProcess('git', ['rev-parse', '--is-inside-work-tree'], repoPath);
+      if (revParse.code !== 0 || revParse.stdout.trim() !== 'true') {
+        return { valid: false, error: 'Not a git repository' };
+      }
+      const remote = await runProcess('git', ['remote', 'get-url', 'origin'], repoPath);
+      const originUrl = remote.code === 0 ? remote.stdout.trim() || null : null;
+      if (!originUrl) {
+        return { valid: false, error: 'No origin remote found. Please add an origin remote to this repository.' };
+      }
+      return { valid: true, originUrl };
+    } catch (err) {
+      return { valid: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(LIST_REPO_BRANCHES_CHANNEL, async (_event, repoPath: string) => {
+    try {
+      const result = await runProcess('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'], repoPath);
+      if (result.code !== 0) {
+        return { success: false, branches: [], error: result.stderr };
+      }
+      const branches = result.stdout
+        .split('\n')
+        .map(b => b.trim())
+        .filter(Boolean);
+      return { success: true, branches };
+    } catch (err) {
+      return { success: false, branches: [], error: String(err) };
     }
   });
 

@@ -1,6 +1,5 @@
 import prisma from '../lib/prisma';
 import { Prisma } from '../../prisma/generated/prisma/client';
-import { extractAskUserQuestionFromTranscript, extractExitPlanModeFromTranscript } from './eventService';
 import { getStorage } from './storageService';
 
 const USER_SESSION_ID = 'user-manual-input';
@@ -339,42 +338,6 @@ export async function getEventsByMessage(
 
   const events = rawEvents.reverse();
 
-  // Lazily enrich the last Stop event with AskUserQuestion or ExitPlanMode data
-  const lastEvent = events.length > 0 ? events[events.length - 1] : null;
-  if (
-    lastEvent &&
-    lastEvent.hookEventName === 'Stop' &&
-    !lastEvent.toolName
-  ) {
-    const session = await prisma.session.findUnique({
-      where: { sessionId: lastEvent.sessionId },
-      select: { transcriptPath: true },
-    });
-    if (session?.transcriptPath) {
-      const askData = extractAskUserQuestionFromTranscript(session.transcriptPath);
-      if (askData) {
-        await prisma.event.update({
-          where: { id: lastEvent.id },
-          data: {
-            toolName: 'AskUserQuestion',
-            toolInput: JSON.parse(JSON.stringify(askData)),
-          },
-        });
-        (lastEvent as Record<string, unknown>).toolName = 'AskUserQuestion';
-        (lastEvent as Record<string, unknown>).toolInput = askData;
-      } else {
-        const exitPlanData = extractExitPlanModeFromTranscript(session.transcriptPath);
-        if (exitPlanData) {
-          await prisma.event.update({
-            where: { id: lastEvent.id },
-            data: { toolName: 'ExitPlanMode' },
-          });
-          (lastEvent as Record<string, unknown>).toolName = 'ExitPlanMode';
-        }
-      }
-    }
-  }
-
   // Compute token aggregates from ALL events across threads.
   // Prefer authoritative cli_usage from Stop events (set by --output-format json).
   let inputTokens = 0;
@@ -480,43 +443,6 @@ export async function getEventsByThread(
   // Reverse to chronological order (query fetches newest-first so the latest
   // events are always included, even when total exceeds the limit).
   const events = rawEvents.reverse();
-
-  // Lazily enrich the last Stop event if it hasn't been enriched with AskUserQuestion or ExitPlanMode data.
-  // Only enrich the final Stop event (which is the one Claude is currently waiting on).
-  const lastEvent = events.length > 0 ? events[events.length - 1] : null;
-  if (
-    lastEvent &&
-    lastEvent.hookEventName === 'Stop' &&
-    !lastEvent.toolName
-  ) {
-    const session = await prisma.session.findUnique({
-      where: { sessionId: lastEvent.sessionId },
-      select: { transcriptPath: true },
-    });
-    if (session?.transcriptPath) {
-      const askData = extractAskUserQuestionFromTranscript(session.transcriptPath);
-      if (askData) {
-        await prisma.event.update({
-          where: { id: lastEvent.id },
-          data: {
-            toolName: 'AskUserQuestion',
-            toolInput: JSON.parse(JSON.stringify(askData)),
-          },
-        });
-        (lastEvent as Record<string, unknown>).toolName = 'AskUserQuestion';
-        (lastEvent as Record<string, unknown>).toolInput = askData;
-      } else {
-        const exitPlanData = extractExitPlanModeFromTranscript(session.transcriptPath);
-        if (exitPlanData) {
-          await prisma.event.update({
-            where: { id: lastEvent.id },
-            data: { toolName: 'ExitPlanMode' },
-          });
-          (lastEvent as Record<string, unknown>).toolName = 'ExitPlanMode';
-        }
-      }
-    }
-  }
 
   // Compute token aggregates from ALL events in the thread.
   // Prefer authoritative cli_usage from Stop events (set by --output-format json).

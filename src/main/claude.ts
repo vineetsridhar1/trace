@@ -14,6 +14,7 @@ import {
   getWorktreeBranch,
 } from './worktree';
 import { runProcess } from './process';
+import { resolveTranscriptPath, extractUsageFromTranscript, extractAskUserQuestionFromTranscript, extractExitPlanModeFromTranscript } from './transcript';
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
@@ -145,10 +146,54 @@ export async function spawnClaude(
       : combined.slice(combined.length - MAX_CAPTURE_CHARS);
   };
 
+  interface EnrichmentData {
+    extracted_usage?: { input_tokens: number; output_tokens: number };
+    extracted_tool_name?: 'AskUserQuestion' | 'ExitPlanMode';
+    extracted_tool_input?: unknown;
+    branch_name?: string;
+  }
+
+  const extractEnrichmentData = async (transcriptPath: string | undefined): Promise<EnrichmentData> => {
+    const data: EnrichmentData = {};
+
+    // Resolve git branch
+    try {
+      const branchResult = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+      if (branchResult.code === 0 && branchResult.stdout.trim()) {
+        data.branch_name = branchResult.stdout.trim();
+      }
+    } catch {
+      // Ignore branch resolution failures
+    }
+
+    if (!transcriptPath) return data;
+
+    // Extract usage
+    const usage = extractUsageFromTranscript(transcriptPath);
+    if (usage) {
+      data.extracted_usage = usage;
+    }
+
+    // Extract AskUserQuestion or ExitPlanMode
+    const askData = extractAskUserQuestionFromTranscript(transcriptPath);
+    if (askData) {
+      data.extracted_tool_name = 'AskUserQuestion';
+      data.extracted_tool_input = askData;
+    } else {
+      const exitPlanData = extractExitPlanModeFromTranscript(transcriptPath);
+      if (exitPlanData) {
+        data.extracted_tool_name = 'ExitPlanMode';
+      }
+    }
+
+    return data;
+  };
+
   const postSyntheticStopEvent = async (
     assistantText: string,
     exitCode: number | null,
     stopReason?: string,
+    enrichment?: EnrichmentData,
   ) => {
     const payload = {
       session_id: `trace-local-${messageId}`,
@@ -159,6 +204,7 @@ export async function spawnClaude(
       source: 'electron-main',
       exit_code: exitCode,
       ...(stopReason && { stop_reason: stopReason }),
+      ...(enrichment ?? {}),
     };
 
     try {
@@ -171,6 +217,29 @@ export async function spawnClaude(
     } catch (err) {
       console.error(`[claude:${messageId.slice(0, 8)}] failed to post synthetic Stop event:`, err);
       appendClaudeDebugLog(messageId, `synthetic stop post failed error=${String(err)}`);
+    }
+  };
+
+  const postEnrichmentEvent = async (enrichment: EnrichmentData, sessionId?: string) => {
+    const payload = {
+      session_id: sessionId ?? `trace-local-${messageId}`,
+      cwd: worktreePath,
+      hook_event_name: 'Stop',
+      stop_hook_active: false,
+      last_assistant_message: '',
+      source: 'electron-enrichment',
+      ...enrichment,
+    };
+
+    try {
+      const response = await fetch(`${SERVER_URL}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      appendClaudeDebugLog(messageId, `enrichment event posted status=${response.status} ok=${response.ok}`);
+    } catch (err) {
+      appendClaudeDebugLog(messageId, `enrichment event post failed error=${String(err)}`);
     }
   };
 
@@ -221,22 +290,79 @@ export async function spawnClaude(
     // be truncated at MAX_CAPTURE_CHARS and corrupt the JSON.
     const fullStdout = stdoutChunks.join('');
     let assistantOutput = stdoutBuffer.trim();
+    let transcriptPath: string | undefined;
+    let claudeSessionId: string | undefined;
+    // Enrichment extracted directly from the JSON output (most reliable source).
+    // AskUserQuestion/ExitPlanMode appear in permission_denials when Claude runs
+    // in non-interactive mode (with -p and --output-format json).
+    let jsonEnrichment: EnrichmentData = {};
 
     try {
       const parsed = JSON.parse(fullStdout);
       assistantOutput = parsed.result ?? assistantOutput;
-      appendClaudeDebugLog(messageId, 'parsed JSON output');
+      if (parsed.session_id) {
+        claudeSessionId = parsed.session_id;
+        transcriptPath = resolveTranscriptPath(parsed.session_id);
+      }
+
+      // Extract usage directly from JSON output
+      if (parsed.usage?.input_tokens) {
+        jsonEnrichment.extracted_usage = {
+          input_tokens: parsed.usage.input_tokens,
+          output_tokens: parsed.usage.output_tokens ?? 0,
+        };
+      }
+
+      // Extract AskUserQuestion/ExitPlanMode from permission_denials
+      if (Array.isArray(parsed.permission_denials)) {
+        for (const denial of parsed.permission_denials) {
+          if (denial.tool_name === 'AskUserQuestion' && denial.tool_input) {
+            jsonEnrichment.extracted_tool_name = 'AskUserQuestion';
+            jsonEnrichment.extracted_tool_input = denial.tool_input;
+            break;
+          }
+          if (denial.tool_name === 'ExitPlanMode') {
+            jsonEnrichment.extracted_tool_name = 'ExitPlanMode';
+            jsonEnrichment.extracted_tool_input = denial.tool_input;
+            break;
+          }
+        }
+      }
+
+      appendClaudeDebugLog(messageId, `parsed JSON output: usage=${JSON.stringify(parsed.usage)} cost=${parsed.total_cost_usd}`);
     } catch {
       // Not JSON — fall back to raw stdout (backwards compatible)
       appendClaudeDebugLog(messageId, 'stdout not JSON, using raw output');
     }
 
+    // Build enrichment: prefer JSON output data, fall back to transcript
+    const buildEnrichment = async (): Promise<EnrichmentData> => {
+      const data = await extractEnrichmentData(transcriptPath);
+      // JSON output is authoritative for tool detection and usage
+      if (jsonEnrichment.extracted_tool_name) {
+        data.extracted_tool_name = jsonEnrichment.extracted_tool_name;
+        data.extracted_tool_input = jsonEnrichment.extracted_tool_input;
+      }
+      if (jsonEnrichment.extracted_usage) {
+        data.extracted_usage = jsonEnrichment.extracted_usage;
+      }
+      return data;
+    };
+
     if (!shouldPostSyntheticStop) {
+      // Hook Stop was already received — send enrichment data as a follow-up
+      // using the real Claude session ID so the server can find and update
+      // the existing Stop event.
+      const enrichment = await buildEnrichment();
+      if (enrichment.extracted_tool_name || enrichment.extracted_usage || enrichment.branch_name) {
+        void postEnrichmentEvent(enrichment, claudeSessionId);
+      }
       return;
     }
 
     if (userStopped || code === 143) {
-      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user');
+      const enrichment = await buildEnrichment();
+      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user', enrichment);
       return;
     }
 
@@ -252,7 +378,8 @@ export async function spawnClaude(
       .trim();
 
     const messageToPersist = fallbackMessage || 'Claude run completed without textual output.';
-    await postSyntheticStopEvent(messageToPersist, code);
+    const enrichment = await buildEnrichment();
+    await postSyntheticStopEvent(messageToPersist, code, undefined, enrichment);
   });
 
   return worktreePath;

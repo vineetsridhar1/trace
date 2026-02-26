@@ -151,14 +151,14 @@ export function useThread({
   const threadOpen = threadWidth > 0;
 
   const reportClaudeActivity = useCallback(
-    async (messageId: string, eventType: string) => {
+    async (messageId: string, eventType: string, sessionId?: string) => {
       if (
         !window.traceAPI ||
         typeof window.traceAPI.reportClaudeActivity !== "function"
       )
         return;
       try {
-        await window.traceAPI.reportClaudeActivity(messageId, eventType);
+        await window.traceAPI.reportClaudeActivity(messageId, eventType, sessionId);
       } catch {
         // best-effort
       }
@@ -248,7 +248,7 @@ export function useThread({
               message.id,
               latestEvent.id,
             );
-            void reportClaudeActivity(message.id, latestEvent.hookEventName);
+            void reportClaudeActivity(message.id, latestEvent.hookEventName, latestEvent.sessionId);
           }
         }
       } catch {

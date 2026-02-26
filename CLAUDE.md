@@ -1,5 +1,12 @@
 # Project Notes
 
+## Server Architecture
+- The server is deployed on AWS and **cannot access the user's local machine**
+- Only the Electron main process can run local operations (git, filesystem, child processes)
+- The server communicates with clients only via GraphQL/REST API
+- Local operations (git, transcript reading, config files) must go through Electron IPC
+- Never add `fs`, `child_process`, `os.homedir()`, or `process.cwd()` dependencies to server code
+
 ## Icon Library
 This project uses `react-icons` for UI icons. All icons should be imported from the
 Feather icons set (`react-icons/fi`) to maintain visual consistency. Example:

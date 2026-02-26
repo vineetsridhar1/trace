@@ -61,6 +61,7 @@ export interface TraceAPI {
   reportClaudeActivity: (
     messageId: string,
     eventType: string,
+    sessionId?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   createPty: (terminalId: string, cwd: string, extraEnv?: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
   writePty: (terminalId: string, data: string) => Promise<{ success: boolean }>;
@@ -78,6 +79,8 @@ export interface TraceAPI {
   getAllLocalConfigs: () => Promise<Record<string, LocalChannelConfig>>;
   deleteLocalConfig: (channelId: string) => Promise<{ success: boolean }>;
   listRepoFiles: (repoPath: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
+  validateRepo: (repoPath: string) => Promise<{ valid: boolean; originUrl?: string; error?: string }>;
+  listRepoBranches: (repoPath: string) => Promise<{ success: boolean; branches: string[]; error?: string }>;
   checkBranchesMerged: (repoPath: string, branches: string[], baseBranch: string) => Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>;
   watchBaseBranch: (repoPath: string, baseBranch: string) => Promise<{ success: boolean }>;
   unwatchBaseBranch: () => Promise<{ success: boolean }>;

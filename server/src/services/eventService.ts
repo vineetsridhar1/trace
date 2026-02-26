@@ -1,9 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import prisma from '../lib/prisma';
 import { HookEvent } from '../types/hookEvents';
 import { pubsub, TOPICS } from './pubsub';
-import { execSync } from 'node:child_process';
 import {
   getMessageByIdForFeed,
   getMessageByIdWithThreads,
@@ -18,8 +15,8 @@ function extractMessageIdFromWorktreePath(worktreePath: string | undefined): str
     return null;
   }
 
-  const normalized = path.normalize(worktreePath);
-  const segments = normalized.split(path.sep).filter(Boolean);
+  // Normalize path separators to handle both unix and windows-style paths
+  const segments = worktreePath.replace(/\\/g, '/').split('/').filter(Boolean);
   // Look for the "worktrees" marker (supports both old .trace-worktrees and new app-data location)
   let markerIndex = segments.lastIndexOf('worktrees');
   if (markerIndex === -1) {
@@ -69,165 +66,98 @@ function extractPromptFromRawPayload(rawPayload: unknown): string | null {
   return null;
 }
 
-const TAIL_BYTES = 32_768; // 32 KB — enough for the last few JSONL entries
+async function handleEnrichmentEvent(payload: HookEvent) {
+  const stopPayload = payload as Record<string, unknown>;
+  const extractedToolName = stopPayload.extracted_tool_name as string | undefined;
+  const extractedToolInput = stopPayload.extracted_tool_input;
+  const extractedUsage = stopPayload.extracted_usage as { input_tokens: number; output_tokens: number } | undefined;
+  const branchName = stopPayload.branch_name as string | undefined;
 
-export function extractUsageFromTranscript(
-  transcriptPath: string,
-): { input_tokens: number; output_tokens: number } | null {
-  try {
-    const fd = fs.openSync(transcriptPath, 'r');
-    try {
-      const stat = fs.fstatSync(fd);
-      const readFrom = Math.max(0, stat.size - TAIL_BYTES);
-      const buf = Buffer.alloc(Math.min(stat.size, TAIL_BYTES));
-      fs.readSync(fd, buf, 0, buf.length, readFrom);
-      const tail = buf.toString('utf-8');
-
-      // Split into lines; first line may be partial so we skip it when reading from mid-file
-      const lines = tail.split('\n');
-      if (readFrom > 0) lines.shift();
-
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(line);
-        } catch {
-          continue;
-        }
-
-        const entry = parsed as Record<string, unknown>;
-        if (entry.type !== 'assistant') continue;
-
-        const message = entry.message as Record<string, unknown> | undefined;
-        const usage = message?.usage as { input_tokens?: number; output_tokens?: number } | undefined;
-        if (usage?.input_tokens) {
-          return {
-            input_tokens: usage.input_tokens,
-            output_tokens: usage.output_tokens ?? 0,
-          };
-        }
-
-        // Only check the most recent assistant message.
-        return null;
-      }
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    // Transcript file may not exist or be unreadable
-  }
-
-  return null;
-}
-
-export function extractAskUserQuestionFromTranscript(
-  transcriptPath: string,
-): { questions: unknown[] } | null {
-  try {
-    const content = fs.readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      const entry = parsed as Record<string, unknown>;
-      if (entry.type !== 'assistant') continue;
-
-      const message = entry.message as Record<string, unknown> | undefined;
-      if (!message?.content || !Array.isArray(message.content)) {
-        // Most recent assistant message has no parseable content — stop searching.
-        return null;
-      }
-
-      for (const block of message.content) {
-        const b = block as Record<string, unknown>;
-        if (b.type === 'tool_use' && b.name === 'AskUserQuestion') {
-          const input = b.input as Record<string, unknown> | undefined;
-          if (input?.questions && Array.isArray(input.questions) && input.questions.length > 0) {
-            return { questions: input.questions };
-          }
-        }
-      }
-
-      // Most recent assistant message didn't contain AskUserQuestion — don't
-      // search older messages which would return stale question data.
-      return null;
-    }
-  } catch {
-    // Transcript file may not exist or be unreadable
-  }
-
-  return null;
-}
-
-export function extractExitPlanModeFromTranscript(
-  transcriptPath: string,
-): { input: unknown } | null {
-  try {
-    const content = fs.readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      const entry = parsed as Record<string, unknown>;
-      if (entry.type !== 'assistant') continue;
-
-      const message = entry.message as Record<string, unknown> | undefined;
-      if (!message?.content || !Array.isArray(message.content)) {
-        return null;
-      }
-
-      for (const block of message.content) {
-        const b = block as Record<string, unknown>;
-        if (b.type === 'tool_use' && b.name === 'ExitPlanMode') {
-          return { input: b.input };
-        }
-      }
-
-      // Most recent assistant message didn't contain ExitPlanMode — don't
-      // search older messages which would return stale data.
-      return null;
-    }
-  } catch {
-    // Transcript file may not exist or be unreadable
-  }
-
-  return null;
-}
-
-function resolveGitBranch(cwd: string): string | null {
-  try {
-    return execSync('git rev-parse --abbrev-ref HEAD', {
-      cwd,
-      timeout: 3000,
-      encoding: 'utf-8',
-    }).trim() || null;
-  } catch {
+  // Find the most recent Stop event for this session to update
+  const existingEvent = await prisma.event.findFirst({
+    where: { sessionId: payload.session_id, hookEventName: 'Stop' },
+    orderBy: { timestamp: 'desc' },
+    include: { thread: { include: { message: true } } },
+  });
+  if (!existingEvent) {
     return null;
   }
+
+  const updates: Parameters<typeof prisma.event.update>[0]['data'] = {};
+
+  if (extractedToolName === 'AskUserQuestion' && extractedToolInput && !existingEvent.toolName) {
+    updates.toolName = 'AskUserQuestion';
+    updates.toolInput = JSON.parse(JSON.stringify(extractedToolInput));
+  } else if (extractedToolName === 'ExitPlanMode' && !existingEvent.toolName) {
+    updates.toolName = 'ExitPlanMode';
+  }
+
+  // Merge usage and branch into rawPayload
+  if (extractedUsage || branchName) {
+    const rawPayload = (existingEvent.rawPayload as Record<string, unknown>) ?? {};
+    if (extractedUsage) rawPayload.usage = extractedUsage;
+    if (branchName) rawPayload.branch_name = branchName;
+    updates.rawPayload = JSON.parse(JSON.stringify(rawPayload));
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return { id: existingEvent.id, session_id: payload.session_id };
+  }
+
+  const updated = await prisma.event.update({
+    where: { id: existingEvent.id },
+    data: updates,
+  });
+
+  const messageId = existingEvent.thread?.messageId;
+  const channelId = existingEvent.thread?.message?.channelId;
+  if (!messageId || !channelId) {
+    return { id: updated.id, session_id: payload.session_id };
+  }
+
+  // Broadcast event update
+  pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
+    threadEventUpdated: {
+      channelId,
+      messageId,
+      threadId: existingEvent.threadId,
+      event: updated,
+    },
+  });
+
+  // Transition to needs_input if AskUserQuestion/ExitPlanMode was detected
+  if (updates.toolName) {
+    const currentMsg = await prisma.message.findUnique({ where: { id: messageId }, select: { status: true } });
+    if (currentMsg?.status === 'in_progress') {
+      await updateMessageStatus(messageId, 'needs_input');
+      void syncTicketWithMessageStatus(messageId, channelId, 'needs_input');
+      const hydratedMsg = await getMessageByIdForFeed(messageId);
+      if (hydratedMsg) {
+        pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+          messageUpserted: hydratedMsg,
+        });
+      }
+    }
+  }
+
+  // Update branch on message if provided
+  if (branchName) {
+    await updateMessageSummaryAndBranch(messageId, null, branchName);
+    void refreshTicketBroadcast(messageId, channelId);
+  }
+
+  return { id: updated.id, session_id: payload.session_id };
 }
 
 export async function ingestEvent(payload: HookEvent) {
+  // Handle enrichment events: update the existing Stop event rather than
+  // creating a duplicate. Enrichment events carry pre-extracted transcript
+  // data (tool name, usage, branch) sent by Electron after the initial Stop.
+  const source = (payload as Record<string, unknown>).source as string | undefined;
+  if (source === 'electron-enrichment') {
+    return handleEnrichmentEvent(payload);
+  }
+
   // Resolve target message from worktree path. If the session wasn't spawned
   // by the app (no worktree path), silently drop the event so external CLI
   // sessions don't pollute #general.
@@ -334,12 +264,30 @@ export async function ingestEvent(payload: HookEvent) {
     importance,
   };
 
-  // Extract context usage from transcript for every event type
-  if (payload.transcript_path) {
-    const usage = extractUsageFromTranscript(payload.transcript_path);
-    if (usage) {
-      rawPayload.usage = usage;
+  // Use pre-extracted data from Electron for Stop events.
+  // All enrichment fields (usage, tool name, branch) are read from a single cast.
+  let stopBranchName: string | null = null;
+  if (payload.hook_event_name === 'Stop') {
+    const stopPayload = payload as Record<string, unknown>;
+    eventData.stopHookActive = payload.stop_hook_active;
+    eventData.lastAssistantMessage = payload.last_assistant_message;
+
+    const extractedUsage = stopPayload.extracted_usage as { input_tokens: number; output_tokens: number } | undefined;
+    if (extractedUsage) {
+      rawPayload.usage = extractedUsage;
     }
+
+    const extractedToolName = stopPayload.extracted_tool_name as string | undefined;
+    const extractedToolInput = stopPayload.extracted_tool_input;
+
+    if (extractedToolName === 'AskUserQuestion' && extractedToolInput) {
+      eventData.toolName = 'AskUserQuestion';
+      eventData.toolInput = JSON.parse(JSON.stringify(extractedToolInput));
+    } else if (extractedToolName === 'ExitPlanMode') {
+      eventData.toolName = 'ExitPlanMode';
+    }
+
+    stopBranchName = (stopPayload.branch_name as string | undefined) ?? null;
   }
 
   if (payload.hook_event_name === 'PreToolUse') {
@@ -353,24 +301,6 @@ export async function ingestEvent(payload: HookEvent) {
     eventData.toolInput = payload.tool_input ? JSON.parse(JSON.stringify(payload.tool_input)) : undefined;
     eventData.toolResponse = payload.tool_response ? JSON.parse(JSON.stringify(payload.tool_response)) : undefined;
     eventData.toolUseId = payload.tool_use_id;
-  }
-
-  if (payload.hook_event_name === 'Stop') {
-    eventData.stopHookActive = payload.stop_hook_active;
-    eventData.lastAssistantMessage = payload.last_assistant_message;
-
-    if (payload.transcript_path) {
-      const askData = extractAskUserQuestionFromTranscript(payload.transcript_path);
-      if (askData) {
-        eventData.toolName = 'AskUserQuestion';
-        eventData.toolInput = JSON.parse(JSON.stringify(askData));
-      } else {
-        const exitPlanData = extractExitPlanModeFromTranscript(payload.transcript_path);
-        if (exitPlanData) {
-          eventData.toolName = 'ExitPlanMode';
-        }
-      }
-    }
   }
 
   const event = await prisma.event.create({ data: eventData });
@@ -403,18 +333,11 @@ export async function ingestEvent(payload: HookEvent) {
   }
 
   // Update summary and branch.
-  // Branch is only resolved on Stop events to avoid a race condition: earlier
-  // events (e.g. UserPromptSubmit) fire before Claude has renamed the branch,
-  // so resolving then would capture the hash-based default name. By waiting
-  // for Stop, the branch rename is guaranteed to have completed.
   const summaryText =
     payload.hook_event_name === 'Stop' && payload.last_assistant_message
       ? payload.last_assistant_message.slice(0, 500)
       : null;
-  const branchName =
-    payload.cwd && payload.hook_event_name === 'Stop'
-      ? resolveGitBranch(payload.cwd)
-      : null;
+  const branchName = stopBranchName;
 
   if (summaryText || branchName) {
     await updateMessageSummaryAndBranch(message.id, summaryText, branchName);
@@ -448,90 +371,14 @@ export async function ingestEvent(payload: HookEvent) {
     });
   }
 
-  // Schedule a delayed retry when the transcript wasn't ready at ingestion time.
-  // The Claude Code SDK may write the assistant message (containing AskUserQuestion
-  // or ExitPlanMode tool_use) to the transcript AFTER firing the Stop hook.
+  // Auto-complete: if the Stop event has no toolName (Claude is NOT waiting on the
+  // user) and the message is still in_progress with the same session after a delay,
+  // transition to completed. Enrichment data may arrive in a follow-up event from
+  // Electron, so we wait before auto-completing.
   if (
     payload.hook_event_name === 'Stop' &&
-    !eventData.toolName &&
-    payload.transcript_path
+    !eventData.toolName
   ) {
-    const transcriptPath = payload.transcript_path;
-    const eventId = event.id;
-    const retryEnrichment = async () => {
-      try {
-        // Skip if already enriched by a prior retry
-        const current = await prisma.event.findUnique({ where: { id: eventId }, select: { toolName: true } });
-        if (current?.toolName) return;
-
-        const askData = extractAskUserQuestionFromTranscript(transcriptPath);
-        if (askData) {
-          const updated = await prisma.event.update({
-            where: { id: eventId },
-            data: {
-              toolName: 'AskUserQuestion',
-              toolInput: JSON.parse(JSON.stringify(askData)),
-            },
-          });
-          pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
-            threadEventUpdated: {
-              channelId,
-              messageId: message.id,
-              threadId: thread.id,
-              event: updated,
-            },
-          });
-          // Auto-transition to needs_input on delayed AskUserQuestion detection
-          const currentMsg = await prisma.message.findUnique({ where: { id: message.id }, select: { status: true } });
-          if (currentMsg?.status === 'in_progress') {
-            await updateMessageStatus(message.id, 'needs_input');
-            void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
-            const hydratedMsg = await getMessageByIdForFeed(message.id);
-            if (hydratedMsg) {
-              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-                messageUpserted: hydratedMsg,
-              });
-            }
-          }
-          return;
-        }
-        const exitPlanData = extractExitPlanModeFromTranscript(transcriptPath);
-        if (exitPlanData) {
-          const updated = await prisma.event.update({
-            where: { id: eventId },
-            data: { toolName: 'ExitPlanMode' },
-          });
-          pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
-            threadEventUpdated: {
-              channelId,
-              messageId: message.id,
-              threadId: thread.id,
-              event: updated,
-            },
-          });
-          // Auto-transition to needs_input on delayed ExitPlanMode detection
-          const currentMsg = await prisma.message.findUnique({ where: { id: message.id }, select: { status: true } });
-          if (currentMsg?.status === 'in_progress') {
-            await updateMessageStatus(message.id, 'needs_input');
-            void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
-            const hydratedMsg = await getMessageByIdForFeed(message.id);
-            if (hydratedMsg) {
-              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-                messageUpserted: hydratedMsg,
-              });
-            }
-          }
-        }
-      } catch {
-        // Silent failure — lazy enrichment on fetch will still work as fallback
-      }
-    };
-    setTimeout(() => void retryEnrichment(), 1500);
-    setTimeout(() => void retryEnrichment(), 4000);
-
-    // Auto-complete: if after 5s the event still has no toolName (Claude is NOT
-    // waiting on the user) and the message is still in_progress with the same
-    // session, transition to completed.
     const autoCompleteSessionId = payload.session_id;
     setTimeout(async () => {
       try {

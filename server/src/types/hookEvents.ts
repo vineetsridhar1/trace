@@ -43,6 +43,11 @@ export const StopSchema = z.object({
   hook_event_name: z.literal('Stop'),
   stop_hook_active: z.boolean().optional(),
   last_assistant_message: z.string().optional(),
+  // Pre-extracted enrichment data from Electron (avoids server reading local files)
+  extracted_usage: z.object({ input_tokens: z.number(), output_tokens: z.number() }).optional(),
+  extracted_tool_name: z.enum(['AskUserQuestion', 'ExitPlanMode']).optional(),
+  extracted_tool_input: z.unknown().optional(),
+  branch_name: z.string().optional(),
 }).passthrough();
 
 export const HookEventSchema = z.discriminatedUnion('hook_event_name', [

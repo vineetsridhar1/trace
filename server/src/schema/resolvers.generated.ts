@@ -8,16 +8,13 @@ import    { channels as Query_channels } from './channel/resolvers/Query/channel
 import    { event as Query_event } from './event/resolvers/Query/event';
 import    { messageEvents as Query_messageEvents } from './thread/resolvers/Query/messageEvents';
 import    { messages as Query_messages } from './message/resolvers/Query/messages';
-import    { repoBranches as Query_repoBranches } from './channel/resolvers/Query/repoBranches';
 import    { servers as Query_servers } from './server/resolvers/Query/servers';
 import    { session as Query_session } from './session/resolvers/Query/session';
 import    { sessionEvents as Query_sessionEvents } from './session/resolvers/Query/sessionEvents';
 import    { sessions as Query_sessions } from './session/resolvers/Query/sessions';
-import    { suggestScripts as Query_suggestScripts } from './channel/resolvers/Query/suggestScripts';
 import    { threadEvents as Query_threadEvents } from './thread/resolvers/Query/threadEvents';
 import    { threads as Query_threads } from './thread/resolvers/Query/threads';
 import    { ticketDependencies as Query_ticketDependencies } from './kanban/resolvers/Query/ticketDependencies';
-import    { validateRepo as Query_validateRepo } from './channel/resolvers/Query/validateRepo';
 import    { appendPrompt as Mutation_appendPrompt } from './message/resolvers/Mutation/appendPrompt';
 import    { createAiChat as Mutation_createAiChat } from './aiChat/resolvers/Mutation/createAiChat';
 import    { createChannel as Mutation_createChannel } from './channel/resolvers/Mutation/createChannel';
@@ -59,8 +56,6 @@ import    { Message } from './message/resolvers/Message';
 import    { MessageConnection } from './message/resolvers/MessageConnection';
 import    { MessageDeletedPayload } from './message/resolvers/MessageDeletedPayload';
 import    { MessageSession } from './message/resolvers/MessageSession';
-import    { RepoValidation } from './channel/resolvers/RepoValidation';
-import    { ScriptSuggestion } from './channel/resolvers/ScriptSuggestion';
 import    { Server } from './server/resolvers/Server';
 import    { Session } from './session/resolvers/Session';
 import    { SessionConnection } from './session/resolvers/SessionConnection';
@@ -75,7 +70,7 @@ import    { TicketUpsertPayload } from './kanban/resolvers/TicketUpsertPayload';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,repoBranches: Query_repoBranches,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,suggestScripts: Query_suggestScripts,threadEvents: Query_threadEvents,threads: Query_threads,ticketDependencies: Query_ticketDependencies,validateRepo: Query_validateRepo },
+      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,ticketDependencies: Query_ticketDependencies },
       Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteAiChat: Mutation_deleteAiChat,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,setTicketDependencies: Mutation_setTicketDependencies,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,uploadAttachment: Mutation_uploadAttachment },
       Subscription: { aiChatStream: Subscription_aiChatStream,messageDeleted: Subscription_messageDeleted,messageUpserted: Subscription_messageUpserted,threadEventCreated: Subscription_threadEventCreated,threadEventUpdated: Subscription_threadEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted },
       AiChat: AiChat,
@@ -92,8 +87,6 @@ Message: Message,
 MessageConnection: MessageConnection,
 MessageDeletedPayload: MessageDeletedPayload,
 MessageSession: MessageSession,
-RepoValidation: RepoValidation,
-ScriptSuggestion: ScriptSuggestion,
 Server: Server,
 Session: Session,
 SessionConnection: SessionConnection,

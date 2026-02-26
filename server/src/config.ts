@@ -1,6 +1,3 @@
-import path from "node:path";
-import os from "node:os";
-
 export const config = {
   port: parseInt(process.env.PORT || "3100", 10),
   databaseUrl:
@@ -9,6 +6,5 @@ export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   aiProvider: (process.env.AI_PROVIDER || "openai") as "openai" | "anthropic",
-  storagePath:
-    process.env.STORAGE_PATH || path.join(os.homedir(), ".trace", "storage"),
+  storagePath: process.env.STORAGE_PATH || "./data/storage",
 };

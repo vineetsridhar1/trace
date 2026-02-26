@@ -1,3 +1,4 @@
+// TODO: Replace DiskStorageAdapter with S3StorageAdapter for AWS deployment
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

@@ -62,9 +62,10 @@ contextBridge.exposeInMainWorld('traceAPI', {
   reportClaudeActivity: async (
     messageId: string,
     eventType: string,
+    sessionId?: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('claude-activity-ping', messageId, eventType);
+      return await ipcRenderer.invoke('claude-activity-ping', messageId, eventType, sessionId);
     } catch (err) {
       return { success: false, error: String(err) };
     }
@@ -124,6 +125,12 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   listRepoFiles: (repoPath: string) =>
     ipcRenderer.invoke('list-repo-files', repoPath) as Promise<{ success: boolean; files: string[]; error?: string }>,
+
+  validateRepo: (repoPath: string) =>
+    ipcRenderer.invoke('validate-repo', repoPath) as Promise<{ valid: boolean; originUrl?: string; error?: string }>,
+
+  listRepoBranches: (repoPath: string) =>
+    ipcRenderer.invoke('list-repo-branches', repoPath) as Promise<{ success: boolean; branches: string[]; error?: string }>,
 
   checkBranchesMerged: (repoPath: string, branches: string[], baseBranch: string) =>
     ipcRenderer.invoke('check-branches-merged', repoPath, branches, baseBranch) as Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>,

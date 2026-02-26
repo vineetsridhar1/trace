@@ -68,9 +68,6 @@ export type Channel = {
   __typename?: 'Channel';
   baseBranch?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['DateTime']['output'];
-  defaultRepoPath?: Maybe<Scalars['String']['output']>;
-  defaultRunScript?: Maybe<Scalars['String']['output']>;
-  defaultSetupScript?: Maybe<Scalars['String']['output']>;
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -202,9 +199,6 @@ export type MutationCreateAiChatArgs = {
 
 export type MutationCreateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
-  defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
-  defaultRunScript?: InputMaybe<Scalars['String']['input']>;
-  defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;
@@ -290,9 +284,6 @@ export type MutationSetTicketDependenciesArgs = {
 
 export type MutationUpdateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
-  defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
-  defaultRunScript?: InputMaybe<Scalars['String']['input']>;
-  defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -337,16 +328,13 @@ export type Query = {
   event?: Maybe<Event>;
   messageEvents: EventConnection;
   messages: MessageConnection;
-  repoBranches: Array<Scalars['String']['output']>;
   servers: Array<Server>;
   session?: Maybe<Session>;
   sessionEvents: EventConnection;
   sessions: SessionConnection;
-  suggestScripts: ScriptSuggestion;
   threadEvents: EventConnection;
   threads: Array<Thread>;
   ticketDependencies: Array<TicketDependency>;
-  validateRepo: RepoValidation;
 };
 
 
@@ -393,11 +381,6 @@ export type QueryMessagesArgs = {
 };
 
 
-export type QueryRepoBranchesArgs = {
-  localRepoPath: Scalars['String']['input'];
-};
-
-
 export type QuerySessionArgs = {
   sessionId: Scalars['String']['input'];
 };
@@ -422,11 +405,6 @@ export type QuerySessionsArgs = {
 };
 
 
-export type QuerySuggestScriptsArgs = {
-  localRepoPath: Scalars['String']['input'];
-};
-
-
 export type QueryThreadEventsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   channelId: Scalars['ID']['input'];
@@ -445,24 +423,6 @@ export type QueryThreadsArgs = {
 
 export type QueryTicketDependenciesArgs = {
   messageId: Scalars['ID']['input'];
-};
-
-
-export type QueryValidateRepoArgs = {
-  localRepoPath: Scalars['String']['input'];
-};
-
-export type RepoValidation = {
-  __typename?: 'RepoValidation';
-  error?: Maybe<Scalars['String']['output']>;
-  originUrl?: Maybe<Scalars['String']['output']>;
-  valid: Scalars['Boolean']['output'];
-};
-
-export type ScriptSuggestion = {
-  __typename?: 'ScriptSuggestion';
-  runScript?: Maybe<Scalars['String']['output']>;
-  setupScript?: Maybe<Scalars['String']['output']>;
 };
 
 export type Server = {

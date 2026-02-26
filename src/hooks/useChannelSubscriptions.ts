@@ -91,7 +91,7 @@ interface UseChannelSubscriptionsOptions {
   removeMessage: (messageId: string) => void;
   appendThreadEvent: (event: ServerEvent) => void;
   updateThreadEvent: (event: ServerEvent) => void;
-  reportClaudeActivity: (messageId: string, eventType: string) => Promise<void>;
+  reportClaudeActivity: (messageId: string, eventType: string, sessionId?: string) => Promise<void>;
   selectedMessageIdRef: React.RefObject<string | null>;
   activeThreadIdRef: React.RefObject<string | null>;
   messagesRef: React.RefObject<ChannelMessage[]>;
@@ -176,7 +176,7 @@ export function useChannelSubscriptions({
     if (!threadEventData?.threadEventCreated || !activeChannelId) return;
     const payload = threadEventData.threadEventCreated;
 
-    void reportClaudeActivity(payload.messageId, payload.event.hookEventName);
+    void reportClaudeActivity(payload.messageId, payload.event.hookEventName, payload.event.sessionId);
 
     if (payload.event.hookEventName === 'Stop') {
       const existing = messagesRef.current.find((item) => item.id === payload.messageId);

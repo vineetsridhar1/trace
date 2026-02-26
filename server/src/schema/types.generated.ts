@@ -1,7 +1,7 @@
 import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from 'graphql';
 import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper, AiChatStreamPayloadMapper } from './aiChat/schema.mappers';
 import { AttachmentMapper } from './attachment/schema.mappers';
-import { ChannelMapper, RepoValidationMapper, ScriptSuggestionMapper } from './channel/schema.mappers';
+import { ChannelMapper } from './channel/schema.mappers';
 import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageDeletedPayloadMapper, MessageSessionMapper } from './message/schema.mappers';
 import { EventMapper, EventConnectionMapper, ThreadEventPayloadMapper } from './event/schema.mappers';
 import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketMessageMapper, TicketUpsertPayloadMapper } from './kanban/schema.mappers';
@@ -79,9 +79,6 @@ export type Channel = {
   __typename?: 'Channel';
   baseBranch?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['DateTime']['output'];
-  defaultRepoPath?: Maybe<Scalars['String']['output']>;
-  defaultRunScript?: Maybe<Scalars['String']['output']>;
-  defaultSetupScript?: Maybe<Scalars['String']['output']>;
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -213,9 +210,6 @@ export type MutationcreateAiChatArgs = {
 
 export type MutationcreateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
-  defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
-  defaultRunScript?: InputMaybe<Scalars['String']['input']>;
-  defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;
@@ -301,9 +295,6 @@ export type MutationsetTicketDependenciesArgs = {
 
 export type MutationupdateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
-  defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
-  defaultRunScript?: InputMaybe<Scalars['String']['input']>;
-  defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -348,16 +339,13 @@ export type Query = {
   event?: Maybe<Event>;
   messageEvents: EventConnection;
   messages: MessageConnection;
-  repoBranches: Array<Scalars['String']['output']>;
   servers: Array<Server>;
   session?: Maybe<Session>;
   sessionEvents: EventConnection;
   sessions: SessionConnection;
-  suggestScripts: ScriptSuggestion;
   threadEvents: EventConnection;
   threads: Array<Thread>;
   ticketDependencies: Array<TicketDependency>;
-  validateRepo: RepoValidation;
 };
 
 
@@ -404,11 +392,6 @@ export type QuerymessagesArgs = {
 };
 
 
-export type QueryrepoBranchesArgs = {
-  localRepoPath: Scalars['String']['input'];
-};
-
-
 export type QuerysessionArgs = {
   sessionId: Scalars['String']['input'];
 };
@@ -433,11 +416,6 @@ export type QuerysessionsArgs = {
 };
 
 
-export type QuerysuggestScriptsArgs = {
-  localRepoPath: Scalars['String']['input'];
-};
-
-
 export type QuerythreadEventsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   channelId: Scalars['ID']['input'];
@@ -456,24 +434,6 @@ export type QuerythreadsArgs = {
 
 export type QueryticketDependenciesArgs = {
   messageId: Scalars['ID']['input'];
-};
-
-
-export type QueryvalidateRepoArgs = {
-  localRepoPath: Scalars['String']['input'];
-};
-
-export type RepoValidation = {
-  __typename?: 'RepoValidation';
-  error?: Maybe<Scalars['String']['output']>;
-  originUrl?: Maybe<Scalars['String']['output']>;
-  valid: Scalars['Boolean']['output'];
-};
-
-export type ScriptSuggestion = {
-  __typename?: 'ScriptSuggestion';
-  runScript?: Maybe<Scalars['String']['output']>;
-  setupScript?: Maybe<Scalars['String']['output']>;
 };
 
 export type Server = {
@@ -722,8 +682,6 @@ export type ResolversTypes = {
   MessageSession: ResolverTypeWrapper<MessageSessionMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
-  RepoValidation: ResolverTypeWrapper<RepoValidationMapper>;
-  ScriptSuggestion: ResolverTypeWrapper<ScriptSuggestionMapper>;
   Server: ResolverTypeWrapper<ServerMapper>;
   Session: ResolverTypeWrapper<SessionMapper>;
   SessionConnection: ResolverTypeWrapper<SessionConnectionMapper>;
@@ -762,8 +720,6 @@ export type ResolversParentTypes = {
   MessageSession: MessageSessionMapper;
   Mutation: Record<PropertyKey, never>;
   Query: Record<PropertyKey, never>;
-  RepoValidation: RepoValidationMapper;
-  ScriptSuggestion: ScriptSuggestionMapper;
   Server: ServerMapper;
   Session: SessionMapper;
   SessionConnection: SessionConnectionMapper;
@@ -824,9 +780,6 @@ export type AttachmentResolvers<ContextType = any, ParentType extends ResolversP
 export type ChannelResolvers<ContextType = any, ParentType extends ResolversParentTypes['Channel'] = ResolversParentTypes['Channel']> = {
   baseBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  defaultRepoPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  defaultRunScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  defaultSetupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   githubUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -946,27 +899,13 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
   messageEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerymessageEventsArgs, 'channelId' | 'messageId'>>;
   messages?: Resolver<ResolversTypes['MessageConnection'], ParentType, ContextType, RequireFields<QuerymessagesArgs, 'channelId'>>;
-  repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryrepoBranchesArgs, 'localRepoPath'>>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionArgs, 'sessionId'>>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'sessionId'>>;
   sessions?: Resolver<ResolversTypes['SessionConnection'], ParentType, ContextType, Partial<QuerysessionsArgs>>;
-  suggestScripts?: Resolver<ResolversTypes['ScriptSuggestion'], ParentType, ContextType, RequireFields<QuerysuggestScriptsArgs, 'localRepoPath'>>;
   threadEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerythreadEventsArgs, 'channelId' | 'messageId' | 'threadId'>>;
   threads?: Resolver<Array<ResolversTypes['Thread']>, ParentType, ContextType, RequireFields<QuerythreadsArgs, 'channelId' | 'messageId'>>;
   ticketDependencies?: Resolver<Array<ResolversTypes['TicketDependency']>, ParentType, ContextType, RequireFields<QueryticketDependenciesArgs, 'messageId'>>;
-  validateRepo?: Resolver<ResolversTypes['RepoValidation'], ParentType, ContextType, RequireFields<QueryvalidateRepoArgs, 'localRepoPath'>>;
-};
-
-export type RepoValidationResolvers<ContextType = any, ParentType extends ResolversParentTypes['RepoValidation'] = ResolversParentTypes['RepoValidation']> = {
-  error?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  originUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  valid?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-};
-
-export type ScriptSuggestionResolvers<ContextType = any, ParentType extends ResolversParentTypes['ScriptSuggestion'] = ResolversParentTypes['ScriptSuggestion']> = {
-  runScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  setupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };
 
 export type ServerResolvers<ContextType = any, ParentType extends ResolversParentTypes['Server'] = ResolversParentTypes['Server']> = {
@@ -1092,8 +1031,6 @@ export type Resolvers<ContextType = any> = {
   MessageSession?: MessageSessionResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
-  RepoValidation?: RepoValidationResolvers<ContextType>;
-  ScriptSuggestion?: ScriptSuggestionResolvers<ContextType>;
   Server?: ServerResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;

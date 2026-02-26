@@ -162,27 +162,13 @@ type Query {
   event(id: ID!): Event
   messageEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int): EventConnection!
   messages(channelId: ID!, limit: Int, offset: Int): MessageConnection!
-  repoBranches(localRepoPath: String!): [String!]!
   servers: [Server!]!
   session(sessionId: String!): Session
   sessionEvents(after: String, hookEventName: String, limit: Int, offset: Int, sessionId: String!, toolName: String): EventConnection!
   sessions(limit: Int, offset: Int, order: String, sort: String, status: String): SessionConnection!
-  suggestScripts(localRepoPath: String!): ScriptSuggestion!
   threadEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int, threadId: ID!): EventConnection!
   threads(channelId: ID!, messageId: ID!): [Thread!]!
   ticketDependencies(messageId: ID!): [TicketDependency!]!
-  validateRepo(localRepoPath: String!): RepoValidation!
-}
-
-type RepoValidation {
-  error: String
-  originUrl: String
-  valid: Boolean!
-}
-
-type ScriptSuggestion {
-  runScript: String
-  setupScript: String
 }
 
 type Server {
