@@ -27,22 +27,31 @@ Run `git branch --show-current` to get the current branch name. If on a detached
 2. If there are any staged or unstaged changes or untracked files, stage everything with `git add -A` and commit with a descriptive message summarizing the changes.
 3. If there are no changes, skip this step and inform the user there was nothing to commit.
 
-## Step 4: Get the main repo working directory
+## Step 4: Rebase onto the base branch (in the worktree)
+
+This step ensures merge conflicts are resolved in the worktree branch, not in the main repo. This is critical because if conflicts occur in the main repo, the app can crash mid-merge.
+
+1. Run `git fetch origin <base-branch>:<base-branch>` to update the local base branch to match the remote.
+2. Run `git rebase <base-branch>`.
+3. If there are merge conflicts, stop and inform the user about the conflicts. Do NOT force resolve. The user can resolve them here in the worktree safely.
+4. If the rebase succeeds, the subsequent merge will be a clean fast-forward.
+
+## Step 5: Get the main repo working directory
 
 Run `git rev-parse --git-common-dir` to find the common git dir path. The main repo working directory is the parent of the `.git` directory (strip the `/.git` suffix). Store this path.
 
-## Step 5: Merge into the base branch
+## Step 6: Merge into the base branch
 
 1. `cd` into the main repo working directory.
 2. Run `git checkout <base-branch>` where `<base-branch>` is the argument provided (or `main` if none).
-3. Run `git merge <branch-name>` where `<branch-name>` is from Step 2.
-4. If there are merge conflicts, stop and inform the user. Do NOT force resolve.
+3. Run `git merge <branch-name>` where `<branch-name>` is from Step 2. This should be a fast-forward merge since we rebased in Step 4.
+4. If there are merge conflicts (should not happen after rebase), stop and inform the user. Do NOT force resolve.
 
-## Step 6: Push
+## Step 7: Push
 
 Run `git push` from the main repo directory to push the base branch to the remote.
 
-## Step 7: Return to worktree
+## Step 8: Return to worktree
 
 `cd` back to the original worktree directory and confirm success to the user, including:
 - What branch was merged
