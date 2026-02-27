@@ -25,30 +25,39 @@ export function useMergePolling({
 
   const checkMerged = useCallback(async () => {
     const currentRepoPath = repoPathRef.current;
-    if (!currentRepoPath) return;
+    if (!currentRepoPath) {
+      console.log('[mergePolling] skipped: no repoPath');
+      return;
+    }
 
     const messages = messagesRef.current;
     const completed = messages.filter(
       (m) => m.status === 'completed' && m.branch,
     );
-    if (completed.length === 0) return;
+    if (completed.length === 0) {
+      console.log('[mergePolling] skipped: no completed messages with branches', { total: messages.length, statuses: messages.map(m => m.status) });
+      return;
+    }
 
     const branches = completed.map((m) => m.branch!);
+    console.log('[mergePolling] checking branches:', branches, 'base:', baseBranchRef.current);
     try {
       const result = await window.traceAPI.checkBranchesMerged(
         currentRepoPath,
         branches,
         baseBranchRef.current,
       );
+      console.log('[mergePolling] result:', result);
       if (!result.success) return;
 
       for (const msg of completed) {
         if (result.merged[msg.branch!]) {
+          console.log('[mergePolling] transitioning to merged:', msg.id, msg.branch);
           await updateStatusRef.current(msg.id, 'merged');
         }
       }
-    } catch {
-      // Silent failure
+    } catch (err) {
+      console.error('[mergePolling] error:', err);
     }
   }, [messagesRef]);
 
