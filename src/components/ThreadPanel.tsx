@@ -5,6 +5,9 @@ import { ReadGlobGroup } from "./ReadGlobGroup";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { TicketView } from "./TicketView";
+import { WorktreeChanges } from "./WorktreeChanges";
+import { TerminalTabs } from "./TerminalTabs";
+import { Terminal } from "./Terminal";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
 import { RunButtons } from "./RunButtons";
@@ -16,7 +19,7 @@ import { useThreadContext } from "../context/ThreadContext";
 import { useThreadEventsContext } from "../context/ThreadEventsContext";
 import { normalizeToolName } from "../utils";
 
-type ViewMode = "agent" | "ticket";
+type ViewMode = "agent" | "ticket" | "files" | "terminal";
 
 export function ThreadPanel() {
   const {
@@ -42,8 +45,14 @@ export function ThreadPanel() {
     onClose,
     onDeleteWorktree,
     onStartDrag,
-    onEnterFullscreen,
-    onExitFullscreen,
+    baseBranch,
+    startupTerminals,
+    activeTerminalTabId,
+    terminalCwd,
+    onSelectTerminalTab,
+    onCloseTerminalTab,
+    onCloseAllTerminals,
+    onAddTerminal,
   } = useThreadContext();
 
   const {
@@ -177,12 +186,9 @@ export function ThreadPanel() {
           hasWorktree={hasWorktree}
           scriptsAvailable={scriptsAvailable}
           onRunScripts={onRunScripts}
-          isFullscreen={isFullscreen}
           onClose={onClose}
           onDeleteWorktree={onDeleteWorktree}
           onMergeToMain={() => void mergeToMain()}
-          onEnterFullscreen={onEnterFullscreen}
-          onExitFullscreen={onExitFullscreen}
           threads={threads}
           activeThreadId={activeThreadId}
           onSwitchThread={switchThread}
@@ -191,6 +197,27 @@ export function ThreadPanel() {
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
           {viewMode === "ticket" && ticket ? (
             <TicketView ticket={ticket} />
+          ) : viewMode === "files" ? (
+            <WorktreeChanges messageId={selectedMessageId} baseBranch={baseBranch} />
+          ) : viewMode === "terminal" ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {startupTerminals.length > 0 ? (
+                <TerminalTabs
+                  terminals={startupTerminals}
+                  activeTabId={activeTerminalTabId}
+                  cwd={terminalCwd}
+                  onSelectTab={onSelectTerminalTab}
+                  onCloseTab={onCloseTerminalTab}
+                  onCloseAll={onCloseAllTerminals}
+                  onAddTab={onAddTerminal}
+                />
+              ) : (
+                <Terminal
+                  terminalId={`thread-${selectedMessageId ?? "none"}`}
+                  cwd={terminalCwd}
+                />
+              )}
+            </div>
           ) : (
             <>
               <div

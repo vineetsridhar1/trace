@@ -21,13 +21,10 @@ import { ChannelPanel } from './components/ChannelPanel';
 import { ChannelTopBar } from './components/ChannelTopBar';
 import { MessagePanel } from './components/MessagePanel';
 import { ThreadPanel } from './components/ThreadPanel';
-import { WorktreeChanges } from './components/WorktreeChanges';
-import { Terminal } from './components/Terminal';
 import { ChannelSettingsModal } from './components/ChannelSettingsModal';
 import { CreateChannelModal } from './components/CreateChannelModal';
 import { CreateServerModal } from './components/CreateServerModal';
 import { ServerRail } from './components/ServerRail';
-import { TerminalTabs } from './components/TerminalTabs';
 import { AiChatPanel } from './components/AiChatPanel';
 
 const GQL_UPDATE_MESSAGE_STATUS = gql`
@@ -158,9 +155,7 @@ function AppContent() {
     terminals: startupTerminalList,
     activeTabId,
     setActiveTabId,
-    isVisible: startupTerminalsVisible,
     runCwd: startupTerminalsCwd,
-    showTerminals,
     runAllScripts,
     killAllTerminals,
     killTerminal,
@@ -193,7 +188,6 @@ function AppContent() {
   const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('chat');
   const [channelWidth, setChannelWidth] = useState(220);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [worktreePath, setWorktreePath] = useState('');
   const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
   const [settingsChannelId, setSettingsChannelId] = useState<string | null>(null);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
@@ -311,6 +305,7 @@ function AppContent() {
 
       if (selectedMessageId === messageId) {
         closeThreadPanel();
+        setChannelWidth(220);
       }
 
       try {
@@ -378,9 +373,9 @@ function AppContent() {
 
   const handleOpenThread = useCallback(
     (message: ChannelMessage) => {
+      setChannelWidth(0);
       resetScroll();
       openThreadPanel(message);
-      setMiddlePanelView('workspaces');
       setAttentionMessageIds((current) => {
         if (!current.has(message.id)) return current;
         const next = new Set(current);
@@ -544,6 +539,7 @@ function AppContent() {
     (chatId: string) => {
       setActiveAiChatId(chatId);
       closeThreadPanel();
+      setChannelWidth(220);
     },
     [closeThreadPanel],
   );
@@ -558,6 +554,7 @@ function AppContent() {
       if (chat) {
         setActiveAiChatId(chat.id);
         closeThreadPanel();
+        setChannelWidth(220);
       }
     } catch (err) {
       console.error('[App] handleCreateAiChat failed:', err);
@@ -582,21 +579,19 @@ function AppContent() {
       return;
     }
     closeThreadPanel();
+    setChannelWidth(220);
   }, [closeThreadPanel, isFullscreen, setThreadWidth]);
 
   const enterFullscreen = useCallback(async () => {
-    if (!selectedMessageId) return;
-    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId, '');
+    const currentRepoPath = getChannelRepoPath();
+    if (!selectedMessageId || !currentRepoPath) return;
+    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId, currentRepoPath);
     if (!result.success || !result.exists || !result.worktreePath) return;
 
     savedWidthsRef.current = { channel: channelWidth, thread: threadWidth };
-    setWorktreePath(result.worktreePath);
     setChannelWidth(0);
     setIsFullscreen(true);
-    if (startupTerminalList.length > 0) {
-      showTerminals();
-    }
-  }, [channelWidth, selectedMessageId, showTerminals, startupTerminalList.length, threadWidth]);
+  }, [channelWidth, getChannelRepoPath, selectedMessageId, threadWidth]);
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
@@ -694,7 +689,6 @@ function AppContent() {
 
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
   const panelTitle = enrichedActiveChannel ? `# ${enrichedActiveChannel.name}` : 'Workspaces';
-  const terminalId = `fullscreen-${selectedMessageId ?? 'none'}`;
   const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const activeChannelBaseBranch = enrichedActiveChannel?.baseBranch ?? 'main';
 
@@ -750,6 +744,14 @@ function AppContent() {
       onStartDrag: () => startDragging('right'),
       onEnterFullscreen: (): void => { void enterFullscreen(); },
       onExitFullscreen: exitFullscreen,
+      baseBranch: activeChannelBaseBranch,
+      startupTerminals: startupTerminalList,
+      activeTerminalTabId: activeTabId,
+      terminalCwd: startupTerminalsCwd || activeChannelRepoPath,
+      onSelectTerminalTab: setActiveTabId,
+      onCloseTerminalTab: killTerminal,
+      onCloseAllTerminals: killAllTerminals,
+      onAddTerminal: addTerminal,
     }),
     [
       selectedMessageId, activeThreadId, threads, threadWidth,
@@ -761,6 +763,9 @@ function AppContent() {
       isFullscreen, scriptsAvailable, dragging,
       handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
       startDragging, enterFullscreen, exitFullscreen,
+      activeChannelBaseBranch, startupTerminalList, activeTabId,
+      startupTerminalsCwd, activeChannelRepoPath, setActiveTabId,
+      killTerminal, killAllTerminals, addTerminal,
     ],
   );
 
@@ -807,12 +812,11 @@ function AppContent() {
               onStartDrag={() => startDragging('left')}
             />
 
-            {/* Content column (message panel + optional thread + terminal) */}
             <div
               className="flex min-h-0 min-w-0 flex-col panel-animate"
               style={{ flex: isFullscreen ? '0 0 0px' : '1 1 0%', overflow: 'hidden' }}
             >
-              <div className="flex min-h-0 flex-1 overflow-hidden">
+              <div className="flex min-h-0 flex-1 flex-col">
                 {activeAiChatId ? (
                   <AiChatPanel
                     chatId={activeAiChatId}
@@ -833,63 +837,10 @@ function AppContent() {
                     onMoveTicket={handleMoveTicket}
                   />
                 )}
-                {/* Thread slideout - only in workspaces view */}
-                {!activeAiChatId && middlePanelView === 'workspaces' && !isFullscreen && (
-                  <ThreadPanel />
-                )}
-              </div>
-
-              {startupTerminalList.length > 0 && !isFullscreen && (
-                <div
-                  className="shrink-0 border-t border-[#292e42]"
-                  style={{
-                    height: startupTerminalsVisible ? '35%' : '0',
-                    minHeight: startupTerminalsVisible ? '150px' : '0',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <TerminalTabs
-                    terminals={startupTerminalList}
-                    activeTabId={activeTabId}
-                    cwd={startupTerminalsCwd || activeChannelRepoPath}
-                    onSelectTab={setActiveTabId}
-                    onCloseTab={killTerminal}
-                    onCloseAll={killAllTerminals}
-                    onAddTab={addTerminal}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Fullscreen: thread panel as top-level sibling */}
-            {isFullscreen && <ThreadPanel />}
-
-            <div
-              className="flex min-h-0 flex-col panel-animate"
-              style={{ flex: isFullscreen ? '1 1 50%' : '0 0 0px', overflow: 'hidden' }}
-            >
-              <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
-                {isFullscreen && <WorktreeChanges messageId={selectedMessageId} baseBranch={activeChannelBaseBranch} />}
-              </div>
-              <div
-                className="overflow-hidden"
-                style={{ height: isFullscreen ? '40%' : '0', minHeight: isFullscreen ? '150px' : '0' }}
-              >
-                {isFullscreen && startupTerminalList.length > 0 ? (
-                  <TerminalTabs
-                    terminals={startupTerminalList}
-                    activeTabId={activeTabId}
-                    cwd={activeChannelRepoPath}
-                    onSelectTab={setActiveTabId}
-                    onCloseTab={killTerminal}
-                    onCloseAll={killAllTerminals}
-                    onAddTab={addTerminal}
-                  />
-                ) : isFullscreen ? (
-                  <Terminal terminalId={terminalId} cwd={worktreePath} />
-                ) : null}
               </div>
             </div>
+
+            <ThreadPanel />
           </div>
 
           {settingsChannel && (

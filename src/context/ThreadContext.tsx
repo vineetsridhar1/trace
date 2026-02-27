@@ -7,6 +7,7 @@ import type {
   TicketStatus,
 } from '../types';
 import type { ThreadInfo } from '../hooks/useThread';
+import type { TerminalTab } from '../hooks/useStartupTerminals';
 import { ThreadEventsContext } from './ThreadEventsContext';
 import type { ThreadEventsContextValue } from './ThreadEventsContext';
 
@@ -47,6 +48,15 @@ export interface ThreadContextValue {
   onStartDrag: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
+  // Terminal state for thread tabs
+  baseBranch: string;
+  startupTerminals: TerminalTab[];
+  activeTerminalTabId: string | null;
+  terminalCwd: string;
+  onSelectTerminalTab: (terminalId: string) => void;
+  onCloseTerminalTab: (terminalId: string) => void;
+  onCloseAllTerminals: () => void;
+  onAddTerminal: () => void;
 }
 
 const ThreadContext = createContext<ThreadContextValue | null>(null);
