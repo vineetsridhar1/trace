@@ -125,20 +125,10 @@ async function handleEnrichmentEvent(payload: HookEvent) {
     },
   });
 
-  // Transition to needs_input if AskUserQuestion/ExitPlanMode was detected
-  if (updates.toolName === 'AskUserQuestion' || updates.toolName === 'ExitPlanMode') {
-    const currentMsg = await prisma.message.findUnique({ where: { id: messageId }, select: { status: true } });
-    if (currentMsg?.status === 'in_progress' || currentMsg?.status === 'auto_review') {
-      await updateMessageStatus(messageId, 'needs_input');
-      void syncTicketWithMessageStatus(messageId, channelId, 'needs_input');
-      const hydratedMsg = await getMessageByIdForFeed(messageId);
-      if (hydratedMsg) {
-        pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-          messageUpserted: hydratedMsg,
-        });
-      }
-    }
-  }
+  // Note: needs_input transitions are handled in real-time by createEvent (line 352)
+  // when the actual AskUserQuestion/ExitPlanMode PostToolUse event fires.
+  // Do NOT transition here — extracted_tool_name comes from the full transcript
+  // and may reference tools from earlier turns, causing false needs_input.
 
   // Update branch on message if provided
   if (branchName) {
