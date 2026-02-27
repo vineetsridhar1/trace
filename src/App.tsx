@@ -300,6 +300,7 @@ function AppContent() {
       autoReviewRef.current?.(messageId, claudeSessionId);
     }, []),
     onMessageCompleted: triggerMergeCheck,
+    refreshMessages,
   });
 
   const handleSetView = useCallback(

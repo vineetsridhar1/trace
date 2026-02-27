@@ -50,10 +50,13 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "-": "^0.0.1",
     "@apollo/client": "^3.12.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "concurrently": "^9.2.1",
     "electron-squirrel-startup": "^1.0.1",
+    "g": "^2.0.1",
     "graphql": "^16.13.0",
     "graphql-ws": "^6.0.7",
     "node-pty": "^1.1.0",

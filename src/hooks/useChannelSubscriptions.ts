@@ -110,6 +110,7 @@ interface UseChannelSubscriptionsOptions {
   onTicketReadyToRun?: (messageId: string, runConfig: unknown) => void;
   onMessageReadyForReview?: (messageId: string, claudeSessionId: string | null) => void;
   onMessageCompleted?: () => void;
+  refreshMessages?: (channelId: string) => Promise<void>;
 }
 
 export function useChannelSubscriptions({
@@ -127,6 +128,7 @@ export function useChannelSubscriptions({
   onTicketReadyToRun,
   onMessageReadyForReview,
   onMessageCompleted,
+  refreshMessages,
 }: UseChannelSubscriptionsOptions) {
   const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
 
@@ -202,6 +204,14 @@ export function useChannelSubscriptions({
         const reason = payload.event.toolName === 'AskUserQuestion' ? 'ask-user-question' : 'stopped';
         onNeedsAttention(payload.messageId, reason);
       }
+      // Re-fetch messages after the server's inline auto-complete runs.
+      // The Stop event triggers status transitions (completed/auto_review)
+      // on the server synchronously, so by the time this subscription fires
+      // the DB already has the final status. A short delay accounts for the
+      // close handler's enrichment merge and any network latency.
+      if (refreshMessages && activeChannelId) {
+        setTimeout(() => void refreshMessages(activeChannelId), 500);
+      }
     }
 
     if (payload.event.hookEventName === 'AskUserQuestion') {
@@ -217,7 +227,7 @@ export function useChannelSubscriptions({
     if (currentThreadId && payload.event.threadId !== currentThreadId) return;
 
     appendThreadEvent(payload.event as ServerEvent);
-  }, [threadEventData, activeChannelId, reportClaudeActivity, messagesRef, upsertMessage, selectedMessageIdRef, activeThreadIdRef, onNeedsAttention, appendThreadEvent]);
+  }, [threadEventData, activeChannelId, reportClaudeActivity, messagesRef, upsertMessage, selectedMessageIdRef, activeThreadIdRef, onNeedsAttention, appendThreadEvent, refreshMessages]);
 
   // --- Thread event updated ---
   const { data: threadEventUpdatedData } = useSubscription(THREAD_EVENT_UPDATED_SUBSCRIPTION, {

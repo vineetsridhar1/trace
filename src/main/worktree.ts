@@ -1,7 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
-import { injectHooks } from './hooks';
 import { runProcess } from './process';
 import {
   runStateByMessageId,
@@ -39,7 +38,6 @@ export async function ensureWorktree(messageId: string, repoPath: string): Promi
   const worktreePath = getWorktreePath(messageId);
 
   if (fs.existsSync(worktreePath)) {
-    injectHooks(worktreePath);
     return { worktreePath, created: false };
   }
 
@@ -71,12 +69,10 @@ export async function ensureWorktree(messageId: string, repoPath: string): Promi
           if (retryCode !== 0) {
             reject(new Error(`Failed to create worktree: ${stderr} / ${retryErr}`));
           } else {
-            injectHooks(worktreePath);
             resolve({ worktreePath, created: true });
           }
         });
       } else {
-        injectHooks(worktreePath);
         resolve({ worktreePath, created: true });
       }
     });

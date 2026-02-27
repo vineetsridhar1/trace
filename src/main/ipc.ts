@@ -3,8 +3,7 @@ import path from 'node:path';
 import { ipcMain, dialog, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
-import { resetWatchdog, stopWatchdog, markHookStopReceived, appendClaudeDebugLog } from './watchdog';
-import { resolveTranscriptPath, extractUsageFromTranscript, extractAskUserQuestionFromTranscript, extractExitPlanModeFromTranscript } from './transcript';
+import { resetWatchdog, stopWatchdog, markHookStopReceived } from './watchdog';
 import { createPty, writePty, resizePty, killPty, getPtyCwd } from './pty';
 import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
@@ -51,75 +50,6 @@ function resolveServerUrl(): string {
   if (!raw) return 'http://localhost:3100';
   if (raw.startsWith('http')) return raw;
   return `http://localhost:${raw}`;
-}
-
-/**
- * Extract enrichment data from the transcript and POST it to the server.
- * Called when a Stop hook event is received while the process is still alive
- * (e.g., Claude is waiting at AskUserQuestion or ExitPlanMode).
- */
-async function extractAndPostEnrichment(messageId: string, sessionId: string) {
-  const serverUrl = resolveServerUrl();
-  const transcriptPath = resolveTranscriptPath(sessionId);
-  if (!transcriptPath) {
-    appendClaudeDebugLog(messageId, `enrichment-on-stop: transcript not found for session=${sessionId}`);
-    return;
-  }
-
-  const extract = () => {
-    const enrichment: Record<string, unknown> = {};
-
-    const usage = extractUsageFromTranscript(transcriptPath);
-    if (usage) enrichment.extracted_usage = usage;
-
-    const askData = extractAskUserQuestionFromTranscript(transcriptPath);
-    if (askData) {
-      enrichment.extracted_tool_name = 'AskUserQuestion';
-      enrichment.extracted_tool_input = askData;
-    } else {
-      const exitPlanData = extractExitPlanModeFromTranscript(transcriptPath);
-      if (exitPlanData) {
-        enrichment.extracted_tool_name = 'ExitPlanMode';
-      }
-    }
-
-    return enrichment;
-  };
-
-  // First attempt: immediate
-  let enrichment = extract();
-
-  // Retry after 1.5s if no tool detected (transcript may not be fully flushed)
-  if (!enrichment.extracted_tool_name) {
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    enrichment = extract();
-  }
-
-  if (!enrichment.extracted_tool_name && !enrichment.extracted_usage) {
-    appendClaudeDebugLog(messageId, 'enrichment-on-stop: no enrichment data found');
-    return;
-  }
-
-  const payload = {
-    session_id: sessionId,
-    cwd: getWorktreePath(messageId),
-    hook_event_name: 'Stop',
-    stop_hook_active: false,
-    last_assistant_message: '',
-    source: 'electron-enrichment',
-    ...enrichment,
-  };
-
-  try {
-    const response = await fetch(`${serverUrl}/events`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    appendClaudeDebugLog(messageId, `enrichment-on-stop: posted status=${response.status} tool=${enrichment.extracted_tool_name ?? 'none'}`);
-  } catch (err) {
-    appendClaudeDebugLog(messageId, `enrichment-on-stop: post failed error=${String(err)}`);
-  }
 }
 
 export function registerIpcHandlers() {
@@ -205,20 +135,11 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(
     CLAUDE_ACTIVITY_PING_CHANNEL,
-    async (_event, messageId: string, eventType: string, sessionId?: string) => {
+    async (_event, messageId: string, eventType: string, _sessionId?: string) => {
       try {
         if ((eventType ?? '').toLowerCase() === 'stop') {
           markHookStopReceived(messageId);
           stopWatchdog(messageId, 'activity-stop-event');
-
-          // When a Stop hook fires (Claude is waiting for input), extract
-          // enrichment data from the transcript immediately and POST it to the
-          // server. The process is still alive so child.on('close') hasn't
-          // fired yet — this is the only opportunity to detect AskUserQuestion
-          // and ExitPlanMode before the auto-complete timer fires.
-          if (sessionId) {
-            void extractAndPostEnrichment(messageId, sessionId);
-          }
         } else {
           resetWatchdog(messageId, `activity-event:${eventType}`);
         }
