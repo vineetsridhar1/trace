@@ -83,7 +83,7 @@ export function ChannelPanel({
             </div>
           </div>
           <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">Coming soon</span>
+            <span className="text-xs italic text-[#565f89]">Coming soon...</span>
           </div>
 
           {/* Teams */}
@@ -150,7 +150,7 @@ export function ChannelPanel({
             </Tooltip>
           </div>
           <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">Coming soon</span>
+            <span className="text-xs italic text-[#565f89]">Coming soon...</span>
           </div>
 
           {/* AI Chats */}
