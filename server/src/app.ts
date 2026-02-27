@@ -10,6 +10,7 @@ import eventsRouter from './routes/events';
 import attachmentsRouter from './routes/attachments';
 import authRouter from './routes/auth';
 import { errorHandler } from './middleware/errorHandler';
+import { generateText } from './services/aiService';
 import { verifyJwt } from './services/authService';
 import prisma from './lib/prisma';
 
@@ -57,6 +58,35 @@ export async function createApp() {
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  app.post('/api/generate-branch-name', async (req, res) => {
+    const { prompt } = req.body ?? {};
+    if (!prompt || typeof prompt !== 'string') {
+      res.status(400).json({ error: 'prompt is required' });
+      return;
+    }
+    try {
+      const name = await generateText({
+        system:
+          'Generate a short git branch name from the user\'s task description. ' +
+          'Return ONLY the branch slug — lowercase, kebab-case, 2-5 words, no prefix. ' +
+          'Examples: "fix-login-bug", "add-dark-mode", "refactor-auth-system", "update-sidebar-styles". ' +
+          'Do NOT include any prefix like "trace/" or "feat/". Just the slug.',
+        prompt,
+        maxTokens: 30,
+      });
+      if (name) {
+        const slug = name.replace(/^["']|["']$/g, '').trim().toLowerCase()
+          .replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        res.json({ name: slug });
+      } else {
+        res.json({ name: null });
+      }
+    } catch (err) {
+      console.error('[generate-branch-name] error:', err);
+      res.json({ name: null });
+    }
   });
 
   app.use(errorHandler);

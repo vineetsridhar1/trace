@@ -18,50 +18,6 @@ import {
 import { runProcess } from './process';
 import { ClaudeStreamParser } from './streamParser';
 
-const STOP_WORDS = new Set([
-  // articles & determiners
-  'a', 'an', 'the', 'this', 'that', 'these', 'those',
-  // prepositions
-  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'into', 'about', 'between', 'through',
-  // pronouns
-  'i', 'me', 'my', 'we', 'our', 'you', 'your', 'it', 'its', 'they', 'them', 'their',
-  // conjunctions
-  'and', 'or', 'but', 'so', 'if', 'when', 'while',
-  // filler / politeness
-  'please', 'help', 'want', 'need', 'would', 'could', 'should', 'can', 'will', 'just',
-  'like', 'also', 'make', 'sure', 'let', 'know',
-  // misc
-  'is', 'are', 'be', 'been', 'was', 'were', 'do', 'does', 'did', 'has', 'have', 'had',
-  'not', 'no', 'all', 'some', 'any', 'each', 'every',
-  'how', 'what', 'which', 'where', 'who',
-  'very', 'really', 'then', 'here', 'there',
-]);
-
-export function generateBranchName(prompt: string, workspaceId: string): string {
-  const fallback = `trace/${workspaceId.slice(0, 8)}`;
-
-  // Strip XML tags (including <trace-internal> blocks)
-  let cleaned = prompt.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '');
-  cleaned = cleaned.replace(/<[^>]+>/g, '');
-
-  // Strip URLs and file paths
-  cleaned = cleaned.replace(/https?:\/\/\S+/g, '');
-  cleaned = cleaned.replace(/(?:\/[\w.-]+){2,}/g, '');
-
-  // Lowercase and extract words (letters only)
-  const words = cleaned
-    .toLowerCase()
-    .replace(/[^a-z\s]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
-
-  if (words.length === 0) return fallback;
-
-  const slug = words.slice(0, 5).join('-');
-  const name = `trace/${slug}`.slice(0, 50);
-  return name;
-}
-
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
   if (!raw) return 'http://localhost:3100';
@@ -71,6 +27,23 @@ function resolveServerUrl(): string {
 }
 const SERVER_URL = resolveServerUrl();
 const MAX_CAPTURE_CHARS = 20_000;
+
+async function generateBranchName(prompt: string, workspaceId: string): Promise<string> {
+  const fallback = `trace/${workspaceId.slice(0, 8)}`;
+  try {
+    const res = await fetch(`${SERVER_URL}/api/generate-branch-name`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) return fallback;
+    const { name } = (await res.json()) as { name: string | null };
+    if (!name) return fallback;
+    return `trace/${name}`.slice(0, 50);
+  } catch {
+    return fallback;
+  }
+}
 
 async function runSetupScripts(worktreePath: string, commands: string[]): Promise<void> {
   const script = commands.join('\n');
@@ -113,7 +86,7 @@ export async function spawnClaude(
   const defaultBranch = `trace/${workspaceId.slice(0, 8)}`;
   const currentBranch = await getWorktreeBranch(workspaceId);
   if (!resumeSessionId && currentBranch === defaultBranch) {
-    let newBranch = generateBranchName(prompt, workspaceId);
+    let newBranch = await generateBranchName(prompt, workspaceId);
     if (newBranch !== defaultBranch) {
       let renameResult = await runProcess('git', ['branch', '-m', newBranch], worktreePath);
       if (renameResult.code !== 0) {
