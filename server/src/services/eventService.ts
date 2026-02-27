@@ -288,6 +288,48 @@ export async function ingestEvent(payload: HookEvent) {
     }
 
     stopBranchName = (stopPayload.branch_name as string | undefined) ?? null;
+
+    // De-duplicate Stop events: if a Stop event was already created for this
+    // thread very recently (e.g. hook Stop followed by synthetic Stop within
+    // seconds), merge into the existing event instead of creating a duplicate.
+    const recentStop = await prisma.event.findFirst({
+      where: {
+        threadId: thread.id,
+        hookEventName: 'Stop',
+        timestamp: { gte: new Date(Date.now() - 60_000) },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    if (recentStop) {
+      const updates: Record<string, unknown> = {};
+      if (eventData.lastAssistantMessage && !recentStop.lastAssistantMessage) {
+        updates.lastAssistantMessage = eventData.lastAssistantMessage;
+      }
+      if (eventData.toolName && !recentStop.toolName) {
+        updates.toolName = eventData.toolName;
+        if (eventData.toolInput) updates.toolInput = eventData.toolInput;
+      }
+      // Merge rawPayload (enrichment data like usage, branch)
+      const mergedRaw = { ...(recentStop.rawPayload as Record<string, unknown> ?? {}), ...rawPayload };
+      updates.rawPayload = mergedRaw;
+
+      if (Object.keys(updates).length > 0) {
+        await prisma.event.update({ where: { id: recentStop.id }, data: updates });
+      }
+
+      // Broadcast the updated event so the UI picks up merged data
+      pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
+        threadEventUpdated: {
+          channelId,
+          messageId: message.id,
+          threadId: thread.id,
+          event: { ...recentStop, ...updates },
+        },
+      });
+
+      return { id: recentStop.id, session_id: session.sessionId };
+    }
   }
 
   if (payload.hook_event_name === 'PreToolUse') {
