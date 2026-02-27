@@ -1,4 +1,4 @@
-import type { ServerEvent, ExtractedDiffContent, SessionRenderNode, DiffRuntime, Question } from './types';
+import type { ServerEvent, ExtractedDiffContent, SessionRenderNode, CollapsedTurnGroupNode, DiffRuntime, Question } from './types';
 
 export function stripTraceInternal(text: string): string {
   return text.replace(/<trace-internal>[\s\S]*?<\/trace-internal>\s*/g, '');
@@ -450,7 +450,84 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     nodes.splice(i, 1, askNode);
   }
 
-  return nodes;
+  // Collapse completed turns: UserPromptSubmit → middle nodes → Stop
+  // Wrap middle nodes into a CollapsedTurnGroupNode so the UI can show them as an accordion.
+  // In-progress turns (no Stop yet) remain ungrouped.
+  const collapsed: SessionRenderNode[] = [];
+  let i = 0;
+  while (i < nodes.length) {
+    const node = nodes[i];
+    const isUserPrompt =
+      node.kind === 'event' && node.event.hookEventName === 'UserPromptSubmit';
+
+    if (!isUserPrompt) {
+      collapsed.push(node);
+      i++;
+      continue;
+    }
+
+    // Found a UserPromptSubmit — scan ahead for the matching Stop
+    let stopIdx = -1;
+    for (let j = i + 1; j < nodes.length; j++) {
+      const candidate = nodes[j];
+      // Hit another UserPromptSubmit or session divider — this turn has no Stop
+      if (
+        candidate.kind === 'session-divider' ||
+        (candidate.kind === 'event' && candidate.event.hookEventName === 'UserPromptSubmit')
+      ) {
+        break;
+      }
+      if (candidate.kind === 'event' && candidate.event.hookEventName === 'Stop') {
+        stopIdx = j;
+        break;
+      }
+    }
+
+    if (stopIdx < 0) {
+      // No Stop found — turn is in-progress, emit nodes as-is
+      collapsed.push(node);
+      i++;
+      continue;
+    }
+
+    // Collect middle nodes (between UserPromptSubmit and Stop)
+    const middleNodes = nodes.slice(i + 1, stopIdx);
+
+    // Push the UserPromptSubmit
+    collapsed.push(node);
+
+    if (middleNodes.length > 0) {
+      let toolCallCount = 0;
+      let messageCount = 0;
+      for (const mn of middleNodes) {
+        if (mn.kind === 'readglob-group') {
+          toolCallCount += mn.count;
+        } else if (mn.kind === 'event') {
+          if (mn.event.hookEventName === 'PostToolUse' || mn.event.hookEventName === 'PreToolUse') {
+            toolCallCount++;
+          }
+          if (mn.event.lastAssistantMessage && stripTraceInternal(mn.event.lastAssistantMessage).trim()) {
+            messageCount++;
+          }
+        }
+      }
+      const group: CollapsedTurnGroupNode = {
+        kind: 'collapsed-turn',
+        id: `collapsed-turn-${(node as { event: ServerEvent }).event.id}`,
+        stepCount: middleNodes.length,
+        toolCallCount,
+        messageCount,
+        innerNodes: middleNodes,
+      };
+      collapsed.push(group);
+    }
+
+    // Push the Stop node
+    collapsed.push(nodes[stopIdx]);
+    i = stopIdx + 1;
+  }
+
+  return collapsed;
 }
 
 export function formatDuration(seconds: number): string {

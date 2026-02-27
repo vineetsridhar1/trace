@@ -196,6 +196,27 @@ body,
   opacity: 1;
 }
 
+.collapsed-turn-chevron {
+  transition: transform 0.2s ease;
+}
+
+.collapsed-turn-chevron.open {
+  transform: rotate(90deg);
+}
+
+.collapsed-turn-body {
+  interpolate-size: allow-keywords;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: height 0.24s ease, opacity 0.24s ease;
+}
+
+.collapsed-turn-body.open {
+  height: auto;
+  opacity: 1;
+}
+
 .activity-row {
   padding: 6px 4px 6px 2px;
 }

@@ -128,6 +128,9 @@ export function useThread({
   const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<
     Record<string, boolean>
   >({});
+  const [expandedTurnGroupIds, setExpandedTurnGroupIds] = useState<
+    Record<string, boolean>
+  >({});
   const [sessionTotal, setSessionTotal] = useState(0);
   const [loadingOlderEvents, setLoadingOlderEvents] = useState(false);
 
@@ -169,6 +172,7 @@ export function useThread({
   const resetSessionViewState = useCallback(() => {
     setShowJumpToLatest(false);
     setExpandedReadGroupIds({});
+    setExpandedTurnGroupIds({});
     setSessionTotal(0);
     setLoadingOlderEvents(false);
     loadingOlderRef.current = false;
@@ -414,6 +418,13 @@ export function useThread({
     }));
   }, []);
 
+  const toggleTurnGroup = useCallback((groupId: string) => {
+    setExpandedTurnGroupIds((current) => ({
+      ...current,
+      [groupId]: !current[groupId],
+    }));
+  }, []);
+
   return {
     selectedWorkspaceId,
     selectedWorkspace,
@@ -435,6 +446,7 @@ export function useThread({
     showJumpToLatest,
     setShowJumpToLatest,
     expandedReadGroupIds,
+    expandedTurnGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
     loadSessionEvents,
@@ -449,6 +461,7 @@ export function useThread({
     deleteWorktree,
     mergeWorktree,
     toggleReadGroup,
+    toggleTurnGroup,
     syncSelectedWorkspace,
   };
 }

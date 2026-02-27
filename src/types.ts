@@ -284,7 +284,16 @@ export interface SessionDividerNode {
   timestamp: string;
 }
 
-export type SessionRenderNode = SessionEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode | SessionDividerNode;
+export interface CollapsedTurnGroupNode {
+  kind: 'collapsed-turn';
+  id: string;
+  stepCount: number;
+  toolCallCount: number;
+  messageCount: number;
+  innerNodes: SessionRenderNode[];
+}
+
+export type SessionRenderNode = SessionEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode | SessionDividerNode | CollapsedTurnGroupNode;
 
 export interface ExtractedDiffContent {
   title: string;
