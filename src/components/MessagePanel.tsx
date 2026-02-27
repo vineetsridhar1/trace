@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FiChevronRight } from 'react-icons/fi';
+import { FiChevronRight, FiColumns, FiList, FiShare2 } from 'react-icons/fi';
 import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { KanbanBoard } from './KanbanBoard';
 import { MessageInput } from './MessageInput';
@@ -81,6 +81,7 @@ export function MessagePanel({
   onMoveTicket,
   isFullscreen,
 }: MessagePanelProps) {
+  const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
 
   const ticketByMessageId = useMemo(() => {
@@ -189,12 +190,45 @@ export function MessagePanel({
         )
       ) : middlePanelView === 'board' ? (
         <>
-          <KanbanBoard
-            columns={kanbanColumns}
-            loading={kanbanLoading}
-            onClickTicket={handleBoardClickTicket}
-            onMoveTicket={onMoveTicket}
-          />
+          <div className="flex items-center gap-2 px-3 py-2">
+            <div className="flex rounded-lg bg-[#1f2335] p-0.5">
+              {([
+                { key: 'list', label: 'List', icon: FiList },
+                { key: 'board', label: 'Board', icon: FiColumns },
+                { key: 'graph', label: 'Graph', icon: FiShare2 },
+              ] as const).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setProjectSubView(key)}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    projectSubView === key
+                      ? 'bg-violet-500/20 text-violet-300'
+                      : 'text-[#565f89] hover:text-[#a9b1d6]'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {projectSubView === 'board' ? (
+            <KanbanBoard
+              columns={kanbanColumns}
+              loading={kanbanLoading}
+              onClickTicket={handleBoardClickTicket}
+              onMoveTicket={onMoveTicket}
+            />
+          ) : projectSubView === 'list' ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-[#565f89]">
+              List view coming soon
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-[#565f89]">
+              Graph view coming soon
+            </div>
+          )}
           <MessageInput />
         </>
       ) : (
