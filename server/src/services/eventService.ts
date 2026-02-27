@@ -240,8 +240,10 @@ export async function ingestEvent(payload: HookEvent) {
     currentStatus = 'in_progress';
   }
 
-  // Auto-transition needs_input -> in_progress when user responds
-  if (currentStatus === 'needs_input' && payload.hook_event_name === 'UserPromptSubmit') {
+  // Auto-transition needs_input -> in_progress when user responds or Claude continues.
+  // UserPromptSubmit is the expected trigger, but any non-input-requesting event also
+  // means the user already responded and Claude is working again.
+  if (currentStatus === 'needs_input' && payload.hook_event_name !== 'Stop') {
     await updateMessageStatus(message.id, 'in_progress');
     void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
     currentStatus = 'in_progress';
