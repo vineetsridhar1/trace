@@ -126,6 +126,7 @@ function AppContent() {
     hasWorktree,
     setHasWorktree,
     expandedReadGroupIds,
+    expandedTurnGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
     loadSessionEvents,
@@ -139,6 +140,7 @@ function AppContent() {
     clearSession,
     deleteWorktree,
     toggleReadGroup,
+    toggleTurnGroup,
     syncSelectedWorkspace,
   } = useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveChannelId });
 
@@ -854,9 +856,11 @@ function AppContent() {
       deletingWorktree,
       hasWorktree,
       expandedReadGroupIds,
+      expandedTurnGroupIds,
       openThreadPanel,
       closeThreadPanel,
       toggleReadGroup,
+      toggleTurnGroup,
       setHasWorktree,
       setThreadWidth,
       loadSessionEvents,
@@ -899,8 +903,8 @@ function AppContent() {
     }),
     [
       selectedWorkspaceId, activeSessionId, sessions, threadWidth,
-      deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
-      closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
+      deletingWorktree, hasWorktree, expandedReadGroupIds, expandedTurnGroupIds, openThreadPanel,
+      closeThreadPanel, toggleReadGroup, toggleTurnGroup, setHasWorktree, setThreadWidth,
       loadSessionEvents, deleteWorktree, switchSession, clearSession,
       channelTickets, handleSetTicketDependencies, handleRemoveTicketDependency, handleUpdateQueuedRunConfig,
       isClaudeRunning, selectedWorkspaceStatus, selectedWorkspaceQueuedRunConfig, selectedTicket,

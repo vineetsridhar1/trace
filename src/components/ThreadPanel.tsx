@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { AskUserQuestionNode, PlanReviewNode, SessionStatus } from "../types";
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
+import { CollapsedTurnGroup } from "./CollapsedTurnGroup";
 import { AssistantTextRow } from "./thread-events/AssistantTextRow";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
@@ -28,6 +29,7 @@ export function ThreadPanel() {
     activeSessionId,
     sessions,
     expandedReadGroupIds,
+    expandedTurnGroupIds,
     selectedWorkspaceId,
     workspaceStatus,
     selectedTicket: ticket,
@@ -46,6 +48,7 @@ export function ThreadPanel() {
     onStopScript,
     runScriptRunning,
     toggleReadGroup,
+    toggleTurnGroup,
     onClose,
     onDeleteWorktree,
     onEnterFullscreen,
@@ -249,6 +252,18 @@ export function ThreadPanel() {
                               onToggle={() => toggleReadGroup(node.id)}
                             />
                           </React.Fragment>
+                        );
+                      }
+                      if (node.kind === "collapsed-turn") {
+                        return (
+                          <CollapsedTurnGroup
+                            key={node.id}
+                            node={node}
+                            isExpanded={Boolean(expandedTurnGroupIds[node.id])}
+                            onToggle={() => toggleTurnGroup(node.id)}
+                            expandedReadGroupIds={expandedReadGroupIds}
+                            toggleReadGroup={toggleReadGroup}
+                          />
                         );
                       }
                       if (node.kind === "plan-review") {

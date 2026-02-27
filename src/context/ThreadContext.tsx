@@ -20,10 +20,12 @@ export interface ThreadContextValue {
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   expandedReadGroupIds: Record<string, boolean>;
+  expandedTurnGroupIds: Record<string, boolean>;
   // Session-level callbacks
   openThreadPanel: (workspace: Workspace) => void;
   closeThreadPanel: () => void;
   toggleReadGroup: (groupId: string) => void;
+  toggleTurnGroup: (groupId: string) => void;
   setHasWorktree: (value: boolean | null) => void;
   setThreadWidth: (width: number) => void;
   loadSessionEvents: (workspace: Workspace) => Promise<void>;

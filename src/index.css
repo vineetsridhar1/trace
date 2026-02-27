@@ -196,6 +196,18 @@ body,
   opacity: 1;
 }
 
+.collapsed-turn-body {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.24s ease, opacity 0.24s ease;
+}
+
+.collapsed-turn-body.open {
+  max-height: 5000px;
+  opacity: 1;
+}
+
 .activity-row {
   padding: 6px 4px 6px 2px;
 }
