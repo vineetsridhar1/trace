@@ -475,31 +475,10 @@ export async function ingestEvent(payload: HookEvent) {
             select: { timestamp: true },
           });
 
-          // Check if Claude is waiting for user input (AskUserQuestion/ExitPlanMode
-          // in the current turn without a subsequent user response). This catches
-          // cases where the PostToolUse event was delayed or status hasn't transitioned yet.
-          const pendingInputTool = await prisma.event.findFirst({
-            where: {
-              thread: { messageId: message.id },
-              sessionId: autoCompleteSessionId,
-              toolName: { in: ['AskUserQuestion', 'ExitPlanMode'] },
-              ...(lastPrompt ? { timestamp: { gt: lastPrompt.timestamp } } : {}),
-            },
-            orderBy: { timestamp: 'desc' },
-          });
-
-          if (pendingInputTool) {
-            // Claude is waiting for user input — transition to needs_input, don't auto-review
-            await updateMessageStatus(message.id, 'needs_input');
-            void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
-            const hydratedMsg = await getMessageByIdForFeed(message.id);
-            if (hydratedMsg) {
-              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-                messageUpserted: hydratedMsg,
-              });
-            }
-            return;
-          }
+          // Note: needs_input is already set in real-time by the createEvent path
+          // (line 352) when AskUserQuestion/ExitPlanMode tools are used. No need
+          // to redundantly re-check here — doing so caused false positives when
+          // old tool calls from earlier turns were found in the same session.
 
           // Check if the current turn made any repo file changes (excluding .claude/ internal files)
           const writeEvents = await prisma.event.findMany({
