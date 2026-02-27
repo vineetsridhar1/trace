@@ -418,17 +418,25 @@ export async function ingestEvent(payload: HookEvent) {
         }
 
         if (currentMsg.status === 'in_progress') {
-          // Check if the session made any file changes (Write, Edit, MultiEdit)
-          const writeToolCount = await prisma.event.count({
+          // Check if the session made any repo file changes (excluding .claude/ internal files)
+          const writeEvents = await prisma.event.findMany({
             where: {
               thread: { messageId: message.id },
               sessionId: autoCompleteSessionId,
               hookEventName: 'PostToolUse',
               toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
             },
+            select: { toolInput: true },
           });
 
-          if (writeToolCount > 0) {
+          const repoWriteCount = writeEvents.filter((e: { toolInput: unknown }) => {
+            if (!e.toolInput || typeof e.toolInput !== 'object') return true;
+            const input = e.toolInput as Record<string, unknown>;
+            const filePath = (input.file_path ?? input.path ?? input.filepath ?? '') as string;
+            return !filePath.includes('/.claude/');
+          }).length;
+
+          if (repoWriteCount > 0) {
             // File changes detected — trigger auto-review
             await updateMessageStatus(message.id, 'auto_review');
             void syncTicketWithMessageStatus(message.id, channelId, 'auto_review');
