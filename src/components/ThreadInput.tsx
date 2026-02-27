@@ -62,7 +62,7 @@ export function ThreadInput({
     if (mode === 'plan') {
       finalText = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${text}`;
     } else if (mode === 'ask') {
-      finalText = `Do NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n\n${text}`;
+      finalText = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${text}`;
     }
 
     const attachmentIds = imageAttachments.getAttachmentIds();

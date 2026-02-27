@@ -154,7 +154,7 @@ export function RunButtons({
   const handleRun = () => {
     let finalPrompt = prompt;
     if (mode === 'ask') {
-      finalPrompt = `Do NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n\n${prompt}`;
+      finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${prompt}`;
     }
     onRun(mode === 'plan', finalPrompt);
   };
@@ -163,7 +163,7 @@ export function RunButtons({
     if (!onRunAfter) return;
     let finalPrompt = prompt;
     if (mode === 'ask') {
-      finalPrompt = `Do NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n\n${prompt}`;
+      finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${prompt}`;
     }
     onRunAfter(depIds, {
       prompt: finalPrompt,
