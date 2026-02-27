@@ -126,9 +126,9 @@ async function handleEnrichmentEvent(payload: HookEvent) {
   });
 
   // Transition to needs_input if AskUserQuestion/ExitPlanMode was detected
-  if (updates.toolName) {
+  if (updates.toolName === 'AskUserQuestion' || updates.toolName === 'ExitPlanMode') {
     const currentMsg = await prisma.message.findUnique({ where: { id: messageId }, select: { status: true } });
-    if (currentMsg?.status === 'in_progress') {
+    if (currentMsg?.status === 'in_progress' || currentMsg?.status === 'auto_review') {
       await updateMessageStatus(messageId, 'needs_input');
       void syncTicketWithMessageStatus(messageId, channelId, 'needs_input');
       const hydratedMsg = await getMessageByIdForFeed(messageId);
