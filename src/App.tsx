@@ -27,7 +27,6 @@ import { CreateServerModal } from './components/CreateServerModal';
 import { ServerRail } from './components/ServerRail';
 import { AiChatPanel } from './components/AiChatPanel';
 
-// Test change - small modification for workflow testing
 const GQL_UPDATE_MESSAGE_STATUS = gql`
   mutation UpdateMessageStatus($channelId: ID!, $messageId: ID!, $status: String!) {
     updateMessageStatus(channelId: $channelId, messageId: $messageId, status: $status) {
@@ -66,7 +65,6 @@ const GQL_UPDATE_QUEUED_RUN_CONFIG = gql`
 
 const SERVER_RAIL_WIDTH = 60;
 
-// Main application component - handles the core UI layout and state management
 export default function App() {
   return (
     <ChannelProvider>
