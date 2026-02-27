@@ -5,61 +5,274 @@ export interface TerminalTab {
   name: string;
   command?: string;
   env?: Record<string, string>;
+  readOnly?: boolean;
+}
+
+interface MessageTerminalState {
+  terminals: TerminalTab[];
+  activeTabId: string | null;
+  cwd: string;
 }
 
 export function useStartupTerminals() {
-  const [terminals, setTerminals] = useState<TerminalTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  const [runCwd, setRunCwd] = useState<string>('');
-  // Counter to generate unique terminal IDs across runs
+  // Per-message backing store (ref = source of truth)
+  const allTerminalsRef = useRef<Map<string, MessageTerminalState>>(new Map());
+  // Tracks which messageIds have been initialized (prevents double-init)
+  const initializedRef = useRef<Set<string>>(new Set());
+  // Which message is currently projected into React state
+  const currentMessageIdRef = useRef<string | null>(null);
+  // Counter for unique terminal IDs
   const runCountRef = useRef(0);
-  const userTerminalCountRef = useRef(0);
-  // Track which channel the current terminals belong to
-  const activeChannelRef = useRef<string | null>(null);
 
-  const killAllTerminals = useCallback(() => {
-    // Clearing the list unmounts TerminalTabContent components,
-    // which triggers useTerminal cleanup (killPty).
-    setTerminals([]);
-    setActiveTabId(null);
-    setIsVisible(false);
-    activeChannelRef.current = null;
+  // React state — projection of the current message's terminals
+  const [terminals, setTerminals] = useState<TerminalTab[]>([]);
+  const [activeTabId, setActiveTabIdState] = useState<string | null>(null);
+  const [cwd, setCwd] = useState<string>('');
+  const [initialized, setInitialized] = useState(false);
+
+  // Reads from ref, writes to React state
+  const syncToState = useCallback((messageId: string | null) => {
+    if (!messageId) {
+      setTerminals([]);
+      setActiveTabIdState(null);
+      setCwd('');
+      setInitialized(false);
+      return;
+    }
+    const entry = allTerminalsRef.current.get(messageId);
+    if (entry) {
+      setTerminals(entry.terminals);
+      setActiveTabIdState(entry.activeTabId);
+      setCwd(entry.cwd);
+      setInitialized(initializedRef.current.has(messageId));
+    } else {
+      setTerminals([]);
+      setActiveTabIdState(null);
+      setCwd('');
+      setInitialized(false);
+    }
   }, []);
 
-  const killTerminal = useCallback((terminalId: string) => {
-    // Removing from list unmounts the component, triggering PTY cleanup.
-    setTerminals((prev) => {
-      const remaining = prev.filter((t) => t.terminalId !== terminalId);
-      if (remaining.length === 0) {
-        setActiveTabId(null);
-        setIsVisible(false);
-        activeChannelRef.current = null;
-      } else {
-        setActiveTabId((currentTab) =>
-          currentTab === terminalId ? remaining[0].terminalId : currentTab,
-        );
+  // Switch to a different message's terminals
+  const selectMessage = useCallback((messageId: string | null) => {
+    currentMessageIdRef.current = messageId;
+    syncToState(messageId);
+  }, [syncToState]);
+
+  // Wrapper that also writes to the ref
+  const setActiveTabId = useCallback((tabId: string) => {
+    const msgId = currentMessageIdRef.current;
+    if (msgId) {
+      const entry = allTerminalsRef.current.get(msgId);
+      if (entry) {
+        entry.activeTabId = tabId;
       }
-      return remaining;
+    }
+    setActiveTabIdState(tabId);
+  }, []);
+
+  // Create default tabs for a message (Setup if script, Run if script, Terminal 1 always)
+  const initializeDefaults = useCallback((
+    messageId: string,
+    worktreeCwd: string,
+    setupScript?: string,
+    runScript?: string,
+    env?: Record<string, string>,
+  ) => {
+    // Guard: don't re-initialize
+    if (initializedRef.current.has(messageId)) return;
+    initializedRef.current.add(messageId);
+
+    runCountRef.current += 1;
+    const run = runCountRef.current;
+    const newTerminals: TerminalTab[] = [];
+
+    if (setupScript?.trim()) {
+      newTerminals.push({
+        terminalId: `setup-${messageId}-${run}`,
+        name: 'Setup',
+        command: setupScript,
+        env,
+        readOnly: true,
+      });
+    }
+
+    if (runScript?.trim()) {
+      // Create the Run tab without a command — it only executes when
+      // the user clicks the play button (rerunTab).
+      newTerminals.push({
+        terminalId: `run-${messageId}-${run}`,
+        name: 'Run',
+        readOnly: true,
+      });
+    }
+
+    newTerminals.push({
+      terminalId: `shell-${messageId}-${run}`,
+      name: 'Terminal 1',
     });
+
+    const entry: MessageTerminalState = {
+      terminals: newTerminals,
+      activeTabId: newTerminals[0]?.terminalId ?? null,
+      cwd: worktreeCwd,
+    };
+    allTerminalsRef.current.set(messageId, entry);
+
+    // Update React state if this is the current message
+    if (currentMessageIdRef.current === messageId) {
+      syncToState(messageId);
+    }
+  }, [syncToState]);
+
+  // Replace a named tab with a new terminalId (unmounts old PTY, mounts new)
+  const rerunTab = useCallback((tabName: string, command: string, env?: Record<string, string>) => {
+    const msgId = currentMessageIdRef.current;
+    if (!msgId) return;
+    const entry = allTerminalsRef.current.get(msgId);
+    if (!entry) return;
+
+    runCountRef.current += 1;
+    const run = runCountRef.current;
+    const newTerminalId = `${tabName.toLowerCase()}-${msgId}-${run}`;
+
+    entry.terminals = entry.terminals.map((t) =>
+      t.name === tabName
+        ? { terminalId: newTerminalId, name: tabName, command, env, readOnly: t.readOnly }
+        : t,
+    );
+    // If the replaced tab was active, keep focus on it
+    const wasActive = entry.activeTabId === entry.terminals.find(t => t.name === tabName)?.terminalId;
+    if (wasActive || entry.activeTabId === null) {
+      entry.activeTabId = newTerminalId;
+    }
+    // Always set active to the rerun tab
+    entry.activeTabId = newTerminalId;
+
+    if (currentMessageIdRef.current === msgId) {
+      syncToState(msgId);
+    }
+  }, [syncToState]);
+
+  // Stop a named tab: kill its PTY and replace with an idle shell (no command)
+  const stopTab = useCallback((tabName: string) => {
+    const msgId = currentMessageIdRef.current;
+    if (!msgId) return;
+    const entry = allTerminalsRef.current.get(msgId);
+    if (!entry) return;
+
+    const existing = entry.terminals.find((t) => t.name === tabName);
+    if (!existing) return;
+
+    // Kill the running PTY
+    void window.traceAPI.killPty(existing.terminalId);
+
+    // Replace with a new idle terminal (no command)
+    runCountRef.current += 1;
+    const run = runCountRef.current;
+    const newTerminalId = `${tabName.toLowerCase()}-${msgId}-${run}`;
+
+    entry.terminals = entry.terminals.map((t) =>
+      t.name === tabName
+        ? { terminalId: newTerminalId, name: tabName, readOnly: t.readOnly }
+        : t,
+    );
+    if (entry.activeTabId === existing.terminalId) {
+      entry.activeTabId = newTerminalId;
+    }
+
+    if (currentMessageIdRef.current === msgId) {
+      syncToState(msgId);
+    }
+  }, [syncToState]);
+
+  // Delete all terminals for a specific message
+  const killAllForMessage = useCallback((messageId: string) => {
+    allTerminalsRef.current.delete(messageId);
+    initializedRef.current.delete(messageId);
+    if (currentMessageIdRef.current === messageId) {
+      syncToState(messageId);
+    }
+  }, [syncToState]);
+
+  // Clear everything (channel switch)
+  const killAll = useCallback(() => {
+    allTerminalsRef.current.clear();
+    initializedRef.current.clear();
+    currentMessageIdRef.current = null;
+    setTerminals([]);
+    setActiveTabIdState(null);
+    setCwd('');
+    setInitialized(false);
   }, []);
 
-  const showTerminals = useCallback(() => {
-    setIsVisible(true);
-  }, []);
+  // Close a single terminal tab
+  const killTerminal = useCallback((terminalId: string) => {
+    const msgId = currentMessageIdRef.current;
+    if (!msgId) return;
+    const entry = allTerminalsRef.current.get(msgId);
+    if (!entry) return;
 
+    entry.terminals = entry.terminals.filter((t) => t.terminalId !== terminalId);
+    if (entry.terminals.length === 0) {
+      allTerminalsRef.current.delete(msgId);
+      initializedRef.current.delete(msgId);
+    } else if (entry.activeTabId === terminalId) {
+      entry.activeTabId = entry.terminals[0].terminalId;
+    }
+
+    if (currentMessageIdRef.current === msgId) {
+      syncToState(msgId);
+    }
+  }, [syncToState]);
+
+  // Add a new user terminal tab
+  const addTerminal = useCallback(() => {
+    const msgId = currentMessageIdRef.current;
+    if (!msgId) return;
+
+    let entry = allTerminalsRef.current.get(msgId);
+    if (!entry) {
+      // Create an entry if none exists
+      entry = { terminals: [], activeTabId: null, cwd: '' };
+      allTerminalsRef.current.set(msgId, entry);
+    }
+
+    // Compute name: find highest existing "Terminal N" and add 1
+    let maxN = 0;
+    for (const t of entry.terminals) {
+      const match = t.name.match(/^Terminal (\d+)$/);
+      if (match) {
+        maxN = Math.max(maxN, parseInt(match[1], 10));
+      }
+    }
+
+    const tab: TerminalTab = {
+      terminalId: `user-terminal-${msgId}-${maxN + 1}-${Date.now()}`,
+      name: `Terminal ${maxN + 1}`,
+    };
+
+    entry.terminals = [...entry.terminals, tab];
+    entry.activeTabId = tab.terminalId;
+
+    if (currentMessageIdRef.current === msgId) {
+      syncToState(msgId);
+    }
+  }, [syncToState]);
+
+  // Channel-level sidebar play button (stores under channelId key in the map)
   const runAllScripts = useCallback(
-    (contextId: string, cwd: string, scripts: { name: string; command: string }[], envMaps?: Record<string, string>[]) => {
+    (contextId: string, runCwd: string, scripts: { name: string; command: string }[], envMaps?: Record<string, string>[]) => {
       // If terminals already exist for this context, just show them
-      if (activeChannelRef.current === contextId) {
-        setIsVisible(true);
+      if (allTerminalsRef.current.has(contextId) && initializedRef.current.has(contextId)) {
+        currentMessageIdRef.current = contextId;
+        syncToState(contextId);
         return;
       }
 
       runCountRef.current += 1;
       const run = runCountRef.current;
 
-      // Build new terminal list. Old terminals unmount, killing their PTYs.
       const newTerminals: TerminalTab[] = scripts.map((script, i) => ({
         terminalId: `startup-${contextId}-${i}-${run}`,
         name: script.name,
@@ -67,37 +280,34 @@ export function useStartupTerminals() {
         env: envMaps?.[i],
       }));
 
-      activeChannelRef.current = contextId;
-      setRunCwd(cwd);
-      setTerminals(newTerminals);
-      setActiveTabId(newTerminals.length > 0 ? newTerminals[0].terminalId : null);
-      setIsVisible(newTerminals.length > 0);
-    },
-    [],
-  );
+      const entry: MessageTerminalState = {
+        terminals: newTerminals,
+        activeTabId: newTerminals[0]?.terminalId ?? null,
+        cwd: runCwd,
+      };
 
-  const addTerminal = useCallback(() => {
-    userTerminalCountRef.current += 1;
-    const n = userTerminalCountRef.current;
-    const tab: TerminalTab = {
-      terminalId: `user-terminal-${n}-${Date.now()}`,
-      name: `Terminal ${n}`,
-    };
-    setTerminals((prev) => [...prev, tab]);
-    setActiveTabId(tab.terminalId);
-    setIsVisible(true);
-  }, []);
+      allTerminalsRef.current.set(contextId, entry);
+      initializedRef.current.add(contextId);
+      currentMessageIdRef.current = contextId;
+      syncToState(contextId);
+    },
+    [syncToState],
+  );
 
   return {
     terminals,
     activeTabId,
     setActiveTabId,
-    isVisible,
-    runCwd,
-    showTerminals,
-    runAllScripts,
-    killAllTerminals,
+    cwd,
+    initialized,
+    selectMessage,
+    initializeDefaults,
+    rerunTab,
+    stopTab,
+    killAllForMessage,
+    killAll,
     killTerminal,
     addTerminal,
+    runAllScripts,
   };
 }

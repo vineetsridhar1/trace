@@ -7,7 +7,6 @@ import { PlanResponseBar } from "./PlanResponseBar";
 import { TicketView } from "./TicketView";
 import { WorktreeChanges } from "./WorktreeChanges";
 import { TerminalTabs } from "./TerminalTabs";
-import { Terminal } from "./Terminal";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
 import { RunButtons } from "./RunButtons";
@@ -40,7 +39,9 @@ export function ThreadPanel() {
     setTicketDependencies,
     clearThread,
     switchThread,
-    onRunScripts,
+    onRerunScript,
+    onStopScript,
+    runScriptRunning,
     toggleReadGroup,
     onClose,
     onDeleteWorktree,
@@ -48,7 +49,7 @@ export function ThreadPanel() {
     onExitFullscreen,
     onStartDrag,
     baseBranch,
-    startupTerminals,
+    terminals,
     activeTerminalTabId,
     terminalCwd,
     onSelectTerminalTab,
@@ -155,6 +156,7 @@ export function ThreadPanel() {
     }
   }, [selectedMessageId]);
 
+
   return (
     <>
       {!isFullscreen && (
@@ -182,9 +184,7 @@ export function ThreadPanel() {
           onSetViewMode={setViewMode}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
-          scriptsAvailable={scriptsAvailable}
           isFullscreen={isFullscreen}
-          onRunScripts={onRunScripts}
           onClose={onClose}
           onDeleteWorktree={onDeleteWorktree}
           onEnterFullscreen={onEnterFullscreen}
@@ -202,21 +202,29 @@ export function ThreadPanel() {
             <WorktreeChanges messageId={selectedMessageId} baseBranch={baseBranch} />
           ) : viewMode === "terminal" ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {startupTerminals.length > 0 ? (
+              {hasWorktree === false ? (
+                <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+                  No worktree available
+                </div>
+              ) : terminals.length > 0 ? (
                 <TerminalTabs
-                  terminals={startupTerminals}
+                  terminals={terminals}
                   activeTabId={activeTerminalTabId}
                   cwd={terminalCwd}
+                  runScriptRunning={runScriptRunning}
+                  scriptsAvailable={scriptsAvailable}
                   onSelectTab={onSelectTerminalTab}
                   onCloseTab={onCloseTerminalTab}
                   onCloseAll={onCloseAllTerminals}
                   onAddTab={onAddTerminal}
+                  onRunScript={() => onRerunScript('Run')}
+                  onStopScript={() => onStopScript('Run')}
+                  onRerunSetup={() => onRerunScript('Setup')}
                 />
               ) : (
-                <Terminal
-                  terminalId={`thread-${selectedMessageId ?? "none"}`}
-                  cwd={terminalCwd}
-                />
+                <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+                  Initializing terminals...
+                </div>
               )}
             </div>
           ) : (
@@ -303,61 +311,63 @@ export function ThreadPanel() {
           <StickyTodoList todos={latestTodos} />
         )}
 
-        {pendingRunMessageId === selectedMessageId && !isClaudeRunning ? (
-          <RunButtons
-            initialPrompt={pendingRunInitialPrompt}
-            onRun={(planMode, prompt) => {
-              void runPendingMessage(planMode, prompt);
-            }}
-            channelTickets={channelTickets}
-            currentMessageId={pendingRunMessageId}
-            onRunAfter={(depIds, runConfig) => {
-              if (pendingRunMessageId) {
-                setTicketDependencies(pendingRunMessageId, depIds, runConfig);
-                clearPendingRun();
-              }
-            }}
-          />
-        ) : messageStatus === 'creation' ? (
-          <CreationStatusBar />
-        ) : messageStatus === 'queued' ? (
-          <QueuedStatusBar key={selectedMessageId} messageId={selectedMessageId!} />
-        ) : showQuestion ? (
-          <AskUserQuestionBar
-            node={showQuestion}
-            onResponse={(text) => {
-              void sendPlanResponse(text, 'keep-context');
-            }}
-            onDismiss={() => {
-              setDismissedQuestionId(showQuestion.id);
-              void stopClaude();
-            }}
-          />
-        ) : showPlan ? (
-          <PlanResponseBar
-            node={showPlan}
-            onPlanResponse={(text, mode) => {
-              setDismissedPlanId(showPlan.id);
-              void sendPlanResponse(
-                text,
-                mode,
-                showPlan.planContent,
-                showPlan.planFilePath,
-              );
-            }}
-            onDismiss={() => {
-              setDismissedPlanId(showPlan.id);
-              void stopClaude();
-            }}
-          />
-        ) : (
-          <ThreadInput
-            isClaudeRunning={isClaudeRunning}
-            lastUserMessageTime={lastUserMessageTime}
-            onSendThreadMessage={sendThreadMessage}
-            onStopClaude={() => void stopClaude()}
-            onClearThread={clearThread}
-          />
+        {viewMode === "agent" && (
+          pendingRunMessageId === selectedMessageId && !isClaudeRunning ? (
+            <RunButtons
+              initialPrompt={pendingRunInitialPrompt}
+              onRun={(planMode, prompt) => {
+                void runPendingMessage(planMode, prompt);
+              }}
+              channelTickets={channelTickets}
+              currentMessageId={pendingRunMessageId}
+              onRunAfter={(depIds, runConfig) => {
+                if (pendingRunMessageId) {
+                  setTicketDependencies(pendingRunMessageId, depIds, runConfig);
+                  clearPendingRun();
+                }
+              }}
+            />
+          ) : messageStatus === 'creation' ? (
+            <CreationStatusBar />
+          ) : messageStatus === 'queued' ? (
+            <QueuedStatusBar key={selectedMessageId} messageId={selectedMessageId!} />
+          ) : showQuestion ? (
+            <AskUserQuestionBar
+              node={showQuestion}
+              onResponse={(text) => {
+                void sendPlanResponse(text, 'keep-context');
+              }}
+              onDismiss={() => {
+                setDismissedQuestionId(showQuestion.id);
+                void stopClaude();
+              }}
+            />
+          ) : showPlan ? (
+            <PlanResponseBar
+              node={showPlan}
+              onPlanResponse={(text, mode) => {
+                setDismissedPlanId(showPlan.id);
+                void sendPlanResponse(
+                  text,
+                  mode,
+                  showPlan.planContent,
+                  showPlan.planFilePath,
+                );
+              }}
+              onDismiss={() => {
+                setDismissedPlanId(showPlan.id);
+                void stopClaude();
+              }}
+            />
+          ) : (
+            <ThreadInput
+              isClaudeRunning={isClaudeRunning}
+              lastUserMessageTime={lastUserMessageTime}
+              onSendThreadMessage={sendThreadMessage}
+              onStopClaude={() => void stopClaude()}
+              onClearThread={clearThread}
+            />
+          )
         )}
 
       </div>

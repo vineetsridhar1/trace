@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
+import { FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
 import type { ThreadInfo } from '../hooks/useThread';
@@ -49,9 +49,7 @@ interface ThreadHeaderProps {
   onSetViewMode: (mode: ViewMode) => void;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
-  scriptsAvailable: boolean;
   isFullscreen: boolean;
-  onRunScripts: () => void;
   onClose: () => void;
   onDeleteWorktree: () => void;
   onMergeToMain: () => void;
@@ -70,9 +68,7 @@ export const ThreadHeader = memo(function ThreadHeader({
   onSetViewMode,
   deletingWorktree,
   hasWorktree,
-  scriptsAvailable,
   isFullscreen,
-  onRunScripts,
   onClose,
   onDeleteWorktree,
   onMergeToMain,
@@ -229,17 +225,6 @@ export const ThreadHeader = memo(function ThreadHeader({
               </div>
             )}
           </div>
-        )}
-        {hasWorktree === true && scriptsAvailable && (
-          <Tooltip text="Run startup scripts" position="bottom">
-            <button
-              type="button"
-              onClick={onRunScripts}
-              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300"
-            >
-              <FiPlay className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </Tooltip>
         )}
         {hasWorktree === true && (messageStatus === 'in_progress' || messageStatus === 'completed' || messageStatus === 'auto_review') && (
           <Tooltip text="Merge to main" position="bottom">

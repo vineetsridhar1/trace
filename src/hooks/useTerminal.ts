@@ -30,9 +30,10 @@ interface UseTerminalOptions {
   cwd: string;
   env?: Record<string, string>;
   command?: string;
+  readOnly?: boolean;
 }
 
-export function useTerminal({ terminalId, cwd, env, command }: UseTerminalOptions) {
+export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -80,7 +81,8 @@ export function useTerminal({ terminalId, cwd, env, command }: UseTerminalOption
         theme: TOKYO_NIGHT_THEME,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         fontSize: 13,
-        cursorBlink: true,
+        cursorBlink: !readOnly,
+        disableStdin: readOnly,
         convertEol: true,
       });
       fitAddon = new FitAddon();
@@ -136,9 +138,11 @@ export function useTerminal({ terminalId, cwd, env, command }: UseTerminalOption
         }
       });
 
-      inputDisposable = terminal.onData((data) => {
-        void window.traceAPI.writePty(terminalId, data);
-      });
+      if (!readOnly) {
+        inputDisposable = terminal.onData((data) => {
+          void window.traceAPI.writePty(terminalId, data);
+        });
+      }
 
       cleanupData = window.traceAPI.onPtyData((id, data) => {
         if (id === terminalId) terminal?.write(data);

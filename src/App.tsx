@@ -164,14 +164,20 @@ function AppContent() {
   });
 
   const {
-    terminals: startupTerminalList,
+    terminals: terminalList,
     activeTabId,
     setActiveTabId,
-    runCwd: startupTerminalsCwd,
-    runAllScripts,
-    killAllTerminals,
+    cwd: terminalsCwd,
+    initialized: terminalsInitialized,
+    selectMessage: selectTerminalMessage,
+    initializeDefaults: initializeTerminalDefaults,
+    rerunTab,
+    stopTab,
+    killAllForMessage: killTerminalsForMessage,
+    killAll: killAllTerminals,
     killTerminal,
     addTerminal,
+    runAllScripts,
   } = useStartupTerminals();
 
   const {
@@ -326,6 +332,7 @@ function AppContent() {
           variables: { channelId: activeChannelId, messageId },
         });
         removeMessage(messageId);
+        killTerminalsForMessage(messageId);
         void window.traceAPI.releasePorts(messageId);
         void window.traceAPI.deleteWorktree(messageId, getChannelRepoPath());
       } catch {
@@ -552,6 +559,11 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [activeChannelId, loadThreadEvents, refreshMessages, selectedMessageRef, subscriptionsActive]);
 
+  // Sync terminal selection with message selection
+  useEffect(() => {
+    selectTerminalMessage(selectedMessageId);
+  }, [selectedMessageId, selectTerminalMessage]);
+
   const handleSwitchChannel = useCallback(
     (channelId: string) => {
       if (selectedMessageId) {
@@ -568,6 +580,7 @@ function AppContent() {
     },
     [switchChannel, clearMessages, clearBoard, closeThreadPanel, killAllTerminals, selectedMessageId],
   );
+
 
   const handleSwitchServer = useCallback(
     (serverId: string) => {
@@ -702,38 +715,78 @@ function AppContent() {
     [enrichedChannels, runAllScripts],
   );
 
-  const handleRunMessageScripts = useCallback(async () => {
+  const handleInitializeTerminals = useCallback(async () => {
     if (!selectedMessageId || !activeChannelId || !repoPath) return;
     const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
     const channel = enrichedChannels.find((item) => item.id === activeChannelId);
-    const script = channel?.runScript;
-    if (!script?.trim()) return;
+    const setupScript = channel?.setupScript;
+    const runScript = channel?.runScript;
 
-    const portResult = await window.traceAPI.allocatePorts(selectedMessageId, 10);
-    if (!portResult.success || !portResult.ports) return;
-
-    const ports = portResult.ports;
-    const env: Record<string, string> = {
-      PORT: String(ports[0]),
-      TRACE_BASE_PORT: String(ports[0]),
-      REPO_FOLDER: worktreeResult.worktreePath,
-    };
-    for (let i = 0; i < ports.length; i += 1) {
-      env[`TRACE_PORT_${i}`] = String(ports[i]);
+    let env: Record<string, string> | undefined;
+    if (runScript?.trim()) {
+      const portResult = await window.traceAPI.allocatePorts(selectedMessageId, 10);
+      if (portResult.success && portResult.ports) {
+        const ports = portResult.ports;
+        env = {
+          PORT: String(ports[0]),
+          TRACE_BASE_PORT: String(ports[0]),
+          REPO_FOLDER: worktreeResult.worktreePath,
+        };
+        for (let i = 0; i < ports.length; i += 1) {
+          env[`TRACE_PORT_${i}`] = String(ports[i]);
+        }
+      }
     }
 
-    runAllScripts(selectedMessageId, worktreeResult.worktreePath, [{ name: 'Run', command: script }], [env]);
-  }, [activeChannelId, enrichedChannels, repoPath, runAllScripts, selectedMessageId]);
+    initializeTerminalDefaults(selectedMessageId, worktreeResult.worktreePath, setupScript ?? undefined, runScript ?? undefined, env);
+  }, [activeChannelId, enrichedChannels, repoPath, initializeTerminalDefaults, selectedMessageId]);
+
+  const handleRerunScript = useCallback(async (tabName: string) => {
+    if (!selectedMessageId || !activeChannelId || !repoPath) return;
+    const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
+    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
+
+    const channel = enrichedChannels.find((item) => item.id === activeChannelId);
+    const script = tabName === 'Setup' ? channel?.setupScript : channel?.runScript;
+    if (!script?.trim()) return;
+
+    let env: Record<string, string> | undefined;
+    if (tabName === 'Run') {
+      // Release old ports, allocate fresh ones
+      await window.traceAPI.releasePorts(selectedMessageId);
+      const portResult = await window.traceAPI.allocatePorts(selectedMessageId, 10);
+      if (portResult.success && portResult.ports) {
+        const ports = portResult.ports;
+        env = {
+          PORT: String(ports[0]),
+          TRACE_BASE_PORT: String(ports[0]),
+          REPO_FOLDER: worktreeResult.worktreePath,
+        };
+        for (let i = 0; i < ports.length; i += 1) {
+          env[`TRACE_PORT_${i}`] = String(ports[i]);
+        }
+      }
+    }
+
+    rerunTab(tabName, script, env);
+  }, [activeChannelId, enrichedChannels, repoPath, rerunTab, selectedMessageId]);
+
+  // Initialize terminal tabs (and run setup script) when a worktree is detected
+  useEffect(() => {
+    if (hasWorktree === true && selectedMessageId) {
+      void handleInitializeTerminals();
+    }
+  }, [hasWorktree, selectedMessageId, handleInitializeTerminals]);
 
   const handleDeleteWorktree = useCallback(() => {
-    killAllTerminals();
     if (selectedMessageId) {
+      killTerminalsForMessage(selectedMessageId);
       void window.traceAPI.releasePorts(selectedMessageId);
     }
     void deleteWorktree((messageId) => void updateMessageStatus(messageId, 'completed'));
-  }, [killAllTerminals, selectedMessageId, deleteWorktree, updateMessageStatus]);
+  }, [killTerminalsForMessage, selectedMessageId, deleteWorktree, updateMessageStatus]);
 
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
   const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
@@ -792,17 +845,21 @@ function AppContent() {
       dragging,
       onClose: handleCloseThread,
       onDeleteWorktree: handleDeleteWorktree,
-      onRunScripts: (): void => { void handleRunMessageScripts(); },
+      onInitializeTerminals: (): void => { void handleInitializeTerminals(); },
+      onRerunScript: (tabName: string): void => { void handleRerunScript(tabName); },
+      onStopScript: stopTab,
+      runScriptRunning: terminalList.some((t) => t.name === 'Run' && Boolean(t.command)),
       onStartDrag: () => startDragging('right'),
       onEnterFullscreen: (): void => { void enterFullscreen(); },
       onExitFullscreen: exitFullscreen,
       baseBranch: activeChannelBaseBranch,
-      startupTerminals: startupTerminalList,
+      terminals: terminalList,
+      terminalsInitialized,
       activeTerminalTabId: activeTabId,
-      terminalCwd: startupTerminalsCwd || activeChannelRepoPath,
+      terminalCwd: terminalsCwd || activeChannelRepoPath,
       onSelectTerminalTab: setActiveTabId,
       onCloseTerminalTab: killTerminal,
-      onCloseAllTerminals: killAllTerminals,
+      onCloseAllTerminals: (): void => { if (selectedMessageId) killTerminalsForMessage(selectedMessageId); },
       onAddTerminal: addTerminal,
     }),
     [
@@ -813,11 +870,11 @@ function AppContent() {
       channelTickets, handleSetTicketDependencies, handleRemoveTicketDependency, handleUpdateQueuedRunConfig,
       isClaudeRunning, selectedMessageStatus, selectedMessageQueuedRunConfig, selectedTicket,
       isFullscreen, scriptsAvailable, dragging,
-      handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
+      handleCloseThread, handleDeleteWorktree, handleInitializeTerminals, handleRerunScript, stopTab,
       startDragging, enterFullscreen, exitFullscreen,
-      activeChannelBaseBranch, startupTerminalList, activeTabId,
-      startupTerminalsCwd, activeChannelRepoPath, setActiveTabId,
-      killTerminal, killAllTerminals, addTerminal,
+      activeChannelBaseBranch, terminalList, terminalsInitialized, activeTabId,
+      terminalsCwd, activeChannelRepoPath, setActiveTabId,
+      killTerminal, killTerminalsForMessage, addTerminal,
     ],
   );
 

@@ -47,13 +47,17 @@ export interface ThreadContextValue {
   // UI callbacks
   onClose: () => void;
   onDeleteWorktree: () => void;
-  onRunScripts: () => void;
+  onInitializeTerminals: () => void;
+  onRerunScript: (tabName: string) => void;
+  onStopScript: (tabName: string) => void;
+  runScriptRunning: boolean;
   onStartDrag: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
   // Terminal state for thread tabs
   baseBranch: string;
-  startupTerminals: TerminalTab[];
+  terminals: TerminalTab[];
+  terminalsInitialized: boolean;
   activeTerminalTabId: string | null;
   terminalCwd: string;
   onSelectTerminalTab: (terminalId: string) => void;

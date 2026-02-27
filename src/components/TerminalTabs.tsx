@@ -1,4 +1,4 @@
-import { FiX } from 'react-icons/fi';
+import { FiPlay, FiRefreshCw, FiSquare, FiX } from 'react-icons/fi';
 import { useTerminal } from '../hooks/useTerminal';
 import { Tooltip } from './Tooltip';
 import type { TerminalTab } from '../hooks/useStartupTerminals';
@@ -10,14 +10,15 @@ interface TerminalTabContentProps {
   command?: string;
   visible: boolean;
   env?: Record<string, string>;
+  readOnly?: boolean;
 }
 
-function TerminalTabContent({ terminalId, cwd, command, visible, env }: TerminalTabContentProps) {
-  const { containerRef, focus } = useTerminal({ terminalId, cwd, env, command });
+function TerminalTabContent({ terminalId, cwd, command, visible, env, readOnly }: TerminalTabContentProps) {
+  const { containerRef, focus } = useTerminal({ terminalId, cwd, env, command, readOnly });
 
   return (
     <div
-      className="absolute inset-0 p-1"
+      className="absolute inset-0 pl-2 bg-[#1a1b26]"
       style={{ visibility: visible ? 'visible' : 'hidden' }}
       onClick={focus}
       onMouseDown={focus}
@@ -31,13 +32,20 @@ interface TerminalTabsProps {
   terminals: TerminalTab[];
   activeTabId: string | null;
   cwd: string;
+  runScriptRunning: boolean;
+  scriptsAvailable: boolean;
   onSelectTab: (terminalId: string) => void;
   onCloseTab: (terminalId: string) => void;
   onCloseAll: () => void;
   onAddTab: () => void;
+  onRunScript: () => void;
+  onStopScript: () => void;
+  onRerunSetup: () => void;
 }
 
-export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onCloseTab, onCloseAll, onAddTab }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, scriptsAvailable, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup }: TerminalTabsProps) {
+  const runTab = terminals.find((t) => t.name === 'Run');
+  const setupTab = terminals.find((t) => t.name === 'Setup');
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Tab bar */}
@@ -54,18 +62,20 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
                 onClick={() => onSelectTab(t.terminalId)}
               >
                 <span className="truncate max-w-[120px]">{t.name}</span>
-                <Tooltip text="Close tab">
-                  <button
-                    type="button"
-                    className="ml-0.5 shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-[#3b4261]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCloseTab(t.terminalId);
-                    }}
-                  >
-                    <FiX className="h-2 w-2" aria-hidden="true" />
-                  </button>
-                </Tooltip>
+                {!t.readOnly && (
+                  <Tooltip text="Close tab">
+                    <button
+                      type="button"
+                      className="ml-0.5 shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-[#3b4261]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCloseTab(t.terminalId);
+                      }}
+                    >
+                      <FiX className="h-2 w-2" aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                )}
               </div>
             );
           })}
@@ -90,6 +100,51 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
         </Tooltip>
       </div>
 
+      {/* Setup action bar */}
+      {activeTabId === setupTab?.terminalId && (
+        <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
+          <Tooltip text="Re-run setup">
+            <button
+              type="button"
+              onClick={onRerunSetup}
+              className="flex items-center gap-1.5 rounded border border-[#292e42] px-2 py-1 text-xs text-[#565f89] transition-colors hover:bg-[#292e42] hover:text-[#c0caf5]"
+            >
+              <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Re-run Setup</span>
+            </button>
+          </Tooltip>
+        </div>
+      )}
+
+      {/* Run script action bar */}
+      {scriptsAvailable && activeTabId === runTab?.terminalId && (
+        <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
+          {runScriptRunning ? (
+            <Tooltip text="Stop script">
+              <button
+                type="button"
+                onClick={onStopScript}
+                className="flex items-center gap-1.5 rounded border border-[#292e42] px-2 py-1 text-xs text-[#f7768e] transition-colors hover:bg-[#292e42] hover:text-red-300"
+              >
+                <FiSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Stop</span>
+              </button>
+            </Tooltip>
+          ) : (
+            <Tooltip text="Run script">
+              <button
+                type="button"
+                onClick={onRunScript}
+                className="flex items-center gap-1.5 rounded border border-[#292e42] px-2 py-1 text-xs text-green-400 transition-colors hover:bg-[#292e42] hover:text-green-300"
+              >
+                <FiPlay className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Run</span>
+              </button>
+            </Tooltip>
+          )}
+        </div>
+      )}
+
       {/* Terminal content -- all mounted, visibility toggled via CSS */}
       <div className="relative min-h-0 flex-1">
         {terminals.map((t) => (
@@ -100,6 +155,7 @@ export function TerminalTabs({ terminals, activeTabId, cwd, onSelectTab, onClose
             command={t.command}
             visible={t.terminalId === activeTabId}
             env={t.env}
+            readOnly={t.readOnly}
           />
         ))}
       </div>
