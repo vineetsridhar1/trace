@@ -497,10 +497,26 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     collapsed.push(node);
 
     if (middleNodes.length > 0) {
+      let toolCallCount = 0;
+      let messageCount = 0;
+      for (const mn of middleNodes) {
+        if (mn.kind === 'readglob-group') {
+          toolCallCount += mn.count;
+        } else if (mn.kind === 'event') {
+          if (mn.event.hookEventName === 'PostToolUse' || mn.event.hookEventName === 'PreToolUse') {
+            toolCallCount++;
+          }
+          if (mn.event.lastAssistantMessage && stripTraceInternal(mn.event.lastAssistantMessage).trim()) {
+            messageCount++;
+          }
+        }
+      }
       const group: CollapsedTurnGroupNode = {
         kind: 'collapsed-turn',
         id: `collapsed-turn-${(node as { event: ServerEvent }).event.id}`,
         stepCount: middleNodes.length,
+        toolCallCount,
+        messageCount,
         innerNodes: middleNodes,
       };
       collapsed.push(group);

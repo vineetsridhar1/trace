@@ -196,15 +196,24 @@ body,
   opacity: 1;
 }
 
+.collapsed-turn-chevron {
+  transition: transform 0.2s ease;
+}
+
+.collapsed-turn-chevron.open {
+  transform: rotate(90deg);
+}
+
 .collapsed-turn-body {
-  max-height: 0;
+  interpolate-size: allow-keywords;
+  height: 0;
   opacity: 0;
   overflow: hidden;
-  transition: max-height 0.24s ease, opacity 0.24s ease;
+  transition: height 0.24s ease, opacity 0.24s ease;
 }
 
 .collapsed-turn-body.open {
-  max-height: 5000px;
+  height: auto;
   opacity: 1;
 }
 

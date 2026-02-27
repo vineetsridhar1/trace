@@ -312,6 +312,8 @@ export interface CollapsedTurnGroupNode {
   kind: 'collapsed-turn';
   id: string;
   stepCount: number;
+  toolCallCount: number;
+  messageCount: number;
   innerNodes: SessionRenderNode[];
 }
 

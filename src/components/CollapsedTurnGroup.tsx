@@ -1,4 +1,5 @@
 import React from 'react';
+import { FiTerminal } from 'react-icons/fi';
 import type { CollapsedTurnGroupNode } from '../types';
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from './ThreadEvent';
 import { ReadGlobGroup } from './ReadGlobGroup';
@@ -11,6 +12,20 @@ interface CollapsedTurnGroupProps {
   onToggle: () => void;
   expandedReadGroupIds: Record<string, boolean>;
   toggleReadGroup: (groupId: string) => void;
+}
+
+function buildSummary(node: CollapsedTurnGroupNode): string {
+  const parts: string[] = [];
+  if (node.toolCallCount > 0) {
+    parts.push(`${node.toolCallCount} tool ${node.toolCallCount === 1 ? 'call' : 'calls'}`);
+  }
+  if (node.messageCount > 0) {
+    parts.push(`${node.messageCount} ${node.messageCount === 1 ? 'message' : 'messages'}`);
+  }
+  if (parts.length === 0) {
+    parts.push(`${node.stepCount} ${node.stepCount === 1 ? 'step' : 'steps'}`);
+  }
+  return parts.join(', ');
 }
 
 export function CollapsedTurnGroup({
@@ -27,11 +42,14 @@ export function CollapsedTurnGroup({
         onClick={onToggle}
         className="activity-row-header w-full cursor-pointer text-left"
       >
-        <span className="activity-row-title opacity-60 font-light">
-          {node.stepCount} {node.stepCount === 1 ? 'step' : 'steps'}
+        <span className={`collapsed-turn-chevron text-[10px] text-[#7f8bbf] ${isExpanded ? 'open' : ''}`}>
+          ▶
         </span>
-        <span className={`read-group-chevron text-[10px] text-[#7f8bbf] ${isExpanded ? 'open' : ''}`}>
-          ▼
+        {node.toolCallCount > 0 && (
+          <FiTerminal className="text-[12px] text-[#6472a7] shrink-0" />
+        )}
+        <span className="activity-row-title opacity-60 font-light">
+          {buildSummary(node)}
         </span>
       </button>
 
