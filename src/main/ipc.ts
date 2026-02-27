@@ -455,124 +455,25 @@ export function registerIpcHandlers() {
       targets: Array<{ messageId: string; branch: string }>,
       baseBranch: string,
     ) => {
-      async function getStoredBaseSha(messageId: string, branch: string): Promise<string | null> {
-        const storedByMessage = await runProcess(
-          'git',
-          ['config', `trace.base-sha-msg-${messageId}`],
-          repoPath,
-        );
-        if (storedByMessage.code === 0 && storedByMessage.stdout.trim()) {
-          return storedByMessage.stdout.trim();
-        }
-
-        // Backward compatibility: fall back to legacy branch-derived key.
-        const legacyId = branch.replace('trace/', '');
-        if (legacyId && legacyId !== branch) {
-          const legacy = await runProcess('git', ['config', `trace.base-sha-${legacyId}`], repoPath);
-          if (legacy.code === 0 && legacy.stdout.trim()) {
-            return legacy.stdout.trim();
-          }
-        }
-
-        return null;
-      }
-
-      // Check if branch is merged into targetRef via regular merge or FF.
-      async function isMergedInto(messageId: string, branch: string, targetRef: string): Promise<boolean | null> {
-        const ancestor = await runProcess('git', ['merge-base', '--is-ancestor', branch, targetRef], repoPath);
-        if (ancestor.code !== 0) return null;
-
-        const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
-        const targetRev = await runProcess('git', ['rev-parse', targetRef], repoPath);
-        if (branchRev.code !== 0 || targetRev.code !== 0) return null;
-
-        const branchSha = branchRev.stdout.trim();
-        const targetSha = targetRev.stdout.trim();
-        const storedBaseSha = await getStoredBaseSha(messageId, branch);
-
-        // Branch tip is still the original base commit; base moved elsewhere.
-        // Do not mark these "no-op" branches as merged.
-        if (storedBaseSha && branchSha === storedBaseSha && branchSha !== targetSha) {
-          return false;
-        }
-
-        // Branch is behind target and has diverged from its initial base -> merged.
-        if (branchSha !== targetSha) return true;
-
-        // Same-commit case (usually FF merge): only mark merged if base moved from
-        // the initial SHA captured when this ticket worktree was created.
-        if (!storedBaseSha) return false;
-        return storedBaseSha !== targetSha;
-      }
-
-      // Detect squash/rebase merges via patch-id matching.
-      // Computes the branch's combined patch-id and checks if any commit
-      // on the target has the same patch-id (i.e., equivalent changes).
-      async function isSquashMergedInto(messageId: string, branch: string, targetRef: string): Promise<boolean> {
-        const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
-        if (branchRev.code !== 0) return false;
-
-        const storedBaseSha = await getStoredBaseSha(messageId, branch);
-        // No-op guard: branch hasn't moved from its creation point.
-        if (storedBaseSha && branchRev.stdout.trim() === storedBaseSha) return false;
-
-        // Find the merge-base between target and branch.
-        const mergeBase = await runProcess('git', ['merge-base', targetRef, branch], repoPath);
-        if (mergeBase.code !== 0) return false;
-        const mergeBaseSha = mergeBase.stdout.trim();
-
-        // Compute the branch's combined patch-id.
-        const branchDiff = await runProcess('git', ['diff', mergeBaseSha, branch], repoPath);
-        if (branchDiff.code !== 0 || !branchDiff.stdout.trim()) return false;
-
-        const branchPatchId = await runProcess('git', ['patch-id', '--stable'], repoPath, branchDiff.stdout);
-        if (branchPatchId.code !== 0) return false;
-        const branchPid = branchPatchId.stdout.trim().split(/\s+/)[0];
-        if (!branchPid) return false;
-
-        // Compute patch-ids for all commits on target since the merge-base.
-        // Uses format-patch for bulk efficiency (~200ms for 100+ commits).
-        const formatPatch = await runProcess(
-          'git',
-          ['format-patch', '--stdout', `${mergeBaseSha}..${targetRef}`],
-          repoPath,
-        );
-        if (formatPatch.code !== 0 || !formatPatch.stdout.trim()) return false;
-
-        const targetPatchIds = await runProcess('git', ['patch-id', '--stable'], repoPath, formatPatch.stdout);
-        if (targetPatchIds.code !== 0) return false;
-
-        // Check if any commit on target has the same patch-id as the branch.
-        const targetPids = new Set(
-          targetPatchIds.stdout.trim().split('\n').map((line) => line.split(/\s+/)[0]),
-        );
-        return targetPids.has(branchPid);
-      }
-
       try {
+        // Fetch the latest remote refs so we can detect merges done on GitHub.
+        await runProcess('git', ['fetch', 'origin', baseBranch], repoPath).catch(() => {});
+
         const merged: Record<string, boolean> = {};
         for (const { messageId, branch } of targets) {
           try {
-            // Primary: check regular merge / fast-forward.
-            const localResult = await isMergedInto(messageId, branch, baseBranch);
-            if (localResult !== null) {
-              merged[messageId] = localResult;
-              continue;
-            }
-            const remoteResult = await isMergedInto(messageId, branch, `origin/${baseBranch}`);
-            if (remoteResult !== null) {
-              merged[messageId] = remoteResult;
-              continue;
-            }
-
-            // Fallback: check squash/rebase merge via patch-id matching.
-            const squashLocal = await isSquashMergedInto(messageId, branch, baseBranch);
-            if (squashLocal) {
+            // `git diff <base>...<branch>` shows changes on <branch> that aren't
+            // in <base>. If empty, all the branch's changes are already in the
+            // base — regardless of merge strategy (FF, squash, rebase).
+            const diff = await runProcess('git', ['diff', '--quiet', `${baseBranch}...${branch}`], repoPath);
+            if (diff.code === 0) {
               merged[messageId] = true;
               continue;
             }
-            const squashRemote = await isSquashMergedInto(messageId, branch, `origin/${baseBranch}`);
-            merged[messageId] = squashRemote;
+
+            // Also check against the fetched remote ref.
+            const remoteDiff = await runProcess('git', ['diff', '--quiet', `origin/${baseBranch}...${branch}`], repoPath);
+            merged[messageId] = remoteDiff.code === 0;
           } catch {
             merged[messageId] = false;
           }

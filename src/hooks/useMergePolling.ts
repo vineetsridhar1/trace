@@ -37,20 +37,15 @@ export function useMergePolling({
       messageId: m.id,
       branch: m.branch,
     }));
+
     try {
-      const result = await window.traceAPI.checkBranchesMerged(
-        repoPath,
-        targets,
-        baseBranch,
-      );
+      const result = await window.traceAPI.checkBranchesMerged(repoPath, targets, baseBranch);
       if (!result.success) return;
 
       for (const msg of candidates) {
-        const isMerged = result.merged[msg.id] === true;
-        if (msg.status === 'completed' && isMerged) {
+        if (msg.status === 'completed' && result.merged[msg.id] === true) {
           await updateStatusRef.current(msg.id, 'merged');
         }
-        // Never flip merged → completed; merged is a terminal state.
       }
     } catch {
       // Silent failure

@@ -93,6 +93,11 @@ export function extractAskUserQuestionFromTranscript(
       }
 
       const entry = parsed as Record<string, unknown>;
+
+      // If we hit a user message before finding an assistant message, the user
+      // already responded to any prior AskUserQuestion — no pending input.
+      if (entry.type === 'user') return null;
+
       if (entry.type !== 'assistant') continue;
 
       const message = entry.message as Record<string, unknown> | undefined;
@@ -138,6 +143,11 @@ export function extractExitPlanModeFromTranscript(
       }
 
       const entry = parsed as Record<string, unknown>;
+
+      // If we hit a user message before finding an assistant message, the user
+      // already responded to any prior ExitPlanMode — no pending input.
+      if (entry.type === 'user') return null;
+
       if (entry.type !== 'assistant') continue;
 
       const message = entry.message as Record<string, unknown> | undefined;
