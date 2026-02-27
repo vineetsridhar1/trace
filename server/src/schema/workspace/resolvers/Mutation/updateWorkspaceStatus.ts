@@ -1,7 +1,7 @@
 import type { MutationResolvers } from './../../../types.generated';
 import { updateWorkspaceStatus as updateStatus, getWorkspaceByIdForFeed } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
-import { syncTicketWithMessageStatus, checkAndTriggerDependents } from '../../../../services/ticketService';
+import { syncTicketWithWorkspaceStatus, checkAndTriggerDependents } from '../../../../services/ticketService';
 import { GraphQLError } from 'graphql';
 
 const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued', 'auto_review'];
@@ -47,7 +47,7 @@ export const updateWorkspaceStatus: NonNullable<MutationResolvers['updateWorkspa
     workspaceUpserted: workspace,
   });
 
-  void syncTicketWithMessageStatus(workspaceId, channelId, status);
+  void syncTicketWithWorkspaceStatus(workspaceId, channelId, status);
 
   if (status === 'merged') {
     void checkAndTriggerDependents(workspaceId, channelId);

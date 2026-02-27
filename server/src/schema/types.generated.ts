@@ -350,9 +350,6 @@ export type Query = {
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
-  cliSession?: Maybe<CliSession>;
-  cliSessionEvents: EventConnection;
-  cliSessions: CliSessionConnection;
   event?: Maybe<Event>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
@@ -382,30 +379,6 @@ export type QueryboardArgs = {
 
 export type QuerychannelArgs = {
   id: Scalars['ID']['input'];
-};
-
-
-export type QuerycliSessionArgs = {
-  sessionId: Scalars['String']['input'];
-};
-
-
-export type QuerycliSessionEventsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  hookEventName?: InputMaybe<Scalars['String']['input']>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  sessionId: Scalars['String']['input'];
-  toolName?: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QuerycliSessionsArgs = {
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order?: InputMaybe<Scalars['String']['input']>;
-  sort?: InputMaybe<Scalars['String']['input']>;
-  status?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -936,9 +909,6 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   board?: Resolver<Array<ResolversTypes['KanbanColumn']>, ParentType, ContextType, RequireFields<QueryboardArgs, 'channelId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QuerychannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
-  cliSession?: Resolver<Maybe<ResolversTypes['CliSession']>, ParentType, ContextType, RequireFields<QuerycliSessionArgs, 'sessionId'>>;
-  cliSessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerycliSessionEventsArgs, 'sessionId'>>;
-  cliSessions?: Resolver<ResolversTypes['CliSessionConnection'], ParentType, ContextType, Partial<QuerycliSessionsArgs>>;
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;

@@ -151,9 +151,6 @@ type Query {
   board(channelId: ID!): [KanbanColumn!]!
   channel(id: ID!): Channel
   channels: [Channel!]!
-  cliSession(sessionId: String!): CliSession
-  cliSessionEvents(after: String, hookEventName: String, limit: Int, offset: Int, sessionId: String!, toolName: String): EventConnection!
-  cliSessions(limit: Int, offset: Int, order: String, sort: String, status: String): CliSessionConnection!
   event(id: ID!): Event
   servers: [Server!]!
   sessionEvents(after: String, channelId: ID!, limit: Int, offset: Int, sessionId: ID!, workspaceId: ID!): EventConnection!

@@ -339,9 +339,6 @@ export type Query = {
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
-  cliSession?: Maybe<CliSession>;
-  cliSessionEvents: EventConnection;
-  cliSessions: CliSessionConnection;
   event?: Maybe<Event>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
@@ -371,30 +368,6 @@ export type QueryBoardArgs = {
 
 export type QueryChannelArgs = {
   id: Scalars['ID']['input'];
-};
-
-
-export type QueryCliSessionArgs = {
-  sessionId: Scalars['String']['input'];
-};
-
-
-export type QueryCliSessionEventsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  hookEventName?: InputMaybe<Scalars['String']['input']>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  sessionId: Scalars['String']['input'];
-  toolName?: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryCliSessionsArgs = {
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order?: InputMaybe<Scalars['String']['input']>;
-  sort?: InputMaybe<Scalars['String']['input']>;
-  status?: InputMaybe<Scalars['String']['input']>;
 };
 
 

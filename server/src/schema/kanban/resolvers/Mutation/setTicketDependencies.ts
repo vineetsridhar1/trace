@@ -2,7 +2,7 @@ import type { MutationResolvers } from './../../../types.generated';
 import prisma from '../../../../lib/prisma';
 import { updateWorkspaceStatus as updateStatus, getWorkspaceByIdForFeed } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
-import { syncTicketWithMessageStatus } from '../../../../services/ticketService';
+import { syncTicketWithWorkspaceStatus } from '../../../../services/ticketService';
 import { GraphQLError } from 'graphql';
 
 export const setTicketDependencies: NonNullable<MutationResolvers['setTicketDependencies']> = async (_parent, { channelId, workspaceId, dependsOnWorkspaceIds, runConfig }, _ctx) => {
@@ -40,7 +40,7 @@ export const setTicketDependencies: NonNullable<MutationResolvers['setTicketDepe
   });
 
   // Sync ticket column
-  void syncTicketWithMessageStatus(workspaceId, channelId, 'queued');
+  void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'queued');
 
   return workspace;
 };

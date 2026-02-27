@@ -204,13 +204,13 @@ export function useChannelSubscriptions({
         const reason = payload.event.toolName === 'AskUserQuestion' ? 'ask-user-question' : 'stopped';
         onNeedsAttention(payload.workspaceId, reason);
       }
-      // Re-fetch messages after the server's inline auto-complete runs.
+      // Re-fetch workspaces after the server's inline auto-complete runs.
       // The Stop event triggers status transitions (completed/auto_review)
       // on the server synchronously, so by the time this subscription fires
       // the DB already has the final status. A short delay accounts for the
       // close handler's enrichment merge and any network latency.
-      if (refreshMessages && activeChannelId) {
-        setTimeout(() => void refreshMessages(activeChannelId), 500);
+      if (refreshWorkspaces && activeChannelId) {
+        setTimeout(() => void refreshWorkspaces(activeChannelId), 500);
       }
     }
 

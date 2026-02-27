@@ -1,9 +1,3 @@
-extend type Query {
-  cliSessions(status: String, limit: Int, offset: Int, sort: String, order: String): CliSessionConnection!
-  cliSession(sessionId: String!): CliSession
-  cliSessionEvents(sessionId: String!, hookEventName: String, toolName: String, after: String, limit: Int, offset: Int): EventConnection!
-}
-
 type CliSession {
   id: ID!
   sessionId: String!

@@ -230,7 +230,7 @@ export async function moveTicket(ticketId: string, columnId: string, sortOrder: 
   return ticket;
 }
 
-export async function syncTicketWithMessageStatus(
+export async function syncTicketWithWorkspaceStatus(
   workspaceId: string,
   channelId: string,
   newStatus: string,

@@ -2,7 +2,7 @@ import type { MutationResolvers } from './../../../types.generated';
 import prisma from '../../../../lib/prisma';
 import { updateWorkspaceStatus as updateStatus, getWorkspaceByIdForFeed } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
-import { syncTicketWithMessageStatus } from '../../../../services/ticketService';
+import { syncTicketWithWorkspaceStatus } from '../../../../services/ticketService';
 
 export const removeTicketDependency: NonNullable<MutationResolvers['removeTicketDependency']> = async (_parent, { channelId, workspaceId, dependsOnWorkspaceId }, _ctx) => {
   // Delete the specific dependency
@@ -30,7 +30,7 @@ export const removeTicketDependency: NonNullable<MutationResolvers['removeTicket
       pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
         workspaceUpserted: workspace,
       });
-      void syncTicketWithMessageStatus(workspaceId, channelId, 'pending');
+      void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'pending');
     }
   }
 

@@ -5,9 +5,6 @@ import    { aiChats as Query_aiChats } from './aiChat/resolvers/Query/aiChats';
 import    { board as Query_board } from './kanban/resolvers/Query/board';
 import    { channel as Query_channel } from './channel/resolvers/Query/channel';
 import    { channels as Query_channels } from './channel/resolvers/Query/channels';
-import    { cliSession as Query_cliSession } from './cli-session/resolvers/Query/cliSession';
-import    { cliSessionEvents as Query_cliSessionEvents } from './cli-session/resolvers/Query/cliSessionEvents';
-import    { cliSessions as Query_cliSessions } from './cli-session/resolvers/Query/cliSessions';
 import    { event as Query_event } from './event/resolvers/Query/event';
 import    { servers as Query_servers } from './server/resolvers/Query/servers';
 import    { sessionEvents as Query_sessionEvents } from './session/resolvers/Query/sessionEvents';
@@ -74,7 +71,7 @@ import    { WorkspaceReadyForReviewPayload } from './workspace/resolvers/Workspa
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,cliSession: Query_cliSession,cliSessionEvents: Query_cliSessionEvents,cliSessions: Query_cliSessions,event: Query_event,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
+      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
       Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,setTicketDependencies: Mutation_setTicketDependencies,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
       Subscription: { aiChatStream: Subscription_aiChatStream,sessionEventCreated: Subscription_sessionEventCreated,sessionEventUpdated: Subscription_sessionEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted,workspaceDeleted: Subscription_workspaceDeleted,workspaceReadyForReview: Subscription_workspaceReadyForReview,workspaceUpserted: Subscription_workspaceUpserted },
       AiChat: AiChat,
