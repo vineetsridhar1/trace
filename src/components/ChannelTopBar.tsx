@@ -42,7 +42,7 @@ export function ChannelTopBar({
                 : 'text-[#565f89] hover:text-[#a9b1d6]'
             }`}
           >
-            Board
+            Project
           </button>
           <button
             type="button"
