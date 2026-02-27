@@ -162,7 +162,7 @@ export function ThreadPanel() {
 
       <div
         id="thread-panel"
-        className={`flex min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
+        className={`flex shrink-0 min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
         style={
           isFullscreen ? { flex: "1 1 50%" } : { width: `${threadWidth}px` }
         }

@@ -322,7 +322,7 @@ export function useThread({
     (message: ChannelMessage) => {
       selectMessage(message);
       setHasWorktree(null);
-      setThreadWidth(clamp(Math.floor(window.innerWidth * 0.5), 280, 600));
+      setThreadWidth(clamp(Math.floor(window.innerWidth * 0.65), 280, 1600));
       resetThreadViewState();
       void loadThreadEvents(message);
       void checkWorktree(message.id);

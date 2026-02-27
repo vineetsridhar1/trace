@@ -18,6 +18,7 @@ import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
 import { ChannelProvider, useChannelContext } from './context/ChannelContext';
 import { ThreadProvider } from './context/ThreadContext';
 import { ChannelPanel } from './components/ChannelPanel';
+import { ChannelTopBar } from './components/ChannelTopBar';
 import { MessagePanel } from './components/MessagePanel';
 import { ThreadPanel } from './components/ThreadPanel';
 import { WorktreeChanges } from './components/WorktreeChanges';
@@ -310,7 +311,6 @@ function AppContent() {
 
       if (selectedMessageId === messageId) {
         closeThreadPanel();
-        setChannelWidth(220);
       }
 
       try {
@@ -378,9 +378,9 @@ function AppContent() {
 
   const handleOpenThread = useCallback(
     (message: ChannelMessage) => {
-      setChannelWidth(0);
       resetScroll();
       openThreadPanel(message);
+      setMiddlePanelView('workspaces');
       setAttentionMessageIds((current) => {
         if (!current.has(message.id)) return current;
         const next = new Set(current);
@@ -544,7 +544,6 @@ function AppContent() {
     (chatId: string) => {
       setActiveAiChatId(chatId);
       closeThreadPanel();
-      setChannelWidth(220);
     },
     [closeThreadPanel],
   );
@@ -559,7 +558,6 @@ function AppContent() {
       if (chat) {
         setActiveAiChatId(chat.id);
         closeThreadPanel();
-        setChannelWidth(220);
       }
     } catch (err) {
       console.error('[App] handleCreateAiChat failed:', err);
@@ -584,7 +582,6 @@ function AppContent() {
       return;
     }
     closeThreadPanel();
-    setChannelWidth(220);
   }, [closeThreadPanel, isFullscreen, setThreadWidth]);
 
   const enterFullscreen = useCallback(async () => {
@@ -770,117 +767,128 @@ function AppContent() {
   return (
     <ClaudeActionsProvider value={claudeActionsContextValue}>
       <ThreadProvider value={threadContextValue} eventsValue={threadEventsContextValue}>
-        <div className="flex h-screen overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
-          {!isFullscreen && (
-            <ServerRail
-              servers={servers}
-              activeServerId={activeServerId}
-              onSwitchServer={handleSwitchServer}
-              onCreateServer={() => setShowCreateServer(true)}
+        <div className="flex h-screen flex-col overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
+          {/* Full-width top bar */}
+          {!isFullscreen && !activeAiChatId && (
+            <ChannelTopBar
+              panelTitle={panelTitle}
+              middlePanelView={middlePanelView}
+              onSetView={handleSetView}
+              onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
             />
           )}
 
-          <ChannelPanel
-            channels={serverChannels}
-            activeChannelId={activeChannelId}
-            channelWidth={isFullscreen ? 0 : channelWidth}
-            dragging={dragging}
-            serverName={activeServer?.name}
-            aiChats={aiChats}
-            activeAiChatId={activeAiChatId}
-            onSwitchChannel={handleSwitchChannel}
-            onOpenSettings={handleOpenSettings}
-            onRunStartupScripts={handleRunChannelScript}
-            onCreateChannel={() => setShowCreateChannel(true)}
-            onSwitchAiChat={handleSwitchAiChat}
-            onCreateAiChat={() => { void handleCreateAiChat(); }}
-            onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
-            onStartDrag={() => startDragging('left')}
-          />
+          {/* Main horizontal layout */}
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            {!isFullscreen && (
+              <ServerRail
+                servers={servers}
+                activeServerId={activeServerId}
+                onSwitchServer={handleSwitchServer}
+                onCreateServer={() => setShowCreateServer(true)}
+              />
+            )}
 
-          <div
-            className="flex min-h-0 min-w-0 flex-col panel-animate"
-            style={{ flex: isFullscreen ? '0 0 0px' : '1 1 0%', overflow: 'hidden' }}
-          >
+            <ChannelPanel
+              channels={serverChannels}
+              activeChannelId={activeChannelId}
+              channelWidth={isFullscreen ? 0 : channelWidth}
+              dragging={dragging}
+              serverName={activeServer?.name}
+              aiChats={aiChats}
+              activeAiChatId={activeAiChatId}
+              onSwitchChannel={handleSwitchChannel}
+              onOpenSettings={handleOpenSettings}
+              onRunStartupScripts={handleRunChannelScript}
+              onCreateChannel={() => setShowCreateChannel(true)}
+              onSwitchAiChat={handleSwitchAiChat}
+              onCreateAiChat={() => { void handleCreateAiChat(); }}
+              onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
+              onStartDrag={() => startDragging('left')}
+            />
+
+            {/* Content column (message panel + optional thread + terminal) */}
             <div
-              className={
-                startupTerminalsVisible && startupTerminalList.length > 0 && !isFullscreen
-                  ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
-                  : 'flex min-h-0 flex-1 flex-col'
-              }
+              className="flex min-h-0 min-w-0 flex-col panel-animate"
+              style={{ flex: isFullscreen ? '0 0 0px' : '1 1 0%', overflow: 'hidden' }}
             >
-              {activeAiChatId ? (
-                <AiChatPanel
-                  chatId={activeAiChatId}
-                  chatTitle={aiChats.find((c) => c.id === activeAiChatId)?.title ?? 'AI Chat'}
-                />
-              ) : (
-                <MessagePanel
-                  panelTitle={panelTitle}
-                  channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
-                  messages={messages}
-                  selectedMessageId={selectedMessageId}
-                  attentionMessageIds={attentionMessageIds}
-                  onOpenThread={handleOpenThread}
-                  onDeleteMessage={handleDeleteMessage}
-                  middlePanelView={middlePanelView}
-                  onSetView={handleSetView}
-                  kanbanColumns={kanbanColumns}
-                  kanbanLoading={kanbanLoading}
-                  onMoveTicket={handleMoveTicket}
-                  onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
-                />
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                {activeAiChatId ? (
+                  <AiChatPanel
+                    chatId={activeAiChatId}
+                    chatTitle={aiChats.find((c) => c.id === activeAiChatId)?.title ?? 'AI Chat'}
+                  />
+                ) : (
+                  <MessagePanel
+                    panelTitle={panelTitle}
+                    channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
+                    messages={messages}
+                    selectedMessageId={selectedMessageId}
+                    attentionMessageIds={attentionMessageIds}
+                    onOpenThread={handleOpenThread}
+                    onDeleteMessage={handleDeleteMessage}
+                    middlePanelView={middlePanelView}
+                    kanbanColumns={kanbanColumns}
+                    kanbanLoading={kanbanLoading}
+                    onMoveTicket={handleMoveTicket}
+                  />
+                )}
+                {/* Thread slideout - only in workspaces view */}
+                {!activeAiChatId && middlePanelView === 'workspaces' && !isFullscreen && (
+                  <ThreadPanel />
+                )}
+              </div>
+
+              {startupTerminalList.length > 0 && !isFullscreen && (
+                <div
+                  className="shrink-0 border-t border-[#292e42]"
+                  style={{
+                    height: startupTerminalsVisible ? '35%' : '0',
+                    minHeight: startupTerminalsVisible ? '150px' : '0',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <TerminalTabs
+                    terminals={startupTerminalList}
+                    activeTabId={activeTabId}
+                    cwd={startupTerminalsCwd || activeChannelRepoPath}
+                    onSelectTab={setActiveTabId}
+                    onCloseTab={killTerminal}
+                    onCloseAll={killAllTerminals}
+                    onAddTab={addTerminal}
+                  />
+                </div>
               )}
             </div>
 
-            {startupTerminalList.length > 0 && !isFullscreen && (
-              <div
-                className="shrink-0 border-t border-[#292e42]"
-                style={{
-                  height: startupTerminalsVisible ? '35%' : '0',
-                  minHeight: startupTerminalsVisible ? '150px' : '0',
-                  overflow: 'hidden',
-                }}
-              >
-                <TerminalTabs
-                  terminals={startupTerminalList}
-                  activeTabId={activeTabId}
-                  cwd={startupTerminalsCwd || activeChannelRepoPath}
-                  onSelectTab={setActiveTabId}
-                  onCloseTab={killTerminal}
-                  onCloseAll={killAllTerminals}
-                  onAddTab={addTerminal}
-                />
-              </div>
-            )}
-          </div>
+            {/* Fullscreen: thread panel as top-level sibling */}
+            {isFullscreen && <ThreadPanel />}
 
-          <ThreadPanel />
-
-          <div
-            className="flex min-h-0 flex-col panel-animate"
-            style={{ flex: isFullscreen ? '1 1 50%' : '0 0 0px', overflow: 'hidden' }}
-          >
-            <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
-              {isFullscreen && <WorktreeChanges messageId={selectedMessageId} baseBranch={activeChannelBaseBranch} />}
-            </div>
             <div
-              className="overflow-hidden"
-              style={{ height: isFullscreen ? '40%' : '0', minHeight: isFullscreen ? '150px' : '0' }}
+              className="flex min-h-0 flex-col panel-animate"
+              style={{ flex: isFullscreen ? '1 1 50%' : '0 0 0px', overflow: 'hidden' }}
             >
-              {isFullscreen && startupTerminalList.length > 0 ? (
-                <TerminalTabs
-                  terminals={startupTerminalList}
-                  activeTabId={activeTabId}
-                  cwd={activeChannelRepoPath}
-                  onSelectTab={setActiveTabId}
-                  onCloseTab={killTerminal}
-                  onCloseAll={killAllTerminals}
-                  onAddTab={addTerminal}
-                />
-              ) : isFullscreen ? (
-                <Terminal terminalId={terminalId} cwd={worktreePath} />
-              ) : null}
+              <div className="min-h-0 flex-1 overflow-hidden border-b border-[#292e42]">
+                {isFullscreen && <WorktreeChanges messageId={selectedMessageId} baseBranch={activeChannelBaseBranch} />}
+              </div>
+              <div
+                className="overflow-hidden"
+                style={{ height: isFullscreen ? '40%' : '0', minHeight: isFullscreen ? '150px' : '0' }}
+              >
+                {isFullscreen && startupTerminalList.length > 0 ? (
+                  <TerminalTabs
+                    terminals={startupTerminalList}
+                    activeTabId={activeTabId}
+                    cwd={activeChannelRepoPath}
+                    onSelectTab={setActiveTabId}
+                    onCloseTab={killTerminal}
+                    onCloseAll={killAllTerminals}
+                    onAddTab={addTerminal}
+                  />
+                ) : isFullscreen ? (
+                  <Terminal terminalId={terminalId} cwd={worktreePath} />
+                ) : null}
+              </div>
             </div>
           </div>
 
