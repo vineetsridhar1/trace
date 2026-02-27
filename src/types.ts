@@ -165,25 +165,6 @@ export interface Workspace {
   queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
 }
 
-export interface WorkspaceSession {
-  id: string;
-  workspaceId: string;
-  createdAt: string;
-  eventCount: number;
-}
-
-export interface WorkspaceEnvelope {
-  channelId: string;
-  workspace: Workspace;
-}
-
-export interface SessionEventEnvelope {
-  channelId: string;
-  workspaceId: string;
-  sessionId: string;
-  event: ServerEvent;
-}
-
 export type ChannelType = 'channel' | 'team' | 'project';
 export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'review';
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
@@ -230,11 +211,6 @@ export interface KanbanColumn {
   color: string | null;
   sortOrder: number;
   tickets: KanbanTicket[];
-}
-
-export interface TicketEnvelope {
-  channelId: string;
-  ticket: KanbanTicket;
 }
 
 export interface AiChat {
