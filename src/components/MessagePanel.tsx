@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FiChevronRight, FiColumns, FiList, FiShare2 } from 'react-icons/fi';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FiChevronRight, FiColumns, FiList, FiSend, FiShare2 } from 'react-icons/fi';
 import type { Channel, Workspace, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { KanbanBoard } from './KanbanBoard';
 import { WorkspaceInput } from './WorkspaceInput';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { ChatEmptyState } from './ChatEmptyState';
 import { ThreadPanel } from './ThreadPanel';
+import { useChannelMessages } from '../hooks/useChannelMessages';
+import { useAuth } from '../context/AuthContext';
 
 interface StatusGroup {
   status: TicketStatus;
@@ -52,8 +54,14 @@ function CollapsibleStatusGroup({
   );
 }
 
+function formatMessageTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 interface MessagePanelProps {
   panelTitle: string;
+  channelId: string | null;
   channelCreatedAt: string | null;
   workspaces: Workspace[];
   selectedWorkspaceId: string | null;
@@ -73,6 +81,7 @@ interface MessagePanelProps {
 
 export function MessagePanel({
   panelTitle,
+  channelId,
   channelCreatedAt,
   workspaces,
   selectedWorkspaceId,
@@ -180,26 +189,108 @@ export function MessagePanel({
       </CollapsibleStatusGroup>
     ));
 
+  // Channel messaging
+  const { messages: chatMessages, sendMessage: sendChatMessage } = useChannelMessages(
+    middlePanelView === 'chat' ? channelId : null,
+  );
+  const { user: authUser } = useAuth();
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const chatNearBottomRef = useRef(true);
+  const [chatInput, setChatInput] = useState('');
+
+  // Auto-scroll chat on new messages
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    if (chatNearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  const handleChatScroll = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    chatNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  }, []);
+
+  const handleSendChat = useCallback(() => {
+    if (!chatInput.trim()) return;
+    void sendChatMessage(chatInput);
+    setChatInput('');
+  }, [chatInput, sendChatMessage]);
+
+  const handleChatKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendChat();
+    }
+  }, [handleSendChat]);
+
   return (
     <div id="messages-panel" className="flex min-h-0 flex-1 flex-col bg-[#1a1b26]" style={{ minWidth: 200 }}>
       {middlePanelView === 'chat' ? (
-        <>
+        <div className="flex min-h-0 flex-1 flex-col">
           <ChatEmptyState
             channelName={panelTitle.replace(/^#\s*/, '')}
             channelCreatedAt={channelCreatedAt}
           />
+          {/* Message list */}
+          <div
+            ref={chatScrollRef}
+            onScroll={handleChatScroll}
+            className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
+          >
+            {chatMessages.map((msg) => {
+              const isOwn = authUser?.id === msg.author.id;
+              return (
+                <div key={msg.id} className="mb-3 flex items-start gap-2">
+                  {msg.author.avatarUrl ? (
+                    <img
+                      src={msg.author.avatarUrl}
+                      alt={msg.author.name}
+                      className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full"
+                    />
+                  ) : (
+                    <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/30 text-[10px] font-bold text-violet-300">
+                      {msg.author.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-xs font-semibold ${isOwn ? 'text-violet-300' : 'text-[#c0caf5]'}`}>
+                        {msg.author.name}
+                      </span>
+                      <span className="text-[10px] text-[#565f89]">{formatMessageTime(msg.createdAt)}</span>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm text-[#a9b1d6]">{msg.content}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* Input */}
           <div className="border-t border-[#292e42] px-3 py-3">
             <div className="flex items-end gap-2">
               <textarea
                 rows={1}
-                disabled
-                placeholder="Chat messaging coming soon..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={handleChatKeyDown}
+                placeholder="Send a message..."
                 style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-                className="w-full resize-none rounded-md border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] opacity-50 cursor-not-allowed"
+                className="w-full resize-none rounded-md border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500/50"
               />
+              <button
+                type="button"
+                onClick={handleSendChat}
+                disabled={!chatInput.trim()}
+                className="flex h-[38px] w-[38px] flex-shrink-0 cursor-pointer items-center justify-center rounded-md bg-violet-500/20 text-violet-300 transition-colors hover:bg-violet-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <FiSend className="h-4 w-4" />
+              </button>
             </div>
           </div>
-        </>
+        </div>
       ) : middlePanelView === 'board' ? (
         <>
           <div className="flex items-center gap-2 px-3 py-2">

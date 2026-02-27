@@ -90,6 +90,30 @@ export type Channel = {
   workspacesEnabled: Scalars['Boolean']['output'];
 };
 
+export type ChannelMessage = {
+  __typename?: 'ChannelMessage';
+  author: ChannelMessageAuthor;
+  channelId: Scalars['String']['output'];
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+};
+
+export type ChannelMessageAuthor = {
+  __typename?: 'ChannelMessageAuthor';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+};
+
+export type ChannelMessageConnection = {
+  __typename?: 'ChannelMessageConnection';
+  limit: Scalars['Int']['output'];
+  messages: Array<ChannelMessage>;
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+};
+
 export type CliSession = {
   __typename?: 'CliSession';
   cwd?: Maybe<Scalars['String']['output']>;
@@ -172,6 +196,7 @@ export type Mutation = {
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   sendAiChatMessage: AiChatMessage;
+  sendChannelMessage: ChannelMessage;
   setTicketDependencies: Workspace;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
@@ -286,6 +311,12 @@ export type MutationSendAiChatMessageArgs = {
 };
 
 
+export type MutationSendChannelMessageArgs = {
+  channelId: Scalars['ID']['input'];
+  content: Scalars['String']['input'];
+};
+
+
 export type MutationSetTicketDependenciesArgs = {
   channelId: Scalars['ID']['input'];
   dependsOnWorkspaceIds: Array<Scalars['ID']['input']>;
@@ -355,6 +386,7 @@ export type Query = {
   aiChats: Array<AiChat>;
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
+  channelMessages: ChannelMessageConnection;
   channels: Array<Channel>;
   checkPRStatuses: Array<PrStatus>;
   event?: Maybe<Event>;
@@ -388,6 +420,13 @@ export type QueryBoardArgs = {
 
 export type QueryChannelArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryChannelMessagesArgs = {
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -472,6 +511,7 @@ export type SessionEventPayload = {
 export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
+  channelMessageCreated: ChannelMessage;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
@@ -483,6 +523,11 @@ export type Subscription = {
 
 export type SubscriptionAiChatStreamArgs = {
   chatId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionChannelMessageCreatedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -588,6 +633,8 @@ export type Workspace = {
   sessionCount: Scalars['Int']['output'];
   status: Scalars['String']['output'];
   summary?: Maybe<Scalars['String']['output']>;
+  user?: Maybe<WorkspaceUser>;
+  userId?: Maybe<Scalars['String']['output']>;
 };
 
 export type WorkspaceCliSession = {
@@ -609,4 +656,11 @@ export type WorkspaceDeletedPayload = {
   __typename?: 'WorkspaceDeletedPayload';
   channelId: Scalars['String']['output'];
   workspaceId: Scalars['String']['output'];
+};
+
+export type WorkspaceUser = {
+  __typename?: 'WorkspaceUser';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
 };

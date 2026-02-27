@@ -1,9 +1,22 @@
 import type { MutationResolvers } from './../../../types.generated';
-import { appendPromptToWorkspaceSession } from '../../../../services/workspaceService';
+import { appendPromptToWorkspaceSession, getWorkspaceByIdForFeed } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
+import { requireAuth } from '../../../../lib/requireAuth';
 import { GraphQLError } from 'graphql';
 
-export const appendPrompt: NonNullable<MutationResolvers['appendPrompt']> = async (_parent, { channelId, workspaceId, text, attachmentIds, createNewSession, sessionId }, _ctx) => {
+const ACTIVE_STATUSES = new Set(['creation', 'in_progress', 'needs_input']);
+
+export const appendPrompt: NonNullable<MutationResolvers['appendPrompt']> = async (_parent, { channelId, workspaceId, text, attachmentIds, createNewSession, sessionId }, ctx) => {
+  const user = requireAuth(ctx);
+
+  // Check workspace lock before appending
+  const current = await getWorkspaceByIdForFeed(workspaceId);
+  if (current && ACTIVE_STATUSES.has(current.status) && current.userId && current.userId !== user.id) {
+    throw new GraphQLError('Workspace is locked by another user', {
+      extensions: { code: 'FORBIDDEN' },
+    });
+  }
+
   const created = await appendPromptToWorkspaceSession(
     channelId,
     workspaceId,

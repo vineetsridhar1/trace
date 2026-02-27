@@ -95,6 +95,25 @@ export const MessageItem = memo(function MessageItem({
         )}
       </div>
 
+      {/* Owner badge */}
+      {workspace.user && (
+        workspace.user.avatarUrl ? (
+          <img
+            src={workspace.user.avatarUrl}
+            alt={workspace.user.name}
+            title={workspace.user.name}
+            className="h-4 w-4 flex-shrink-0 rounded-full"
+          />
+        ) : (
+          <div
+            title={workspace.user.name}
+            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/30 text-[8px] font-bold text-violet-300"
+          >
+            {workspace.user.name.charAt(0).toUpperCase()}
+          </div>
+        )
+      )}
+
       {/* Status icon */}
       <StatusIcon status={status} />
 

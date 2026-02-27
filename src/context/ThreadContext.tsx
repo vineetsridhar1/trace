@@ -40,6 +40,7 @@ export interface ThreadContextValue {
   // Derived state
   isClaudeRunning: boolean;
   workspaceStatus: TicketStatus;
+  workspaceUserId: string | null;
   queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
   selectedTicket: KanbanTicket | null;
   // UI state

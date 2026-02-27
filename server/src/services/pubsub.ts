@@ -10,4 +10,5 @@ export const TOPICS = {
   TICKET_UPSERTED: (channelId: string) => `TICKET_UPSERTED.${channelId}`,
   TICKET_READY_TO_RUN: (channelId: string) => `TICKET_READY_TO_RUN.${channelId}`,
   AI_CHAT_STREAM: (chatId: string) => `AI_CHAT_STREAM.${chatId}`,
+  CHANNEL_MESSAGE_CREATED: (channelId: string) => `CHANNEL_MESSAGE_CREATED.${channelId}`,
 } as const;

@@ -72,6 +72,7 @@ export function createGraphqlClient(): ApolloClient<unknown> {
       typePolicies: {
         // Types without `id` — store inline, don't try to normalize
         WorkspaceCliSession: { keyFields: false },
+        WorkspaceUser: { keyFields: false },
         WorkspaceConnection: { keyFields: false },
         EventConnection: { keyFields: false },
         SessionConnection: { keyFields: false },
@@ -80,6 +81,8 @@ export function createGraphqlClient(): ApolloClient<unknown> {
         AiChatMessageConnection: { keyFields: false },
         SessionEventPayload: { keyFields: false },
         TicketUpsertPayload: { keyFields: false },
+        ChannelMessageConnection: { keyFields: false },
+        ChannelMessageAuthor: { keyFields: false },
       },
     }),
     defaultOptions: {

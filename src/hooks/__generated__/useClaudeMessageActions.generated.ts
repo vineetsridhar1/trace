@@ -11,7 +11,7 @@ export type CreateWorkspaceMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateWorkspaceMutation = { __typename?: 'Mutation', createWorkspace: { __typename?: 'CreateWorkspacePayload', workspace: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null }, session: { __typename?: 'Session', id: string, workspaceId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, sessionId: string, importance: string } } };
+export type CreateWorkspaceMutation = { __typename?: 'Mutation', createWorkspace: { __typename?: 'CreateWorkspacePayload', workspace: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null }, session: { __typename?: 'Session', id: string, workspaceId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, sessionId: string, importance: string } } };
 
 export type AppendPromptMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
@@ -23,7 +23,7 @@ export type AppendPromptMutationVariables = Types.Exact<{
 }>;
 
 
-export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt: { __typename?: 'CreateWorkspacePayload', workspace: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null }, session: { __typename?: 'Session', id: string, workspaceId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, sessionId: string, importance: string } } };
+export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt: { __typename?: 'CreateWorkspacePayload', workspace: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null }, session: { __typename?: 'Session', id: string, workspaceId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, sessionId: string, importance: string } } };
 
 export type UpdateWorkspacePreviewMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
@@ -32,7 +32,7 @@ export type UpdateWorkspacePreviewMutationVariables = Types.Exact<{
 }>;
 
 
-export type UpdateWorkspacePreviewMutation = { __typename?: 'Mutation', updateWorkspacePreview: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null } };
+export type UpdateWorkspacePreviewMutation = { __typename?: 'Mutation', updateWorkspacePreview: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null } };
 
 
 export const CreateWorkspaceDocument = gql`

@@ -153,6 +153,7 @@ export interface Workspace {
   id: string;
   channelId: string;
   cliSessionId: string;
+  userId: string | null;
   preview: string | null;
   importance: string;
   status: TicketStatus;
@@ -161,6 +162,7 @@ export interface Workspace {
   claudeSessionId: string | null;
   createdAt: string;
   cliSession: WorkspaceCliSession;
+  user: { id: string; name: string; avatarUrl: string | null } | null;
   sessionCount: number;
   queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
 }

@@ -37,6 +37,7 @@ model User {
   channelMembers  ChannelMember[]
   workspaces      Workspace[]
   assignedTickets Ticket[]
+  channelMessages ChannelMessage[]
 
   @@map("users")
 }
@@ -106,8 +107,9 @@ model Channel {
   kanbanColumns  KanbanColumn[]
   members        ChannelMember[]
   aiChats        AiChat[]
-  teamLinks      ChannelTeam[]  @relation("projectTeams")
-  projectLinks   ChannelTeam[]  @relation("teamProjects")
+  teamLinks        ChannelTeam[]    @relation("projectTeams")
+  projectLinks     ChannelTeam[]    @relation("teamProjects")
+  channelMessages  ChannelMessage[]
 
   @@map("channels")
 }
@@ -287,4 +289,18 @@ model TicketDependency {
   @@unique([ticketWorkspaceId, dependsOnWorkspaceId])
   @@index([dependsOnWorkspaceId])
   @@map("ticket_dependencies")
+}
+
+model ChannelMessage {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+  @@map("channel_messages")
 }

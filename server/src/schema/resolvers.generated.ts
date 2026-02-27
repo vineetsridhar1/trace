@@ -4,6 +4,7 @@
 import    { aiChats as Query_aiChats } from './aiChat/resolvers/Query/aiChats';
 import    { board as Query_board } from './kanban/resolvers/Query/board';
 import    { channel as Query_channel } from './channel/resolvers/Query/channel';
+import    { channelMessages as Query_channelMessages } from './channelMessage/resolvers/Query/channelMessages';
 import    { channels as Query_channels } from './channel/resolvers/Query/channels';
 import    { checkPRStatuses as Query_checkPRStatuses } from './workspace/resolvers/Query/checkPRStatuses';
 import    { event as Query_event } from './event/resolvers/Query/event';
@@ -30,6 +31,7 @@ import    { moveTicket as Mutation_moveTicket } from './kanban/resolvers/Mutatio
 import    { removeTicketDependency as Mutation_removeTicketDependency } from './kanban/resolvers/Mutation/removeTicketDependency';
 import    { renameAiChat as Mutation_renameAiChat } from './aiChat/resolvers/Mutation/renameAiChat';
 import    { sendAiChatMessage as Mutation_sendAiChatMessage } from './aiChat/resolvers/Mutation/sendAiChatMessage';
+import    { sendChannelMessage as Mutation_sendChannelMessage } from './channelMessage/resolvers/Mutation/sendChannelMessage';
 import    { setTicketDependencies as Mutation_setTicketDependencies } from './kanban/resolvers/Mutation/setTicketDependencies';
 import    { updateChannel as Mutation_updateChannel } from './channel/resolvers/Mutation/updateChannel';
 import    { updateColumn as Mutation_updateColumn } from './kanban/resolvers/Mutation/updateColumn';
@@ -38,6 +40,7 @@ import    { updateWorkspacePreview as Mutation_updateWorkspacePreview } from './
 import    { updateWorkspaceStatus as Mutation_updateWorkspaceStatus } from './workspace/resolvers/Mutation/updateWorkspaceStatus';
 import    { uploadAttachment as Mutation_uploadAttachment } from './attachment/resolvers/Mutation/uploadAttachment';
 import    { aiChatStream as Subscription_aiChatStream } from './aiChat/resolvers/Subscription/aiChatStream';
+import    { channelMessageCreated as Subscription_channelMessageCreated } from './channelMessage/resolvers/Subscription/channelMessageCreated';
 import    { sessionEventCreated as Subscription_sessionEventCreated } from './event/resolvers/Subscription/sessionEventCreated';
 import    { sessionEventUpdated as Subscription_sessionEventUpdated } from './event/resolvers/Subscription/sessionEventUpdated';
 import    { ticketReadyToRun as Subscription_ticketReadyToRun } from './kanban/resolvers/Subscription/ticketReadyToRun';
@@ -51,6 +54,9 @@ import    { AiChatStreamPayload } from './aiChat/resolvers/AiChatStreamPayload';
 import    { Attachment } from './attachment/resolvers/Attachment';
 import    { AuthUser } from './auth/resolvers/AuthUser';
 import    { Channel } from './channel/resolvers/Channel';
+import    { ChannelMessage } from './channelMessage/resolvers/ChannelMessage';
+import    { ChannelMessageAuthor } from './channelMessage/resolvers/ChannelMessageAuthor';
+import    { ChannelMessageConnection } from './channelMessage/resolvers/ChannelMessageConnection';
 import    { CliSession } from './cli-session/resolvers/CliSession';
 import    { CliSessionConnection } from './cli-session/resolvers/CliSessionConnection';
 import    { CreateWorkspacePayload } from './workspace/resolvers/CreateWorkspacePayload';
@@ -71,12 +77,13 @@ import    { Workspace } from './workspace/resolvers/Workspace';
 import    { WorkspaceCliSession } from './workspace/resolvers/WorkspaceCliSession';
 import    { WorkspaceConnection } from './workspace/resolvers/WorkspaceConnection';
 import    { WorkspaceDeletedPayload } from './workspace/resolvers/WorkspaceDeletedPayload';
+import    { WorkspaceUser } from './workspace/resolvers/WorkspaceUser';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,checkPRStatuses: Query_checkPRStatuses,event: Query_event,generateBranchName: Query_generateBranchName,me: Query_me,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
-      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,setTicketDependencies: Mutation_setTicketDependencies,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
-      Subscription: { aiChatStream: Subscription_aiChatStream,sessionEventCreated: Subscription_sessionEventCreated,sessionEventUpdated: Subscription_sessionEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted,workspaceDeleted: Subscription_workspaceDeleted,workspaceUpserted: Subscription_workspaceUpserted },
+      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channelMessages: Query_channelMessages,channels: Query_channels,checkPRStatuses: Query_checkPRStatuses,event: Query_event,generateBranchName: Query_generateBranchName,me: Query_me,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
+      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,sendChannelMessage: Mutation_sendChannelMessage,setTicketDependencies: Mutation_setTicketDependencies,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
+      Subscription: { aiChatStream: Subscription_aiChatStream,channelMessageCreated: Subscription_channelMessageCreated,sessionEventCreated: Subscription_sessionEventCreated,sessionEventUpdated: Subscription_sessionEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted,workspaceDeleted: Subscription_workspaceDeleted,workspaceUpserted: Subscription_workspaceUpserted },
       AiChat: AiChat,
 AiChatMessage: AiChatMessage,
 AiChatMessageConnection: AiChatMessageConnection,
@@ -84,6 +91,9 @@ AiChatStreamPayload: AiChatStreamPayload,
 Attachment: Attachment,
 AuthUser: AuthUser,
 Channel: Channel,
+ChannelMessage: ChannelMessage,
+ChannelMessageAuthor: ChannelMessageAuthor,
+ChannelMessageConnection: ChannelMessageConnection,
 CliSession: CliSession,
 CliSessionConnection: CliSessionConnection,
 CreateWorkspacePayload: CreateWorkspacePayload,
@@ -104,6 +114,7 @@ Workspace: Workspace,
 WorkspaceCliSession: WorkspaceCliSession,
 WorkspaceConnection: WorkspaceConnection,
 WorkspaceDeletedPayload: WorkspaceDeletedPayload,
+WorkspaceUser: WorkspaceUser,
 DateTime: DateTime,
 JSON: JSON
     }

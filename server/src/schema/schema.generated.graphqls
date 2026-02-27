@@ -65,6 +65,27 @@ type Channel {
   workspacesEnabled: Boolean!
 }
 
+type ChannelMessage {
+  author: ChannelMessageAuthor!
+  channelId: String!
+  content: String!
+  createdAt: DateTime!
+  id: ID!
+}
+
+type ChannelMessageAuthor {
+  avatarUrl: String
+  id: ID!
+  name: String!
+}
+
+type ChannelMessageConnection {
+  limit: Int!
+  messages: [ChannelMessage!]!
+  offset: Int!
+  total: Int!
+}
+
 type CliSession {
   cwd: String
   eventCount: Int!
@@ -144,6 +165,7 @@ type Mutation {
   removeTicketDependency(channelId: ID!, dependsOnWorkspaceId: ID!, workspaceId: ID!): Boolean!
   renameAiChat(id: ID!, title: String!): AiChat!
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
+  sendChannelMessage(channelId: ID!, content: String!): ChannelMessage!
   setTicketDependencies(channelId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!, workspaceId: ID!): Workspace!
   updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, id: ID!, name: String, teamIds: [String!], workspacesEnabled: Boolean): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
@@ -165,6 +187,7 @@ type Query {
   aiChats(serverId: ID!): [AiChat!]!
   board(channelId: ID!): [KanbanColumn!]!
   channel(id: ID!): Channel
+  channelMessages(channelId: ID!, limit: Int, offset: Int): ChannelMessageConnection!
   channels: [Channel!]!
   checkPRStatuses(branches: [String!]!, channelId: ID!): [PRStatus!]!
   event(id: ID!): Event
@@ -203,6 +226,7 @@ type SessionEventPayload {
 
 type Subscription {
   aiChatStream(chatId: ID!): AiChatStreamPayload!
+  channelMessageCreated(channelId: ID!): ChannelMessage!
   sessionEventCreated(channelId: ID!): SessionEventPayload!
   sessionEventUpdated(channelId: ID!): SessionEventPayload!
   ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
@@ -277,6 +301,8 @@ type Workspace {
   sessionCount: Int!
   status: String!
   summary: String
+  user: WorkspaceUser
+  userId: String
 }
 
 type WorkspaceCliSession {
@@ -295,4 +321,10 @@ type WorkspaceConnection {
 type WorkspaceDeletedPayload {
   channelId: String!
   workspaceId: String!
+}
+
+type WorkspaceUser {
+  avatarUrl: String
+  id: ID!
+  name: String!
 }

@@ -6,6 +6,7 @@ export interface WorkspaceMapper {
   id: string;
   channelId: string;
   cliSessionId: string;
+  userId: string | null;
   preview: string | null;
   importance: string;
   status: string;
@@ -14,7 +15,14 @@ export interface WorkspaceMapper {
   claudeSessionId: string | null;
   createdAt: Date;
   cliSession: { sessionId: string; cwd: string | null; status: string } | null;
+  user: { id: string; name: string; avatarUrl: string | null } | null;
   _count: { sessions: number };
+}
+
+export interface WorkspaceUserMapper {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
 }
 
 export interface WorkspaceCliSessionMapper {
