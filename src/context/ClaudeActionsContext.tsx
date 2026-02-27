@@ -21,7 +21,6 @@ export interface ClaudeActionsContextValue {
   mergeToMain: () => Promise<void>;
   markMerged: () => Promise<void>;
   clearPendingRun: () => void;
-  autoReviewWorkspace: (workspaceId: string, claudeSessionId: string | null) => Promise<void>;
 }
 
 const ClaudeActionsContext = createContext<ClaudeActionsContextValue | null>(null);

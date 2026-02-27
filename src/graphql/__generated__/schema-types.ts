@@ -64,6 +64,15 @@ export type Attachment = {
   url: Scalars['String']['output'];
 };
 
+export type AuthUser = {
+  __typename?: 'AuthUser';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  email: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  role: Scalars['String']['output'];
+};
+
 export type Channel = {
   __typename?: 'Channel';
   baseBranch?: Maybe<Scalars['String']['output']>;
@@ -332,6 +341,14 @@ export type MutationUploadAttachmentArgs = {
   filename: Scalars['String']['input'];
 };
 
+export type PrStatus = {
+  __typename?: 'PRStatus';
+  branch: Scalars['String']['output'];
+  hasPR: Scalars['Boolean']['output'];
+  merged: Scalars['Boolean']['output'];
+  prUrl?: Maybe<Scalars['String']['output']>;
+};
+
 export type Query = {
   __typename?: 'Query';
   aiChatMessages: AiChatMessageConnection;
@@ -339,7 +356,9 @@ export type Query = {
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
+  checkPRStatuses: Array<PrStatus>;
   event?: Maybe<Event>;
+  me?: Maybe<AuthUser>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
@@ -368,6 +387,12 @@ export type QueryBoardArgs = {
 
 export type QueryChannelArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryCheckPrStatusesArgs = {
+  branches: Array<Scalars['String']['input']>;
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -446,7 +471,6 @@ export type Subscription = {
   ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
   workspaceDeleted: WorkspaceDeletedPayload;
-  workspaceReadyForReview: WorkspaceReadyForReviewPayload;
   workspaceUpserted: Workspace;
 };
 
@@ -477,11 +501,6 @@ export type SubscriptionTicketUpsertedArgs = {
 
 
 export type SubscriptionWorkspaceDeletedArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionWorkspaceReadyForReviewArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -582,12 +601,5 @@ export type WorkspaceConnection = {
 export type WorkspaceDeletedPayload = {
   __typename?: 'WorkspaceDeletedPayload';
   channelId: Scalars['String']['output'];
-  workspaceId: Scalars['String']['output'];
-};
-
-export type WorkspaceReadyForReviewPayload = {
-  __typename?: 'WorkspaceReadyForReviewPayload';
-  channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
   workspaceId: Scalars['String']['output'];
 };

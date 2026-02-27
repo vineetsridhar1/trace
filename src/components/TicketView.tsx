@@ -21,11 +21,11 @@ const GQL_TICKET_DEPENDENCIES = gql`
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'text-yellow-400 bg-yellow-400/10' },
   in_progress: { label: 'In Progress', className: 'text-blue-400 bg-blue-400/10' },
-  completed: { label: 'Completed', className: 'text-green-400 bg-green-400/10' },
+  completed: { label: 'Done', className: 'text-green-400 bg-green-400/10' },
   merged: { label: 'Merged', className: 'text-purple-400 bg-purple-400/10' },
   needs_input: { label: 'Needs Input', className: 'text-amber-400 bg-amber-400/10' },
   queued: { label: 'Queued', className: 'text-cyan-400 bg-cyan-400/10' },
-  auto_review: { label: 'Reviewing', className: 'text-teal-400 bg-teal-400/10' },
+  review: { label: 'In Review', className: 'text-teal-400 bg-teal-400/10' },
 };
 
 const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = {

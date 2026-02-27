@@ -150,4 +150,7 @@ contextBridge.exposeInMainWorld('traceAPI', {
     ipcRenderer.on('base-branch-changed', handler);
     return () => ipcRenderer.removeListener('base-branch-changed', handler);
   },
+
+  githubLogin: () =>
+    ipcRenderer.invoke('github-login') as Promise<{ success: boolean; token?: string; user?: { id: string; email: string; name: string; avatarUrl: string | null }; error?: string }>,
 });

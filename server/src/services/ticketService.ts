@@ -36,7 +36,7 @@ const STATUS_TO_SLUG: Record<string, string> = {
   creation: 'in_progress',
   in_progress: 'in_progress',
   needs_input: 'in_review',
-  auto_review: 'in_review',
+  review: 'in_review',
   completed: 'completed',
   merged: 'merged',
 };

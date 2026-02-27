@@ -41,6 +41,14 @@ type Attachment {
   url: String!
 }
 
+type AuthUser {
+  avatarUrl: String
+  email: String!
+  id: ID!
+  name: String!
+  role: String!
+}
+
 type Channel {
   baseBranch: String
   createdAt: DateTime!
@@ -145,13 +153,22 @@ type Mutation {
   uploadAttachment(contentType: String!, data: String!, filename: String!): Attachment!
 }
 
+type PRStatus {
+  branch: String!
+  hasPR: Boolean!
+  merged: Boolean!
+  prUrl: String
+}
+
 type Query {
   aiChatMessages(chatId: ID!, limit: Int, offset: Int): AiChatMessageConnection!
   aiChats(serverId: ID!): [AiChat!]!
   board(channelId: ID!): [KanbanColumn!]!
   channel(id: ID!): Channel
   channels: [Channel!]!
+  checkPRStatuses(branches: [String!]!, channelId: ID!): [PRStatus!]!
   event(id: ID!): Event
+  me: AuthUser
   servers: [Server!]!
   sessionEvents(after: String, channelId: ID!, limit: Int, offset: Int, sessionId: ID!, workspaceId: ID!): EventConnection!
   sessions(channelId: ID!, workspaceId: ID!): [Session!]!
@@ -190,7 +207,6 @@ type Subscription {
   ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
   workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
-  workspaceReadyForReview(channelId: ID!): WorkspaceReadyForReviewPayload!
   workspaceUpserted(channelId: ID!): Workspace!
 }
 
@@ -276,11 +292,5 @@ type WorkspaceConnection {
 
 type WorkspaceDeletedPayload {
   channelId: String!
-  workspaceId: String!
-}
-
-type WorkspaceReadyForReviewPayload {
-  channelId: String!
-  claudeSessionId: String
   workspaceId: String!
 }

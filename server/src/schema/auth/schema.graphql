@@ -1,0 +1,11 @@
+extend type Query {
+  me: AuthUser
+}
+
+type AuthUser {
+  id: ID!
+  email: String!
+  name: String!
+  avatarUrl: String
+  role: String!
+}

@@ -8,7 +8,10 @@ import { makeExecutableSchema } from '@graphql-tools/schema';
 import { resolvers } from './schema/resolvers.generated';
 import eventsRouter from './routes/events';
 import attachmentsRouter from './routes/attachments';
+import authRouter from './routes/auth';
 import { errorHandler } from './middleware/errorHandler';
+import { verifyJwt } from './services/authService';
+import prisma from './lib/prisma';
 
 const typeDefs = readFileSync(
   join(__dirname, './schema/schema.generated.graphqls'),
@@ -29,8 +32,24 @@ export async function createApp() {
   app.use(
     '/graphql',
     cors({ origin: '*' }),
-    expressMiddleware(server),
+    expressMiddleware(server, {
+      context: async ({ req }) => {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+          const token = authHeader.slice(7);
+          const payload = verifyJwt(token);
+          if (payload) {
+            const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+            if (user) return { user };
+          }
+        }
+        return {};
+      },
+    }),
   );
+
+  // Auth routes
+  app.use('/auth', authRouter);
 
   // REST endpoints that stay
   app.use('/events', eventsRouter);

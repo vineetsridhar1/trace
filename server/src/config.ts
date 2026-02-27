@@ -7,4 +7,7 @@ export const config = {
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   aiProvider: (process.env.AI_PROVIDER || "openai") as "openai" | "anthropic",
   storagePath: process.env.STORAGE_PATH || "./data/storage",
+  jwtSecret: process.env.JWT_SECRET || "trace-dev-secret-change-in-production",
+  githubClientId: process.env.GITHUB_CLIENT_ID || "",
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "",
 };

@@ -11,7 +11,7 @@ import { usePanelResize } from './hooks/usePanelResize';
 import { useChannelSubscriptions } from './hooks/useChannelSubscriptions';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
 import { useClaudeWorkspaceActions } from './hooks/useClaudeMessageActions';
-import { useMergePolling } from './hooks/useMergePolling';
+import { usePRPolling } from './hooks/usePRPolling';
 import { useKanban } from './hooks/useKanban';
 import { useAiChats } from './hooks/useAiChats';
 import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
@@ -217,7 +217,6 @@ function AppContent() {
   const [showCreateServer, setShowCreateServer] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const autoRunRef = useRef<((workspaceId: string, runConfig: unknown) => void) | null>(null);
-  const autoReviewRef = useRef<((workspaceId: string, claudeSessionId: string | null) => void) | null>(null);
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth, SERVER_RAIL_WIDTH);
 
@@ -275,10 +274,9 @@ function AppContent() {
     [activeChannelId, executeUpdateWorkspaceStatus, upsertAndSyncWorkspace],
   );
 
-  const { triggerCheck: triggerMergeCheck } = useMergePolling({
+  const { triggerCheck: triggerPRCheck } = usePRPolling({
     workspacesRef,
-    getRepoPath: getChannelRepoPath,
-    getBaseBranch: getChannelBaseBranch,
+    getChannelId: getActiveChannelId,
     updateWorkspaceStatus,
   });
 
@@ -297,10 +295,7 @@ function AppContent() {
     onTicketReadyToRun: useCallback((workspaceId: string, runConfig: unknown) => {
       autoRunRef.current?.(workspaceId, runConfig);
     }, []),
-    onWorkspaceReadyForReview: useCallback((workspaceId: string, claudeSessionId: string | null) => {
-      autoReviewRef.current?.(workspaceId, claudeSessionId);
-    }, []),
-    onWorkspaceCompleted: triggerMergeCheck,
+    onWorkspaceCompleted: triggerPRCheck,
     refreshWorkspaces,
   });
 
@@ -480,13 +475,6 @@ function AppContent() {
     };
   }, [claudeActions.autoRunQueuedTicket]);
 
-  // Populate autoReviewRef so the subscription callback can call autoReviewWorkspace
-  useEffect(() => {
-    autoReviewRef.current = (workspaceId: string, claudeSessionId: string | null) => {
-      void claudeActions.autoReviewWorkspace(workspaceId, claudeSessionId);
-    };
-  }, [claudeActions.autoReviewWorkspace]);
-
   const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const claudeActionsContextValue = useMemo(
     () => ({
@@ -506,7 +494,6 @@ function AppContent() {
       mergeToMain: claudeActions.mergeToMain,
       markMerged: claudeActions.markMerged,
       clearPendingRun: claudeActions.clearPendingRun,
-      autoReviewWorkspace: claudeActions.autoReviewWorkspace,
     }),
     [
       repoPath,
@@ -525,7 +512,6 @@ function AppContent() {
       claudeActions.mergeToMain,
       claudeActions.markMerged,
       claudeActions.clearPendingRun,
-      claudeActions.autoReviewWorkspace,
     ],
   );
 

@@ -40,3 +40,10 @@ export interface WorkspaceDeletedPayloadMapper {
   channelId: string;
   workspaceId: string;
 }
+
+export interface PRStatusMapper {
+  branch: string;
+  hasPR: boolean;
+  merged: boolean;
+  prUrl: string | null;
+}

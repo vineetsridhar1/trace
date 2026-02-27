@@ -50,16 +50,6 @@ const TICKET_READY_TO_RUN_SUBSCRIPTION = gql`
   }
 `;
 
-const WORKSPACE_READY_FOR_REVIEW_SUBSCRIPTION = gql`
-  subscription WorkspaceReadyForReview($channelId: ID!) {
-    workspaceReadyForReview(channelId: $channelId) {
-      channelId
-      workspaceId
-      claudeSessionId
-    }
-  }
-`;
-
 const TICKET_UPSERTED_SUBSCRIPTION = gql`
   subscription TicketUpserted($channelId: ID!) {
     ticketUpserted(channelId: $channelId) {
@@ -108,7 +98,6 @@ interface UseChannelSubscriptionsOptions {
   onNeedsAttention: (workspaceId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   upsertTicket?: (ticket: KanbanTicket) => void;
   onTicketReadyToRun?: (workspaceId: string, runConfig: unknown) => void;
-  onWorkspaceReadyForReview?: (workspaceId: string, claudeSessionId: string | null) => void;
   onWorkspaceCompleted?: () => void;
   refreshWorkspaces?: (channelId: string) => Promise<void>;
 }
@@ -126,7 +115,6 @@ export function useChannelSubscriptions({
   onNeedsAttention,
   upsertTicket,
   onTicketReadyToRun,
-  onWorkspaceReadyForReview,
   onWorkspaceCompleted,
   refreshWorkspaces,
 }: UseChannelSubscriptionsOptions) {
@@ -205,7 +193,7 @@ export function useChannelSubscriptions({
         onNeedsAttention(payload.workspaceId, reason);
       }
       // Re-fetch workspaces after the server's inline auto-complete runs.
-      // The Stop event triggers status transitions (completed/auto_review)
+      // The Stop event triggers status transitions (completed)
       // on the server synchronously, so by the time this subscription fires
       // the DB already has the final status. A short delay accounts for the
       // close handler's enrichment merge and any network latency.
@@ -277,18 +265,6 @@ export function useChannelSubscriptions({
     const { workspaceId, runConfig } = ticketReadyData.ticketReadyToRun;
     onTicketReadyToRun(workspaceId, runConfig);
   }, [ticketReadyData, activeChannelId, onTicketReadyToRun]);
-
-  // --- Workspace ready for review ---
-  const { data: reviewReadyData } = useSubscription(WORKSPACE_READY_FOR_REVIEW_SUBSCRIPTION, {
-    variables,
-    skip,
-  });
-
-  useEffect(() => {
-    if (!reviewReadyData?.workspaceReadyForReview || !activeChannelId || !onWorkspaceReadyForReview) return;
-    const { workspaceId, claudeSessionId } = reviewReadyData.workspaceReadyForReview;
-    onWorkspaceReadyForReview(workspaceId, claudeSessionId);
-  }, [reviewReadyData, activeChannelId, onWorkspaceReadyForReview]);
 
   return { subscriptionsActive };
 }

@@ -39,13 +39,6 @@ export type TicketReadyToRunSubscriptionVariables = Types.Exact<{
 
 export type TicketReadyToRunSubscription = { __typename?: 'Subscription', ticketReadyToRun: { __typename?: 'TicketReadyToRunPayload', channelId: string, workspaceId: string, runConfig: unknown } };
 
-export type WorkspaceReadyForReviewSubscriptionVariables = Types.Exact<{
-  channelId: Types.Scalars['ID']['input'];
-}>;
-
-
-export type WorkspaceReadyForReviewSubscription = { __typename?: 'Subscription', workspaceReadyForReview: { __typename?: 'WorkspaceReadyForReviewPayload', channelId: string, workspaceId: string, claudeSessionId?: string | null } };
-
 export type TicketUpsertedSubscriptionVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
 }>;
@@ -207,38 +200,6 @@ export function useTicketReadyToRunSubscription(baseOptions: Apollo.Subscription
       }
 export type TicketReadyToRunSubscriptionHookResult = ReturnType<typeof useTicketReadyToRunSubscription>;
 export type TicketReadyToRunSubscriptionResult = Apollo.SubscriptionResult<TicketReadyToRunSubscription>;
-export const WorkspaceReadyForReviewDocument = gql`
-    subscription WorkspaceReadyForReview($channelId: ID!) {
-  workspaceReadyForReview(channelId: $channelId) {
-    channelId
-    workspaceId
-    claudeSessionId
-  }
-}
-    `;
-
-/**
- * __useWorkspaceReadyForReviewSubscription__
- *
- * To run a query within a React component, call `useWorkspaceReadyForReviewSubscription` and pass it any options that fit your needs.
- * When your component renders, `useWorkspaceReadyForReviewSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useWorkspaceReadyForReviewSubscription({
- *   variables: {
- *      channelId: // value for 'channelId'
- *   },
- * });
- */
-export function useWorkspaceReadyForReviewSubscription(baseOptions: Apollo.SubscriptionHookOptions<WorkspaceReadyForReviewSubscription, WorkspaceReadyForReviewSubscriptionVariables> & ({ variables: WorkspaceReadyForReviewSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<WorkspaceReadyForReviewSubscription, WorkspaceReadyForReviewSubscriptionVariables>(WorkspaceReadyForReviewDocument, options);
-      }
-export type WorkspaceReadyForReviewSubscriptionHookResult = ReturnType<typeof useWorkspaceReadyForReviewSubscription>;
-export type WorkspaceReadyForReviewSubscriptionResult = Apollo.SubscriptionResult<WorkspaceReadyForReviewSubscription>;
 export const TicketUpsertedDocument = gql`
     subscription TicketUpserted($channelId: ID!) {
   ticketUpserted(channelId: $channelId) {

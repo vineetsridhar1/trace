@@ -23,6 +23,7 @@
     "graphql-subscriptions": "^3.0.0",
     "graphql-type-json": "^0.3.2",
     "graphql-ws": "^6.0.7",
+    "jsonwebtoken": "^9.0.3",
     "openai": "^6.22.0",
     "ws": "^8.19.0",
     "zod": "^3.24.2"
@@ -35,6 +36,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.0",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/ws": "^8.18.1",
     "prisma": "^7.4.1",
     "tsx": "^4.19.0",

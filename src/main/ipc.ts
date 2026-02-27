@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ipcMain, dialog, type BrowserWindow } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
@@ -37,6 +37,7 @@ const LIST_REPO_BRANCHES_CHANNEL = 'list-repo-branches';
 const CHECK_BRANCHES_MERGED_CHANNEL = 'check-branches-merged';
 const WATCH_BASE_BRANCH_CHANNEL = 'watch-base-branch';
 const UNWATCH_BASE_BRANCH_CHANNEL = 'unwatch-base-branch';
+const GITHUB_LOGIN_CHANNEL = 'github-login';
 
 let mainWindowRef: BrowserWindow | null = null;
 let branchWatchers: fs.FSWatcher[] = [];
@@ -84,6 +85,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(CHECK_BRANCHES_MERGED_CHANNEL);
   ipcMain.removeHandler(WATCH_BASE_BRANCH_CHANNEL);
   ipcMain.removeHandler(UNWATCH_BASE_BRANCH_CHANNEL);
+  ipcMain.removeHandler(GITHUB_LOGIN_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string) => {
     try {
@@ -452,5 +454,57 @@ export function registerIpcHandlers() {
     for (const w of branchWatchers) w.close();
     branchWatchers = [];
     return { success: true };
+  });
+
+  ipcMain.handle(GITHUB_LOGIN_CHANNEL, async () => {
+    const serverUrl = resolveServerUrl();
+    return new Promise<{ success: boolean; token?: string; user?: unknown; error?: string }>((resolve) => {
+      const authWindow = new BrowserWindow({
+        width: 600,
+        height: 700,
+        show: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      authWindow.loadURL(`${serverUrl}/auth/github`);
+
+      authWindow.webContents.on('did-navigate', async (_event, url) => {
+        if (url.includes('/auth/github/callback')) {
+          try {
+            const result = await authWindow.webContents.executeJavaScript(`
+              (function() {
+                var tokenMeta = document.querySelector('meta[name="trace-token"]');
+                var userMeta = document.querySelector('meta[name="trace-user"]');
+                if (tokenMeta) {
+                  return {
+                    token: tokenMeta.getAttribute('content'),
+                    user: userMeta ? JSON.parse(userMeta.getAttribute('content')) : null,
+                  };
+                }
+                return null;
+              })();
+            `);
+
+            if (result?.token) {
+              authWindow.close();
+              resolve({ success: true, token: result.token, user: result.user });
+            } else {
+              authWindow.close();
+              resolve({ success: false, error: 'No token found in response' });
+            }
+          } catch (err) {
+            authWindow.close();
+            resolve({ success: false, error: String(err) });
+          }
+        }
+      });
+
+      authWindow.on('closed', () => {
+        resolve({ success: false, error: 'Window closed by user' });
+      });
+    });
   });
 }

@@ -5,7 +5,6 @@ import { UserPromptBubble } from './thread-events/UserPromptBubble';
 import { ToolUseRow } from './thread-events/ToolUseRow';
 import { StopBubble } from './thread-events/StopBubble';
 import { GenericEventRow } from './thread-events/GenericEventRow';
-import { AutoReviewDivider } from './thread-events/AutoReviewDivider';
 import { AssistantTextRow } from './thread-events/AssistantTextRow';
 
 export { PlanReview } from './thread-events/PlanReview';
@@ -42,10 +41,6 @@ export const ThreadEvent = memo(function ThreadEvent({
         <ToolUseRow event={event} time={time} />
       </>
     );
-  }
-
-  if (event.hookEventName === 'AutoReview') {
-    return <AutoReviewDivider time={time} />;
   }
 
   if (event.hookEventName === 'Stop') {

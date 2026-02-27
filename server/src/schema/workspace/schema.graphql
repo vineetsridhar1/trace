@@ -1,5 +1,13 @@
 extend type Query {
   workspaces(channelId: ID!, limit: Int, offset: Int): WorkspaceConnection!
+  checkPRStatuses(channelId: ID!, branches: [String!]!): [PRStatus!]!
+}
+
+type PRStatus {
+  branch: String!
+  hasPR: Boolean!
+  merged: Boolean!
+  prUrl: String
 }
 
 extend type Mutation {
@@ -48,16 +56,9 @@ type CreateWorkspacePayload {
 extend type Subscription {
   workspaceUpserted(channelId: ID!): Workspace!
   workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
-  workspaceReadyForReview(channelId: ID!): WorkspaceReadyForReviewPayload!
 }
 
 type WorkspaceDeletedPayload {
   channelId: String!
   workspaceId: String!
-}
-
-type WorkspaceReadyForReviewPayload {
-  channelId: String!
-  workspaceId: String!
-  claudeSessionId: String
 }

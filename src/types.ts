@@ -91,6 +91,7 @@ export interface TraceAPI {
   watchBaseBranch: (repoPath: string, baseBranch: string) => Promise<{ success: boolean }>;
   unwatchBaseBranch: () => Promise<{ success: boolean }>;
   onBaseBranchChanged: (callback: () => void) => () => void;
+  githubLogin: () => Promise<{ success: boolean; token?: string; user?: { id: string; email: string; name: string; avatarUrl: string | null }; error?: string }>;
 }
 
 declare global {
@@ -184,7 +185,7 @@ export interface SessionEventEnvelope {
 }
 
 export type ChannelType = 'channel' | 'team' | 'project';
-export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'auto_review';
+export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'review';
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';
 export type SessionStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';

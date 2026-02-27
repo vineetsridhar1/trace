@@ -1,4 +1,5 @@
 import { ApolloClient, InMemoryCache, HttpLink, split } from "@apollo/client";
+import { setContext } from "@apollo/client/link/context";
 import { GraphQLWsLink } from "@apollo/client/link/subscriptions";
 import { getMainDefinition } from "@apollo/client/utilities";
 import { createClient } from "graphql-ws";
@@ -27,7 +28,19 @@ export function getWsConnectionSnapshot(): boolean {
 export function createGraphqlClient(): ApolloClient<unknown> {
   const serverUrl = getServerUrl();
 
-  const httpLink = new HttpLink({ uri: `${serverUrl}/graphql` });
+  const rawHttpLink = new HttpLink({ uri: `${serverUrl}/graphql` });
+
+  const authLink = setContext((_, { headers }) => {
+    const token = localStorage.getItem('trace-auth-token');
+    return {
+      headers: {
+        ...headers,
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    };
+  });
+
+  const httpLink = authLink.concat(rawHttpLink);
 
   const wsLink = new GraphQLWsLink(
     createClient({

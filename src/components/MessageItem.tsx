@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { FiCheck, FiLoader, FiTrash2 } from 'react-icons/fi';
+import { FiCheck, FiGitMerge, FiGitPullRequest, FiLoader, FiTrash2 } from 'react-icons/fi';
 import type { Workspace, KanbanTicket, TicketStatus } from '../types';
 import { avatarInitial } from '../utils';
 
@@ -7,11 +7,11 @@ export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string;
   pending: { label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', avatarBg: 'bg-yellow-500/20', avatarText: 'text-yellow-400' },
   creation: { label: 'Creating', color: 'text-orange-400', bgColor: 'bg-orange-400/10', avatarBg: 'bg-orange-500/20', avatarText: 'text-orange-400' },
   in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-400/10', avatarBg: 'bg-blue-500', avatarText: 'text-white' },
-  completed: { label: 'Completed', color: 'text-green-400', bgColor: 'bg-green-400/10', avatarBg: 'bg-green-500/20', avatarText: 'text-green-400' },
+  completed: { label: 'Done', color: 'text-green-400', bgColor: 'bg-green-400/10', avatarBg: 'bg-green-500/20', avatarText: 'text-green-400' },
   merged: { label: 'Merged', color: 'text-purple-400', bgColor: 'bg-purple-400/10', avatarBg: 'bg-purple-500/20', avatarText: 'text-purple-400' },
   needs_input: { label: 'Needs Input', color: 'text-amber-400', bgColor: 'bg-amber-400/10', avatarBg: 'bg-amber-500/20', avatarText: 'text-amber-400' },
   queued: { label: 'Queued', color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', avatarBg: 'bg-cyan-500/20', avatarText: 'text-cyan-400' },
-  auto_review: { label: 'Reviewing', color: 'text-teal-400', bgColor: 'bg-teal-400/10', avatarBg: 'bg-teal-500/20', avatarText: 'text-teal-400' },
+  review: { label: 'In Review', color: 'text-teal-400', bgColor: 'bg-teal-400/10', avatarBg: 'bg-teal-500/20', avatarText: 'text-teal-400' },
 };
 
 export const STATUS_GROUP_ORDER: TicketStatus[] = [
@@ -19,14 +19,13 @@ export const STATUS_GROUP_ORDER: TicketStatus[] = [
   'in_progress',
   'creation',
   'queued',
-  'auto_review',
+  'review',
   'pending',
-  'completed',
   'merged',
 ];
 
-const ACTIVE_STATUSES = new Set<TicketStatus>(['in_progress', 'creation', 'auto_review']);
-const DONE_STATUSES = new Set<TicketStatus>(['completed', 'merged']);
+const ACTIVE_STATUSES = new Set<TicketStatus>(['in_progress', 'creation']);
+const DONE_STATUSES = new Set<TicketStatus>(['completed']);
 
 function StatusIcon({ status }: { status: TicketStatus }) {
   if (ACTIVE_STATUSES.has(status)) {
@@ -34,6 +33,12 @@ function StatusIcon({ status }: { status: TicketStatus }) {
   }
   if (DONE_STATUSES.has(status)) {
     return <FiCheck className="h-4 w-4 flex-shrink-0 text-green-400" />;
+  }
+  if (status === 'review') {
+    return <FiGitPullRequest className="h-4 w-4 flex-shrink-0 text-teal-400" />;
+  }
+  if (status === 'merged') {
+    return <FiGitMerge className="h-4 w-4 flex-shrink-0 text-purple-400" />;
   }
   return null;
 }

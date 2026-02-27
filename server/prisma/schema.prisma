@@ -22,14 +22,16 @@ model Server {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String
-  avatarUrl    String?  @map("avatar_url")
-  passwordHash String   @map("password_hash")
-  role         String   @default("member")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  email             String   @unique
+  name              String
+  avatarUrl         String?  @map("avatar_url")
+  passwordHash      String?  @map("password_hash")
+  githubId          String?  @unique @map("github_id")
+  githubAccessToken String?  @map("github_access_token")
+  role              String   @default("member")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   serverMembers   ServerMember[]
   channelMembers  ChannelMember[]

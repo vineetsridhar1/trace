@@ -67,12 +67,11 @@ function extractPromptFromRawPayload(rawPayload: unknown): string | null {
 }
 
 /**
- * Run auto-complete / auto-review logic when a Stop event arrives without a
- * toolName (Claude is NOT waiting on user input). Determines the final status
- * by checking if the current turn made repo file changes.
+ * Run auto-complete logic when a Stop event arrives without a toolName
+ * (Claude is NOT waiting on user input). Transitions in_progress → completed.
  *
  * Safe to call multiple times — checks current DB status and only acts when
- * the message is still `in_progress` or `auto_review`.
+ * the workspace is still `in_progress`.
  */
 async function runAutoCompleteIfNeeded(
   workspaceId: string,
@@ -80,10 +79,6 @@ async function runAutoCompleteIfNeeded(
   cliSessionId: string,
   sessionId: string,
   toolName: string | null | undefined,
-  /** When true, skip the auto_review→completed transition. Used by the dedup
-   *  path to avoid prematurely completing a message before the review Claude
-   *  has even started — the review Claude will fire its own Stop event. */
-  skipReviewTransition = false,
 ): Promise<void> {
   if (toolName) return; // Claude is waiting on user input
 
@@ -128,51 +123,15 @@ async function runAutoCompleteIfNeeded(
 
     console.log(`[event] auto-complete: writes=${writeEvents.length} repoWrites=${repoWriteCount} ws=${workspaceId.slice(0, 8)}`);
 
-    if (repoWriteCount > 0) {
-      await updateWorkspaceStatus(workspaceId, 'auto_review');
-      void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'auto_review');
-
-      const reviewEvent = await prisma.event.create({
-        data: {
-          cliSessionId: cliSessionId,
-          sessionId,
-          hookEventName: 'AutoReview',
-          importance: 'important',
-          timestamp: new Date(),
-          rawPayload: {},
-        },
-      });
-
-      pubsub.publish(TOPICS.SESSION_EVENT_CREATED(channelId), {
-        sessionEventCreated: { channelId, workspaceId, sessionId, event: reviewEvent },
-      });
-
-      pubsub.publish(TOPICS.WORKSPACE_READY_FOR_REVIEW(channelId), {
-        workspaceReadyForReview: {
-          channelId,
-          workspaceId,
-          claudeSessionId: cliSessionId,
-        },
-      });
-    } else {
-      await updateWorkspaceStatus(workspaceId, 'completed');
-      void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'completed');
-      void checkAndTriggerDependents(workspaceId, channelId);
-    }
-
-    const newStatus = repoWriteCount > 0 ? 'auto_review' : 'completed';
-    console.log(`[event] status: ${currentStatus} -> ${newStatus} ws=${workspaceId.slice(0, 8)}`);
-  }
-
-  if (currentStatus === 'auto_review' && !skipReviewTransition) {
     await updateWorkspaceStatus(workspaceId, 'completed');
     void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'completed');
     void checkAndTriggerDependents(workspaceId, channelId);
-    console.log(`[event] status: auto_review -> completed ws=${workspaceId.slice(0, 8)}`);
+
+    console.log(`[event] status: ${currentStatus} -> completed ws=${workspaceId.slice(0, 8)}`);
   }
 
   // Broadcast the final workspace status to the frontend
-  if (currentStatus === 'in_progress' || currentStatus === 'auto_review') {
+  if (currentStatus === 'in_progress') {
     const finalWorkspace = await getWorkspaceByIdForFeed(workspaceId);
     if (finalWorkspace) {
       pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
@@ -438,7 +397,7 @@ export async function ingestEvent(payload: HookEvent) {
       // data available. runAutoCompleteIfNeeded re-reads status from DB and is
       // a no-op if the first Stop already transitioned the status.
       const mergedToolName = (updates.toolName ?? recentStop.toolName) as string | null;
-      await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, mergedToolName, /* skipReviewTransition */ true);
+      await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, mergedToolName);
 
       // Always re-broadcast the hydrated message on deduped Stop so the UI
       // receives final session/status/summary updates even when status is
@@ -472,8 +431,8 @@ export async function ingestEvent(payload: HookEvent) {
   const event = await prisma.event.create({ data: eventData });
   console.log(`[event] ${payload.hook_event_name}${eventData.toolName ? ':' + eventData.toolName : ''} ws=${workspace.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} status=${currentStatus}`);
 
-  // Auto-transition in_progress/auto_review -> needs_input when AskUserQuestion or ExitPlanMode is detected
-  if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && (currentStatus === 'in_progress' || currentStatus === 'auto_review')) {
+  // Auto-transition in_progress -> needs_input when AskUserQuestion or ExitPlanMode is detected
+  if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && currentStatus === 'in_progress') {
     await updateWorkspaceStatus(workspace.id, 'needs_input');
     void syncTicketWithWorkspaceStatus(workspace.id, channelId, 'needs_input');
     currentStatus = 'needs_input';

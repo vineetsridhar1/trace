@@ -101,7 +101,9 @@ export function MessagePanel({
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
     for (const ws of workspaces) {
-      const status = (ws.status ?? 'pending') as TicketStatus;
+      let status = (ws.status ?? 'pending') as TicketStatus;
+      // "completed" is a visual sub-state of "in_progress" — group them together
+      if (status === 'completed') status = 'in_progress';
       let bucket = buckets.get(status);
       if (!bucket) {
         bucket = [];

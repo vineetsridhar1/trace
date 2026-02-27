@@ -1,9 +1,10 @@
 import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from 'graphql';
 import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper, AiChatStreamPayloadMapper } from './aiChat/schema.mappers';
 import { AttachmentMapper } from './attachment/schema.mappers';
+import { AuthUserMapper } from './auth/schema.mappers';
 import { ChannelMapper } from './channel/schema.mappers';
 import { CliSessionMapper, CliSessionConnectionMapper } from './cli-session/schema.mappers';
-import { CreateWorkspacePayloadMapper, WorkspaceMapper, WorkspaceCliSessionMapper, WorkspaceConnectionMapper, WorkspaceDeletedPayloadMapper } from './workspace/schema.mappers';
+import { CreateWorkspacePayloadMapper, PRStatusMapper, WorkspaceMapper, WorkspaceCliSessionMapper, WorkspaceConnectionMapper, WorkspaceDeletedPayloadMapper } from './workspace/schema.mappers';
 import { EventMapper, EventConnectionMapper, SessionEventPayloadMapper } from './event/schema.mappers';
 import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketUpsertPayloadMapper, TicketWorkspaceMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
@@ -73,6 +74,15 @@ export type Attachment = {
   key: Scalars['String']['output'];
   localPath: Scalars['String']['output'];
   url: Scalars['String']['output'];
+};
+
+export type AuthUser = {
+  __typename?: 'AuthUser';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  email: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  role: Scalars['String']['output'];
 };
 
 export type Channel = {
@@ -343,6 +353,14 @@ export type MutationuploadAttachmentArgs = {
   filename: Scalars['String']['input'];
 };
 
+export type PRStatus = {
+  __typename?: 'PRStatus';
+  branch: Scalars['String']['output'];
+  hasPR: Scalars['Boolean']['output'];
+  merged: Scalars['Boolean']['output'];
+  prUrl?: Maybe<Scalars['String']['output']>;
+};
+
 export type Query = {
   __typename?: 'Query';
   aiChatMessages: AiChatMessageConnection;
@@ -350,7 +368,9 @@ export type Query = {
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
+  checkPRStatuses: Array<PRStatus>;
   event?: Maybe<Event>;
+  me?: Maybe<AuthUser>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
@@ -379,6 +399,12 @@ export type QueryboardArgs = {
 
 export type QuerychannelArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerycheckPRStatusesArgs = {
+  branches: Array<Scalars['String']['input']>;
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -457,7 +483,6 @@ export type Subscription = {
   ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
   workspaceDeleted: WorkspaceDeletedPayload;
-  workspaceReadyForReview: WorkspaceReadyForReviewPayload;
   workspaceUpserted: Workspace;
 };
 
@@ -488,11 +513,6 @@ export type SubscriptionticketUpsertedArgs = {
 
 
 export type SubscriptionworkspaceDeletedArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionworkspaceReadyForReviewArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -596,13 +616,6 @@ export type WorkspaceDeletedPayload = {
   workspaceId: Scalars['String']['output'];
 };
 
-export type WorkspaceReadyForReviewPayload = {
-  __typename?: 'WorkspaceReadyForReviewPayload';
-  channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
-  workspaceId: Scalars['String']['output'];
-};
-
 
 
 export type ResolverTypeWrapper<T> = Promise<T> | T;
@@ -684,6 +697,7 @@ export type ResolversTypes = {
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   AiChatStreamPayload: ResolverTypeWrapper<AiChatStreamPayloadMapper>;
   Attachment: ResolverTypeWrapper<AttachmentMapper>;
+  AuthUser: ResolverTypeWrapper<AuthUserMapper>;
   Channel: ResolverTypeWrapper<ChannelMapper>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   CliSession: ResolverTypeWrapper<CliSessionMapper>;
@@ -695,6 +709,7 @@ export type ResolversTypes = {
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  PRStatus: ResolverTypeWrapper<PRStatusMapper>;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Server: ResolverTypeWrapper<ServerMapper>;
   Session: ResolverTypeWrapper<SessionMapper>;
@@ -710,7 +725,6 @@ export type ResolversTypes = {
   WorkspaceCliSession: ResolverTypeWrapper<WorkspaceCliSessionMapper>;
   WorkspaceConnection: ResolverTypeWrapper<WorkspaceConnectionMapper>;
   WorkspaceDeletedPayload: ResolverTypeWrapper<WorkspaceDeletedPayloadMapper>;
-  WorkspaceReadyForReviewPayload: ResolverTypeWrapper<WorkspaceReadyForReviewPayload>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -723,6 +737,7 @@ export type ResolversParentTypes = {
   Int: Scalars['Int']['output'];
   AiChatStreamPayload: AiChatStreamPayloadMapper;
   Attachment: AttachmentMapper;
+  AuthUser: AuthUserMapper;
   Channel: ChannelMapper;
   Boolean: Scalars['Boolean']['output'];
   CliSession: CliSessionMapper;
@@ -734,6 +749,7 @@ export type ResolversParentTypes = {
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
   Mutation: Record<PropertyKey, never>;
+  PRStatus: PRStatusMapper;
   Query: Record<PropertyKey, never>;
   Server: ServerMapper;
   Session: SessionMapper;
@@ -749,7 +765,6 @@ export type ResolversParentTypes = {
   WorkspaceCliSession: WorkspaceCliSessionMapper;
   WorkspaceConnection: WorkspaceConnectionMapper;
   WorkspaceDeletedPayload: WorkspaceDeletedPayloadMapper;
-  WorkspaceReadyForReviewPayload: WorkspaceReadyForReviewPayload;
 };
 
 export type AiChatResolvers<ContextType = any, ParentType extends ResolversParentTypes['AiChat'] = ResolversParentTypes['AiChat']> = {
@@ -793,6 +808,14 @@ export type AttachmentResolvers<ContextType = any, ParentType extends ResolversP
   key?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   localPath?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   url?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type AuthUserResolvers<ContextType = any, ParentType extends ResolversParentTypes['AuthUser'] = ResolversParentTypes['AuthUser']> = {
+  avatarUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  role?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type ChannelResolvers<ContextType = any, ParentType extends ResolversParentTypes['Channel'] = ResolversParentTypes['Channel']> = {
@@ -903,13 +926,22 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   uploadAttachment?: Resolver<ResolversTypes['Attachment'], ParentType, ContextType, RequireFields<MutationuploadAttachmentArgs, 'contentType' | 'data' | 'filename'>>;
 };
 
+export type PRStatusResolvers<ContextType = any, ParentType extends ResolversParentTypes['PRStatus'] = ResolversParentTypes['PRStatus']> = {
+  branch?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  hasPR?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  merged?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+};
+
 export type QueryResolvers<ContextType = any, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = {
   aiChatMessages?: Resolver<ResolversTypes['AiChatMessageConnection'], ParentType, ContextType, RequireFields<QueryaiChatMessagesArgs, 'chatId'>>;
   aiChats?: Resolver<Array<ResolversTypes['AiChat']>, ParentType, ContextType, RequireFields<QueryaiChatsArgs, 'serverId'>>;
   board?: Resolver<Array<ResolversTypes['KanbanColumn']>, ParentType, ContextType, RequireFields<QueryboardArgs, 'channelId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QuerychannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
+  checkPRStatuses?: Resolver<Array<ResolversTypes['PRStatus']>, ParentType, ContextType, RequireFields<QuerycheckPRStatusesArgs, 'branches' | 'channelId'>>;
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
+  me?: Resolver<Maybe<ResolversTypes['AuthUser']>, ParentType, ContextType>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionsArgs, 'channelId' | 'workspaceId'>>;
@@ -948,7 +980,6 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   ticketReadyToRun?: SubscriptionResolver<ResolversTypes['TicketReadyToRunPayload'], "ticketReadyToRun", ParentType, ContextType, RequireFields<SubscriptionticketReadyToRunArgs, 'channelId'>>;
   ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
   workspaceDeleted?: SubscriptionResolver<ResolversTypes['WorkspaceDeletedPayload'], "workspaceDeleted", ParentType, ContextType, RequireFields<SubscriptionworkspaceDeletedArgs, 'channelId'>>;
-  workspaceReadyForReview?: SubscriptionResolver<ResolversTypes['WorkspaceReadyForReviewPayload'], "workspaceReadyForReview", ParentType, ContextType, RequireFields<SubscriptionworkspaceReadyForReviewArgs, 'channelId'>>;
   workspaceUpserted?: SubscriptionResolver<ResolversTypes['Workspace'], "workspaceUpserted", ParentType, ContextType, RequireFields<SubscriptionworkspaceUpsertedArgs, 'channelId'>>;
 };
 
@@ -1037,18 +1068,13 @@ export type WorkspaceDeletedPayloadResolvers<ContextType = any, ParentType exten
   workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
-export type WorkspaceReadyForReviewPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceReadyForReviewPayload'] = ResolversParentTypes['WorkspaceReadyForReviewPayload']> = {
-  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  claudeSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-};
-
 export type Resolvers<ContextType = any> = {
   AiChat?: AiChatResolvers<ContextType>;
   AiChatMessage?: AiChatMessageResolvers<ContextType>;
   AiChatMessageConnection?: AiChatMessageConnectionResolvers<ContextType>;
   AiChatStreamPayload?: AiChatStreamPayloadResolvers<ContextType>;
   Attachment?: AttachmentResolvers<ContextType>;
+  AuthUser?: AuthUserResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   CliSession?: CliSessionResolvers<ContextType>;
   CliSessionConnection?: CliSessionConnectionResolvers<ContextType>;
@@ -1059,6 +1085,7 @@ export type Resolvers<ContextType = any> = {
   JSON?: GraphQLScalarType;
   KanbanColumn?: KanbanColumnResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
+  PRStatus?: PRStatusResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   Server?: ServerResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
@@ -1074,6 +1101,5 @@ export type Resolvers<ContextType = any> = {
   WorkspaceCliSession?: WorkspaceCliSessionResolvers<ContextType>;
   WorkspaceConnection?: WorkspaceConnectionResolvers<ContextType>;
   WorkspaceDeletedPayload?: WorkspaceDeletedPayloadResolvers<ContextType>;
-  WorkspaceReadyForReviewPayload?: WorkspaceReadyForReviewPayloadResolvers<ContextType>;
 };
 

@@ -20,7 +20,7 @@ const HEADER_STATUS_CONFIG: Record<
     className: 'text-blue-400 bg-blue-400/10',
   },
   completed: {
-    label: 'Completed',
+    label: 'Done',
     className: 'text-green-400 bg-green-400/10',
   },
   merged: {
@@ -35,8 +35,8 @@ const HEADER_STATUS_CONFIG: Record<
     label: 'Queued',
     className: 'text-cyan-400 bg-cyan-400/10',
   },
-  auto_review: {
-    label: 'Auto-Reviewing',
+  review: {
+    label: 'In Review',
     className: 'text-teal-400 bg-teal-400/10',
   },
 };
@@ -228,7 +228,7 @@ export const ThreadHeader = memo(function ThreadHeader({
             )}
           </div>
         )}
-        {hasWorktree === true && (workspaceStatus === 'in_progress' || workspaceStatus === 'completed' || workspaceStatus === 'auto_review') && (
+        {hasWorktree === true && (workspaceStatus === 'in_progress' || workspaceStatus === 'completed' || workspaceStatus === 'review') && (
           <Tooltip text="Merge to main" position="bottom">
             <button
               id="thread-merge-to-main"

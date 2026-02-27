@@ -4,16 +4,16 @@ import { pubsub, TOPICS } from '../../../../services/pubsub';
 import { syncTicketWithWorkspaceStatus, checkAndTriggerDependents } from '../../../../services/ticketService';
 import { GraphQLError } from 'graphql';
 
-const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued', 'auto_review'];
+const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued', 'review'];
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ['creation', 'in_progress', 'queued'],
   queued: ['creation', 'in_progress', 'pending'],
   creation: ['in_progress', 'pending'],
-  in_progress: ['completed', 'needs_input', 'auto_review'],
+  in_progress: ['completed', 'needs_input'],
   needs_input: ['in_progress'],
-  auto_review: ['completed', 'in_progress', 'needs_input'],
-  completed: ['merged', 'in_progress'],
+  completed: ['review', 'merged', 'in_progress'],
+  review: ['merged', 'in_progress'],
   merged: [],
 };
 

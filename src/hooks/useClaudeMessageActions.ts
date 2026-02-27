@@ -512,34 +512,6 @@ export function useClaudeWorkspaceActions({
     setPendingRunFilePaths([]);
   }, []);
 
-  const autoReviewWorkspace = useCallback(
-    async (workspaceId: string, claudeSessionId: string | null) => {
-      const reviewPrompt = `<trace-internal>
-You are now acting as a staff engineer performing a code review of the changes you just made. Review your own changes critically:
-
-1. Check for DRY violations and duplicated patterns
-2. Verify frontend composability, readability, and separation of concerns
-3. Ensure proper React hooks/context usage, no prop drilling, correct dependency arrays
-4. Validate logical file structure and naming conventions
-5. Check type safety and error handling
-6. Look for any bugs, edge cases, or missing error states
-
-Fix all issues you find immediately — do not just list them. After fixing, present a brief summary of:
-- Files reviewed
-- Issues found and fixed
-- Any remaining concerns
-</trace-internal>`;
-
-      await spawnClaudeForWorkspace(workspaceId, reviewPrompt, {
-        errorPrefix: 'Failed to spawn claude for auto-review',
-        resumeSessionId: claudeSessionId ?? undefined,
-        model: selectedModel,
-        effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
-      });
-    },
-    [selectedModel, selectedEffort, spawnClaudeForWorkspace],
-  );
-
   const isWorkspaceSpawned = useCallback((workspaceId: string) => {
     return spawnedWorkspaceIdsRef.current.has(workspaceId);
   }, []);
@@ -560,7 +532,6 @@ Fix all issues you find immediately — do not just list them. After fixing, pre
     mergeToMain,
     markMerged,
     clearPendingRun,
-    autoReviewWorkspace,
     isWorkspaceSpawned,
   };
 }
