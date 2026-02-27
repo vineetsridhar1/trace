@@ -197,8 +197,8 @@ export async function ingestEvent(payload: HookEvent) {
   // prompt from the UI before spawning Claude.
   if (payload.hook_event_name === 'UserPromptSubmit') {
     const rawIncoming = extractPromptFromPayload(payload)?.trim() ?? null;
-    // Strip <trace-internal> blocks so the injected branch-rename instruction
-    // doesn't prevent dedup against the clean prompt already persisted by the UI.
+    // Strip <trace-internal> blocks so the injected system instructions
+    // don't prevent dedup against the clean prompt already persisted by the UI.
     const incomingPrompt = rawIncoming ? stripTraceInternal(rawIncoming).trim() : null;
     if (incomingPrompt) {
       const existingPromptEvent = await prisma.event.findFirst({
