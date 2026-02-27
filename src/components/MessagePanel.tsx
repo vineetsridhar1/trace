@@ -204,10 +204,7 @@ export function MessagePanel({
               <div
                 id="workspaces-list"
                 ref={feedListRef}
-<<<<<<< HEAD
                 onScroll={handleFeedScroll}
-=======
->>>>>>> cf81d54 (feat: compact message cards with status-grouped layout)
                 className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
               >
                 {renderGroupedMessages(false)}
