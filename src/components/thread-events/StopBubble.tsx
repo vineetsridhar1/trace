@@ -1,7 +1,8 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ServerEvent } from '../../types';
 import { formatDuration, stripTraceInternal } from '../../utils';
-import { ExpandableText } from './ExpandableText';
 
 function CopyMessageButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -77,7 +78,9 @@ export const StopBubble = memo(function StopBubble({
         <span className="activity-row-time">{time}</span>
       </div>
       <div className="activity-row-note">
-        <ExpandableText text={displayMessage} lineClamp={4} />
+        <div className="markdown-body break-words text-sm text-[#c0caf5]">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayMessage}</ReactMarkdown>
+        </div>
       </div>
       <div className="mt-1.5 flex items-center gap-3">
         {duration != null && (
