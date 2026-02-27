@@ -418,13 +418,53 @@ export async function ingestEvent(payload: HookEvent) {
         }
 
         if (currentMsg.status === 'in_progress') {
-          // Check if the session made any repo file changes (excluding .claude/ internal files)
+          // Find the start of the current turn (most recent user prompt) so we only
+          // consider writes and tool uses from THIS interaction, not older turns in
+          // the same resumed session.
+          const lastPrompt = await prisma.event.findFirst({
+            where: {
+              thread: { messageId: message.id },
+              sessionId: autoCompleteSessionId,
+              hookEventName: 'UserPromptSubmit',
+            },
+            orderBy: { timestamp: 'desc' },
+            select: { timestamp: true },
+          });
+
+          // Check if Claude is waiting for user input (AskUserQuestion/ExitPlanMode
+          // in the current turn without a subsequent user response). This catches
+          // cases where the PostToolUse event was delayed or status hasn't transitioned yet.
+          const pendingInputTool = await prisma.event.findFirst({
+            where: {
+              thread: { messageId: message.id },
+              sessionId: autoCompleteSessionId,
+              toolName: { in: ['AskUserQuestion', 'ExitPlanMode'] },
+              ...(lastPrompt ? { timestamp: { gt: lastPrompt.timestamp } } : {}),
+            },
+            orderBy: { timestamp: 'desc' },
+          });
+
+          if (pendingInputTool) {
+            // Claude is waiting for user input — transition to needs_input, don't auto-review
+            await updateMessageStatus(message.id, 'needs_input');
+            void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
+            const hydratedMsg = await getMessageByIdForFeed(message.id);
+            if (hydratedMsg) {
+              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+                messageUpserted: hydratedMsg,
+              });
+            }
+            return;
+          }
+
+          // Check if the current turn made any repo file changes (excluding .claude/ internal files)
           const writeEvents = await prisma.event.findMany({
             where: {
               thread: { messageId: message.id },
               sessionId: autoCompleteSessionId,
               hookEventName: 'PostToolUse',
               toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
+              ...(lastPrompt ? { timestamp: { gte: lastPrompt.timestamp } } : {}),
             },
             select: { toolInput: true },
           });
