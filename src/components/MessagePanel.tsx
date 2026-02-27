@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView } from '../types';
 import { KanbanBoard } from './KanbanBoard';
 import { MessageInput } from './MessageInput';
@@ -36,6 +36,24 @@ export function MessagePanel({
   isFullscreen,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
+  const [feedWidth, setFeedWidth] = useState(Infinity);
+
+  const feedRefCallback = useCallback((el: HTMLDivElement | null) => {
+    feedListRef.current = el;
+    if (roRef.current) {
+      roRef.current.disconnect();
+      roRef.current = null;
+    }
+    if (el) {
+      roRef.current = new ResizeObserver(([entry]) => {
+        setFeedWidth(entry.contentRect.width);
+      });
+      roRef.current.observe(el);
+    }
+  }, []);
+
+  const compact = feedWidth < 300;
 
   const ticketByMessageId = useMemo(() => {
     const map = new Map<string, KanbanTicket>();
@@ -104,7 +122,7 @@ export function MessagePanel({
         ) : (
           <>
             <div
-              ref={feedListRef}
+              ref={feedRefCallback}
               onScroll={handleFeedScroll}
               className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
             >
@@ -119,6 +137,7 @@ export function MessagePanel({
                   onOpenThread={onOpenThread}
                   onDeleteMessage={onDeleteMessage}
                   dimmed={message.status === 'merged'}
+                  compact={compact}
                 />
               ))}
             </div>
@@ -141,7 +160,7 @@ export function MessagePanel({
             <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: 200 }}>
               <div
                 id="workspaces-list"
-                ref={feedListRef}
+                ref={feedRefCallback}
                 onScroll={handleFeedScroll}
                 className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
               >
@@ -155,6 +174,7 @@ export function MessagePanel({
                     needsAttention={attentionMessageIds.has(message.id)}
                     onOpenThread={onOpenThread}
                     dimmed={message.status === 'merged'}
+                    compact={compact}
                   />
                 ))}
               </div>

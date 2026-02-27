@@ -84,6 +84,7 @@ interface MessageItemProps {
   onOpenThread: (message: ChannelMessage) => void;
   onDeleteMessage?: (messageId: string) => void;
   dimmed?: boolean;
+  compact?: boolean;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -94,12 +95,59 @@ export const MessageItem = memo(function MessageItem({
   onOpenThread,
   onDeleteMessage,
   dimmed,
+  compact,
 }: MessageItemProps) {
   const rawPreview = message.preview || message.session?.cwd || message.sessionId;
   const preview = stripTraceInternal(rawPreview);
   const threadCount = message.threadCount;
   const status = (message.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+  const displayName = message.sessionId === 'user-manual-input' ? 'You' : message.sessionId.slice(0, 8);
+  const title = ticket?.title ?? preview;
+
+  const deleteButton = onDeleteMessage && (
+    <div
+      role="button"
+      tabIndex={-1}
+      className="hidden cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
+      onClick={(e) => {
+        e.stopPropagation();
+        onDeleteMessage(message.id);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.stopPropagation();
+          onDeleteMessage(message.id);
+        }
+      }}
+    >
+      <FiTrash2 className="h-3.5 w-3.5" />
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        className={`message-item group flex cursor-pointer flex-col border-l-2 border-transparent px-3 py-2.5 text-left transition-colors ${
+          isSelected ? 'selected' : ''
+        } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
+        onClick={() => onOpenThread(message)}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-[#a9b1d6]">{displayName}</span>
+          <span className="ml-auto flex items-center gap-1">
+            <span className="text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
+            {deleteButton}
+          </span>
+        </div>
+        <div className="mt-1">
+          <StatusBadge status={status} />
+        </div>
+        <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#c0caf5]">{title}</p>
+      </button>
+    );
+  }
 
   return (
     <button
@@ -119,7 +167,7 @@ export const MessageItem = memo(function MessageItem({
         <div className="flex items-center gap-2">
           <StatusBadge status={status} />
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-xs text-[#565f89]">
-            {message.sessionId === 'user-manual-input' ? 'You' : message.sessionId.slice(0, 8)}
+            {displayName}
           </span>
           {message.branch && (
             <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-xs text-blue-400">
@@ -128,25 +176,7 @@ export const MessageItem = memo(function MessageItem({
           )}
           <span className="ml-auto flex items-center gap-1">
             <span className="text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
-            {onDeleteMessage && (
-              <div
-                role="button"
-                tabIndex={-1}
-                className="hidden cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteMessage(message.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    onDeleteMessage(message.id);
-                  }
-                }}
-              >
-                <FiTrash2 className="h-3.5 w-3.5" />
-              </div>
-            )}
+            {deleteButton}
           </span>
         </div>
         {ticket ? (
@@ -183,6 +213,7 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.isSelected === next.isSelected &&
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
+    prev.compact === next.compact &&
     prev.onOpenThread === next.onOpenThread &&
     prev.onDeleteMessage === next.onDeleteMessage
   );
