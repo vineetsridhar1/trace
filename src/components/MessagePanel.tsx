@@ -62,14 +62,28 @@ export function MessagePanel({
     return [...merged, ...active];
   }, [messages]);
 
-  const scrollFeedToBottom = useCallback(() => {
-    const el = feedListRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, []);
+  const nearBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(0);
 
   useEffect(() => {
-    scrollFeedToBottom();
-  }, [messages, scrollFeedToBottom]);
+    const prevCount = prevMessageCountRef.current;
+    const currCount = messages.length;
+    prevMessageCountRef.current = currCount;
+
+    const el = feedListRef.current;
+    if (!el) return;
+
+    // Always scroll on first load (0 → N); otherwise only if near bottom
+    if (prevCount === 0 || nearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleFeedScroll = useCallback(() => {
+    const el = feedListRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  }, []);
 
   const handleBoardClickTicket = useCallback(
     (messageId: string) => {
@@ -91,6 +105,7 @@ export function MessagePanel({
           <>
             <div
               ref={feedListRef}
+              onScroll={handleFeedScroll}
               className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
             >
               <div className="flex-1" />
@@ -127,6 +142,7 @@ export function MessagePanel({
               <div
                 id="workspaces-list"
                 ref={feedListRef}
+                onScroll={handleFeedScroll}
                 className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
               >
                 <div className="flex-1" />
