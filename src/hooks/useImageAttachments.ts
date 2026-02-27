@@ -116,7 +116,7 @@ export function useImageAttachments() {
   }, []);
 
   const getAttachmentIds = useCallback(() => attachments.map((a) => a.id), [attachments]);
-  const getFilePaths = useCallback(() => attachments.map((a) => a.localPath), [attachments]);
+  const getFilePaths = useCallback(() => attachments.map((a) => a.serverUrl), [attachments]);
 
   return {
     attachments,

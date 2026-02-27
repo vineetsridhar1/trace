@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   CLAUDE_INACTIVITY_TIMEOUT_MS,
   runStateByMessageId,
@@ -112,6 +114,38 @@ export async function spawnClaude(
 
   if (effort && model !== 'haiku') {
     args.push('--effort', effort);
+  }
+
+  // Download remote images to the worktree so Claude can read them
+  if (filePaths && filePaths.length > 0) {
+    const resolvedPaths: string[] = [];
+    const imgDir = path.join(worktreePath, '.trace-images');
+    let imgDirCreated = false;
+    for (const p of filePaths) {
+      if (p.startsWith('http://') || p.startsWith('https://')) {
+        try {
+          if (!imgDirCreated) {
+            fs.mkdirSync(imgDir, { recursive: true });
+            imgDirCreated = true;
+          }
+          const filename = path.basename(new URL(p).pathname);
+          const localPath = path.join(imgDir, filename);
+          const response = await fetch(p);
+          if (!response.ok) {
+            appendClaudeDebugLog(messageId, `image download failed status=${response.status} url=${p}`);
+            continue;
+          }
+          const buffer = Buffer.from(await response.arrayBuffer());
+          fs.writeFileSync(localPath, buffer);
+          resolvedPaths.push(localPath);
+        } catch (err) {
+          appendClaudeDebugLog(messageId, `image download error url=${p} error=${String(err)}`);
+        }
+      } else {
+        resolvedPaths.push(p);
+      }
+    }
+    filePaths = resolvedPaths;
   }
 
   let finalPrompt = effectivePrompt;
