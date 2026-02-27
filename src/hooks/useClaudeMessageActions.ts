@@ -502,6 +502,13 @@ export function useClaudeMessageActions({
     });
   }, [activeChannelId, getChannelBaseBranch, persistPrompt, selectedMessageRef, spawnClaudeForMessage]);
 
+  const markMerged = useCallback(async () => {
+    const selectedMessage = selectedMessageRef.current;
+    if (!selectedMessage || !activeChannelId) return;
+    if (selectedMessage.status !== 'completed') return;
+    await updateMessageStatus(selectedMessage.id, 'merged');
+  }, [activeChannelId, selectedMessageRef, updateMessageStatus]);
+
   const clearPendingRun = useCallback(() => {
     setPendingRunMessageId(null);
     setPendingRunInitialPrompt('');
@@ -554,6 +561,7 @@ Fix all issues you find immediately — do not just list them. After fixing, pre
     sendThreadMessage,
     sendPlanResponse,
     mergeToMain,
+    markMerged,
     clearPendingRun,
     autoReviewMessage,
     isMessageSpawned,

@@ -76,6 +76,7 @@ export function ThreadPanel() {
     sendThreadMessage,
     sendPlanResponse,
     mergeToMain,
+    markMerged,
     clearPendingRun,
   } = useClaudeActions();
 
@@ -186,6 +187,7 @@ export function ThreadPanel() {
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
           onMergeToMain={() => void mergeToMain()}
+          onMarkMerged={() => void markMerged()}
           threads={threads}
           activeThreadId={activeThreadId}
           onSwitchThread={switchThread}

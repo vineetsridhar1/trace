@@ -419,29 +419,57 @@ export function registerIpcHandlers() {
       // Check if branch is merged into targetRef.
       async function isMergedInto(messageId: string, branch: string, targetRef: string): Promise<boolean | null> {
         const ancestor = await runProcess('git', ['merge-base', '--is-ancestor', branch, targetRef], repoPath);
-        if (ancestor.code !== 0) return null;
 
+        if (ancestor.code === 0) {
+          // Primary path: branch IS an ancestor of target (regular merge or FF).
+          const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
+          const targetRev = await runProcess('git', ['rev-parse', targetRef], repoPath);
+          if (branchRev.code !== 0 || targetRev.code !== 0) return null;
+
+          const branchSha = branchRev.stdout.trim();
+          const targetSha = targetRev.stdout.trim();
+          const storedBaseSha = await getStoredBaseSha(messageId, branch);
+
+          // Branch tip is still the original base commit; base moved elsewhere.
+          // Do not mark these "no-op" branches as merged.
+          if (storedBaseSha && branchSha === storedBaseSha && branchSha !== targetSha) {
+            return false;
+          }
+
+          // Branch is behind target and has diverged from its initial base -> merged.
+          if (branchSha !== targetSha) return true;
+
+          // Same-commit case (usually FF merge): only mark merged if base moved from
+          // the initial SHA captured when this ticket worktree was created.
+          if (!storedBaseSha) return false;
+          return storedBaseSha !== targetSha;
+        }
+
+        // Fallback path: detect squash & rebase merges.
+        // --is-ancestor failed, so the branch is not a direct ancestor of target.
         const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
         const targetRev = await runProcess('git', ['rev-parse', targetRef], repoPath);
         if (branchRev.code !== 0 || targetRev.code !== 0) return null;
 
-        const branchSha = branchRev.stdout.trim();
-        const targetSha = targetRev.stdout.trim();
         const storedBaseSha = await getStoredBaseSha(messageId, branch);
+        // No-op guard: branch hasn't moved from its creation point.
+        if (storedBaseSha && branchRev.stdout.trim() === storedBaseSha) return false;
 
-        // Branch tip is still the original base commit; base moved elsewhere.
-        // Do not mark these "no-op" branches as merged.
-        if (storedBaseSha && branchSha === storedBaseSha && branchSha !== targetSha) {
-          return false;
-        }
+        // Three-way merge check: if merging the branch into target produces the
+        // exact same tree that target already has, then all the branch's changes
+        // are already incorporated (via squash or rebase merge).
+        // Requires git >= 2.38; gracefully returns null on older versions.
+        const mergeTree = await runProcess(
+          'git',
+          ['merge-tree', '--write-tree', targetRef, branch],
+          repoPath,
+        );
+        if (mergeTree.code !== 0) return null;
 
-        // Branch is behind target and has diverged from its initial base -> merged.
-        if (branchSha !== targetSha) return true;
+        const targetTree = await runProcess('git', ['rev-parse', `${targetRef}^{tree}`], repoPath);
+        if (targetTree.code !== 0) return null;
 
-        // Same-commit case (usually FF merge): only mark merged if base moved from
-        // the initial SHA captured when this ticket worktree was created.
-        if (!storedBaseSha) return false;
-        return storedBaseSha !== targetSha;
+        return mergeTree.stdout.trim() === targetTree.stdout.trim();
       }
 
       try {

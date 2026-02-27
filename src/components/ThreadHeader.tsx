@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
+import { FiCheck, FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
 import type { ThreadInfo } from '../hooks/useThread';
@@ -53,6 +53,7 @@ interface ThreadHeaderProps {
   onClose: () => void;
   onDeleteWorktree: () => void;
   onMergeToMain: () => void;
+  onMarkMerged: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
   threads: ThreadInfo[];
@@ -72,6 +73,7 @@ export const ThreadHeader = memo(function ThreadHeader({
   onClose,
   onDeleteWorktree,
   onMergeToMain,
+  onMarkMerged,
   onEnterFullscreen,
   onExitFullscreen,
   threads,
@@ -236,6 +238,18 @@ export const ThreadHeader = memo(function ThreadHeader({
               className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <FiGitMerge className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+        {messageStatus === 'completed' && (
+          <Tooltip text="Mark as merged" position="bottom">
+            <button
+              type="button"
+              disabled={!selectedMessageId}
+              onClick={onMarkMerged}
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-purple-400/50 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <FiCheck className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         )}

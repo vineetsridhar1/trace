@@ -27,7 +27,7 @@ export function useMergePolling({
     const messages = messagesRef.current;
     const candidates = messages.filter(
       (m): m is ChannelMessage & { branch: string } =>
-        (m.status === 'completed' || m.status === 'merged')
+        m.status === 'completed'
         && typeof m.branch === 'string'
         && m.branch.length > 0,
     );
@@ -50,9 +50,7 @@ export function useMergePolling({
         if (msg.status === 'completed' && isMerged) {
           await updateStatusRef.current(msg.id, 'merged');
         }
-        if (msg.status === 'merged' && !isMerged) {
-          await updateStatusRef.current(msg.id, 'completed');
-        }
+        // Never flip merged → completed; merged is a terminal state.
       }
     } catch {
       // Silent failure
