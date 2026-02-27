@@ -52,6 +52,7 @@ export function ThreadPanel() {
     onStartDrag,
     baseBranch,
     terminals,
+    allTerminalEntries,
     activeTerminalTabId,
     terminalCwd,
     onSelectTerminalTab,
@@ -203,37 +204,7 @@ export function ThreadPanel() {
             <TicketView ticket={ticket} />
           ) : viewMode === "files" ? (
             <WorktreeChanges messageId={selectedMessageId} baseBranch={baseBranch} />
-          ) : viewMode === "terminal" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {hasWorktree === false ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
-                  No worktree available
-                </div>
-              ) : terminals.length > 0 ? (
-                <TerminalTabs
-                  terminals={terminals}
-                  activeTabId={activeTerminalTabId}
-                  cwd={terminalCwd}
-                  runScriptRunning={runScriptRunning}
-                  scriptsAvailable={scriptsAvailable}
-                  hasSetupScript={hasSetupScript}
-                  hasRunScript={hasRunScript}
-                  onSelectTab={onSelectTerminalTab}
-                  onCloseTab={onCloseTerminalTab}
-                  onCloseAll={onCloseAllTerminals}
-                  onAddTab={onAddTerminal}
-                  onRunScript={() => onRerunScript('Run')}
-                  onStopScript={() => onStopScript('Run')}
-                  onRerunSetup={() => onRerunScript('Setup')}
-                  onOpenSettings={onOpenSettings}
-                />
-              ) : (
-                <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
-                  Initializing terminals...
-                </div>
-              )}
-            </div>
-          ) : (
+          ) : viewMode === "terminal" ? null : (
             <>
               <div
                 id="thread-content"
@@ -311,6 +282,42 @@ export function ThreadPanel() {
               </button>
             </>
           )}
+
+          {/* Terminal area — always mounted to preserve PTYs across message/view switches */}
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            style={{ display: viewMode === 'terminal' ? 'flex' : 'none' }}
+          >
+            {hasWorktree === false ? (
+              <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+                No worktree available
+              </div>
+            ) : allTerminalEntries.length > 0 ? (
+              <TerminalTabs
+                terminals={terminals}
+                allTerminalEntries={allTerminalEntries}
+                currentMessageId={selectedMessageId}
+                activeTabId={activeTerminalTabId}
+                cwd={terminalCwd}
+                runScriptRunning={runScriptRunning}
+                scriptsAvailable={scriptsAvailable}
+                hasSetupScript={hasSetupScript}
+                hasRunScript={hasRunScript}
+                onSelectTab={onSelectTerminalTab}
+                onCloseTab={onCloseTerminalTab}
+                onCloseAll={onCloseAllTerminals}
+                onAddTab={onAddTerminal}
+                onRunScript={() => onRerunScript('Run')}
+                onStopScript={() => onStopScript('Run')}
+                onRerunSetup={() => onRerunScript('Setup')}
+                onOpenSettings={onOpenSettings}
+              />
+            ) : (
+              <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+                Initializing terminals...
+              </div>
+            )}
+          </div>
         </div>
 
         {viewMode === "agent" && isClaudeRunning && latestTodos && (

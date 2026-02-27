@@ -8,6 +8,13 @@ export interface TerminalTab {
   readOnly?: boolean;
 }
 
+export interface TerminalEntry {
+  messageId: string;
+  terminals: TerminalTab[];
+  activeTabId: string | null;
+  cwd: string;
+}
+
 interface MessageTerminalState {
   terminals: TerminalTab[];
   activeTabId: string | null;
@@ -29,6 +36,17 @@ export function useStartupTerminals() {
   const [activeTabId, setActiveTabIdState] = useState<string | null>(null);
   const [cwd, setCwd] = useState<string>('');
   const [initialized, setInitialized] = useState(false);
+  // All messages' terminal entries (for persistent rendering)
+  const [allTerminalEntries, setAllTerminalEntries] = useState<TerminalEntry[]>([]);
+
+  // Rebuild allTerminalEntries from the ref map
+  const syncAllToState = useCallback(() => {
+    const entries: TerminalEntry[] = [];
+    for (const [msgId, state] of allTerminalsRef.current) {
+      entries.push({ messageId: msgId, terminals: state.terminals, activeTabId: state.activeTabId, cwd: state.cwd });
+    }
+    setAllTerminalEntries(entries);
+  }, []);
 
   // Reads from ref, writes to React state
   const syncToState = useCallback((messageId: string | null) => {
@@ -37,6 +55,7 @@ export function useStartupTerminals() {
       setActiveTabIdState(null);
       setCwd('');
       setInitialized(false);
+      syncAllToState();
       return;
     }
     const entry = allTerminalsRef.current.get(messageId);
@@ -51,7 +70,8 @@ export function useStartupTerminals() {
       setCwd('');
       setInitialized(false);
     }
-  }, []);
+    syncAllToState();
+  }, [syncAllToState]);
 
   // Switch to a different message's terminals
   const selectMessage = useCallback((messageId: string | null) => {
@@ -69,7 +89,8 @@ export function useStartupTerminals() {
       }
     }
     setActiveTabIdState(tabId);
-  }, []);
+    syncAllToState();
+  }, [syncAllToState]);
 
   // Create default tabs for a message (Setup, Run, Terminal 1 — always created)
   const initializeDefaults = useCallback((
@@ -117,8 +138,10 @@ export function useStartupTerminals() {
     // Update React state if this is the current message
     if (currentMessageIdRef.current === messageId) {
       syncToState(messageId);
+    } else {
+      syncAllToState();
     }
-  }, [syncToState]);
+  }, [syncToState, syncAllToState]);
 
   // Replace a named tab with a new terminalId (unmounts old PTY, mounts new)
   const rerunTab = useCallback((tabName: string, command: string, env?: Record<string, string>) => {
@@ -187,8 +210,10 @@ export function useStartupTerminals() {
     initializedRef.current.delete(messageId);
     if (currentMessageIdRef.current === messageId) {
       syncToState(messageId);
+    } else {
+      syncAllToState();
     }
-  }, [syncToState]);
+  }, [syncToState, syncAllToState]);
 
   // Clear everything (channel switch)
   const killAll = useCallback(() => {
@@ -199,6 +224,7 @@ export function useStartupTerminals() {
     setActiveTabIdState(null);
     setCwd('');
     setInitialized(false);
+    setAllTerminalEntries([]);
   }, []);
 
   // Close a single terminal tab
@@ -300,6 +326,7 @@ export function useStartupTerminals() {
     setActiveTabId,
     cwd,
     initialized,
+    allTerminalEntries,
     selectMessage,
     initializeDefaults,
     isInitialized,

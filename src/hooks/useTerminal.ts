@@ -165,7 +165,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     const observer = new ResizeObserver(() => {
       if (!terminal && container.clientWidth > 0 && container.clientHeight > 0) {
         init();
-      } else if (fitAddon) {
+      } else if (fitAddon && container.clientWidth > 0 && container.clientHeight > 0) {
         fitAddon.fit();
       }
     });

@@ -1,7 +1,7 @@
 import { FiPlay, FiRefreshCw, FiSettings, FiSquare, FiX } from 'react-icons/fi';
 import { useTerminal } from '../hooks/useTerminal';
 import { Tooltip } from './Tooltip';
-import type { TerminalTab } from '../hooks/useStartupTerminals';
+import type { TerminalTab, TerminalEntry } from '../hooks/useStartupTerminals';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalTabContentProps {
@@ -30,6 +30,8 @@ function TerminalTabContent({ terminalId, cwd, command, visible, env, readOnly }
 
 interface TerminalTabsProps {
   terminals: TerminalTab[];
+  allTerminalEntries: TerminalEntry[];
+  currentMessageId: string | null;
   activeTabId: string | null;
   cwd: string;
   runScriptRunning: boolean;
@@ -46,12 +48,12 @@ interface TerminalTabsProps {
   onOpenSettings: () => void;
 }
 
-export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, allTerminalEntries, currentMessageId, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
   const runTab = terminals.find((t) => t.name === 'Run');
   const setupTab = terminals.find((t) => t.name === 'Setup');
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Tab bar */}
+      {/* Tab bar — current message only */}
       <div className="flex items-center border-b border-[#292e42] bg-[#16161e] px-1">
         <div className="flex flex-1 items-center gap-0.5 overflow-x-auto py-1">
           {terminals.map((t) => {
@@ -150,9 +152,9 @@ export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, sc
 
       {/* Terminal content */}
       <div className="relative min-h-0 flex-1">
-        {/* Configure placeholders for unconfigured script tabs */}
+        {/* Configure placeholders for unconfigured script tabs — current message only */}
         {!hasSetupScript && activeTabId === setupTab?.terminalId && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1b26]">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
             <button
               type="button"
               onClick={onOpenSettings}
@@ -165,7 +167,7 @@ export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, sc
           </div>
         )}
         {!hasRunScript && activeTabId === runTab?.terminalId && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1b26]">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
             <button
               type="button"
               onClick={onOpenSettings}
@@ -178,23 +180,27 @@ export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, sc
           </div>
         )}
 
-        {/* Actual terminal content — skip mounting for unconfigured script tabs */}
-        {terminals.map((t) => {
-          const isSetupUnconfigured = t.name === 'Setup' && !hasSetupScript;
-          const isRunUnconfigured = t.name === 'Run' && !hasRunScript;
-          if (isSetupUnconfigured || isRunUnconfigured) return null;
-          return (
-            <TerminalTabContent
-              key={t.terminalId}
-              terminalId={t.terminalId}
-              cwd={cwd}
-              command={t.command}
-              visible={t.terminalId === activeTabId}
-              env={t.env}
-              readOnly={t.readOnly}
-            />
-          );
-        })}
+        {/* All messages' terminals — persistently mounted to preserve PTYs */}
+        {allTerminalEntries.flatMap((entry) =>
+          entry.terminals.map((t) => {
+            const isSetupUnconfigured = t.name === 'Setup' && !hasSetupScript;
+            const isRunUnconfigured = t.name === 'Run' && !hasRunScript;
+            if (isSetupUnconfigured || isRunUnconfigured) return null;
+            const isCurrent = entry.messageId === currentMessageId;
+            const isActiveTab = t.terminalId === entry.activeTabId;
+            return (
+              <TerminalTabContent
+                key={t.terminalId}
+                terminalId={t.terminalId}
+                cwd={entry.cwd}
+                command={t.command}
+                visible={isCurrent && isActiveTab}
+                env={t.env}
+                readOnly={t.readOnly}
+              />
+            );
+          }),
+        )}
       </div>
     </div>
   );

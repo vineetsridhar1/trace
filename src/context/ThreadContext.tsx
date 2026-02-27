@@ -7,7 +7,7 @@ import type {
   TicketStatus,
 } from '../types';
 import type { ThreadInfo } from '../hooks/useThread';
-import type { TerminalTab } from '../hooks/useStartupTerminals';
+import type { TerminalTab, TerminalEntry } from '../hooks/useStartupTerminals';
 import { ThreadEventsContext } from './ThreadEventsContext';
 import type { ThreadEventsContextValue } from './ThreadEventsContext';
 
@@ -59,6 +59,7 @@ export interface ThreadContextValue {
   // Terminal state for thread tabs
   baseBranch: string;
   terminals: TerminalTab[];
+  allTerminalEntries: TerminalEntry[];
   terminalsInitialized: boolean;
   activeTerminalTabId: string | null;
   terminalCwd: string;
