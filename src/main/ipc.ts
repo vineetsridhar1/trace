@@ -387,38 +387,40 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle(CHECK_BRANCHES_MERGED_CHANNEL, async (_event, repoPath: string, branches: string[], baseBranch: string) => {
+    // Check if the base branch moved since worktree creation (detects FF merges).
+    // Returns true if the stored base SHA differs from the current base SHA.
+    async function didBaseMove(branch: string, currentBaseSha: string): Promise<boolean> {
+      const id = branch.replace('trace/', '');
+      const stored = await runProcess('git', ['config', `trace.base-sha-${id}`], repoPath);
+      return stored.code === 0 && stored.stdout.trim() !== currentBaseSha;
+    }
+
+    // Check if branch is merged into targetRef, handling same-commit (FF merge) cases.
+    async function isMergedInto(branch: string, targetRef: string): Promise<boolean | null> {
+      const ancestor = await runProcess('git', ['merge-base', '--is-ancestor', branch, targetRef], repoPath);
+      if (ancestor.code !== 0) return null; // not an ancestor
+      const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
+      const targetRev = await runProcess('git', ['rev-parse', targetRef], repoPath);
+      if (branchRev.code !== 0 || targetRev.code !== 0) return null;
+      // Different commits — branch is behind target, clearly merged
+      if (branchRev.stdout.trim() !== targetRev.stdout.trim()) return true;
+      // Same commit — only merged if the base branch moved since worktree creation
+      return didBaseMove(branch, targetRev.stdout.trim());
+    }
+
     try {
       const merged: Record<string, boolean> = {};
       for (const branch of branches) {
         try {
-          // Check against local base branch (covers local merges)
-          const local = await runProcess('git', ['merge-base', '--is-ancestor', branch, baseBranch], repoPath);
-          if (local.code === 0) {
-            // Verify the branch actually diverged — if branch and base resolve to the
-            // same commit, the branch was just created from base and never had unique
-            // commits, so it's not truly merged.
-            const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
-            const baseRev = await runProcess('git', ['rev-parse', baseBranch], repoPath);
-            if (branchRev.code === 0 && baseRev.code === 0 && branchRev.stdout.trim() === baseRev.stdout.trim()) {
-              merged[branch] = false;
-            } else {
-              merged[branch] = true;
-            }
+          // Check against local base branch (covers local merges and FF merges)
+          const localResult = await isMergedInto(branch, baseBranch);
+          if (localResult !== null) {
+            merged[branch] = localResult;
             continue;
           }
           // Check against remote base branch (covers pushed merges after fetch)
-          const remote = await runProcess('git', ['merge-base', '--is-ancestor', branch, `origin/${baseBranch}`], repoPath);
-          if (remote.code === 0) {
-            const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
-            const remoteBaseRev = await runProcess('git', ['rev-parse', `origin/${baseBranch}`], repoPath);
-            if (branchRev.code === 0 && remoteBaseRev.code === 0 && branchRev.stdout.trim() === remoteBaseRev.stdout.trim()) {
-              merged[branch] = false;
-            } else {
-              merged[branch] = true;
-            }
-          } else {
-            merged[branch] = false;
-          }
+          const remoteResult = await isMergedInto(branch, `origin/${baseBranch}`);
+          merged[branch] = remoteResult === true;
         } catch {
           merged[branch] = false;
         }

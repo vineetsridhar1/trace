@@ -31,12 +31,12 @@ export interface EnsureWorktreeResult {
   created: boolean;
 }
 
-export function ensureWorktree(messageId: string, repoPath: string): Promise<EnsureWorktreeResult> {
+export async function ensureWorktree(messageId: string, repoPath: string): Promise<EnsureWorktreeResult> {
   const worktreePath = getWorktreePath(messageId);
 
   if (fs.existsSync(worktreePath)) {
     injectHooks(worktreePath);
-    return Promise.resolve({ worktreePath, created: false });
+    return { worktreePath, created: false };
   }
 
   const base = getWorktreeBase();
@@ -46,16 +46,16 @@ export function ensureWorktree(messageId: string, repoPath: string): Promise<Ens
 
   const branchName = `trace/${messageId.slice(0, 8)}`;
 
-  return new Promise<EnsureWorktreeResult>((resolve, reject) => {
-    const result = spawn('git', ['worktree', 'add', '-b', branchName, worktreePath], {
+  const result = await new Promise<EnsureWorktreeResult>((resolve, reject) => {
+    const proc = spawn('git', ['worktree', 'add', '-b', branchName, worktreePath], {
       cwd: repoPath,
       stdio: 'pipe',
     });
 
     let stderr = '';
-    result.stderr?.on('data', (d) => (stderr += d.toString()));
+    proc.stderr?.on('data', (d) => (stderr += d.toString()));
 
-    result.on('close', (code) => {
+    proc.on('close', (code) => {
       if (code !== 0) {
         const retry = spawn('git', ['worktree', 'add', worktreePath, branchName], {
           cwd: repoPath,
@@ -77,6 +77,17 @@ export function ensureWorktree(messageId: string, repoPath: string): Promise<Ens
       }
     });
   });
+
+  // Store the base branch SHA so merge detection can tell if base moved (for FF merges)
+  if (result.created) {
+    const baseSha = await runProcess('git', ['rev-parse', 'HEAD'], repoPath);
+    if (baseSha.code === 0) {
+      const id = branchName.replace('trace/', '');
+      await runProcess('git', ['config', `trace.base-sha-${id}`, baseSha.stdout.trim()], repoPath);
+    }
+  }
+
+  return result;
 }
 
 export function stopClaudeProcess(messageId: string): { stopped: boolean } {
@@ -171,6 +182,10 @@ export async function deleteWorktree(messageId: string, repoPath: string): Promi
 
   await runProcess('git', ['worktree', 'prune'], repoPath);
   await runProcess('git', ['branch', '-D', branch], repoPath);
+
+  // Clean up stored base SHA from git config
+  const id = branch.replace('trace/', '');
+  await runProcess('git', ['config', '--unset', `trace.base-sha-${id}`], repoPath);
 
   return { removed: true, worktreePath };
 }
