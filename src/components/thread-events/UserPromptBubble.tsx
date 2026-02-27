@@ -18,6 +18,8 @@ export const UserPromptBubble = memo(function UserPromptBubble({
   const attachments = extractAttachments(event.rawPayload);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
+  if (!prompt.trim() && attachments.length === 0) return null;
+
   return (
     <>
       <div className="thread-bubble flex justify-end">
