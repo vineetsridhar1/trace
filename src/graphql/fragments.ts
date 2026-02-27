@@ -18,6 +18,7 @@ export const MESSAGE_FIELDS = gql`
       status
     }
     threadCount
+    queuedRunConfig
   }
 `;
 

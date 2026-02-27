@@ -11,7 +11,7 @@ export type UpdateMessageStatusMutationVariables = Types.Exact<{
 }>;
 
 
-export type UpdateMessageStatusMutation = { __typename?: 'Mutation', updateMessageStatus: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
+export type UpdateMessageStatusMutation = { __typename?: 'Mutation', updateMessageStatus: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
 
 export type DeleteMessageMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
@@ -29,7 +29,7 @@ export type SetTicketDependenciesMutationVariables = Types.Exact<{
 }>;
 
 
-export type SetTicketDependenciesMutation = { __typename?: 'Mutation', setTicketDependencies: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
+export type SetTicketDependenciesMutation = { __typename?: 'Mutation', setTicketDependencies: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
 
 
 export const UpdateMessageStatusDocument = gql`
@@ -144,3 +144,50 @@ export function useSetTicketDependenciesMutation(baseOptions?: Apollo.MutationHo
 export type SetTicketDependenciesMutationHookResult = ReturnType<typeof useSetTicketDependenciesMutation>;
 export type SetTicketDependenciesMutationResult = Apollo.MutationResult<SetTicketDependenciesMutation>;
 export type SetTicketDependenciesMutationOptions = Apollo.BaseMutationOptions<SetTicketDependenciesMutation, SetTicketDependenciesMutationVariables>;
+export type RemoveTicketDependencyMutationVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+  messageId: Types.Scalars['ID']['input'];
+  dependsOnMessageId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type RemoveTicketDependencyMutation = { __typename?: 'Mutation', removeTicketDependency: boolean };
+
+export const RemoveTicketDependencyDocument = gql`
+    mutation RemoveTicketDependency($channelId: ID!, $messageId: ID!, $dependsOnMessageId: ID!) {
+  removeTicketDependency(
+    channelId: $channelId
+    messageId: $messageId
+    dependsOnMessageId: $dependsOnMessageId
+  )
+}
+    `;
+export type RemoveTicketDependencyMutationFn = Apollo.MutationFunction<RemoveTicketDependencyMutation, RemoveTicketDependencyMutationVariables>;
+export function useRemoveTicketDependencyMutation(baseOptions?: Apollo.MutationHookOptions<RemoveTicketDependencyMutation, RemoveTicketDependencyMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<RemoveTicketDependencyMutation, RemoveTicketDependencyMutationVariables>(RemoveTicketDependencyDocument, options);
+      }
+export type RemoveTicketDependencyMutationHookResult = ReturnType<typeof useRemoveTicketDependencyMutation>;
+export type RemoveTicketDependencyMutationResult = Apollo.MutationResult<RemoveTicketDependencyMutation>;
+export type RemoveTicketDependencyMutationOptions = Apollo.BaseMutationOptions<RemoveTicketDependencyMutation, RemoveTicketDependencyMutationVariables>;
+export type UpdateQueuedRunConfigMutationVariables = Types.Exact<{
+  messageId: Types.Scalars['ID']['input'];
+  runConfig: Types.Scalars['JSON']['input'];
+}>;
+
+
+export type UpdateQueuedRunConfigMutation = { __typename?: 'Mutation', updateQueuedRunConfig: boolean };
+
+export const UpdateQueuedRunConfigDocument = gql`
+    mutation UpdateQueuedRunConfig($messageId: ID!, $runConfig: JSON!) {
+  updateQueuedRunConfig(messageId: $messageId, runConfig: $runConfig)
+}
+    `;
+export type UpdateQueuedRunConfigMutationFn = Apollo.MutationFunction<UpdateQueuedRunConfigMutation, UpdateQueuedRunConfigMutationVariables>;
+export function useUpdateQueuedRunConfigMutation(baseOptions?: Apollo.MutationHookOptions<UpdateQueuedRunConfigMutation, UpdateQueuedRunConfigMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UpdateQueuedRunConfigMutation, UpdateQueuedRunConfigMutationVariables>(UpdateQueuedRunConfigDocument, options);
+      }
+export type UpdateQueuedRunConfigMutationHookResult = ReturnType<typeof useUpdateQueuedRunConfigMutation>;
+export type UpdateQueuedRunConfigMutationResult = Apollo.MutationResult<UpdateQueuedRunConfigMutation>;
+export type UpdateQueuedRunConfigMutationOptions = Apollo.BaseMutationOptions<UpdateQueuedRunConfigMutation, UpdateQueuedRunConfigMutationVariables>;

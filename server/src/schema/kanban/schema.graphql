@@ -9,6 +9,7 @@ extend type Mutation {
   moveTicket(ticketId: ID!, columnId: ID!, sortOrder: Int): Ticket!
   setTicketDependencies(channelId: ID!, messageId: ID!, dependsOnMessageIds: [ID!]!, runConfig: JSON!): Message!
   removeTicketDependency(channelId: ID!, messageId: ID!, dependsOnMessageId: ID!): Boolean!
+  updateQueuedRunConfig(messageId: ID!, runConfig: JSON!): Boolean!
 }
 
 extend type Query {

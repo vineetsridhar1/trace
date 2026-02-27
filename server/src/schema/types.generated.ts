@@ -138,6 +138,7 @@ export type Message = {
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
   preview?: Maybe<Scalars['String']['output']>;
+  queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
   session?: Maybe<MessageSession>;
   sessionId: Scalars['String']['output'];
   status: Scalars['String']['output'];
@@ -194,6 +195,7 @@ export type Mutation = {
   updateColumn: KanbanColumn;
   updateMessagePreview: Message;
   updateMessageStatus: Message;
+  updateQueuedRunConfig: Scalars['Boolean']['output'];
   uploadAttachment: Attachment;
 };
 
@@ -327,6 +329,12 @@ export type MutationupdateMessageStatusArgs = {
   channelId: Scalars['ID']['input'];
   messageId: Scalars['ID']['input'];
   status: Scalars['String']['input'];
+};
+
+
+export type MutationupdateQueuedRunConfigArgs = {
+  messageId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
 };
 
 
@@ -857,6 +865,7 @@ export type MessageResolvers<ContextType = any, ParentType extends ResolversPare
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   importance?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   preview?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  queuedRunConfig?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
   session?: Resolver<Maybe<ResolversTypes['MessageSession']>, ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -908,6 +917,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;
   updateMessagePreview?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationupdateMessagePreviewArgs, 'channelId' | 'messageId' | 'preview'>>;
   updateMessageStatus?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationupdateMessageStatusArgs, 'channelId' | 'messageId' | 'status'>>;
+  updateQueuedRunConfig?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationupdateQueuedRunConfigArgs, 'messageId' | 'runConfig'>>;
   uploadAttachment?: Resolver<ResolversTypes['Attachment'], ParentType, ContextType, RequireFields<MutationuploadAttachmentArgs, 'contentType' | 'data' | 'filename'>>;
 };
 

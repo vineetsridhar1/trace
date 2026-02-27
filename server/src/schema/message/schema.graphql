@@ -23,6 +23,7 @@ type Message {
   createdAt: DateTime!
   session: MessageSession
   threadCount: Int!
+  queuedRunConfig: JSON
 }
 
 type MessageSession {

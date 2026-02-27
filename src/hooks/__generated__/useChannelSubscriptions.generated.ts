@@ -9,7 +9,7 @@ export type MessageUpsertedSubscriptionVariables = Types.Exact<{
 }>;
 
 
-export type MessageUpsertedSubscription = { __typename?: 'Subscription', messageUpserted: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
+export type MessageUpsertedSubscription = { __typename?: 'Subscription', messageUpserted: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
 
 export type MessageDeletedSubscriptionVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];

@@ -152,6 +152,7 @@ export interface ChannelMessage {
   createdAt: string;
   session: MessageSession;
   threadCount: number;
+  queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
 }
 
 export interface MessageThread {

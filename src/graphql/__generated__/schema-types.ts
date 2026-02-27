@@ -127,6 +127,7 @@ export type Message = {
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
   preview?: Maybe<Scalars['String']['output']>;
+  queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
   session?: Maybe<MessageSession>;
   sessionId: Scalars['String']['output'];
   status: Scalars['String']['output'];
@@ -176,6 +177,7 @@ export type Mutation = {
   updateColumn: KanbanColumn;
   updateMessagePreview: Message;
   updateMessageStatus: Message;
+  updateQueuedRunConfig: Scalars['Boolean']['output'];
   uploadAttachment: Attachment;
 };
 
@@ -309,6 +311,12 @@ export type MutationUpdateMessageStatusArgs = {
   channelId: Scalars['ID']['input'];
   messageId: Scalars['ID']['input'];
   status: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateQueuedRunConfigArgs = {
+  messageId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
 };
 
 

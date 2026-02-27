@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
 import { MESSAGE_FIELDS } from './graphql/fragments';
-import { useUpdateMessageStatusMutation, useDeleteMessageMutation, useSetTicketDependenciesMutation } from './__generated__/App.generated';
+import { useUpdateMessageStatusMutation, useDeleteMessageMutation, useSetTicketDependenciesMutation, useRemoveTicketDependencyMutation, useUpdateQueuedRunConfigMutation } from './__generated__/App.generated';
 import { buildThreadNodes } from './utils';
 import { useMessages } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
@@ -49,6 +49,18 @@ const GQL_SET_TICKET_DEPENDENCIES = gql`
     }
   }
   ${MESSAGE_FIELDS}
+`;
+
+const GQL_REMOVE_TICKET_DEPENDENCY = gql`
+  mutation RemoveTicketDependency($channelId: ID!, $messageId: ID!, $dependsOnMessageId: ID!) {
+    removeTicketDependency(channelId: $channelId, messageId: $messageId, dependsOnMessageId: $dependsOnMessageId)
+  }
+`;
+
+const GQL_UPDATE_QUEUED_RUN_CONFIG = gql`
+  mutation UpdateQueuedRunConfig($messageId: ID!, $runConfig: JSON!) {
+    updateQueuedRunConfig(messageId: $messageId, runConfig: $runConfig)
+  }
 `;
 
 const SERVER_RAIL_WIDTH = 60;
@@ -184,6 +196,8 @@ function AppContent() {
   const [executeUpdateMessageStatus] = useUpdateMessageStatusMutation();
   const [executeDeleteMessage] = useDeleteMessageMutation();
   const [executeSetTicketDependencies] = useSetTicketDependenciesMutation();
+  const [executeRemoveTicketDependency] = useRemoveTicketDependencyMutation();
+  const [executeUpdateQueuedRunConfig] = useUpdateQueuedRunConfigMutation();
 
   const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('chat');
   const [channelWidth, setChannelWidth] = useState(220);
@@ -328,6 +342,11 @@ function AppContent() {
     return (selected?.status ?? 'pending') as TicketStatus;
   }, [messages, selectedMessageId]);
 
+  const selectedMessageQueuedRunConfig = useMemo(() => {
+    const selected = messages.find((message) => message.id === selectedMessageId);
+    return selected?.queuedRunConfig ?? null;
+  }, [messages, selectedMessageId]);
+
   const selectedTicket = useMemo(() => {
     if (!selectedMessageId) return null;
     for (const col of kanbanColumns) {
@@ -369,6 +388,33 @@ function AppContent() {
       }
     },
     [activeChannelId, executeSetTicketDependencies, upsertAndSyncMessage],
+  );
+
+  const handleRemoveTicketDependency = useCallback(
+    async (messageId: string, dependsOnMessageId: string) => {
+      if (!activeChannelId) return;
+      try {
+        await executeRemoveTicketDependency({
+          variables: { channelId: activeChannelId, messageId, dependsOnMessageId },
+        });
+      } catch {
+        console.error('Failed to remove ticket dependency');
+      }
+    },
+    [activeChannelId, executeRemoveTicketDependency],
+  );
+
+  const handleUpdateQueuedRunConfig = useCallback(
+    async (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+      try {
+        await executeUpdateQueuedRunConfig({
+          variables: { messageId, runConfig },
+        });
+      } catch {
+        console.error('Failed to update queued run config');
+      }
+    },
+    [executeUpdateQueuedRunConfig],
   );
 
   const handleOpenThread = useCallback(
@@ -732,8 +778,11 @@ function AppContent() {
       clearThread,
       channelTickets,
       setTicketDependencies: handleSetTicketDependencies,
+      removeTicketDependency: handleRemoveTicketDependency,
+      updateQueuedRunConfig: handleUpdateQueuedRunConfig,
       isClaudeRunning,
       messageStatus: selectedMessageStatus,
+      queuedRunConfig: selectedMessageQueuedRunConfig,
       selectedTicket,
       isFullscreen,
       scriptsAvailable,
@@ -758,8 +807,8 @@ function AppContent() {
       deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
       closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
       loadThreadEvents, deleteWorktree, switchThread, clearThread,
-      channelTickets, handleSetTicketDependencies,
-      isClaudeRunning, selectedMessageStatus, selectedTicket,
+      channelTickets, handleSetTicketDependencies, handleRemoveTicketDependency, handleUpdateQueuedRunConfig,
+      isClaudeRunning, selectedMessageStatus, selectedMessageQueuedRunConfig, selectedTicket,
       isFullscreen, scriptsAvailable, dragging,
       handleCloseThread, handleDeleteWorktree, handleRunMessageScripts,
       startDragging, enterFullscreen, exitFullscreen,

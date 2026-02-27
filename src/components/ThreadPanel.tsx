@@ -325,7 +325,7 @@ export function ThreadPanel() {
         ) : messageStatus === 'creation' ? (
           <CreationStatusBar />
         ) : messageStatus === 'queued' ? (
-          <QueuedStatusBar messageId={selectedMessageId!} />
+          <QueuedStatusBar key={selectedMessageId} messageId={selectedMessageId!} />
         ) : showQuestion ? (
           <AskUserQuestionBar
             node={showQuestion}

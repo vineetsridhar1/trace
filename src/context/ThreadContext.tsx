@@ -33,9 +33,12 @@ export interface ThreadContextValue {
   // Ticket dependency support
   channelTickets: { messageId: string; title: string; status: string }[];
   setTicketDependencies: (messageId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
+  removeTicketDependency: (messageId: string, dependsOnMessageId: string) => void;
+  updateQueuedRunConfig: (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
   // Derived state
   isClaudeRunning: boolean;
   messageStatus: TicketStatus;
+  queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
   selectedTicket: KanbanTicket | null;
   // UI state
   isFullscreen: boolean;

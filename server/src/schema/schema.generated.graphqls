@@ -102,6 +102,7 @@ type Message {
   id: ID!
   importance: String!
   preview: String
+  queuedRunConfig: JSON
   session: MessageSession
   sessionId: String!
   status: String!
@@ -153,6 +154,7 @@ type Mutation {
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
   updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!
+  updateQueuedRunConfig(messageId: ID!, runConfig: JSON!): Boolean!
   uploadAttachment(contentType: String!, data: String!, filename: String!): Attachment!
 }
 
