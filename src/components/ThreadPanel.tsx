@@ -154,9 +154,11 @@ export function ThreadPanel() {
   }, [selectedMessageId]);
 
 
+  const isOpen = selectedMessageId !== null;
+
   return (
     <>
-      {!isFullscreen && (
+      {!isFullscreen && isOpen && (
         <div
           className={`resize-handle ${dragging === "right" ? "active" : ""}`}
           onMouseDown={(e) => {
@@ -168,9 +170,9 @@ export function ThreadPanel() {
 
       <div
         id="thread-panel"
-        className={`flex shrink-0 min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
+        className={`flex shrink-0 min-h-0 flex-col overflow-hidden ${isOpen ? 'border-l border-[#292e42]' : ''} bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
         style={
-          isFullscreen ? { flex: "1 1 0%" } : { width: `${threadWidth}px` }
+          isFullscreen ? { flex: "1 1 0%" } : { width: isOpen ? `${threadWidth}px` : 0 }
         }
       >
         <ThreadHeader

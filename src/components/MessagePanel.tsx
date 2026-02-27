@@ -181,7 +181,7 @@ export function MessagePanel({
               <MessageInput />
             </div>
           )}
-          {selectedMessageId && <ThreadPanel />}
+          <ThreadPanel />
         </div>
       )}
     </div>
