@@ -4,6 +4,7 @@ export function runProcess(
   cmd: string,
   args: string[],
   cwd: string,
+  stdin?: string,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { cwd, stdio: 'pipe' });
@@ -30,5 +31,10 @@ export function runProcess(
     child.on('close', (code) => {
       finish({ code: code ?? 1, stdout, stderr });
     });
+
+    if (stdin !== undefined) {
+      child.stdin?.write(stdin);
+      child.stdin?.end();
+    }
   });
 }
