@@ -52,16 +52,24 @@ body,
 
 .message-item.selected {
   background: #1f2335;
-  border-left-color: #7c3aed;
+  box-shadow: inset 3px 0 0 #7c3aed;
+}
+
+.message-item.selected:hover {
+  background: #252a40;
 }
 
 @keyframes attention-pulse {
-  0%, 100% { border-left-color: transparent; background: transparent; }
-  50% { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.04); }
+  0%, 100% { background: transparent; box-shadow: none; }
+  50% { background: rgba(245, 158, 11, 0.06); box-shadow: inset 2px 0 0 #f59e0b; }
 }
 
 .message-item.needs-attention {
   animation: attention-pulse 2s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
 }
 
 .thread-bubble pre {
