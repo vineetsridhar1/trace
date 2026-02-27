@@ -149,11 +149,7 @@ export function ThreadPanel() {
   const [viewMode, setViewMode] = useState<ViewMode>("agent");
 
   useEffect(() => {
-    if (messageStatus === "completed" && ticket) {
-      setViewMode("ticket");
-    } else {
-      setViewMode("agent");
-    }
+    setViewMode("agent");
   }, [selectedMessageId]);
 
 
