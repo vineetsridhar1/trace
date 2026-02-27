@@ -734,7 +734,8 @@ function AppContent() {
   }, [killAllTerminals, selectedMessageId, deleteWorktree, updateMessageStatus]);
 
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
-  const panelTitle = enrichedActiveChannel ? `# ${enrichedActiveChannel.name}` : 'Workspaces';
+  const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
+  const panelTitle = displayChannel ? `# ${displayChannel.name}` : '';
   const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const activeChannelBaseBranch = enrichedActiveChannel?.baseBranch ?? 'main';
 
@@ -822,16 +823,6 @@ function AppContent() {
     <ClaudeActionsProvider value={claudeActionsContextValue}>
       <ThreadProvider value={threadContextValue} eventsValue={threadEventsContextValue}>
         <div className="flex h-screen flex-col overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
-          {/* Full-width top bar */}
-          {!isFullscreen && !activeAiChatId && (
-            <ChannelTopBar
-              panelTitle={panelTitle}
-              middlePanelView={middlePanelView}
-              onSetView={handleSetView}
-              onOpenSettings={() => activeChannelId && handleOpenSettings(activeChannelId)}
-            />
-          )}
-
           {/* Main horizontal layout */}
           <div className="flex min-h-0 flex-1 overflow-hidden">
             {!isFullscreen && (
@@ -865,6 +856,14 @@ function AppContent() {
               className="flex min-h-0 min-w-0 flex-col panel-animate"
               style={{ flex: isFullscreen ? '0 0 0px' : '1 1 0%', overflow: 'hidden' }}
             >
+              {!isFullscreen && !activeAiChatId && (
+                <ChannelTopBar
+                  panelTitle={panelTitle}
+                  middlePanelView={middlePanelView}
+                  onSetView={handleSetView}
+                  onOpenSettings={() => { if (displayChannel) handleOpenSettings(displayChannel.id); }}
+                />
+              )}
               <div className="flex min-h-0 flex-1 flex-col">
                 {activeAiChatId ? (
                   <AiChatPanel

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { FiExternalLink, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { Channel, LocalChannelConfig } from '../types';
@@ -63,7 +64,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
 
   const textareaClass = 'w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono';
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -237,6 +238,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
