@@ -450,6 +450,55 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     nodes.splice(i, 1, askNode);
   }
 
+  // Deduplicate ask-user-question nodes within each turn.
+  // When stdin is disconnected, Claude may call AskUserQuestion multiple times
+  // in a single turn with overlapping questions. Keep only the one with the
+  // most questions per turn (ties favor the later node).
+  {
+    let turnQuestionIndices: number[] = [];
+    const indicesToRemove: number[] = [];
+
+    const flushTurnQuestions = () => {
+      if (turnQuestionIndices.length <= 1) {
+        turnQuestionIndices = [];
+        return;
+      }
+      let bestIdx = turnQuestionIndices[0];
+      let bestCount = 0;
+      for (const idx of turnQuestionIndices) {
+        const n = nodes[idx];
+        if (n.kind === 'ask-user-question') {
+          const count = n.questions.length;
+          if (count >= bestCount) {
+            bestCount = count;
+            bestIdx = idx;
+          }
+        }
+      }
+      for (const idx of turnQuestionIndices) {
+        if (idx !== bestIdx) {
+          indicesToRemove.push(idx);
+        }
+      }
+      turnQuestionIndices = [];
+    };
+
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.kind === 'event' && n.event.hookEventName === 'UserPromptSubmit') {
+        flushTurnQuestions();
+      } else if (n.kind === 'ask-user-question') {
+        turnQuestionIndices.push(i);
+      }
+    }
+    flushTurnQuestions();
+
+    // Remove in reverse order to keep indices stable
+    for (let i = indicesToRemove.length - 1; i >= 0; i--) {
+      nodes.splice(indicesToRemove[i], 1);
+    }
+  }
+
   // Collapse completed turns: UserPromptSubmit → middle nodes → Stop
   // Wrap middle nodes into a CollapsedTurnGroupNode so the UI can show them as an accordion.
   // In-progress turns (no Stop yet) remain ungrouped.
