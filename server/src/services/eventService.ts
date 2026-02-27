@@ -66,88 +66,123 @@ function extractPromptFromRawPayload(rawPayload: unknown): string | null {
   return null;
 }
 
-async function handleEnrichmentEvent(payload: HookEvent) {
-  const stopPayload = payload as Record<string, unknown>;
-  const extractedToolName = stopPayload.extracted_tool_name as string | undefined;
-  const extractedToolInput = stopPayload.extracted_tool_input;
-  const extractedUsage = stopPayload.extracted_usage as { input_tokens: number; output_tokens: number } | undefined;
-  const branchName = stopPayload.branch_name as string | undefined;
+/**
+ * Run auto-complete / auto-review logic when a Stop event arrives without a
+ * toolName (Claude is NOT waiting on user input). Determines the final status
+ * by checking if the current turn made repo file changes.
+ *
+ * Safe to call multiple times — checks current DB status and only acts when
+ * the message is still `in_progress` or `auto_review`.
+ */
+async function runAutoCompleteIfNeeded(
+  messageId: string,
+  channelId: string,
+  sessionId: string,
+  threadId: string,
+  toolName: string | null | undefined,
+  /** When true, skip the auto_review→completed transition. Used by the dedup
+   *  path to avoid prematurely completing a message before the review Claude
+   *  has even started — the review Claude will fire its own Stop event. */
+  skipReviewTransition = false,
+): Promise<void> {
+  if (toolName) return; // Claude is waiting on user input
 
-  // Find the most recent Stop event for this session to update
-  const existingEvent = await prisma.event.findFirst({
-    where: { sessionId: payload.session_id, hookEventName: 'Stop' },
-    orderBy: { timestamp: 'desc' },
-    include: { thread: { include: { message: true } } },
+  // Re-read current status from DB to avoid stale data from earlier in the request
+  const freshMessage = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: { status: true },
   });
-  if (!existingEvent) {
-    return null;
+  const currentStatus = freshMessage?.status ?? 'pending';
+
+  if (currentStatus === 'in_progress') {
+    // Find the start of the current turn (most recent user prompt) so we only
+    // consider writes from THIS interaction, not older turns in a resumed session.
+    const lastPrompt = await prisma.event.findFirst({
+      where: {
+        thread: { messageId },
+        sessionId,
+        hookEventName: 'UserPromptSubmit',
+      },
+      orderBy: { timestamp: 'desc' },
+      select: { timestamp: true },
+    });
+
+    // Check if the current turn made any repo file changes (excluding .claude/ internal files)
+    const writeEvents = await prisma.event.findMany({
+      where: {
+        thread: { messageId },
+        sessionId,
+        hookEventName: 'PostToolUse',
+        toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
+        ...(lastPrompt ? { timestamp: { gte: lastPrompt.timestamp } } : {}),
+      },
+      select: { toolInput: true },
+    });
+
+    const repoWriteCount = writeEvents.filter((e: { toolInput: unknown }) => {
+      if (!e.toolInput || typeof e.toolInput !== 'object') return true;
+      const input = e.toolInput as Record<string, unknown>;
+      const filePath = (input.file_path ?? input.path ?? input.filepath ?? '') as string;
+      return !filePath.includes('/.claude/');
+    }).length;
+
+    console.log(`[event] auto-complete: writes=${writeEvents.length} repoWrites=${repoWriteCount} msg=${messageId.slice(0, 8)}`);
+
+    if (repoWriteCount > 0) {
+      await updateMessageStatus(messageId, 'auto_review');
+      void syncTicketWithMessageStatus(messageId, channelId, 'auto_review');
+
+      const reviewEvent = await prisma.event.create({
+        data: {
+          sessionId,
+          threadId,
+          hookEventName: 'AutoReview',
+          importance: 'important',
+          timestamp: new Date(),
+          rawPayload: {},
+        },
+      });
+
+      pubsub.publish(TOPICS.THREAD_EVENT_CREATED(channelId), {
+        threadEventCreated: { channelId, messageId, threadId, event: reviewEvent },
+      });
+
+      pubsub.publish(TOPICS.MESSAGE_READY_FOR_REVIEW(channelId), {
+        messageReadyForReview: {
+          channelId,
+          messageId,
+          claudeSessionId: sessionId,
+        },
+      });
+    } else {
+      await updateMessageStatus(messageId, 'completed');
+      void syncTicketWithMessageStatus(messageId, channelId, 'completed');
+      void checkAndTriggerDependents(messageId, channelId);
+    }
+
+    const newStatus = repoWriteCount > 0 ? 'auto_review' : 'completed';
+    console.log(`[event] status: ${currentStatus} -> ${newStatus} msg=${messageId.slice(0, 8)}`);
   }
 
-  const updates: Parameters<typeof prisma.event.update>[0]['data'] = {};
-
-  if (extractedToolName === 'AskUserQuestion' && extractedToolInput && !existingEvent.toolName) {
-    updates.toolName = 'AskUserQuestion';
-    updates.toolInput = JSON.parse(JSON.stringify(extractedToolInput));
-  } else if (extractedToolName === 'ExitPlanMode' && !existingEvent.toolName) {
-    updates.toolName = 'ExitPlanMode';
+  if (currentStatus === 'auto_review' && !skipReviewTransition) {
+    await updateMessageStatus(messageId, 'completed');
+    void syncTicketWithMessageStatus(messageId, channelId, 'completed');
+    void checkAndTriggerDependents(messageId, channelId);
+    console.log(`[event] status: auto_review -> completed msg=${messageId.slice(0, 8)}`);
   }
 
-  // Merge usage and branch into rawPayload
-  if (extractedUsage || branchName) {
-    const rawPayload = (existingEvent.rawPayload as Record<string, unknown>) ?? {};
-    if (extractedUsage) rawPayload.usage = extractedUsage;
-    if (branchName) rawPayload.branch_name = branchName;
-    updates.rawPayload = JSON.parse(JSON.stringify(rawPayload));
+  // Broadcast the final message status to the frontend
+  if (currentStatus === 'in_progress' || currentStatus === 'auto_review') {
+    const finalMessage = await getMessageByIdForFeed(messageId);
+    if (finalMessage) {
+      pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+        messageUpserted: finalMessage,
+      });
+    }
   }
-
-  if (Object.keys(updates).length === 0) {
-    return { id: existingEvent.id, session_id: payload.session_id };
-  }
-
-  const updated = await prisma.event.update({
-    where: { id: existingEvent.id },
-    data: updates,
-  });
-
-  const messageId = existingEvent.thread?.messageId;
-  const channelId = existingEvent.thread?.message?.channelId;
-  if (!messageId || !channelId) {
-    return { id: updated.id, session_id: payload.session_id };
-  }
-
-  // Broadcast event update
-  pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
-    threadEventUpdated: {
-      channelId,
-      messageId,
-      threadId: existingEvent.threadId,
-      event: updated,
-    },
-  });
-
-  // Note: needs_input transitions are handled in real-time by createEvent (line 352)
-  // when the actual AskUserQuestion/ExitPlanMode PostToolUse event fires.
-  // Do NOT transition here — extracted_tool_name comes from the full transcript
-  // and may reference tools from earlier turns, causing false needs_input.
-
-  // Update branch on message if provided
-  if (branchName) {
-    await updateMessageSummaryAndBranch(messageId, null, branchName);
-    void refreshTicketBroadcast(messageId, channelId);
-  }
-
-  return { id: updated.id, session_id: payload.session_id };
 }
 
 export async function ingestEvent(payload: HookEvent) {
-  // Handle enrichment events: update the existing Stop event rather than
-  // creating a duplicate. Enrichment events carry pre-extracted transcript
-  // data (tool name, usage, branch) sent by Electron after the initial Stop.
-  const source = (payload as Record<string, unknown>).source as string | undefined;
-  if (source === 'electron-enrichment') {
-    return handleEnrichmentEvent(payload);
-  }
-
   // Resolve target message from worktree path. If the session wasn't spawned
   // by the app (no worktree path), silently drop the event so external CLI
   // sessions don't pollute #general.
@@ -158,6 +193,7 @@ export async function ingestEvent(payload: HookEvent) {
     ? await getMessageByIdWithThreads(resolvedMessageId)
     : null;
   if (!message) {
+    console.log(`[event] DROPPED ${payload.hook_event_name} — no message found (cwd=${payload.cwd?.slice(-40)} resolvedId=${resolvedMessageId})`);
     return null;
   }
 
@@ -179,9 +215,11 @@ export async function ingestEvent(payload: HookEvent) {
       ...(payload.permission_mode ? { permissionMode: payload.permission_mode } : {}),
     },
   });
-  // Save Claude session ID on the message for conversation continuity
-  // Skip synthetic IDs (trace-local-*) and manual input
-  if (payload.session_id !== 'user-manual-input' && !payload.session_id.startsWith('trace-local-')) {
+  // Save Claude session ID on the message for conversation continuity.
+  // Skip manual input (UI-created events) but allow trace-local-* IDs so
+  // the inline auto-complete check can match them when Claude exits before
+  // producing a real session ID (e.g. immediate crash or early exit).
+  if (payload.session_id !== 'user-manual-input') {
     await prisma.message.update({
       where: { id: message.id },
       data: { claudeSessionId: payload.session_id },
@@ -223,11 +261,46 @@ export async function ingestEvent(payload: HookEvent) {
     }
   }
 
-  // Auto-transition pending/completed -> in_progress on first non-UserPromptSubmit event
-  if ((currentStatus === 'pending' || currentStatus === 'completed') && payload.hook_event_name !== 'UserPromptSubmit') {
+  // Auto-transition pending -> in_progress on first non-UserPromptSubmit event.
+  if (currentStatus === 'pending' && payload.hook_event_name !== 'UserPromptSubmit') {
     await updateMessageStatus(message.id, 'in_progress');
     void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
     currentStatus = 'in_progress';
+  }
+
+  // Auto-transition completed -> in_progress only when a NEW prompt was submitted
+  // after the last Stop in this thread. This prevents stale late-arriving hook
+  // events from reopening a message that was already completed.
+  if (
+    currentStatus === 'completed' &&
+    payload.hook_event_name !== 'UserPromptSubmit' &&
+    payload.hook_event_name !== 'Stop'
+  ) {
+    const [latestPrompt, latestStop] = await Promise.all([
+      prisma.event.findFirst({
+        where: {
+          threadId: thread.id,
+          hookEventName: 'UserPromptSubmit',
+        },
+        orderBy: { timestamp: 'desc' },
+        select: { timestamp: true },
+      }),
+      prisma.event.findFirst({
+        where: {
+          threadId: thread.id,
+          hookEventName: 'Stop',
+        },
+        orderBy: { timestamp: 'desc' },
+        select: { timestamp: true },
+      }),
+    ]);
+
+    const hasNewPromptSinceLastStop = !!latestPrompt && (!latestStop || latestPrompt.timestamp > latestStop.timestamp);
+    if (hasNewPromptSinceLastStop) {
+      await updateMessageStatus(message.id, 'in_progress');
+      void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
+      currentStatus = 'in_progress';
+    }
   }
 
   // Auto-transition needs_input -> in_progress when user responds or Claude continues.
@@ -281,21 +354,48 @@ export async function ingestEvent(payload: HookEvent) {
 
     stopBranchName = (stopPayload.branch_name as string | undefined) ?? null;
 
-    // De-duplicate Stop events: if a Stop event was already created for this
-    // thread very recently (e.g. hook Stop followed by synthetic Stop within
-    // seconds), merge into the existing event instead of creating a duplicate.
+    // De-duplicate Stop events: if a Stop event from the SAME session was
+    // already created very recently, merge into it instead of creating a
+    // duplicate. This guards against edge cases where multiple Stop signals
+    // arrive for one run. The sessionId filter ensures a new Claude run on
+    // the same message isn't incorrectly deduped against the previous run.
+    // Scope dedupe to the current turn. Claude session IDs are reused across
+    // turns, so a plain session+time window can accidentally match the
+    // previous turn's Stop when runs happen close together.
+    const latestPrompt = await prisma.event.findFirst({
+      where: {
+        threadId: thread.id,
+        hookEventName: 'UserPromptSubmit',
+      },
+      orderBy: { timestamp: 'desc' },
+      select: { timestamp: true },
+    });
+
+    const dedupeWindowStart = new Date(Date.now() - 60_000);
+    const turnWindowStart =
+      latestPrompt && latestPrompt.timestamp > dedupeWindowStart
+        ? latestPrompt.timestamp
+        : dedupeWindowStart;
+
     const recentStop = await prisma.event.findFirst({
       where: {
         threadId: thread.id,
+        sessionId: payload.session_id,
         hookEventName: 'Stop',
-        timestamp: { gte: new Date(Date.now() - 60_000) },
+        timestamp: { gte: turnWindowStart },
       },
       orderBy: { timestamp: 'desc' },
     });
 
     if (recentStop) {
+      console.log(`[event] Stop DEDUPED msg=${message.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} existingId=${recentStop.id.slice(0, 8)} age=${Date.now() - recentStop.timestamp.getTime()}ms`);
       const updates: Record<string, unknown> = {};
-      if (eventData.lastAssistantMessage && !recentStop.lastAssistantMessage) {
+      // Prefer newer enriched Stop text from the close handler.
+      if (
+        typeof eventData.lastAssistantMessage === 'string' &&
+        eventData.lastAssistantMessage.trim().length > 0 &&
+        eventData.lastAssistantMessage !== recentStop.lastAssistantMessage
+      ) {
         updates.lastAssistantMessage = eventData.lastAssistantMessage;
       }
       if (eventData.toolName && !recentStop.toolName) {
@@ -320,6 +420,36 @@ export async function ingestEvent(payload: HookEvent) {
         },
       });
 
+      // Update summary/branch from the enriched Stop data (the first Stop from
+      // hooks typically lacks branch_name and last_assistant_message).
+      if (stopBranchName || eventData.lastAssistantMessage) {
+        const summaryText = typeof eventData.lastAssistantMessage === 'string'
+          ? eventData.lastAssistantMessage.slice(0, 500)
+          : null;
+        await updateMessageSummaryAndBranch(message.id, summaryText, stopBranchName);
+        if (stopBranchName) {
+          void refreshTicketBroadcast(message.id, channelId);
+        }
+      }
+
+      // Run auto-complete even on the deduped Stop. The first Stop (from hooks)
+      // may have arrived before all PostToolUse events were persisted. This
+      // second Stop (from the close handler, after waitForPendingPosts) has all
+      // data available. runAutoCompleteIfNeeded re-reads status from DB and is
+      // a no-op if the first Stop already transitioned the status.
+      const mergedToolName = (updates.toolName ?? recentStop.toolName) as string | null;
+      await runAutoCompleteIfNeeded(message.id, channelId, payload.session_id, thread.id, mergedToolName, /* skipReviewTransition */ true);
+
+      // Always re-broadcast the hydrated message on deduped Stop so the UI
+      // receives final session/status/summary updates even when status is
+      // unchanged (e.g. duplicate Stop after completion).
+      const hydratedMessage = await getMessageByIdForFeed(message.id);
+      if (hydratedMessage) {
+        pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
+          messageUpserted: hydratedMessage,
+        });
+      }
+
       return { id: recentStop.id, session_id: session.sessionId };
     }
   }
@@ -338,6 +468,7 @@ export async function ingestEvent(payload: HookEvent) {
   }
 
   const event = await prisma.event.create({ data: eventData });
+  console.log(`[event] ${payload.hook_event_name}${eventData.toolName ? ':' + eventData.toolName : ''} msg=${message.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} status=${currentStatus}`);
 
   // Auto-transition in_progress/auto_review -> needs_input when AskUserQuestion or ExitPlanMode is detected
   if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && (currentStatus === 'in_progress' || currentStatus === 'auto_review')) {
@@ -405,143 +536,10 @@ export async function ingestEvent(payload: HookEvent) {
     });
   }
 
-  // Auto-complete / auto-review: if the Stop event has no toolName (Claude is NOT
-  // waiting on the user) and the message is still in_progress or auto_review after
-  // a delay, handle the transition. Enrichment data may arrive in a follow-up event
-  // from Electron, so we wait before auto-completing.
-  if (
-    payload.hook_event_name === 'Stop' &&
-    !eventData.toolName
-  ) {
-    const autoCompleteSessionId = payload.session_id;
-    setTimeout(async () => {
-      try {
-        const [currentEvent, currentMsg] = await Promise.all([
-          prisma.event.findUnique({ where: { id: event.id }, select: { toolName: true } }),
-          prisma.message.findUnique({ where: { id: message.id }, select: { status: true, claudeSessionId: true } }),
-        ]);
-        if (!currentEvent || currentEvent.toolName || !currentMsg || currentMsg.claudeSessionId !== autoCompleteSessionId) {
-          return;
-        }
-
-        // Check if Claude continued working after this Stop event
-        const newerEventCount = await prisma.event.count({
-          where: {
-            thread: { messageId: message.id },
-            sessionId: autoCompleteSessionId,
-            timestamp: { gte: event.timestamp },
-            id: { not: event.id },
-          },
-        });
-        if (newerEventCount > 0) {
-          return;
-        }
-
-        // If the review Claude just finished, transition to completed
-        if (currentMsg.status === 'auto_review') {
-          await updateMessageStatus(message.id, 'completed');
-          void syncTicketWithMessageStatus(message.id, channelId, 'completed');
-          void checkAndTriggerDependents(message.id, channelId);
-          const hydratedMsg = await getMessageByIdForFeed(message.id);
-          if (hydratedMsg) {
-            pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-              messageUpserted: hydratedMsg,
-            });
-          }
-          return;
-        }
-
-        if (currentMsg.status === 'in_progress') {
-          // Find the start of the current turn (most recent user prompt) so we only
-          // consider writes and tool uses from THIS interaction, not older turns in
-          // the same resumed session.
-          const lastPrompt = await prisma.event.findFirst({
-            where: {
-              thread: { messageId: message.id },
-              sessionId: autoCompleteSessionId,
-              hookEventName: 'UserPromptSubmit',
-            },
-            orderBy: { timestamp: 'desc' },
-            select: { timestamp: true },
-          });
-
-          // Note: needs_input is already set in real-time by the createEvent path
-          // (line 352) when AskUserQuestion/ExitPlanMode tools are used. No need
-          // to redundantly re-check here — doing so caused false positives when
-          // old tool calls from earlier turns were found in the same session.
-
-          // Check if the current turn made any repo file changes (excluding .claude/ internal files)
-          const writeEvents = await prisma.event.findMany({
-            where: {
-              thread: { messageId: message.id },
-              sessionId: autoCompleteSessionId,
-              hookEventName: 'PostToolUse',
-              toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
-              ...(lastPrompt ? { timestamp: { gte: lastPrompt.timestamp } } : {}),
-            },
-            select: { toolInput: true },
-          });
-
-          const repoWriteCount = writeEvents.filter((e: { toolInput: unknown }) => {
-            if (!e.toolInput || typeof e.toolInput !== 'object') return true;
-            const input = e.toolInput as Record<string, unknown>;
-            const filePath = (input.file_path ?? input.path ?? input.filepath ?? '') as string;
-            return !filePath.includes('/.claude/');
-          }).length;
-
-          if (repoWriteCount > 0) {
-            // File changes detected — trigger auto-review
-            await updateMessageStatus(message.id, 'auto_review');
-            void syncTicketWithMessageStatus(message.id, channelId, 'auto_review');
-
-            // Create a synthetic AutoReview event in the thread
-            const reviewEvent = await prisma.event.create({
-              data: {
-                sessionId: eventData.sessionId,
-                threadId: eventData.threadId,
-                hookEventName: 'AutoReview',
-                importance: 'important',
-                timestamp: new Date(),
-                rawPayload: {},
-              },
-            });
-
-            // Broadcast the review event and updated message status
-            pubsub.publish(TOPICS.THREAD_EVENT_CREATED(channelId), {
-              threadEventCreated: { channelId, messageId: message.id, threadId: eventData.threadId, event: reviewEvent },
-            });
-            const hydratedMsg = await getMessageByIdForFeed(message.id);
-            if (hydratedMsg) {
-              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-                messageUpserted: hydratedMsg,
-              });
-            }
-
-            // Publish subscription to trigger client-side Claude spawn
-            pubsub.publish(TOPICS.MESSAGE_READY_FOR_REVIEW(channelId), {
-              messageReadyForReview: {
-                channelId,
-                messageId: message.id,
-                claudeSessionId: currentMsg.claudeSessionId,
-              },
-            });
-          } else {
-            // No file changes — complete directly
-            await updateMessageStatus(message.id, 'completed');
-            void syncTicketWithMessageStatus(message.id, channelId, 'completed');
-            void checkAndTriggerDependents(message.id, channelId);
-            const hydratedMsg = await getMessageByIdForFeed(message.id);
-            if (hydratedMsg) {
-              pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-                messageUpserted: hydratedMsg,
-              });
-            }
-          }
-        }
-      } catch {
-        // Silent failure — status will remain as-is
-      }
-    }, 5000);
+  // Auto-complete / auto-review: determine the final message status when
+  // Claude stops without requesting user input.
+  if (payload.hook_event_name === 'Stop') {
+    await runAutoCompleteIfNeeded(message.id, channelId, payload.session_id, thread.id, eventData.toolName);
   }
 
   return { id: event.id, session_id: session.sessionId };

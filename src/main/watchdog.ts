@@ -14,7 +14,6 @@ export interface ClaudeRunState {
   active: boolean;
   stopped: boolean;
   timedOut: boolean;
-  hookStopReceived: boolean;
   userStopped: boolean;
 }
 
@@ -90,7 +89,6 @@ export function startWatchdog(messageId: string, child: ChildProcess) {
     active: true,
     stopped: false,
     timedOut: false,
-    hookStopReceived: false,
     userStopped: false,
   });
 
@@ -123,9 +121,3 @@ export function stopWatchdog(messageId: string, reason: string) {
   appendClaudeDebugLog(messageId, `watchdog stopped reason=${reason}`);
 }
 
-export function markHookStopReceived(messageId: string) {
-  const state = runStateByMessageId.get(messageId);
-  if (!state) return;
-  state.hookStopReceived = true;
-  appendClaudeDebugLog(messageId, 'hook stop received');
-}

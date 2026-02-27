@@ -99,6 +99,7 @@ server/prisma/generated/
 
 # Trace worktrees
 .trace-worktrees/
+.trace-images/
 
 dist/
 

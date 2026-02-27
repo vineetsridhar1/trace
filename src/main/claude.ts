@@ -16,7 +16,7 @@ import {
   getWorktreeBranch,
 } from './worktree';
 import { runProcess } from './process';
-import { resolveTranscriptPath, extractUsageFromTranscript, extractAskUserQuestionFromTranscript, extractExitPlanModeFromTranscript } from './transcript';
+import { ClaudeStreamParser } from './streamParser';
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
@@ -154,7 +154,7 @@ export async function spawnClaude(
     finalPrompt += `\n\n<trace-internal>\nThe user has referenced the following files. Read them to understand the context:\n${fileList}\n</trace-internal>`;
   }
 
-  args.push('--output-format', 'json');
+  args.push('--output-format', 'stream-json', '--verbose');
   args.push('-p', finalPrompt);
 
   const child = spawn('claude', args, {
@@ -168,127 +168,37 @@ export async function spawnClaude(
 
   runningProcesses.set(messageId, child);
   startWatchdog(messageId, child);
-  let stdoutBuffer = '';
-  const stdoutChunks: string[] = [];  // Full stdout for JSON parsing (no truncation)
+
+  const parser = new ClaudeStreamParser({
+    serverUrl: SERVER_URL,
+    messageId,
+    cwd: worktreePath,
+    callbacks: {
+      onSessionId: (id) => appendClaudeDebugLog(messageId, `stream session_id=${id}`),
+      onActivity: () => resetWatchdog(messageId, 'stream-json'),
+    },
+    log: (line) => appendClaudeDebugLog(messageId, line),
+  });
+
   let stderrBuffer = '';
   let failedToSpawn: string | null = null;
 
-  const appendToBuffer = (existing: string, chunk: string) => {
+  const appendToStderr = (existing: string, chunk: string) => {
     const combined = existing + chunk;
     return combined.length <= MAX_CAPTURE_CHARS
       ? combined
       : combined.slice(combined.length - MAX_CAPTURE_CHARS);
   };
 
-  interface EnrichmentData {
-    extracted_usage?: { input_tokens: number; output_tokens: number };
-    extracted_tool_name?: 'AskUserQuestion' | 'ExitPlanMode';
-    extracted_tool_input?: unknown;
-    branch_name?: string;
-  }
-
-  const extractEnrichmentData = async (transcriptPath: string | undefined): Promise<EnrichmentData> => {
-    const data: EnrichmentData = {};
-
-    // Resolve git branch
-    try {
-      const branchResult = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
-      if (branchResult.code === 0 && branchResult.stdout.trim()) {
-        data.branch_name = branchResult.stdout.trim();
-      }
-    } catch {
-      // Ignore branch resolution failures
-    }
-
-    if (!transcriptPath) return data;
-
-    // Extract usage
-    const usage = extractUsageFromTranscript(transcriptPath);
-    if (usage) {
-      data.extracted_usage = usage;
-    }
-
-    // Extract AskUserQuestion or ExitPlanMode
-    const askData = extractAskUserQuestionFromTranscript(transcriptPath);
-    if (askData) {
-      data.extracted_tool_name = 'AskUserQuestion';
-      data.extracted_tool_input = askData;
-    } else {
-      const exitPlanData = extractExitPlanModeFromTranscript(transcriptPath);
-      if (exitPlanData) {
-        data.extracted_tool_name = 'ExitPlanMode';
-      }
-    }
-
-    return data;
-  };
-
-  const postSyntheticStopEvent = async (
-    assistantText: string,
-    exitCode: number | null,
-    stopReason?: string,
-    enrichment?: EnrichmentData,
-  ) => {
-    const payload = {
-      session_id: `trace-local-${messageId}`,
-      cwd: worktreePath,
-      hook_event_name: 'Stop',
-      stop_hook_active: false,
-      last_assistant_message: assistantText,
-      source: 'electron-main',
-      exit_code: exitCode,
-      ...(stopReason && { stop_reason: stopReason }),
-      ...(enrichment ?? {}),
-    };
-
-    try {
-      const response = await fetch(`${SERVER_URL}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      appendClaudeDebugLog(messageId, `synthetic stop posted status=${response.status} ok=${response.ok}`);
-    } catch (err) {
-      console.error(`[claude:${messageId.slice(0, 8)}] failed to post synthetic Stop event:`, err);
-      appendClaudeDebugLog(messageId, `synthetic stop post failed error=${String(err)}`);
-    }
-  };
-
-  const postEnrichmentEvent = async (enrichment: EnrichmentData, sessionId?: string) => {
-    const payload = {
-      session_id: sessionId ?? `trace-local-${messageId}`,
-      cwd: worktreePath,
-      hook_event_name: 'Stop',
-      stop_hook_active: false,
-      last_assistant_message: '',
-      source: 'electron-enrichment',
-      ...enrichment,
-    };
-
-    try {
-      const response = await fetch(`${SERVER_URL}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      appendClaudeDebugLog(messageId, `enrichment event posted status=${response.status} ok=${response.ok}`);
-    } catch (err) {
-      appendClaudeDebugLog(messageId, `enrichment event post failed error=${String(err)}`);
-    }
-  };
-
   child.stdout?.on('data', (data) => {
     const chunk = data.toString();
-    stdoutBuffer = appendToBuffer(stdoutBuffer, chunk);
-    stdoutChunks.push(chunk);
-    resetWatchdog(messageId, 'stdout');
+    parser.processChunk(chunk);
     appendClaudeDebugLog(messageId, `stdout bytes=${Buffer.byteLength(chunk)}`);
-    console.log(`[claude:${messageId.slice(0, 8)}] ${chunk.trim()}`);
   });
 
   child.stderr?.on('data', (data) => {
     const chunk = data.toString();
-    stderrBuffer = appendToBuffer(stderrBuffer, chunk);
+    stderrBuffer = appendToStderr(stderrBuffer, chunk);
     resetWatchdog(messageId, 'stderr');
     appendClaudeDebugLog(messageId, `stderr bytes=${Buffer.byteLength(chunk)} text=${chunk.trim().slice(0, 500)}`);
     console.error(`[claude:${messageId.slice(0, 8)}:err] ${chunk.trim()}`);
@@ -302,118 +212,106 @@ export async function spawnClaude(
   });
 
   child.on('close', async (code) => {
-    console.log(`[claude:${messageId.slice(0, 8)}] exited with code ${code}`);
+    const tag = `[claude:${messageId.slice(0, 8)}]`;
+    console.log(`${tag} exited with code ${code}`);
     appendClaudeDebugLog(
       messageId,
-      `close code=${code} durationMs=${Date.now() - startedAt} stdoutLen=${stdoutBuffer.length} stderrLen=${stderrBuffer.length}`,
+      `close code=${code} durationMs=${Date.now() - startedAt} stderrLen=${stderrBuffer.length}`,
     );
     runningProcesses.delete(messageId);
     const runState = runStateByMessageId.get(messageId);
     const timedOut = runState?.timedOut ?? false;
-    const hookStopReceived = runState?.hookStopReceived ?? false;
     const userStopped = runState?.userStopped ?? false;
     stopWatchdog(messageId, 'process-close');
     runStateByMessageId.delete(messageId);
 
-    const stderrOutput = stderrBuffer.trim();
     const suppressed = suppressSyntheticStopFor.delete(messageId);
-    const shouldPostSyntheticStop = !suppressed && !hookStopReceived;
+    if (suppressed) return;
 
-    // Attempt to parse JSON output from --output-format json.
-    // Use the full untruncated stdout (stdoutChunks) since stdoutBuffer may
-    // be truncated at MAX_CAPTURE_CHARS and corrupt the JSON.
-    const fullStdout = stdoutChunks.join('');
-    let assistantOutput = stdoutBuffer.trim();
-    let transcriptPath: string | undefined;
-    let claudeSessionId: string | undefined;
-    // Enrichment extracted directly from the JSON output (most reliable source).
-    // AskUserQuestion/ExitPlanMode appear in permission_denials when Claude runs
-    // in non-interactive mode (with -p and --output-format json).
-    let jsonEnrichment: EnrichmentData = {};
-
+    // Wrap the entire post-close flow in try-catch so an unexpected error
+    // doesn't silently swallow the Stop event (async EventEmitter callbacks
+    // turn throws into unhandled rejections with no console output).
     try {
-      const parsed = JSON.parse(fullStdout);
-      assistantOutput = parsed.result ?? assistantOutput;
-      if (parsed.session_id) {
-        claudeSessionId = parsed.session_id;
-        transcriptPath = resolveTranscriptPath(parsed.session_id);
+      // Flush any remaining buffered data in the stream parser and wait
+      // for all in-flight event POSTs to land before posting the Stop event.
+      // This ensures all PostToolUse events reach the server first, so the
+      // server can determine the correct final status inline (no timer needed).
+      parser.flush();
+      await parser.waitForPendingPosts();
+      const enrichment = parser.getEnrichment();
+      const claudeSessionId = enrichment.sessionId;
+
+      if (!claudeSessionId) {
+        console.warn(`${tag} no session_id from stream — Claude likely exited before producing output (code=${code} stderr=${stderrBuffer.trim().slice(0, 200) || 'none'})`);
       }
 
-      // Extract usage directly from JSON output
-      if (parsed.usage?.input_tokens) {
-        jsonEnrichment.extracted_usage = {
-          input_tokens: parsed.usage.input_tokens,
-          output_tokens: parsed.usage.output_tokens ?? 0,
-        };
-      }
-
-      // Extract AskUserQuestion/ExitPlanMode from permission_denials
-      if (Array.isArray(parsed.permission_denials)) {
-        for (const denial of parsed.permission_denials) {
-          if (denial.tool_name === 'AskUserQuestion' && denial.tool_input) {
-            jsonEnrichment.extracted_tool_name = 'AskUserQuestion';
-            jsonEnrichment.extracted_tool_input = denial.tool_input;
-            break;
-          }
-          if (denial.tool_name === 'ExitPlanMode') {
-            jsonEnrichment.extracted_tool_name = 'ExitPlanMode';
-            jsonEnrichment.extracted_tool_input = denial.tool_input;
-            break;
-          }
+      // Resolve git branch
+      let branchName: string | undefined;
+      try {
+        const branchResult = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+        if (branchResult.code === 0 && branchResult.stdout.trim()) {
+          branchName = branchResult.stdout.trim();
         }
+      } catch {
+        // Ignore branch resolution failures
       }
 
-      appendClaudeDebugLog(messageId, `parsed JSON output: usage=${JSON.stringify(parsed.usage)} cost=${parsed.total_cost_usd}`);
-    } catch {
-      // Not JSON — fall back to raw stdout (backwards compatible)
-      appendClaudeDebugLog(messageId, 'stdout not JSON, using raw output');
+      // Build the assistant output text
+      const stderrOutput = stderrBuffer.trim();
+      let stopReason: string | undefined;
+
+      if (userStopped || code === 143) {
+        stopReason = 'user';
+      }
+
+      // Only include stderr in the persisted message when there's no assistant
+      // text or the process failed — otherwise Claude Code's startup noise
+      // (e.g. "Initializing...") pollutes the message summary shown in the UI.
+      const includeStderr = !enrichment.lastAssistantText || (code !== 0 && code !== null && code !== 143);
+
+      const fallbackMessage = [
+        enrichment.lastAssistantText,
+        timedOut ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.` : '',
+        failedToSpawn ? `Spawn error: ${failedToSpawn}` : '',
+        includeStderr ? stderrOutput : '',
+        code !== 0 && code !== null && code !== 143 ? `Process exited with code ${code}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+        .trim();
+
+      const messageToPersist = fallbackMessage || (userStopped ? 'Stopped by user' : 'Claude run completed without textual output.');
+
+      // Post a single Stop event with all enrichment data inline
+      const payload = {
+        session_id: claudeSessionId ?? `trace-local-${messageId}`,
+        cwd: worktreePath,
+        hook_event_name: 'Stop',
+        stop_hook_active: false,
+        last_assistant_message: messageToPersist,
+        source: 'stream-json',
+        exit_code: code,
+        ...(stopReason && { stop_reason: stopReason }),
+        ...(enrichment.usage && { extracted_usage: enrichment.usage }),
+        ...(enrichment.detectedToolName !== undefined && { extracted_tool_name: enrichment.detectedToolName }),
+        ...(enrichment.detectedToolInput !== undefined && { extracted_tool_input: enrichment.detectedToolInput }),
+        ...(branchName && { branch_name: branchName }),
+      };
+
+      console.log(`${tag} posting Stop session=${payload.session_id.slice(0, 8)} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'}`);
+      appendClaudeDebugLog(messageId, `stop payload session=${payload.session_id} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'} msgLen=${messageToPersist.length}`);
+
+      const response = await fetch(`${SERVER_URL}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      console.log(`${tag} Stop posted status=${response.status}`);
+      appendClaudeDebugLog(messageId, `stop event posted status=${response.status} ok=${response.ok}`);
+    } catch (err) {
+      console.error(`${tag} close handler error:`, err);
+      appendClaudeDebugLog(messageId, `close handler error=${String(err)}`);
     }
-
-    // Build enrichment: prefer JSON output data, fall back to transcript
-    const buildEnrichment = async (): Promise<EnrichmentData> => {
-      const data = await extractEnrichmentData(transcriptPath);
-      // JSON output is authoritative for tool detection and usage
-      if (jsonEnrichment.extracted_tool_name) {
-        data.extracted_tool_name = jsonEnrichment.extracted_tool_name;
-        data.extracted_tool_input = jsonEnrichment.extracted_tool_input;
-      }
-      if (jsonEnrichment.extracted_usage) {
-        data.extracted_usage = jsonEnrichment.extracted_usage;
-      }
-      return data;
-    };
-
-    if (!shouldPostSyntheticStop) {
-      // Hook Stop was already received — send enrichment data as a follow-up
-      // using the real Claude session ID so the server can find and update
-      // the existing Stop event.
-      const enrichment = await buildEnrichment();
-      if (enrichment.extracted_tool_name || enrichment.extracted_usage || enrichment.branch_name) {
-        void postEnrichmentEvent(enrichment, claudeSessionId);
-      }
-      return;
-    }
-
-    if (userStopped || code === 143) {
-      const enrichment = await buildEnrichment();
-      await postSyntheticStopEvent(assistantOutput || 'Stopped by user', code, 'user', enrichment);
-      return;
-    }
-
-    const fallbackMessage = [
-      assistantOutput,
-      timedOut ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.` : '',
-      failedToSpawn ? `Spawn error: ${failedToSpawn}` : '',
-      stderrOutput,
-      code !== 0 && code !== null && code !== 143 ? `Process exited with code ${code}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-      .trim();
-
-    const messageToPersist = fallbackMessage || 'Claude run completed without textual output.';
-    const enrichment = await buildEnrichment();
-    await postSyntheticStopEvent(messageToPersist, code, undefined, enrichment);
   });
 
   return worktreePath;

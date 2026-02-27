@@ -309,9 +309,34 @@ export function useThread({
 
   const updateThreadEvent = useCallback(
     (event: ServerEvent) => {
-      setThreadEvents((prev) =>
-        prev.map((e) => (e.id === event.id ? event : e)),
-      );
+      setThreadEvents((prev) => {
+        const existingIndex = prev.findIndex((e) => e.id === event.id);
+        if (existingIndex >= 0) {
+          const next = [...prev];
+          next[existingIndex] = event;
+          return next;
+        }
+
+        // Upsert behavior: updated events can arrive without a prior created
+        // event (e.g. deduped Stop merge path), so append when missing.
+        const next = [...prev, event].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+        );
+
+        setThreadTotal((total) => Math.max(total, next.length));
+        const currentThreadId = activeThreadIdRef.current;
+        if (currentThreadId) {
+          setThreads((threadsPrev) =>
+            threadsPrev.map((t) =>
+              t.id === currentThreadId
+                ? { ...t, eventCount: Math.max(t.eventCount, next.length) }
+                : t,
+            ),
+          );
+        }
+
+        return next;
+      });
     },
     [],
   );
