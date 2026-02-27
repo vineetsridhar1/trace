@@ -396,7 +396,15 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     nodes.splice(planToolIdx, 1);
   }
 
-  // Detect Stop events enriched with AskUserQuestion data from the transcript
+  // Check if there's a PostToolUse event for AskUserQuestion (the primary source).
+  // When both PostToolUse and Stop events exist for the same AskUserQuestion call,
+  // remove the Stop event to avoid duplicate ask-user-question nodes.
+  const hasPostToolUseAsk = nodes.some(n =>
+    n.kind === 'event' &&
+    n.event.hookEventName === 'PostToolUse' &&
+    normalizeToolName(n.event.toolName) === 'askuserquestion',
+  );
+
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
     if (n.kind !== 'event' || n.event.hookEventName !== 'Stop') continue;
@@ -406,13 +414,20 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     const questions = toolInput?.questions as Question[] | undefined;
     if (!questions || !Array.isArray(questions) || questions.length === 0) continue;
 
-    const askNode: SessionRenderNode = {
-      kind: 'ask-user-question',
-      id: `ask-question-${n.event.id}`,
-      questions,
-      event: n.event,
-    };
-    nodes.splice(i, 1, askNode);
+    if (hasPostToolUseAsk) {
+      // PostToolUse will be converted to ask-user-question below; remove the
+      // redundant Stop event so we don't render the question twice.
+      nodes.splice(i, 1);
+    } else {
+      // Fallback: no PostToolUse exists, convert the Stop event directly.
+      const askNode: SessionRenderNode = {
+        kind: 'ask-user-question',
+        id: `ask-question-${n.event.id}`,
+        questions,
+        event: n.event,
+      };
+      nodes.splice(i, 1, askNode);
+    }
   }
 
   // Detect PostToolUse events with AskUserQuestion tool
