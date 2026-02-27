@@ -132,8 +132,8 @@ contextBridge.exposeInMainWorld('traceAPI', {
   listRepoBranches: (repoPath: string) =>
     ipcRenderer.invoke('list-repo-branches', repoPath) as Promise<{ success: boolean; branches: string[]; error?: string }>,
 
-  checkBranchesMerged: (repoPath: string, branches: string[], baseBranch: string) =>
-    ipcRenderer.invoke('check-branches-merged', repoPath, branches, baseBranch) as Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>,
+  checkBranchesMerged: (repoPath: string, targets: Array<{ messageId: string; branch: string }>, baseBranch: string) =>
+    ipcRenderer.invoke('check-branches-merged', repoPath, targets, baseBranch) as Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>,
 
   watchBaseBranch: (repoPath: string, baseBranch: string) =>
     ipcRenderer.invoke('watch-base-branch', repoPath, baseBranch) as Promise<{ success: boolean }>,

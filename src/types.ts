@@ -81,7 +81,11 @@ export interface TraceAPI {
   listRepoFiles: (repoPath: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
   validateRepo: (repoPath: string) => Promise<{ valid: boolean; originUrl?: string; error?: string }>;
   listRepoBranches: (repoPath: string) => Promise<{ success: boolean; branches: string[]; error?: string }>;
-  checkBranchesMerged: (repoPath: string, branches: string[], baseBranch: string) => Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>;
+  checkBranchesMerged: (
+    repoPath: string,
+    targets: Array<{ messageId: string; branch: string }>,
+    baseBranch: string,
+  ) => Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>;
   watchBaseBranch: (repoPath: string, baseBranch: string) => Promise<{ success: boolean }>;
   unwatchBaseBranch: () => Promise<{ success: boolean }>;
   onBaseBranchChanged: (callback: () => void) => () => void;

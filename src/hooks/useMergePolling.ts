@@ -16,6 +16,8 @@ export function useMergePolling({
 }: UseMergePollingOptions) {
   const updateStatusRef = useRef(updateMessageStatus);
   updateStatusRef.current = updateMessageStatus;
+  const repoPath = getRepoPath();
+  const baseBranch = getBaseBranch();
 
   const checkMerged = useCallback(async () => {
     const repoPath = getRepoPath();
@@ -23,23 +25,33 @@ export function useMergePolling({
     if (!repoPath) return;
 
     const messages = messagesRef.current;
-    const completed = messages.filter(
-      (m) => m.status === 'completed' && m.branch,
+    const candidates = messages.filter(
+      (m): m is ChannelMessage & { branch: string } =>
+        (m.status === 'completed' || m.status === 'merged')
+        && typeof m.branch === 'string'
+        && m.branch.length > 0,
     );
-    if (completed.length === 0) return;
+    if (candidates.length === 0) return;
 
-    const branches = completed.map((m) => m.branch!);
+    const targets = candidates.map((m) => ({
+      messageId: m.id,
+      branch: m.branch,
+    }));
     try {
       const result = await window.traceAPI.checkBranchesMerged(
         repoPath,
-        branches,
+        targets,
         baseBranch,
       );
       if (!result.success) return;
 
-      for (const msg of completed) {
-        if (result.merged[msg.branch!]) {
+      for (const msg of candidates) {
+        const isMerged = result.merged[msg.id] === true;
+        if (msg.status === 'completed' && isMerged) {
           await updateStatusRef.current(msg.id, 'merged');
+        }
+        if (msg.status === 'merged' && !isMerged) {
+          await updateStatusRef.current(msg.id, 'completed');
         }
       }
     } catch {
@@ -52,8 +64,6 @@ export function useMergePolling({
     void checkMerged();
 
     // Start watching git refs for base branch changes
-    const repoPath = getRepoPath();
-    const baseBranch = getBaseBranch();
     if (repoPath) {
       void window.traceAPI.watchBaseBranch(repoPath, baseBranch);
     }
@@ -62,12 +72,16 @@ export function useMergePolling({
     const unsubscribe = window.traceAPI.onBaseBranchChanged(() => {
       void checkMerged();
     });
+    const interval = window.setInterval(() => {
+      void checkMerged();
+    }, 30_000);
 
     return () => {
       unsubscribe();
+      window.clearInterval(interval);
       void window.traceAPI.unwatchBaseBranch();
     };
-  }, [checkMerged, getRepoPath, getBaseBranch]);
+  }, [checkMerged, repoPath, baseBranch]);
 
   return { triggerCheck: checkMerged };
 }

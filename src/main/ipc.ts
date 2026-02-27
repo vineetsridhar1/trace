@@ -386,52 +386,86 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(CHECK_BRANCHES_MERGED_CHANNEL, async (_event, repoPath: string, branches: string[], baseBranch: string) => {
-    // Check if the base branch moved since worktree creation (detects FF merges).
-    // Returns true if the stored base SHA differs from the current base SHA.
-    async function didBaseMove(branch: string, currentBaseSha: string): Promise<boolean> {
-      const id = branch.replace('trace/', '');
-      const stored = await runProcess('git', ['config', `trace.base-sha-${id}`], repoPath);
-      // No stored SHA (pre-fix worktree) — assume merged when branch == base
-      if (stored.code !== 0) return true;
-      return stored.stdout.trim() !== currentBaseSha;
-    }
-
-    // Check if branch is merged into targetRef, handling same-commit (FF merge) cases.
-    async function isMergedInto(branch: string, targetRef: string): Promise<boolean | null> {
-      const ancestor = await runProcess('git', ['merge-base', '--is-ancestor', branch, targetRef], repoPath);
-      if (ancestor.code !== 0) return null; // not an ancestor
-      const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
-      const targetRev = await runProcess('git', ['rev-parse', targetRef], repoPath);
-      if (branchRev.code !== 0 || targetRev.code !== 0) return null;
-      // Different commits — branch is behind target, clearly merged
-      if (branchRev.stdout.trim() !== targetRev.stdout.trim()) return true;
-      // Same commit — only merged if the base branch moved since worktree creation
-      return didBaseMove(branch, targetRev.stdout.trim());
-    }
-
-    try {
-      const merged: Record<string, boolean> = {};
-      for (const branch of branches) {
-        try {
-          // Check against local base branch (covers local merges and FF merges)
-          const localResult = await isMergedInto(branch, baseBranch);
-          if (localResult !== null) {
-            merged[branch] = localResult;
-            continue;
-          }
-          // Check against remote base branch (covers pushed merges after fetch)
-          const remoteResult = await isMergedInto(branch, `origin/${baseBranch}`);
-          merged[branch] = remoteResult === true;
-        } catch {
-          merged[branch] = false;
+  ipcMain.handle(
+    CHECK_BRANCHES_MERGED_CHANNEL,
+    async (
+      _event,
+      repoPath: string,
+      targets: Array<{ messageId: string; branch: string }>,
+      baseBranch: string,
+    ) => {
+      async function getStoredBaseSha(messageId: string, branch: string): Promise<string | null> {
+        const storedByMessage = await runProcess(
+          'git',
+          ['config', `trace.base-sha-msg-${messageId}`],
+          repoPath,
+        );
+        if (storedByMessage.code === 0 && storedByMessage.stdout.trim()) {
+          return storedByMessage.stdout.trim();
         }
+
+        // Backward compatibility: fall back to legacy branch-derived key.
+        const legacyId = branch.replace('trace/', '');
+        if (legacyId && legacyId !== branch) {
+          const legacy = await runProcess('git', ['config', `trace.base-sha-${legacyId}`], repoPath);
+          if (legacy.code === 0 && legacy.stdout.trim()) {
+            return legacy.stdout.trim();
+          }
+        }
+
+        return null;
       }
-      return { success: true, merged };
-    } catch (err) {
-      return { success: false, merged: {}, error: String(err) };
-    }
-  });
+
+      // Check if branch is merged into targetRef.
+      async function isMergedInto(messageId: string, branch: string, targetRef: string): Promise<boolean | null> {
+        const ancestor = await runProcess('git', ['merge-base', '--is-ancestor', branch, targetRef], repoPath);
+        if (ancestor.code !== 0) return null;
+
+        const branchRev = await runProcess('git', ['rev-parse', branch], repoPath);
+        const targetRev = await runProcess('git', ['rev-parse', targetRef], repoPath);
+        if (branchRev.code !== 0 || targetRev.code !== 0) return null;
+
+        const branchSha = branchRev.stdout.trim();
+        const targetSha = targetRev.stdout.trim();
+        const storedBaseSha = await getStoredBaseSha(messageId, branch);
+
+        // Branch tip is still the original base commit; base moved elsewhere.
+        // Do not mark these "no-op" branches as merged.
+        if (storedBaseSha && branchSha === storedBaseSha && branchSha !== targetSha) {
+          return false;
+        }
+
+        // Branch is behind target and has diverged from its initial base -> merged.
+        if (branchSha !== targetSha) return true;
+
+        // Same-commit case (usually FF merge): only mark merged if base moved from
+        // the initial SHA captured when this ticket worktree was created.
+        if (!storedBaseSha) return false;
+        return storedBaseSha !== targetSha;
+      }
+
+      try {
+        const merged: Record<string, boolean> = {};
+        for (const { messageId, branch } of targets) {
+          try {
+            const localResult = await isMergedInto(messageId, branch, baseBranch);
+            if (localResult !== null) {
+              merged[messageId] = localResult;
+              continue;
+            }
+
+            const remoteResult = await isMergedInto(messageId, branch, `origin/${baseBranch}`);
+            merged[messageId] = remoteResult === true;
+          } catch {
+            merged[messageId] = false;
+          }
+        }
+        return { success: true, merged };
+      } catch (err) {
+        return { success: false, merged: {}, error: String(err) };
+      }
+    },
+  );
 
   ipcMain.handle(WATCH_BASE_BRANCH_CHANNEL, (_event, repoPath: string, baseBranch: string) => {
     // Close any existing watchers
@@ -464,7 +498,9 @@ export function registerIpcHandlers() {
       try {
         if (fs.existsSync(watchPath)) {
           const watcher = fs.watch(watchPath, notify);
-          watcher.on('error', () => {}); // Ignore watch errors
+          watcher.on('error', (err) => {
+            void err; // Ignore watch errors
+          });
           branchWatchers.push(watcher);
         }
       } catch {

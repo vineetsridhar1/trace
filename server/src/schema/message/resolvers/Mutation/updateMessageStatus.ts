@@ -14,7 +14,7 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   needs_input: ['in_progress'],
   auto_review: ['completed', 'in_progress', 'needs_input'],
   completed: ['merged', 'in_progress'],
-  merged: [],
+  merged: ['completed'],
 };
 
 export const updateMessageStatus: NonNullable<MutationResolvers['updateMessageStatus']> = async (_parent, { channelId, messageId, status }, _ctx) => {

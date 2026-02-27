@@ -26,6 +26,10 @@ export function getWorktreePath(messageId: string): string {
   return path.join(getWorktreeBase(), messageId);
 }
 
+function getBaseShaConfigKey(messageId: string): string {
+  return `trace.base-sha-msg-${messageId}`;
+}
+
 export interface EnsureWorktreeResult {
   worktreePath: string;
   created: boolean;
@@ -82,8 +86,7 @@ export async function ensureWorktree(messageId: string, repoPath: string): Promi
   if (result.created) {
     const baseSha = await runProcess('git', ['rev-parse', 'HEAD'], repoPath);
     if (baseSha.code === 0) {
-      const id = branchName.replace('trace/', '');
-      await runProcess('git', ['config', `trace.base-sha-${id}`, baseSha.stdout.trim()], repoPath);
+      await runProcess('git', ['config', getBaseShaConfigKey(messageId), baseSha.stdout.trim()], repoPath);
     }
   }
 
@@ -115,7 +118,8 @@ export async function getWorktreeBranch(messageId: string): Promise<string> {
   return branch;
 }
 
-export async function checkWorktreeExists(messageId: string, _repoPath: string): Promise<{ exists: boolean; worktreePath: string }> {
+export async function checkWorktreeExists(messageId: string, repoPath: string): Promise<{ exists: boolean; worktreePath: string }> {
+  void repoPath;
   const worktreePath = getWorktreePath(messageId);
   const exists = fs.existsSync(worktreePath);
   return { exists, worktreePath };
@@ -184,8 +188,10 @@ export async function deleteWorktree(messageId: string, repoPath: string): Promi
   await runProcess('git', ['branch', '-D', branch], repoPath);
 
   // Clean up stored base SHA from git config
-  const id = branch.replace('trace/', '');
-  await runProcess('git', ['config', '--unset', `trace.base-sha-${id}`], repoPath);
+  await runProcess('git', ['config', '--unset', getBaseShaConfigKey(messageId)], repoPath);
+  // Backward compatibility cleanup for older keys.
+  const legacyId = branch.replace('trace/', '');
+  await runProcess('git', ['config', '--unset', `trace.base-sha-${legacyId}`], repoPath);
 
   return { removed: true, worktreePath };
 }
