@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage, Channel, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
+import type { ChannelMessage, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
 import { MESSAGE_FIELDS } from './graphql/fragments';
 import { useUpdateMessageStatusMutation, useDeleteMessageMutation, useSetTicketDependenciesMutation, useRemoveTicketDependencyMutation, useUpdateQueuedRunConfigMutation } from './__generated__/App.generated';
@@ -212,7 +212,7 @@ function AppContent() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
   const [settingsChannelId, setSettingsChannelId] = useState<string | null>(null);
-  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [createChannelType, setCreateChannelType] = useState<ChannelType | null>(null);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const autoRunRef = useRef<((messageId: string, runConfig: unknown) => void) | null>(null);
@@ -693,6 +693,8 @@ function AppContent() {
   const handleSaveSettings = useCallback(
     async (
       channelData: {
+        workspacesEnabled?: boolean;
+        teamIds?: string[];
         defaultSetupScript?: string | null;
         defaultRunScript?: string | null;
       },
@@ -923,7 +925,8 @@ function AppContent() {
               onSwitchChannel={handleSwitchChannel}
               onOpenSettings={handleOpenSettings}
               onRunStartupScripts={handleRunChannelScript}
-              onCreateChannel={() => setShowCreateChannel(true)}
+              onCreateTeam={() => setCreateChannelType('team')}
+              onCreateProject={() => setCreateChannelType('project')}
               onSwitchAiChat={handleSwitchAiChat}
               onCreateAiChat={() => { void handleCreateAiChat(); }}
               onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
@@ -937,6 +940,8 @@ function AppContent() {
               {!isFullscreen && !activeAiChatId && (
                 <ChannelTopBar
                   panelTitle={panelTitle}
+                  channelType={(displayChannel?.type ?? 'project') as ChannelType}
+                  workspacesEnabled={displayChannel?.workspacesEnabled ?? true}
                   middlePanelView={middlePanelView}
                   onSetView={handleSetView}
                   onOpenSettings={() => { if (displayChannel) handleOpenSettings(displayChannel.id); }}
@@ -972,18 +977,21 @@ function AppContent() {
           {settingsChannel && (
             <ChannelSettingsModal
               channel={settingsChannel}
+              teams={serverChannels.filter((ch) => ch.type === 'team')}
               localConfig={getLocalConfig(settingsChannel.id)}
               onClose={() => setSettingsChannelId(null)}
               onSave={handleSaveSettings}
             />
           )}
 
-          {showCreateChannel && (
+          {createChannelType && (
             <CreateChannelModal
               serverId={activeServerId}
-              onClose={() => setShowCreateChannel(false)}
+              channelType={createChannelType}
+              teams={serverChannels.filter((ch) => ch.type === 'team')}
+              onClose={() => setCreateChannelType(null)}
               onCreated={() => {
-                setShowCreateChannel(false);
+                setCreateChannelType(null);
                 void refreshChannels();
               }}
               onLocalConfigSave={setLocalConfig}

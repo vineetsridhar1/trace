@@ -4,14 +4,17 @@ extend type Query {
 }
 
 extend type Mutation {
-  createChannel(name: String!, serverId: String, githubUrl: String, baseBranch: String, defaultSetupScript: String, defaultRunScript: String): Channel!
-  updateChannel(id: ID!, name: String, baseBranch: String, githubUrl: String, defaultRepoPath: String, defaultSetupScript: String, defaultRunScript: String): Channel!
+  createChannel(name: String!, serverId: String, type: String, workspacesEnabled: Boolean, teamIds: [String!], githubUrl: String, baseBranch: String, defaultSetupScript: String, defaultRunScript: String): Channel!
+  updateChannel(id: ID!, name: String, workspacesEnabled: Boolean, teamIds: [String!], baseBranch: String, githubUrl: String, defaultRepoPath: String, defaultSetupScript: String, defaultRunScript: String): Channel!
 }
 
 type Channel {
   id: ID!
   serverId: String!
   name: String!
+  type: String!
+  workspacesEnabled: Boolean!
+  teamIds: [String!]!
   baseBranch: String
   githubUrl: String
   defaultRepoPath: String

@@ -89,6 +89,8 @@ model Channel {
   id                 String   @id @default(uuid())
   serverId           String   @map("server_id")
   name               String
+  type               String   @default("project")
+  workspacesEnabled  Boolean  @default(true) @map("workspaces_enabled")
   baseBranch         String?  @map("base_branch")
   githubUrl          String?  @map("github_url")
   defaultRepoPath    String?  @map("default_repo_path")
@@ -102,8 +104,22 @@ model Channel {
   kanbanColumns  KanbanColumn[]
   members        ChannelMember[]
   aiChats        AiChat[]
+  teamLinks      ChannelTeam[]  @relation("projectTeams")
+  projectLinks   ChannelTeam[]  @relation("teamProjects")
 
   @@map("channels")
+}
+
+model ChannelTeam {
+  id        String @id @default(uuid())
+  channelId String @map("channel_id")
+  teamId    String @map("team_id")
+
+  channel Channel @relation("projectTeams", fields: [channelId], references: [id], onDelete: Cascade)
+  team    Channel @relation("teamProjects", fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, teamId])
+  @@map("channel_teams")
 }
 
 model Message {

@@ -27,6 +27,8 @@ export interface ChannelContextValue {
   setLocalConfig: (channelId: string, data: LocalChannelConfig) => Promise<void>;
   // Channel settings
   updateChannelSettings: (channelId: string, data: {
+    workspacesEnabled?: boolean;
+    teamIds?: string[];
     baseBranch?: string | null;
     defaultRepoPath?: string | null;
     defaultSetupScript?: string | null;

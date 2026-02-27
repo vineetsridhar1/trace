@@ -86,7 +86,10 @@ export type Channel = {
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   serverId: Scalars['String']['output'];
+  teamIds: Array<Scalars['String']['output']>;
+  type: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
+  workspacesEnabled: Scalars['Boolean']['output'];
 };
 
 export type CreateMessagePayload = {
@@ -227,6 +230,9 @@ export type MutationcreateChannelArgs = {
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;
+  teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  type?: InputMaybe<Scalars['String']['input']>;
+  workspacesEnabled?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 
@@ -315,6 +321,8 @@ export type MutationupdateChannelArgs = {
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
+  teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  workspacesEnabled?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 
@@ -698,10 +706,10 @@ export type ResolversTypes = {
   AiChatStreamPayload: ResolverTypeWrapper<AiChatStreamPayloadMapper>;
   Attachment: ResolverTypeWrapper<AttachmentMapper>;
   Channel: ResolverTypeWrapper<ChannelMapper>;
+  Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   CreateMessagePayload: ResolverTypeWrapper<CreateMessagePayloadMapper>;
   DateTime: ResolverTypeWrapper<Scalars['DateTime']['output']>;
   Event: ResolverTypeWrapper<EventMapper>;
-  Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   EventConnection: ResolverTypeWrapper<EventConnectionMapper>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
@@ -737,10 +745,10 @@ export type ResolversParentTypes = {
   AiChatStreamPayload: AiChatStreamPayloadMapper;
   Attachment: AttachmentMapper;
   Channel: ChannelMapper;
+  Boolean: Scalars['Boolean']['output'];
   CreateMessagePayload: CreateMessagePayloadMapper;
   DateTime: Scalars['DateTime']['output'];
   Event: EventMapper;
-  Boolean: Scalars['Boolean']['output'];
   EventConnection: EventConnectionMapper;
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
@@ -818,7 +826,10 @@ export type ChannelResolvers<ContextType = any, ParentType extends ResolversPare
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   serverId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  teamIds?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  workspacesEnabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
 };
 
 export type CreateMessagePayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['CreateMessagePayload'] = ResolversParentTypes['CreateMessagePayload']> = {

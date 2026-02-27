@@ -6,6 +6,9 @@ const defaultOptions = {} as const;
 export type CreateChannelMutationVariables = Types.Exact<{
   name: Types.Scalars['String']['input'];
   serverId?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  type?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  workspacesEnabled?: Types.InputMaybe<Types.Scalars['Boolean']['input']>;
+  teamIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
   githubUrl?: Types.InputMaybe<Types.Scalars['String']['input']>;
   baseBranch?: Types.InputMaybe<Types.Scalars['String']['input']>;
   defaultSetupScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
@@ -13,14 +16,17 @@ export type CreateChannelMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
+export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
 
 
 export const CreateChannelDocument = gql`
-    mutation CreateChannel($name: String!, $serverId: String, $githubUrl: String, $baseBranch: String, $defaultSetupScript: String, $defaultRunScript: String) {
+    mutation CreateChannel($name: String!, $serverId: String, $type: String, $workspacesEnabled: Boolean, $teamIds: [String!], $githubUrl: String, $baseBranch: String, $defaultSetupScript: String, $defaultRunScript: String) {
   createChannel(
     name: $name
     serverId: $serverId
+    type: $type
+    workspacesEnabled: $workspacesEnabled
+    teamIds: $teamIds
     githubUrl: $githubUrl
     baseBranch: $baseBranch
     defaultSetupScript: $defaultSetupScript
@@ -29,6 +35,9 @@ export const CreateChannelDocument = gql`
     id
     serverId
     name
+    type
+    workspacesEnabled
+    teamIds
     baseBranch
     githubUrl
     defaultSetupScript
@@ -55,6 +64,9 @@ export type CreateChannelMutationFn = Apollo.MutationFunction<CreateChannelMutat
  *   variables: {
  *      name: // value for 'name'
  *      serverId: // value for 'serverId'
+ *      type: // value for 'type'
+ *      workspacesEnabled: // value for 'workspacesEnabled'
+ *      teamIds: // value for 'teamIds'
  *      githubUrl: // value for 'githubUrl'
  *      baseBranch: // value for 'baseBranch'
  *      defaultSetupScript: // value for 'defaultSetupScript'

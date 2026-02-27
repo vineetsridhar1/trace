@@ -126,6 +126,9 @@ export interface Channel {
   id: string;
   serverId: string;
   name: string;
+  type: ChannelType;
+  workspacesEnabled: boolean;
+  teamIds: string[];
   localRepoPath?: string | null;
   baseBranch: string | null;
   githubUrl: string | null;
@@ -179,6 +182,7 @@ export interface ThreadEventEnvelope {
   event: ServerEvent;
 }
 
+export type ChannelType = 'channel' | 'team' | 'project';
 export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'auto_review';
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';

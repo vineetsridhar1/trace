@@ -75,7 +75,10 @@ export type Channel = {
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   serverId: Scalars['String']['output'];
+  teamIds: Array<Scalars['String']['output']>;
+  type: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
+  workspacesEnabled: Scalars['Boolean']['output'];
 };
 
 export type CreateMessagePayload = {
@@ -216,6 +219,9 @@ export type MutationCreateChannelArgs = {
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;
+  teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  type?: InputMaybe<Scalars['String']['input']>;
+  workspacesEnabled?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 
@@ -304,6 +310,8 @@ export type MutationUpdateChannelArgs = {
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
+  teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  workspacesEnabled?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 

@@ -2,6 +2,9 @@ export interface ChannelMapper {
   id: string;
   serverId: string;
   name: string;
+  type: string;
+  workspacesEnabled: boolean;
+  teamIds: string[];
   baseBranch: string | null;
   githubUrl: string | null;
   defaultRepoPath: string | null;

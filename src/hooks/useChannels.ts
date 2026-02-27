@@ -9,6 +9,9 @@ const GQL_CHANNELS = gql`
       id
       serverId
       name
+      type
+      workspacesEnabled
+      teamIds
       baseBranch
       githubUrl
       defaultRepoPath

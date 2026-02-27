@@ -6,6 +6,8 @@ const defaultOptions = {} as const;
 export type UpdateChannelMutationVariables = Types.Exact<{
   id: Types.Scalars['ID']['input'];
   name?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  workspacesEnabled?: Types.InputMaybe<Types.Scalars['Boolean']['input']>;
+  teamIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
   baseBranch?: Types.InputMaybe<Types.Scalars['String']['input']>;
   githubUrl?: Types.InputMaybe<Types.Scalars['String']['input']>;
   defaultRepoPath?: Types.InputMaybe<Types.Scalars['String']['input']>;
@@ -14,14 +16,16 @@ export type UpdateChannelMutationVariables = Types.Exact<{
 }>;
 
 
-export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
+export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
 
 
 export const UpdateChannelDocument = gql`
-    mutation UpdateChannel($id: ID!, $name: String, $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String) {
+    mutation UpdateChannel($id: ID!, $name: String, $workspacesEnabled: Boolean, $teamIds: [String!], $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String) {
   updateChannel(
     id: $id
     name: $name
+    workspacesEnabled: $workspacesEnabled
+    teamIds: $teamIds
     baseBranch: $baseBranch
     githubUrl: $githubUrl
     defaultRepoPath: $defaultRepoPath
@@ -31,6 +35,9 @@ export const UpdateChannelDocument = gql`
     id
     serverId
     name
+    type
+    workspacesEnabled
+    teamIds
     baseBranch
     githubUrl
     defaultRepoPath
@@ -58,6 +65,8 @@ export type UpdateChannelMutationFn = Apollo.MutationFunction<UpdateChannelMutat
  *   variables: {
  *      id: // value for 'id'
  *      name: // value for 'name'
+ *      workspacesEnabled: // value for 'workspacesEnabled'
+ *      teamIds: // value for 'teamIds'
  *      baseBranch: // value for 'baseBranch'
  *      githubUrl: // value for 'githubUrl'
  *      defaultRepoPath: // value for 'defaultRepoPath'
