@@ -309,7 +309,7 @@ function AppContent() {
     [activeChannelId, executeUpdateWorkspaceStatus, upsertAndSyncWorkspace],
   );
 
-  const { triggerCheck: triggerPRCheck } = usePRPolling({
+  const { triggerCheck: triggerPRCheck, prUrlMap } = usePRPolling({
     workspacesRef,
     getChannelId: getActiveChannelId,
     updateWorkspaceStatus,
@@ -968,6 +968,7 @@ function AppContent() {
       onCloseAllTerminals: (): void => { if (selectedWorkspaceId) killTerminalsForWorkspace(selectedWorkspaceId); },
       onAddTerminal: addTerminal,
       onOpenSettings: (): void => { if (activeChannelId) handleOpenSettings(activeChannelId); },
+      prUrl: selectedWorkspaceId ? (prUrlMap[selectedWorkspaceId] ?? null) : null,
     }),
     [
       selectedWorkspaceId, activeSessionId, sessions, threadWidth,
@@ -982,6 +983,7 @@ function AppContent() {
       activeChannelBaseBranch, terminalList, allTerminalEntries, terminalsInitialized, activeTabId,
       terminalsCwd, activeChannelRepoPath, setActiveTabId,
       killTerminal, killTerminalsForWorkspace, addTerminal, handleOpenSettings, activeChannelId,
+      prUrlMap,
     ],
   );
 

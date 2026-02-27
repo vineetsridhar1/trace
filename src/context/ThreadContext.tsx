@@ -70,6 +70,7 @@ export interface ThreadContextValue {
   onCloseAllTerminals: () => void;
   onAddTerminal: () => void;
   onOpenSettings: () => void;
+  prUrl: string | null;
 }
 
 const ThreadContext = createContext<ThreadContextValue | null>(null);

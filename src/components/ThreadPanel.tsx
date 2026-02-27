@@ -64,6 +64,7 @@ export function ThreadPanel() {
     onCloseAllTerminals,
     onAddTerminal,
     onOpenSettings,
+    prUrl,
   } = useThreadContext();
 
   const {
@@ -158,7 +159,8 @@ export function ThreadPanel() {
   const [viewMode, setViewMode] = useState<ViewMode>("agent");
 
   useEffect(() => {
-    setViewMode("agent");
+    setViewMode(workspaceStatus === 'merged' ? 'ticket' : 'agent');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
 
 
@@ -205,7 +207,7 @@ export function ThreadPanel() {
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
           {viewMode === "ticket" && ticket ? (
-            <TicketView ticket={ticket} />
+            <TicketView ticket={ticket} prUrl={prUrl} />
           ) : viewMode === "files" ? (
             <WorktreeChanges workspaceId={selectedWorkspaceId} baseBranch={baseBranch} />
           ) : viewMode === "terminal" ? null : (
