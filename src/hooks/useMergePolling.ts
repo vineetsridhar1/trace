@@ -3,72 +3,60 @@ import type { ChannelMessage, TicketStatus } from '../types';
 
 interface UseMergePollingOptions {
   messagesRef: React.RefObject<ChannelMessage[]>;
-  repoPath: string;
-  baseBranch: string;
+  getRepoPath: () => string;
+  getBaseBranch: () => string;
   updateMessageStatus: (messageId: string, status: TicketStatus) => Promise<void>;
 }
 
 export function useMergePolling({
   messagesRef,
-  repoPath,
-  baseBranch,
+  getRepoPath,
+  getBaseBranch,
   updateMessageStatus,
 }: UseMergePollingOptions) {
   const updateStatusRef = useRef(updateMessageStatus);
   updateStatusRef.current = updateMessageStatus;
 
-  const repoPathRef = useRef(repoPath);
-  repoPathRef.current = repoPath;
-
-  const baseBranchRef = useRef(baseBranch);
-  baseBranchRef.current = baseBranch;
-
   const checkMerged = useCallback(async () => {
-    const currentRepoPath = repoPathRef.current;
-    if (!currentRepoPath) {
-      console.log('[mergePolling] skipped: no repoPath');
-      return;
-    }
+    const repoPath = getRepoPath();
+    const baseBranch = getBaseBranch();
+    if (!repoPath) return;
 
     const messages = messagesRef.current;
     const completed = messages.filter(
       (m) => m.status === 'completed' && m.branch,
     );
-    if (completed.length === 0) {
-      console.log('[mergePolling] skipped: no completed messages with branches', { total: messages.length, statuses: messages.map(m => m.status) });
-      return;
-    }
+    if (completed.length === 0) return;
 
     const branches = completed.map((m) => m.branch!);
-    console.log('[mergePolling] checking branches:', branches, 'base:', baseBranchRef.current);
     try {
       const result = await window.traceAPI.checkBranchesMerged(
-        currentRepoPath,
+        repoPath,
         branches,
-        baseBranchRef.current,
+        baseBranch,
       );
-      console.log('[mergePolling] result:', result);
       if (!result.success) return;
 
       for (const msg of completed) {
         if (result.merged[msg.branch!]) {
-          console.log('[mergePolling] transitioning to merged:', msg.id, msg.branch);
           await updateStatusRef.current(msg.id, 'merged');
         }
       }
-    } catch (err) {
-      console.error('[mergePolling] error:', err);
+    } catch {
+      // Silent failure
     }
-  }, [messagesRef]);
+  }, [messagesRef, getRepoPath, getBaseBranch]);
 
   useEffect(() => {
-    if (!repoPath) return;
-
-    // Run once on startup
+    // Run once on mount
     void checkMerged();
 
     // Start watching git refs for base branch changes
-    void window.traceAPI.watchBaseBranch(repoPath, baseBranch);
+    const repoPath = getRepoPath();
+    const baseBranch = getBaseBranch();
+    if (repoPath) {
+      void window.traceAPI.watchBaseBranch(repoPath, baseBranch);
+    }
 
     // Re-check when the base branch ref changes on disk
     const unsubscribe = window.traceAPI.onBaseBranchChanged(() => {
@@ -79,7 +67,7 @@ export function useMergePolling({
       unsubscribe();
       void window.traceAPI.unwatchBaseBranch();
     };
-  }, [checkMerged, repoPath, baseBranch]);
+  }, [checkMerged, getRepoPath, getBaseBranch]);
 
   return { triggerCheck: checkMerged };
 }

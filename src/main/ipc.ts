@@ -411,26 +411,22 @@ export function registerIpcHandlers() {
     }
 
     try {
-      console.log('[mergeCheck] checking branches:', branches, 'base:', baseBranch, 'repo:', repoPath);
       const merged: Record<string, boolean> = {};
       for (const branch of branches) {
         try {
           // Check against local base branch (covers local merges and FF merges)
           const localResult = await isMergedInto(branch, baseBranch);
-          console.log('[mergeCheck]', branch, 'local:', localResult);
           if (localResult !== null) {
             merged[branch] = localResult;
             continue;
           }
           // Check against remote base branch (covers pushed merges after fetch)
           const remoteResult = await isMergedInto(branch, `origin/${baseBranch}`);
-          console.log('[mergeCheck]', branch, 'remote:', remoteResult);
           merged[branch] = remoteResult === true;
         } catch {
           merged[branch] = false;
         }
       }
-      console.log('[mergeCheck] result:', merged);
       return { success: true, merged };
     } catch (err) {
       return { success: false, merged: {}, error: String(err) };

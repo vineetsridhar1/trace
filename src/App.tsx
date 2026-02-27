@@ -268,8 +268,8 @@ function AppContent() {
 
   const { triggerCheck: triggerMergeCheck } = useMergePolling({
     messagesRef,
-    repoPath: enrichedActiveChannel?.localRepoPath ?? '',
-    baseBranch: enrichedActiveChannel?.baseBranch ?? 'main',
+    getRepoPath: getChannelRepoPath,
+    getBaseBranch: getChannelBaseBranch,
     updateMessageStatus,
   });
 
