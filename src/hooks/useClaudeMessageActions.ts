@@ -524,9 +524,7 @@ Fix all issues you find immediately — do not just list them. After fixing, pre
 - Files reviewed
 - Issues found and fixed
 - Any remaining concerns
-</trace-internal>
-
-Review the changes made in this session and fix any issues.`;
+</trace-internal>`;
 
       await spawnClaudeForMessage(messageId, reviewPrompt, {
         errorPrefix: 'Failed to spawn claude for auto-review',

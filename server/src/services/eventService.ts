@@ -390,6 +390,19 @@ export async function ingestEvent(payload: HookEvent) {
           return;
         }
 
+        // Check if Claude continued working after this Stop event
+        const newerEventCount = await prisma.event.count({
+          where: {
+            thread: { messageId: message.id },
+            sessionId: autoCompleteSessionId,
+            timestamp: { gte: event.timestamp },
+            id: { not: event.id },
+          },
+        });
+        if (newerEventCount > 0) {
+          return;
+        }
+
         // If the review Claude just finished, transition to completed
         if (currentMsg.status === 'auto_review') {
           await updateMessageStatus(message.id, 'completed');
@@ -409,6 +422,7 @@ export async function ingestEvent(payload: HookEvent) {
           const writeToolCount = await prisma.event.count({
             where: {
               thread: { messageId: message.id },
+              sessionId: autoCompleteSessionId,
               hookEventName: 'PostToolUse',
               toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
             },
