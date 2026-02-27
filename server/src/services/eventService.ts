@@ -80,6 +80,10 @@ async function runAutoCompleteIfNeeded(
   sessionId: string,
   threadId: string,
   toolName: string | null | undefined,
+  /** When true, skip the auto_review→completed transition. Used by the dedup
+   *  path to avoid prematurely completing a message before the review Claude
+   *  has even started — the review Claude will fire its own Stop event. */
+  skipReviewTransition = false,
 ): Promise<void> {
   if (toolName) return; // Claude is waiting on user input
 
@@ -160,7 +164,7 @@ async function runAutoCompleteIfNeeded(
     console.log(`[event] status: ${currentStatus} -> ${newStatus} msg=${messageId.slice(0, 8)}`);
   }
 
-  if (currentStatus === 'auto_review') {
+  if (currentStatus === 'auto_review' && !skipReviewTransition) {
     await updateMessageStatus(messageId, 'completed');
     void syncTicketWithMessageStatus(messageId, channelId, 'completed');
     void checkAndTriggerDependents(messageId, channelId);
@@ -434,7 +438,7 @@ export async function ingestEvent(payload: HookEvent) {
       // data available. runAutoCompleteIfNeeded re-reads status from DB and is
       // a no-op if the first Stop already transitioned the status.
       const mergedToolName = (updates.toolName ?? recentStop.toolName) as string | null;
-      await runAutoCompleteIfNeeded(message.id, channelId, payload.session_id, thread.id, mergedToolName);
+      await runAutoCompleteIfNeeded(message.id, channelId, payload.session_id, thread.id, mergedToolName, /* skipReviewTransition */ true);
 
       // Always re-broadcast the hydrated message on deduped Stop so the UI
       // receives final session/status/summary updates even when status is

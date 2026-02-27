@@ -3,7 +3,7 @@ import path from 'node:path';
 import { ipcMain, dialog, type BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
-import { resetWatchdog, stopWatchdog, markHookStopReceived } from './watchdog';
+import { resetWatchdog, stopWatchdog } from './watchdog';
 import { createPty, writePty, resizePty, killPty, getPtyCwd } from './pty';
 import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
@@ -135,10 +135,9 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(
     CLAUDE_ACTIVITY_PING_CHANNEL,
-    async (_event, messageId: string, eventType: string, _sessionId?: string) => {
+    async (_event, messageId: string, eventType: string) => {
       try {
         if ((eventType ?? '').toLowerCase() === 'stop') {
-          markHookStopReceived(messageId);
           stopWatchdog(messageId, 'activity-stop-event');
         } else {
           resetWatchdog(messageId, `activity-event:${eventType}`);
@@ -378,7 +377,7 @@ export function registerIpcHandlers() {
     ) => {
       try {
         // Fetch the latest remote refs so we can detect merges done on GitHub.
-        await runProcess('git', ['fetch', 'origin', baseBranch], repoPath).catch(() => {});
+        await runProcess('git', ['fetch', 'origin', baseBranch], repoPath).catch(() => undefined);
 
         const merged: Record<string, boolean> = {};
         for (const { messageId, branch } of targets) {
