@@ -1,11 +1,9 @@
-import { memo, useRef, useState, useEffect } from 'react';
-import { FiTrash2 } from 'react-icons/fi';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { memo } from 'react';
+import { FiCheck, FiLoader, FiTrash2 } from 'react-icons/fi';
 import type { ChannelMessage, KanbanTicket, TicketStatus } from '../types';
-import { avatarInitial, formatTime, stripTraceInternal } from '../utils';
+import { avatarInitial } from '../utils';
 
-const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; avatarBg: string; avatarText: string }> = {
+export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; avatarBg: string; avatarText: string }> = {
   pending: { label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', avatarBg: 'bg-yellow-500/20', avatarText: 'text-yellow-400' },
   creation: { label: 'Creating', color: 'text-orange-400', bgColor: 'bg-orange-400/10', avatarBg: 'bg-orange-500/20', avatarText: 'text-orange-400' },
   in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-400/10', avatarBg: 'bg-blue-500', avatarText: 'text-white' },
@@ -16,64 +14,28 @@ const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColo
   auto_review: { label: 'Reviewing', color: 'text-teal-400', bgColor: 'bg-teal-400/10', avatarBg: 'bg-teal-500/20', avatarText: 'text-teal-400' },
 };
 
-function StatusBadge({ status }: { status: TicketStatus }) {
-  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${config.color} ${config.bgColor}`}>
-      {config.label}
-    </span>
-  );
-}
+export const STATUS_GROUP_ORDER: TicketStatus[] = [
+  'needs_input',
+  'in_progress',
+  'creation',
+  'queued',
+  'auto_review',
+  'pending',
+  'completed',
+  'merged',
+];
 
-function MessagePreview({ text }: { text: string }) {
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [needsClamp, setNeedsClamp] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [collapsedH, setCollapsedH] = useState(0);
-  const [fullH, setFullH] = useState(0);
+const ACTIVE_STATUSES = new Set<TicketStatus>(['in_progress', 'creation', 'auto_review']);
+const DONE_STATUSES = new Set<TicketStatus>(['completed', 'merged']);
 
-  useEffect(() => {
-    const el = innerRef.current;
-    if (!el) return;
-    const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
-    const clampH = Math.ceil(lh * 3);
-    const scrollH = el.scrollHeight;
-    if (scrollH > clampH + 4) {
-      setNeedsClamp(true);
-      setCollapsedH(clampH);
-      setFullH(scrollH);
-    } else {
-      setNeedsClamp(false);
-    }
-  }, [text]);
-
-  return (
-    <div className="mt-1">
-      <div
-        style={{
-          maxHeight: !needsClamp ? undefined : expanded ? `${fullH}px` : `${collapsedH}px`,
-          overflow: 'hidden',
-          transition: 'max-height 0.3s ease',
-        }}
-      >
-        <div ref={innerRef} className="break-words whitespace-pre-wrap text-sm text-[#a9b1d6]">
-          {text}
-        </div>
-      </div>
-      {needsClamp && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded(!expanded);
-          }}
-          className="mt-1 cursor-pointer text-xs font-medium text-violet-400 hover:text-violet-300"
-        >
-          {expanded ? 'See less' : 'See more'}
-        </button>
-      )}
-    </div>
-  );
+function StatusIcon({ status }: { status: TicketStatus }) {
+  if (ACTIVE_STATUSES.has(status)) {
+    return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-blue-400" />;
+  }
+  if (DONE_STATUSES.has(status)) {
+    return <FiCheck className="h-4 w-4 flex-shrink-0 text-green-400" />;
+  }
+  return null;
 }
 
 interface MessageItemProps {
@@ -84,7 +46,6 @@ interface MessageItemProps {
   onOpenThread: (message: ChannelMessage) => void;
   onDeleteMessage?: (messageId: string) => void;
   dimmed?: boolean;
-  compact?: boolean;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -95,113 +56,59 @@ export const MessageItem = memo(function MessageItem({
   onOpenThread,
   onDeleteMessage,
   dimmed,
-  compact,
 }: MessageItemProps) {
-  const rawPreview = message.preview || message.session?.cwd || message.sessionId;
-  const preview = stripTraceInternal(rawPreview);
-  const threadCount = message.threadCount;
   const status = (message.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  const displayName = message.sessionId === 'user-manual-input' ? 'You' : message.sessionId.slice(0, 8);
-  const title = ticket?.title ?? preview;
-
-  const deleteButton = onDeleteMessage && (
-    <div
-      role="button"
-      tabIndex={-1}
-      className="hidden cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
-      onClick={(e) => {
-        e.stopPropagation();
-        onDeleteMessage(message.id);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.stopPropagation();
-          onDeleteMessage(message.id);
-        }
-      }}
-    >
-      <FiTrash2 className="h-3.5 w-3.5" />
-    </div>
-  );
-
-  if (compact) {
-    return (
-      <button
-        type="button"
-        className={`message-item group flex cursor-pointer flex-col border-l-2 border-transparent px-3 py-2.5 text-left transition-colors ${
-          isSelected ? 'selected' : ''
-        } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
-        onClick={() => onOpenThread(message)}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-[#a9b1d6]">{displayName}</span>
-          <span className="ml-auto flex items-center gap-1">
-            <span className="text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
-            {deleteButton}
-          </span>
-        </div>
-        <div className="mt-1">
-          <StatusBadge status={status} />
-        </div>
-        <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#c0caf5]">{title}</p>
-      </button>
-    );
-  }
+  const title = ticket?.title || message.sessionId;
+  const branch = message.branch?.replace(/^trace\//, '');
 
   return (
     <button
       type="button"
-      className={`message-item group flex cursor-pointer items-start gap-3 border-l-2 border-transparent px-3 py-3 text-left transition-colors ${
+      className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
         isSelected ? 'selected' : ''
       } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
       onClick={() => onOpenThread(message)}
+      title={message.sessionId}
     >
+      {/* Avatar */}
       <div
-        className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
+        className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
       >
         {avatarInitial(message.sessionId)}
       </div>
 
+      {/* Title + branch stacked */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <StatusBadge status={status} />
-          <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-xs text-[#565f89]">
-            {displayName}
-          </span>
-          {message.branch && (
-            <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-xs text-blue-400">
-              {message.branch.replace(/^trace\//, '')}
-            </span>
-          )}
-          <span className="ml-auto flex items-center gap-1">
-            <span className="text-xs text-[#565f89]">{formatTime(message.createdAt)}</span>
-            {deleteButton}
-          </span>
-        </div>
-        {ticket ? (
-          <>
-            <p className="mt-1 text-sm font-semibold text-[#c0caf5]">{ticket.title}</p>
-            {ticket.description && (
-              <div className="markdown-body mt-0.5 line-clamp-2 text-sm text-[#a9b1d6]">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.description}</ReactMarkdown>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <MessagePreview text={preview} />
-            {message.summary && (
-              <p className="mt-0.5 line-clamp-2 text-xs text-[#565f89]">{message.summary}</p>
-            )}
-          </>
-        )}
-        {threadCount > 1 && (
-          <div className="mt-1.5 text-xs text-violet-300 hover:underline">
-            {threadCount} threads
-          </div>
+        <div className="truncate text-sm text-[#c0caf5]">{title}</div>
+        {branch && (
+          <div className="truncate font-mono text-[10px] text-[#565f89]">{branch}</div>
         )}
       </div>
+
+      {/* Status icon */}
+      <StatusIcon status={status} />
+
+      {/* Delete button (hover only) */}
+      {onDeleteMessage && (
+        <div
+          role="button"
+          tabIndex={-1}
+          className="hidden flex-shrink-0 cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteMessage(message.id);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              onDeleteMessage(message.id);
+            }
+          }}
+        >
+          <FiTrash2 className="h-3 w-3" />
+        </div>
+      )}
     </button>
   );
 }, areMessageItemPropsEqual);
@@ -213,7 +120,6 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.isSelected === next.isSelected &&
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
-    prev.compact === next.compact &&
     prev.onOpenThread === next.onOpenThread &&
     prev.onDeleteMessage === next.onDeleteMessage
   );
