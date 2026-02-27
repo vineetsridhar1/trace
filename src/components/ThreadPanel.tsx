@@ -44,6 +44,8 @@ export function ThreadPanel() {
     toggleReadGroup,
     onClose,
     onDeleteWorktree,
+    onEnterFullscreen,
+    onExitFullscreen,
     onStartDrag,
     baseBranch,
     startupTerminals,
@@ -185,9 +187,12 @@ export function ThreadPanel() {
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
           scriptsAvailable={scriptsAvailable}
+          isFullscreen={isFullscreen}
           onRunScripts={onRunScripts}
           onClose={onClose}
           onDeleteWorktree={onDeleteWorktree}
+          onEnterFullscreen={onEnterFullscreen}
+          onExitFullscreen={onExitFullscreen}
           onMergeToMain={() => void mergeToMain()}
           threads={threads}
           activeThreadId={activeThreadId}

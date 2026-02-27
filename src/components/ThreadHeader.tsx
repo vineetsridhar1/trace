@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiClock, FiGitMerge, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
+import { FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiPlay, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
 import type { ThreadInfo } from '../hooks/useThread';
@@ -50,10 +50,13 @@ interface ThreadHeaderProps {
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   scriptsAvailable: boolean;
+  isFullscreen: boolean;
   onRunScripts: () => void;
   onClose: () => void;
   onDeleteWorktree: () => void;
   onMergeToMain: () => void;
+  onEnterFullscreen: () => void;
+  onExitFullscreen: () => void;
   threads: ThreadInfo[];
   activeThreadId: string | null;
   onSwitchThread: (threadId: string) => Promise<void>;
@@ -68,10 +71,13 @@ export const ThreadHeader = memo(function ThreadHeader({
   deletingWorktree,
   hasWorktree,
   scriptsAvailable,
+  isFullscreen,
   onRunScripts,
   onClose,
   onDeleteWorktree,
   onMergeToMain,
+  onEnterFullscreen,
+  onExitFullscreen,
   threads,
   activeThreadId,
   onSwitchThread,
@@ -245,6 +251,28 @@ export const ThreadHeader = memo(function ThreadHeader({
               className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <FiGitMerge className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+        {hasWorktree === true && !isFullscreen && (
+          <Tooltip text="Fullscreen" position="bottom">
+            <button
+              type="button"
+              onClick={onEnterFullscreen}
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
+            >
+              <FiMaximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+        {isFullscreen && (
+          <Tooltip text="Exit fullscreen" position="bottom">
+            <button
+              type="button"
+              onClick={onExitFullscreen}
+              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300"
+            >
+              <FiMinimize2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         )}
