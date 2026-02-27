@@ -14,7 +14,7 @@ const GQL_BOARD = gql`
       sortOrder
       tickets {
         id
-        messageId
+        workspaceId
         columnId
         title
         description
@@ -24,7 +24,7 @@ const GQL_BOARD = gql`
         sortOrder
         createdAt
         updatedAt
-        message {
+        workspace {
           id
           branch
           status
@@ -46,7 +46,7 @@ const GQL_MOVE_TICKET = gql`
   mutation MoveTicket($ticketId: ID!, $columnId: ID!, $sortOrder: Int) {
     moveTicket(ticketId: $ticketId, columnId: $columnId, sortOrder: $sortOrder) {
       id
-      messageId
+      workspaceId
       columnId
       title
       sortOrder

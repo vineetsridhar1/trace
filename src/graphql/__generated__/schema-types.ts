@@ -81,15 +81,38 @@ export type Channel = {
   workspacesEnabled: Scalars['Boolean']['output'];
 };
 
-export type CreateMessagePayload = {
-  __typename?: 'CreateMessagePayload';
+export type CliSession = {
+  __typename?: 'CliSession';
+  cwd?: Maybe<Scalars['String']['output']>;
+  eventCount: Scalars['Int']['output'];
+  firstSeenAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  lastSeenAt: Scalars['DateTime']['output'];
+  permissionMode?: Maybe<Scalars['String']['output']>;
+  sessionId: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  toolSummary?: Maybe<Scalars['JSON']['output']>;
+  transcriptPath?: Maybe<Scalars['String']['output']>;
+};
+
+export type CliSessionConnection = {
+  __typename?: 'CliSessionConnection';
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  sessions: Array<CliSession>;
+  total: Scalars['Int']['output'];
+};
+
+export type CreateWorkspacePayload = {
+  __typename?: 'CreateWorkspacePayload';
   event: Event;
-  message: Message;
-  thread: Thread;
+  session: Session;
+  workspace: Workspace;
 };
 
 export type Event = {
   __typename?: 'Event';
+  cliSessionId: Scalars['String']['output'];
   hookEventName: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
@@ -97,7 +120,6 @@ export type Event = {
   rawPayload: Scalars['JSON']['output'];
   sessionId: Scalars['String']['output'];
   stopHookActive?: Maybe<Scalars['Boolean']['output']>;
-  threadId: Scalars['String']['output'];
   timestamp: Scalars['DateTime']['output'];
   toolInput?: Maybe<Scalars['JSON']['output']>;
   toolName?: Maybe<Scalars['String']['output']>;
@@ -124,73 +146,29 @@ export type KanbanColumn = {
   tickets: Array<Ticket>;
 };
 
-export type Message = {
-  __typename?: 'Message';
-  branch?: Maybe<Scalars['String']['output']>;
-  channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
-  createdAt: Scalars['DateTime']['output'];
-  id: Scalars['ID']['output'];
-  importance: Scalars['String']['output'];
-  preview?: Maybe<Scalars['String']['output']>;
-  queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
-  session?: Maybe<MessageSession>;
-  sessionId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  summary?: Maybe<Scalars['String']['output']>;
-  threadCount: Scalars['Int']['output'];
-};
-
-export type MessageConnection = {
-  __typename?: 'MessageConnection';
-  limit: Scalars['Int']['output'];
-  messages: Array<Message>;
-  offset: Scalars['Int']['output'];
-  total: Scalars['Int']['output'];
-};
-
-export type MessageDeletedPayload = {
-  __typename?: 'MessageDeletedPayload';
-  channelId: Scalars['String']['output'];
-  messageId: Scalars['String']['output'];
-};
-
-export type MessageReadyForReviewPayload = {
-  __typename?: 'MessageReadyForReviewPayload';
-  channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
-  messageId: Scalars['String']['output'];
-};
-
-export type MessageSession = {
-  __typename?: 'MessageSession';
-  cwd?: Maybe<Scalars['String']['output']>;
-  sessionId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-};
-
 export type Mutation = {
   __typename?: 'Mutation';
-  appendPrompt: CreateMessagePayload;
+  appendPrompt: CreateWorkspacePayload;
   createAiChat: AiChat;
   createChannel: Channel;
   createColumn: KanbanColumn;
-  createMessage: CreateMessagePayload;
   createServer: Server;
-  createThread: Thread;
+  createSession: Session;
+  createWorkspace: CreateWorkspacePayload;
   deleteAiChat: Scalars['Boolean']['output'];
+  deleteChannel: Scalars['Boolean']['output'];
   deleteColumn: Scalars['Boolean']['output'];
-  deleteMessage: Scalars['Boolean']['output'];
+  deleteWorkspace: Scalars['Boolean']['output'];
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   sendAiChatMessage: AiChatMessage;
-  setTicketDependencies: Message;
+  setTicketDependencies: Workspace;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
-  updateMessagePreview: Message;
-  updateMessageStatus: Message;
   updateQueuedRunConfig: Scalars['Boolean']['output'];
+  updateWorkspacePreview: Workspace;
+  updateWorkspaceStatus: Workspace;
   uploadAttachment: Attachment;
 };
 
@@ -198,10 +176,10 @@ export type Mutation = {
 export type MutationAppendPromptArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
-  createNewThread?: InputMaybe<Scalars['Boolean']['input']>;
-  messageId: Scalars['ID']['input'];
+  createNewSession?: InputMaybe<Scalars['Boolean']['input']>;
+  sessionId?: InputMaybe<Scalars['ID']['input']>;
   text: Scalars['String']['input'];
-  threadId?: InputMaybe<Scalars['ID']['input']>;
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -233,26 +211,31 @@ export type MutationCreateColumnArgs = {
 };
 
 
-export type MutationCreateMessageArgs = {
-  attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
-  channelId: Scalars['ID']['input'];
-  text: Scalars['String']['input'];
-};
-
-
 export type MutationCreateServerArgs = {
   avatarUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
 };
 
 
-export type MutationCreateThreadArgs = {
+export type MutationCreateSessionArgs = {
   channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateWorkspaceArgs = {
+  attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  channelId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
 };
 
 
 export type MutationDeleteAiChatArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteChannelArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -262,9 +245,9 @@ export type MutationDeleteColumnArgs = {
 };
 
 
-export type MutationDeleteMessageArgs = {
+export type MutationDeleteWorkspaceArgs = {
   channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -277,8 +260,8 @@ export type MutationMoveTicketArgs = {
 
 export type MutationRemoveTicketDependencyArgs = {
   channelId: Scalars['ID']['input'];
-  dependsOnMessageId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  dependsOnWorkspaceId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -296,9 +279,9 @@ export type MutationSendAiChatMessageArgs = {
 
 export type MutationSetTicketDependenciesArgs = {
   channelId: Scalars['ID']['input'];
-  dependsOnMessageIds: Array<Scalars['ID']['input']>;
-  messageId: Scalars['ID']['input'];
+  dependsOnWorkspaceIds: Array<Scalars['ID']['input']>;
   runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -323,23 +306,23 @@ export type MutationUpdateColumnArgs = {
 };
 
 
-export type MutationUpdateMessagePreviewArgs = {
-  channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
-  preview: Scalars['String']['input'];
-};
-
-
-export type MutationUpdateMessageStatusArgs = {
-  channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
-  status: Scalars['String']['input'];
-};
-
-
 export type MutationUpdateQueuedRunConfigArgs = {
-  messageId: Scalars['ID']['input'];
   runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateWorkspacePreviewArgs = {
+  channelId: Scalars['ID']['input'];
+  preview: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateWorkspaceStatusArgs = {
+  channelId: Scalars['ID']['input'];
+  status: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -357,15 +340,12 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   event?: Maybe<Event>;
-  messageEvents: EventConnection;
-  messages: MessageConnection;
   servers: Array<Server>;
-  session?: Maybe<Session>;
   sessionEvents: EventConnection;
-  sessions: SessionConnection;
-  threadEvents: EventConnection;
-  threads: Array<Thread>;
+  sessions: Array<Session>;
   ticketDependencies: Array<TicketDependency>;
+  workspaceEvents: EventConnection;
+  workspaces: WorkspaceConnection;
 };
 
 
@@ -396,64 +376,40 @@ export type QueryEventArgs = {
 };
 
 
-export type QueryMessageEventsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  channelId: Scalars['ID']['input'];
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  messageId: Scalars['ID']['input'];
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryMessagesArgs = {
-  channelId: Scalars['ID']['input'];
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QuerySessionArgs = {
-  sessionId: Scalars['String']['input'];
-};
-
-
 export type QuerySessionEventsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
-  hookEventName?: InputMaybe<Scalars['String']['input']>;
+  channelId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
-  sessionId: Scalars['String']['input'];
-  toolName?: InputMaybe<Scalars['String']['input']>;
+  sessionId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
 export type QuerySessionsArgs = {
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  order?: InputMaybe<Scalars['String']['input']>;
-  sort?: InputMaybe<Scalars['String']['input']>;
-  status?: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryThreadEventsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
   channelId: Scalars['ID']['input'];
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  messageId: Scalars['ID']['input'];
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  threadId: Scalars['ID']['input'];
-};
-
-
-export type QueryThreadsArgs = {
-  channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
 export type QueryTicketDependenciesArgs = {
-  messageId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QueryWorkspaceEventsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QueryWorkspacesArgs = {
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type Server = {
@@ -468,36 +424,30 @@ export type Server = {
 
 export type Session = {
   __typename?: 'Session';
-  cwd?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
   eventCount: Scalars['Int']['output'];
-  firstSeenAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
-  lastSeenAt: Scalars['DateTime']['output'];
-  permissionMode?: Maybe<Scalars['String']['output']>;
-  sessionId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  toolSummary?: Maybe<Scalars['JSON']['output']>;
-  transcriptPath?: Maybe<Scalars['String']['output']>;
+  workspaceId: Scalars['String']['output'];
 };
 
-export type SessionConnection = {
-  __typename?: 'SessionConnection';
-  limit: Scalars['Int']['output'];
-  offset: Scalars['Int']['output'];
-  sessions: Array<Session>;
-  total: Scalars['Int']['output'];
+export type SessionEventPayload = {
+  __typename?: 'SessionEventPayload';
+  channelId: Scalars['String']['output'];
+  event: Event;
+  sessionId: Scalars['String']['output'];
+  workspaceId: Scalars['String']['output'];
 };
 
 export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
-  messageDeleted: MessageDeletedPayload;
-  messageReadyForReview: MessageReadyForReviewPayload;
-  messageUpserted: Message;
-  threadEventCreated: ThreadEventPayload;
-  threadEventUpdated: ThreadEventPayload;
+  sessionEventCreated: SessionEventPayload;
+  sessionEventUpdated: SessionEventPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
+  workspaceDeleted: WorkspaceDeletedPayload;
+  workspaceReadyForReview: WorkspaceReadyForReviewPayload;
+  workspaceUpserted: Workspace;
 };
 
 
@@ -506,27 +456,12 @@ export type SubscriptionAiChatStreamArgs = {
 };
 
 
-export type SubscriptionMessageDeletedArgs = {
+export type SubscriptionSessionEventCreatedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
 
-export type SubscriptionMessageReadyForReviewArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionMessageUpsertedArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionThreadEventCreatedArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionThreadEventUpdatedArgs = {
+export type SubscriptionSessionEventUpdatedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -540,20 +475,19 @@ export type SubscriptionTicketUpsertedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
-export type Thread = {
-  __typename?: 'Thread';
-  createdAt: Scalars['DateTime']['output'];
-  eventCount: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  messageId: Scalars['String']['output'];
+
+export type SubscriptionWorkspaceDeletedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
-export type ThreadEventPayload = {
-  __typename?: 'ThreadEventPayload';
-  channelId: Scalars['String']['output'];
-  event: Event;
-  messageId: Scalars['String']['output'];
-  threadId: Scalars['String']['output'];
+
+export type SubscriptionWorkspaceReadyForReviewArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionWorkspaceUpsertedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 export type Ticket = {
@@ -562,14 +496,14 @@ export type Ticket = {
   createdAt: Scalars['DateTime']['output'];
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
-  message?: Maybe<TicketMessage>;
-  messageId: Scalars['String']['output'];
   metadata?: Maybe<Scalars['JSON']['output']>;
   solutionApproach?: Maybe<Scalars['String']['output']>;
   sortOrder: Scalars['Int']['output'];
   status: Scalars['String']['output'];
   title: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
+  workspace?: Maybe<TicketWorkspace>;
+  workspaceId: Scalars['String']['output'];
 };
 
 export type TicketAttachment = {
@@ -584,26 +518,17 @@ export type TicketAttachment = {
 export type TicketDependency = {
   __typename?: 'TicketDependency';
   createdAt: Scalars['DateTime']['output'];
-  dependsOnMessageId: Scalars['String']['output'];
   dependsOnTicketTitle?: Maybe<Scalars['String']['output']>;
+  dependsOnWorkspaceId: Scalars['String']['output'];
   id: Scalars['ID']['output'];
-  ticketMessageId: Scalars['String']['output'];
-};
-
-export type TicketMessage = {
-  __typename?: 'TicketMessage';
-  attachments: Array<TicketAttachment>;
-  branch?: Maybe<Scalars['String']['output']>;
-  createdAt: Scalars['DateTime']['output'];
-  id: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
+  ticketWorkspaceId: Scalars['String']['output'];
 };
 
 export type TicketReadyToRunPayload = {
   __typename?: 'TicketReadyToRunPayload';
   channelId: Scalars['String']['output'];
-  messageId: Scalars['String']['output'];
   runConfig: Scalars['JSON']['output'];
+  workspaceId: Scalars['String']['output'];
 };
 
 export type TicketUpsertPayload = {
@@ -611,4 +536,58 @@ export type TicketUpsertPayload = {
   channelId: Scalars['String']['output'];
   columnSlug: Scalars['String']['output'];
   ticket: Ticket;
+};
+
+export type TicketWorkspace = {
+  __typename?: 'TicketWorkspace';
+  attachments: Array<TicketAttachment>;
+  branch?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type Workspace = {
+  __typename?: 'Workspace';
+  branch?: Maybe<Scalars['String']['output']>;
+  channelId: Scalars['String']['output'];
+  claudeSessionId?: Maybe<Scalars['String']['output']>;
+  cliSession?: Maybe<WorkspaceCliSession>;
+  cliSessionId: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  importance: Scalars['String']['output'];
+  preview?: Maybe<Scalars['String']['output']>;
+  queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
+  sessionCount: Scalars['Int']['output'];
+  status: Scalars['String']['output'];
+  summary?: Maybe<Scalars['String']['output']>;
+};
+
+export type WorkspaceCliSession = {
+  __typename?: 'WorkspaceCliSession';
+  cwd?: Maybe<Scalars['String']['output']>;
+  sessionId: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type WorkspaceConnection = {
+  __typename?: 'WorkspaceConnection';
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+  workspaces: Array<Workspace>;
+};
+
+export type WorkspaceDeletedPayload = {
+  __typename?: 'WorkspaceDeletedPayload';
+  channelId: Scalars['String']['output'];
+  workspaceId: Scalars['String']['output'];
+};
+
+export type WorkspaceReadyForReviewPayload = {
+  __typename?: 'WorkspaceReadyForReviewPayload';
+  channelId: Scalars['String']['output'];
+  claudeSessionId?: Maybe<Scalars['String']['output']>;
+  workspaceId: Scalars['String']['output'];
 };

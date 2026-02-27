@@ -85,9 +85,9 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(WATCH_BASE_BRANCH_CHANNEL);
   ipcMain.removeHandler(UNWATCH_BASE_BRANCH_CHANNEL);
 
-  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, messageId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string) => {
+  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string) => {
     try {
-      const worktreePath = await spawnClaude(messageId, prompt, repoPath, creationCommands, resumeSessionId, filePaths, model, effort, systemInstructions);
+      const worktreePath = await spawnClaude(workspaceId, prompt, repoPath, creationCommands, resumeSessionId, filePaths, model, effort, systemInstructions);
       return { success: true, worktreePath };
     } catch (err) {
       console.error('Failed to spawn claude:', err);
@@ -95,9 +95,9 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(DELETE_WORKTREE_CHANNEL, async (_event, messageId: string, repoPath: string) => {
+  ipcMain.handle(DELETE_WORKTREE_CHANNEL, async (_event, workspaceId: string, repoPath: string) => {
     try {
-      const result = await deleteWorktree(messageId, repoPath);
+      const result = await deleteWorktree(workspaceId, repoPath);
       return { success: true, ...result };
     } catch (err) {
       console.error('Failed to delete worktree:', err);
@@ -105,18 +105,18 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(CHECK_WORKTREE_CHANNEL, async (_event, messageId: string, repoPath: string) => {
+  ipcMain.handle(CHECK_WORKTREE_CHANNEL, async (_event, workspaceId: string, repoPath: string) => {
     try {
-      const result = await checkWorktreeExists(messageId, repoPath);
+      const result = await checkWorktreeExists(workspaceId, repoPath);
       return { success: true, ...result };
     } catch (err) {
       return { success: false, exists: false, error: String(err) };
     }
   });
 
-  ipcMain.handle(MERGE_WORKTREE_CHANNEL, async (_event, messageId: string, repoPath: string, baseBranch: string) => {
+  ipcMain.handle(MERGE_WORKTREE_CHANNEL, async (_event, workspaceId: string, repoPath: string, baseBranch: string) => {
     try {
-      const result = await mergeWorktree(messageId, repoPath, baseBranch);
+      const result = await mergeWorktree(workspaceId, repoPath, baseBranch);
       return { success: true, ...result };
     } catch (err) {
       console.error('Failed to merge worktree:', err);
@@ -124,9 +124,9 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(STOP_CLAUDE_CHANNEL, (_event, messageId: string) => {
+  ipcMain.handle(STOP_CLAUDE_CHANNEL, (_event, workspaceId: string) => {
     try {
-      const result = stopClaudeProcess(messageId);
+      const result = stopClaudeProcess(workspaceId);
       return { success: true, ...result };
     } catch (err) {
       return { success: false, error: String(err) };
@@ -135,12 +135,12 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(
     CLAUDE_ACTIVITY_PING_CHANNEL,
-    async (_event, messageId: string, eventType: string) => {
+    async (_event, workspaceId: string, eventType: string) => {
       try {
         if ((eventType ?? '').toLowerCase() === 'stop') {
-          stopWatchdog(messageId, 'activity-stop-event');
+          stopWatchdog(workspaceId, 'activity-stop-event');
         } else {
-          resetWatchdog(messageId, `activity-event:${eventType}`);
+          resetWatchdog(workspaceId, `activity-event:${eventType}`);
         }
         return { success: true };
       } catch (err) {
@@ -195,9 +195,9 @@ export function registerIpcHandlers() {
     return { success: killPty(terminalId) };
   });
 
-  ipcMain.handle(GET_WORKTREE_DIFF_CHANNEL, async (_event, messageId: string, baseBranch: string) => {
+  ipcMain.handle(GET_WORKTREE_DIFF_CHANNEL, async (_event, workspaceId: string, baseBranch: string) => {
     try {
-      const worktreePath = getWorktreePath(messageId);
+      const worktreePath = getWorktreePath(workspaceId);
       const result = await getWorktreeDiff(worktreePath, baseBranch || 'main');
       return { success: true, ...result };
     } catch (err) {
@@ -205,18 +205,18 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(ALLOCATE_PORTS_CHANNEL, async (_event, messageId: string, count: number) => {
+  ipcMain.handle(ALLOCATE_PORTS_CHANNEL, async (_event, workspaceId: string, count: number) => {
     try {
-      const ports = await allocatePorts(messageId, count);
+      const ports = await allocatePorts(workspaceId, count);
       return { success: true, ports };
     } catch (err) {
       return { success: false, error: String(err) };
     }
   });
 
-  ipcMain.handle(RELEASE_PORTS_CHANNEL, (_event, messageId: string) => {
+  ipcMain.handle(RELEASE_PORTS_CHANNEL, (_event, workspaceId: string) => {
     try {
-      releasePorts(messageId);
+      releasePorts(workspaceId);
       return { success: true };
     } catch (err) {
       return { success: false, error: String(err) };
@@ -372,7 +372,7 @@ export function registerIpcHandlers() {
     async (
       _event,
       repoPath: string,
-      targets: Array<{ messageId: string; branch: string }>,
+      targets: Array<{ workspaceId: string; branch: string }>,
       baseBranch: string,
     ) => {
       try {
@@ -380,22 +380,22 @@ export function registerIpcHandlers() {
         await runProcess('git', ['fetch', 'origin', baseBranch], repoPath).catch(() => undefined);
 
         const merged: Record<string, boolean> = {};
-        for (const { messageId, branch } of targets) {
+        for (const { workspaceId, branch } of targets) {
           try {
             // `git diff <base>...<branch>` shows changes on <branch> that aren't
             // in <base>. If empty, all the branch's changes are already in the
             // base — regardless of merge strategy (FF, squash, rebase).
             const diff = await runProcess('git', ['diff', '--quiet', `${baseBranch}...${branch}`], repoPath);
             if (diff.code === 0) {
-              merged[messageId] = true;
+              merged[workspaceId] = true;
               continue;
             }
 
             // Also check against the fetched remote ref.
             const remoteDiff = await runProcess('git', ['diff', '--quiet', `origin/${baseBranch}...${branch}`], repoPath);
-            merged[messageId] = remoteDiff.code === 0;
+            merged[workspaceId] = remoteDiff.code === 0;
           } catch {
-            merged[messageId] = false;
+            merged[workspaceId] = false;
           }
         }
         return { success: true, merged };

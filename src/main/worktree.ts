@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { runProcess } from './process';
 import {
-  runStateByMessageId,
+  runStateByWorkspaceId,
   stopWatchdog,
   appendClaudeDebugLog,
 } from './watchdog';
@@ -21,12 +21,12 @@ export function getWorktreeBase(): string {
   return worktreeBase;
 }
 
-export function getWorktreePath(messageId: string): string {
-  return path.join(getWorktreeBase(), messageId);
+export function getWorktreePath(workspaceId: string): string {
+  return path.join(getWorktreeBase(), workspaceId);
 }
 
-function getBaseShaConfigKey(messageId: string): string {
-  return `trace.base-sha-msg-${messageId}`;
+function getBaseShaConfigKey(workspaceId: string): string {
+  return `trace.base-sha-msg-${workspaceId}`;
 }
 
 export interface EnsureWorktreeResult {
@@ -34,8 +34,8 @@ export interface EnsureWorktreeResult {
   created: boolean;
 }
 
-export async function ensureWorktree(messageId: string, repoPath: string): Promise<EnsureWorktreeResult> {
-  const worktreePath = getWorktreePath(messageId);
+export async function ensureWorktree(workspaceId: string, repoPath: string): Promise<EnsureWorktreeResult> {
+  const worktreePath = getWorktreePath(workspaceId);
 
   if (fs.existsSync(worktreePath)) {
     return { worktreePath, created: false };
@@ -46,7 +46,7 @@ export async function ensureWorktree(messageId: string, repoPath: string): Promi
     fs.mkdirSync(base, { recursive: true });
   }
 
-  const branchName = `trace/${messageId.slice(0, 8)}`;
+  const branchName = `trace/${workspaceId.slice(0, 8)}`;
 
   const result = await new Promise<EnsureWorktreeResult>((resolve, reject) => {
     const proc = spawn('git', ['worktree', 'add', '-b', branchName, worktreePath], {
@@ -82,53 +82,53 @@ export async function ensureWorktree(messageId: string, repoPath: string): Promi
   if (result.created) {
     const baseSha = await runProcess('git', ['rev-parse', 'HEAD'], repoPath);
     if (baseSha.code === 0) {
-      await runProcess('git', ['config', getBaseShaConfigKey(messageId), baseSha.stdout.trim()], repoPath);
+      await runProcess('git', ['config', getBaseShaConfigKey(workspaceId), baseSha.stdout.trim()], repoPath);
     }
   }
 
   return result;
 }
 
-export function stopClaudeProcess(messageId: string): { stopped: boolean } {
-  const existing = runningProcesses.get(messageId);
+export function stopClaudeProcess(workspaceId: string): { stopped: boolean } {
+  const existing = runningProcesses.get(workspaceId);
   if (!existing || existing.killed) {
     return { stopped: false };
   }
 
-  const state = runStateByMessageId.get(messageId);
+  const state = runStateByWorkspaceId.get(workspaceId);
   if (state) {
     state.userStopped = true;
   }
-  stopWatchdog(messageId, 'user-stop');
+  stopWatchdog(workspaceId, 'user-stop');
   existing.kill('SIGTERM');
   return { stopped: true };
 }
 
-export async function getWorktreeBranch(messageId: string): Promise<string> {
-  const worktreePath = getWorktreePath(messageId);
+export async function getWorktreeBranch(workspaceId: string): Promise<string> {
+  const worktreePath = getWorktreePath(workspaceId);
   const result = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
   const branch = result.stdout.trim();
   if (result.code !== 0 || !branch) {
-    return `trace/${messageId.slice(0, 8)}`;
+    return `trace/${workspaceId.slice(0, 8)}`;
   }
   return branch;
 }
 
-export async function checkWorktreeExists(messageId: string, repoPath: string): Promise<{ exists: boolean; worktreePath: string }> {
+export async function checkWorktreeExists(workspaceId: string, repoPath: string): Promise<{ exists: boolean; worktreePath: string }> {
   void repoPath;
-  const worktreePath = getWorktreePath(messageId);
+  const worktreePath = getWorktreePath(workspaceId);
   const exists = fs.existsSync(worktreePath);
   return { exists, worktreePath };
 }
 
-export async function mergeWorktree(messageId: string, repoPath: string, baseBranch: string): Promise<{ success: boolean; branch: string }> {
-  const worktreePath = getWorktreePath(messageId);
+export async function mergeWorktree(workspaceId: string, repoPath: string, baseBranch: string): Promise<{ success: boolean; branch: string }> {
+  const worktreePath = getWorktreePath(workspaceId);
 
   if (!fs.existsSync(worktreePath)) {
     throw new Error(`Worktree not found: ${worktreePath}`);
   }
 
-  const branch = await getWorktreeBranch(messageId);
+  const branch = await getWorktreeBranch(workspaceId);
 
   // Checkout the base branch and merge the worktree branch
   const checkoutResult = await runProcess('git', ['checkout', baseBranch], repoPath);
@@ -144,47 +144,47 @@ export async function mergeWorktree(messageId: string, repoPath: string, baseBra
   return { success: true, branch };
 }
 
-export async function deleteWorktree(messageId: string, repoPath: string): Promise<{ removed: boolean; worktreePath: string }> {
-  const worktreePath = getWorktreePath(messageId);
-  const existing = runningProcesses.get(messageId);
+export async function deleteWorktree(workspaceId: string, repoPath: string): Promise<{ removed: boolean; worktreePath: string }> {
+  const worktreePath = getWorktreePath(workspaceId);
+  const existing = runningProcesses.get(workspaceId);
 
   if (existing && !existing.killed) {
-    suppressSyntheticStopFor.add(messageId);
-    stopWatchdog(messageId, 'delete-worktree');
-    runStateByMessageId.delete(messageId);
+    suppressSyntheticStopFor.add(workspaceId);
+    stopWatchdog(workspaceId, 'delete-worktree');
+    runStateByWorkspaceId.delete(workspaceId);
     existing.kill('SIGTERM');
-    runningProcesses.delete(messageId);
-    appendClaudeDebugLog(messageId, 'delete-worktree killed running process before deletion');
+    runningProcesses.delete(workspaceId);
+    appendClaudeDebugLog(workspaceId, 'delete-worktree killed running process before deletion');
   } else {
-    stopWatchdog(messageId, 'delete-worktree-no-process');
-    runStateByMessageId.delete(messageId);
+    stopWatchdog(workspaceId, 'delete-worktree-no-process');
+    runStateByWorkspaceId.delete(workspaceId);
   }
 
   if (!fs.existsSync(worktreePath)) {
-    appendClaudeDebugLog(messageId, `delete-worktree skipped (not found): ${worktreePath}`);
+    appendClaudeDebugLog(workspaceId, `delete-worktree skipped (not found): ${worktreePath}`);
     return { removed: false, worktreePath };
   }
 
   // Resolve the actual branch name before removing the worktree directory
-  const branch = await getWorktreeBranch(messageId);
+  const branch = await getWorktreeBranch(workspaceId);
 
   const removeResult = await runProcess('git', ['worktree', 'remove', '--force', worktreePath], repoPath);
 
   if (removeResult.code !== 0) {
     fs.rmSync(worktreePath, { recursive: true, force: true });
     appendClaudeDebugLog(
-      messageId,
+      workspaceId,
       `delete-worktree git remove failed, fs fallback used stderr=${removeResult.stderr.trim().slice(0, 500)}`,
     );
   } else {
-    appendClaudeDebugLog(messageId, `delete-worktree git remove succeeded path=${worktreePath}`);
+    appendClaudeDebugLog(workspaceId, `delete-worktree git remove succeeded path=${worktreePath}`);
   }
 
   await runProcess('git', ['worktree', 'prune'], repoPath);
   await runProcess('git', ['branch', '-D', branch], repoPath);
 
   // Clean up stored base SHA from git config
-  await runProcess('git', ['config', '--unset', getBaseShaConfigKey(messageId)], repoPath);
+  await runProcess('git', ['config', '--unset', getBaseShaConfigKey(workspaceId)], repoPath);
   // Backward compatibility cleanup for older keys.
   const legacyId = branch.replace('trace/', '');
   await runProcess('git', ['config', '--unset', `trace.base-sha-${legacyId}`], repoPath);

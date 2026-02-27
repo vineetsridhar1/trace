@@ -51,13 +51,13 @@ export function TicketDependencySelector({
         <div className="max-h-48 space-y-1 overflow-y-auto">
           {eligibleTickets.map((ticket) => (
             <label
-              key={ticket.messageId}
+              key={ticket.workspaceId}
               className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[#1f2335]"
             >
               <input
                 type="checkbox"
-                checked={selected.has(ticket.messageId)}
-                onChange={() => toggle(ticket.messageId)}
+                checked={selected.has(ticket.workspaceId)}
+                onChange={() => toggle(ticket.workspaceId)}
                 className="accent-violet-500"
               />
               <span className="min-w-0 flex-1 truncate text-sm text-[#c0caf5]">

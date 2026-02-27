@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChannelMessage, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
+import type { Workspace, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
-import { MESSAGE_FIELDS } from './graphql/fragments';
-import { useUpdateMessageStatusMutation, useDeleteMessageMutation, useSetTicketDependenciesMutation, useRemoveTicketDependencyMutation, useUpdateQueuedRunConfigMutation } from './__generated__/App.generated';
-import { buildThreadNodes } from './utils';
-import { useMessages } from './hooks/useMessages';
+import { WORKSPACE_FIELDS } from './graphql/fragments';
+import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation, useSetTicketDependenciesMutation, useRemoveTicketDependencyMutation, useUpdateQueuedRunConfigMutation } from './__generated__/App.generated';
+import { buildSessionNodes } from './utils';
+import { useWorkspaces } from './hooks/useMessages';
 import { useThread } from './hooks/useThread';
 import { useThreadScroll } from './hooks/useThreadScroll';
 import { usePanelResize } from './hooks/usePanelResize';
 import { useChannelSubscriptions } from './hooks/useChannelSubscriptions';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
-import { useClaudeMessageActions } from './hooks/useClaudeMessageActions';
+import { useClaudeWorkspaceActions } from './hooks/useClaudeMessageActions';
 import { useMergePolling } from './hooks/useMergePolling';
 import { useKanban } from './hooks/useKanban';
 import { useAiChats } from './hooks/useAiChats';
@@ -27,39 +27,39 @@ import { CreateServerModal } from './components/CreateServerModal';
 import { ServerRail } from './components/ServerRail';
 import { AiChatPanel } from './components/AiChatPanel';
 
-const GQL_UPDATE_MESSAGE_STATUS = gql`
-  mutation UpdateMessageStatus($channelId: ID!, $messageId: ID!, $status: String!) {
-    updateMessageStatus(channelId: $channelId, messageId: $messageId, status: $status) {
-      ...MessageFields
+const GQL_UPDATE_WORKSPACE_STATUS = gql`
+  mutation UpdateWorkspaceStatus($channelId: ID!, $workspaceId: ID!, $status: String!) {
+    updateWorkspaceStatus(channelId: $channelId, workspaceId: $workspaceId, status: $status) {
+      ...WorkspaceFields
     }
   }
-  ${MESSAGE_FIELDS}
+  ${WORKSPACE_FIELDS}
 `;
 
-const GQL_DELETE_MESSAGE = gql`
-  mutation DeleteMessage($channelId: ID!, $messageId: ID!) {
-    deleteMessage(channelId: $channelId, messageId: $messageId)
+const GQL_DELETE_WORKSPACE = gql`
+  mutation DeleteWorkspace($channelId: ID!, $workspaceId: ID!) {
+    deleteWorkspace(channelId: $channelId, workspaceId: $workspaceId)
   }
 `;
 
 const GQL_SET_TICKET_DEPENDENCIES = gql`
-  mutation SetTicketDependencies($channelId: ID!, $messageId: ID!, $dependsOnMessageIds: [ID!]!, $runConfig: JSON!) {
-    setTicketDependencies(channelId: $channelId, messageId: $messageId, dependsOnMessageIds: $dependsOnMessageIds, runConfig: $runConfig) {
-      ...MessageFields
+  mutation SetTicketDependencies($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceIds: [ID!]!, $runConfig: JSON!) {
+    setTicketDependencies(channelId: $channelId, workspaceId: $workspaceId, dependsOnWorkspaceIds: $dependsOnWorkspaceIds, runConfig: $runConfig) {
+      ...WorkspaceFields
     }
   }
-  ${MESSAGE_FIELDS}
+  ${WORKSPACE_FIELDS}
 `;
 
 const GQL_REMOVE_TICKET_DEPENDENCY = gql`
-  mutation RemoveTicketDependency($channelId: ID!, $messageId: ID!, $dependsOnMessageId: ID!) {
-    removeTicketDependency(channelId: $channelId, messageId: $messageId, dependsOnMessageId: $dependsOnMessageId)
+  mutation RemoveTicketDependency($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceId: ID!) {
+    removeTicketDependency(channelId: $channelId, workspaceId: $workspaceId, dependsOnWorkspaceId: $dependsOnWorkspaceId)
   }
 `;
 
 const GQL_UPDATE_QUEUED_RUN_CONFIG = gql`
-  mutation UpdateQueuedRunConfig($messageId: ID!, $runConfig: JSON!) {
-    updateQueuedRunConfig(messageId: $messageId, runConfig: $runConfig)
+  mutation UpdateQueuedRunConfig($workspaceId: ID!, $runConfig: JSON!) {
+    updateQueuedRunConfig(workspaceId: $workspaceId, runConfig: $runConfig)
   }
 `;
 
@@ -90,16 +90,17 @@ function AppContent() {
     getLocalConfig,
     setLocalConfig,
     updateChannelSettings,
+    deleteChannel,
   } = useChannelContext();
 
   const {
-    messages,
-    messagesRef,
-    upsertMessage,
-    removeMessage,
-    refreshMessages,
-    clearMessages,
-  } = useMessages();
+    workspaces,
+    workspacesRef,
+    upsertWorkspace,
+    removeWorkspace,
+    refreshWorkspaces,
+    clearWorkspaces,
+  } = useWorkspaces();
 
   const activeChannelRef = useRef<Channel | null>(null);
   activeChannelRef.current = enrichedActiveChannel;
@@ -110,43 +111,43 @@ function AppContent() {
   const getActiveChannelId = useCallback(() => activeChannelId, [activeChannelId]);
 
   const {
-    selectedMessageId,
-    selectedMessageRef,
-    selectedMessageIdRef,
-    threadEvents,
-    threadEventsRef,
+    selectedWorkspaceId,
+    selectedWorkspaceRef,
+    selectedWorkspaceIdRef,
+    sessionEvents,
+    sessionEventsRef,
     threadWidth,
     setThreadWidth,
-    activeThreadId,
-    activeThreadIdRef,
-    threads,
-    threadStatus,
+    activeSessionId,
+    activeSessionIdRef,
+    sessions,
+    sessionStatus,
     deletingWorktree,
     hasWorktree,
     setHasWorktree,
     expandedReadGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
-    loadThreadEvents,
+    loadSessionEvents,
     loadOlderEvents,
-    appendThreadEvent,
-    updateThreadEvent,
+    appendSessionEvent,
+    updateSessionEvent,
     hasMoreEvents,
     loadingOlderEvents,
     openThreadPanel,
-    switchThread,
-    clearThread,
+    switchSession,
+    clearSession,
     deleteWorktree,
     toggleReadGroup,
-    syncSelectedMessage,
+    syncSelectedWorkspace,
   } = useThread({ getChannelRepoPath, getChannelBaseBranch, getActiveChannelId });
 
-  const upsertAndSyncMessage = useCallback(
-    (message: ChannelMessage) => {
-      upsertMessage(message);
-      syncSelectedMessage(message);
+  const upsertAndSyncWorkspace = useCallback(
+    (workspace: Workspace) => {
+      upsertWorkspace(workspace);
+      syncSelectedWorkspace(workspace);
     },
-    [upsertMessage, syncSelectedMessage],
+    [upsertWorkspace, syncSelectedWorkspace],
   );
 
   const {
@@ -156,8 +157,8 @@ function AppContent() {
     onThreadScroll,
     resetScroll,
   } = useThreadScroll({
-    threadEvents,
-    selectedMessageId,
+    sessionEvents,
+    selectedWorkspaceId,
     hasMoreEvents,
     loadingOlderEvents,
     loadOlderEvents,
@@ -170,12 +171,12 @@ function AppContent() {
     cwd: terminalsCwd,
     initialized: terminalsInitialized,
     allTerminalEntries,
-    selectMessage: selectTerminalMessage,
+    selectWorkspace: selectTerminalWorkspace,
     initializeDefaults: initializeTerminalDefaults,
     rerunTab,
     stopTab,
     isInitialized: isTerminalInitialized,
-    killAllForMessage: killTerminalsForMessage,
+    killAllForWorkspace: killTerminalsForWorkspace,
     killAll: killAllTerminals,
     killTerminal,
     addTerminal,
@@ -201,8 +202,8 @@ function AppContent() {
 
   const [activeAiChatId, setActiveAiChatId] = useState<string | null>(null);
 
-  const [executeUpdateMessageStatus] = useUpdateMessageStatusMutation();
-  const [executeDeleteMessage] = useDeleteMessageMutation();
+  const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
+  const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
   const [executeSetTicketDependencies] = useSetTicketDependenciesMutation();
   const [executeRemoveTicketDependency] = useRemoveTicketDependencyMutation();
   const [executeUpdateQueuedRunConfig] = useUpdateQueuedRunConfigMutation();
@@ -210,13 +211,13 @@ function AppContent() {
   const [middlePanelView, setMiddlePanelView] = useState<MiddlePanelView>('chat');
   const [channelWidth, setChannelWidth] = useState(220);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [attentionMessageIds, setAttentionMessageIds] = useState<Set<string>>(new Set());
+  const [attentionWorkspaceIds, setAttentionWorkspaceIds] = useState<Set<string>>(new Set());
   const [settingsChannelId, setSettingsChannelId] = useState<string | null>(null);
   const [createChannelType, setCreateChannelType] = useState<ChannelType | null>(null);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
-  const autoRunRef = useRef<((messageId: string, runConfig: unknown) => void) | null>(null);
-  const autoReviewRef = useRef<((messageId: string, claudeSessionId: string | null) => void) | null>(null);
+  const autoRunRef = useRef<((workspaceId: string, runConfig: unknown) => void) | null>(null);
+  const autoReviewRef = useRef<((workspaceId: string, claudeSessionId: string | null) => void) | null>(null);
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth, SERVER_RAIL_WIDTH);
 
@@ -227,11 +228,11 @@ function AppContent() {
   }, []);
 
   const handleNeedsAttention = useCallback(
-    (messageId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => {
-      setAttentionMessageIds((current) => {
-        if (current.has(messageId)) return current;
+    (workspaceId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => {
+      setAttentionWorkspaceIds((current) => {
+        if (current.has(workspaceId)) return current;
         const next = new Set(current);
-        next.add(messageId);
+        next.add(workspaceId);
         return next;
       });
 
@@ -242,65 +243,65 @@ function AppContent() {
           'merged': 'Branch merged',
         };
         const title = NOTIFICATION_TITLES[reason] ?? 'Chat completed';
-        const message = messagesRef.current.find((item) => item.id === messageId);
-        const body = message?.preview || message?.session.cwd || messageId;
+        const workspace = workspacesRef.current.find((item) => item.id === workspaceId);
+        const body = workspace?.preview || workspace?.cliSession.cwd || workspaceId;
         const notification = new Notification(title, { body });
         notification.onclick = () => {
           void window.traceAPI.focusWindow();
         };
       }
     },
-    [messagesRef],
+    [workspacesRef],
   );
 
-  const updateMessageStatus = useCallback(
-    async (messageId: string, status: TicketStatus) => {
+  const updateWorkspaceStatus = useCallback(
+    async (workspaceId: string, status: TicketStatus) => {
       if (!activeChannelId) return;
       try {
-        const { data } = await executeUpdateMessageStatus({
+        const { data } = await executeUpdateWorkspaceStatus({
           variables: {
             channelId: activeChannelId,
-            messageId,
+            workspaceId,
             status,
           },
         });
 
         if (!data) return;
-        upsertAndSyncMessage(data.updateMessageStatus as ChannelMessage);
+        upsertAndSyncWorkspace(data.updateWorkspaceStatus as Workspace);
       } catch {
-        console.error('Failed to update message status');
+        console.error('Failed to update workspace status');
       }
     },
-    [activeChannelId, executeUpdateMessageStatus, upsertAndSyncMessage],
+    [activeChannelId, executeUpdateWorkspaceStatus, upsertAndSyncWorkspace],
   );
 
   const { triggerCheck: triggerMergeCheck } = useMergePolling({
-    messagesRef,
+    workspacesRef,
     getRepoPath: getChannelRepoPath,
     getBaseBranch: getChannelBaseBranch,
-    updateMessageStatus,
+    updateWorkspaceStatus,
   });
 
   const { subscriptionsActive } = useChannelSubscriptions({
     activeChannelId,
-    upsertMessage: upsertAndSyncMessage,
-    removeMessage,
-    appendThreadEvent,
-    updateThreadEvent,
+    upsertWorkspace: upsertAndSyncWorkspace,
+    removeWorkspace,
+    appendSessionEvent,
+    updateSessionEvent,
     reportClaudeActivity,
-    selectedMessageIdRef,
-    activeThreadIdRef,
-    messagesRef,
+    selectedWorkspaceIdRef,
+    activeSessionIdRef,
+    workspacesRef,
     onNeedsAttention: handleNeedsAttention,
     upsertTicket,
-    onTicketReadyToRun: useCallback((messageId: string, runConfig: unknown) => {
-      autoRunRef.current?.(messageId, runConfig);
+    onTicketReadyToRun: useCallback((workspaceId: string, runConfig: unknown) => {
+      autoRunRef.current?.(workspaceId, runConfig);
     }, []),
-    onMessageReadyForReview: useCallback((messageId: string, claudeSessionId: string | null) => {
-      autoReviewRef.current?.(messageId, claudeSessionId);
+    onWorkspaceReadyForReview: useCallback((workspaceId: string, claudeSessionId: string | null) => {
+      autoReviewRef.current?.(workspaceId, claudeSessionId);
     }, []),
-    onMessageCompleted: triggerMergeCheck,
-    refreshMessages,
+    onWorkspaceCompleted: triggerMergeCheck,
+    refreshWorkspaces,
   });
 
   const handleSetView = useCallback(
@@ -321,90 +322,90 @@ function AppContent() {
     [activeChannelId, moveTicket],
   );
 
-  const handleDeleteMessage = useCallback(
-    async (messageId: string) => {
+  const handleDeleteWorkspace = useCallback(
+    async (workspaceId: string) => {
       if (!activeChannelId) return;
-      if (!window.confirm('Delete this message?')) return;
+      if (!window.confirm('Delete this workspace?')) return;
 
-      if (selectedMessageId === messageId) {
+      if (selectedWorkspaceId === workspaceId) {
         closeThreadPanel();
       }
 
       try {
-        await executeDeleteMessage({
-          variables: { channelId: activeChannelId, messageId },
+        await executeDeleteWorkspace({
+          variables: { channelId: activeChannelId, workspaceId },
         });
-        removeMessage(messageId);
-        killTerminalsForMessage(messageId);
-        void window.traceAPI.releasePorts(messageId);
-        void window.traceAPI.deleteWorktree(messageId, getChannelRepoPath());
+        removeWorkspace(workspaceId);
+        killTerminalsForWorkspace(workspaceId);
+        void window.traceAPI.releasePorts(workspaceId);
+        void window.traceAPI.deleteWorktree(workspaceId, getChannelRepoPath());
       } catch {
-        console.error('Failed to delete message');
+        console.error('Failed to delete workspace');
       }
     },
-    [activeChannelId, selectedMessageId, closeThreadPanel, executeDeleteMessage, removeMessage, getChannelRepoPath],
+    [activeChannelId, selectedWorkspaceId, closeThreadPanel, executeDeleteWorkspace, removeWorkspace, getChannelRepoPath],
   );
 
-  const threadNodes = useMemo(() => buildThreadNodes(threadEvents), [threadEvents]);
-  const selectedMessageStatus: TicketStatus = useMemo(() => {
-    const selected = messages.find((message) => message.id === selectedMessageId);
+  const sessionNodes = useMemo(() => buildSessionNodes(sessionEvents), [sessionEvents]);
+  const selectedWorkspaceStatus: TicketStatus = useMemo(() => {
+    const selected = workspaces.find((ws) => ws.id === selectedWorkspaceId);
     return (selected?.status ?? 'pending') as TicketStatus;
-  }, [messages, selectedMessageId]);
+  }, [workspaces, selectedWorkspaceId]);
 
-  const selectedMessageQueuedRunConfig = useMemo(() => {
-    const selected = messages.find((message) => message.id === selectedMessageId);
+  const selectedWorkspaceQueuedRunConfig = useMemo(() => {
+    const selected = workspaces.find((ws) => ws.id === selectedWorkspaceId);
     return selected?.queuedRunConfig ?? null;
-  }, [messages, selectedMessageId]);
+  }, [workspaces, selectedWorkspaceId]);
 
   const selectedTicket = useMemo(() => {
-    if (!selectedMessageId) return null;
+    if (!selectedWorkspaceId) return null;
     for (const col of kanbanColumns) {
-      const found = col.tickets.find((t) => t.messageId === selectedMessageId);
+      const found = col.tickets.find((t) => t.workspaceId === selectedWorkspaceId);
       if (found) return found;
     }
     return null;
-  }, [kanbanColumns, selectedMessageId]);
+  }, [kanbanColumns, selectedWorkspaceId]);
 
   const channelTickets = useMemo(
     () =>
       kanbanColumns.flatMap((col) =>
         col.tickets.map((t) => ({
-          messageId: t.messageId,
+          workspaceId: t.workspaceId,
           title: t.title,
-          status: t.message?.status ?? 'pending',
+          status: t.workspace?.status ?? 'pending',
         })),
       ),
     [kanbanColumns],
   );
 
   const handleSetTicketDependencies = useCallback(
-    async (messageId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+    async (workspaceId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
       if (!activeChannelId) return;
       try {
         const { data } = await executeSetTicketDependencies({
           variables: {
             channelId: activeChannelId,
-            messageId,
-            dependsOnMessageIds: depIds,
+            workspaceId,
+            dependsOnWorkspaceIds: depIds,
             runConfig,
           },
         });
         if (data?.setTicketDependencies) {
-          upsertAndSyncMessage(data.setTicketDependencies as ChannelMessage);
+          upsertAndSyncWorkspace(data.setTicketDependencies as Workspace);
         }
       } catch {
         console.error('Failed to set ticket dependencies');
       }
     },
-    [activeChannelId, executeSetTicketDependencies, upsertAndSyncMessage],
+    [activeChannelId, executeSetTicketDependencies, upsertAndSyncWorkspace],
   );
 
   const handleRemoveTicketDependency = useCallback(
-    async (messageId: string, dependsOnMessageId: string) => {
+    async (workspaceId: string, dependsOnWorkspaceId: string) => {
       if (!activeChannelId) return;
       try {
         await executeRemoveTicketDependency({
-          variables: { channelId: activeChannelId, messageId, dependsOnMessageId },
+          variables: { channelId: activeChannelId, workspaceId, dependsOnWorkspaceId },
         });
       } catch {
         console.error('Failed to remove ticket dependency');
@@ -414,10 +415,10 @@ function AppContent() {
   );
 
   const handleUpdateQueuedRunConfig = useCallback(
-    async (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+    async (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
       try {
         await executeUpdateQueuedRunConfig({
-          variables: { messageId, runConfig },
+          variables: { workspaceId, runConfig },
         });
       } catch {
         console.error('Failed to update queued run config');
@@ -426,15 +427,15 @@ function AppContent() {
     [executeUpdateQueuedRunConfig],
   );
 
-  const handleOpenThread = useCallback(
-    (message: ChannelMessage) => {
+  const handleOpenWorkspace = useCallback(
+    (workspace: Workspace) => {
       resetScroll();
-      openThreadPanel(message);
+      openThreadPanel(workspace);
       setMiddlePanelView('workspaces');
-      setAttentionMessageIds((current) => {
-        if (!current.has(message.id)) return current;
+      setAttentionWorkspaceIds((current) => {
+        if (!current.has(workspace.id)) return current;
         const next = new Set(current);
-        next.delete(message.id);
+        next.delete(workspace.id);
         return next;
       });
     },
@@ -452,19 +453,19 @@ function AppContent() {
   const activeSystemInstructions = activeChannelId ? localConfigs[activeChannelId]?.systemInstructions : undefined;
   const getSystemInstructions = useCallback((): string | undefined => activeSystemInstructions, [activeSystemInstructions]);
 
-  const claudeActions = useClaudeMessageActions({
+  const claudeActions = useClaudeWorkspaceActions({
     activeChannelId,
-    selectedMessageId,
-    selectedMessageRef,
-    selectedMessageIdRef,
-    activeThreadIdRef,
-    threadEventsRef,
-    clearThread,
-    onMessageCreated: handleOpenThread,
-    loadThreadEvents,
-    upsertMessage: upsertAndSyncMessage,
+    selectedWorkspaceId,
+    selectedWorkspaceRef,
+    selectedWorkspaceIdRef,
+    activeSessionIdRef,
+    sessionEventsRef,
+    clearSession,
+    onWorkspaceCreated: handleOpenWorkspace,
+    loadSessionEvents,
+    upsertWorkspace: upsertAndSyncWorkspace,
     setHasWorktree,
-    updateMessageStatus,
+    updateWorkspaceStatus,
     getSetupCommands,
     getChannelRepoPath,
     getChannelBaseBranch,
@@ -473,31 +474,31 @@ function AppContent() {
 
   // Populate autoRunRef so the subscription callback can call autoRunQueuedTicket
   useEffect(() => {
-    autoRunRef.current = (messageId: string, runConfig: unknown) => {
+    autoRunRef.current = (workspaceId: string, runConfig: unknown) => {
       const config = runConfig as { prompt: string; model: string; effort: string; planMode: boolean };
-      void claudeActions.autoRunQueuedTicket(messageId, config);
+      void claudeActions.autoRunQueuedTicket(workspaceId, config);
     };
   }, [claudeActions.autoRunQueuedTicket]);
 
-  // Populate autoReviewRef so the subscription callback can call autoReviewMessage
+  // Populate autoReviewRef so the subscription callback can call autoReviewWorkspace
   useEffect(() => {
-    autoReviewRef.current = (messageId: string, claudeSessionId: string | null) => {
-      void claudeActions.autoReviewMessage(messageId, claudeSessionId);
+    autoReviewRef.current = (workspaceId: string, claudeSessionId: string | null) => {
+      void claudeActions.autoReviewWorkspace(workspaceId, claudeSessionId);
     };
-  }, [claudeActions.autoReviewMessage]);
+  }, [claudeActions.autoReviewWorkspace]);
 
   const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const claudeActionsContextValue = useMemo(
     () => ({
       repoPath,
-      pendingRunMessageId: claudeActions.pendingRunMessageId,
+      pendingRunWorkspaceId: claudeActions.pendingRunWorkspaceId,
       pendingRunInitialPrompt: claudeActions.pendingRunInitialPrompt,
       selectedModel: claudeActions.selectedModel,
       selectedEffort: claudeActions.selectedEffort,
       setSelectedModel: claudeActions.setSelectedModel,
       setSelectedEffort: claudeActions.setSelectedEffort,
       sendMessage: claudeActions.sendMessage,
-      runPendingMessage: claudeActions.runPendingMessage,
+      runPendingWorkspace: claudeActions.runPendingWorkspace,
       autoRunQueuedTicket: claudeActions.autoRunQueuedTicket,
       stopClaude: claudeActions.stopClaude,
       sendThreadMessage: claudeActions.sendThreadMessage,
@@ -505,18 +506,18 @@ function AppContent() {
       mergeToMain: claudeActions.mergeToMain,
       markMerged: claudeActions.markMerged,
       clearPendingRun: claudeActions.clearPendingRun,
-      autoReviewMessage: claudeActions.autoReviewMessage,
+      autoReviewWorkspace: claudeActions.autoReviewWorkspace,
     }),
     [
       repoPath,
-      claudeActions.pendingRunMessageId,
+      claudeActions.pendingRunWorkspaceId,
       claudeActions.pendingRunInitialPrompt,
       claudeActions.selectedModel,
       claudeActions.selectedEffort,
       claudeActions.setSelectedModel,
       claudeActions.setSelectedEffort,
       claudeActions.sendMessage,
-      claudeActions.runPendingMessage,
+      claudeActions.runPendingWorkspace,
       claudeActions.autoRunQueuedTicket,
       claudeActions.stopClaude,
       claudeActions.sendThreadMessage,
@@ -524,27 +525,27 @@ function AppContent() {
       claudeActions.mergeToMain,
       claudeActions.markMerged,
       claudeActions.clearPendingRun,
-      claudeActions.autoReviewMessage,
+      claudeActions.autoReviewWorkspace,
     ],
   );
 
-  const isMessageSpawned = claudeActions.isMessageSpawned;
+  const isWorkspaceSpawned = claudeActions.isWorkspaceSpawned;
   const isClaudeRunning = useMemo(() => {
-    if (!selectedMessageId || !isMessageSpawned(selectedMessageId)) return false;
-    // After /clear, the thread is empty – Claude isn't running on it
-    if (threadStatus === 'empty') return false;
-    const lastEvent = threadEvents[threadEvents.length - 1];
+    if (!selectedWorkspaceId || !isWorkspaceSpawned(selectedWorkspaceId)) return false;
+    // After /clear, the session is empty – Claude isn't running on it
+    if (sessionStatus === 'empty') return false;
+    const lastEvent = sessionEvents[sessionEvents.length - 1];
     if (lastEvent?.hookEventName === 'Stop') return false;
-    const message = messages.find((item) => item.id === selectedMessageId);
-    return message ? message.session.status !== 'stopped' : false;
-  }, [isMessageSpawned, messages, selectedMessageId, threadEvents, threadStatus]);
+    const workspace = workspaces.find((item) => item.id === selectedWorkspaceId);
+    return workspace ? workspace.cliSession.status !== 'stopped' : false;
+  }, [isWorkspaceSpawned, workspaces, selectedWorkspaceId, sessionEvents, sessionStatus]);
 
   useEffect(() => {
     if (activeChannelId) {
-      void refreshMessages(activeChannelId);
+      void refreshWorkspaces(activeChannelId);
       void fetchBoard(activeChannelId);
     }
-  }, [activeChannelId, refreshMessages, fetchBoard]);
+  }, [activeChannelId, refreshWorkspaces, fetchBoard]);
 
   // Fetch AI chats when server changes
   useEffect(() => {
@@ -556,34 +557,34 @@ function AppContent() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!activeChannelId || subscriptionsActive) return;
-      void refreshMessages(activeChannelId);
-      if (selectedMessageRef.current) {
-        void loadThreadEvents(selectedMessageRef.current);
+      void refreshWorkspaces(activeChannelId);
+      if (selectedWorkspaceRef.current) {
+        void loadSessionEvents(selectedWorkspaceRef.current);
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [activeChannelId, loadThreadEvents, refreshMessages, selectedMessageRef, subscriptionsActive]);
+  }, [activeChannelId, loadSessionEvents, refreshWorkspaces, selectedWorkspaceRef, subscriptionsActive]);
 
-  // Sync terminal selection with message selection
+  // Sync terminal selection with workspace selection
   useEffect(() => {
-    selectTerminalMessage(selectedMessageId);
-  }, [selectedMessageId, selectTerminalMessage]);
+    selectTerminalWorkspace(selectedWorkspaceId);
+  }, [selectedWorkspaceId, selectTerminalWorkspace]);
 
   const handleSwitchChannel = useCallback(
     (channelId: string) => {
-      if (selectedMessageId) {
-        void window.traceAPI.releasePorts(selectedMessageId);
+      if (selectedWorkspaceId) {
+        void window.traceAPI.releasePorts(selectedWorkspaceId);
       }
       setActiveAiChatId(null);
       switchChannel(channelId);
-      clearMessages();
+      clearWorkspaces();
       clearBoard();
       setMiddlePanelView('chat');
       closeThreadPanel();
       setChannelWidth(220);
       killAllTerminals();
     },
-    [switchChannel, clearMessages, clearBoard, closeThreadPanel, killAllTerminals, selectedMessageId],
+    [switchChannel, clearWorkspaces, clearBoard, closeThreadPanel, killAllTerminals, selectedWorkspaceId],
   );
 
 
@@ -650,14 +651,14 @@ function AppContent() {
 
   const enterFullscreen = useCallback(async () => {
     const currentRepoPath = getChannelRepoPath();
-    if (!selectedMessageId || !currentRepoPath) return;
-    const result = await window.traceAPI.checkWorktreeExists(selectedMessageId, currentRepoPath);
+    if (!selectedWorkspaceId || !currentRepoPath) return;
+    const result = await window.traceAPI.checkWorktreeExists(selectedWorkspaceId, currentRepoPath);
     if (!result.success || !result.exists || !result.worktreePath) return;
 
     savedWidthsRef.current = { channel: channelWidth, thread: threadWidth };
     setChannelWidth(0);
     setIsFullscreen(true);
-  }, [channelWidth, getChannelRepoPath, selectedMessageId, threadWidth]);
+  }, [channelWidth, getChannelRepoPath, selectedWorkspaceId, threadWidth]);
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
@@ -712,6 +713,23 @@ function AppContent() {
     [refreshChannels, settingsChannelId, updateChannelSettings, setLocalConfig],
   );
 
+  const handleDeleteChannel = useCallback(
+    async (channelId: string) => {
+      const success = await deleteChannel(channelId);
+      if (!success) return;
+      setSettingsChannelId(null);
+      // Switch to another channel if we deleted the active one
+      if (activeChannelId === channelId) {
+        const remaining = serverChannels.filter((ch) => ch.id !== channelId);
+        if (remaining.length > 0) {
+          switchChannel(remaining[0].id);
+        }
+      }
+      void refreshChannels();
+    },
+    [deleteChannel, activeChannelId, serverChannels, switchChannel, refreshChannels],
+  );
+
   const handleRunChannelScript = useCallback(
     (channelId: string) => {
       const channel = enrichedChannels.find((item) => item.id === channelId);
@@ -724,10 +742,10 @@ function AppContent() {
   );
 
   const handleInitializeTerminals = useCallback(async () => {
-    if (!selectedMessageId || !activeChannelId || !repoPath) return;
+    if (!selectedWorkspaceId || !activeChannelId || !repoPath) return;
     // Already initialized — don't re-allocate ports or re-create tabs
-    if (isTerminalInitialized(selectedMessageId)) return;
-    const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
+    if (isTerminalInitialized(selectedWorkspaceId)) return;
+    const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedWorkspaceId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
     const channel = enrichedChannels.find((item) => item.id === activeChannelId);
@@ -736,7 +754,7 @@ function AppContent() {
 
     let env: Record<string, string> | undefined;
     if (runScript?.trim()) {
-      const portResult = await window.traceAPI.allocatePorts(selectedMessageId, 10);
+      const portResult = await window.traceAPI.allocatePorts(selectedWorkspaceId, 10);
       if (portResult.success && portResult.ports) {
         const ports = portResult.ports;
         env = {
@@ -750,12 +768,12 @@ function AppContent() {
       }
     }
 
-    initializeTerminalDefaults(selectedMessageId, worktreeResult.worktreePath, setupScript ?? undefined, runScript ?? undefined, env);
-  }, [activeChannelId, enrichedChannels, repoPath, initializeTerminalDefaults, isTerminalInitialized, selectedMessageId]);
+    initializeTerminalDefaults(selectedWorkspaceId, worktreeResult.worktreePath, setupScript ?? undefined, runScript ?? undefined, env);
+  }, [activeChannelId, enrichedChannels, repoPath, initializeTerminalDefaults, isTerminalInitialized, selectedWorkspaceId]);
 
   const handleRerunScript = useCallback(async (tabName: string) => {
-    if (!selectedMessageId || !activeChannelId || !repoPath) return;
-    const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
+    if (!selectedWorkspaceId || !activeChannelId || !repoPath) return;
+    const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedWorkspaceId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
     const channel = enrichedChannels.find((item) => item.id === activeChannelId);
@@ -765,8 +783,8 @@ function AppContent() {
     let env: Record<string, string> | undefined;
     if (tabName === 'Run') {
       // Release old ports, allocate fresh ones
-      await window.traceAPI.releasePorts(selectedMessageId);
-      const portResult = await window.traceAPI.allocatePorts(selectedMessageId, 10);
+      await window.traceAPI.releasePorts(selectedWorkspaceId);
+      const portResult = await window.traceAPI.allocatePorts(selectedWorkspaceId, 10);
       if (portResult.success && portResult.ports) {
         const ports = portResult.ports;
         env = {
@@ -781,29 +799,29 @@ function AppContent() {
     }
 
     rerunTab(tabName, script, env);
-  }, [activeChannelId, enrichedChannels, repoPath, rerunTab, selectedMessageId]);
+  }, [activeChannelId, enrichedChannels, repoPath, rerunTab, selectedWorkspaceId]);
 
   const handleStopScript = useCallback(async (tabName: string) => {
-    if (tabName === 'Run' && selectedMessageId) {
-      await window.traceAPI.releasePorts(selectedMessageId);
+    if (tabName === 'Run' && selectedWorkspaceId) {
+      await window.traceAPI.releasePorts(selectedWorkspaceId);
     }
     stopTab(tabName);
-  }, [selectedMessageId, stopTab]);
+  }, [selectedWorkspaceId, stopTab]);
 
   // Initialize terminal tabs (and run setup script) when a worktree is detected
   useEffect(() => {
-    if (hasWorktree === true && selectedMessageId) {
+    if (hasWorktree === true && selectedWorkspaceId) {
       void handleInitializeTerminals();
     }
-  }, [hasWorktree, selectedMessageId, handleInitializeTerminals]);
+  }, [hasWorktree, selectedWorkspaceId, handleInitializeTerminals]);
 
   const handleDeleteWorktree = useCallback(() => {
-    if (selectedMessageId) {
-      killTerminalsForMessage(selectedMessageId);
-      void window.traceAPI.releasePorts(selectedMessageId);
+    if (selectedWorkspaceId) {
+      killTerminalsForWorkspace(selectedWorkspaceId);
+      void window.traceAPI.releasePorts(selectedWorkspaceId);
     }
-    void deleteWorktree((messageId) => void updateMessageStatus(messageId, 'completed'));
-  }, [killTerminalsForMessage, selectedMessageId, deleteWorktree, updateMessageStatus]);
+    void deleteWorktree((workspaceId) => void updateWorkspaceStatus(workspaceId, 'completed'));
+  }, [killTerminalsForWorkspace, selectedWorkspaceId, deleteWorktree, updateWorkspaceStatus]);
 
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
   const hasSetupScript = Boolean(enrichedActiveChannel?.setupScript?.trim());
@@ -824,9 +842,9 @@ function AppContent() {
   // High-frequency context: changes on every SSE event
   const threadEventsContextValue = useMemo(
     () => ({
-      threadEvents,
-      threadNodes,
-      threadStatus,
+      sessionEvents,
+      sessionNodes,
+      sessionStatus,
       hasMoreEvents,
       loadingOlderEvents,
       threadContentRef,
@@ -835,7 +853,7 @@ function AppContent() {
       onThreadScroll,
     }),
     [
-      threadEvents, threadNodes, threadStatus, hasMoreEvents, loadingOlderEvents,
+      sessionEvents, sessionNodes, sessionStatus, hasMoreEvents, loadingOlderEvents,
       threadContentRef, showJumpToLatest, scrollThreadToBottom, onThreadScroll,
     ],
   );
@@ -843,9 +861,9 @@ function AppContent() {
   // Session-level context: changes infrequently
   const threadContextValue = useMemo(
     () => ({
-      selectedMessageId,
-      activeThreadId,
-      threads,
+      selectedWorkspaceId,
+      activeSessionId,
+      sessions,
       threadWidth: isFullscreen ? 9999 : threadWidth,
       deletingWorktree,
       hasWorktree,
@@ -855,17 +873,17 @@ function AppContent() {
       toggleReadGroup,
       setHasWorktree,
       setThreadWidth,
-      loadThreadEvents,
+      loadSessionEvents,
       deleteWorktree,
-      switchThread,
-      clearThread,
+      switchSession,
+      clearSession,
       channelTickets,
       setTicketDependencies: handleSetTicketDependencies,
       removeTicketDependency: handleRemoveTicketDependency,
       updateQueuedRunConfig: handleUpdateQueuedRunConfig,
       isClaudeRunning,
-      messageStatus: selectedMessageStatus,
-      queuedRunConfig: selectedMessageQueuedRunConfig,
+      workspaceStatus: selectedWorkspaceStatus,
+      queuedRunConfig: selectedWorkspaceQueuedRunConfig,
       selectedTicket,
       isFullscreen,
       scriptsAvailable,
@@ -889,23 +907,23 @@ function AppContent() {
       terminalCwd: terminalsCwd || activeChannelRepoPath,
       onSelectTerminalTab: setActiveTabId,
       onCloseTerminalTab: killTerminal,
-      onCloseAllTerminals: (): void => { if (selectedMessageId) killTerminalsForMessage(selectedMessageId); },
+      onCloseAllTerminals: (): void => { if (selectedWorkspaceId) killTerminalsForWorkspace(selectedWorkspaceId); },
       onAddTerminal: addTerminal,
       onOpenSettings: (): void => { if (activeChannelId) handleOpenSettings(activeChannelId); },
     }),
     [
-      selectedMessageId, activeThreadId, threads, threadWidth,
+      selectedWorkspaceId, activeSessionId, sessions, threadWidth,
       deletingWorktree, hasWorktree, expandedReadGroupIds, openThreadPanel,
       closeThreadPanel, toggleReadGroup, setHasWorktree, setThreadWidth,
-      loadThreadEvents, deleteWorktree, switchThread, clearThread,
+      loadSessionEvents, deleteWorktree, switchSession, clearSession,
       channelTickets, handleSetTicketDependencies, handleRemoveTicketDependency, handleUpdateQueuedRunConfig,
-      isClaudeRunning, selectedMessageStatus, selectedMessageQueuedRunConfig, selectedTicket,
+      isClaudeRunning, selectedWorkspaceStatus, selectedWorkspaceQueuedRunConfig, selectedTicket,
       isFullscreen, scriptsAvailable, hasSetupScript, hasRunScript, dragging,
       handleCloseThread, handleDeleteWorktree, handleInitializeTerminals, handleRerunScript, handleStopScript,
       startDragging, enterFullscreen, exitFullscreen,
       activeChannelBaseBranch, terminalList, allTerminalEntries, terminalsInitialized, activeTabId,
       terminalsCwd, activeChannelRepoPath, setActiveTabId,
-      killTerminal, killTerminalsForMessage, addTerminal, handleOpenSettings, activeChannelId,
+      killTerminal, killTerminalsForWorkspace, addTerminal, handleOpenSettings, activeChannelId,
     ],
   );
 
@@ -967,11 +985,11 @@ function AppContent() {
                   <MessagePanel
                     panelTitle={panelTitle}
                     channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
-                    messages={messages}
-                    selectedMessageId={selectedMessageId}
-                    attentionMessageIds={attentionMessageIds}
-                    onOpenThread={handleOpenThread}
-                    onDeleteMessage={handleDeleteMessage}
+                    workspaces={workspaces}
+                    selectedWorkspaceId={selectedWorkspaceId}
+                    attentionWorkspaceIds={attentionWorkspaceIds}
+                    onOpenWorkspace={handleOpenWorkspace}
+                    onDeleteWorkspace={handleDeleteWorkspace}
                     middlePanelView={middlePanelView}
                     kanbanColumns={kanbanColumns}
                     kanbanLoading={kanbanLoading}
@@ -993,6 +1011,7 @@ function AppContent() {
               localConfig={getLocalConfig(settingsChannel.id)}
               onClose={() => setSettingsChannelId(null)}
               onSave={handleSaveSettings}
+              onDelete={handleDeleteChannel}
             />
           )}
 

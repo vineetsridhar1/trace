@@ -34,7 +34,7 @@ export class ClaudeStreamParser {
   private pendingToolUses = new Map<string, PendingToolUse>();
 
   private readonly serverUrl: string;
-  private readonly messageId: string;
+  private readonly workspaceId: string;
   private readonly cwd: string;
   private readonly callbacks: StreamParserCallbacks;
   private readonly log: (line: string) => void;
@@ -42,13 +42,13 @@ export class ClaudeStreamParser {
 
   constructor(opts: {
     serverUrl: string;
-    messageId: string;
+    workspaceId: string;
     cwd: string;
     callbacks: StreamParserCallbacks;
     log: (line: string) => void;
   }) {
     this.serverUrl = opts.serverUrl;
-    this.messageId = opts.messageId;
+    this.workspaceId = opts.workspaceId;
     this.cwd = opts.cwd;
     this.callbacks = opts.callbacks;
     this.log = opts.log;
@@ -183,7 +183,7 @@ export class ClaudeStreamParser {
         // Emit PreToolUse for Task tool (subagent tracking)
         if (toolName === 'Task') {
           this.trackPost({
-            session_id: this.sessionId ?? `trace-local-${this.messageId}`,
+            session_id: this.sessionId ?? `trace-local-${this.workspaceId}`,
             cwd: this.cwd,
             hook_event_name: 'PreToolUse',
             tool_name: toolName,
@@ -220,7 +220,7 @@ export class ClaudeStreamParser {
 
         // Emit PostToolUse event
         this.trackPost({
-          session_id: this.sessionId ?? `trace-local-${this.messageId}`,
+          session_id: this.sessionId ?? `trace-local-${this.workspaceId}`,
           cwd: this.cwd,
           hook_event_name: 'PostToolUse',
           tool_name: pending.name,

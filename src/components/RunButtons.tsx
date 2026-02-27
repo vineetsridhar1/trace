@@ -104,7 +104,7 @@ function InteractionModeToggle({
 export { InteractionModeToggle };
 
 export interface ChannelTicketInfo {
-  messageId: string;
+  workspaceId: string;
   title: string;
   status: string;
 }
@@ -113,14 +113,14 @@ export function RunButtons({
   initialPrompt,
   onRun,
   channelTickets,
-  currentMessageId,
+  currentWorkspaceId,
   onRunAfter,
 }: {
   initialPrompt: string;
   onRun: (planMode: boolean, prompt: string) => Promise<void> | void;
   channelTickets?: ChannelTicketInfo[];
-  currentMessageId?: string;
-  onRunAfter?: (dependsOnMessageIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
+  currentWorkspaceId?: string;
+  onRunAfter?: (dependsOnWorkspaceIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
 }) {
   const {
     selectedModel,
@@ -234,9 +234,9 @@ export function RunButtons({
           </div>
         )}
       </div>
-      {showRunAfter && channelTickets && currentMessageId && (
+      {showRunAfter && channelTickets && currentWorkspaceId && (
         <TicketDependencySelector
-          tickets={channelTickets.filter((t) => t.messageId !== currentMessageId)}
+          tickets={channelTickets.filter((t) => t.workspaceId !== currentWorkspaceId)}
           onConfirm={handleRunAfter}
           onCancel={() => setShowRunAfter(false)}
         />

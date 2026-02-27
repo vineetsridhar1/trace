@@ -5,7 +5,7 @@ import { KanbanColumn } from './KanbanColumn';
 interface KanbanBoardProps {
   columns: KanbanColumnType[];
   loading: boolean;
-  onClickTicket: (messageId: string) => void;
+  onClickTicket: (workspaceId: string) => void;
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
 }
 

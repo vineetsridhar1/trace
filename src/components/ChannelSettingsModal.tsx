@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { FiExternalLink, FiX, FiZap } from 'react-icons/fi';
+import { FiExternalLink, FiTrash2, FiX, FiZap } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { Channel, LocalChannelConfig } from '../types';
 
@@ -19,9 +19,10 @@ interface ChannelSettingsModalProps {
     },
     localConfig: LocalChannelConfig | null,
   ) => Promise<void>;
+  onDelete?: (channelId: string) => Promise<void>;
 }
 
-export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onSave }: ChannelSettingsModalProps) {
+export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onSave, onDelete }: ChannelSettingsModalProps) {
   // Channel settings
   const [draftName, setDraftName] = useState(channel.name);
   const [draftWorkspacesEnabled, setDraftWorkspacesEnabled] = useState(channel.workspacesEnabled);
@@ -36,6 +37,8 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
   const [draftRunScript, setDraftRunScript] = useState(localConfig?.runScript ?? '');
   const [draftSystemInstructions, setDraftSystemInstructions] = useState(localConfig?.systemInstructions ?? '');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [validating, setValidating] = useState(false);
   const [repoError, setRepoError] = useState<string | null>(null);
@@ -130,6 +133,18 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
       setSuggesting(false);
     }
   }, [repoPath]);
+
+  const handleDelete = useCallback(async () => {
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete(channel.id);
+    } catch (err) {
+      console.error('[ChannelSettingsModal] Delete failed:', err);
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }, [channel.id, onDelete]);
 
   const textareaClass = 'w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono';
 
@@ -438,22 +453,59 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 border-t border-[#292e42] px-5 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded px-3 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={saving}
-            className="rounded bg-[#7aa2f7] px-3 py-1.5 text-xs font-medium text-[#1a1b26] hover:bg-[#89b4fa] disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
+        <div className="flex items-center border-t border-[#292e42] px-5 py-3">
+          {onDelete && (
+            <div className="flex items-center gap-2">
+              {confirmDelete ? (
+                <>
+                  <span className="text-xs text-[#f7768e]">Delete this {typeLabel.toLowerCase()}?</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={deleting}
+                    className="rounded bg-[#f7768e] px-2.5 py-1 text-xs font-medium text-[#1a1b26] hover:bg-[#ff9e9e] disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting...' : 'Confirm'}
+                  </button>
+                  {!deleting && (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="rounded px-2 py-1 text-xs text-[#565f89] hover:text-[#c0caf5]"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
+                >
+                  <FiTrash2 className="h-3 w-3" />
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded px-3 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className="rounded bg-[#7aa2f7] px-3 py-1.5 text-xs font-medium text-[#1a1b26] hover:bg-[#89b4fa] disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
         </div>
       </div>
     </div>,

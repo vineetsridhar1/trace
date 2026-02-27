@@ -35,6 +35,7 @@ export interface ChannelContextValue {
     defaultSetupScript?: string | null;
     defaultRunScript?: string | null;
   }) => Promise<unknown>;
+  deleteChannel: (channelId: string) => Promise<boolean>;
 }
 
 const ChannelContext = createContext<ChannelContextValue | null>(null);
@@ -86,7 +87,7 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
     [enrichedChannels, activeChannelId],
   );
 
-  const { updateChannel: updateChannelSettings } = useChannelSettings();
+  const { updateChannel: updateChannelSettings, deleteChannel } = useChannelSettings();
 
   // One-time migration: copy DB localRepoPath/creationScript into local config
   const migrationRanRef = useRef(false);
@@ -125,6 +126,7 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
       getLocalConfig,
       setLocalConfig,
       updateChannelSettings,
+      deleteChannel,
     }),
     [
       servers,
@@ -143,6 +145,7 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
       getLocalConfig,
       setLocalConfig,
       updateChannelSettings,
+      deleteChannel,
     ],
   );
 

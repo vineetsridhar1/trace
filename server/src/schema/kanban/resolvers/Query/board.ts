@@ -9,10 +9,10 @@ export const board: NonNullable<QueryResolvers['board']> = async (_parent, { cha
     ...col,
     tickets: col.tickets.map((ticket: (typeof col.tickets)[number]) => ({
       ...ticket,
-      message: ticket.message
+      workspace: ticket.workspace
         ? {
-            ...ticket.message,
-            attachments: ticket.message.attachments.map((a: (typeof ticket.message.attachments)[number]) => ({
+            ...ticket.workspace,
+            attachments: ticket.workspace.attachments.map((a: (typeof ticket.workspace.attachments)[number]) => ({
               ...a,
               url: storage.url(a.key),
             })),

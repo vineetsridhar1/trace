@@ -1,0 +1,63 @@
+extend type Query {
+  workspaces(channelId: ID!, limit: Int, offset: Int): WorkspaceConnection!
+}
+
+extend type Mutation {
+  createWorkspace(channelId: ID!, text: String!, attachmentIds: [String!]): CreateWorkspacePayload!
+  appendPrompt(channelId: ID!, workspaceId: ID!, text: String!, attachmentIds: [String!], createNewSession: Boolean, sessionId: ID): CreateWorkspacePayload!
+  updateWorkspacePreview(channelId: ID!, workspaceId: ID!, preview: String!): Workspace!
+  updateWorkspaceStatus(channelId: ID!, workspaceId: ID!, status: String!): Workspace!
+  deleteWorkspace(channelId: ID!, workspaceId: ID!): Boolean!
+}
+
+type Workspace {
+  id: ID!
+  channelId: String!
+  cliSessionId: String!
+  preview: String
+  importance: String!
+  status: String!
+  summary: String
+  branch: String
+  claudeSessionId: String
+  createdAt: DateTime!
+  cliSession: WorkspaceCliSession
+  sessionCount: Int!
+  queuedRunConfig: JSON
+}
+
+type WorkspaceCliSession {
+  sessionId: String!
+  cwd: String
+  status: String!
+}
+
+type WorkspaceConnection {
+  workspaces: [Workspace!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+
+type CreateWorkspacePayload {
+  workspace: Workspace!
+  session: Session!
+  event: Event!
+}
+
+extend type Subscription {
+  workspaceUpserted(channelId: ID!): Workspace!
+  workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
+  workspaceReadyForReview(channelId: ID!): WorkspaceReadyForReviewPayload!
+}
+
+type WorkspaceDeletedPayload {
+  channelId: String!
+  workspaceId: String!
+}
+
+type WorkspaceReadyForReviewPayload {
+  channelId: String!
+  workspaceId: String!
+  claudeSessionId: String
+}

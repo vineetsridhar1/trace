@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { ChannelMessage, TicketStatus } from '../types';
+import type { Workspace, TicketStatus } from '../types';
 
 interface UseMergePollingOptions {
-  messagesRef: React.RefObject<ChannelMessage[]>;
+  workspacesRef: React.RefObject<Workspace[]>;
   getRepoPath: () => string;
   getBaseBranch: () => string;
-  updateMessageStatus: (messageId: string, status: TicketStatus) => Promise<void>;
+  updateWorkspaceStatus: (workspaceId: string, status: TicketStatus) => Promise<void>;
 }
 
 export function useMergePolling({
-  messagesRef,
+  workspacesRef,
   getRepoPath,
   getBaseBranch,
-  updateMessageStatus,
+  updateWorkspaceStatus,
 }: UseMergePollingOptions) {
-  const updateStatusRef = useRef(updateMessageStatus);
-  updateStatusRef.current = updateMessageStatus;
+  const updateStatusRef = useRef(updateWorkspaceStatus);
+  updateStatusRef.current = updateWorkspaceStatus;
   const repoPath = getRepoPath();
   const baseBranch = getBaseBranch();
 
@@ -24,9 +24,9 @@ export function useMergePolling({
     const baseBranch = getBaseBranch();
     if (!repoPath) return;
 
-    const messages = messagesRef.current;
-    const candidates = messages.filter(
-      (m): m is ChannelMessage & { branch: string } =>
+    const workspaces = workspacesRef.current;
+    const candidates = workspaces.filter(
+      (m): m is Workspace & { branch: string } =>
         m.status === 'completed'
         && typeof m.branch === 'string'
         && m.branch.length > 0,
@@ -34,7 +34,7 @@ export function useMergePolling({
     if (candidates.length === 0) return;
 
     const targets = candidates.map((m) => ({
-      messageId: m.id,
+      workspaceId: m.id,
       branch: m.branch,
     }));
 
@@ -42,15 +42,15 @@ export function useMergePolling({
       const result = await window.traceAPI.checkBranchesMerged(repoPath, targets, baseBranch);
       if (!result.success) return;
 
-      for (const msg of candidates) {
-        if (msg.status === 'completed' && result.merged[msg.id] === true) {
-          await updateStatusRef.current(msg.id, 'merged');
+      for (const ws of candidates) {
+        if (ws.status === 'completed' && result.merged[ws.id] === true) {
+          await updateStatusRef.current(ws.id, 'merged');
         }
       }
     } catch {
       // Silent failure
     }
-  }, [messagesRef, getRepoPath, getBaseBranch]);
+  }, [workspacesRef, getRepoPath, getBaseBranch]);
 
   useEffect(() => {
     // Run once on mount

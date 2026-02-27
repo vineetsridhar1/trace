@@ -1,43 +1,43 @@
 import * as Types from '../../graphql/__generated__/schema-types';
 
 import { gql } from '@apollo/client';
-import { MessageFieldsFragmentDoc } from '../../graphql/__generated__/fragments.generated';
+import { WorkspaceFieldsFragmentDoc } from '../../graphql/__generated__/fragments.generated';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type MessagesQueryVariables = Types.Exact<{
+export type WorkspacesQueryVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
   limit?: Types.InputMaybe<Types.Scalars['Int']['input']>;
   offset?: Types.InputMaybe<Types.Scalars['Int']['input']>;
 }>;
 
 
-export type MessagesQuery = { __typename?: 'Query', messages: { __typename?: 'MessageConnection', total: number, limit: number, offset: number, messages: Array<{ __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null }> } };
+export type WorkspacesQuery = { __typename?: 'Query', workspaces: { __typename?: 'WorkspaceConnection', total: number, limit: number, offset: number, workspaces: Array<{ __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null }> } };
 
 
-export const MessagesDocument = gql`
-    query Messages($channelId: ID!, $limit: Int, $offset: Int) {
-  messages(channelId: $channelId, limit: $limit, offset: $offset) {
-    messages {
-      ...MessageFields
+export const WorkspacesDocument = gql`
+    query Workspaces($channelId: ID!, $limit: Int, $offset: Int) {
+  workspaces(channelId: $channelId, limit: $limit, offset: $offset) {
+    workspaces {
+      ...WorkspaceFields
     }
     total
     limit
     offset
   }
 }
-    ${MessageFieldsFragmentDoc}`;
+    ${WorkspaceFieldsFragmentDoc}`;
 
 /**
- * __useMessagesQuery__
+ * __useWorkspacesQuery__
  *
- * To run a query within a React component, call `useMessagesQuery` and pass it any options that fit your needs.
- * When your component renders, `useMessagesQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * To run a query within a React component, call `useWorkspacesQuery` and pass it any options that fit your needs.
+ * When your component renders, `useWorkspacesQuery` returns an object from Apollo Client that contains loading, error, and data properties
  * you can use to render your UI.
  *
  * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
  *
  * @example
- * const { data, loading, error } = useMessagesQuery({
+ * const { data, loading, error } = useWorkspacesQuery({
  *   variables: {
  *      channelId: // value for 'channelId'
  *      limit: // value for 'limit'
@@ -45,22 +45,22 @@ export const MessagesDocument = gql`
  *   },
  * });
  */
-export function useMessagesQuery(baseOptions: Apollo.QueryHookOptions<MessagesQuery, MessagesQueryVariables> & ({ variables: MessagesQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+export function useWorkspacesQuery(baseOptions: Apollo.QueryHookOptions<WorkspacesQuery, WorkspacesQueryVariables> & ({ variables: WorkspacesQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<MessagesQuery, MessagesQueryVariables>(MessagesDocument, options);
+        return Apollo.useQuery<WorkspacesQuery, WorkspacesQueryVariables>(WorkspacesDocument, options);
       }
-export function useMessagesLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<MessagesQuery, MessagesQueryVariables>) {
+export function useWorkspacesLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<WorkspacesQuery, WorkspacesQueryVariables>) {
           const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<MessagesQuery, MessagesQueryVariables>(MessagesDocument, options);
+          return Apollo.useLazyQuery<WorkspacesQuery, WorkspacesQueryVariables>(WorkspacesDocument, options);
         }
 // @ts-ignore
-export function useMessagesSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<MessagesQuery, MessagesQueryVariables>): Apollo.UseSuspenseQueryResult<MessagesQuery, MessagesQueryVariables>;
-export function useMessagesSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<MessagesQuery, MessagesQueryVariables>): Apollo.UseSuspenseQueryResult<MessagesQuery | undefined, MessagesQueryVariables>;
-export function useMessagesSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<MessagesQuery, MessagesQueryVariables>) {
+export function useWorkspacesSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<WorkspacesQuery, WorkspacesQueryVariables>): Apollo.UseSuspenseQueryResult<WorkspacesQuery, WorkspacesQueryVariables>;
+export function useWorkspacesSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<WorkspacesQuery, WorkspacesQueryVariables>): Apollo.UseSuspenseQueryResult<WorkspacesQuery | undefined, WorkspacesQueryVariables>;
+export function useWorkspacesSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<WorkspacesQuery, WorkspacesQueryVariables>) {
           const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<MessagesQuery, MessagesQueryVariables>(MessagesDocument, options);
+          return Apollo.useSuspenseQuery<WorkspacesQuery, WorkspacesQueryVariables>(WorkspacesDocument, options);
         }
-export type MessagesQueryHookResult = ReturnType<typeof useMessagesQuery>;
-export type MessagesLazyQueryHookResult = ReturnType<typeof useMessagesLazyQuery>;
-export type MessagesSuspenseQueryHookResult = ReturnType<typeof useMessagesSuspenseQuery>;
-export type MessagesQueryResult = Apollo.QueryResult<MessagesQuery, MessagesQueryVariables>;
+export type WorkspacesQueryHookResult = ReturnType<typeof useWorkspacesQuery>;
+export type WorkspacesLazyQueryHookResult = ReturnType<typeof useWorkspacesLazyQuery>;
+export type WorkspacesSuspenseQueryHookResult = ReturnType<typeof useWorkspacesSuspenseQuery>;
+export type WorkspacesQueryResult = Apollo.QueryResult<WorkspacesQuery, WorkspacesQueryVariables>;

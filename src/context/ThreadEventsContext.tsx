@@ -1,10 +1,10 @@
 import { createContext, useContext } from 'react';
-import type { ServerEvent, ThreadRenderNode, ThreadStatus } from '../types';
+import type { ServerEvent, SessionRenderNode, SessionStatus } from '../types';
 
 export interface ThreadEventsContextValue {
-  threadEvents: ServerEvent[];
-  threadNodes: ThreadRenderNode[];
-  threadStatus: ThreadStatus;
+  sessionEvents: ServerEvent[];
+  sessionNodes: SessionRenderNode[];
+  sessionStatus: SessionStatus;
   hasMoreEvents: boolean;
   loadingOlderEvents: boolean;
   // Scroll state

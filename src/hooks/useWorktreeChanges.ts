@@ -3,26 +3,26 @@ import type { WorktreeDiffResult } from '../types';
 
 const POLL_INTERVAL = 10000;
 
-export function useWorktreeChanges(messageId: string | null, baseBranch = 'main', enabled = true) {
+export function useWorktreeChanges(workspaceId: string | null, baseBranch = 'main', enabled = true) {
   const [diffData, setDiffData] = useState<WorktreeDiffResult | null>(null);
   const [loading, setLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDiff = useCallback(async () => {
-    if (!messageId) return;
+    if (!workspaceId) return;
     setLoading(true);
     try {
-      const result = await window.traceAPI.getWorktreeDiff(messageId, baseBranch);
+      const result = await window.traceAPI.getWorktreeDiff(workspaceId, baseBranch);
       setDiffData(result);
     } catch {
       setDiffData(null);
     } finally {
       setLoading(false);
     }
-  }, [messageId, baseBranch]);
+  }, [workspaceId, baseBranch]);
 
   useEffect(() => {
-    if (!messageId || !enabled) return;
+    if (!workspaceId || !enabled) return;
 
     void fetchDiff();
     intervalRef.current = setInterval(() => void fetchDiff(), POLL_INTERVAL);
@@ -30,7 +30,7 @@ export function useWorktreeChanges(messageId: string | null, baseBranch = 'main'
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [messageId, enabled, fetchDiff]);
+  }, [workspaceId, enabled, fetchDiff]);
 
   return { diffData, loading, refresh: fetchDiff };
 }

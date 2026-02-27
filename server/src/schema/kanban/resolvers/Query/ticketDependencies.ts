@@ -1,9 +1,9 @@
 import type { QueryResolvers } from './../../../types.generated';
 import prisma from '../../../../lib/prisma';
 
-export const ticketDependencies: NonNullable<QueryResolvers['ticketDependencies']> = async (_parent, { messageId }, _ctx) => {
+export const ticketDependencies: NonNullable<QueryResolvers['ticketDependencies']> = async (_parent, { workspaceId }, _ctx) => {
   const deps = await prisma.ticketDependency.findMany({
-    where: { ticketMessageId: messageId },
+    where: { ticketWorkspaceId: workspaceId },
     include: {
       dependsOn: {
         include: {
@@ -16,8 +16,8 @@ export const ticketDependencies: NonNullable<QueryResolvers['ticketDependencies'
 
   return deps.map((dep) => ({
     id: dep.id,
-    ticketMessageId: dep.ticketMessageId,
-    dependsOnMessageId: dep.dependsOnMessageId,
+    ticketWorkspaceId: dep.ticketWorkspaceId,
+    dependsOnWorkspaceId: dep.dependsOnWorkspaceId,
     dependsOnTicketTitle: dep.dependsOn.ticket?.title ?? null,
     createdAt: dep.createdAt,
   }));

@@ -22,11 +22,11 @@ function getAllAllocatedPorts(): Set<number> {
 }
 
 export async function allocatePorts(
-  messageId: string,
+  workspaceId: string,
   count: number,
 ): Promise<number[]> {
   // Release any previous allocation for this message
-  allocations.delete(messageId);
+  allocations.delete(workspaceId);
 
   const allocated: number[] = [];
   const reserved = getAllAllocatedPorts();
@@ -40,10 +40,10 @@ export async function allocatePorts(
     candidate++;
   }
 
-  allocations.set(messageId, allocated);
+  allocations.set(workspaceId, allocated);
   return allocated;
 }
 
-export function releasePorts(messageId: string): void {
-  allocations.delete(messageId);
+export function releasePorts(workspaceId: string): void {
+  allocations.delete(workspaceId);
 }

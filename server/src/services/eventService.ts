@@ -2,15 +2,15 @@ import prisma from '../lib/prisma';
 import { HookEvent } from '../types/hookEvents';
 import { pubsub, TOPICS } from './pubsub';
 import {
-  getMessageByIdForFeed,
-  getMessageByIdWithThreads,
-  updateMessagePreviewAndImportance,
-  updateMessageStatus,
-  updateMessageSummaryAndBranch,
-} from './messageService';
-import { updateTicketFromEvent, syncTicketWithMessageStatus, refreshTicketBroadcast, checkAndTriggerDependents } from './ticketService';
+  getWorkspaceByIdForFeed,
+  getWorkspaceByIdWithSessions,
+  updateWorkspacePreviewAndImportance,
+  updateWorkspaceStatus,
+  updateWorkspaceSummaryAndBranch,
+} from './workspaceService';
+import { updateTicketFromEvent, syncTicketWithWorkspaceStatus, refreshTicketBroadcast, checkAndTriggerDependents } from './ticketService';
 
-function extractMessageIdFromWorktreePath(worktreePath: string | undefined): string | null {
+function extractWorkspaceIdFromWorktreePath(worktreePath: string | undefined): string | null {
   if (!worktreePath) {
     return null;
   }
@@ -75,10 +75,10 @@ function extractPromptFromRawPayload(rawPayload: unknown): string | null {
  * the message is still `in_progress` or `auto_review`.
  */
 async function runAutoCompleteIfNeeded(
-  messageId: string,
+  workspaceId: string,
   channelId: string,
+  cliSessionId: string,
   sessionId: string,
-  threadId: string,
   toolName: string | null | undefined,
   /** When true, skip the auto_review→completed transition. Used by the dedup
    *  path to avoid prematurely completing a message before the review Claude
@@ -88,8 +88,8 @@ async function runAutoCompleteIfNeeded(
   if (toolName) return; // Claude is waiting on user input
 
   // Re-read current status from DB to avoid stale data from earlier in the request
-  const freshMessage = await prisma.message.findUnique({
-    where: { id: messageId },
+  const freshMessage = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
     select: { status: true },
   });
   const currentStatus = freshMessage?.status ?? 'pending';
@@ -99,8 +99,8 @@ async function runAutoCompleteIfNeeded(
     // consider writes from THIS interaction, not older turns in a resumed session.
     const lastPrompt = await prisma.event.findFirst({
       where: {
-        thread: { messageId },
-        sessionId,
+        session: { workspaceId },
+        cliSessionId,
         hookEventName: 'UserPromptSubmit',
       },
       orderBy: { timestamp: 'desc' },
@@ -110,8 +110,8 @@ async function runAutoCompleteIfNeeded(
     // Check if the current turn made any repo file changes (excluding .claude/ internal files)
     const writeEvents = await prisma.event.findMany({
       where: {
-        thread: { messageId },
-        sessionId,
+        session: { workspaceId },
+        cliSessionId,
         hookEventName: 'PostToolUse',
         toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
         ...(lastPrompt ? { timestamp: { gte: lastPrompt.timestamp } } : {}),
@@ -126,16 +126,16 @@ async function runAutoCompleteIfNeeded(
       return !filePath.includes('/.claude/');
     }).length;
 
-    console.log(`[event] auto-complete: writes=${writeEvents.length} repoWrites=${repoWriteCount} msg=${messageId.slice(0, 8)}`);
+    console.log(`[event] auto-complete: writes=${writeEvents.length} repoWrites=${repoWriteCount} ws=${workspaceId.slice(0, 8)}`);
 
     if (repoWriteCount > 0) {
-      await updateMessageStatus(messageId, 'auto_review');
-      void syncTicketWithMessageStatus(messageId, channelId, 'auto_review');
+      await updateWorkspaceStatus(workspaceId, 'auto_review');
+      void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'auto_review');
 
       const reviewEvent = await prisma.event.create({
         data: {
+          cliSessionId: cliSessionId,
           sessionId,
-          threadId,
           hookEventName: 'AutoReview',
           importance: 'important',
           timestamp: new Date(),
@@ -143,40 +143,40 @@ async function runAutoCompleteIfNeeded(
         },
       });
 
-      pubsub.publish(TOPICS.THREAD_EVENT_CREATED(channelId), {
-        threadEventCreated: { channelId, messageId, threadId, event: reviewEvent },
+      pubsub.publish(TOPICS.SESSION_EVENT_CREATED(channelId), {
+        sessionEventCreated: { channelId, workspaceId, sessionId, event: reviewEvent },
       });
 
-      pubsub.publish(TOPICS.MESSAGE_READY_FOR_REVIEW(channelId), {
-        messageReadyForReview: {
+      pubsub.publish(TOPICS.WORKSPACE_READY_FOR_REVIEW(channelId), {
+        workspaceReadyForReview: {
           channelId,
-          messageId,
-          claudeSessionId: sessionId,
+          workspaceId,
+          claudeSessionId: cliSessionId,
         },
       });
     } else {
-      await updateMessageStatus(messageId, 'completed');
-      void syncTicketWithMessageStatus(messageId, channelId, 'completed');
-      void checkAndTriggerDependents(messageId, channelId);
+      await updateWorkspaceStatus(workspaceId, 'completed');
+      void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'completed');
+      void checkAndTriggerDependents(workspaceId, channelId);
     }
 
     const newStatus = repoWriteCount > 0 ? 'auto_review' : 'completed';
-    console.log(`[event] status: ${currentStatus} -> ${newStatus} msg=${messageId.slice(0, 8)}`);
+    console.log(`[event] status: ${currentStatus} -> ${newStatus} ws=${workspaceId.slice(0, 8)}`);
   }
 
   if (currentStatus === 'auto_review' && !skipReviewTransition) {
-    await updateMessageStatus(messageId, 'completed');
-    void syncTicketWithMessageStatus(messageId, channelId, 'completed');
-    void checkAndTriggerDependents(messageId, channelId);
-    console.log(`[event] status: auto_review -> completed msg=${messageId.slice(0, 8)}`);
+    await updateWorkspaceStatus(workspaceId, 'completed');
+    void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'completed');
+    void checkAndTriggerDependents(workspaceId, channelId);
+    console.log(`[event] status: auto_review -> completed ws=${workspaceId.slice(0, 8)}`);
   }
 
-  // Broadcast the final message status to the frontend
+  // Broadcast the final workspace status to the frontend
   if (currentStatus === 'in_progress' || currentStatus === 'auto_review') {
-    const finalMessage = await getMessageByIdForFeed(messageId);
-    if (finalMessage) {
-      pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-        messageUpserted: finalMessage,
+    const finalWorkspace = await getWorkspaceByIdForFeed(workspaceId);
+    if (finalWorkspace) {
+      pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
+        workspaceUpserted: finalWorkspace,
       });
     }
   }
@@ -186,19 +186,19 @@ export async function ingestEvent(payload: HookEvent) {
   // Resolve target message from worktree path. If the session wasn't spawned
   // by the app (no worktree path), silently drop the event so external CLI
   // sessions don't pollute #general.
-  const messageIdFromCwd = extractMessageIdFromWorktreePath(payload.cwd);
-  const messageIdFromTranscript = extractMessageIdFromWorktreePath(payload.transcript_path);
-  const resolvedMessageId = messageIdFromCwd ?? messageIdFromTranscript;
-  const message = resolvedMessageId
-    ? await getMessageByIdWithThreads(resolvedMessageId)
+  const workspaceIdFromCwd = extractWorkspaceIdFromWorktreePath(payload.cwd);
+  const workspaceIdFromTranscript = extractWorkspaceIdFromWorktreePath(payload.transcript_path);
+  const resolvedWorkspaceId = workspaceIdFromCwd ?? workspaceIdFromTranscript;
+  const workspace = resolvedWorkspaceId
+    ? await getWorkspaceByIdWithSessions(resolvedWorkspaceId)
     : null;
-  if (!message) {
-    console.log(`[event] DROPPED ${payload.hook_event_name} — no message found (cwd=${payload.cwd?.slice(-40)} resolvedId=${resolvedMessageId})`);
+  if (!workspace) {
+    console.log(`[event] DROPPED ${payload.hook_event_name} — no workspace found (cwd=${payload.cwd?.slice(-40)} resolvedId=${resolvedWorkspaceId})`);
     return null;
   }
 
-  // Upsert session
-  const session = await prisma.session.upsert({
+  // Upsert CLI session
+  const cliSession = await prisma.cliSession.upsert({
     where: { sessionId: payload.session_id },
     create: {
       sessionId: payload.session_id,
@@ -220,18 +220,18 @@ export async function ingestEvent(payload: HookEvent) {
   // the inline auto-complete check can match them when Claude exits before
   // producing a real session ID (e.g. immediate crash or early exit).
   if (payload.session_id !== 'user-manual-input') {
-    await prisma.message.update({
-      where: { id: message.id },
+    await prisma.workspace.update({
+      where: { id: workspace.id },
       data: { claudeSessionId: payload.session_id },
     });
   }
 
-  const channelId = message.channelId;
-  let currentStatus = message.status;
-  const thread =
-    message.threads[message.threads.length - 1] ??
-    (await prisma.thread.create({
-      data: { messageId: message.id },
+  const channelId = workspace.channelId;
+  let currentStatus = workspace.status;
+  const session =
+    workspace.sessions[workspace.sessions.length - 1] ??
+    (await prisma.session.create({
+      data: { workspaceId: workspace.id },
     }));
 
   // De-duplicate hook prompt events when we've already persisted the exact
@@ -244,7 +244,7 @@ export async function ingestEvent(payload: HookEvent) {
     if (incomingPrompt) {
       const existingPromptEvent = await prisma.event.findFirst({
         where: {
-          threadId: thread.id,
+          sessionId: session.id,
           hookEventName: 'UserPromptSubmit',
           timestamp: { gte: new Date(Date.now() - 5 * 60 * 1000) },
         },
@@ -256,15 +256,15 @@ export async function ingestEvent(payload: HookEvent) {
         : null;
 
       if (existingPromptEvent && existingPrompt && existingPrompt === incomingPrompt) {
-        return { id: existingPromptEvent.id, session_id: session.sessionId };
+        return { id: existingPromptEvent.id, session_id: cliSession.sessionId };
       }
     }
   }
 
   // Auto-transition pending -> in_progress on first non-UserPromptSubmit event.
   if (currentStatus === 'pending' && payload.hook_event_name !== 'UserPromptSubmit') {
-    await updateMessageStatus(message.id, 'in_progress');
-    void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
+    await updateWorkspaceStatus(workspace.id, 'in_progress');
+    void syncTicketWithWorkspaceStatus(workspace.id, channelId, 'in_progress');
     currentStatus = 'in_progress';
   }
 
@@ -279,7 +279,7 @@ export async function ingestEvent(payload: HookEvent) {
     const [latestPrompt, latestStop] = await Promise.all([
       prisma.event.findFirst({
         where: {
-          threadId: thread.id,
+          sessionId: session.id,
           hookEventName: 'UserPromptSubmit',
         },
         orderBy: { timestamp: 'desc' },
@@ -287,7 +287,7 @@ export async function ingestEvent(payload: HookEvent) {
       }),
       prisma.event.findFirst({
         where: {
-          threadId: thread.id,
+          sessionId: session.id,
           hookEventName: 'Stop',
         },
         orderBy: { timestamp: 'desc' },
@@ -297,8 +297,8 @@ export async function ingestEvent(payload: HookEvent) {
 
     const hasNewPromptSinceLastStop = !!latestPrompt && (!latestStop || latestPrompt.timestamp > latestStop.timestamp);
     if (hasNewPromptSinceLastStop) {
-      await updateMessageStatus(message.id, 'in_progress');
-      void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
+      await updateWorkspaceStatus(workspace.id, 'in_progress');
+      void syncTicketWithWorkspaceStatus(workspace.id, channelId, 'in_progress');
       currentStatus = 'in_progress';
     }
   }
@@ -307,8 +307,8 @@ export async function ingestEvent(payload: HookEvent) {
   // UserPromptSubmit is the expected trigger, but any non-input-requesting event also
   // means the user already responded and Claude is working again.
   if (currentStatus === 'needs_input' && payload.hook_event_name !== 'Stop') {
-    await updateMessageStatus(message.id, 'in_progress');
-    void syncTicketWithMessageStatus(message.id, channelId, 'in_progress');
+    await updateWorkspaceStatus(workspace.id, 'in_progress');
+    void syncTicketWithWorkspaceStatus(workspace.id, channelId, 'in_progress');
     currentStatus = 'in_progress';
   }
 
@@ -322,10 +322,10 @@ export async function ingestEvent(payload: HookEvent) {
   const rawPayload = JSON.parse(JSON.stringify(payload));
 
   const eventData: Parameters<typeof prisma.event.create>[0]['data'] = {
-    sessionId: payload.session_id,
+    cliSessionId: payload.session_id,
     hookEventName: payload.hook_event_name,
     rawPayload,
-    threadId: thread.id,
+    sessionId: session.id,
     importance,
   };
 
@@ -364,7 +364,7 @@ export async function ingestEvent(payload: HookEvent) {
     // previous turn's Stop when runs happen close together.
     const latestPrompt = await prisma.event.findFirst({
       where: {
-        threadId: thread.id,
+        sessionId: session.id,
         hookEventName: 'UserPromptSubmit',
       },
       orderBy: { timestamp: 'desc' },
@@ -379,8 +379,8 @@ export async function ingestEvent(payload: HookEvent) {
 
     const recentStop = await prisma.event.findFirst({
       where: {
-        threadId: thread.id,
-        sessionId: payload.session_id,
+        sessionId: session.id,
+        cliSessionId: payload.session_id,
         hookEventName: 'Stop',
         timestamp: { gte: turnWindowStart },
       },
@@ -388,7 +388,7 @@ export async function ingestEvent(payload: HookEvent) {
     });
 
     if (recentStop) {
-      console.log(`[event] Stop DEDUPED msg=${message.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} existingId=${recentStop.id.slice(0, 8)} age=${Date.now() - recentStop.timestamp.getTime()}ms`);
+      console.log(`[event] Stop DEDUPED ws=${workspace.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} existingId=${recentStop.id.slice(0, 8)} age=${Date.now() - recentStop.timestamp.getTime()}ms`);
       const updates: Record<string, unknown> = {};
       // Prefer newer enriched Stop text from the close handler.
       if (
@@ -411,11 +411,11 @@ export async function ingestEvent(payload: HookEvent) {
       }
 
       // Broadcast the updated event so the UI picks up merged data
-      pubsub.publish(TOPICS.THREAD_EVENT_UPDATED(channelId), {
-        threadEventUpdated: {
+      pubsub.publish(TOPICS.SESSION_EVENT_UPDATED(channelId), {
+        sessionEventUpdated: {
           channelId,
-          messageId: message.id,
-          threadId: thread.id,
+          workspaceId: workspace.id,
+          sessionId: session.id,
           event: { ...recentStop, ...updates },
         },
       });
@@ -426,9 +426,9 @@ export async function ingestEvent(payload: HookEvent) {
         const summaryText = typeof eventData.lastAssistantMessage === 'string'
           ? eventData.lastAssistantMessage.slice(0, 500)
           : null;
-        await updateMessageSummaryAndBranch(message.id, summaryText, stopBranchName);
+        await updateWorkspaceSummaryAndBranch(workspace.id, summaryText, stopBranchName);
         if (stopBranchName) {
-          void refreshTicketBroadcast(message.id, channelId);
+          void refreshTicketBroadcast(workspace.id, channelId);
         }
       }
 
@@ -438,19 +438,19 @@ export async function ingestEvent(payload: HookEvent) {
       // data available. runAutoCompleteIfNeeded re-reads status from DB and is
       // a no-op if the first Stop already transitioned the status.
       const mergedToolName = (updates.toolName ?? recentStop.toolName) as string | null;
-      await runAutoCompleteIfNeeded(message.id, channelId, payload.session_id, thread.id, mergedToolName, /* skipReviewTransition */ true);
+      await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, mergedToolName, /* skipReviewTransition */ true);
 
       // Always re-broadcast the hydrated message on deduped Stop so the UI
       // receives final session/status/summary updates even when status is
       // unchanged (e.g. duplicate Stop after completion).
-      const hydratedMessage = await getMessageByIdForFeed(message.id);
-      if (hydratedMessage) {
-        pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-          messageUpserted: hydratedMessage,
+      const hydratedWorkspace = await getWorkspaceByIdForFeed(workspace.id);
+      if (hydratedWorkspace) {
+        pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
+          workspaceUpserted: hydratedWorkspace,
         });
       }
 
-      return { id: recentStop.id, session_id: session.sessionId };
+      return { id: recentStop.id, session_id: cliSession.sessionId };
     }
   }
 
@@ -468,12 +468,12 @@ export async function ingestEvent(payload: HookEvent) {
   }
 
   const event = await prisma.event.create({ data: eventData });
-  console.log(`[event] ${payload.hook_event_name}${eventData.toolName ? ':' + eventData.toolName : ''} msg=${message.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} status=${currentStatus}`);
+  console.log(`[event] ${payload.hook_event_name}${eventData.toolName ? ':' + eventData.toolName : ''} ws=${workspace.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} status=${currentStatus}`);
 
   // Auto-transition in_progress/auto_review -> needs_input when AskUserQuestion or ExitPlanMode is detected
   if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && (currentStatus === 'in_progress' || currentStatus === 'auto_review')) {
-    await updateMessageStatus(message.id, 'needs_input');
-    void syncTicketWithMessageStatus(message.id, channelId, 'needs_input');
+    await updateWorkspaceStatus(workspace.id, 'needs_input');
+    void syncTicketWithWorkspaceStatus(workspace.id, channelId, 'needs_input');
     currentStatus = 'needs_input';
   }
 
@@ -487,13 +487,13 @@ export async function ingestEvent(payload: HookEvent) {
 
   // Only set the preview once (first message), so the thread preview shows the
   // initial prompt rather than the latest assistant response.
-  const shouldSetPreview = preview && !message.preview;
+  const shouldSetPreview = preview && !workspace.preview;
 
   if (shouldSetPreview || importance === 'important') {
-    await updateMessagePreviewAndImportance(
-      message.id,
+    await updateWorkspacePreviewAndImportance(
+      workspace.id,
       shouldSetPreview ? preview : null,
-      importance === 'important' ? 'important' : message.importance,
+      importance === 'important' ? 'important' : workspace.importance,
     );
   }
 
@@ -505,44 +505,44 @@ export async function ingestEvent(payload: HookEvent) {
   const branchName = stopBranchName;
 
   if (summaryText || branchName) {
-    await updateMessageSummaryAndBranch(message.id, summaryText, branchName);
+    await updateWorkspaceSummaryAndBranch(workspace.id, summaryText, branchName);
   }
 
   // Re-broadcast the ticket immediately so the board view picks up the
   // updated message.branch without waiting for the AI-powered ticket update.
   if (branchName) {
-    void refreshTicketBroadcast(message.id, channelId);
+    void refreshTicketBroadcast(workspace.id, channelId);
   }
 
   // Update kanban ticket on Stop events
   if (payload.hook_event_name === 'Stop' && payload.last_assistant_message) {
     void updateTicketFromEvent(
-      message.id,
+      workspace.id,
       channelId,
       payload.last_assistant_message.slice(0, 1000),
       summaryText ?? '',
     );
   }
 
-  const hydratedMessage = await getMessageByIdForFeed(message.id);
+  const hydratedWorkspace = await getWorkspaceByIdForFeed(workspace.id);
 
   // Broadcast via GraphQL subscriptions
-  pubsub.publish(TOPICS.THREAD_EVENT_CREATED(channelId), {
-    threadEventCreated: { channelId, messageId: message.id, threadId: thread.id, event },
+  pubsub.publish(TOPICS.SESSION_EVENT_CREATED(channelId), {
+    sessionEventCreated: { channelId, workspaceId: workspace.id, sessionId: session.id, event },
   });
-  if (hydratedMessage) {
-    pubsub.publish(TOPICS.MESSAGE_UPSERTED(channelId), {
-      messageUpserted: hydratedMessage,
+  if (hydratedWorkspace) {
+    pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
+      workspaceUpserted: hydratedWorkspace,
     });
   }
 
   // Auto-complete / auto-review: determine the final message status when
   // Claude stops without requesting user input.
   if (payload.hook_event_name === 'Stop') {
-    await runAutoCompleteIfNeeded(message.id, channelId, payload.session_id, thread.id, eventData.toolName);
+    await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, eventData.toolName);
   }
 
-  return { id: event.id, session_id: session.sessionId };
+  return { id: event.id, session_id: cliSession.sessionId };
 }
 
 export async function getEventById(id: string) {

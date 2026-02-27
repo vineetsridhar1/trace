@@ -9,10 +9,10 @@ import { ImageLightbox } from './ImageLightbox';
 import { useTicketDependenciesLazyQuery } from './__generated__/TicketView.generated';
 
 const GQL_TICKET_DEPENDENCIES = gql`
-  query TicketDependencies($messageId: ID!) {
-    ticketDependencies(messageId: $messageId) {
+  query TicketDependencies($workspaceId: ID!) {
+    ticketDependencies(workspaceId: $workspaceId) {
       id
-      dependsOnMessageId
+      dependsOnWorkspaceId
       dependsOnTicketTitle
     }
   }
@@ -35,16 +35,16 @@ const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = 
 };
 
 export function TicketView({ ticket }: { ticket: KanbanTicket }) {
-  const statusConfig = STATUS_CONFIG[ticket.message.status] ?? STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
-  const attachments = ticket.message.attachments ?? [];
+  const statusConfig = STATUS_CONFIG[ticket.workspace.status] ?? STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
+  const attachments = ticket.workspace.attachments ?? [];
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [fetchDeps, { data: depsData }] = useTicketDependenciesLazyQuery();
 
   useEffect(() => {
-    if (ticket.message.status === 'queued') {
-      void fetchDeps({ variables: { messageId: ticket.messageId } });
+    if (ticket.workspace.status === 'queued') {
+      void fetchDeps({ variables: { workspaceId: ticket.workspaceId } });
     }
-  }, [ticket.messageId, ticket.message.status, fetchDeps]);
+  }, [ticket.workspaceId, ticket.workspace.status, fetchDeps]);
 
   const deps = depsData?.ticketDependencies ?? [];
 
@@ -56,9 +56,9 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
         <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}>
           {statusConfig.label}
         </span>
-        {ticket.message.branch && (
+        {ticket.workspace.branch && (
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-[11px] text-[#7aa2f7]">
-            {ticket.message.branch}
+            {ticket.workspace.branch}
           </span>
         )}
       </div>
@@ -72,7 +72,7 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
           <div className="space-y-1">
             {deps.map((dep) => (
               <div key={dep.id} className="flex items-center gap-2 rounded bg-[#1f2335] px-2 py-1.5 text-sm text-[#a9b1d6]">
-                <span className="truncate">{dep.dependsOnTicketTitle ?? dep.dependsOnMessageId}</span>
+                <span className="truncate">{dep.dependsOnTicketTitle ?? dep.dependsOnWorkspaceId}</span>
               </div>
             ))}
           </div>

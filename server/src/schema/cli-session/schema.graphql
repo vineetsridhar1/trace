@@ -1,0 +1,19 @@
+type CliSession {
+  id: ID!
+  sessionId: String!
+  transcriptPath: String
+  cwd: String
+  permissionMode: String
+  status: String!
+  firstSeenAt: DateTime!
+  lastSeenAt: DateTime!
+  eventCount: Int!
+  toolSummary: JSON
+}
+
+type CliSessionConnection {
+  sessions: [CliSession!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}

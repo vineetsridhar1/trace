@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma';
 
-export async function listSessions(options: {
+export async function listCliSessions(options: {
   status?: string;
   limit?: number;
   offset?: number;
@@ -12,8 +12,8 @@ export async function listSessions(options: {
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
 
-  const [sessions, total] = await Promise.all([
-    prisma.session.findMany({
+  const [cliSessions, total] = await Promise.all([
+    prisma.cliSession.findMany({
       where,
       orderBy: { [sort]: order },
       skip: offset,
@@ -22,10 +22,10 @@ export async function listSessions(options: {
         _count: { select: { events: true } },
       },
     }),
-    prisma.session.count({ where }),
+    prisma.cliSession.count({ where }),
   ]);
 
-  const result = sessions.map((s) => {
+  const result = cliSessions.map((s) => {
     const { _count, ...rest } = s;
     return { ...rest, eventCount: _count.events };
   });
@@ -33,20 +33,20 @@ export async function listSessions(options: {
   return { sessions: result, total, limit, offset };
 }
 
-export async function getSession(sessionId: string) {
-  const session = await prisma.session.findUnique({
+export async function getCliSession(sessionId: string) {
+  const cliSession = await prisma.cliSession.findUnique({
     where: { sessionId },
     include: {
       _count: { select: { events: true } },
     },
   });
 
-  if (!session) return null;
+  if (!cliSession) return null;
 
   // Get tool summary
   const toolCounts = await prisma.event.groupBy({
     by: ['toolName'],
-    where: { sessionId, toolName: { not: null } },
+    where: { cliSessionId: sessionId, toolName: { not: null } },
     _count: true,
   });
 
@@ -57,7 +57,7 @@ export async function getSession(sessionId: string) {
     }
   }
 
-  const { _count, ...rest } = session;
+  const { _count, ...rest } = cliSession;
   return {
     ...rest,
     eventCount: _count.events,

@@ -57,15 +57,36 @@ type Channel {
   workspacesEnabled: Boolean!
 }
 
-type CreateMessagePayload {
+type CliSession {
+  cwd: String
+  eventCount: Int!
+  firstSeenAt: DateTime!
+  id: ID!
+  lastSeenAt: DateTime!
+  permissionMode: String
+  sessionId: String!
+  status: String!
+  toolSummary: JSON
+  transcriptPath: String
+}
+
+type CliSessionConnection {
+  limit: Int!
+  offset: Int!
+  sessions: [CliSession!]!
+  total: Int!
+}
+
+type CreateWorkspacePayload {
   event: Event!
-  message: Message!
-  thread: Thread!
+  session: Session!
+  workspace: Workspace!
 }
 
 scalar DateTime
 
 type Event {
+  cliSessionId: String!
   hookEventName: String!
   id: ID!
   importance: String!
@@ -73,7 +94,6 @@ type Event {
   rawPayload: JSON!
   sessionId: String!
   stopHookActive: Boolean
-  threadId: String!
   timestamp: DateTime!
   toolInput: JSON
   toolName: String
@@ -100,67 +120,28 @@ type KanbanColumn {
   tickets: [Ticket!]!
 }
 
-type Message {
-  branch: String
-  channelId: String!
-  claudeSessionId: String
-  createdAt: DateTime!
-  id: ID!
-  importance: String!
-  preview: String
-  queuedRunConfig: JSON
-  session: MessageSession
-  sessionId: String!
-  status: String!
-  summary: String
-  threadCount: Int!
-}
-
-type MessageConnection {
-  limit: Int!
-  messages: [Message!]!
-  offset: Int!
-  total: Int!
-}
-
-type MessageDeletedPayload {
-  channelId: String!
-  messageId: String!
-}
-
-type MessageReadyForReviewPayload {
-  channelId: String!
-  claudeSessionId: String
-  messageId: String!
-}
-
-type MessageSession {
-  cwd: String
-  sessionId: String!
-  status: String!
-}
-
 type Mutation {
-  appendPrompt(attachmentIds: [String!], channelId: ID!, createNewThread: Boolean, messageId: ID!, text: String!, threadId: ID): CreateMessagePayload!
+  appendPrompt(attachmentIds: [String!], channelId: ID!, createNewSession: Boolean, sessionId: ID, text: String!, workspaceId: ID!): CreateWorkspacePayload!
   createAiChat(channelId: ID, serverId: ID!, title: String): AiChat!
   createChannel(baseBranch: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, name: String!, serverId: String, teamIds: [String!], type: String, workspacesEnabled: Boolean): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
-  createMessage(attachmentIds: [String!], channelId: ID!, text: String!): CreateMessagePayload!
   createServer(avatarUrl: String, name: String!): Server!
-  createThread(channelId: ID!, messageId: ID!): Thread!
+  createSession(channelId: ID!, workspaceId: ID!): Session!
+  createWorkspace(attachmentIds: [String!], channelId: ID!, text: String!): CreateWorkspacePayload!
   deleteAiChat(id: ID!): Boolean!
+  deleteChannel(id: ID!): Boolean!
   deleteColumn(columnId: ID!): Boolean!
-  deleteMessage(channelId: ID!, messageId: ID!): Boolean!
+  deleteWorkspace(channelId: ID!, workspaceId: ID!): Boolean!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
-  removeTicketDependency(channelId: ID!, dependsOnMessageId: ID!, messageId: ID!): Boolean!
+  removeTicketDependency(channelId: ID!, dependsOnWorkspaceId: ID!, workspaceId: ID!): Boolean!
   renameAiChat(id: ID!, title: String!): AiChat!
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
-  setTicketDependencies(channelId: ID!, dependsOnMessageIds: [ID!]!, messageId: ID!, runConfig: JSON!): Message!
+  setTicketDependencies(channelId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!, workspaceId: ID!): Workspace!
   updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, id: ID!, name: String, teamIds: [String!], workspacesEnabled: Boolean): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
-  updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
-  updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!
-  updateQueuedRunConfig(messageId: ID!, runConfig: JSON!): Boolean!
+  updateQueuedRunConfig(runConfig: JSON!, workspaceId: ID!): Boolean!
+  updateWorkspacePreview(channelId: ID!, preview: String!, workspaceId: ID!): Workspace!
+  updateWorkspaceStatus(channelId: ID!, status: String!, workspaceId: ID!): Workspace!
   uploadAttachment(contentType: String!, data: String!, filename: String!): Attachment!
 }
 
@@ -171,15 +152,12 @@ type Query {
   channel(id: ID!): Channel
   channels: [Channel!]!
   event(id: ID!): Event
-  messageEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int): EventConnection!
-  messages(channelId: ID!, limit: Int, offset: Int): MessageConnection!
   servers: [Server!]!
-  session(sessionId: String!): Session
-  sessionEvents(after: String, hookEventName: String, limit: Int, offset: Int, sessionId: String!, toolName: String): EventConnection!
-  sessions(limit: Int, offset: Int, order: String, sort: String, status: String): SessionConnection!
-  threadEvents(after: String, channelId: ID!, limit: Int, messageId: ID!, offset: Int, threadId: ID!): EventConnection!
-  threads(channelId: ID!, messageId: ID!): [Thread!]!
-  ticketDependencies(messageId: ID!): [TicketDependency!]!
+  sessionEvents(after: String, channelId: ID!, limit: Int, offset: Int, sessionId: ID!, workspaceId: ID!): EventConnection!
+  sessions(channelId: ID!, workspaceId: ID!): [Session!]!
+  ticketDependencies(workspaceId: ID!): [TicketDependency!]!
+  workspaceEvents(after: String, channelId: ID!, limit: Int, offset: Int, workspaceId: ID!): EventConnection!
+  workspaces(channelId: ID!, limit: Int, offset: Int): WorkspaceConnection!
 }
 
 type Server {
@@ -192,48 +170,28 @@ type Server {
 }
 
 type Session {
-  cwd: String
+  createdAt: DateTime!
   eventCount: Int!
-  firstSeenAt: DateTime!
   id: ID!
-  lastSeenAt: DateTime!
-  permissionMode: String
-  sessionId: String!
-  status: String!
-  toolSummary: JSON
-  transcriptPath: String
+  workspaceId: String!
 }
 
-type SessionConnection {
-  limit: Int!
-  offset: Int!
-  sessions: [Session!]!
-  total: Int!
+type SessionEventPayload {
+  channelId: String!
+  event: Event!
+  sessionId: String!
+  workspaceId: String!
 }
 
 type Subscription {
   aiChatStream(chatId: ID!): AiChatStreamPayload!
-  messageDeleted(channelId: ID!): MessageDeletedPayload!
-  messageReadyForReview(channelId: ID!): MessageReadyForReviewPayload!
-  messageUpserted(channelId: ID!): Message!
-  threadEventCreated(channelId: ID!): ThreadEventPayload!
-  threadEventUpdated(channelId: ID!): ThreadEventPayload!
+  sessionEventCreated(channelId: ID!): SessionEventPayload!
+  sessionEventUpdated(channelId: ID!): SessionEventPayload!
   ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
-}
-
-type Thread {
-  createdAt: DateTime!
-  eventCount: Int!
-  id: ID!
-  messageId: String!
-}
-
-type ThreadEventPayload {
-  channelId: String!
-  event: Event!
-  messageId: String!
-  threadId: String!
+  workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
+  workspaceReadyForReview(channelId: ID!): WorkspaceReadyForReviewPayload!
+  workspaceUpserted(channelId: ID!): Workspace!
 }
 
 type Ticket {
@@ -241,14 +199,14 @@ type Ticket {
   createdAt: DateTime!
   description: String
   id: ID!
-  message: TicketMessage
-  messageId: String!
   metadata: JSON
   solutionApproach: String
   sortOrder: Int!
   status: String!
   title: String!
   updatedAt: DateTime!
+  workspace: TicketWorkspace
+  workspaceId: String!
 }
 
 type TicketAttachment {
@@ -261,13 +219,25 @@ type TicketAttachment {
 
 type TicketDependency {
   createdAt: DateTime!
-  dependsOnMessageId: String!
   dependsOnTicketTitle: String
+  dependsOnWorkspaceId: String!
   id: ID!
-  ticketMessageId: String!
+  ticketWorkspaceId: String!
 }
 
-type TicketMessage {
+type TicketReadyToRunPayload {
+  channelId: String!
+  runConfig: JSON!
+  workspaceId: String!
+}
+
+type TicketUpsertPayload {
+  channelId: String!
+  columnSlug: String!
+  ticket: Ticket!
+}
+
+type TicketWorkspace {
   attachments: [TicketAttachment!]!
   branch: String
   createdAt: DateTime!
@@ -275,14 +245,42 @@ type TicketMessage {
   status: String!
 }
 
-type TicketReadyToRunPayload {
+type Workspace {
+  branch: String
   channelId: String!
-  messageId: String!
-  runConfig: JSON!
+  claudeSessionId: String
+  cliSession: WorkspaceCliSession
+  cliSessionId: String!
+  createdAt: DateTime!
+  id: ID!
+  importance: String!
+  preview: String
+  queuedRunConfig: JSON
+  sessionCount: Int!
+  status: String!
+  summary: String
 }
 
-type TicketUpsertPayload {
+type WorkspaceCliSession {
+  cwd: String
+  sessionId: String!
+  status: String!
+}
+
+type WorkspaceConnection {
+  limit: Int!
+  offset: Int!
+  total: Int!
+  workspaces: [Workspace!]!
+}
+
+type WorkspaceDeletedPayload {
   channelId: String!
-  columnSlug: String!
-  ticket: Ticket!
+  workspaceId: String!
+}
+
+type WorkspaceReadyForReviewPayload {
+  channelId: String!
+  claudeSessionId: String
+  workspaceId: String!
 }

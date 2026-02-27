@@ -1,43 +1,43 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import type {
-  ChannelMessage,
+  Workspace,
   DragTarget,
   KanbanTicket,
   TicketStatus,
 } from '../types';
-import type { ThreadInfo } from '../hooks/useThread';
+import type { SessionInfo } from '../hooks/useThread';
 import type { TerminalTab, TerminalEntry } from '../hooks/useStartupTerminals';
 import { ThreadEventsContext } from './ThreadEventsContext';
 import type { ThreadEventsContextValue } from './ThreadEventsContext';
 
 export interface ThreadContextValue {
   // Core thread state (session-level, changes infrequently)
-  selectedMessageId: string | null;
-  activeThreadId: string | null;
-  threads: ThreadInfo[];
+  selectedWorkspaceId: string | null;
+  activeSessionId: string | null;
+  sessions: SessionInfo[];
   threadWidth: number;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   expandedReadGroupIds: Record<string, boolean>;
   // Session-level callbacks
-  openThreadPanel: (message: ChannelMessage) => void;
+  openThreadPanel: (workspace: Workspace) => void;
   closeThreadPanel: () => void;
   toggleReadGroup: (groupId: string) => void;
   setHasWorktree: (value: boolean | null) => void;
   setThreadWidth: (width: number) => void;
-  loadThreadEvents: (message: ChannelMessage) => Promise<void>;
-  deleteWorktree: (onDeleted?: (messageId: string) => void) => Promise<void>;
-  switchThread: (threadId: string) => Promise<void>;
-  clearThread: () => Promise<string | null>;
+  loadSessionEvents: (workspace: Workspace) => Promise<void>;
+  deleteWorktree: (onDeleted?: (workspaceId: string) => void) => Promise<void>;
+  switchSession: (sessionId: string) => Promise<void>;
+  clearSession: () => Promise<string | null>;
   // Ticket dependency support
-  channelTickets: { messageId: string; title: string; status: string }[];
-  setTicketDependencies: (messageId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
-  removeTicketDependency: (messageId: string, dependsOnMessageId: string) => void;
-  updateQueuedRunConfig: (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
+  channelTickets: { workspaceId: string; title: string; status: string }[];
+  setTicketDependencies: (workspaceId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
+  removeTicketDependency: (workspaceId: string, dependsOnWorkspaceId: string) => void;
+  updateQueuedRunConfig: (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
   // Derived state
   isClaudeRunning: boolean;
-  messageStatus: TicketStatus;
+  workspaceStatus: TicketStatus;
   queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
   selectedTicket: KanbanTicket | null;
   // UI state

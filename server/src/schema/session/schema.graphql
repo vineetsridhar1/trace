@@ -1,25 +1,16 @@
 extend type Query {
-  sessions(status: String, limit: Int, offset: Int, sort: String, order: String): SessionConnection!
-  session(sessionId: String!): Session
-  sessionEvents(sessionId: String!, hookEventName: String, toolName: String, after: String, limit: Int, offset: Int): EventConnection!
+  sessions(channelId: ID!, workspaceId: ID!): [Session!]!
+  sessionEvents(channelId: ID!, workspaceId: ID!, sessionId: ID!, limit: Int, offset: Int, after: String): EventConnection!
+  workspaceEvents(channelId: ID!, workspaceId: ID!, limit: Int, offset: Int, after: String): EventConnection!
+}
+
+extend type Mutation {
+  createSession(channelId: ID!, workspaceId: ID!): Session!
 }
 
 type Session {
   id: ID!
-  sessionId: String!
-  transcriptPath: String
-  cwd: String
-  permissionMode: String
-  status: String!
-  firstSeenAt: DateTime!
-  lastSeenAt: DateTime!
+  workspaceId: String!
+  createdAt: DateTime!
   eventCount: Int!
-  toolSummary: JSON
-}
-
-type SessionConnection {
-  sessions: [Session!]!
-  total: Int!
-  limit: Int!
-  offset: Int!
 }

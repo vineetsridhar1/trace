@@ -7,7 +7,7 @@ export const CLAUDE_INACTIVITY_TIMEOUT_MS = Number(
 );
 
 export interface ClaudeRunState {
-  messageId: string;
+  workspaceId: string;
   child: ChildProcess;
   lastActivityAt: number;
   watchdogTimer: NodeJS.Timeout | null;
@@ -17,7 +17,7 @@ export interface ClaudeRunState {
   userStopped: boolean;
 }
 
-export const runStateByMessageId = new Map<string, ClaudeRunState>();
+export const runStateByWorkspaceId = new Map<string, ClaudeRunState>();
 
 let worktreeBaseFn: () => string;
 
@@ -25,33 +25,33 @@ export function setWorktreeBaseFn(fn: () => string) {
   worktreeBaseFn = fn;
 }
 
-export function appendClaudeDebugLog(messageId: string, line: string) {
+export function appendClaudeDebugLog(workspaceId: string, line: string) {
   try {
     const base = worktreeBaseFn();
     if (!fs.existsSync(base)) {
       fs.mkdirSync(base, { recursive: true });
     }
     const logPath = path.join(base, 'claude-debug.log');
-    const stamped = `[${new Date().toISOString()}] [${messageId.slice(0, 8)}] ${line}\n`;
+    const stamped = `[${new Date().toISOString()}] [${workspaceId.slice(0, 8)}] ${line}\n`;
     fs.appendFileSync(logPath, stamped);
   } catch (err) {
     console.error('Failed to write Claude debug log:', err);
   }
 }
 
-export function scheduleWatchdog(messageId: string) {
-  const state = runStateByMessageId.get(messageId);
+export function scheduleWatchdog(workspaceId: string) {
+  const state = runStateByWorkspaceId.get(workspaceId);
   if (!state || !state.active || state.stopped) return;
 
   if (state.watchdogTimer) clearTimeout(state.watchdogTimer);
 
   state.watchdogTimer = setTimeout(() => {
-    const latest = runStateByMessageId.get(messageId);
+    const latest = runStateByWorkspaceId.get(workspaceId);
     if (!latest || !latest.active || latest.stopped) return;
 
     const idleFor = Date.now() - latest.lastActivityAt;
     if (idleFor < CLAUDE_INACTIVITY_TIMEOUT_MS) {
-      scheduleWatchdog(messageId);
+      scheduleWatchdog(workspaceId);
       return;
     }
 
@@ -64,25 +64,25 @@ export function scheduleWatchdog(messageId: string) {
     }
 
     appendClaudeDebugLog(
-      messageId,
+      workspaceId,
       `inactivity-timeout reached (${CLAUDE_INACTIVITY_TIMEOUT_MS}ms idle), sending SIGTERM`,
     );
 
     if (!latest.child.killed) {
       latest.child.kill('SIGTERM');
       console.error(
-        `[claude:${messageId.slice(0, 8)}] inactivity timeout after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms, sent SIGTERM`,
+        `[claude:${workspaceId.slice(0, 8)}] inactivity timeout after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms, sent SIGTERM`,
       );
     }
   }, CLAUDE_INACTIVITY_TIMEOUT_MS);
 }
 
-export function startWatchdog(messageId: string, child: ChildProcess) {
-  const existing = runStateByMessageId.get(messageId);
+export function startWatchdog(workspaceId: string, child: ChildProcess) {
+  const existing = runStateByWorkspaceId.get(workspaceId);
   if (existing?.watchdogTimer) clearTimeout(existing.watchdogTimer);
 
-  runStateByMessageId.set(messageId, {
-    messageId,
+  runStateByWorkspaceId.set(workspaceId, {
+    workspaceId,
     child,
     lastActivityAt: Date.now(),
     watchdogTimer: null,
@@ -93,23 +93,23 @@ export function startWatchdog(messageId: string, child: ChildProcess) {
   });
 
   appendClaudeDebugLog(
-    messageId,
+    workspaceId,
     `watchdog started inactivityTimeoutMs=${CLAUDE_INACTIVITY_TIMEOUT_MS}`,
   );
-  scheduleWatchdog(messageId);
+  scheduleWatchdog(workspaceId);
 }
 
-export function resetWatchdog(messageId: string, reason: string) {
-  const state = runStateByMessageId.get(messageId);
+export function resetWatchdog(workspaceId: string, reason: string) {
+  const state = runStateByWorkspaceId.get(workspaceId);
   if (!state || !state.active || state.stopped) return;
 
   state.lastActivityAt = Date.now();
-  appendClaudeDebugLog(messageId, `watchdog reset reason=${reason}`);
-  scheduleWatchdog(messageId);
+  appendClaudeDebugLog(workspaceId, `watchdog reset reason=${reason}`);
+  scheduleWatchdog(workspaceId);
 }
 
-export function stopWatchdog(messageId: string, reason: string) {
-  const state = runStateByMessageId.get(messageId);
+export function stopWatchdog(workspaceId: string, reason: string) {
+  const state = runStateByWorkspaceId.get(workspaceId);
   if (!state) return;
 
   state.active = false;
@@ -118,6 +118,6 @@ export function stopWatchdog(messageId: string, reason: string) {
     clearTimeout(state.watchdogTimer);
     state.watchdogTimer = null;
   }
-  appendClaudeDebugLog(messageId, `watchdog stopped reason=${reason}`);
+  appendClaudeDebugLog(workspaceId, `watchdog stopped reason=${reason}`);
 }
 

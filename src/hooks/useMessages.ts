@@ -1,38 +1,38 @@
 import { useCallback, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
-import type { ChannelMessage } from '../types';
-import { MESSAGE_FIELDS } from '../graphql/fragments';
-import { type MessagesQuery, useMessagesLazyQuery } from './__generated__/useMessages.generated';
+import type { Workspace } from '../types';
+import { WORKSPACE_FIELDS } from '../graphql/fragments';
+import { type WorkspacesQuery, useWorkspacesLazyQuery } from './__generated__/useMessages.generated';
 
-const GQL_MESSAGES = gql`
-  query Messages($channelId: ID!, $limit: Int, $offset: Int) {
-    messages(channelId: $channelId, limit: $limit, offset: $offset) {
-      messages {
-        ...MessageFields
+const GQL_WORKSPACES = gql`
+  query Workspaces($channelId: ID!, $limit: Int, $offset: Int) {
+    workspaces(channelId: $channelId, limit: $limit, offset: $offset) {
+      workspaces {
+        ...WorkspaceFields
       }
       total
       limit
       offset
     }
   }
-  ${MESSAGE_FIELDS}
+  ${WORKSPACE_FIELDS}
 `;
 
-export function useMessages() {
-  const [executeMessages] = useMessagesLazyQuery();
-  const [messages, setMessages] = useState<ChannelMessage[]>([]);
-  const messagesRef = useRef<ChannelMessage[]>([]);
-  messagesRef.current = messages;
+export function useWorkspaces() {
+  const [executeWorkspaces] = useWorkspacesLazyQuery();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const workspacesRef = useRef<Workspace[]>([]);
+  workspacesRef.current = workspaces;
 
-  const upsertMessage = useCallback((message: ChannelMessage) => {
-    setMessages((current) => {
-      const existingIndex = current.findIndex((item) => item.id === message.id);
+  const upsertWorkspace = useCallback((workspace: Workspace) => {
+    setWorkspaces((current) => {
+      const existingIndex = current.findIndex((item) => item.id === workspace.id);
       const next = [...current];
 
       if (existingIndex >= 0) {
-        next[existingIndex] = message;
+        next[existingIndex] = workspace;
       } else {
-        next.push(message);
+        next.push(workspace);
       }
 
       next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -40,29 +40,29 @@ export function useMessages() {
     });
   }, []);
 
-  const refreshMessages = useCallback(async (channelId: string) => {
+  const refreshWorkspaces = useCallback(async (channelId: string) => {
     try {
-      const { data } = await executeMessages({
+      const { data } = await executeWorkspaces({
         variables: { channelId, limit: 200 },
       });
       if (!data) return;
 
-      const fetched = [...data.messages.messages].sort(
+      const fetched = [...data.workspaces.workspaces].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      ) as ChannelMessage[];
-      setMessages(fetched);
+      ) as Workspace[];
+      setWorkspaces(fetched);
     } catch (err) {
-      console.error('[useMessages] refreshMessages failed:', err);
+      console.error('[useWorkspaces] refreshWorkspaces failed:', err);
     }
-  }, [executeMessages]);
+  }, [executeWorkspaces]);
 
-  const removeMessage = useCallback((messageId: string) => {
-    setMessages((current) => current.filter((item) => item.id !== messageId));
+  const removeWorkspace = useCallback((workspaceId: string) => {
+    setWorkspaces((current) => current.filter((item) => item.id !== workspaceId));
   }, []);
 
-  const clearMessages = useCallback(() => {
-    setMessages([]);
+  const clearWorkspaces = useCallback(() => {
+    setWorkspaces([]);
   }, []);
 
-  return { messages, messagesRef, upsertMessage, removeMessage, refreshMessages, clearMessages };
+  return { workspaces, workspacesRef, upsertWorkspace, removeWorkspace, refreshWorkspaces, clearWorkspaces };
 }

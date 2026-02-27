@@ -4,7 +4,7 @@ import { KanbanCard } from './KanbanCard';
 
 interface KanbanColumnProps {
   column: KanbanColumnType;
-  onClickTicket: (messageId: string) => void;
+  onClickTicket: (workspaceId: string) => void;
   onDropTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
 }
 

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   CLAUDE_INACTIVITY_TIMEOUT_MS,
-  runStateByMessageId,
+  runStateByWorkspaceId,
   appendClaudeDebugLog,
   startWatchdog,
   resetWatchdog,
@@ -38,7 +38,7 @@ async function runSetupScripts(worktreePath: string, commands: string[]): Promis
 }
 
 export async function spawnClaude(
-  messageId: string,
+  workspaceId: string,
   prompt: string,
   repoPath: string,
   creationCommands?: string[],
@@ -48,24 +48,24 @@ export async function spawnClaude(
   effort?: string,
   systemInstructions?: string,
 ): Promise<string> {
-  const { worktreePath, created } = await ensureWorktree(messageId, repoPath);
+  const { worktreePath, created } = await ensureWorktree(workspaceId, repoPath);
 
   if (created && creationCommands && creationCommands.length > 0) {
-    appendClaudeDebugLog(messageId, `running ${creationCommands.length} setup script(s)`);
+    appendClaudeDebugLog(workspaceId, `running ${creationCommands.length} setup script(s)`);
     await runSetupScripts(worktreePath, creationCommands);
-    appendClaudeDebugLog(messageId, 'setup scripts completed');
+    appendClaudeDebugLog(workspaceId, 'setup scripts completed');
   }
   const startedAt = Date.now();
   appendClaudeDebugLog(
-    messageId,
+    workspaceId,
     `spawn start cwd=${worktreePath} inactivityTimeoutMs=${CLAUDE_INACTIVITY_TIMEOUT_MS} promptLen=${prompt.length}`,
   );
 
   // If this is the first spawn (branch still has the default UUID name),
   // inject a hidden instruction asking Claude to rename the branch based on intent.
   // Skip when resuming a session — the branch was already renamed on the first spawn.
-  const defaultBranch = `trace/${messageId.slice(0, 8)}`;
-  const currentBranch = await getWorktreeBranch(messageId);
+  const defaultBranch = `trace/${workspaceId.slice(0, 8)}`;
+  const currentBranch = await getWorktreeBranch(workspaceId);
   let effectivePrompt = prompt;
   if (!resumeSessionId) {
     const hiddenParts: string[] = [];
@@ -94,13 +94,13 @@ export async function spawnClaude(
     effectivePrompt = `<trace-internal>\n${hiddenParts.join('\n\n')}\n</trace-internal>\n\n${prompt}`;
   }
 
-  const existing = runningProcesses.get(messageId);
+  const existing = runningProcesses.get(workspaceId);
   if (existing && !existing.killed) {
-    suppressSyntheticStopFor.add(messageId);
-    stopWatchdog(messageId, 'spawn-replaced');
-    runStateByMessageId.delete(messageId);
+    suppressSyntheticStopFor.add(workspaceId);
+    stopWatchdog(workspaceId, 'spawn-replaced');
+    runStateByWorkspaceId.delete(workspaceId);
     existing.kill('SIGTERM');
-    runningProcesses.delete(messageId);
+    runningProcesses.delete(workspaceId);
   }
 
   const args = ['--dangerously-skip-permissions'];
@@ -132,14 +132,14 @@ export async function spawnClaude(
           const localPath = path.join(imgDir, filename);
           const response = await fetch(p);
           if (!response.ok) {
-            appendClaudeDebugLog(messageId, `image download failed status=${response.status} url=${p}`);
+            appendClaudeDebugLog(workspaceId, `image download failed status=${response.status} url=${p}`);
             continue;
           }
           const buffer = Buffer.from(await response.arrayBuffer());
           fs.writeFileSync(localPath, buffer);
           resolvedPaths.push(localPath);
         } catch (err) {
-          appendClaudeDebugLog(messageId, `image download error url=${p} error=${String(err)}`);
+          appendClaudeDebugLog(workspaceId, `image download error url=${p} error=${String(err)}`);
         }
       } else {
         resolvedPaths.push(p);
@@ -164,20 +164,20 @@ export async function spawnClaude(
       Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
     ),
   });
-  appendClaudeDebugLog(messageId, `spawned pid=${child.pid ?? -1}`);
+  appendClaudeDebugLog(workspaceId, `spawned pid=${child.pid ?? -1}`);
 
-  runningProcesses.set(messageId, child);
-  startWatchdog(messageId, child);
+  runningProcesses.set(workspaceId, child);
+  startWatchdog(workspaceId, child);
 
   const parser = new ClaudeStreamParser({
     serverUrl: SERVER_URL,
-    messageId,
+    workspaceId,
     cwd: worktreePath,
     callbacks: {
-      onSessionId: (id) => appendClaudeDebugLog(messageId, `stream session_id=${id}`),
-      onActivity: () => resetWatchdog(messageId, 'stream-json'),
+      onSessionId: (id) => appendClaudeDebugLog(workspaceId, `stream session_id=${id}`),
+      onActivity: () => resetWatchdog(workspaceId, 'stream-json'),
     },
-    log: (line) => appendClaudeDebugLog(messageId, line),
+    log: (line) => appendClaudeDebugLog(workspaceId, line),
   });
 
   let stderrBuffer = '';
@@ -193,39 +193,39 @@ export async function spawnClaude(
   child.stdout?.on('data', (data) => {
     const chunk = data.toString();
     parser.processChunk(chunk);
-    appendClaudeDebugLog(messageId, `stdout bytes=${Buffer.byteLength(chunk)}`);
+    appendClaudeDebugLog(workspaceId, `stdout bytes=${Buffer.byteLength(chunk)}`);
   });
 
   child.stderr?.on('data', (data) => {
     const chunk = data.toString();
     stderrBuffer = appendToStderr(stderrBuffer, chunk);
-    resetWatchdog(messageId, 'stderr');
-    appendClaudeDebugLog(messageId, `stderr bytes=${Buffer.byteLength(chunk)} text=${chunk.trim().slice(0, 500)}`);
-    console.error(`[claude:${messageId.slice(0, 8)}:err] ${chunk.trim()}`);
+    resetWatchdog(workspaceId, 'stderr');
+    appendClaudeDebugLog(workspaceId, `stderr bytes=${Buffer.byteLength(chunk)} text=${chunk.trim().slice(0, 500)}`);
+    console.error(`[claude:${workspaceId.slice(0, 8)}:err] ${chunk.trim()}`);
   });
 
   child.on('error', (err) => {
     failedToSpawn = String(err);
-    stopWatchdog(messageId, 'spawn-error');
-    appendClaudeDebugLog(messageId, `spawn error=${failedToSpawn}`);
-    console.error(`[claude:${messageId.slice(0, 8)}:spawn] ${failedToSpawn}`);
+    stopWatchdog(workspaceId, 'spawn-error');
+    appendClaudeDebugLog(workspaceId, `spawn error=${failedToSpawn}`);
+    console.error(`[claude:${workspaceId.slice(0, 8)}:spawn] ${failedToSpawn}`);
   });
 
   child.on('close', async (code) => {
-    const tag = `[claude:${messageId.slice(0, 8)}]`;
+    const tag = `[claude:${workspaceId.slice(0, 8)}]`;
     console.log(`${tag} exited with code ${code}`);
     appendClaudeDebugLog(
-      messageId,
+      workspaceId,
       `close code=${code} durationMs=${Date.now() - startedAt} stderrLen=${stderrBuffer.length}`,
     );
-    runningProcesses.delete(messageId);
-    const runState = runStateByMessageId.get(messageId);
+    runningProcesses.delete(workspaceId);
+    const runState = runStateByWorkspaceId.get(workspaceId);
     const timedOut = runState?.timedOut ?? false;
     const userStopped = runState?.userStopped ?? false;
-    stopWatchdog(messageId, 'process-close');
-    runStateByMessageId.delete(messageId);
+    stopWatchdog(workspaceId, 'process-close');
+    runStateByWorkspaceId.delete(workspaceId);
 
-    const suppressed = suppressSyntheticStopFor.delete(messageId);
+    const suppressed = suppressSyntheticStopFor.delete(workspaceId);
     if (suppressed) return;
 
     // Wrap the entire post-close flow in try-catch so an unexpected error
@@ -284,7 +284,7 @@ export async function spawnClaude(
 
       // Post a single Stop event with all enrichment data inline
       const payload = {
-        session_id: claudeSessionId ?? `trace-local-${messageId}`,
+        session_id: claudeSessionId ?? `trace-local-${workspaceId}`,
         cwd: worktreePath,
         hook_event_name: 'Stop',
         stop_hook_active: false,
@@ -299,7 +299,7 @@ export async function spawnClaude(
       };
 
       console.log(`${tag} posting Stop session=${payload.session_id.slice(0, 8)} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'}`);
-      appendClaudeDebugLog(messageId, `stop payload session=${payload.session_id} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'} msgLen=${messageToPersist.length}`);
+      appendClaudeDebugLog(workspaceId, `stop payload session=${payload.session_id} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'} msgLen=${messageToPersist.length}`);
 
       const response = await fetch(`${SERVER_URL}/events`, {
         method: 'POST',
@@ -307,10 +307,10 @@ export async function spawnClaude(
         body: JSON.stringify(payload),
       });
       console.log(`${tag} Stop posted status=${response.status}`);
-      appendClaudeDebugLog(messageId, `stop event posted status=${response.status} ok=${response.ok}`);
+      appendClaudeDebugLog(workspaceId, `stop event posted status=${response.status} ok=${response.ok}`);
     } catch (err) {
       console.error(`${tag} close handler error:`, err);
-      appendClaudeDebugLog(messageId, `close handler error=${String(err)}`);
+      appendClaudeDebugLog(workspaceId, `close handler error=${String(err)}`);
     }
   });
 

@@ -4,7 +4,7 @@ extend type Query {
 
 type Event {
   id: ID!
-  sessionId: String!
+  cliSessionId: String!
   hookEventName: String!
   timestamp: DateTime!
   toolName: String
@@ -14,7 +14,7 @@ type Event {
   stopHookActive: Boolean
   lastAssistantMessage: String
   rawPayload: JSON!
-  threadId: String!
+  sessionId: String!
   importance: String!
 }
 
@@ -26,13 +26,13 @@ type EventConnection {
 }
 
 extend type Subscription {
-  threadEventCreated(channelId: ID!): ThreadEventPayload!
-  threadEventUpdated(channelId: ID!): ThreadEventPayload!
+  sessionEventCreated(channelId: ID!): SessionEventPayload!
+  sessionEventUpdated(channelId: ID!): SessionEventPayload!
 }
 
-type ThreadEventPayload {
+type SessionEventPayload {
   channelId: String!
-  messageId: String!
-  threadId: String!
+  workspaceId: String!
+  sessionId: String!
   event: Event!
 }

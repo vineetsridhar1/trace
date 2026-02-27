@@ -1,6 +1,6 @@
 export interface EventMapper {
   id: string;
-  sessionId: string;
+  cliSessionId: string;
   hookEventName: string;
   timestamp: Date;
   toolName: string | null;
@@ -10,7 +10,7 @@ export interface EventMapper {
   stopHookActive: boolean | null;
   lastAssistantMessage: string | null;
   rawPayload: unknown;
-  threadId: string;
+  sessionId: string;
   importance: string;
 }
 
@@ -21,9 +21,9 @@ export interface EventConnectionMapper {
   offset: number;
 }
 
-export interface ThreadEventPayloadMapper {
+export interface SessionEventPayloadMapper {
   channelId: string;
-  messageId: string;
-  threadId: string;
+  workspaceId: string;
+  sessionId: string;
   event: EventMapper;
 }
