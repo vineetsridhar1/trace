@@ -392,7 +392,9 @@ export function registerIpcHandlers() {
     async function didBaseMove(branch: string, currentBaseSha: string): Promise<boolean> {
       const id = branch.replace('trace/', '');
       const stored = await runProcess('git', ['config', `trace.base-sha-${id}`], repoPath);
-      return stored.code === 0 && stored.stdout.trim() !== currentBaseSha;
+      // No stored SHA (pre-fix worktree) — assume merged when branch == base
+      if (stored.code !== 0) return true;
+      return stored.stdout.trim() !== currentBaseSha;
     }
 
     // Check if branch is merged into targetRef, handling same-commit (FF merge) cases.
