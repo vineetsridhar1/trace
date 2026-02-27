@@ -66,6 +66,7 @@ const GQL_UPDATE_QUEUED_RUN_CONFIG = gql`
 
 const SERVER_RAIL_WIDTH = 60;
 
+// Main application component - handles the core UI layout and state management
 export default function App() {
   return (
     <ChannelProvider>
