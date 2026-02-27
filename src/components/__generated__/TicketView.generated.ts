@@ -4,18 +4,18 @@ import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
 export type TicketDependenciesQueryVariables = Types.Exact<{
-  messageId: Types.Scalars['ID']['input'];
+  workspaceId: Types.Scalars['ID']['input'];
 }>;
 
 
-export type TicketDependenciesQuery = { __typename?: 'Query', ticketDependencies: Array<{ __typename?: 'TicketDependency', id: string, dependsOnMessageId: string, dependsOnTicketTitle?: string | null }> };
+export type TicketDependenciesQuery = { __typename?: 'Query', ticketDependencies: Array<{ __typename?: 'TicketDependency', id: string, dependsOnWorkspaceId: string, dependsOnTicketTitle?: string | null }> };
 
 
 export const TicketDependenciesDocument = gql`
-    query TicketDependencies($messageId: ID!) {
-  ticketDependencies(messageId: $messageId) {
+    query TicketDependencies($workspaceId: ID!) {
+  ticketDependencies(workspaceId: $workspaceId) {
     id
-    dependsOnMessageId
+    dependsOnWorkspaceId
     dependsOnTicketTitle
   }
 }
@@ -33,7 +33,7 @@ export const TicketDependenciesDocument = gql`
  * @example
  * const { data, loading, error } = useTicketDependenciesQuery({
  *   variables: {
- *      messageId: // value for 'messageId'
+ *      workspaceId: // value for 'workspaceId'
  *   },
  * });
  */

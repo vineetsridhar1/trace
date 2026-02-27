@@ -7,13 +7,13 @@ extend type Mutation {
   updateColumn(columnId: ID!, name: String, color: String, sortOrder: Int): KanbanColumn!
   deleteColumn(columnId: ID!): Boolean!
   moveTicket(ticketId: ID!, columnId: ID!, sortOrder: Int): Ticket!
-  setTicketDependencies(channelId: ID!, messageId: ID!, dependsOnMessageIds: [ID!]!, runConfig: JSON!): Message!
-  removeTicketDependency(channelId: ID!, messageId: ID!, dependsOnMessageId: ID!): Boolean!
-  updateQueuedRunConfig(messageId: ID!, runConfig: JSON!): Boolean!
+  setTicketDependencies(channelId: ID!, workspaceId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!): Workspace!
+  removeTicketDependency(channelId: ID!, workspaceId: ID!, dependsOnWorkspaceId: ID!): Boolean!
+  updateQueuedRunConfig(workspaceId: ID!, runConfig: JSON!): Boolean!
 }
 
 extend type Query {
-  ticketDependencies(messageId: ID!): [TicketDependency!]!
+  ticketDependencies(workspaceId: ID!): [TicketDependency!]!
 }
 
 type KanbanColumn {
@@ -28,7 +28,7 @@ type KanbanColumn {
 
 type Ticket {
   id: ID!
-  messageId: String!
+  workspaceId: String!
   columnId: String!
   title: String!
   description: String
@@ -38,10 +38,10 @@ type Ticket {
   sortOrder: Int!
   createdAt: DateTime!
   updatedAt: DateTime!
-  message: TicketMessage
+  workspace: TicketWorkspace
 }
 
-type TicketMessage {
+type TicketWorkspace {
   id: ID!
   branch: String
   status: String!
@@ -70,14 +70,14 @@ type TicketUpsertPayload {
 
 type TicketDependency {
   id: ID!
-  ticketMessageId: String!
-  dependsOnMessageId: String!
+  ticketWorkspaceId: String!
+  dependsOnWorkspaceId: String!
   dependsOnTicketTitle: String
   createdAt: DateTime!
 }
 
 type TicketReadyToRunPayload {
   channelId: String!
-  messageId: String!
+  workspaceId: String!
   runConfig: JSON!
 }

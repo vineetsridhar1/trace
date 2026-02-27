@@ -3,18 +3,18 @@ import { pubsub, TOPICS } from './pubsub';
 import { generateTicketFromMessage, updateTicketFromContext } from './ticketAiService';
 import { getStorage } from './storageService';
 
-function resolveTicketAttachmentUrls<T extends { message: { attachments: { id: string; key: string; filename: string; contentType: string }[] } }>(ticket: T) {
+function resolveTicketAttachmentUrls<T extends { workspace: { attachments: { id: string; key: string; filename: string; contentType: string }[] } }>(ticket: T) {
   const storage = getStorage();
   return {
     ...ticket,
-    message: {
-      ...ticket.message,
-      attachments: ticket.message.attachments.map((a) => ({ ...a, url: storage.url(a.key) })),
+    workspace: {
+      ...ticket.workspace,
+      attachments: ticket.workspace.attachments.map((a) => ({ ...a, url: storage.url(a.key) })),
     },
   };
 }
 
-const TICKET_MESSAGE_SELECT = {
+const TICKET_WORKSPACE_SELECT = {
   id: true,
   branch: true,
   status: true,
@@ -89,8 +89,8 @@ export async function getBoard(channelId: string) {
       tickets: {
         orderBy: { sortOrder: 'asc' },
         include: {
-          message: {
-            select: TICKET_MESSAGE_SELECT,
+          workspace: {
+            select: TICKET_WORKSPACE_SELECT,
           },
         },
       },
@@ -100,8 +100,8 @@ export async function getBoard(channelId: string) {
   return columnsWithTickets;
 }
 
-export async function createTicketForMessage(
-  messageId: string,
+export async function createTicketForWorkspace(
+  workspaceId: string,
   channelId: string,
   text: string,
   channelName: string,
@@ -110,8 +110,8 @@ export async function createTicketForMessage(
   const todoColumn = columns.find((col) => col.slug === 'todo');
   if (!todoColumn) return null;
 
-  // Check if ticket already exists for this message
-  const existing = await prisma.ticket.findUnique({ where: { messageId } });
+  // Check if ticket already exists for this workspace
+  const existing = await prisma.ticket.findUnique({ where: { workspaceId } });
   if (existing) return existing;
 
   // Try AI generation, fallback to simple extraction
@@ -129,7 +129,7 @@ export async function createTicketForMessage(
 
   const ticket = await prisma.ticket.create({
     data: {
-      messageId,
+      workspaceId,
       columnId: todoColumn.id,
       title,
       description,
@@ -138,8 +138,8 @@ export async function createTicketForMessage(
       sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
     },
     include: {
-      message: {
-        select: TICKET_MESSAGE_SELECT,
+      workspace: {
+        select: TICKET_WORKSPACE_SELECT,
       },
     },
   });
@@ -156,13 +156,13 @@ export async function createTicketForMessage(
 }
 
 export async function updateTicketFromEvent(
-  messageId: string,
+  workspaceId: string,
   channelId: string,
   eventsContext: string,
   summary: string,
 ) {
   const ticket = await prisma.ticket.findUnique({
-    where: { messageId },
+    where: { workspaceId },
     include: { column: true },
   });
   if (!ticket) return null;
@@ -188,8 +188,8 @@ export async function updateTicketFromEvent(
     data,
     include: {
       column: true,
-      message: {
-        select: TICKET_MESSAGE_SELECT,
+      workspace: {
+        select: TICKET_WORKSPACE_SELECT,
       },
     },
   });
@@ -211,13 +211,13 @@ export async function moveTicket(ticketId: string, columnId: string, sortOrder: 
     data: { columnId, sortOrder },
     include: {
       column: true,
-      message: {
-        select: { ...TICKET_MESSAGE_SELECT, channelId: true },
+      workspace: {
+        select: { ...TICKET_WORKSPACE_SELECT, channelId: true },
       },
     },
   });
 
-  const { channelId } = ticket.message;
+  const { channelId } = ticket.workspace;
 
   pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
     ticketUpserted: {
@@ -231,7 +231,7 @@ export async function moveTicket(ticketId: string, columnId: string, sortOrder: 
 }
 
 export async function syncTicketWithMessageStatus(
-  messageId: string,
+  workspaceId: string,
   channelId: string,
   newStatus: string,
 ) {
@@ -239,7 +239,7 @@ export async function syncTicketWithMessageStatus(
   if (!targetSlug) return null;
 
   const ticket = await prisma.ticket.findUnique({
-    where: { messageId },
+    where: { workspaceId },
     include: { column: true },
   });
   if (!ticket) return null;
@@ -267,8 +267,8 @@ export async function syncTicketWithMessageStatus(
     },
     include: {
       column: true,
-      message: {
-        select: TICKET_MESSAGE_SELECT,
+      workspace: {
+        select: TICKET_WORKSPACE_SELECT,
       },
     },
   });
@@ -284,12 +284,12 @@ export async function syncTicketWithMessageStatus(
   return updated;
 }
 
-export async function refreshTicketBroadcast(messageId: string, channelId: string) {
+export async function refreshTicketBroadcast(workspaceId: string, channelId: string) {
   const ticket = await prisma.ticket.findUnique({
-    where: { messageId },
+    where: { workspaceId },
     include: {
       column: true,
-      message: { select: TICKET_MESSAGE_SELECT },
+      workspace: { select: TICKET_WORKSPACE_SELECT },
     },
   });
   if (!ticket) return;
@@ -303,20 +303,20 @@ export async function refreshTicketBroadcast(messageId: string, channelId: strin
   });
 }
 
-export async function checkAndTriggerDependents(completedMessageId: string, channelId: string) {
+export async function checkAndTriggerDependents(completedWorkspaceId: string, channelId: string) {
   try {
-    // Find all dependencies where the completed message is a dependency target
+    // Find all dependencies where the completed workspace is a dependency target
     const waitingDeps = await prisma.ticketDependency.findMany({
-      where: { dependsOnMessageId: completedMessageId },
-      select: { ticketMessageId: true },
+      where: { dependsOnWorkspaceId: completedWorkspaceId },
+      select: { ticketWorkspaceId: true },
     });
 
-    const uniqueTicketIds = [...new Set(waitingDeps.map((d) => d.ticketMessageId))];
+    const uniqueTicketIds = [...new Set(waitingDeps.map((d) => d.ticketWorkspaceId))];
 
-    for (const ticketMessageId of uniqueTicketIds) {
+    for (const ticketWorkspaceId of uniqueTicketIds) {
       // Get all deps for this waiting ticket
       const allDeps = await prisma.ticketDependency.findMany({
-        where: { ticketMessageId },
+        where: { ticketWorkspaceId },
         include: {
           dependsOn: { select: { status: true } },
         },
@@ -328,25 +328,25 @@ export async function checkAndTriggerDependents(completedMessageId: string, chan
 
       // Atomically claim the ticket: only proceed if status is still 'queued'.
       // This prevents double-fire when two deps complete near-simultaneously.
-      const { count } = await prisma.message.updateMany({
-        where: { id: ticketMessageId, status: 'queued' },
+      const { count } = await prisma.workspace.updateMany({
+        where: { id: ticketWorkspaceId, status: 'queued' },
         data: { status: 'creation' },
       });
       if (count === 0) continue;
 
-      const message = await prisma.message.findUnique({
-        where: { id: ticketMessageId },
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: ticketWorkspaceId },
         select: { queuedRunConfig: true },
       });
 
-      if (!message?.queuedRunConfig) continue;
+      if (!workspace?.queuedRunConfig) continue;
 
       // Publish ready-to-run event
       pubsub.publish(TOPICS.TICKET_READY_TO_RUN(channelId), {
         ticketReadyToRun: {
           channelId,
-          messageId: ticketMessageId,
-          runConfig: message.queuedRunConfig,
+          workspaceId: ticketWorkspaceId,
+          runConfig: workspace.queuedRunConfig,
         },
       });
     }

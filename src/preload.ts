@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('traceAPI', {
   getServerUrl: () => ipcRenderer.sendSync('get-server-url') as string,
   spawnClaude: async (
-    messageId: string,
+    workspaceId: string,
     prompt: string,
     repoPath: string,
     creationCommands?: string[],
@@ -14,58 +14,58 @@ contextBridge.exposeInMainWorld('traceAPI', {
     systemInstructions?: string,
   ): Promise<{ success: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('spawn-claude', messageId, prompt, repoPath, creationCommands, resumeSessionId, filePaths, model, effort, systemInstructions);
+      return await ipcRenderer.invoke('spawn-claude', workspaceId, prompt, repoPath, creationCommands, resumeSessionId, filePaths, model, effort, systemInstructions);
     } catch (err) {
       return { success: false, error: String(err) };
     }
   },
   stopClaude: async (
-    messageId: string,
+    workspaceId: string,
   ): Promise<{ success: boolean; stopped?: boolean; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('stop-claude', messageId);
+      return await ipcRenderer.invoke('stop-claude', workspaceId);
     } catch (err) {
       return { success: false, error: String(err) };
     }
   },
   deleteWorktree: async (
-    messageId: string,
+    workspaceId: string,
     repoPath: string,
   ): Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('delete-worktree', messageId, repoPath);
+      return await ipcRenderer.invoke('delete-worktree', workspaceId, repoPath);
     } catch (err) {
       return { success: false, error: String(err) };
     }
   },
   checkWorktreeExists: async (
-    messageId: string,
+    workspaceId: string,
     repoPath: string,
   ): Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('check-worktree', messageId, repoPath);
+      return await ipcRenderer.invoke('check-worktree', workspaceId, repoPath);
     } catch (err) {
       return { success: false, exists: false, error: String(err) };
     }
   },
   mergeWorktree: async (
-    messageId: string,
+    workspaceId: string,
     repoPath: string,
     baseBranch: string,
   ): Promise<{ success: boolean; branch?: string; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('merge-worktree', messageId, repoPath, baseBranch);
+      return await ipcRenderer.invoke('merge-worktree', workspaceId, repoPath, baseBranch);
     } catch (err) {
       return { success: false, error: String(err) };
     }
   },
   reportClaudeActivity: async (
-    messageId: string,
+    workspaceId: string,
     eventType: string,
     sessionId?: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      return await ipcRenderer.invoke('claude-activity-ping', messageId, eventType, sessionId);
+      return await ipcRenderer.invoke('claude-activity-ping', workspaceId, eventType, sessionId);
     } catch (err) {
       return { success: false, error: String(err) };
     }
@@ -97,14 +97,14 @@ contextBridge.exposeInMainWorld('traceAPI', {
     return () => ipcRenderer.removeListener('pty-exit', handler);
   },
 
-  getWorktreeDiff: (messageId: string, baseBranch: string) =>
-    ipcRenderer.invoke('get-worktree-diff', messageId, baseBranch),
+  getWorktreeDiff: (workspaceId: string, baseBranch: string) =>
+    ipcRenderer.invoke('get-worktree-diff', workspaceId, baseBranch),
 
-  allocatePorts: (messageId: string, count: number) =>
-    ipcRenderer.invoke('allocate-ports', messageId, count),
+  allocatePorts: (workspaceId: string, count: number) =>
+    ipcRenderer.invoke('allocate-ports', workspaceId, count),
 
-  releasePorts: (messageId: string) =>
-    ipcRenderer.invoke('release-ports', messageId),
+  releasePorts: (workspaceId: string) =>
+    ipcRenderer.invoke('release-ports', workspaceId),
 
   focusWindow: () => ipcRenderer.invoke('focus-window'),
 
@@ -135,7 +135,7 @@ contextBridge.exposeInMainWorld('traceAPI', {
   listRepoBranches: (repoPath: string) =>
     ipcRenderer.invoke('list-repo-branches', repoPath) as Promise<{ success: boolean; branches: string[]; error?: string }>,
 
-  checkBranchesMerged: (repoPath: string, targets: Array<{ messageId: string; branch: string }>, baseBranch: string) =>
+  checkBranchesMerged: (repoPath: string, targets: Array<{ workspaceId: string; branch: string }>, baseBranch: string) =>
     ipcRenderer.invoke('check-branches-merged', repoPath, targets, baseBranch) as Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>,
 
   watchBaseBranch: (repoPath: string, baseBranch: string) =>

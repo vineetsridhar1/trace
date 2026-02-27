@@ -3,7 +3,7 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
 import { registerIpcHandlers, setMainWindow } from './main/ipc';
-import { setWorktreeBaseFn, runStateByMessageId, stopWatchdog } from './main/watchdog';
+import { setWorktreeBaseFn, runStateByWorkspaceId, stopWatchdog } from './main/watchdog';
 import { killAllPtys } from './main/pty';
 import {
   setWorktreeBase,
@@ -82,11 +82,11 @@ app.on('before-quit', () => {
     if (!proc.killed) {
       suppressSyntheticStopFor.add(id);
       stopWatchdog(id, 'app-before-quit');
-      runStateByMessageId.delete(id);
+      runStateByWorkspaceId.delete(id);
       proc.kill('SIGTERM');
       console.log(`Killed claude process for ${id.slice(0, 8)}`);
     }
   }
   runningProcesses.clear();
-  runStateByMessageId.clear();
+  runStateByWorkspaceId.clear();
 });

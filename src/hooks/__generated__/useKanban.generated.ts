@@ -8,7 +8,7 @@ export type BoardQueryVariables = Types.Exact<{
 }>;
 
 
-export type BoardQuery = { __typename?: 'Query', board: Array<{ __typename?: 'KanbanColumn', id: string, channelId: string, name: string, slug: string, color?: string | null, sortOrder: number, tickets: Array<{ __typename?: 'Ticket', id: string, messageId: string, columnId: string, title: string, description?: string | null, solutionApproach?: string | null, status: string, metadata?: unknown | null, sortOrder: number, createdAt: string, updatedAt: string, message?: { __typename?: 'TicketMessage', id: string, branch?: string | null, status: string, createdAt: string, attachments: Array<{ __typename?: 'TicketAttachment', id: string, key: string, filename: string, contentType: string, url: string }> } | null }> }> };
+export type BoardQuery = { __typename?: 'Query', board: Array<{ __typename?: 'KanbanColumn', id: string, channelId: string, name: string, slug: string, color?: string | null, sortOrder: number, tickets: Array<{ __typename?: 'Ticket', id: string, workspaceId: string, columnId: string, title: string, description?: string | null, solutionApproach?: string | null, status: string, metadata?: unknown | null, sortOrder: number, createdAt: string, updatedAt: string, workspace?: { __typename?: 'TicketWorkspace', id: string, branch?: string | null, status: string, createdAt: string, attachments: Array<{ __typename?: 'TicketAttachment', id: string, key: string, filename: string, contentType: string, url: string }> } | null }> }> };
 
 export type MoveTicketMutationVariables = Types.Exact<{
   ticketId: Types.Scalars['ID']['input'];
@@ -17,7 +17,7 @@ export type MoveTicketMutationVariables = Types.Exact<{
 }>;
 
 
-export type MoveTicketMutation = { __typename?: 'Mutation', moveTicket: { __typename?: 'Ticket', id: string, messageId: string, columnId: string, title: string, sortOrder: number } };
+export type MoveTicketMutation = { __typename?: 'Mutation', moveTicket: { __typename?: 'Ticket', id: string, workspaceId: string, columnId: string, title: string, sortOrder: number } };
 
 
 export const BoardDocument = gql`
@@ -31,7 +31,7 @@ export const BoardDocument = gql`
     sortOrder
     tickets {
       id
-      messageId
+      workspaceId
       columnId
       title
       description
@@ -41,7 +41,7 @@ export const BoardDocument = gql`
       sortOrder
       createdAt
       updatedAt
-      message {
+      workspace {
         id
         branch
         status
@@ -98,7 +98,7 @@ export const MoveTicketDocument = gql`
     mutation MoveTicket($ticketId: ID!, $columnId: ID!, $sortOrder: Int) {
   moveTicket(ticketId: $ticketId, columnId: $columnId, sortOrder: $sortOrder) {
     id
-    messageId
+    workspaceId
     columnId
     title
     sortOrder

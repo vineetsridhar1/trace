@@ -32,7 +32,7 @@ export interface LocalChannelConfig {
 export interface TraceAPI {
   getServerUrl: () => string;
   spawnClaude: (
-    messageId: string,
+    workspaceId: string,
     prompt: string,
     repoPath: string,
     creationCommands?: string[],
@@ -43,23 +43,23 @@ export interface TraceAPI {
     systemInstructions?: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   stopClaude: (
-    messageId: string,
+    workspaceId: string,
   ) => Promise<{ success: boolean; stopped?: boolean; error?: string }>;
   deleteWorktree: (
-    messageId: string,
+    workspaceId: string,
     repoPath: string,
   ) => Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }>;
   checkWorktreeExists: (
-    messageId: string,
+    workspaceId: string,
     repoPath: string,
   ) => Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }>;
   mergeWorktree: (
-    messageId: string,
+    workspaceId: string,
     repoPath: string,
     baseBranch: string,
   ) => Promise<{ success: boolean; branch?: string; error?: string }>;
   reportClaudeActivity: (
-    messageId: string,
+    workspaceId: string,
     eventType: string,
     sessionId?: string,
   ) => Promise<{ success: boolean; error?: string }>;
@@ -69,9 +69,9 @@ export interface TraceAPI {
   killPty: (terminalId: string) => Promise<{ success: boolean }>;
   onPtyData: (callback: (terminalId: string, data: string) => void) => () => void;
   onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
-  getWorktreeDiff: (messageId: string, baseBranch: string) => Promise<WorktreeDiffResult>;
-  allocatePorts: (messageId: string, count: number) => Promise<{ success: boolean; ports?: number[]; error?: string }>;
-  releasePorts: (messageId: string) => Promise<{ success: boolean; error?: string }>;
+  getWorktreeDiff: (workspaceId: string, baseBranch: string) => Promise<WorktreeDiffResult>;
+  allocatePorts: (workspaceId: string, count: number) => Promise<{ success: boolean; ports?: number[]; error?: string }>;
+  releasePorts: (workspaceId: string) => Promise<{ success: boolean; error?: string }>;
   focusWindow: () => Promise<void>;
   selectFolder: () => Promise<{ success: boolean; canceled?: boolean; path?: string; error?: string }>;
   getLocalConfig: (channelId: string) => Promise<LocalChannelConfig | null>;
@@ -84,7 +84,7 @@ export interface TraceAPI {
   listRepoBranches: (repoPath: string) => Promise<{ success: boolean; branches: string[]; error?: string }>;
   checkBranchesMerged: (
     repoPath: string,
-    targets: Array<{ messageId: string; branch: string }>,
+    targets: Array<{ workspaceId: string; branch: string }>,
     baseBranch: string,
   ) => Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>;
   watchBaseBranch: (repoPath: string, baseBranch: string) => Promise<{ success: boolean }>;
@@ -100,7 +100,7 @@ declare global {
 
 export interface ServerEvent {
   id: string;
-  sessionId: string;
+  cliSessionId: string;
   hookEventName: string;
   timestamp: string;
   toolName: string | null;
@@ -110,7 +110,7 @@ export interface ServerEvent {
   stopHookActive: boolean | null;
   lastAssistantMessage: string | null;
   rawPayload: unknown;
-  threadId: string;
+  sessionId: string;
   importance: string;
 }
 
@@ -141,16 +141,16 @@ export interface Channel {
   updatedAt: string;
 }
 
-export interface MessageSession {
+export interface WorkspaceCliSession {
   sessionId: string;
   cwd: string | null;
   status: string;
 }
 
-export interface ChannelMessage {
+export interface Workspace {
   id: string;
   channelId: string;
-  sessionId: string;
+  cliSessionId: string;
   preview: string | null;
   importance: string;
   status: TicketStatus;
@@ -158,27 +158,27 @@ export interface ChannelMessage {
   branch: string | null;
   claudeSessionId: string | null;
   createdAt: string;
-  session: MessageSession;
-  threadCount: number;
+  cliSession: WorkspaceCliSession;
+  sessionCount: number;
   queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
 }
 
-export interface MessageThread {
+export interface WorkspaceSession {
   id: string;
-  messageId: string;
+  workspaceId: string;
   createdAt: string;
   eventCount: number;
 }
 
-export interface MessageEnvelope {
+export interface WorkspaceEnvelope {
   channelId: string;
-  message: ChannelMessage;
+  workspace: Workspace;
 }
 
-export interface ThreadEventEnvelope {
+export interface SessionEventEnvelope {
   channelId: string;
-  messageId: string;
-  threadId: string;
+  workspaceId: string;
+  sessionId: string;
   event: ServerEvent;
 }
 
@@ -186,7 +186,7 @@ export type ChannelType = 'channel' | 'team' | 'project';
 export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'auto_review';
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';
-export type ThreadStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+export type SessionStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
 export type MiddlePanelView = 'chat' | 'board' | 'workspaces' | 'projects';
 
@@ -200,7 +200,7 @@ export interface TicketAttachment {
 
 export interface KanbanTicket {
   id: string;
-  messageId: string;
+  workspaceId: string;
   columnId: string;
   columnSlug?: string;
   title: string;
@@ -211,7 +211,7 @@ export interface KanbanTicket {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
-  message: {
+  workspace: {
     id: string;
     branch: string | null;
     status: string;
@@ -253,7 +253,7 @@ export interface AiChatMessage {
   createdAt: string;
 }
 
-export interface ThreadEventNode {
+export interface SessionEventNode {
   kind: 'event';
   event: ServerEvent;
 }
@@ -300,13 +300,13 @@ export interface TodoItem {
   status: string;
 }
 
-export interface ThreadDividerNode {
-  kind: 'thread-divider';
+export interface SessionDividerNode {
+  kind: 'session-divider';
   id: string;
   timestamp: string;
 }
 
-export type ThreadRenderNode = ThreadEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode | ThreadDividerNode;
+export type SessionRenderNode = SessionEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode | SessionDividerNode;
 
 export interface ExtractedDiffContent {
   title: string;

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { gql } from '@apollo/client';
-import { useUpdateChannelMutation } from './__generated__/useChannelSettings.generated';
+import { useUpdateChannelMutation, useDeleteChannelMutation } from './__generated__/useChannelSettings.generated';
 
 const GQL_UPDATE_CHANNEL = gql`
   mutation UpdateChannel($id: ID!, $name: String, $workspacesEnabled: Boolean, $teamIds: [String!], $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String) {
@@ -22,8 +22,15 @@ const GQL_UPDATE_CHANNEL = gql`
   }
 `;
 
+const GQL_DELETE_CHANNEL = gql`
+  mutation DeleteChannel($id: ID!) {
+    deleteChannel(id: $id)
+  }
+`;
+
 export function useChannelSettings() {
   const [executeUpdateChannel] = useUpdateChannelMutation();
+  const [executeDeleteChannel] = useDeleteChannelMutation();
 
   const updateChannel = useCallback(async (channelId: string, data: {
     name?: string;
@@ -45,5 +52,16 @@ export function useChannelSettings() {
     }
   }, [executeUpdateChannel]);
 
-  return { updateChannel };
+  const deleteChannel = useCallback(async (channelId: string) => {
+    try {
+      const result = await executeDeleteChannel({ variables: { id: channelId } });
+      if (result.errors?.length) return false;
+      return result.data?.deleteChannel ?? false;
+    } catch {
+      console.error('Failed to delete channel');
+      return false;
+    }
+  }, [executeDeleteChannel]);
+
+  return { updateChannel, deleteChannel };
 }

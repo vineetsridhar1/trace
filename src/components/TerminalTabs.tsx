@@ -31,7 +31,7 @@ function TerminalTabContent({ terminalId, cwd, command, visible, env, readOnly }
 interface TerminalTabsProps {
   terminals: TerminalTab[];
   allTerminalEntries: TerminalEntry[];
-  currentMessageId: string | null;
+  currentWorkspaceId: string | null;
   activeTabId: string | null;
   cwd: string;
   runScriptRunning: boolean;
@@ -48,7 +48,7 @@ interface TerminalTabsProps {
   onOpenSettings: () => void;
 }
 
-export function TerminalTabs({ terminals, allTerminalEntries, currentMessageId, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
   const runTab = terminals.find((t) => t.name === 'Run');
   const setupTab = terminals.find((t) => t.name === 'Setup');
   return (
@@ -186,7 +186,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentMessageId, 
             const isSetupUnconfigured = t.name === 'Setup' && !hasSetupScript;
             const isRunUnconfigured = t.name === 'Run' && !hasRunScript;
             if (isSetupUnconfigured || isRunUnconfigured) return null;
-            const isCurrent = entry.messageId === currentMessageId;
+            const isCurrent = entry.workspaceId === currentWorkspaceId;
             const isActiveTab = t.terminalId === entry.activeTabId;
             return (
               <TerminalTabContent

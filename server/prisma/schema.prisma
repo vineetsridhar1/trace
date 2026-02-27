@@ -33,7 +33,7 @@ model User {
 
   serverMembers   ServerMember[]
   channelMembers  ChannelMember[]
-  messages        Message[]
+  workspaces      Workspace[]
   assignedTickets Ticket[]
 
   @@map("users")
@@ -69,7 +69,7 @@ model ChannelMember {
   @@map("channel_members")
 }
 
-model Session {
+model CliSession {
   id             String   @id @default(uuid())
   sessionId      String   @unique @map("session_id")
   transcriptPath String?  @map("transcript_path")
@@ -79,8 +79,8 @@ model Session {
   lastSeenAt     DateTime @default(now()) @map("last_seen_at")
   status         String   @default("active")
 
-  events   Event[]
-  messages Message[]
+  events     Event[]
+  workspaces Workspace[]
 
   @@map("sessions")
 }
@@ -100,7 +100,7 @@ model Channel {
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   server         Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  messages       Message[]
+  workspaces     Workspace[]
   kanbanColumns  KanbanColumn[]
   members        ChannelMember[]
   aiChats        AiChat[]
@@ -122,10 +122,10 @@ model ChannelTeam {
   @@map("channel_teams")
 }
 
-model Message {
+model Workspace {
   id              String   @id @default(uuid())
   channelId       String   @map("channel_id")
-  sessionId       String   @map("session_id")
+  cliSessionId    String   @map("session_id")
   userId          String?  @map("user_id")
   preview         String?
   importance      String   @default("non-important")
@@ -138,11 +138,11 @@ model Message {
   queuedRunConfig Json?    @map("queued_run_config")
 
   channel      Channel            @relation(fields: [channelId], references: [id])
-  session      Session            @relation(fields: [sessionId], references: [sessionId])
+  cliSession   CliSession         @relation(fields: [cliSessionId], references: [sessionId])
   user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
-  threads      Thread[]
+  sessions     Session[]
   ticket       Ticket?
-  attachments  Attachment[]
+  attachments  Attachment[] @relation("AttachmentToMessage")
   dependencies TicketDependency[] @relation("ticketDeps")
   dependedOnBy TicketDependency[] @relation("depTarget")
 
@@ -151,20 +151,20 @@ model Message {
   @@map("messages")
 }
 
-model Thread {
-  id        String   @id @default(uuid())
-  messageId String   @map("message_id")
-  createdAt DateTime @default(now()) @map("created_at")
+model Session {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("message_id")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  message Message @relation(fields: [messageId], references: [id])
-  events  Event[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  events    Event[]
 
   @@map("threads")
 }
 
 model Event {
   id                   String   @id @default(uuid())
-  sessionId            String   @map("session_id")
+  cliSessionId         String   @map("session_id")
   hookEventName        String   @map("hook_event_name")
   timestamp            DateTime @default(now())
   toolName             String?  @map("tool_name")
@@ -174,17 +174,17 @@ model Event {
   stopHookActive       Boolean? @map("stop_hook_active")
   lastAssistantMessage String?  @map("last_assistant_message")
   rawPayload           Json     @map("raw_payload")
-  threadId             String   @map("thread_id")
+  sessionId            String   @map("thread_id")
   importance           String   @default("non-important")
 
-  session Session @relation(fields: [sessionId], references: [sessionId])
-  thread  Thread  @relation(fields: [threadId], references: [id])
+  cliSession CliSession @relation(fields: [cliSessionId], references: [sessionId])
+  session    Session    @relation(fields: [sessionId], references: [id])
 
-  @@index([sessionId, timestamp])
+  @@index([cliSessionId, timestamp])
   @@index([hookEventName])
   @@index([toolName])
-  @@index([sessionId, hookEventName])
-  @@index([threadId, timestamp])
+  @@index([cliSessionId, hookEventName])
+  @@index([sessionId, timestamp])
   @@map("events")
 }
 
@@ -208,7 +208,7 @@ model KanbanColumn {
 
 model Ticket {
   id               String   @id @default(uuid())
-  messageId        String   @unique @map("message_id")
+  workspaceId      String   @unique @map("message_id")
   columnId         String   @map("column_id")
   assigneeId       String?  @map("assignee_id")
   title            String
@@ -220,9 +220,9 @@ model Ticket {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  message  Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  column   KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
-  assignee User?        @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  column    KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  assignee  User?        @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
 
   @@index([columnId, sortOrder])
   @@index([assigneeId])
@@ -238,7 +238,7 @@ model Attachment {
   checksum    String
   createdAt   DateTime @default(now()) @map("created_at")
 
-  messages Message[]
+  workspaces Workspace[] @relation("AttachmentToMessage")
 
   @@map("attachments")
 }
@@ -273,15 +273,15 @@ model AiChatMessage {
 }
 
 model TicketDependency {
-  id                 String   @id @default(uuid())
-  ticketMessageId    String   @map("ticket_message_id")
-  dependsOnMessageId String   @map("depends_on_message_id")
-  createdAt          DateTime @default(now()) @map("created_at")
+  id                     String   @id @default(uuid())
+  ticketWorkspaceId      String   @map("ticket_message_id")
+  dependsOnWorkspaceId   String   @map("depends_on_message_id")
+  createdAt              DateTime @default(now()) @map("created_at")
 
-  ticket    Message @relation("ticketDeps", fields: [ticketMessageId], references: [id], onDelete: Cascade)
-  dependsOn Message @relation("depTarget", fields: [dependsOnMessageId], references: [id], onDelete: Cascade)
+  ticket    Workspace @relation("ticketDeps", fields: [ticketWorkspaceId], references: [id], onDelete: Cascade)
+  dependsOn Workspace @relation("depTarget", fields: [dependsOnWorkspaceId], references: [id], onDelete: Cascade)
 
-  @@unique([ticketMessageId, dependsOnMessageId])
-  @@index([dependsOnMessageId])
+  @@unique([ticketWorkspaceId, dependsOnWorkspaceId])
+  @@index([dependsOnWorkspaceId])
   @@map("ticket_dependencies")
 }

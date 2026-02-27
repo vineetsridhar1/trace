@@ -6,7 +6,7 @@ import { useWorktreeChanges } from '../hooks/useWorktreeChanges';
 const MAX_FILES_SHOWN = 20;
 
 interface WorktreeChangesProps {
-  messageId: string | null;
+  workspaceId: string | null;
   baseBranch?: string;
 }
 
@@ -29,8 +29,8 @@ function countChanges(hunks: ParsedHunk[]): { additions: number; deletions: numb
 
 type DiffTab = 'working' | 'branch';
 
-export function WorktreeChanges({ messageId, baseBranch = 'main' }: WorktreeChangesProps) {
-  const { diffData, loading, refresh } = useWorktreeChanges(messageId, baseBranch);
+export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeChangesProps) {
+  const { diffData, loading, refresh } = useWorktreeChanges(workspaceId, baseBranch);
   const [runtime, setRuntime] = useState<DiffRuntime | null>(null);
   const [activeTab, setActiveTab] = useState<DiffTab>('working');
 

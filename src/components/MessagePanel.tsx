@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiChevronRight, FiColumns, FiList, FiShare2 } from 'react-icons/fi';
-import type { Channel, ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
+import type { Channel, Workspace, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { KanbanBoard } from './KanbanBoard';
-import { MessageInput } from './MessageInput';
+import { WorkspaceInput } from './WorkspaceInput';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { ChatEmptyState } from './ChatEmptyState';
 import { ThreadPanel } from './ThreadPanel';
 
 interface StatusGroup {
   status: TicketStatus;
-  messages: ChannelMessage[];
+  workspaces: Workspace[];
 }
 
 function CollapsibleStatusGroup({
@@ -55,15 +55,15 @@ function CollapsibleStatusGroup({
 interface MessagePanelProps {
   panelTitle: string;
   channelCreatedAt: string | null;
-  messages: ChannelMessage[];
-  selectedMessageId: string | null;
-  attentionMessageIds: Set<string>;
-  onOpenThread: (message: ChannelMessage) => void;
+  workspaces: Workspace[];
+  selectedWorkspaceId: string | null;
+  attentionWorkspaceIds: Set<string>;
+  onOpenWorkspace: (workspace: Workspace) => void;
   middlePanelView: MiddlePanelView;
   kanbanColumns: KanbanColumnType[];
   kanbanLoading: boolean;
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
-  onDeleteMessage?: (messageId: string) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
   isFullscreen?: boolean;
   teamProjects?: Channel[];
   onSwitchChannel?: (channelId: string) => void;
@@ -72,14 +72,14 @@ interface MessagePanelProps {
 export function MessagePanel({
   panelTitle,
   channelCreatedAt,
-  messages,
-  selectedMessageId,
-  attentionMessageIds,
-  onOpenThread,
+  workspaces,
+  selectedWorkspaceId,
+  attentionWorkspaceIds,
+  onOpenWorkspace,
   middlePanelView,
   kanbanColumns,
   kanbanLoading,
-  onDeleteMessage,
+  onDeleteWorkspace,
   onMoveTicket,
   isFullscreen,
   teamProjects = [],
@@ -88,45 +88,45 @@ export function MessagePanel({
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
 
-  const ticketByMessageId = useMemo(() => {
+  const ticketByWorkspaceId = useMemo(() => {
     const map = new Map<string, KanbanTicket>();
     for (const col of kanbanColumns) {
       for (const ticket of col.tickets) {
-        map.set(ticket.messageId, ticket);
+        map.set(ticket.workspaceId, ticket);
       }
     }
     return map;
   }, [kanbanColumns]);
 
-  const groupedMessages = useMemo(() => {
-    const buckets = new Map<TicketStatus, ChannelMessage[]>();
-    for (const msg of messages) {
-      const status = (msg.status ?? 'pending') as TicketStatus;
+  const groupedWorkspaces = useMemo(() => {
+    const buckets = new Map<TicketStatus, Workspace[]>();
+    for (const ws of workspaces) {
+      const status = (ws.status ?? 'pending') as TicketStatus;
       let bucket = buckets.get(status);
       if (!bucket) {
         bucket = [];
         buckets.set(status, bucket);
       }
-      bucket.push(msg);
+      bucket.push(ws);
     }
 
     const groups: StatusGroup[] = [];
     for (const status of STATUS_GROUP_ORDER) {
-      const msgs = buckets.get(status);
-      if (msgs && msgs.length > 0) {
-        groups.push({ status, messages: msgs });
+      const items = buckets.get(status);
+      if (items && items.length > 0) {
+        groups.push({ status, workspaces: items });
       }
     }
     return groups;
-  }, [messages]);
+  }, [workspaces]);
 
   const nearBottomRef = useRef(true);
-  const prevMessageCountRef = useRef(0);
+  const prevWorkspaceCountRef = useRef(0);
 
   useEffect(() => {
-    const prevCount = prevMessageCountRef.current;
-    const currCount = messages.length;
-    prevMessageCountRef.current = currCount;
+    const prevCount = prevWorkspaceCountRef.current;
+    const currCount = workspaces.length;
+    prevWorkspaceCountRef.current = currCount;
 
     const el = feedListRef.current;
     if (!el) return;
@@ -134,7 +134,7 @@ export function MessagePanel({
     if (prevCount === 0 || nearBottomRef.current) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [messages]);
+  }, [workspaces]);
 
   const handleFeedScroll = useCallback(() => {
     const el = feedListRef.current;
@@ -143,30 +143,30 @@ export function MessagePanel({
   }, []);
 
   const handleBoardClickTicket = useCallback(
-    (messageId: string) => {
-      const message = messages.find((m) => m.id === messageId);
-      if (message) onOpenThread(message);
+    (workspaceId: string) => {
+      const workspace = workspaces.find((m) => m.id === workspaceId);
+      if (workspace) onOpenWorkspace(workspace);
     },
-    [messages, onOpenThread],
+    [workspaces, onOpenWorkspace],
   );
 
-  const renderGroupedMessages = (showDelete: boolean) =>
-    groupedMessages.map((group) => (
+  const renderGroupedWorkspaces = (showDelete: boolean) =>
+    groupedWorkspaces.map((group) => (
       <CollapsibleStatusGroup
         key={group.status}
         status={group.status}
-        count={group.messages.length}
+        count={group.workspaces.length}
       >
-        {group.messages.map((message) => (
+        {group.workspaces.map((workspace) => (
           <MessageItem
-            key={message.id}
-            message={message}
-            ticket={ticketByMessageId.get(message.id) ?? null}
-            isSelected={message.id === selectedMessageId}
-            needsAttention={attentionMessageIds.has(message.id)}
-            onOpenThread={onOpenThread}
-            onDeleteMessage={showDelete ? onDeleteMessage : undefined}
-            dimmed={message.status === 'merged'}
+            key={workspace.id}
+            workspace={workspace}
+            ticket={ticketByWorkspaceId.get(workspace.id) ?? null}
+            isSelected={workspace.id === selectedWorkspaceId}
+            needsAttention={attentionWorkspaceIds.has(workspace.id)}
+            onOpenWorkspace={onOpenWorkspace}
+            onDeleteWorkspace={showDelete ? onDeleteWorkspace : undefined}
+            dimmed={workspace.status === 'merged'}
           />
         ))}
       </CollapsibleStatusGroup>
@@ -175,23 +175,23 @@ export function MessagePanel({
   return (
     <div id="messages-panel" className="flex min-h-0 flex-1 flex-col bg-[#1a1b26]" style={{ minWidth: 200 }}>
       {middlePanelView === 'chat' ? (
-        messages.length === 0 ? (
+        <>
           <ChatEmptyState
             channelName={panelTitle.replace(/^#\s*/, '')}
             channelCreatedAt={channelCreatedAt}
           />
-        ) : (
-          <>
-            <div
-              ref={feedListRef}
-              onScroll={handleFeedScroll}
-              className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
-            >
-              {renderGroupedMessages(true)}
+          <div className="border-t border-[#292e42] px-3 py-3">
+            <div className="flex items-end gap-2">
+              <textarea
+                rows={1}
+                disabled
+                placeholder="Chat messaging coming soon..."
+                style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
+                className="w-full resize-none rounded-md border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] opacity-50 cursor-not-allowed"
+              />
             </div>
-            <MessageInput />
-          </>
-        )
+          </div>
+        </>
       ) : middlePanelView === 'board' ? (
         <>
           <div className="flex items-center gap-2 px-3 py-2">
@@ -233,7 +233,6 @@ export function MessagePanel({
               Graph view coming soon
             </div>
           )}
-          <MessageInput />
         </>
       ) : middlePanelView === 'projects' ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -262,7 +261,7 @@ export function MessagePanel({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          {!(isFullscreen && selectedMessageId) && (
+          {!(isFullscreen && selectedWorkspaceId) && (
             <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: 200 }}>
               <div
                 id="workspaces-list"
@@ -270,9 +269,9 @@ export function MessagePanel({
                 onScroll={handleFeedScroll}
                 className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
               >
-                {renderGroupedMessages(false)}
+                {renderGroupedWorkspaces(false)}
               </div>
-              <MessageInput />
+              <WorkspaceInput />
             </div>
           )}
           <ThreadPanel />

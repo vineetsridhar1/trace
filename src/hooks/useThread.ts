@@ -1,53 +1,53 @@
 import { useCallback, useRef, useState } from "react";
 import { gql } from "@apollo/client";
-import type { ChannelMessage, ServerEvent, ThreadStatus } from "../types";
+import type { Workspace, ServerEvent, SessionStatus } from "../types";
 import {
-  useCreateThreadMutation,
-  useThreadsLazyQuery,
-  useThreadEventsLazyQuery,
+  useCreateSessionMutation,
+  useSessionsLazyQuery,
+  useSessionEventsLazyQuery,
 } from "./__generated__/useThread.generated";
 import { clamp } from "../utils";
 import { useWorktreeState } from "./useWorktreeState";
 import { useThreadSelection } from "./useThreadSelection";
 
-export interface ThreadInfo {
+export interface SessionInfo {
   id: string;
-  messageId: string;
+  workspaceId: string;
   createdAt: string;
   eventCount: number;
 }
 
-const GQL_THREADS = gql`
-  query Threads($channelId: ID!, $messageId: ID!) {
-    threads(channelId: $channelId, messageId: $messageId) {
+const GQL_SESSIONS = gql`
+  query Sessions($channelId: ID!, $workspaceId: ID!) {
+    sessions(channelId: $channelId, workspaceId: $workspaceId) {
       id
-      messageId
+      workspaceId
       createdAt
       eventCount
     }
   }
 `;
 
-const GQL_THREAD_EVENTS = gql`
-  query ThreadEvents(
+const GQL_SESSION_EVENTS = gql`
+  query SessionEvents(
     $channelId: ID!
-    $messageId: ID!
-    $threadId: ID!
+    $workspaceId: ID!
+    $sessionId: ID!
     $limit: Int
     $offset: Int
     $after: String
   ) {
-    threadEvents(
+    sessionEvents(
       channelId: $channelId
-      messageId: $messageId
-      threadId: $threadId
+      workspaceId: $workspaceId
+      sessionId: $sessionId
       limit: $limit
       offset: $offset
       after: $after
     ) {
       events {
         id
-        sessionId
+        cliSessionId
         hookEventName
         timestamp
         toolName
@@ -57,7 +57,7 @@ const GQL_THREAD_EVENTS = gql`
         stopHookActive
         lastAssistantMessage
         rawPayload
-        threadId
+        sessionId
         importance
       }
       total
@@ -67,11 +67,11 @@ const GQL_THREAD_EVENTS = gql`
   }
 `;
 
-const GQL_CREATE_THREAD = gql`
-  mutation CreateThread($channelId: ID!, $messageId: ID!) {
-    createThread(channelId: $channelId, messageId: $messageId) {
+const GQL_CREATE_SESSION = gql`
+  mutation CreateSession($channelId: ID!, $workspaceId: ID!) {
+    createSession(channelId: $channelId, workspaceId: $workspaceId) {
       id
-      messageId
+      workspaceId
       createdAt
       eventCount
     }
@@ -84,26 +84,26 @@ interface UseThreadOptions {
   getActiveChannelId: () => string | null;
 }
 
-const THREAD_PAGE_SIZE = 100;
+const SESSION_PAGE_SIZE = 100;
 
 export function useThread({
   getChannelRepoPath,
   getChannelBaseBranch,
   getActiveChannelId,
 }: UseThreadOptions) {
-  const [executeThreads] = useThreadsLazyQuery();
-  const [executeThreadEvents] = useThreadEventsLazyQuery();
-  const [executeCreateThread] = useCreateThreadMutation();
+  const [executeSessions] = useSessionsLazyQuery();
+  const [executeSessionEvents] = useSessionEventsLazyQuery();
+  const [executeCreateSession] = useCreateSessionMutation();
 
   // Composed hooks
   const {
-    selectedMessageId,
-    selectedMessage,
-    selectedMessageRef,
-    selectedMessageIdRef,
-    syncSelectedMessage,
+    selectedWorkspaceId,
+    selectedWorkspace,
+    selectedWorkspaceRef,
+    selectedWorkspaceIdRef,
+    syncSelectedWorkspace,
     clearSelection,
-    selectMessage,
+    selectWorkspace,
   } = useThreadSelection();
   const {
     hasWorktree,
@@ -116,49 +116,49 @@ export function useThread({
   } = useWorktreeState({
     getChannelRepoPath,
     getChannelBaseBranch,
-    selectedMessageRef,
+    selectedWorkspaceRef,
   });
 
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [threads, setThreads] = useState<ThreadInfo[]>([]);
-  const [threadEvents, setThreadEvents] = useState<ServerEvent[]>([]);
-  const [threadStatus, setThreadStatus] = useState<ThreadStatus>("idle");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sessionEvents, setSessionEvents] = useState<ServerEvent[]>([]);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("idle");
   const [threadWidth, setThreadWidth] = useState(0);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [expandedReadGroupIds, setExpandedReadGroupIds] = useState<
     Record<string, boolean>
   >({});
-  const [threadTotal, setThreadTotal] = useState(0);
+  const [sessionTotal, setSessionTotal] = useState(0);
   const [loadingOlderEvents, setLoadingOlderEvents] = useState(false);
 
-  const activeThreadIdRef = useRef<string | null>(null);
-  const lastReportedThreadEventIdByMessageRef = useRef<Map<string, string>>(
+  const activeSessionIdRef = useRef<string | null>(null);
+  const lastReportedSessionEventIdByWorkspaceRef = useRef<Map<string, string>>(
     new Map(),
   );
   const loadingOlderRef = useRef(false);
-  const threadQueryRef = useRef<{
+  const sessionQueryRef = useRef<{
     channelId: string;
-    messageId: string;
-    threadId: string;
+    workspaceId: string;
+    sessionId: string;
   } | null>(null);
-  const threadEventsLengthRef = useRef(0);
-  const threadEventsRef = useRef<ServerEvent[]>([]);
-  threadEventsLengthRef.current = threadEvents.length;
-  threadEventsRef.current = threadEvents;
+  const sessionEventsLengthRef = useRef(0);
+  const sessionEventsRef = useRef<ServerEvent[]>([]);
+  sessionEventsLengthRef.current = sessionEvents.length;
+  sessionEventsRef.current = sessionEvents;
 
-  activeThreadIdRef.current = activeThreadId;
+  activeSessionIdRef.current = activeSessionId;
 
   const threadOpen = threadWidth > 0;
 
   const reportClaudeActivity = useCallback(
-    async (messageId: string, eventType: string, sessionId?: string) => {
+    async (workspaceId: string, eventType: string, sessionId?: string) => {
       if (
         !window.traceAPI ||
         typeof window.traceAPI.reportClaudeActivity !== "function"
       )
         return;
       try {
-        await window.traceAPI.reportClaudeActivity(messageId, eventType, sessionId);
+        await window.traceAPI.reportClaudeActivity(workspaceId, eventType, sessionId);
       } catch {
         // best-effort
       }
@@ -166,139 +166,139 @@ export function useThread({
     [],
   );
 
-  const resetThreadViewState = useCallback(() => {
+  const resetSessionViewState = useCallback(() => {
     setShowJumpToLatest(false);
     setExpandedReadGroupIds({});
-    setThreadTotal(0);
+    setSessionTotal(0);
     setLoadingOlderEvents(false);
     loadingOlderRef.current = false;
-    threadQueryRef.current = null;
+    sessionQueryRef.current = null;
   }, []);
 
   const closeThreadPanel = useCallback(() => {
     clearSelection();
-    setActiveThreadId(null);
-    setThreads([]);
-    setThreadEvents([]);
-    setThreadStatus("idle");
+    setActiveSessionId(null);
+    setSessions([]);
+    setSessionEvents([]);
+    setSessionStatus("idle");
     setThreadWidth(0);
-    resetThreadViewState();
-  }, [resetThreadViewState, clearSelection]);
+    resetSessionViewState();
+  }, [resetSessionViewState, clearSelection]);
 
-  // Load events for a specific thread by ID
-  const loadEventsForThread = useCallback(
-    async (channelId: string, messageId: string, threadId: string) => {
-      resetThreadViewState();
+  // Load events for a specific session by ID
+  const loadEventsForSession = useCallback(
+    async (channelId: string, workspaceId: string, sessionId: string) => {
+      resetSessionViewState();
 
-      const { data: eventsData } = await executeThreadEvents({
+      const { data: eventsData } = await executeSessionEvents({
         variables: {
           channelId,
-          messageId,
-          threadId,
-          limit: THREAD_PAGE_SIZE,
+          workspaceId,
+          sessionId,
+          limit: SESSION_PAGE_SIZE,
         },
       });
 
-      const result = eventsData?.threadEvents;
+      const result = eventsData?.sessionEvents;
       const events: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
       const total = result?.total ?? events.length;
-      setThreadEvents(events);
-      setThreadTotal(total);
-      threadQueryRef.current = { channelId, messageId, threadId };
-      setThreadStatus(events.length === 0 ? "empty" : "ready");
+      setSessionEvents(events);
+      setSessionTotal(total);
+      sessionQueryRef.current = { channelId, workspaceId, sessionId };
+      setSessionStatus(events.length === 0 ? "empty" : "ready");
     },
-    [executeThreadEvents, resetThreadViewState],
+    [executeSessionEvents, resetSessionViewState],
   );
 
-  const loadThreadEvents = useCallback(
-    async (message: ChannelMessage) => {
+  const loadSessionEvents = useCallback(
+    async (workspace: Workspace) => {
       try {
-        setThreadStatus((prev) =>
+        setSessionStatus((prev) =>
           prev === "idle" || prev === "error" ? "loading" : prev,
         );
 
-        const { data: threadsData } = await executeThreads({
+        const { data: sessionsData } = await executeSessions({
           variables: {
-            channelId: message.channelId,
-            messageId: message.id,
+            channelId: workspace.channelId,
+            workspaceId: workspace.id,
           },
         });
 
-        const threadList = (threadsData?.threads ?? []) as ThreadInfo[];
-        setThreads(threadList);
+        const sessionList = (sessionsData?.sessions ?? []) as SessionInfo[];
+        setSessions(sessionList);
 
-        if (threadList.length === 0) {
-          setActiveThreadId(null);
-          setThreadEvents([]);
-          setThreadStatus("empty");
+        if (sessionList.length === 0) {
+          setActiveSessionId(null);
+          setSessionEvents([]);
+          setSessionStatus("empty");
           return;
         }
 
-        const latestThread = threadList[threadList.length - 1];
-        setActiveThreadId(latestThread.id);
-        await loadEventsForThread(message.channelId, message.id, latestThread.id);
+        const latestSession = sessionList[sessionList.length - 1];
+        setActiveSessionId(latestSession.id);
+        await loadEventsForSession(workspace.channelId, workspace.id, latestSession.id);
 
         const latestEvent =
-          threadEventsRef.current[threadEventsRef.current.length - 1];
+          sessionEventsRef.current[sessionEventsRef.current.length - 1];
         if (latestEvent) {
           const lastReportedId =
-            lastReportedThreadEventIdByMessageRef.current.get(message.id);
+            lastReportedSessionEventIdByWorkspaceRef.current.get(workspace.id);
           if (lastReportedId !== latestEvent.id) {
-            lastReportedThreadEventIdByMessageRef.current.set(
-              message.id,
+            lastReportedSessionEventIdByWorkspaceRef.current.set(
+              workspace.id,
               latestEvent.id,
             );
-            void reportClaudeActivity(message.id, latestEvent.hookEventName, latestEvent.sessionId);
+            void reportClaudeActivity(workspace.id, latestEvent.hookEventName, latestEvent.cliSessionId);
           }
         }
       } catch {
-        setThreadStatus("error");
+        setSessionStatus("error");
       }
     },
-    [executeThreads, loadEventsForThread, reportClaudeActivity],
+    [executeSessions, loadEventsForSession, reportClaudeActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
-    const query = threadQueryRef.current;
+    const query = sessionQueryRef.current;
     if (loadingOlderRef.current || !query) return 0;
     loadingOlderRef.current = true;
     setLoadingOlderEvents(true);
     try {
-      const { data } = await executeThreadEvents({
+      const { data } = await executeSessionEvents({
         variables: {
           channelId: query.channelId,
-          messageId: query.messageId,
-          threadId: query.threadId,
-          limit: THREAD_PAGE_SIZE,
-          offset: threadEventsLengthRef.current,
+          workspaceId: query.workspaceId,
+          sessionId: query.sessionId,
+          limit: SESSION_PAGE_SIZE,
+          offset: sessionEventsLengthRef.current,
         },
       });
 
-      const result = data?.threadEvents;
+      const result = data?.sessionEvents;
       const olderEvents: ServerEvent[] = (result?.events ??
         []) as ServerEvent[];
       const total = result?.total;
-      if (total != null) setThreadTotal(total);
+      if (total != null) setSessionTotal(total);
       if (olderEvents.length > 0) {
-        setThreadEvents((prev) => [...olderEvents, ...prev]);
+        setSessionEvents((prev) => [...olderEvents, ...prev]);
       }
       return olderEvents.length;
     } finally {
       loadingOlderRef.current = false;
       setLoadingOlderEvents(false);
     }
-  }, [executeThreadEvents]);
+  }, [executeSessionEvents]);
 
-  const appendThreadEvent = useCallback(
+  const appendSessionEvent = useCallback(
     (event: ServerEvent) => {
-      setThreadEvents((prev) => [...prev, event]);
-      setThreadTotal((prev) => prev + 1);
+      setSessionEvents((prev) => [...prev, event]);
+      setSessionTotal((prev) => prev + 1);
 
-      const currentThreadId = activeThreadIdRef.current;
-      if (currentThreadId) {
-        setThreads((prev) =>
+      const currentSessionId = activeSessionIdRef.current;
+      if (currentSessionId) {
+        setSessions((prev) =>
           prev.map((t) =>
-            t.id === currentThreadId ? { ...t, eventCount: t.eventCount + 1 } : t,
+            t.id === currentSessionId ? { ...t, eventCount: t.eventCount + 1 } : t,
           ),
         );
       }
@@ -307,9 +307,9 @@ export function useThread({
     [],
   );
 
-  const updateThreadEvent = useCallback(
+  const updateSessionEvent = useCallback(
     (event: ServerEvent) => {
-      setThreadEvents((prev) => {
+      setSessionEvents((prev) => {
         const existingIndex = prev.findIndex((e) => e.id === event.id);
         if (existingIndex >= 0) {
           const next = [...prev];
@@ -323,14 +323,14 @@ export function useThread({
           (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
 
-        setThreadTotal((total) => Math.max(total, next.length));
-        const currentThreadId = activeThreadIdRef.current;
-        if (currentThreadId) {
-          setThreads((threadsPrev) =>
-            threadsPrev.map((t) =>
-              t.id === currentThreadId
-                ? { ...t, eventCount: Math.max(t.eventCount, next.length) }
-                : t,
+        setSessionTotal((total) => Math.max(total, next.length));
+        const currentSessionId = activeSessionIdRef.current;
+        if (currentSessionId) {
+          setSessions((sessionsPrev) =>
+            sessionsPrev.map((s) =>
+              s.id === currentSessionId
+                ? { ...s, eventCount: Math.max(s.eventCount, next.length) }
+                : s,
             ),
           );
         }
@@ -341,71 +341,71 @@ export function useThread({
     [],
   );
 
-  const hasMoreEvents = threadTotal > threadEvents.length;
+  const hasMoreEvents = sessionTotal > sessionEvents.length;
 
   const openThreadPanel = useCallback(
-    (message: ChannelMessage) => {
-      selectMessage(message);
+    (workspace: Workspace) => {
+      selectWorkspace(workspace);
       setHasWorktree(null);
       setThreadWidth(clamp(Math.floor(window.innerWidth * 0.65), 280, 1600));
-      resetThreadViewState();
-      void loadThreadEvents(message);
-      void checkWorktree(message.id);
+      resetSessionViewState();
+      void loadSessionEvents(workspace);
+      void checkWorktree(workspace.id);
     },
-    [loadThreadEvents, resetThreadViewState, checkWorktree, selectMessage],
+    [loadSessionEvents, resetSessionViewState, checkWorktree, selectWorkspace],
   );
 
-  const switchThread = useCallback(
-    async (threadId: string) => {
-      const message = selectedMessageRef.current;
-      if (!message) return;
+  const switchSession = useCallback(
+    async (sessionId: string) => {
+      const workspace = selectedWorkspaceRef.current;
+      if (!workspace) return;
 
-      setActiveThreadId(threadId);
-      setThreadStatus("loading");
+      setActiveSessionId(sessionId);
+      setSessionStatus("loading");
 
       try {
-        await loadEventsForThread(message.channelId, message.id, threadId);
+        await loadEventsForSession(workspace.channelId, workspace.id, sessionId);
       } catch {
-        setThreadStatus("error");
+        setSessionStatus("error");
       }
     },
-    [loadEventsForThread],
+    [loadEventsForSession],
   );
 
-  const clearThread = useCallback(async (): Promise<string | null> => {
-    const message = selectedMessageRef.current;
+  const clearSession = useCallback(async (): Promise<string | null> => {
+    const workspace = selectedWorkspaceRef.current;
     const channelId = getActiveChannelId();
-    if (!message || !channelId) return null;
+    if (!workspace || !channelId) return null;
 
     try {
-      const { data } = await executeCreateThread({
+      const { data } = await executeCreateSession({
         variables: {
           channelId,
-          messageId: message.id,
+          workspaceId: workspace.id,
         },
       });
 
-      const newThread = data?.createThread as ThreadInfo | undefined;
-      if (!newThread) return null;
+      const newSession = data?.createSession as SessionInfo | undefined;
+      if (!newSession) return null;
 
-      setThreads((prev) => [...prev, newThread]);
-      setActiveThreadId(newThread.id);
-      activeThreadIdRef.current = newThread.id;
-      setThreadEvents([]);
-      setThreadTotal(0);
-      setThreadStatus("empty");
-      resetThreadViewState();
-      threadQueryRef.current = {
+      setSessions((prev) => [...prev, newSession]);
+      setActiveSessionId(newSession.id);
+      activeSessionIdRef.current = newSession.id;
+      setSessionEvents([]);
+      setSessionTotal(0);
+      setSessionStatus("empty");
+      resetSessionViewState();
+      sessionQueryRef.current = {
         channelId,
-        messageId: message.id,
-        threadId: newThread.id,
+        workspaceId: workspace.id,
+        sessionId: newSession.id,
       };
-      return newThread.id;
+      return newSession.id;
     } catch (err) {
-      console.error("Failed to clear thread:", err);
+      console.error("Failed to clear session:", err);
       return null;
     }
-  }, [executeCreateThread, getActiveChannelId, resetThreadViewState]);
+  }, [executeCreateSession, getActiveChannelId, resetSessionViewState]);
 
   const toggleReadGroup = useCallback((groupId: string) => {
     setExpandedReadGroupIds((current) => ({
@@ -415,16 +415,16 @@ export function useThread({
   }, []);
 
   return {
-    selectedMessageId,
-    selectedMessage,
-    selectedMessageRef,
-    selectedMessageIdRef,
-    activeThreadId,
-    activeThreadIdRef,
-    threads,
-    threadEvents,
-    threadEventsRef,
-    threadStatus,
+    selectedWorkspaceId,
+    selectedWorkspace,
+    selectedWorkspaceRef,
+    selectedWorkspaceIdRef,
+    activeSessionId,
+    activeSessionIdRef,
+    sessions,
+    sessionEvents,
+    sessionEventsRef,
+    sessionStatus,
     threadWidth,
     setThreadWidth,
     threadOpen,
@@ -437,18 +437,18 @@ export function useThread({
     expandedReadGroupIds,
     reportClaudeActivity,
     closeThreadPanel,
-    loadThreadEvents,
+    loadSessionEvents,
     loadOlderEvents,
-    appendThreadEvent,
-    updateThreadEvent,
+    appendSessionEvent,
+    updateSessionEvent,
     hasMoreEvents,
     loadingOlderEvents,
     openThreadPanel,
-    switchThread,
-    clearThread,
+    switchSession,
+    clearSession,
     deleteWorktree,
     mergeWorktree,
     toggleReadGroup,
-    syncSelectedMessage,
+    syncSelectedWorkspace,
   };
 }

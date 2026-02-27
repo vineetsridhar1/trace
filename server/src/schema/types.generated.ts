@@ -2,12 +2,12 @@ import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from '
 import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper, AiChatStreamPayloadMapper } from './aiChat/schema.mappers';
 import { AttachmentMapper } from './attachment/schema.mappers';
 import { ChannelMapper } from './channel/schema.mappers';
-import { CreateMessagePayloadMapper, MessageMapper, MessageConnectionMapper, MessageDeletedPayloadMapper, MessageSessionMapper } from './message/schema.mappers';
-import { EventMapper, EventConnectionMapper, ThreadEventPayloadMapper } from './event/schema.mappers';
-import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketMessageMapper, TicketUpsertPayloadMapper } from './kanban/schema.mappers';
+import { CliSessionMapper, CliSessionConnectionMapper } from './cli-session/schema.mappers';
+import { CreateWorkspacePayloadMapper, WorkspaceMapper, WorkspaceCliSessionMapper, WorkspaceConnectionMapper, WorkspaceDeletedPayloadMapper } from './workspace/schema.mappers';
+import { EventMapper, EventConnectionMapper, SessionEventPayloadMapper } from './event/schema.mappers';
+import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketUpsertPayloadMapper, TicketWorkspaceMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
-import { SessionMapper, SessionConnectionMapper } from './session/schema.mappers';
-import { ThreadMapper } from './thread/schema.mappers';
+import { SessionMapper } from './session/schema.mappers';
 export type Maybe<T> = T | null | undefined;
 export type InputMaybe<T> = T | null | undefined;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
@@ -92,15 +92,38 @@ export type Channel = {
   workspacesEnabled: Scalars['Boolean']['output'];
 };
 
-export type CreateMessagePayload = {
-  __typename?: 'CreateMessagePayload';
+export type CliSession = {
+  __typename?: 'CliSession';
+  cwd?: Maybe<Scalars['String']['output']>;
+  eventCount: Scalars['Int']['output'];
+  firstSeenAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  lastSeenAt: Scalars['DateTime']['output'];
+  permissionMode?: Maybe<Scalars['String']['output']>;
+  sessionId: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  toolSummary?: Maybe<Scalars['JSON']['output']>;
+  transcriptPath?: Maybe<Scalars['String']['output']>;
+};
+
+export type CliSessionConnection = {
+  __typename?: 'CliSessionConnection';
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  sessions: Array<CliSession>;
+  total: Scalars['Int']['output'];
+};
+
+export type CreateWorkspacePayload = {
+  __typename?: 'CreateWorkspacePayload';
   event: Event;
-  message: Message;
-  thread: Thread;
+  session: Session;
+  workspace: Workspace;
 };
 
 export type Event = {
   __typename?: 'Event';
+  cliSessionId: Scalars['String']['output'];
   hookEventName: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
@@ -108,7 +131,6 @@ export type Event = {
   rawPayload: Scalars['JSON']['output'];
   sessionId: Scalars['String']['output'];
   stopHookActive?: Maybe<Scalars['Boolean']['output']>;
-  threadId: Scalars['String']['output'];
   timestamp: Scalars['DateTime']['output'];
   toolInput?: Maybe<Scalars['JSON']['output']>;
   toolName?: Maybe<Scalars['String']['output']>;
@@ -135,73 +157,29 @@ export type KanbanColumn = {
   tickets: Array<Ticket>;
 };
 
-export type Message = {
-  __typename?: 'Message';
-  branch?: Maybe<Scalars['String']['output']>;
-  channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
-  createdAt: Scalars['DateTime']['output'];
-  id: Scalars['ID']['output'];
-  importance: Scalars['String']['output'];
-  preview?: Maybe<Scalars['String']['output']>;
-  queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
-  session?: Maybe<MessageSession>;
-  sessionId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  summary?: Maybe<Scalars['String']['output']>;
-  threadCount: Scalars['Int']['output'];
-};
-
-export type MessageConnection = {
-  __typename?: 'MessageConnection';
-  limit: Scalars['Int']['output'];
-  messages: Array<Message>;
-  offset: Scalars['Int']['output'];
-  total: Scalars['Int']['output'];
-};
-
-export type MessageDeletedPayload = {
-  __typename?: 'MessageDeletedPayload';
-  channelId: Scalars['String']['output'];
-  messageId: Scalars['String']['output'];
-};
-
-export type MessageReadyForReviewPayload = {
-  __typename?: 'MessageReadyForReviewPayload';
-  channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
-  messageId: Scalars['String']['output'];
-};
-
-export type MessageSession = {
-  __typename?: 'MessageSession';
-  cwd?: Maybe<Scalars['String']['output']>;
-  sessionId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-};
-
 export type Mutation = {
   __typename?: 'Mutation';
-  appendPrompt: CreateMessagePayload;
+  appendPrompt: CreateWorkspacePayload;
   createAiChat: AiChat;
   createChannel: Channel;
   createColumn: KanbanColumn;
-  createMessage: CreateMessagePayload;
   createServer: Server;
-  createThread: Thread;
+  createSession: Session;
+  createWorkspace: CreateWorkspacePayload;
   deleteAiChat: Scalars['Boolean']['output'];
+  deleteChannel: Scalars['Boolean']['output'];
   deleteColumn: Scalars['Boolean']['output'];
-  deleteMessage: Scalars['Boolean']['output'];
+  deleteWorkspace: Scalars['Boolean']['output'];
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   sendAiChatMessage: AiChatMessage;
-  setTicketDependencies: Message;
+  setTicketDependencies: Workspace;
   updateChannel: Channel;
   updateColumn: KanbanColumn;
-  updateMessagePreview: Message;
-  updateMessageStatus: Message;
   updateQueuedRunConfig: Scalars['Boolean']['output'];
+  updateWorkspacePreview: Workspace;
+  updateWorkspaceStatus: Workspace;
   uploadAttachment: Attachment;
 };
 
@@ -209,10 +187,10 @@ export type Mutation = {
 export type MutationappendPromptArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
-  createNewThread?: InputMaybe<Scalars['Boolean']['input']>;
-  messageId: Scalars['ID']['input'];
+  createNewSession?: InputMaybe<Scalars['Boolean']['input']>;
+  sessionId?: InputMaybe<Scalars['ID']['input']>;
   text: Scalars['String']['input'];
-  threadId?: InputMaybe<Scalars['ID']['input']>;
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -244,26 +222,31 @@ export type MutationcreateColumnArgs = {
 };
 
 
-export type MutationcreateMessageArgs = {
-  attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
-  channelId: Scalars['ID']['input'];
-  text: Scalars['String']['input'];
-};
-
-
 export type MutationcreateServerArgs = {
   avatarUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
 };
 
 
-export type MutationcreateThreadArgs = {
+export type MutationcreateSessionArgs = {
   channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationcreateWorkspaceArgs = {
+  attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  channelId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
 };
 
 
 export type MutationdeleteAiChatArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationdeleteChannelArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -273,9 +256,9 @@ export type MutationdeleteColumnArgs = {
 };
 
 
-export type MutationdeleteMessageArgs = {
+export type MutationdeleteWorkspaceArgs = {
   channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -288,8 +271,8 @@ export type MutationmoveTicketArgs = {
 
 export type MutationremoveTicketDependencyArgs = {
   channelId: Scalars['ID']['input'];
-  dependsOnMessageId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  dependsOnWorkspaceId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -307,9 +290,9 @@ export type MutationsendAiChatMessageArgs = {
 
 export type MutationsetTicketDependenciesArgs = {
   channelId: Scalars['ID']['input'];
-  dependsOnMessageIds: Array<Scalars['ID']['input']>;
-  messageId: Scalars['ID']['input'];
+  dependsOnWorkspaceIds: Array<Scalars['ID']['input']>;
   runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -334,23 +317,23 @@ export type MutationupdateColumnArgs = {
 };
 
 
-export type MutationupdateMessagePreviewArgs = {
-  channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
-  preview: Scalars['String']['input'];
-};
-
-
-export type MutationupdateMessageStatusArgs = {
-  channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
-  status: Scalars['String']['input'];
-};
-
-
 export type MutationupdateQueuedRunConfigArgs = {
-  messageId: Scalars['ID']['input'];
   runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationupdateWorkspacePreviewArgs = {
+  channelId: Scalars['ID']['input'];
+  preview: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationupdateWorkspaceStatusArgs = {
+  channelId: Scalars['ID']['input'];
+  status: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -367,16 +350,16 @@ export type Query = {
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
+  cliSession?: Maybe<CliSession>;
+  cliSessionEvents: EventConnection;
+  cliSessions: CliSessionConnection;
   event?: Maybe<Event>;
-  messageEvents: EventConnection;
-  messages: MessageConnection;
   servers: Array<Server>;
-  session?: Maybe<Session>;
   sessionEvents: EventConnection;
-  sessions: SessionConnection;
-  threadEvents: EventConnection;
-  threads: Array<Thread>;
+  sessions: Array<Session>;
   ticketDependencies: Array<TicketDependency>;
+  workspaceEvents: EventConnection;
+  workspaces: WorkspaceConnection;
 };
 
 
@@ -402,33 +385,12 @@ export type QuerychannelArgs = {
 };
 
 
-export type QueryeventArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QuerymessageEventsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  channelId: Scalars['ID']['input'];
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  messageId: Scalars['ID']['input'];
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QuerymessagesArgs = {
-  channelId: Scalars['ID']['input'];
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QuerysessionArgs = {
+export type QuerycliSessionArgs = {
   sessionId: Scalars['String']['input'];
 };
 
 
-export type QuerysessionEventsArgs = {
+export type QuerycliSessionEventsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   hookEventName?: InputMaybe<Scalars['String']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -438,7 +400,7 @@ export type QuerysessionEventsArgs = {
 };
 
 
-export type QuerysessionsArgs = {
+export type QuerycliSessionsArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   order?: InputMaybe<Scalars['String']['input']>;
@@ -447,24 +409,45 @@ export type QuerysessionsArgs = {
 };
 
 
-export type QuerythreadEventsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  channelId: Scalars['ID']['input'];
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  messageId: Scalars['ID']['input'];
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  threadId: Scalars['ID']['input'];
+export type QueryeventArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
-export type QuerythreadsArgs = {
+export type QuerysessionEventsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
   channelId: Scalars['ID']['input'];
-  messageId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  sessionId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QuerysessionsArgs = {
+  channelId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
 export type QueryticketDependenciesArgs = {
-  messageId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QueryworkspaceEventsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QueryworkspacesArgs = {
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type Server = {
@@ -479,36 +462,30 @@ export type Server = {
 
 export type Session = {
   __typename?: 'Session';
-  cwd?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
   eventCount: Scalars['Int']['output'];
-  firstSeenAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
-  lastSeenAt: Scalars['DateTime']['output'];
-  permissionMode?: Maybe<Scalars['String']['output']>;
-  sessionId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  toolSummary?: Maybe<Scalars['JSON']['output']>;
-  transcriptPath?: Maybe<Scalars['String']['output']>;
+  workspaceId: Scalars['String']['output'];
 };
 
-export type SessionConnection = {
-  __typename?: 'SessionConnection';
-  limit: Scalars['Int']['output'];
-  offset: Scalars['Int']['output'];
-  sessions: Array<Session>;
-  total: Scalars['Int']['output'];
+export type SessionEventPayload = {
+  __typename?: 'SessionEventPayload';
+  channelId: Scalars['String']['output'];
+  event: Event;
+  sessionId: Scalars['String']['output'];
+  workspaceId: Scalars['String']['output'];
 };
 
 export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
-  messageDeleted: MessageDeletedPayload;
-  messageReadyForReview: MessageReadyForReviewPayload;
-  messageUpserted: Message;
-  threadEventCreated: ThreadEventPayload;
-  threadEventUpdated: ThreadEventPayload;
+  sessionEventCreated: SessionEventPayload;
+  sessionEventUpdated: SessionEventPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
+  workspaceDeleted: WorkspaceDeletedPayload;
+  workspaceReadyForReview: WorkspaceReadyForReviewPayload;
+  workspaceUpserted: Workspace;
 };
 
 
@@ -517,27 +494,12 @@ export type SubscriptionaiChatStreamArgs = {
 };
 
 
-export type SubscriptionmessageDeletedArgs = {
+export type SubscriptionsessionEventCreatedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
 
-export type SubscriptionmessageReadyForReviewArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionmessageUpsertedArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionthreadEventCreatedArgs = {
-  channelId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionthreadEventUpdatedArgs = {
+export type SubscriptionsessionEventUpdatedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -551,20 +513,19 @@ export type SubscriptionticketUpsertedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
-export type Thread = {
-  __typename?: 'Thread';
-  createdAt: Scalars['DateTime']['output'];
-  eventCount: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  messageId: Scalars['String']['output'];
+
+export type SubscriptionworkspaceDeletedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
-export type ThreadEventPayload = {
-  __typename?: 'ThreadEventPayload';
-  channelId: Scalars['String']['output'];
-  event: Event;
-  messageId: Scalars['String']['output'];
-  threadId: Scalars['String']['output'];
+
+export type SubscriptionworkspaceReadyForReviewArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionworkspaceUpsertedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 export type Ticket = {
@@ -573,14 +534,14 @@ export type Ticket = {
   createdAt: Scalars['DateTime']['output'];
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
-  message?: Maybe<TicketMessage>;
-  messageId: Scalars['String']['output'];
   metadata?: Maybe<Scalars['JSON']['output']>;
   solutionApproach?: Maybe<Scalars['String']['output']>;
   sortOrder: Scalars['Int']['output'];
   status: Scalars['String']['output'];
   title: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
+  workspace?: Maybe<TicketWorkspace>;
+  workspaceId: Scalars['String']['output'];
 };
 
 export type TicketAttachment = {
@@ -595,26 +556,17 @@ export type TicketAttachment = {
 export type TicketDependency = {
   __typename?: 'TicketDependency';
   createdAt: Scalars['DateTime']['output'];
-  dependsOnMessageId: Scalars['String']['output'];
   dependsOnTicketTitle?: Maybe<Scalars['String']['output']>;
+  dependsOnWorkspaceId: Scalars['String']['output'];
   id: Scalars['ID']['output'];
-  ticketMessageId: Scalars['String']['output'];
-};
-
-export type TicketMessage = {
-  __typename?: 'TicketMessage';
-  attachments: Array<TicketAttachment>;
-  branch?: Maybe<Scalars['String']['output']>;
-  createdAt: Scalars['DateTime']['output'];
-  id: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
+  ticketWorkspaceId: Scalars['String']['output'];
 };
 
 export type TicketReadyToRunPayload = {
   __typename?: 'TicketReadyToRunPayload';
   channelId: Scalars['String']['output'];
-  messageId: Scalars['String']['output'];
   runConfig: Scalars['JSON']['output'];
+  workspaceId: Scalars['String']['output'];
 };
 
 export type TicketUpsertPayload = {
@@ -622,6 +574,60 @@ export type TicketUpsertPayload = {
   channelId: Scalars['String']['output'];
   columnSlug: Scalars['String']['output'];
   ticket: Ticket;
+};
+
+export type TicketWorkspace = {
+  __typename?: 'TicketWorkspace';
+  attachments: Array<TicketAttachment>;
+  branch?: Maybe<Scalars['String']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type Workspace = {
+  __typename?: 'Workspace';
+  branch?: Maybe<Scalars['String']['output']>;
+  channelId: Scalars['String']['output'];
+  claudeSessionId?: Maybe<Scalars['String']['output']>;
+  cliSession?: Maybe<WorkspaceCliSession>;
+  cliSessionId: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  importance: Scalars['String']['output'];
+  preview?: Maybe<Scalars['String']['output']>;
+  queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
+  sessionCount: Scalars['Int']['output'];
+  status: Scalars['String']['output'];
+  summary?: Maybe<Scalars['String']['output']>;
+};
+
+export type WorkspaceCliSession = {
+  __typename?: 'WorkspaceCliSession';
+  cwd?: Maybe<Scalars['String']['output']>;
+  sessionId: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type WorkspaceConnection = {
+  __typename?: 'WorkspaceConnection';
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+  workspaces: Array<Workspace>;
+};
+
+export type WorkspaceDeletedPayload = {
+  __typename?: 'WorkspaceDeletedPayload';
+  channelId: Scalars['String']['output'];
+  workspaceId: Scalars['String']['output'];
+};
+
+export type WorkspaceReadyForReviewPayload = {
+  __typename?: 'WorkspaceReadyForReviewPayload';
+  channelId: Scalars['String']['output'];
+  claudeSessionId?: Maybe<Scalars['String']['output']>;
+  workspaceId: Scalars['String']['output'];
 };
 
 
@@ -707,31 +713,31 @@ export type ResolversTypes = {
   Attachment: ResolverTypeWrapper<AttachmentMapper>;
   Channel: ResolverTypeWrapper<ChannelMapper>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
-  CreateMessagePayload: ResolverTypeWrapper<CreateMessagePayloadMapper>;
+  CliSession: ResolverTypeWrapper<CliSessionMapper>;
+  CliSessionConnection: ResolverTypeWrapper<CliSessionConnectionMapper>;
+  CreateWorkspacePayload: ResolverTypeWrapper<CreateWorkspacePayloadMapper>;
   DateTime: ResolverTypeWrapper<Scalars['DateTime']['output']>;
   Event: ResolverTypeWrapper<EventMapper>;
   EventConnection: ResolverTypeWrapper<EventConnectionMapper>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
-  Message: ResolverTypeWrapper<MessageMapper>;
-  MessageConnection: ResolverTypeWrapper<MessageConnectionMapper>;
-  MessageDeletedPayload: ResolverTypeWrapper<MessageDeletedPayloadMapper>;
-  MessageReadyForReviewPayload: ResolverTypeWrapper<MessageReadyForReviewPayload>;
-  MessageSession: ResolverTypeWrapper<MessageSessionMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Server: ResolverTypeWrapper<ServerMapper>;
   Session: ResolverTypeWrapper<SessionMapper>;
-  SessionConnection: ResolverTypeWrapper<SessionConnectionMapper>;
+  SessionEventPayload: ResolverTypeWrapper<SessionEventPayloadMapper>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
-  Thread: ResolverTypeWrapper<ThreadMapper>;
-  ThreadEventPayload: ResolverTypeWrapper<ThreadEventPayloadMapper>;
   Ticket: ResolverTypeWrapper<TicketMapper>;
   TicketAttachment: ResolverTypeWrapper<TicketAttachmentMapper>;
   TicketDependency: ResolverTypeWrapper<TicketDependency>;
-  TicketMessage: ResolverTypeWrapper<TicketMessageMapper>;
   TicketReadyToRunPayload: ResolverTypeWrapper<TicketReadyToRunPayload>;
   TicketUpsertPayload: ResolverTypeWrapper<TicketUpsertPayloadMapper>;
+  TicketWorkspace: ResolverTypeWrapper<TicketWorkspaceMapper>;
+  Workspace: ResolverTypeWrapper<WorkspaceMapper>;
+  WorkspaceCliSession: ResolverTypeWrapper<WorkspaceCliSessionMapper>;
+  WorkspaceConnection: ResolverTypeWrapper<WorkspaceConnectionMapper>;
+  WorkspaceDeletedPayload: ResolverTypeWrapper<WorkspaceDeletedPayloadMapper>;
+  WorkspaceReadyForReviewPayload: ResolverTypeWrapper<WorkspaceReadyForReviewPayload>;
 };
 
 /** Mapping between all available schema types and the resolvers parents */
@@ -746,31 +752,31 @@ export type ResolversParentTypes = {
   Attachment: AttachmentMapper;
   Channel: ChannelMapper;
   Boolean: Scalars['Boolean']['output'];
-  CreateMessagePayload: CreateMessagePayloadMapper;
+  CliSession: CliSessionMapper;
+  CliSessionConnection: CliSessionConnectionMapper;
+  CreateWorkspacePayload: CreateWorkspacePayloadMapper;
   DateTime: Scalars['DateTime']['output'];
   Event: EventMapper;
   EventConnection: EventConnectionMapper;
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
-  Message: MessageMapper;
-  MessageConnection: MessageConnectionMapper;
-  MessageDeletedPayload: MessageDeletedPayloadMapper;
-  MessageReadyForReviewPayload: MessageReadyForReviewPayload;
-  MessageSession: MessageSessionMapper;
   Mutation: Record<PropertyKey, never>;
   Query: Record<PropertyKey, never>;
   Server: ServerMapper;
   Session: SessionMapper;
-  SessionConnection: SessionConnectionMapper;
+  SessionEventPayload: SessionEventPayloadMapper;
   Subscription: Record<PropertyKey, never>;
-  Thread: ThreadMapper;
-  ThreadEventPayload: ThreadEventPayloadMapper;
   Ticket: TicketMapper;
   TicketAttachment: TicketAttachmentMapper;
   TicketDependency: TicketDependency;
-  TicketMessage: TicketMessageMapper;
   TicketReadyToRunPayload: TicketReadyToRunPayload;
   TicketUpsertPayload: TicketUpsertPayloadMapper;
+  TicketWorkspace: TicketWorkspaceMapper;
+  Workspace: WorkspaceMapper;
+  WorkspaceCliSession: WorkspaceCliSessionMapper;
+  WorkspaceConnection: WorkspaceConnectionMapper;
+  WorkspaceDeletedPayload: WorkspaceDeletedPayloadMapper;
+  WorkspaceReadyForReviewPayload: WorkspaceReadyForReviewPayload;
 };
 
 export type AiChatResolvers<ContextType = any, ParentType extends ResolversParentTypes['AiChat'] = ResolversParentTypes['AiChat']> = {
@@ -832,10 +838,30 @@ export type ChannelResolvers<ContextType = any, ParentType extends ResolversPare
   workspacesEnabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
 };
 
-export type CreateMessagePayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['CreateMessagePayload'] = ResolversParentTypes['CreateMessagePayload']> = {
+export type CliSessionResolvers<ContextType = any, ParentType extends ResolversParentTypes['CliSession'] = ResolversParentTypes['CliSession']> = {
+  cwd?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  eventCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  firstSeenAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  lastSeenAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  permissionMode?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  toolSummary?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  transcriptPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+};
+
+export type CliSessionConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['CliSessionConnection'] = ResolversParentTypes['CliSessionConnection']> = {
+  limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  sessions?: Resolver<Array<ResolversTypes['CliSession']>, ParentType, ContextType>;
+  total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+};
+
+export type CreateWorkspacePayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['CreateWorkspacePayload'] = ResolversParentTypes['CreateWorkspacePayload']> = {
   event?: Resolver<ResolversTypes['Event'], ParentType, ContextType>;
-  message?: Resolver<ResolversTypes['Message'], ParentType, ContextType>;
-  thread?: Resolver<ResolversTypes['Thread'], ParentType, ContextType>;
+  session?: Resolver<ResolversTypes['Session'], ParentType, ContextType>;
+  workspace?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType>;
 };
 
 export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['DateTime'], any> {
@@ -843,6 +869,7 @@ export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<ResolversT
 }
 
 export type EventResolvers<ContextType = any, ParentType extends ResolversParentTypes['Event'] = ResolversParentTypes['Event']> = {
+  cliSessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   hookEventName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   importance?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -850,7 +877,6 @@ export type EventResolvers<ContextType = any, ParentType extends ResolversParent
   rawPayload?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   stopHookActive?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
-  threadId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   timestamp?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   toolInput?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
   toolName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -879,67 +905,28 @@ export type KanbanColumnResolvers<ContextType = any, ParentType extends Resolver
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType>;
 };
 
-export type MessageResolvers<ContextType = any, ParentType extends ResolversParentTypes['Message'] = ResolversParentTypes['Message']> = {
-  branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  claudeSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  importance?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  preview?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  queuedRunConfig?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
-  session?: Resolver<Maybe<ResolversTypes['MessageSession']>, ParentType, ContextType>;
-  sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  summary?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  threadCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-};
-
-export type MessageConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageConnection'] = ResolversParentTypes['MessageConnection']> = {
-  limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  messages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType>;
-  offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-};
-
-export type MessageDeletedPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageDeletedPayload'] = ResolversParentTypes['MessageDeletedPayload']> = {
-  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-};
-
-export type MessageReadyForReviewPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageReadyForReviewPayload'] = ResolversParentTypes['MessageReadyForReviewPayload']> = {
-  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  claudeSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-};
-
-export type MessageSessionResolvers<ContextType = any, ParentType extends ResolversParentTypes['MessageSession'] = ResolversParentTypes['MessageSession']> = {
-  cwd?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-};
-
 export type MutationResolvers<ContextType = any, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = {
-  appendPrompt?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationappendPromptArgs, 'channelId' | 'messageId' | 'text'>>;
+  appendPrompt?: Resolver<ResolversTypes['CreateWorkspacePayload'], ParentType, ContextType, RequireFields<MutationappendPromptArgs, 'channelId' | 'text' | 'workspaceId'>>;
   createAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationcreateAiChatArgs, 'serverId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationcreateChannelArgs, 'name'>>;
   createColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationcreateColumnArgs, 'channelId' | 'name' | 'slug'>>;
-  createMessage?: Resolver<ResolversTypes['CreateMessagePayload'], ParentType, ContextType, RequireFields<MutationcreateMessageArgs, 'channelId' | 'text'>>;
   createServer?: Resolver<ResolversTypes['Server'], ParentType, ContextType, RequireFields<MutationcreateServerArgs, 'name'>>;
-  createThread?: Resolver<ResolversTypes['Thread'], ParentType, ContextType, RequireFields<MutationcreateThreadArgs, 'channelId' | 'messageId'>>;
+  createSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationcreateSessionArgs, 'channelId' | 'workspaceId'>>;
+  createWorkspace?: Resolver<ResolversTypes['CreateWorkspacePayload'], ParentType, ContextType, RequireFields<MutationcreateWorkspaceArgs, 'channelId' | 'text'>>;
   deleteAiChat?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteAiChatArgs, 'id'>>;
+  deleteChannel?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteChannelArgs, 'id'>>;
   deleteColumn?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteColumnArgs, 'columnId'>>;
-  deleteMessage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteMessageArgs, 'channelId' | 'messageId'>>;
+  deleteWorkspace?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteWorkspaceArgs, 'channelId' | 'workspaceId'>>;
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
-  removeTicketDependency?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationremoveTicketDependencyArgs, 'channelId' | 'dependsOnMessageId' | 'messageId'>>;
+  removeTicketDependency?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationremoveTicketDependencyArgs, 'channelId' | 'dependsOnWorkspaceId' | 'workspaceId'>>;
   renameAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationrenameAiChatArgs, 'id' | 'title'>>;
   sendAiChatMessage?: Resolver<ResolversTypes['AiChatMessage'], ParentType, ContextType, RequireFields<MutationsendAiChatMessageArgs, 'chatId' | 'content'>>;
-  setTicketDependencies?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationsetTicketDependenciesArgs, 'channelId' | 'dependsOnMessageIds' | 'messageId' | 'runConfig'>>;
+  setTicketDependencies?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationsetTicketDependenciesArgs, 'channelId' | 'dependsOnWorkspaceIds' | 'runConfig' | 'workspaceId'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationupdateChannelArgs, 'id'>>;
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;
-  updateMessagePreview?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationupdateMessagePreviewArgs, 'channelId' | 'messageId' | 'preview'>>;
-  updateMessageStatus?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationupdateMessageStatusArgs, 'channelId' | 'messageId' | 'status'>>;
-  updateQueuedRunConfig?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationupdateQueuedRunConfigArgs, 'messageId' | 'runConfig'>>;
+  updateQueuedRunConfig?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationupdateQueuedRunConfigArgs, 'runConfig' | 'workspaceId'>>;
+  updateWorkspacePreview?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationupdateWorkspacePreviewArgs, 'channelId' | 'preview' | 'workspaceId'>>;
+  updateWorkspaceStatus?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationupdateWorkspaceStatusArgs, 'channelId' | 'status' | 'workspaceId'>>;
   uploadAttachment?: Resolver<ResolversTypes['Attachment'], ParentType, ContextType, RequireFields<MutationuploadAttachmentArgs, 'contentType' | 'data' | 'filename'>>;
 };
 
@@ -949,16 +936,16 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   board?: Resolver<Array<ResolversTypes['KanbanColumn']>, ParentType, ContextType, RequireFields<QueryboardArgs, 'channelId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QuerychannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
+  cliSession?: Resolver<Maybe<ResolversTypes['CliSession']>, ParentType, ContextType, RequireFields<QuerycliSessionArgs, 'sessionId'>>;
+  cliSessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerycliSessionEventsArgs, 'sessionId'>>;
+  cliSessions?: Resolver<ResolversTypes['CliSessionConnection'], ParentType, ContextType, Partial<QuerycliSessionsArgs>>;
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
-  messageEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerymessageEventsArgs, 'channelId' | 'messageId'>>;
-  messages?: Resolver<ResolversTypes['MessageConnection'], ParentType, ContextType, RequireFields<QuerymessagesArgs, 'channelId'>>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
-  session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionArgs, 'sessionId'>>;
-  sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'sessionId'>>;
-  sessions?: Resolver<ResolversTypes['SessionConnection'], ParentType, ContextType, Partial<QuerysessionsArgs>>;
-  threadEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerythreadEventsArgs, 'channelId' | 'messageId' | 'threadId'>>;
-  threads?: Resolver<Array<ResolversTypes['Thread']>, ParentType, ContextType, RequireFields<QuerythreadsArgs, 'channelId' | 'messageId'>>;
-  ticketDependencies?: Resolver<Array<ResolversTypes['TicketDependency']>, ParentType, ContextType, RequireFields<QueryticketDependenciesArgs, 'messageId'>>;
+  sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;
+  sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionsArgs, 'channelId' | 'workspaceId'>>;
+  ticketDependencies?: Resolver<Array<ResolversTypes['TicketDependency']>, ParentType, ContextType, RequireFields<QueryticketDependenciesArgs, 'workspaceId'>>;
+  workspaceEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QueryworkspaceEventsArgs, 'channelId' | 'workspaceId'>>;
+  workspaces?: Resolver<ResolversTypes['WorkspaceConnection'], ParentType, ContextType, RequireFields<QueryworkspacesArgs, 'channelId'>>;
 };
 
 export type ServerResolvers<ContextType = any, ParentType extends ResolversParentTypes['Server'] = ResolversParentTypes['Server']> = {
@@ -971,48 +958,28 @@ export type ServerResolvers<ContextType = any, ParentType extends ResolversParen
 };
 
 export type SessionResolvers<ContextType = any, ParentType extends ResolversParentTypes['Session'] = ResolversParentTypes['Session']> = {
-  cwd?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   eventCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  firstSeenAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  lastSeenAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  permissionMode?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  toolSummary?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
-  transcriptPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
-export type SessionConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['SessionConnection'] = ResolversParentTypes['SessionConnection']> = {
-  limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
-  total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+export type SessionEventPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['SessionEventPayload'] = ResolversParentTypes['SessionEventPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  event?: Resolver<ResolversTypes['Event'], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type SubscriptionResolvers<ContextType = any, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
   aiChatStream?: SubscriptionResolver<ResolversTypes['AiChatStreamPayload'], "aiChatStream", ParentType, ContextType, RequireFields<SubscriptionaiChatStreamArgs, 'chatId'>>;
-  messageDeleted?: SubscriptionResolver<ResolversTypes['MessageDeletedPayload'], "messageDeleted", ParentType, ContextType, RequireFields<SubscriptionmessageDeletedArgs, 'channelId'>>;
-  messageReadyForReview?: SubscriptionResolver<ResolversTypes['MessageReadyForReviewPayload'], "messageReadyForReview", ParentType, ContextType, RequireFields<SubscriptionmessageReadyForReviewArgs, 'channelId'>>;
-  messageUpserted?: SubscriptionResolver<ResolversTypes['Message'], "messageUpserted", ParentType, ContextType, RequireFields<SubscriptionmessageUpsertedArgs, 'channelId'>>;
-  threadEventCreated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventCreated", ParentType, ContextType, RequireFields<SubscriptionthreadEventCreatedArgs, 'channelId'>>;
-  threadEventUpdated?: SubscriptionResolver<ResolversTypes['ThreadEventPayload'], "threadEventUpdated", ParentType, ContextType, RequireFields<SubscriptionthreadEventUpdatedArgs, 'channelId'>>;
+  sessionEventCreated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventCreated", ParentType, ContextType, RequireFields<SubscriptionsessionEventCreatedArgs, 'channelId'>>;
+  sessionEventUpdated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventUpdated", ParentType, ContextType, RequireFields<SubscriptionsessionEventUpdatedArgs, 'channelId'>>;
   ticketReadyToRun?: SubscriptionResolver<ResolversTypes['TicketReadyToRunPayload'], "ticketReadyToRun", ParentType, ContextType, RequireFields<SubscriptionticketReadyToRunArgs, 'channelId'>>;
   ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
-};
-
-export type ThreadResolvers<ContextType = any, ParentType extends ResolversParentTypes['Thread'] = ResolversParentTypes['Thread']> = {
-  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  eventCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-};
-
-export type ThreadEventPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['ThreadEventPayload'] = ResolversParentTypes['ThreadEventPayload']> = {
-  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  event?: Resolver<ResolversTypes['Event'], ParentType, ContextType>;
-  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  threadId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  workspaceDeleted?: SubscriptionResolver<ResolversTypes['WorkspaceDeletedPayload'], "workspaceDeleted", ParentType, ContextType, RequireFields<SubscriptionworkspaceDeletedArgs, 'channelId'>>;
+  workspaceReadyForReview?: SubscriptionResolver<ResolversTypes['WorkspaceReadyForReviewPayload'], "workspaceReadyForReview", ParentType, ContextType, RequireFields<SubscriptionworkspaceReadyForReviewArgs, 'channelId'>>;
+  workspaceUpserted?: SubscriptionResolver<ResolversTypes['Workspace'], "workspaceUpserted", ParentType, ContextType, RequireFields<SubscriptionworkspaceUpsertedArgs, 'channelId'>>;
 };
 
 export type TicketResolvers<ContextType = any, ParentType extends ResolversParentTypes['Ticket'] = ResolversParentTypes['Ticket']> = {
@@ -1020,14 +987,14 @@ export type TicketResolvers<ContextType = any, ParentType extends ResolversParen
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  message?: Resolver<Maybe<ResolversTypes['TicketMessage']>, ParentType, ContextType>;
-  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   metadata?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
   solutionApproach?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   sortOrder?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  workspace?: Resolver<Maybe<ResolversTypes['TicketWorkspace']>, ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type TicketAttachmentResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketAttachment'] = ResolversParentTypes['TicketAttachment']> = {
@@ -1040,13 +1007,25 @@ export type TicketAttachmentResolvers<ContextType = any, ParentType extends Reso
 
 export type TicketDependencyResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketDependency'] = ResolversParentTypes['TicketDependency']> = {
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  dependsOnMessageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   dependsOnTicketTitle?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  dependsOnWorkspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  ticketMessageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  ticketWorkspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
-export type TicketMessageResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketMessage'] = ResolversParentTypes['TicketMessage']> = {
+export type TicketReadyToRunPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketReadyToRunPayload'] = ResolversParentTypes['TicketReadyToRunPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  runConfig?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type TicketUpsertPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketUpsertPayload'] = ResolversParentTypes['TicketUpsertPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  columnSlug?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  ticket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType>;
+};
+
+export type TicketWorkspaceResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketWorkspace'] = ResolversParentTypes['TicketWorkspace']> = {
   attachments?: Resolver<Array<ResolversTypes['TicketAttachment']>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
@@ -1054,16 +1033,44 @@ export type TicketMessageResolvers<ContextType = any, ParentType extends Resolve
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
-export type TicketReadyToRunPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketReadyToRunPayload'] = ResolversParentTypes['TicketReadyToRunPayload']> = {
+export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversParentTypes['Workspace'] = ResolversParentTypes['Workspace']> = {
+  branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  runConfig?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  claudeSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  cliSession?: Resolver<Maybe<ResolversTypes['WorkspaceCliSession']>, ParentType, ContextType>;
+  cliSessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  importance?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  preview?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  queuedRunConfig?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  summary?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };
 
-export type TicketUpsertPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketUpsertPayload'] = ResolversParentTypes['TicketUpsertPayload']> = {
+export type WorkspaceCliSessionResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceCliSession'] = ResolversParentTypes['WorkspaceCliSession']> = {
+  cwd?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type WorkspaceConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceConnection'] = ResolversParentTypes['WorkspaceConnection']> = {
+  limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  workspaces?: Resolver<Array<ResolversTypes['Workspace']>, ParentType, ContextType>;
+};
+
+export type WorkspaceDeletedPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceDeletedPayload'] = ResolversParentTypes['WorkspaceDeletedPayload']> = {
   channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  columnSlug?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  ticket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type WorkspaceReadyForReviewPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceReadyForReviewPayload'] = ResolversParentTypes['WorkspaceReadyForReviewPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  claudeSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type Resolvers<ContextType = any> = {
@@ -1073,30 +1080,30 @@ export type Resolvers<ContextType = any> = {
   AiChatStreamPayload?: AiChatStreamPayloadResolvers<ContextType>;
   Attachment?: AttachmentResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
-  CreateMessagePayload?: CreateMessagePayloadResolvers<ContextType>;
+  CliSession?: CliSessionResolvers<ContextType>;
+  CliSessionConnection?: CliSessionConnectionResolvers<ContextType>;
+  CreateWorkspacePayload?: CreateWorkspacePayloadResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;
   EventConnection?: EventConnectionResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   KanbanColumn?: KanbanColumnResolvers<ContextType>;
-  Message?: MessageResolvers<ContextType>;
-  MessageConnection?: MessageConnectionResolvers<ContextType>;
-  MessageDeletedPayload?: MessageDeletedPayloadResolvers<ContextType>;
-  MessageReadyForReviewPayload?: MessageReadyForReviewPayloadResolvers<ContextType>;
-  MessageSession?: MessageSessionResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   Server?: ServerResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
-  SessionConnection?: SessionConnectionResolvers<ContextType>;
+  SessionEventPayload?: SessionEventPayloadResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
-  Thread?: ThreadResolvers<ContextType>;
-  ThreadEventPayload?: ThreadEventPayloadResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
   TicketAttachment?: TicketAttachmentResolvers<ContextType>;
   TicketDependency?: TicketDependencyResolvers<ContextType>;
-  TicketMessage?: TicketMessageResolvers<ContextType>;
   TicketReadyToRunPayload?: TicketReadyToRunPayloadResolvers<ContextType>;
   TicketUpsertPayload?: TicketUpsertPayloadResolvers<ContextType>;
+  TicketWorkspace?: TicketWorkspaceResolvers<ContextType>;
+  Workspace?: WorkspaceResolvers<ContextType>;
+  WorkspaceCliSession?: WorkspaceCliSessionResolvers<ContextType>;
+  WorkspaceConnection?: WorkspaceConnectionResolvers<ContextType>;
+  WorkspaceDeletedPayload?: WorkspaceDeletedPayloadResolvers<ContextType>;
+  WorkspaceReadyForReviewPayload?: WorkspaceReadyForReviewPayloadResolvers<ContextType>;
 };
 

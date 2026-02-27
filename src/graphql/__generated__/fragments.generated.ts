@@ -1,15 +1,15 @@
 import * as Types from './schema-types';
 
 import { gql } from '@apollo/client';
-export type MessageFieldsFragment = { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null };
+export type WorkspaceFieldsFragment = { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null };
 
-export type ThreadEventPayloadFieldsFragment = { __typename?: 'ThreadEventPayload', channelId: string, messageId: string, threadId: string, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, threadId: string, importance: string } };
+export type SessionEventPayloadFieldsFragment = { __typename?: 'SessionEventPayload', channelId: string, workspaceId: string, sessionId: string, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, sessionId: string, importance: string } };
 
-export const MessageFieldsFragmentDoc = gql`
-    fragment MessageFields on Message {
+export const WorkspaceFieldsFragmentDoc = gql`
+    fragment WorkspaceFields on Workspace {
   id
   channelId
-  sessionId
+  cliSessionId
   preview
   importance
   status
@@ -17,23 +17,23 @@ export const MessageFieldsFragmentDoc = gql`
   branch
   claudeSessionId
   createdAt
-  session {
+  cliSession {
     sessionId
     cwd
     status
   }
-  threadCount
+  sessionCount
   queuedRunConfig
 }
     `;
-export const ThreadEventPayloadFieldsFragmentDoc = gql`
-    fragment ThreadEventPayloadFields on ThreadEventPayload {
+export const SessionEventPayloadFieldsFragmentDoc = gql`
+    fragment SessionEventPayloadFields on SessionEventPayload {
   channelId
-  messageId
-  threadId
+  workspaceId
+  sessionId
   event {
     id
-    sessionId
+    cliSessionId
     hookEventName
     timestamp
     toolName
@@ -43,7 +43,7 @@ export const ThreadEventPayloadFieldsFragmentDoc = gql`
     stopHookActive
     lastAssistantMessage
     rawPayload
-    threadId
+    sessionId
     importance
   }
 }

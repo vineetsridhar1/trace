@@ -58,14 +58,14 @@ export function createGraphqlClient(): ApolloClient<unknown> {
     cache: new InMemoryCache({
       typePolicies: {
         // Types without `id` — store inline, don't try to normalize
-        MessageSession: { keyFields: false },
-        MessageConnection: { keyFields: false },
+        WorkspaceCliSession: { keyFields: false },
+        WorkspaceConnection: { keyFields: false },
         EventConnection: { keyFields: false },
         SessionConnection: { keyFields: false },
         RepoValidation: { keyFields: false },
-        CreateMessagePayload: { keyFields: false },
+        CreateWorkspacePayload: { keyFields: false },
         AiChatMessageConnection: { keyFields: false },
-        ThreadEventPayload: { keyFields: false },
+        SessionEventPayload: { keyFields: false },
         TicketUpsertPayload: { keyFields: false },
       },
     }),

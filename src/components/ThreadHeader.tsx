@@ -2,7 +2,7 @@ import { memo, useState, useRef, useEffect } from 'react';
 import { FiCheck, FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
-import type { ThreadInfo } from '../hooks/useThread';
+import type { SessionInfo } from '../hooks/useThread';
 
 type ViewMode = 'agent' | 'ticket' | 'files' | 'terminal';
 
@@ -42,8 +42,8 @@ const HEADER_STATUS_CONFIG: Record<
 };
 
 interface ThreadHeaderProps {
-  selectedMessageId: string | null;
-  messageStatus: TicketStatus;
+  selectedWorkspaceId: string | null;
+  workspaceStatus: TicketStatus;
   hasTicket: boolean;
   viewMode: ViewMode;
   onSetViewMode: (mode: ViewMode) => void;
@@ -56,14 +56,14 @@ interface ThreadHeaderProps {
   onMarkMerged: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
-  threads: ThreadInfo[];
-  activeThreadId: string | null;
-  onSwitchThread: (threadId: string) => Promise<void>;
+  sessions: SessionInfo[];
+  activeSessionId: string | null;
+  onSwitchSession: (sessionId: string) => Promise<void>;
 }
 
 export const ThreadHeader = memo(function ThreadHeader({
-  selectedMessageId,
-  messageStatus,
+  selectedWorkspaceId,
+  workspaceStatus,
   hasTicket,
   viewMode,
   onSetViewMode,
@@ -76,12 +76,12 @@ export const ThreadHeader = memo(function ThreadHeader({
   onMarkMerged,
   onEnterFullscreen,
   onExitFullscreen,
-  threads,
-  activeThreadId,
-  onSwitchThread,
+  sessions,
+  activeSessionId,
+  onSwitchSession,
 }: ThreadHeaderProps) {
   const statusConfig =
-    HEADER_STATUS_CONFIG[messageStatus] ?? HEADER_STATUS_CONFIG.pending;
+    HEADER_STATUS_CONFIG[workspaceStatus] ?? HEADER_STATUS_CONFIG.pending;
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -104,11 +104,11 @@ export const ThreadHeader = memo(function ThreadHeader({
     >
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-semibold text-violet-300">
-          {selectedMessageId
-            ? `trace/${selectedMessageId.slice(0, 8)}`
+          {selectedWorkspaceId
+            ? `trace/${selectedWorkspaceId.slice(0, 8)}`
             : 'Thread'}
         </h3>
-        {selectedMessageId && (
+        {selectedWorkspaceId && (
           <span
             className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}
           >
@@ -164,18 +164,18 @@ export const ThreadHeader = memo(function ThreadHeader({
           </button>
         </div>
         {hasWorktree === false &&
-          messageStatus !== 'pending' &&
-          messageStatus !== 'creation' &&
-          selectedMessageId && (
+          workspaceStatus !== 'pending' &&
+          workspaceStatus !== 'creation' &&
+          selectedWorkspaceId && (
             <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
               Worktree deleted
             </span>
           )}
       </div>
       <div className="flex items-center gap-2">
-        {threads.length > 1 && (
+        {sessions.length > 1 && (
           <div className="relative" ref={historyRef}>
-            <Tooltip text="Thread history" position="bottom">
+            <Tooltip text="Session history" position="bottom">
               <button
                 type="button"
                 onClick={() => setHistoryOpen((prev) => !prev)}
@@ -191,20 +191,20 @@ export const ThreadHeader = memo(function ThreadHeader({
             {historyOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
                 <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#565f89]">
-                  Thread History
+                  Session History
                 </div>
-                {threads.map((thread, index) => {
-                  const isActive = thread.id === activeThreadId;
-                  const time = new Date(thread.createdAt).toLocaleTimeString([], {
+                {sessions.map((session, index) => {
+                  const isActive = session.id === activeSessionId;
+                  const time = new Date(session.createdAt).toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
                   });
                   return (
                     <button
-                      key={thread.id}
+                      key={session.id}
                       type="button"
                       onClick={() => {
-                        void onSwitchThread(thread.id);
+                        void onSwitchSession(session.id);
                         setHistoryOpen(false);
                       }}
                       className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
@@ -216,7 +216,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                       <span className="font-medium">#{index + 1}</span>
                       <span className="flex-1 truncate text-[#565f89]">{time}</span>
                       <span className="text-[#565f89]">
-                        {thread.eventCount} {thread.eventCount === 1 ? 'event' : 'events'}
+                        {session.eventCount} {session.eventCount === 1 ? 'event' : 'events'}
                       </span>
                       {isActive && (
                         <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
@@ -228,12 +228,12 @@ export const ThreadHeader = memo(function ThreadHeader({
             )}
           </div>
         )}
-        {hasWorktree === true && (messageStatus === 'in_progress' || messageStatus === 'completed' || messageStatus === 'auto_review') && (
+        {hasWorktree === true && (workspaceStatus === 'in_progress' || workspaceStatus === 'completed' || workspaceStatus === 'auto_review') && (
           <Tooltip text="Merge to main" position="bottom">
             <button
               id="thread-merge-to-main"
               type="button"
-              disabled={!selectedMessageId}
+              disabled={!selectedWorkspaceId}
               onClick={onMergeToMain}
               className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -241,11 +241,11 @@ export const ThreadHeader = memo(function ThreadHeader({
             </button>
           </Tooltip>
         )}
-        {messageStatus === 'completed' && (
+        {workspaceStatus === 'completed' && (
           <Tooltip text="Mark as merged" position="bottom">
             <button
               type="button"
-              disabled={!selectedMessageId}
+              disabled={!selectedWorkspaceId}
               onClick={onMarkMerged}
               className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-purple-400/50 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -280,7 +280,7 @@ export const ThreadHeader = memo(function ThreadHeader({
             <button
               id="thread-delete-worktree"
               type="button"
-              disabled={!selectedMessageId || deletingWorktree}
+              disabled={!selectedWorkspaceId || deletingWorktree}
               onClick={onDeleteWorktree}
               className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
             >

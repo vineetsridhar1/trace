@@ -1,0 +1,33 @@
+import type { MutationResolvers } from './../../../types.generated';
+import { appendPromptToWorkspaceSession } from '../../../../services/workspaceService';
+import { pubsub, TOPICS } from '../../../../services/pubsub';
+import { GraphQLError } from 'graphql';
+
+export const appendPrompt: NonNullable<MutationResolvers['appendPrompt']> = async (_parent, { channelId, workspaceId, text, attachmentIds, createNewSession, sessionId }, _ctx) => {
+  const created = await appendPromptToWorkspaceSession(
+    channelId,
+    workspaceId,
+    text.trim(),
+    attachmentIds ?? undefined,
+    createNewSession ?? undefined,
+    sessionId ?? undefined,
+  );
+
+  if (!created) {
+    throw new GraphQLError('Workspace or session not found', { extensions: { code: 'NOT_FOUND' } });
+  }
+
+  pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
+    workspaceUpserted: created.workspace,
+  });
+  pubsub.publish(TOPICS.SESSION_EVENT_CREATED(channelId), {
+    sessionEventCreated: {
+      channelId,
+      workspaceId: created.workspace.id,
+      sessionId: created.session.id,
+      event: created.event,
+    },
+  });
+
+  return created;
+};

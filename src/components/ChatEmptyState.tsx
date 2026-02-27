@@ -1,5 +1,4 @@
 import { FiMessageSquare } from 'react-icons/fi';
-import { MessageInput } from './MessageInput';
 
 export function ChatEmptyState({ channelName, channelCreatedAt }: { channelName: string; channelCreatedAt: string | null }) {
   const dateLabel = channelCreatedAt
@@ -39,7 +38,6 @@ export function ChatEmptyState({ channelName, channelCreatedAt }: { channelName:
           </span>
         </div>
       </div>
-      <MessageInput />
     </>
   );
 }

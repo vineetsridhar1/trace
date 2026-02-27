@@ -9,14 +9,14 @@ import { useThreadContext } from '../context/ThreadContext';
 
 const MODE_CYCLE: InteractionMode[] = ['code', 'plan', 'ask'];
 
-export function QueuedStatusBar({ messageId }: { messageId: string }) {
+export function QueuedStatusBar({ workspaceId }: { workspaceId: string }) {
   const {
     removeTicketDependency,
     updateQueuedRunConfig,
     queuedRunConfig,
   } = useThreadContext();
 
-  const { data } = useTicketDependenciesQuery({ variables: { messageId } });
+  const { data } = useTicketDependenciesQuery({ variables: { workspaceId } });
   const deps = data?.ticketDependencies ?? [];
 
   const [model, setModel] = useState<ClaudeModel>(
@@ -31,7 +31,7 @@ export function QueuedStatusBar({ messageId }: { messageId: string }) {
 
   const saveConfig = (newModel: ClaudeModel, newEffort: EffortLevel, newMode: InteractionMode) => {
     if (!queuedRunConfig) return;
-    updateQueuedRunConfig(messageId, {
+    updateQueuedRunConfig(workspaceId, {
       ...queuedRunConfig,
       model: newModel,
       effort: newEffort,
@@ -71,10 +71,10 @@ export function QueuedStatusBar({ messageId }: { messageId: string }) {
               key={dep.id}
               className="flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-300"
             >
-              {dep.dependsOnTicketTitle ?? dep.dependsOnMessageId}
+              {dep.dependsOnTicketTitle ?? dep.dependsOnWorkspaceId}
               <button
                 type="button"
-                onClick={() => removeTicketDependency(messageId, dep.dependsOnMessageId)}
+                onClick={() => removeTicketDependency(workspaceId, dep.dependsOnWorkspaceId)}
                 className="ml-0.5 rounded p-0.5 text-cyan-400/60 transition-colors hover:bg-cyan-500/20 hover:text-cyan-300"
               >
                 <FiX className="h-3 w-3" />

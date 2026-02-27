@@ -1,77 +1,81 @@
 import * as Types from '../../graphql/__generated__/schema-types';
 
 import { gql } from '@apollo/client';
-import { MessageFieldsFragmentDoc } from '../../graphql/__generated__/fragments.generated';
+import { WorkspaceFieldsFragmentDoc } from '../../graphql/__generated__/fragments.generated';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type CreateMessageMutationVariables = Types.Exact<{
+export type CreateWorkspaceMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
   text: Types.Scalars['String']['input'];
   attachmentIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
 }>;
 
 
-export type CreateMessageMutation = { __typename?: 'Mutation', createMessage: { __typename?: 'CreateMessagePayload', message: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null }, thread: { __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, threadId: string, importance: string } } };
+export type CreateWorkspaceMutation = { __typename?: 'Mutation', createWorkspace: { __typename?: 'CreateWorkspacePayload', workspace: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null }, session: { __typename?: 'Session', id: string, workspaceId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, sessionId: string, importance: string } } };
 
 export type AppendPromptMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
-  messageId: Types.Scalars['ID']['input'];
+  workspaceId: Types.Scalars['ID']['input'];
   text: Types.Scalars['String']['input'];
   attachmentIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
-  createNewThread?: Types.InputMaybe<Types.Scalars['Boolean']['input']>;
-  threadId?: Types.InputMaybe<Types.Scalars['ID']['input']>;
+  createNewSession?: Types.InputMaybe<Types.Scalars['Boolean']['input']>;
+  sessionId?: Types.InputMaybe<Types.Scalars['ID']['input']>;
 }>;
 
 
-export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt: { __typename?: 'CreateMessagePayload', message: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null }, thread: { __typename?: 'Thread', id: string, messageId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, sessionId: string, hookEventName: string, timestamp: string, threadId: string, importance: string } } };
+export type AppendPromptMutation = { __typename?: 'Mutation', appendPrompt: { __typename?: 'CreateWorkspacePayload', workspace: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null }, session: { __typename?: 'Session', id: string, workspaceId: string, createdAt: string, eventCount: number }, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, sessionId: string, importance: string } } };
 
-export type UpdateMessagePreviewMutationVariables = Types.Exact<{
+export type UpdateWorkspacePreviewMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
-  messageId: Types.Scalars['ID']['input'];
+  workspaceId: Types.Scalars['ID']['input'];
   preview: Types.Scalars['String']['input'];
 }>;
 
 
-export type UpdateMessagePreviewMutation = { __typename?: 'Mutation', updateMessagePreview: { __typename?: 'Message', id: string, channelId: string, sessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, threadCount: number, queuedRunConfig?: unknown | null, session?: { __typename?: 'MessageSession', sessionId: string, cwd?: string | null, status: string } | null } };
+export type UpdateWorkspacePreviewMutation = { __typename?: 'Mutation', updateWorkspacePreview: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null } };
 
 
-export const CreateMessageDocument = gql`
-    mutation CreateMessage($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
-  createMessage(channelId: $channelId, text: $text, attachmentIds: $attachmentIds) {
-    message {
-      ...MessageFields
+export const CreateWorkspaceDocument = gql`
+    mutation CreateWorkspace($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
+  createWorkspace(
+    channelId: $channelId
+    text: $text
+    attachmentIds: $attachmentIds
+  ) {
+    workspace {
+      ...WorkspaceFields
     }
-    thread {
+    session {
       id
-      messageId
+      workspaceId
       createdAt
       eventCount
     }
     event {
       id
-      sessionId
+      cliSessionId
       hookEventName
       timestamp
-      threadId
+      sessionId
       importance
     }
   }
 }
-    ${MessageFieldsFragmentDoc}`;
-export type CreateMessageMutationFn = Apollo.MutationFunction<CreateMessageMutation, CreateMessageMutationVariables>;
+    ${WorkspaceFieldsFragmentDoc}`;
+export type CreateWorkspaceMutationFn = Apollo.MutationFunction<CreateWorkspaceMutation, CreateWorkspaceMutationVariables>;
 
 /**
- * __useCreateMessageMutation__
+ * __useCreateWorkspaceMutation__
  *
- * To run a mutation, you first call `useCreateMessageMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateMessageMutation` returns a tuple that includes:
+ * To run a mutation, you first call `useCreateWorkspaceMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateWorkspaceMutation` returns a tuple that includes:
  * - A mutate function that you can call at any time to execute the mutation
  * - An object with fields that represent the current status of the mutation's execution
  *
  * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
  *
  * @example
- * const [createMessageMutation, { data, loading, error }] = useCreateMessageMutation({
+ * const [createWorkspaceMutation, { data, loading, error }] = useCreateWorkspaceMutation({
  *   variables: {
  *      channelId: // value for 'channelId'
  *      text: // value for 'text'
@@ -79,43 +83,43 @@ export type CreateMessageMutationFn = Apollo.MutationFunction<CreateMessageMutat
  *   },
  * });
  */
-export function useCreateMessageMutation(baseOptions?: Apollo.MutationHookOptions<CreateMessageMutation, CreateMessageMutationVariables>) {
+export function useCreateWorkspaceMutation(baseOptions?: Apollo.MutationHookOptions<CreateWorkspaceMutation, CreateWorkspaceMutationVariables>) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<CreateMessageMutation, CreateMessageMutationVariables>(CreateMessageDocument, options);
+        return Apollo.useMutation<CreateWorkspaceMutation, CreateWorkspaceMutationVariables>(CreateWorkspaceDocument, options);
       }
-export type CreateMessageMutationHookResult = ReturnType<typeof useCreateMessageMutation>;
-export type CreateMessageMutationResult = Apollo.MutationResult<CreateMessageMutation>;
-export type CreateMessageMutationOptions = Apollo.BaseMutationOptions<CreateMessageMutation, CreateMessageMutationVariables>;
+export type CreateWorkspaceMutationHookResult = ReturnType<typeof useCreateWorkspaceMutation>;
+export type CreateWorkspaceMutationResult = Apollo.MutationResult<CreateWorkspaceMutation>;
+export type CreateWorkspaceMutationOptions = Apollo.BaseMutationOptions<CreateWorkspaceMutation, CreateWorkspaceMutationVariables>;
 export const AppendPromptDocument = gql`
-    mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!], $createNewThread: Boolean, $threadId: ID) {
+    mutation AppendPrompt($channelId: ID!, $workspaceId: ID!, $text: String!, $attachmentIds: [String!], $createNewSession: Boolean, $sessionId: ID) {
   appendPrompt(
     channelId: $channelId
-    messageId: $messageId
+    workspaceId: $workspaceId
     text: $text
     attachmentIds: $attachmentIds
-    createNewThread: $createNewThread
-    threadId: $threadId
+    createNewSession: $createNewSession
+    sessionId: $sessionId
   ) {
-    message {
-      ...MessageFields
+    workspace {
+      ...WorkspaceFields
     }
-    thread {
+    session {
       id
-      messageId
+      workspaceId
       createdAt
       eventCount
     }
     event {
       id
-      sessionId
+      cliSessionId
       hookEventName
       timestamp
-      threadId
+      sessionId
       importance
     }
   }
 }
-    ${MessageFieldsFragmentDoc}`;
+    ${WorkspaceFieldsFragmentDoc}`;
 export type AppendPromptMutationFn = Apollo.MutationFunction<AppendPromptMutation, AppendPromptMutationVariables>;
 
 /**
@@ -132,11 +136,11 @@ export type AppendPromptMutationFn = Apollo.MutationFunction<AppendPromptMutatio
  * const [appendPromptMutation, { data, loading, error }] = useAppendPromptMutation({
  *   variables: {
  *      channelId: // value for 'channelId'
- *      messageId: // value for 'messageId'
+ *      workspaceId: // value for 'workspaceId'
  *      text: // value for 'text'
  *      attachmentIds: // value for 'attachmentIds'
- *      createNewThread: // value for 'createNewThread'
- *      threadId: // value for 'threadId'
+ *      createNewSession: // value for 'createNewSession'
+ *      sessionId: // value for 'sessionId'
  *   },
  * });
  */
@@ -147,42 +151,42 @@ export function useAppendPromptMutation(baseOptions?: Apollo.MutationHookOptions
 export type AppendPromptMutationHookResult = ReturnType<typeof useAppendPromptMutation>;
 export type AppendPromptMutationResult = Apollo.MutationResult<AppendPromptMutation>;
 export type AppendPromptMutationOptions = Apollo.BaseMutationOptions<AppendPromptMutation, AppendPromptMutationVariables>;
-export const UpdateMessagePreviewDocument = gql`
-    mutation UpdateMessagePreview($channelId: ID!, $messageId: ID!, $preview: String!) {
-  updateMessagePreview(
+export const UpdateWorkspacePreviewDocument = gql`
+    mutation UpdateWorkspacePreview($channelId: ID!, $workspaceId: ID!, $preview: String!) {
+  updateWorkspacePreview(
     channelId: $channelId
-    messageId: $messageId
+    workspaceId: $workspaceId
     preview: $preview
   ) {
-    ...MessageFields
+    ...WorkspaceFields
   }
 }
-    ${MessageFieldsFragmentDoc}`;
-export type UpdateMessagePreviewMutationFn = Apollo.MutationFunction<UpdateMessagePreviewMutation, UpdateMessagePreviewMutationVariables>;
+    ${WorkspaceFieldsFragmentDoc}`;
+export type UpdateWorkspacePreviewMutationFn = Apollo.MutationFunction<UpdateWorkspacePreviewMutation, UpdateWorkspacePreviewMutationVariables>;
 
 /**
- * __useUpdateMessagePreviewMutation__
+ * __useUpdateWorkspacePreviewMutation__
  *
- * To run a mutation, you first call `useUpdateMessagePreviewMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useUpdateMessagePreviewMutation` returns a tuple that includes:
+ * To run a mutation, you first call `useUpdateWorkspacePreviewMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateWorkspacePreviewMutation` returns a tuple that includes:
  * - A mutate function that you can call at any time to execute the mutation
  * - An object with fields that represent the current status of the mutation's execution
  *
  * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
  *
  * @example
- * const [updateMessagePreviewMutation, { data, loading, error }] = useUpdateMessagePreviewMutation({
+ * const [updateWorkspacePreviewMutation, { data, loading, error }] = useUpdateWorkspacePreviewMutation({
  *   variables: {
  *      channelId: // value for 'channelId'
- *      messageId: // value for 'messageId'
+ *      workspaceId: // value for 'workspaceId'
  *      preview: // value for 'preview'
  *   },
  * });
  */
-export function useUpdateMessagePreviewMutation(baseOptions?: Apollo.MutationHookOptions<UpdateMessagePreviewMutation, UpdateMessagePreviewMutationVariables>) {
+export function useUpdateWorkspacePreviewMutation(baseOptions?: Apollo.MutationHookOptions<UpdateWorkspacePreviewMutation, UpdateWorkspacePreviewMutationVariables>) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<UpdateMessagePreviewMutation, UpdateMessagePreviewMutationVariables>(UpdateMessagePreviewDocument, options);
+        return Apollo.useMutation<UpdateWorkspacePreviewMutation, UpdateWorkspacePreviewMutationVariables>(UpdateWorkspacePreviewDocument, options);
       }
-export type UpdateMessagePreviewMutationHookResult = ReturnType<typeof useUpdateMessagePreviewMutation>;
-export type UpdateMessagePreviewMutationResult = Apollo.MutationResult<UpdateMessagePreviewMutation>;
-export type UpdateMessagePreviewMutationOptions = Apollo.BaseMutationOptions<UpdateMessagePreviewMutation, UpdateMessagePreviewMutationVariables>;
+export type UpdateWorkspacePreviewMutationHookResult = ReturnType<typeof useUpdateWorkspacePreviewMutation>;
+export type UpdateWorkspacePreviewMutationResult = Apollo.MutationResult<UpdateWorkspacePreviewMutation>;
+export type UpdateWorkspacePreviewMutationOptions = Apollo.BaseMutationOptions<UpdateWorkspacePreviewMutation, UpdateWorkspacePreviewMutationVariables>;

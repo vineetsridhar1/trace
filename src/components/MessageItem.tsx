@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { FiCheck, FiLoader, FiTrash2 } from 'react-icons/fi';
-import type { ChannelMessage, KanbanTicket, TicketStatus } from '../types';
+import type { Workspace, KanbanTicket, TicketStatus } from '../types';
 import { avatarInitial } from '../utils';
 
 export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; avatarBg: string; avatarText: string }> = {
@@ -39,28 +39,28 @@ function StatusIcon({ status }: { status: TicketStatus }) {
 }
 
 interface MessageItemProps {
-  message: ChannelMessage;
+  workspace: Workspace;
   ticket: KanbanTicket | null;
   isSelected: boolean;
   needsAttention?: boolean;
-  onOpenThread: (message: ChannelMessage) => void;
-  onDeleteMessage?: (messageId: string) => void;
+  onOpenWorkspace: (workspace: Workspace) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
   dimmed?: boolean;
 }
 
 export const MessageItem = memo(function MessageItem({
-  message,
+  workspace,
   ticket,
   isSelected,
   needsAttention,
-  onOpenThread,
-  onDeleteMessage,
+  onOpenWorkspace,
+  onDeleteWorkspace,
   dimmed,
 }: MessageItemProps) {
-  const status = (message.status ?? 'pending') as TicketStatus;
+  const status = (workspace.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  const title = ticket?.title || message.sessionId;
-  const branch = message.branch?.replace(/^trace\//, '');
+  const title = ticket?.title || workspace.cliSessionId;
+  const branch = workspace.branch?.replace(/^trace\//, '');
 
   return (
     <button
@@ -68,14 +68,14 @@ export const MessageItem = memo(function MessageItem({
       className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
         isSelected ? 'selected' : ''
       } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
-      onClick={() => onOpenThread(message)}
-      title={message.sessionId}
+      onClick={() => onOpenWorkspace(workspace)}
+      title={workspace.cliSessionId}
     >
       {/* Avatar */}
       <div
         className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
       >
-        {avatarInitial(message.sessionId)}
+        {avatarInitial(workspace.cliSessionId)}
       </div>
 
       {/* Title + branch stacked */}
@@ -90,19 +90,19 @@ export const MessageItem = memo(function MessageItem({
       <StatusIcon status={status} />
 
       {/* Delete button (hover only) */}
-      {onDeleteMessage && (
+      {onDeleteWorkspace && (
         <div
           role="button"
           tabIndex={-1}
           className="hidden flex-shrink-0 cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
           onClick={(e) => {
             e.stopPropagation();
-            onDeleteMessage(message.id);
+            onDeleteWorkspace(workspace.id);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.stopPropagation();
-              onDeleteMessage(message.id);
+              onDeleteWorkspace(workspace.id);
             }
           }}
         >
@@ -115,12 +115,12 @@ export const MessageItem = memo(function MessageItem({
 
 function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps) {
   return (
-    prev.message === next.message &&
+    prev.workspace === next.workspace &&
     prev.ticket === next.ticket &&
     prev.isSelected === next.isSelected &&
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
-    prev.onOpenThread === next.onOpenThread &&
-    prev.onDeleteMessage === next.onDeleteMessage
+    prev.onOpenWorkspace === next.onOpenWorkspace &&
+    prev.onDeleteWorkspace === next.onDeleteWorkspace
   );
 }

@@ -1,39 +1,39 @@
 import { useCallback, useRef, useState } from 'react';
-import type { ChannelMessage } from '../types';
+import type { Workspace } from '../types';
 
 export function useThreadSelection() {
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-  const [selectedMessage, setSelectedMessage] = useState<ChannelMessage | null>(null);
-  const selectedMessageRef = useRef<ChannelMessage | null>(null);
-  const selectedMessageIdRef = useRef<string | null>(null);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
+  const selectedWorkspaceRef = useRef<Workspace | null>(null);
+  const selectedWorkspaceIdRef = useRef<string | null>(null);
 
-  selectedMessageRef.current = selectedMessage;
-  selectedMessageIdRef.current = selectedMessageId;
+  selectedWorkspaceRef.current = selectedWorkspace;
+  selectedWorkspaceIdRef.current = selectedWorkspaceId;
 
-  const syncSelectedMessage = useCallback((message: ChannelMessage) => {
-    setSelectedMessage((current) => {
-      if (current && current.id === message.id) return message;
+  const syncSelectedWorkspace = useCallback((workspace: Workspace) => {
+    setSelectedWorkspace((current) => {
+      if (current && current.id === workspace.id) return workspace;
       return current;
     });
   }, []);
 
   const clearSelection = useCallback(() => {
-    setSelectedMessageId(null);
-    setSelectedMessage(null);
+    setSelectedWorkspaceId(null);
+    setSelectedWorkspace(null);
   }, []);
 
-  const selectMessage = useCallback((message: ChannelMessage) => {
-    setSelectedMessageId(message.id);
-    setSelectedMessage(message);
+  const selectWorkspace = useCallback((workspace: Workspace) => {
+    setSelectedWorkspaceId(workspace.id);
+    setSelectedWorkspace(workspace);
   }, []);
 
   return {
-    selectedMessageId,
-    selectedMessage,
-    selectedMessageRef,
-    selectedMessageIdRef,
-    syncSelectedMessage,
+    selectedWorkspaceId,
+    selectedWorkspace,
+    selectedWorkspaceRef,
+    selectedWorkspaceIdRef,
+    syncSelectedWorkspace,
     clearSelection,
-    selectMessage,
+    selectWorkspace,
   };
 }

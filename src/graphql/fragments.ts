@@ -1,10 +1,10 @@
 import { gql } from '@apollo/client';
 
-export const MESSAGE_FIELDS = gql`
-  fragment MessageFields on Message {
+export const WORKSPACE_FIELDS = gql`
+  fragment WorkspaceFields on Workspace {
     id
     channelId
-    sessionId
+    cliSessionId
     preview
     importance
     status
@@ -12,24 +12,24 @@ export const MESSAGE_FIELDS = gql`
     branch
     claudeSessionId
     createdAt
-    session {
+    cliSession {
       sessionId
       cwd
       status
     }
-    threadCount
+    sessionCount
     queuedRunConfig
   }
 `;
 
-export const THREAD_EVENT_PAYLOAD_FIELDS = gql`
-  fragment ThreadEventPayloadFields on ThreadEventPayload {
+export const SESSION_EVENT_PAYLOAD_FIELDS = gql`
+  fragment SessionEventPayloadFields on SessionEventPayload {
     channelId
-    messageId
-    threadId
+    workspaceId
+    sessionId
     event {
       id
-      sessionId
+      cliSessionId
       hookEventName
       timestamp
       toolName
@@ -39,7 +39,7 @@ export const THREAD_EVENT_PAYLOAD_FIELDS = gql`
       stopHookActive
       lastAssistantMessage
       rawPayload
-      threadId
+      sessionId
       importance
     }
   }

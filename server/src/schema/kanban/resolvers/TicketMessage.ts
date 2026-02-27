@@ -1,2 +1,2 @@
-import type { TicketMessageResolvers } from './../../types.generated';
-export const TicketMessage: TicketMessageResolvers = {};
+import type { TicketWorkspaceResolvers } from './../../types.generated';
+export const TicketWorkspace: TicketWorkspaceResolvers = {};

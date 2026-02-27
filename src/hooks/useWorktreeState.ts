@@ -1,23 +1,23 @@
 import { useCallback, useState } from 'react';
-import type { ChannelMessage } from '../types';
+import type { Workspace } from '../types';
 
 interface UseWorktreeStateOptions {
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
-  selectedMessageRef: React.RefObject<ChannelMessage | null>;
+  selectedWorkspaceRef: React.RefObject<Workspace | null>;
 }
 
 export function useWorktreeState({
   getChannelRepoPath,
   getChannelBaseBranch,
-  selectedMessageRef,
+  selectedWorkspaceRef,
 }: UseWorktreeStateOptions) {
   const [hasWorktree, setHasWorktree] = useState<boolean | null>(null);
   const [deletingWorktree, setDeletingWorktree] = useState(false);
   const [mergingWorktree, setMergingWorktree] = useState(false);
 
   const checkWorktree = useCallback(
-    async (messageId: string) => {
+    async (workspaceId: string) => {
       if (
         !window.traceAPI ||
         typeof window.traceAPI.checkWorktreeExists !== 'function'
@@ -27,7 +27,7 @@ export function useWorktreeState({
       }
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.checkWorktreeExists(messageId, repoPath);
+        const result = await window.traceAPI.checkWorktreeExists(workspaceId, repoPath);
         setHasWorktree(result.success && result.exists === true);
       } catch {
         setHasWorktree(false);
@@ -37,9 +37,9 @@ export function useWorktreeState({
   );
 
   const deleteWorktree = useCallback(
-    async (onDeleted?: (messageId: string) => void) => {
-      const message = selectedMessageRef.current;
-      if (!message) return;
+    async (onDeleted?: (workspaceId: string) => void) => {
+      const workspace = selectedWorkspaceRef.current;
+      if (!workspace) return;
 
       const confirmed = window.confirm(
         'Delete this worktree? This removes local files for this workspace.',
@@ -49,7 +49,7 @@ export function useWorktreeState({
       setDeletingWorktree(true);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.deleteWorktree(message.id, repoPath);
+        const result = await window.traceAPI.deleteWorktree(workspace.id, repoPath);
         if (!result.success) {
           console.error('Failed to delete worktree:', result.error);
           return;
@@ -60,17 +60,17 @@ export function useWorktreeState({
             : `Worktree already missing: ${result.worktreePath}`,
         );
         setHasWorktree(false);
-        onDeleted?.(message.id);
+        onDeleted?.(workspace.id);
       } finally {
         setDeletingWorktree(false);
       }
     },
-    [getChannelRepoPath, selectedMessageRef],
+    [getChannelRepoPath, selectedWorkspaceRef],
   );
 
   const mergeWorktree = useCallback(async () => {
-    const message = selectedMessageRef.current;
-    if (!message) return;
+    const workspace = selectedWorkspaceRef.current;
+    if (!workspace) return;
 
     const baseBranch = getChannelBaseBranch();
     const confirmed = window.confirm(
@@ -81,7 +81,7 @@ export function useWorktreeState({
     setMergingWorktree(true);
     try {
       const repoPath = getChannelRepoPath();
-      const result = await window.traceAPI.mergeWorktree(message.id, repoPath, baseBranch);
+      const result = await window.traceAPI.mergeWorktree(workspace.id, repoPath, baseBranch);
       if (!result.success) {
         console.error('Failed to merge worktree:', result.error);
         return;
@@ -90,7 +90,7 @@ export function useWorktreeState({
     } finally {
       setMergingWorktree(false);
     }
-  }, [getChannelBaseBranch, getChannelRepoPath, selectedMessageRef]);
+  }, [getChannelBaseBranch, getChannelRepoPath, selectedWorkspaceRef]);
 
   return {
     hasWorktree,

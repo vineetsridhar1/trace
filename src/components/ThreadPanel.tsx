@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AskUserQuestionNode, PlanReviewNode, ThreadStatus } from "../types";
+import type { AskUserQuestionNode, PlanReviewNode, SessionStatus } from "../types";
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
@@ -24,11 +24,11 @@ export function ThreadPanel() {
   const {
     threadWidth,
     dragging,
-    activeThreadId,
-    threads,
+    activeSessionId,
+    sessions,
     expandedReadGroupIds,
-    selectedMessageId,
-    messageStatus,
+    selectedWorkspaceId,
+    workspaceStatus,
     selectedTicket: ticket,
     deletingWorktree,
     hasWorktree,
@@ -39,8 +39,8 @@ export function ThreadPanel() {
     isFullscreen,
     channelTickets,
     setTicketDependencies,
-    clearThread,
-    switchThread,
+    clearSession,
+    switchSession,
     onRerunScript,
     onStopScript,
     runScriptRunning,
@@ -63,8 +63,8 @@ export function ThreadPanel() {
   } = useThreadContext();
 
   const {
-    threadNodes,
-    threadStatus,
+    sessionNodes,
+    sessionStatus,
     showJumpToLatest,
     threadContentRef,
     loadingOlderEvents,
@@ -73,9 +73,9 @@ export function ThreadPanel() {
   } = useThreadEventsContext();
 
   const {
-    pendingRunMessageId,
+    pendingRunWorkspaceId,
     pendingRunInitialPrompt,
-    runPendingMessage,
+    runPendingWorkspace,
     stopClaude,
     sendThreadMessage,
     sendPlanResponse,
@@ -85,8 +85,8 @@ export function ThreadPanel() {
   } = useClaudeActions();
 
   const lastUserMessageTime = useMemo(() => {
-    for (let i = threadNodes.length - 1; i >= 0; i--) {
-      const node = threadNodes[i];
+    for (let i = sessionNodes.length - 1; i >= 0; i--) {
+      const node = sessionNodes[i];
       if (
         node.kind === "event" &&
         node.event.hookEventName === "UserPromptSubmit"
@@ -95,11 +95,11 @@ export function ThreadPanel() {
       }
     }
     return null;
-  }, [threadNodes]);
+  }, [sessionNodes]);
 
   const latestTodos = useMemo(() => {
-    for (let i = threadNodes.length - 1; i >= 0; i--) {
-      const node = threadNodes[i];
+    for (let i = sessionNodes.length - 1; i >= 0; i--) {
+      const node = sessionNodes[i];
       if (
         node.kind === "event" &&
         node.event.hookEventName === "PostToolUse" &&
@@ -113,14 +113,14 @@ export function ThreadPanel() {
       }
     }
     return null;
-  }, [threadNodes]);
+  }, [sessionNodes]);
 
   const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
     if (isClaudeRunning) return null;
     // Scan backward for the most recent unanswered question,
     // stopping at a UserPromptSubmit boundary (which means it was answered)
-    for (let i = threadNodes.length - 1; i >= 0; i--) {
-      const node = threadNodes[i];
+    for (let i = sessionNodes.length - 1; i >= 0; i--) {
+      const node = sessionNodes[i];
       if (node.kind === "ask-user-question") return node;
       if (
         node.kind === "event" &&
@@ -130,7 +130,7 @@ export function ThreadPanel() {
       }
     }
     return null;
-  }, [threadNodes, isClaudeRunning]);
+  }, [sessionNodes, isClaudeRunning]);
 
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
   const showQuestion =
@@ -140,10 +140,10 @@ export function ThreadPanel() {
 
   const activePlanNode = useMemo((): PlanReviewNode | null => {
     if (isClaudeRunning) return null;
-    const last = threadNodes[threadNodes.length - 1];
+    const last = sessionNodes[sessionNodes.length - 1];
     if (last?.kind === "plan-review") return last;
     return null;
-  }, [threadNodes, isClaudeRunning]);
+  }, [sessionNodes, isClaudeRunning]);
 
   const [dismissedPlanId, setDismissedPlanId] = useState<string | null>(null);
   const showPlan =
@@ -155,10 +155,10 @@ export function ThreadPanel() {
 
   useEffect(() => {
     setViewMode("agent");
-  }, [selectedMessageId]);
+  }, [selectedWorkspaceId]);
 
 
-  const isOpen = selectedMessageId !== null;
+  const isOpen = selectedWorkspaceId !== null;
 
   return (
     <>
@@ -180,8 +180,8 @@ export function ThreadPanel() {
         }
       >
         <ThreadHeader
-          selectedMessageId={selectedMessageId}
-          messageStatus={messageStatus}
+          selectedWorkspaceId={selectedWorkspaceId}
+          workspaceStatus={workspaceStatus}
           hasTicket={ticket !== null}
           viewMode={viewMode}
           onSetViewMode={setViewMode}
@@ -194,16 +194,16 @@ export function ThreadPanel() {
           onExitFullscreen={onExitFullscreen}
           onMergeToMain={() => void mergeToMain()}
           onMarkMerged={() => void markMerged()}
-          threads={threads}
-          activeThreadId={activeThreadId}
-          onSwitchThread={switchThread}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSwitchSession={switchSession}
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
           {viewMode === "ticket" && ticket ? (
             <TicketView ticket={ticket} />
           ) : viewMode === "files" ? (
-            <WorktreeChanges messageId={selectedMessageId} baseBranch={baseBranch} />
+            <WorktreeChanges workspaceId={selectedWorkspaceId} baseBranch={baseBranch} />
           ) : viewMode === "terminal" ? null : (
             <>
               <div
@@ -217,14 +217,14 @@ export function ThreadPanel() {
                     <div className="py-2 text-center text-xs text-[#565f89]">Loading older events...</div>
                   )}
                   <ThreadStatusMessage
-                    status={threadStatus}
-                    activeThreadId={activeThreadId}
+                    status={sessionStatus}
+                    activeSessionId={activeSessionId}
                   />
 
                   {(() => {
                     let lastUserPromptTime: string | null = null;
-                    return threadNodes.map((node) => {
-                      if (node.kind === "thread-divider") {
+                    return sessionNodes.map((node) => {
+                      if (node.kind === "session-divider") {
                         return (
                           <div key={node.id} className="my-3 flex items-center gap-3 px-2">
                             <div className="h-px flex-1 bg-violet-500/20" />
@@ -283,7 +283,7 @@ export function ThreadPanel() {
             </>
           )}
 
-          {/* Terminal area — always mounted to preserve PTYs across message/view switches */}
+          {/* Terminal area — always mounted to preserve PTYs across workspace/view switches */}
           <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
             style={{ display: viewMode === 'terminal' ? 'flex' : 'none' }}
@@ -296,7 +296,7 @@ export function ThreadPanel() {
               <TerminalTabs
                 terminals={terminals}
                 allTerminalEntries={allTerminalEntries}
-                currentMessageId={selectedMessageId}
+                currentWorkspaceId={selectedWorkspaceId}
                 activeTabId={activeTerminalTabId}
                 cwd={terminalCwd}
                 runScriptRunning={runScriptRunning}
@@ -325,25 +325,25 @@ export function ThreadPanel() {
         )}
 
         {viewMode === "agent" && (
-          pendingRunMessageId === selectedMessageId && !isClaudeRunning ? (
+          pendingRunWorkspaceId === selectedWorkspaceId && !isClaudeRunning ? (
             <RunButtons
               initialPrompt={pendingRunInitialPrompt}
               onRun={(planMode, prompt) => {
-                void runPendingMessage(planMode, prompt);
+                void runPendingWorkspace(planMode, prompt);
               }}
               channelTickets={channelTickets}
-              currentMessageId={pendingRunMessageId}
+              currentWorkspaceId={pendingRunWorkspaceId}
               onRunAfter={(depIds, runConfig) => {
-                if (pendingRunMessageId) {
-                  setTicketDependencies(pendingRunMessageId, depIds, runConfig);
+                if (pendingRunWorkspaceId) {
+                  setTicketDependencies(pendingRunWorkspaceId, depIds, runConfig);
                   clearPendingRun();
                 }
               }}
             />
-          ) : messageStatus === 'creation' ? (
+          ) : workspaceStatus === 'creation' ? (
             <CreationStatusBar />
-          ) : messageStatus === 'queued' ? (
-            <QueuedStatusBar key={selectedMessageId} messageId={selectedMessageId!} />
+          ) : workspaceStatus === 'queued' ? (
+            <QueuedStatusBar key={selectedWorkspaceId} workspaceId={selectedWorkspaceId!} />
           ) : showQuestion ? (
             <AskUserQuestionBar
               node={showQuestion}
@@ -378,7 +378,7 @@ export function ThreadPanel() {
               lastUserMessageTime={lastUserMessageTime}
               onSendThreadMessage={sendThreadMessage}
               onStopClaude={() => void stopClaude()}
-              onClearThread={clearThread}
+              onClearThread={clearSession}
             />
           )
         )}
@@ -390,10 +390,10 @@ export function ThreadPanel() {
 
 function ThreadStatusMessage({
   status,
-  activeThreadId,
+  activeSessionId,
 }: {
-  status: ThreadStatus;
-  activeThreadId: string | null;
+  status: SessionStatus;
+  activeSessionId: string | null;
 }) {
   if (status === "loading") {
     return <div className="text-sm text-[#565f89]">Loading events...</div>;
@@ -401,9 +401,9 @@ function ThreadStatusMessage({
   if (status === "empty") {
     return (
       <div className="text-sm text-[#565f89]">
-        {activeThreadId
+        {activeSessionId
           ? "No events yet"
-          : "No threads yet. Create a workspace to start."}
+          : "No sessions yet. Create a workspace to start."}
       </div>
     );
   }

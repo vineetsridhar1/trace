@@ -6,22 +6,22 @@ export type PlanResponseMode = 'clear-context' | 'keep-context' | 'revise';
 
 export interface ClaudeActionsContextValue {
   repoPath: string;
-  pendingRunMessageId: string | null;
+  pendingRunWorkspaceId: string | null;
   pendingRunInitialPrompt: string;
   selectedModel: ClaudeModel;
   selectedEffort: EffortLevel;
   setSelectedModel: Dispatch<SetStateAction<ClaudeModel>>;
   setSelectedEffort: Dispatch<SetStateAction<EffortLevel>>;
   sendMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
-  runPendingMessage: (planMode: boolean, prompt: string) => Promise<void>;
-  autoRunQueuedTicket: (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => Promise<void>;
+  runPendingWorkspace: (planMode: boolean, prompt: string) => Promise<void>;
+  autoRunQueuedTicket: (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => Promise<void>;
   stopClaude: () => Promise<void>;
   sendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
   sendPlanResponse: (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => Promise<void>;
   mergeToMain: () => Promise<void>;
   markMerged: () => Promise<void>;
   clearPendingRun: () => void;
-  autoReviewMessage: (messageId: string, claudeSessionId: string | null) => Promise<void>;
+  autoReviewWorkspace: (workspaceId: string, claudeSessionId: string | null) => Promise<void>;
 }
 
 const ClaudeActionsContext = createContext<ClaudeActionsContextValue | null>(null);

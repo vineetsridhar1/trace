@@ -1,87 +1,87 @@
 import { useCallback, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
-import type { ChannelMessage, ServerEvent, TicketStatus, ClaudeModel, EffortLevel } from '../types';
+import type { Workspace, ServerEvent, TicketStatus, ClaudeModel, EffortLevel } from '../types';
 import type { PlanResponseMode } from '../context/ClaudeActionsContext';
-import { MESSAGE_FIELDS } from '../graphql/fragments';
+import { WORKSPACE_FIELDS } from '../graphql/fragments';
 import {
-  useCreateMessageMutation,
+  useCreateWorkspaceMutation,
   useAppendPromptMutation,
-  useUpdateMessagePreviewMutation,
+  useUpdateWorkspacePreviewMutation,
 } from './__generated__/useClaudeMessageActions.generated';
 
-const GQL_CREATE_MESSAGE = gql`
-  mutation CreateMessage($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
-    createMessage(channelId: $channelId, text: $text, attachmentIds: $attachmentIds) {
-      message {
-        ...MessageFields
+const GQL_CREATE_WORKSPACE = gql`
+  mutation CreateWorkspace($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
+    createWorkspace(channelId: $channelId, text: $text, attachmentIds: $attachmentIds) {
+      workspace {
+        ...WorkspaceFields
       }
-      thread {
+      session {
         id
-        messageId
+        workspaceId
         createdAt
         eventCount
       }
       event {
         id
-        sessionId
+        cliSessionId
         hookEventName
         timestamp
-        threadId
+        sessionId
         importance
       }
     }
   }
-  ${MESSAGE_FIELDS}
+  ${WORKSPACE_FIELDS}
 `;
 
 const GQL_APPEND_PROMPT = gql`
-  mutation AppendPrompt($channelId: ID!, $messageId: ID!, $text: String!, $attachmentIds: [String!], $createNewThread: Boolean, $threadId: ID) {
-    appendPrompt(channelId: $channelId, messageId: $messageId, text: $text, attachmentIds: $attachmentIds, createNewThread: $createNewThread, threadId: $threadId) {
-      message {
-        ...MessageFields
+  mutation AppendPrompt($channelId: ID!, $workspaceId: ID!, $text: String!, $attachmentIds: [String!], $createNewSession: Boolean, $sessionId: ID) {
+    appendPrompt(channelId: $channelId, workspaceId: $workspaceId, text: $text, attachmentIds: $attachmentIds, createNewSession: $createNewSession, sessionId: $sessionId) {
+      workspace {
+        ...WorkspaceFields
       }
-      thread {
+      session {
         id
-        messageId
+        workspaceId
         createdAt
         eventCount
       }
       event {
         id
-        sessionId
+        cliSessionId
         hookEventName
         timestamp
-        threadId
+        sessionId
         importance
       }
     }
   }
-  ${MESSAGE_FIELDS}
+  ${WORKSPACE_FIELDS}
 `;
 
 const GQL_UPDATE_PREVIEW = gql`
-  mutation UpdateMessagePreview($channelId: ID!, $messageId: ID!, $preview: String!) {
-    updateMessagePreview(channelId: $channelId, messageId: $messageId, preview: $preview) {
-      ...MessageFields
+  mutation UpdateWorkspacePreview($channelId: ID!, $workspaceId: ID!, $preview: String!) {
+    updateWorkspacePreview(channelId: $channelId, workspaceId: $workspaceId, preview: $preview) {
+      ...WorkspaceFields
     }
   }
-  ${MESSAGE_FIELDS}
+  ${WORKSPACE_FIELDS}
 `;
 
-interface UseClaudeMessageActionsOptions {
+interface UseClaudeWorkspaceActionsOptions {
   activeChannelId: string | null;
-  selectedMessageId: string | null;
-  selectedMessageRef: RefObject<ChannelMessage | null>;
-  selectedMessageIdRef: RefObject<string | null>;
-  activeThreadIdRef: RefObject<string | null>;
-  threadEventsRef: RefObject<ServerEvent[]>;
-  clearThread: () => Promise<string | null>;
-  onMessageCreated: (message: ChannelMessage) => void;
-  loadThreadEvents: (message: ChannelMessage) => Promise<void>;
-  upsertMessage: (message: ChannelMessage) => void;
+  selectedWorkspaceId: string | null;
+  selectedWorkspaceRef: RefObject<Workspace | null>;
+  selectedWorkspaceIdRef: RefObject<string | null>;
+  activeSessionIdRef: RefObject<string | null>;
+  sessionEventsRef: RefObject<ServerEvent[]>;
+  clearSession: () => Promise<string | null>;
+  onWorkspaceCreated: (workspace: Workspace) => void;
+  loadSessionEvents: (workspace: Workspace) => Promise<void>;
+  upsertWorkspace: (workspace: Workspace) => void;
   setHasWorktree: Dispatch<SetStateAction<boolean | null>>;
-  updateMessageStatus: (messageId: string, status: TicketStatus) => Promise<void>;
+  updateWorkspaceStatus: (workspaceId: string, status: TicketStatus) => Promise<void>;
   getSetupCommands: () => string[];
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
@@ -100,30 +100,30 @@ interface SpawnOptions {
   systemInstructions?: string;
 }
 
-export function useClaudeMessageActions({
+export function useClaudeWorkspaceActions({
   activeChannelId,
-  selectedMessageId,
-  selectedMessageRef,
-  selectedMessageIdRef,
-  activeThreadIdRef,
-  threadEventsRef,
-  clearThread,
-  onMessageCreated,
-  loadThreadEvents,
-  upsertMessage,
+  selectedWorkspaceId,
+  selectedWorkspaceRef,
+  selectedWorkspaceIdRef,
+  activeSessionIdRef,
+  sessionEventsRef,
+  clearSession,
+  onWorkspaceCreated,
+  loadSessionEvents,
+  upsertWorkspace,
   setHasWorktree,
-  updateMessageStatus,
+  updateWorkspaceStatus,
   getSetupCommands,
   getChannelRepoPath,
   getChannelBaseBranch,
   getSystemInstructions,
-}: UseClaudeMessageActionsOptions) {
-  const [executeCreateMessage] = useCreateMessageMutation();
+}: UseClaudeWorkspaceActionsOptions) {
+  const [executeCreateWorkspace] = useCreateWorkspaceMutation();
   const [executeAppendPrompt] = useAppendPromptMutation();
-  const [executeUpdatePreview] = useUpdateMessagePreviewMutation();
+  const [executeUpdatePreview] = useUpdateWorkspacePreviewMutation();
 
-  const spawnedMessageIdsRef = useRef(new Set<string>());
-  const [pendingRunMessageId, setPendingRunMessageId] = useState<string | null>(
+  const spawnedWorkspaceIdsRef = useRef(new Set<string>());
+  const [pendingRunWorkspaceId, setPendingRunWorkspaceId] = useState<string | null>(
     null,
   );
   const [pendingRunInitialPrompt, setPendingRunInitialPrompt] = useState('');
@@ -131,15 +131,15 @@ export function useClaudeMessageActions({
   const [selectedModel, setSelectedModel] = useState<ClaudeModel>('opus');
   const [selectedEffort, setSelectedEffort] = useState<EffortLevel>('high');
 
-  const spawnClaudeForMessage = useCallback(
-    async (messageId: string, prompt: string, options: SpawnOptions) => {
-      spawnedMessageIdsRef.current.add(messageId);
+  const spawnClaudeForWorkspace = useCallback(
+    async (workspaceId: string, prompt: string, options: SpawnOptions) => {
+      spawnedWorkspaceIdsRef.current.add(workspaceId);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.spawnClaude(messageId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions);
+        const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions);
 
         if (!result.success) {
-          spawnedMessageIdsRef.current.delete(messageId);
+          spawnedWorkspaceIdsRef.current.delete(workspaceId);
           console.error(`${options.errorPrefix}:`, result.error);
           return false;
         }
@@ -149,54 +149,54 @@ export function useClaudeMessageActions({
         }
 
         if (options.statusOnSuccess) {
-          await updateMessageStatus(messageId, options.statusOnSuccess);
+          await updateWorkspaceStatus(workspaceId, options.statusOnSuccess);
         }
 
         return true;
       } catch {
-        spawnedMessageIdsRef.current.delete(messageId);
+        spawnedWorkspaceIdsRef.current.delete(workspaceId);
         console.error(options.errorPrefix);
         return false;
       }
     },
-    [getChannelRepoPath, setHasWorktree, updateMessageStatus],
+    [getChannelRepoPath, setHasWorktree, updateWorkspaceStatus],
   );
 
   const updatePreviewForPendingRun = useCallback(
-    async (messageId: string, preview: string) => {
+    async (workspaceId: string, preview: string) => {
       if (!activeChannelId) return;
 
       try {
         const { data } = await executeUpdatePreview({
           variables: {
             channelId: activeChannelId,
-            messageId,
+            workspaceId,
             preview,
           },
         });
 
         if (!data) return;
-        upsertMessage(data.updateMessagePreview as ChannelMessage);
+        upsertWorkspace(data.updateWorkspacePreview as Workspace);
       } catch {
         // Preview updates are best-effort and should not block execution.
       }
     },
-    [activeChannelId, executeUpdatePreview, upsertMessage],
+    [activeChannelId, executeUpdatePreview, upsertWorkspace],
   );
 
   const persistPrompt = useCallback(
-    async (messageId: string, text: string, errorLabel: string, attachmentIds?: string[], createNewThread?: boolean, threadId?: string) => {
+    async (workspaceId: string, text: string, errorLabel: string, attachmentIds?: string[], createNewSession?: boolean, sessionId?: string) => {
       if (!activeChannelId) return null;
 
       try {
         const { data } = await executeAppendPrompt({
           variables: {
             channelId: activeChannelId,
-            messageId,
+            workspaceId,
             text,
             attachmentIds,
-            createNewThread,
-            threadId,
+            createNewSession,
+            sessionId,
           },
         });
 
@@ -205,18 +205,18 @@ export function useClaudeMessageActions({
           return null;
         }
 
-        const message = data.appendPrompt.message as ChannelMessage;
-        upsertMessage(message);
-        if (selectedMessageIdRef.current === message.id) {
-          void loadThreadEvents(message);
+        const workspace = data.appendPrompt.workspace as Workspace;
+        upsertWorkspace(workspace);
+        if (selectedWorkspaceIdRef.current === workspace.id) {
+          void loadSessionEvents(workspace);
         }
-        return message;
+        return workspace;
       } catch {
         console.error(errorLabel);
         return null;
       }
     },
-    [activeChannelId, executeAppendPrompt, loadThreadEvents, selectedMessageIdRef, upsertMessage],
+    [activeChannelId, executeAppendPrompt, loadSessionEvents, selectedWorkspaceIdRef, upsertWorkspace],
   );
 
   const sendMessage = useCallback(
@@ -225,7 +225,7 @@ export function useClaudeMessageActions({
       if (!text || !activeChannelId) return false;
 
       try {
-        const { data } = await executeCreateMessage({
+        const { data } = await executeCreateWorkspace({
           variables: {
             channelId: activeChannelId,
             text,
@@ -233,48 +233,48 @@ export function useClaudeMessageActions({
           },
         });
 
-        if (!data?.createMessage) return false;
+        if (!data?.createWorkspace) return false;
 
-        const message = data.createMessage.message as ChannelMessage;
-        upsertMessage(message);
-        onMessageCreated(message);
-        setPendingRunMessageId(message.id);
+        const workspace = data.createWorkspace.workspace as Workspace;
+        upsertWorkspace(workspace);
+        onWorkspaceCreated(workspace);
+        setPendingRunWorkspaceId(workspace.id);
         setPendingRunInitialPrompt(text);
         setPendingRunFilePaths(filePaths ?? []);
         return true;
       } catch {
-        console.error('Failed to send message');
+        console.error('Failed to create workspace');
         return false;
       }
     },
-    [activeChannelId, executeCreateMessage, onMessageCreated, upsertMessage],
+    [activeChannelId, executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
   );
 
-  const runPendingMessage = useCallback(
+  const runPendingWorkspace = useCallback(
     async (planMode: boolean, promptText: string) => {
       const editedPrompt = promptText.trim();
-      if (!pendingRunMessageId || !editedPrompt) return;
+      if (!pendingRunWorkspaceId || !editedPrompt) return;
 
       const prompt = planMode
         ? `<trace-internal>\nBefore implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n</trace-internal>\n\n${editedPrompt}`
         : editedPrompt;
 
-      const messageId = pendingRunMessageId;
+      const workspaceId = pendingRunWorkspaceId;
       const filePaths = pendingRunFilePaths;
-      setPendingRunMessageId(null);
+      setPendingRunWorkspaceId(null);
       setPendingRunInitialPrompt('');
       setPendingRunFilePaths([]);
 
       const setupCommands = getSetupCommands();
 
       if (setupCommands.length > 0) {
-        await updateMessageStatus(messageId, 'creation');
+        await updateWorkspaceStatus(workspaceId, 'creation');
       }
 
-      await updatePreviewForPendingRun(messageId, editedPrompt);
+      await updatePreviewForPendingRun(workspaceId, editedPrompt);
 
       // Allocate 10 ports for this workspace
-      const portResult = await window.traceAPI.allocatePorts(messageId, 10);
+      const portResult = await window.traceAPI.allocatePorts(workspaceId, 10);
       const ports = portResult.success && portResult.ports ? portResult.ports : [];
 
       const baseBranch = getChannelBaseBranch();
@@ -288,7 +288,7 @@ export function useClaudeMessageActions({
       }
       if (userInstructions) instructionParts.push(userInstructions);
 
-      const success = await spawnClaudeForMessage(messageId, prompt, {
+      const success = await spawnClaudeForWorkspace(workspaceId, prompt, {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
         creationCommands: setupCommands,
@@ -299,24 +299,24 @@ export function useClaudeMessageActions({
       });
 
       if (!success && setupCommands.length > 0) {
-        await updateMessageStatus(messageId, 'pending');
+        await updateWorkspaceStatus(workspaceId, 'pending');
       }
     },
-    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, pendingRunMessageId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, pendingRunWorkspaceId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForWorkspace, updateWorkspaceStatus, updatePreviewForPendingRun],
   );
 
   const autoRunQueuedTicket = useCallback(
-    async (messageId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+    async (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
       const prompt = runConfig.planMode
         ? `<trace-internal>\nBefore implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n</trace-internal>\n\n${runConfig.prompt}`
         : runConfig.prompt;
 
       const creationCommands = getSetupCommands();
 
-      await updatePreviewForPendingRun(messageId, runConfig.prompt);
+      await updatePreviewForPendingRun(workspaceId, runConfig.prompt);
 
       if (creationCommands.length > 0) {
-        await updateMessageStatus(messageId, 'creation');
+        await updateWorkspaceStatus(workspaceId, 'creation');
       }
 
       const baseBranch = getChannelBaseBranch();
@@ -326,7 +326,7 @@ export function useClaudeMessageActions({
       ];
       if (userInstructions) instructionParts.push(userInstructions);
 
-      const success = await spawnClaudeForMessage(messageId, prompt, {
+      const success = await spawnClaudeForWorkspace(workspaceId, prompt, {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to auto-run queued ticket',
         creationCommands,
@@ -336,38 +336,38 @@ export function useClaudeMessageActions({
       });
 
       if (!success && creationCommands.length > 0) {
-        await updateMessageStatus(messageId, 'pending');
+        await updateWorkspaceStatus(workspaceId, 'pending');
       }
     },
-    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, spawnClaudeForMessage, updateMessageStatus, updatePreviewForPendingRun],
+    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, spawnClaudeForWorkspace, updateWorkspaceStatus, updatePreviewForPendingRun],
   );
 
   const stopClaude = useCallback(async () => {
-    if (!selectedMessageId) return;
-    await window.traceAPI.stopClaude(selectedMessageId);
-  }, [selectedMessageId]);
+    if (!selectedWorkspaceId) return;
+    await window.traceAPI.stopClaude(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
 
   const sendThreadMessage = useCallback(
     async (rawText: string, attachmentIds?: string[], filePaths?: string[]) => {
       const text = rawText.trim();
-      const selectedMessage = selectedMessageRef.current;
-      if (!text || !selectedMessage || !activeChannelId) return false;
+      const selectedWorkspace = selectedWorkspaceRef.current;
+      if (!text || !selectedWorkspace || !activeChannelId) return false;
 
-      const currentThreadId = activeThreadIdRef.current ?? undefined;
+      const currentSessionId = activeSessionIdRef.current ?? undefined;
 
       const persisted = await persistPrompt(
-        selectedMessage.id,
+        selectedWorkspace.id,
         text,
-        'Failed to persist thread prompt',
+        'Failed to persist session prompt',
         attachmentIds,
         undefined,
-        currentThreadId,
+        currentSessionId,
       );
       if (!persisted) return false;
 
-      // If active thread has events → resume existing session
-      // If active thread is empty (just cleared) → spawn fresh
-      const hasEvents = (threadEventsRef.current?.length ?? 0) > 0;
+      // If active session has events → resume existing session
+      // If active session is empty (just cleared) → spawn fresh
+      const hasEvents = (sessionEventsRef.current?.length ?? 0) > 0;
       const spawnOptions: SpawnOptions = {
         statusOnSuccess: 'in_progress',
         errorPrefix: 'Failed to spawn claude',
@@ -379,7 +379,7 @@ export function useClaudeMessageActions({
 
       if (hasEvents) {
         // Resume existing session
-        spawnOptions.resumeSessionId = selectedMessage.claudeSessionId ?? undefined;
+        spawnOptions.resumeSessionId = selectedWorkspace.claudeSessionId ?? undefined;
       } else {
         // Fresh spawn — include system instructions
         const baseBranch = getChannelBaseBranch();
@@ -391,16 +391,16 @@ export function useClaudeMessageActions({
         spawnOptions.systemInstructions = instructionParts.join('\n\n');
       }
 
-      await spawnClaudeForMessage(selectedMessage.id, text, spawnOptions);
+      await spawnClaudeForWorkspace(selectedWorkspace.id, text, spawnOptions);
       return true;
     },
-    [activeChannelId, activeThreadIdRef, threadEventsRef, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
+    [activeChannelId, activeSessionIdRef, sessionEventsRef, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, selectedWorkspaceRef, selectedModel, selectedEffort, spawnClaudeForWorkspace],
   );
 
   const sendPlanResponse = useCallback(
     async (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => {
-      const selectedMessage = selectedMessageRef.current;
-      if (!selectedMessage || !activeChannelId) return;
+      const selectedWorkspace = selectedWorkspaceRef.current;
+      if (!selectedWorkspace || !activeChannelId) return;
 
       if (mode === 'clear-context') {
         // Build prompt with the plan content for a fresh Claude process
@@ -408,16 +408,16 @@ export function useClaudeMessageActions({
           ? `Implement the following approved plan. The plan file is at ${planFilePath}.\n\n${planContent ?? text}`
           : `Implement the following approved plan:\n\n${planContent ?? text}`;
 
-        // Create a new thread and switch to it so SSE events are routed correctly
-        const newThreadId = (await clearThread()) ?? undefined;
+        // Create a new session and switch to it so SSE events are routed correctly
+        const newSessionId = (await clearSession()) ?? undefined;
 
         const persisted = await persistPrompt(
-          selectedMessage.id,
+          selectedWorkspace.id,
           implementPrompt,
           'Failed to persist plan approval prompt',
           undefined,
           undefined,
-          newThreadId,
+          newSessionId,
         );
         if (!persisted) return;
 
@@ -429,7 +429,7 @@ export function useClaudeMessageActions({
         ];
         if (userInstructions) instructionParts.push(userInstructions);
 
-        await spawnClaudeForMessage(selectedMessage.id, implementPrompt, {
+        await spawnClaudeForWorkspace(selectedWorkspace.id, implementPrompt, {
           errorPrefix: 'Failed to spawn claude for plan implementation',
           statusOnSuccess: 'in_progress',
           model: selectedModel,
@@ -443,16 +443,16 @@ export function useClaudeMessageActions({
         if (!trimmed) return;
 
         const persisted = await persistPrompt(
-          selectedMessage.id,
+          selectedWorkspace.id,
           trimmed,
           'Failed to persist plan response prompt',
         );
         if (!persisted) return;
 
-        await spawnClaudeForMessage(selectedMessage.id, trimmed, {
+        await spawnClaudeForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: 'Failed to spawn claude for plan response',
           statusOnSuccess: 'in_progress',
-          resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
+          resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
           model: selectedModel,
           effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
         });
@@ -461,9 +461,9 @@ export function useClaudeMessageActions({
         const trimmed = text.trim();
         if (!trimmed) return;
 
-        // Persist the clean user text for display in the thread
+        // Persist the clean user text for display in the session
         const persisted = await persistPrompt(
-          selectedMessage.id,
+          selectedWorkspace.id,
           trimmed,
           'Failed to persist plan revision prompt',
         );
@@ -472,51 +472,51 @@ export function useClaudeMessageActions({
         // Wrap with trace-internal instructions so Claude revises the plan
         const wrappedPrompt = `<trace-internal>\nThe user has provided feedback on your plan. Go back into plan mode and revise the plan based on their suggestions below. Only revise the plan — do not start implementing yet.\n</trace-internal>\n\n${trimmed}`;
 
-        await spawnClaudeForMessage(selectedMessage.id, wrappedPrompt, {
+        await spawnClaudeForWorkspace(selectedWorkspace.id, wrappedPrompt, {
           errorPrefix: 'Failed to spawn claude for plan revision',
-          resumeSessionId: selectedMessage.claudeSessionId ?? undefined,
+          resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
           model: selectedModel,
           effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
         });
       }
     },
-    [activeChannelId, clearThread, getChannelBaseBranch, getSystemInstructions, persistPrompt, selectedMessageRef, selectedModel, selectedEffort, spawnClaudeForMessage],
+    [activeChannelId, clearSession, getChannelBaseBranch, getSystemInstructions, persistPrompt, selectedWorkspaceRef, selectedModel, selectedEffort, spawnClaudeForWorkspace],
   );
 
   const mergeToMain = useCallback(async () => {
-    const selectedMessage = selectedMessageRef.current;
-    if (!selectedMessage || !activeChannelId) return;
+    const selectedWorkspace = selectedWorkspaceRef.current;
+    if (!selectedWorkspace || !activeChannelId) return;
 
     const baseBranch = getChannelBaseBranch();
     const prompt = `/merge-to-main ${baseBranch}`;
     const persisted = await persistPrompt(
-      selectedMessage.id,
+      selectedWorkspace.id,
       prompt,
       'Failed to persist merge-to-main prompt',
     );
     if (!persisted) return;
 
-    await spawnClaudeForMessage(selectedMessage.id, prompt, {
+    await spawnClaudeForWorkspace(selectedWorkspace.id, prompt, {
       errorPrefix: 'Failed to spawn claude for merge-to-main',
       setHasWorktreeOnSuccess: false,
     });
-  }, [activeChannelId, getChannelBaseBranch, persistPrompt, selectedMessageRef, spawnClaudeForMessage]);
+  }, [activeChannelId, getChannelBaseBranch, persistPrompt, selectedWorkspaceRef, spawnClaudeForWorkspace]);
 
   const markMerged = useCallback(async () => {
-    const selectedMessage = selectedMessageRef.current;
-    if (!selectedMessage || !activeChannelId) return;
-    if (selectedMessage.status !== 'completed') return;
-    await updateMessageStatus(selectedMessage.id, 'merged');
-  }, [activeChannelId, selectedMessageRef, updateMessageStatus]);
+    const selectedWorkspace = selectedWorkspaceRef.current;
+    if (!selectedWorkspace || !activeChannelId) return;
+    if (selectedWorkspace.status !== 'completed') return;
+    await updateWorkspaceStatus(selectedWorkspace.id, 'merged');
+  }, [activeChannelId, selectedWorkspaceRef, updateWorkspaceStatus]);
 
   const clearPendingRun = useCallback(() => {
-    setPendingRunMessageId(null);
+    setPendingRunWorkspaceId(null);
     setPendingRunInitialPrompt('');
     setPendingRunFilePaths([]);
   }, []);
 
-  const autoReviewMessage = useCallback(
-    async (messageId: string, claudeSessionId: string | null) => {
+  const autoReviewWorkspace = useCallback(
+    async (workspaceId: string, claudeSessionId: string | null) => {
       const reviewPrompt = `<trace-internal>
 You are now acting as a staff engineer performing a code review of the changes you just made. Review your own changes critically:
 
@@ -533,29 +533,29 @@ Fix all issues you find immediately — do not just list them. After fixing, pre
 - Any remaining concerns
 </trace-internal>`;
 
-      await spawnClaudeForMessage(messageId, reviewPrompt, {
+      await spawnClaudeForWorkspace(workspaceId, reviewPrompt, {
         errorPrefix: 'Failed to spawn claude for auto-review',
         resumeSessionId: claudeSessionId ?? undefined,
         model: selectedModel,
         effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
       });
     },
-    [selectedModel, selectedEffort, spawnClaudeForMessage],
+    [selectedModel, selectedEffort, spawnClaudeForWorkspace],
   );
 
-  const isMessageSpawned = useCallback((messageId: string) => {
-    return spawnedMessageIdsRef.current.has(messageId);
+  const isWorkspaceSpawned = useCallback((workspaceId: string) => {
+    return spawnedWorkspaceIdsRef.current.has(workspaceId);
   }, []);
 
   return {
-    pendingRunMessageId,
+    pendingRunWorkspaceId,
     pendingRunInitialPrompt,
     selectedModel,
     selectedEffort,
     setSelectedModel,
     setSelectedEffort,
     sendMessage,
-    runPendingMessage,
+    runPendingWorkspace,
     autoRunQueuedTicket,
     stopClaude,
     sendThreadMessage,
@@ -563,7 +563,7 @@ Fix all issues you find immediately — do not just list them. After fixing, pre
     mergeToMain,
     markMerged,
     clearPendingRun,
-    autoReviewMessage,
-    isMessageSpawned,
+    autoReviewWorkspace,
+    isWorkspaceSpawned,
   };
 }

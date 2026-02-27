@@ -5,16 +5,16 @@ const THREAD_NEAR_BOTTOM_THRESHOLD_PX = 100;
 const THREAD_NEAR_TOP_THRESHOLD_PX = 100;
 
 interface UseThreadScrollOptions {
-  threadEvents: ServerEvent[];
-  selectedMessageId: string | null;
+  sessionEvents: ServerEvent[];
+  selectedWorkspaceId: string | null;
   hasMoreEvents: boolean;
   loadingOlderEvents: boolean;
   loadOlderEvents: () => Promise<number>;
 }
 
 export function useThreadScroll({
-  threadEvents,
-  selectedMessageId,
+  sessionEvents,
+  selectedWorkspaceId,
   hasMoreEvents,
   loadingOlderEvents,
   loadOlderEvents,
@@ -22,7 +22,7 @@ export function useThreadScroll({
   const threadContentRef = useRef<HTMLDivElement | null>(null);
   const threadNearBottomRef = useRef(true);
   const prevThreadEventCountRef = useRef(0);
-  const mountedMessageRef = useRef<string | null>(null);
+  const mountedWorkspaceRef = useRef<string | null>(null);
   const isPrependingRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
@@ -42,16 +42,16 @@ export function useThreadScroll({
 
   // Scroll to bottom only when a NEW thread is opened (not on every re-render)
   useEffect(() => {
-    if (!selectedMessageId) return;
-    if (mountedMessageRef.current === selectedMessageId) return;
-    mountedMessageRef.current = selectedMessageId;
+    if (!selectedWorkspaceId) return;
+    if (mountedWorkspaceRef.current === selectedWorkspaceId) return;
+    mountedWorkspaceRef.current = selectedWorkspaceId;
     // Reset state for new thread
     threadNearBottomRef.current = true;
     prevThreadEventCountRef.current = 0;
     setShowJumpToLatest(false);
     const timer = setTimeout(() => scrollThreadToBottom('auto'), 50);
     return () => clearTimeout(timer);
-  }, [selectedMessageId, scrollThreadToBottom]);
+  }, [selectedWorkspaceId, scrollThreadToBottom]);
 
   // Auto-scroll when new events arrive, but only if user is near the bottom
   useEffect(() => {
@@ -59,7 +59,7 @@ export function useThreadScroll({
     if (isPrependingRef.current) return;
 
     const previousCount = prevThreadEventCountRef.current;
-    const nextCount = threadEvents.length;
+    const nextCount = sessionEvents.length;
     const hasNew = nextCount > previousCount;
     prevThreadEventCountRef.current = nextCount;
 
@@ -84,7 +84,7 @@ export function useThreadScroll({
     }
 
     setShowJumpToLatest(true);
-  }, [threadEvents, scrollThreadToBottom]);
+  }, [sessionEvents, scrollThreadToBottom]);
 
   const onThreadScroll = useCallback(() => {
     const el = threadContentRef.current;
@@ -120,7 +120,7 @@ export function useThreadScroll({
     setShowJumpToLatest(false);
     threadNearBottomRef.current = true;
     prevThreadEventCountRef.current = 0;
-    mountedMessageRef.current = null;
+    mountedWorkspaceRef.current = null;
     isPrependingRef.current = false;
   }, []);
 

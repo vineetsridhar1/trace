@@ -1,4 +1,4 @@
-import type { ServerEvent, ExtractedDiffContent, ThreadRenderNode, DiffRuntime, Question } from './types';
+import type { ServerEvent, ExtractedDiffContent, SessionRenderNode, DiffRuntime, Question } from './types';
 
 export function stripTraceInternal(text: string): string {
   return text.replace(/<trace-internal>[\s\S]*?<\/trace-internal>\s*/g, '');
@@ -255,8 +255,8 @@ export function extractReadGlobSummary(event: ServerEvent): string {
 }
 
 
-export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
-  const nodes: ThreadRenderNode[] = [];
+export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
+  const nodes: SessionRenderNode[] = [];
   let bucket: ServerEvent[] = [];
 
   // Build a set of toolUseIds that have a PostToolUse (completed subagents).
@@ -290,18 +290,18 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     bucket = [];
   };
 
-  let currentThreadId: string | null = null;
+  let currentSessionId: string | null = null;
   for (const event of events) {
-    // Insert thread divider when threadId changes (multi-thread boundary)
-    if (currentThreadId !== null && event.threadId !== currentThreadId) {
+    // Insert session divider when sessionId changes (multi-session boundary)
+    if (currentSessionId !== null && event.sessionId !== currentSessionId) {
       flushBucket();
       nodes.push({
-        kind: 'thread-divider',
-        id: `thread-divider-${event.id}`,
+        kind: 'session-divider',
+        id: `session-divider-${event.id}`,
         timestamp: event.timestamp,
       });
     }
-    currentThreadId = event.threadId;
+    currentSessionId = event.sessionId;
 
     // Skip PreToolUse events that already have a matching PostToolUse (completed)
     if (event.hookEventName === 'PreToolUse' && event.toolUseId && completedToolUseIds.has(event.toolUseId)) {
@@ -383,7 +383,7 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     }
 
     // Replace the Stop node with a plan-review node
-    const planNode: ThreadRenderNode = {
+    const planNode: SessionRenderNode = {
       kind: 'plan-review',
       id: `plan-review-${n.event.id}`,
       planContent,
@@ -406,7 +406,7 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     const questions = toolInput?.questions as Question[] | undefined;
     if (!questions || !Array.isArray(questions) || questions.length === 0) continue;
 
-    const askNode: ThreadRenderNode = {
+    const askNode: SessionRenderNode = {
       kind: 'ask-user-question',
       id: `ask-question-${n.event.id}`,
       questions,
@@ -426,7 +426,7 @@ export function buildThreadNodes(events: ServerEvent[]): ThreadRenderNode[] {
     const questions = toolInput?.questions as Question[] | undefined;
     if (!questions || !Array.isArray(questions) || questions.length === 0) continue;
 
-    const askNode: ThreadRenderNode = {
+    const askNode: SessionRenderNode = {
       kind: 'ask-user-question',
       id: `ask-question-${n.event.id}`,
       questions,

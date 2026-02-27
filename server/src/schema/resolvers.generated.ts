@@ -5,26 +5,27 @@ import    { aiChats as Query_aiChats } from './aiChat/resolvers/Query/aiChats';
 import    { board as Query_board } from './kanban/resolvers/Query/board';
 import    { channel as Query_channel } from './channel/resolvers/Query/channel';
 import    { channels as Query_channels } from './channel/resolvers/Query/channels';
+import    { cliSession as Query_cliSession } from './cli-session/resolvers/Query/cliSession';
+import    { cliSessionEvents as Query_cliSessionEvents } from './cli-session/resolvers/Query/cliSessionEvents';
+import    { cliSessions as Query_cliSessions } from './cli-session/resolvers/Query/cliSessions';
 import    { event as Query_event } from './event/resolvers/Query/event';
-import    { messageEvents as Query_messageEvents } from './thread/resolvers/Query/messageEvents';
-import    { messages as Query_messages } from './message/resolvers/Query/messages';
 import    { servers as Query_servers } from './server/resolvers/Query/servers';
-import    { session as Query_session } from './session/resolvers/Query/session';
 import    { sessionEvents as Query_sessionEvents } from './session/resolvers/Query/sessionEvents';
 import    { sessions as Query_sessions } from './session/resolvers/Query/sessions';
-import    { threadEvents as Query_threadEvents } from './thread/resolvers/Query/threadEvents';
-import    { threads as Query_threads } from './thread/resolvers/Query/threads';
 import    { ticketDependencies as Query_ticketDependencies } from './kanban/resolvers/Query/ticketDependencies';
-import    { appendPrompt as Mutation_appendPrompt } from './message/resolvers/Mutation/appendPrompt';
+import    { workspaceEvents as Query_workspaceEvents } from './session/resolvers/Query/workspaceEvents';
+import    { workspaces as Query_workspaces } from './workspace/resolvers/Query/workspaces';
+import    { appendPrompt as Mutation_appendPrompt } from './workspace/resolvers/Mutation/appendPrompt';
 import    { createAiChat as Mutation_createAiChat } from './aiChat/resolvers/Mutation/createAiChat';
 import    { createChannel as Mutation_createChannel } from './channel/resolvers/Mutation/createChannel';
 import    { createColumn as Mutation_createColumn } from './kanban/resolvers/Mutation/createColumn';
-import    { createMessage as Mutation_createMessage } from './message/resolvers/Mutation/createMessage';
 import    { createServer as Mutation_createServer } from './server/resolvers/Mutation/createServer';
-import    { createThread as Mutation_createThread } from './thread/resolvers/Mutation/createThread';
+import    { createSession as Mutation_createSession } from './session/resolvers/Mutation/createSession';
+import    { createWorkspace as Mutation_createWorkspace } from './workspace/resolvers/Mutation/createWorkspace';
 import    { deleteAiChat as Mutation_deleteAiChat } from './aiChat/resolvers/Mutation/deleteAiChat';
+import    { deleteChannel as Mutation_deleteChannel } from './channel/resolvers/Mutation/deleteChannel';
 import    { deleteColumn as Mutation_deleteColumn } from './kanban/resolvers/Mutation/deleteColumn';
-import    { deleteMessage as Mutation_deleteMessage } from './message/resolvers/Mutation/deleteMessage';
+import    { deleteWorkspace as Mutation_deleteWorkspace } from './workspace/resolvers/Mutation/deleteWorkspace';
 import    { moveTicket as Mutation_moveTicket } from './kanban/resolvers/Mutation/moveTicket';
 import    { removeTicketDependency as Mutation_removeTicketDependency } from './kanban/resolvers/Mutation/removeTicketDependency';
 import    { renameAiChat as Mutation_renameAiChat } from './aiChat/resolvers/Mutation/renameAiChat';
@@ -32,76 +33,76 @@ import    { sendAiChatMessage as Mutation_sendAiChatMessage } from './aiChat/res
 import    { setTicketDependencies as Mutation_setTicketDependencies } from './kanban/resolvers/Mutation/setTicketDependencies';
 import    { updateChannel as Mutation_updateChannel } from './channel/resolvers/Mutation/updateChannel';
 import    { updateColumn as Mutation_updateColumn } from './kanban/resolvers/Mutation/updateColumn';
-import    { updateMessagePreview as Mutation_updateMessagePreview } from './message/resolvers/Mutation/updateMessagePreview';
-import    { updateMessageStatus as Mutation_updateMessageStatus } from './message/resolvers/Mutation/updateMessageStatus';
 import    { updateQueuedRunConfig as Mutation_updateQueuedRunConfig } from './kanban/resolvers/Mutation/updateQueuedRunConfig';
+import    { updateWorkspacePreview as Mutation_updateWorkspacePreview } from './workspace/resolvers/Mutation/updateWorkspacePreview';
+import    { updateWorkspaceStatus as Mutation_updateWorkspaceStatus } from './workspace/resolvers/Mutation/updateWorkspaceStatus';
 import    { uploadAttachment as Mutation_uploadAttachment } from './attachment/resolvers/Mutation/uploadAttachment';
 import    { aiChatStream as Subscription_aiChatStream } from './aiChat/resolvers/Subscription/aiChatStream';
-import    { messageDeleted as Subscription_messageDeleted } from './message/resolvers/Subscription/messageDeleted';
-import    { messageReadyForReview as Subscription_messageReadyForReview } from './message/resolvers/Subscription/messageReadyForReview';
-import    { messageUpserted as Subscription_messageUpserted } from './message/resolvers/Subscription/messageUpserted';
-import    { threadEventCreated as Subscription_threadEventCreated } from './event/resolvers/Subscription/threadEventCreated';
-import    { threadEventUpdated as Subscription_threadEventUpdated } from './event/resolvers/Subscription/threadEventUpdated';
+import    { sessionEventCreated as Subscription_sessionEventCreated } from './event/resolvers/Subscription/sessionEventCreated';
+import    { sessionEventUpdated as Subscription_sessionEventUpdated } from './event/resolvers/Subscription/sessionEventUpdated';
 import    { ticketReadyToRun as Subscription_ticketReadyToRun } from './kanban/resolvers/Subscription/ticketReadyToRun';
 import    { ticketUpserted as Subscription_ticketUpserted } from './kanban/resolvers/Subscription/ticketUpserted';
+import    { workspaceDeleted as Subscription_workspaceDeleted } from './workspace/resolvers/Subscription/workspaceDeleted';
+import    { workspaceReadyForReview as Subscription_workspaceReadyForReview } from './workspace/resolvers/Subscription/workspaceReadyForReview';
+import    { workspaceUpserted as Subscription_workspaceUpserted } from './workspace/resolvers/Subscription/workspaceUpserted';
 import    { AiChat } from './aiChat/resolvers/AiChat';
 import    { AiChatMessage } from './aiChat/resolvers/AiChatMessage';
 import    { AiChatMessageConnection } from './aiChat/resolvers/AiChatMessageConnection';
 import    { AiChatStreamPayload } from './aiChat/resolvers/AiChatStreamPayload';
 import    { Attachment } from './attachment/resolvers/Attachment';
 import    { Channel } from './channel/resolvers/Channel';
-import    { CreateMessagePayload } from './message/resolvers/CreateMessagePayload';
+import    { CliSession } from './cli-session/resolvers/CliSession';
+import    { CliSessionConnection } from './cli-session/resolvers/CliSessionConnection';
+import    { CreateWorkspacePayload } from './workspace/resolvers/CreateWorkspacePayload';
 import    { Event } from './event/resolvers/Event';
 import    { EventConnection } from './event/resolvers/EventConnection';
 import    { KanbanColumn } from './kanban/resolvers/KanbanColumn';
-import    { Message } from './message/resolvers/Message';
-import    { MessageConnection } from './message/resolvers/MessageConnection';
-import    { MessageDeletedPayload } from './message/resolvers/MessageDeletedPayload';
-import    { MessageReadyForReviewPayload } from './message/resolvers/MessageReadyForReviewPayload';
-import    { MessageSession } from './message/resolvers/MessageSession';
 import    { Server } from './server/resolvers/Server';
 import    { Session } from './session/resolvers/Session';
-import    { SessionConnection } from './session/resolvers/SessionConnection';
-import    { Thread } from './thread/resolvers/Thread';
-import    { ThreadEventPayload } from './event/resolvers/ThreadEventPayload';
+import    { SessionEventPayload } from './event/resolvers/SessionEventPayload';
 import    { Ticket } from './kanban/resolvers/Ticket';
 import    { TicketAttachment } from './kanban/resolvers/TicketAttachment';
 import    { TicketDependency } from './kanban/resolvers/TicketDependency';
-import    { TicketMessage } from './kanban/resolvers/TicketMessage';
 import    { TicketReadyToRunPayload } from './kanban/resolvers/TicketReadyToRunPayload';
 import    { TicketUpsertPayload } from './kanban/resolvers/TicketUpsertPayload';
+import    { TicketWorkspace } from './kanban/resolvers/TicketWorkspace';
+import    { Workspace } from './workspace/resolvers/Workspace';
+import    { WorkspaceCliSession } from './workspace/resolvers/WorkspaceCliSession';
+import    { WorkspaceConnection } from './workspace/resolvers/WorkspaceConnection';
+import    { WorkspaceDeletedPayload } from './workspace/resolvers/WorkspaceDeletedPayload';
+import    { WorkspaceReadyForReviewPayload } from './workspace/resolvers/WorkspaceReadyForReviewPayload';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,event: Query_event,messageEvents: Query_messageEvents,messages: Query_messages,servers: Query_servers,session: Query_session,sessionEvents: Query_sessionEvents,sessions: Query_sessions,threadEvents: Query_threadEvents,threads: Query_threads,ticketDependencies: Query_ticketDependencies },
-      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createMessage: Mutation_createMessage,createServer: Mutation_createServer,createThread: Mutation_createThread,deleteAiChat: Mutation_deleteAiChat,deleteColumn: Mutation_deleteColumn,deleteMessage: Mutation_deleteMessage,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,setTicketDependencies: Mutation_setTicketDependencies,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateMessagePreview: Mutation_updateMessagePreview,updateMessageStatus: Mutation_updateMessageStatus,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,uploadAttachment: Mutation_uploadAttachment },
-      Subscription: { aiChatStream: Subscription_aiChatStream,messageDeleted: Subscription_messageDeleted,messageReadyForReview: Subscription_messageReadyForReview,messageUpserted: Subscription_messageUpserted,threadEventCreated: Subscription_threadEventCreated,threadEventUpdated: Subscription_threadEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted },
+      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channels: Query_channels,cliSession: Query_cliSession,cliSessionEvents: Query_cliSessionEvents,cliSessions: Query_cliSessions,event: Query_event,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
+      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,setTicketDependencies: Mutation_setTicketDependencies,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
+      Subscription: { aiChatStream: Subscription_aiChatStream,sessionEventCreated: Subscription_sessionEventCreated,sessionEventUpdated: Subscription_sessionEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted,workspaceDeleted: Subscription_workspaceDeleted,workspaceReadyForReview: Subscription_workspaceReadyForReview,workspaceUpserted: Subscription_workspaceUpserted },
       AiChat: AiChat,
 AiChatMessage: AiChatMessage,
 AiChatMessageConnection: AiChatMessageConnection,
 AiChatStreamPayload: AiChatStreamPayload,
 Attachment: Attachment,
 Channel: Channel,
-CreateMessagePayload: CreateMessagePayload,
+CliSession: CliSession,
+CliSessionConnection: CliSessionConnection,
+CreateWorkspacePayload: CreateWorkspacePayload,
 Event: Event,
 EventConnection: EventConnection,
 KanbanColumn: KanbanColumn,
-Message: Message,
-MessageConnection: MessageConnection,
-MessageDeletedPayload: MessageDeletedPayload,
-MessageReadyForReviewPayload: MessageReadyForReviewPayload,
-MessageSession: MessageSession,
 Server: Server,
 Session: Session,
-SessionConnection: SessionConnection,
-Thread: Thread,
-ThreadEventPayload: ThreadEventPayload,
+SessionEventPayload: SessionEventPayload,
 Ticket: Ticket,
 TicketAttachment: TicketAttachment,
 TicketDependency: TicketDependency,
-TicketMessage: TicketMessage,
 TicketReadyToRunPayload: TicketReadyToRunPayload,
 TicketUpsertPayload: TicketUpsertPayload,
+TicketWorkspace: TicketWorkspace,
+Workspace: Workspace,
+WorkspaceCliSession: WorkspaceCliSession,
+WorkspaceConnection: WorkspaceConnection,
+WorkspaceDeletedPayload: WorkspaceDeletedPayload,
+WorkspaceReadyForReviewPayload: WorkspaceReadyForReviewPayload,
 DateTime: DateTime,
 JSON: JSON
     }

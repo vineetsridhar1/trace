@@ -8,7 +8,7 @@ import { CopyableBranch } from './CopyableBranch';
 
 interface KanbanCardProps {
   ticket: KanbanTicket;
-  onClickTicket: (messageId: string) => void;
+  onClickTicket: (workspaceId: string) => void;
   onDragStart: (ticketId: string) => void;
 }
 
@@ -24,12 +24,12 @@ export const KanbanCard = memo(function KanbanCard({
         e.dataTransfer.setData('text/plain', ticket.id);
         onDragStart(ticket.id);
       }}
-      onClick={() => onClickTicket(ticket.messageId)}
+      onClick={() => onClickTicket(ticket.workspaceId)}
       className="group cursor-pointer rounded-md border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
     >
       <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]">{ticket.title}</h4>
 
-      {ticket.message.status === 'queued' && (
+      {ticket.workspace.status === 'queued' && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-cyan-400">
           <FiLink className="h-3 w-3" />
           <span>Queued</span>
@@ -69,8 +69,8 @@ export const KanbanCard = memo(function KanbanCard({
       })()}
 
       <div className="relative mt-2 flex items-center gap-2">
-        {ticket.message.branch && (
-          <CopyableBranch branch={ticket.message.branch} />
+        {ticket.workspace.branch && (
+          <CopyableBranch branch={ticket.workspace.branch} />
         )}
         <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] text-[#565f89]">
           {formatTime(ticket.createdAt)}
