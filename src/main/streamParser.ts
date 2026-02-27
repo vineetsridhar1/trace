@@ -14,6 +14,7 @@ interface StreamParserCallbacks {
 interface PendingToolUse {
   name: string;
   input: unknown;
+  assistantText?: string;
 }
 
 export interface ParsedEnrichment {
@@ -28,6 +29,7 @@ export class ClaudeStreamParser {
   private buffer = '';
   private sessionId: string | undefined;
   private lastAssistantText = '';
+  private pendingAssistantText: string | undefined;
   private usage: { input_tokens: number; output_tokens: number } | undefined;
   private detectedToolName: 'AskUserQuestion' | 'ExitPlanMode' | undefined;
   private detectedToolInput: unknown;
@@ -159,6 +161,7 @@ export class ClaudeStreamParser {
     for (const block of content) {
       if (block.type === 'text' && typeof block.text === 'string') {
         this.lastAssistantText = block.text;
+        this.pendingAssistantText = block.text;
       }
 
       if (block.type === 'tool_use') {
@@ -166,9 +169,13 @@ export class ClaudeStreamParser {
         const toolId = block.id as string;
         const toolInput = block.input;
 
+        // Grab and clear pending assistant text for this tool use
+        const assistantText = this.pendingAssistantText;
+        this.pendingAssistantText = undefined;
+
         // Store for correlation with subsequent tool_result
         if (toolId) {
-          this.pendingToolUses.set(toolId, { name: toolName, input: toolInput });
+          this.pendingToolUses.set(toolId, { name: toolName, input: toolInput, assistantText });
         }
 
         // Detect AskUserQuestion / ExitPlanMode
@@ -190,6 +197,7 @@ export class ClaudeStreamParser {
             tool_input: toolInput,
             tool_use_id: toolId,
             source: 'stream-json',
+            ...(assistantText ? { last_assistant_message: assistantText } : {}),
           });
         }
       }
@@ -228,6 +236,7 @@ export class ClaudeStreamParser {
           tool_response: block.content,
           tool_use_id: toolUseId,
           source: 'stream-json',
+          ...(pending.assistantText ? { last_assistant_message: pending.assistantText } : {}),
         });
       }
     }

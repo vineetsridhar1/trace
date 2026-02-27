@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { AskUserQuestionNode, PlanReviewNode, SessionStatus } from "../types";
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
+import { AssistantTextRow } from "./thread-events/AssistantTextRow";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { TicketView } from "./TicketView";
@@ -16,7 +17,7 @@ import { StickyTodoList } from "./StickyTodoList";
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useThreadContext } from "../context/ThreadContext";
 import { useThreadEventsContext } from "../context/ThreadEventsContext";
-import { normalizeToolName } from "../utils";
+import { normalizeToolName, stripTraceInternal } from "../utils";
 
 type ViewMode = "agent" | "ticket" | "files" | "terminal";
 
@@ -236,13 +237,18 @@ export function ThreadPanel() {
                         );
                       }
                       if (node.kind === "readglob-group") {
+                        const groupAssistantText = node.events[0]?.lastAssistantMessage
+                          ? stripTraceInternal(node.events[0].lastAssistantMessage).trim()
+                          : '';
                         return (
-                          <ReadGlobGroup
-                            key={node.id}
-                            node={node}
-                            isExpanded={Boolean(expandedReadGroupIds[node.id])}
-                            onToggle={() => toggleReadGroup(node.id)}
-                          />
+                          <React.Fragment key={node.id}>
+                            {groupAssistantText && <AssistantTextRow text={groupAssistantText} />}
+                            <ReadGlobGroup
+                              node={node}
+                              isExpanded={Boolean(expandedReadGroupIds[node.id])}
+                              onToggle={() => toggleReadGroup(node.id)}
+                            />
+                          </React.Fragment>
                         );
                       }
                       if (node.kind === "plan-review") {

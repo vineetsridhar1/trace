@@ -458,6 +458,7 @@ export async function ingestEvent(payload: HookEvent) {
     eventData.toolName = payload.tool_name;
     eventData.toolInput = payload.tool_input ? JSON.parse(JSON.stringify(payload.tool_input)) : undefined;
     eventData.toolUseId = payload.tool_use_id;
+    eventData.lastAssistantMessage = payload.last_assistant_message;
   }
 
   if (payload.hook_event_name === 'PostToolUse') {
@@ -465,6 +466,7 @@ export async function ingestEvent(payload: HookEvent) {
     eventData.toolInput = payload.tool_input ? JSON.parse(JSON.stringify(payload.tool_input)) : undefined;
     eventData.toolResponse = payload.tool_response ? JSON.parse(JSON.stringify(payload.tool_response)) : undefined;
     eventData.toolUseId = payload.tool_use_id;
+    eventData.lastAssistantMessage = payload.last_assistant_message;
   }
 
   const event = await prisma.event.create({ data: eventData });

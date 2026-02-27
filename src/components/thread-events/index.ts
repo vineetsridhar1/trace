@@ -9,3 +9,4 @@ export { GenericEventRow } from './GenericEventRow';
 export { ToolUseRow } from './ToolUseRow';
 export { PlanReview } from './PlanReview';
 export { AskUserQuestionInline } from './AskUserQuestionInline';
+export { AssistantTextRow } from './AssistantTextRow';

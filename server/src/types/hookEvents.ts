@@ -9,6 +9,7 @@ export const PreToolUseSchema = z.object({
   tool_name: z.string().optional(),
   tool_input: z.unknown().optional(),
   tool_use_id: z.string().optional(),
+  last_assistant_message: z.string().optional(),
 }).passthrough();
 
 export const PostToolUseSchema = z.object({
@@ -21,6 +22,7 @@ export const PostToolUseSchema = z.object({
   tool_input: z.unknown().optional(),
   tool_response: z.unknown().optional(),
   tool_use_id: z.string().optional(),
+  last_assistant_message: z.string().optional(),
 }).passthrough();
 
 export const UserPromptSubmitSchema = z.object({

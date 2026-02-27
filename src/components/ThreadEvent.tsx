@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import type { ServerEvent } from '../types';
-import { formatTime } from '../utils';
+import { formatTime, stripTraceInternal } from '../utils';
 import { UserPromptBubble } from './thread-events/UserPromptBubble';
 import { ToolUseRow } from './thread-events/ToolUseRow';
 import { StopBubble } from './thread-events/StopBubble';
 import { GenericEventRow } from './thread-events/GenericEventRow';
 import { AutoReviewDivider } from './thread-events/AutoReviewDivider';
+import { AssistantTextRow } from './thread-events/AssistantTextRow';
 
 export { PlanReview } from './thread-events/PlanReview';
 export { AskUserQuestionInline } from './thread-events/AskUserQuestionInline';
@@ -24,11 +25,23 @@ export const ThreadEvent = memo(function ThreadEvent({
   }
 
   if (event.hookEventName === 'PreToolUse') {
-    return <ToolUseRow event={event} time={time} />;
+    const assistantText = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage).trim() : '';
+    return (
+      <>
+        {assistantText && <AssistantTextRow text={assistantText} />}
+        <ToolUseRow event={event} time={time} />
+      </>
+    );
   }
 
   if (event.hookEventName === 'PostToolUse') {
-    return <ToolUseRow event={event} time={time} />;
+    const assistantText = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage).trim() : '';
+    return (
+      <>
+        {assistantText && <AssistantTextRow text={assistantText} />}
+        <ToolUseRow event={event} time={time} />
+      </>
+    );
   }
 
   if (event.hookEventName === 'AutoReview') {
