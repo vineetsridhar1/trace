@@ -222,6 +222,8 @@ export type MutationcreateAiChatArgs = {
 
 export type MutationcreateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
+  defaultRunScript?: InputMaybe<Scalars['String']['input']>;
+  defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;

@@ -140,7 +140,7 @@ type MessageSession {
 type Mutation {
   appendPrompt(attachmentIds: [String!], channelId: ID!, createNewThread: Boolean, messageId: ID!, text: String!, threadId: ID): CreateMessagePayload!
   createAiChat(channelId: ID, serverId: ID!, title: String): AiChat!
-  createChannel(baseBranch: String, githubUrl: String, name: String!, serverId: String): Channel!
+  createChannel(baseBranch: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, name: String!, serverId: String): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createMessage(attachmentIds: [String!], channelId: ID!, text: String!): CreateMessagePayload!
   createServer(avatarUrl: String, name: String!): Server!

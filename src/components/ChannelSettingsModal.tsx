@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { FiExternalLink, FiX } from 'react-icons/fi';
+import { FiExternalLink, FiX, FiZap } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { Channel, LocalChannelConfig } from '../types';
 
@@ -27,6 +27,7 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
   const [draftRunScript, setDraftRunScript] = useState(localConfig?.runScript ?? '');
   const [draftSystemInstructions, setDraftSystemInstructions] = useState(localConfig?.systemInstructions ?? '');
   const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
 
   useEffect(() => {
     setDraftDefaultSetupScript(channel.defaultSetupScript ?? '');
@@ -61,6 +62,29 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
       setSaving(false);
     }
   }, [draftDefaultSetupScript, draftDefaultRunScript, draftSetupScript, draftRunScript, draftSystemInstructions, localConfig, onSave, onClose]);
+
+  const repoPath = localConfig?.localRepoPath ?? channel.localRepoPath ?? null;
+
+  const handleSuggestScripts = useCallback(async () => {
+    if (!repoPath) {
+      console.warn('[SuggestScripts] No repoPath available', { localConfig: localConfig?.localRepoPath, channel: channel.localRepoPath });
+      return;
+    }
+    console.log('[SuggestScripts] Calling suggestScripts with', repoPath);
+    setSuggesting(true);
+    try {
+      const result = await window.traceAPI.suggestScripts(repoPath);
+      console.log('[SuggestScripts] Result:', result);
+      if (result.success) {
+        if (result.setupScript) setDraftDefaultSetupScript(result.setupScript);
+        if (result.runScript) setDraftDefaultRunScript(result.runScript);
+      }
+    } catch (err) {
+      console.error('[SuggestScripts] Error:', err);
+    } finally {
+      setSuggesting(false);
+    }
+  }, [repoPath, localConfig?.localRepoPath, channel.localRepoPath]);
 
   const textareaClass = 'w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono';
 
@@ -122,9 +146,22 @@ export function ChannelSettingsModal({ channel, localConfig, onClose, onSave }: 
 
             {/* Default Setup Script */}
             <div className="mb-4">
-              <div className="mb-2">
-                <label className="text-xs font-medium text-[#a9b1d6]">Default Setup Script</label>
-                <p className="text-xs text-[#565f89]">Runs when a new workspace is created</p>
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-medium text-[#a9b1d6]">Default Setup Script</label>
+                  <p className="text-xs text-[#565f89]">Runs when a new workspace is created</p>
+                </div>
+                {repoPath && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSuggestScripts()}
+                    disabled={suggesting}
+                    className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-[#7aa2f7] hover:bg-[#292e42] disabled:opacity-50"
+                  >
+                    <FiZap className="h-3 w-3" aria-hidden="true" />
+                    {suggesting ? 'Detecting...' : 'Suggest Scripts'}
+                  </button>
+                )}
               </div>
               <textarea
                 value={draftDefaultSetupScript}

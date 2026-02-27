@@ -173,6 +173,7 @@ function AppContent() {
     initializeDefaults: initializeTerminalDefaults,
     rerunTab,
     stopTab,
+    isInitialized: isTerminalInitialized,
     killAllForMessage: killTerminalsForMessage,
     killAll: killAllTerminals,
     killTerminal,
@@ -719,6 +720,8 @@ function AppContent() {
 
   const handleInitializeTerminals = useCallback(async () => {
     if (!selectedMessageId || !activeChannelId || !repoPath) return;
+    // Already initialized — don't re-allocate ports or re-create tabs
+    if (isTerminalInitialized(selectedMessageId)) return;
     const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedMessageId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
@@ -743,7 +746,7 @@ function AppContent() {
     }
 
     initializeTerminalDefaults(selectedMessageId, worktreeResult.worktreePath, setupScript ?? undefined, runScript ?? undefined, env);
-  }, [activeChannelId, enrichedChannels, repoPath, initializeTerminalDefaults, selectedMessageId]);
+  }, [activeChannelId, enrichedChannels, repoPath, initializeTerminalDefaults, isTerminalInitialized, selectedMessageId]);
 
   const handleRerunScript = useCallback(async (tabName: string) => {
     if (!selectedMessageId || !activeChannelId || !repoPath) return;
@@ -775,6 +778,13 @@ function AppContent() {
     rerunTab(tabName, script, env);
   }, [activeChannelId, enrichedChannels, repoPath, rerunTab, selectedMessageId]);
 
+  const handleStopScript = useCallback(async (tabName: string) => {
+    if (tabName === 'Run' && selectedMessageId) {
+      await window.traceAPI.releasePorts(selectedMessageId);
+    }
+    stopTab(tabName);
+  }, [selectedMessageId, stopTab]);
+
   // Initialize terminal tabs (and run setup script) when a worktree is detected
   useEffect(() => {
     if (hasWorktree === true && selectedMessageId) {
@@ -791,6 +801,8 @@ function AppContent() {
   }, [killTerminalsForMessage, selectedMessageId, deleteWorktree, updateMessageStatus]);
 
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
+  const hasSetupScript = Boolean(enrichedActiveChannel?.setupScript?.trim());
+  const hasRunScript = Boolean(enrichedActiveChannel?.runScript?.trim());
   const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
   const panelTitle = displayChannel ? `# ${displayChannel.name}` : '';
   const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
@@ -844,12 +856,14 @@ function AppContent() {
       selectedTicket,
       isFullscreen,
       scriptsAvailable,
+      hasSetupScript,
+      hasRunScript,
       dragging,
       onClose: handleCloseThread,
       onDeleteWorktree: handleDeleteWorktree,
       onInitializeTerminals: (): void => { void handleInitializeTerminals(); },
       onRerunScript: (tabName: string): void => { void handleRerunScript(tabName); },
-      onStopScript: stopTab,
+      onStopScript: (tabName: string): void => { void handleStopScript(tabName); },
       runScriptRunning: terminalList.some((t) => t.name === 'Run' && Boolean(t.command)),
       onStartDrag: () => startDragging('right'),
       onEnterFullscreen: (): void => { void enterFullscreen(); },
@@ -863,6 +877,7 @@ function AppContent() {
       onCloseTerminalTab: killTerminal,
       onCloseAllTerminals: (): void => { if (selectedMessageId) killTerminalsForMessage(selectedMessageId); },
       onAddTerminal: addTerminal,
+      onOpenSettings: (): void => { if (activeChannelId) handleOpenSettings(activeChannelId); },
     }),
     [
       selectedMessageId, activeThreadId, threads, threadWidth,
@@ -871,12 +886,12 @@ function AppContent() {
       loadThreadEvents, deleteWorktree, switchThread, clearThread,
       channelTickets, handleSetTicketDependencies, handleRemoveTicketDependency, handleUpdateQueuedRunConfig,
       isClaudeRunning, selectedMessageStatus, selectedMessageQueuedRunConfig, selectedTicket,
-      isFullscreen, scriptsAvailable, dragging,
-      handleCloseThread, handleDeleteWorktree, handleInitializeTerminals, handleRerunScript, stopTab,
+      isFullscreen, scriptsAvailable, hasSetupScript, hasRunScript, dragging,
+      handleCloseThread, handleDeleteWorktree, handleInitializeTerminals, handleRerunScript, handleStopScript,
       startDragging, enterFullscreen, exitFullscreen,
       activeChannelBaseBranch, terminalList, terminalsInitialized, activeTabId,
       terminalsCwd, activeChannelRepoPath, setActiveTabId,
-      killTerminal, killTerminalsForMessage, addTerminal,
+      killTerminal, killTerminalsForMessage, addTerminal, handleOpenSettings, activeChannelId,
     ],
   );
 

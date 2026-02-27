@@ -32,6 +32,7 @@ const SET_LOCAL_CONFIG_CHANNEL = 'set-local-config';
 const GET_ALL_LOCAL_CONFIGS_CHANNEL = 'get-all-local-configs';
 const DELETE_LOCAL_CONFIG_CHANNEL = 'delete-local-config';
 const LIST_REPO_FILES_CHANNEL = 'list-repo-files';
+const SUGGEST_SCRIPTS_CHANNEL = 'suggest-scripts';
 const VALIDATE_REPO_CHANNEL = 'validate-repo';
 const LIST_REPO_BRANCHES_CHANNEL = 'list-repo-branches';
 const CHECK_BRANCHES_MERGED_CHANNEL = 'check-branches-merged';
@@ -147,6 +148,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(GET_ALL_LOCAL_CONFIGS_CHANNEL);
   ipcMain.removeHandler(DELETE_LOCAL_CONFIG_CHANNEL);
   ipcMain.removeHandler(LIST_REPO_FILES_CHANNEL);
+  ipcMain.removeHandler(SUGGEST_SCRIPTS_CHANNEL);
   ipcMain.removeHandler(VALIDATE_REPO_CHANNEL);
   ipcMain.removeHandler(LIST_REPO_BRANCHES_CHANNEL);
   ipcMain.removeHandler(CHECK_BRANCHES_MERGED_CHANNEL);
@@ -350,6 +352,65 @@ export function registerIpcHandlers() {
       return { success: true, files };
     } catch (err) {
       return { success: false, error: String(err), files: [] };
+    }
+  });
+
+  ipcMain.handle(SUGGEST_SCRIPTS_CHANNEL, async (_event, repoPath: string) => {
+    try {
+      const setupParts: string[] = [];
+      let runScript: string | undefined;
+
+      // Check package.json
+      const pkgPath = path.join(repoPath, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+          const scripts = pkg.scripts ?? {};
+          setupParts.push('npm install');
+          if (scripts.dev) {
+            runScript = 'PORT=$PORT npm run dev';
+          } else if (scripts.start) {
+            runScript = 'PORT=$PORT npm start';
+          }
+        } catch { /* ignore parse errors */ }
+      }
+
+      // Check docker-compose
+      if (fs.existsSync(path.join(repoPath, 'docker-compose.yml')) || fs.existsSync(path.join(repoPath, 'docker-compose.yaml'))) {
+        if (!runScript) runScript = 'docker compose up';
+      }
+
+      // Check Python requirements.txt
+      if (fs.existsSync(path.join(repoPath, 'requirements.txt'))) {
+        setupParts.push('pip install -r requirements.txt');
+      }
+
+      // Check Go go.mod
+      if (fs.existsSync(path.join(repoPath, 'go.mod'))) {
+        setupParts.push('go mod download');
+        if (!runScript) runScript = 'PORT=$PORT go run .';
+      }
+
+      // Check Makefile for dev/start targets
+      const makefilePath = path.join(repoPath, 'Makefile');
+      if (fs.existsSync(makefilePath)) {
+        try {
+          const makefile = fs.readFileSync(makefilePath, 'utf-8');
+          const targets = makefile.match(/^([a-zA-Z_-]+)\s*:/gm)?.map((t) => t.replace(':', '').trim()) ?? [];
+          if (!runScript) {
+            if (targets.includes('dev')) runScript = 'make dev';
+            else if (targets.includes('start')) runScript = 'make start';
+          }
+        } catch { /* ignore read errors */ }
+      }
+
+      return {
+        success: true,
+        setupScript: setupParts.length > 0 ? setupParts.join('\n') : undefined,
+        runScript,
+      };
+    } catch (err) {
+      return { success: false, error: String(err) };
     }
   });
 

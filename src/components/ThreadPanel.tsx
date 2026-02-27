@@ -34,6 +34,8 @@ export function ThreadPanel() {
     hasWorktree,
     isClaudeRunning,
     scriptsAvailable,
+    hasSetupScript,
+    hasRunScript,
     isFullscreen,
     channelTickets,
     setTicketDependencies,
@@ -56,6 +58,7 @@ export function ThreadPanel() {
     onCloseTerminalTab,
     onCloseAllTerminals,
     onAddTerminal,
+    onOpenSettings,
   } = useThreadContext();
 
   const {
@@ -213,6 +216,8 @@ export function ThreadPanel() {
                   cwd={terminalCwd}
                   runScriptRunning={runScriptRunning}
                   scriptsAvailable={scriptsAvailable}
+                  hasSetupScript={hasSetupScript}
+                  hasRunScript={hasRunScript}
                   onSelectTab={onSelectTerminalTab}
                   onCloseTab={onCloseTerminalTab}
                   onCloseAll={onCloseAllTerminals}
@@ -220,6 +225,7 @@ export function ThreadPanel() {
                   onRunScript={() => onRerunScript('Run')}
                   onStopScript={() => onStopScript('Run')}
                   onRerunSetup={() => onRerunScript('Setup')}
+                  onOpenSettings={onOpenSettings}
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">

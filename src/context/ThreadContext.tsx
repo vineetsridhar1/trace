@@ -43,6 +43,8 @@ export interface ThreadContextValue {
   // UI state
   isFullscreen: boolean;
   scriptsAvailable: boolean;
+  hasSetupScript: boolean;
+  hasRunScript: boolean;
   dragging: DragTarget;
   // UI callbacks
   onClose: () => void;
@@ -64,6 +66,7 @@ export interface ThreadContextValue {
   onCloseTerminalTab: (terminalId: string) => void;
   onCloseAllTerminals: () => void;
   onAddTerminal: () => void;
+  onOpenSettings: () => void;
 }
 
 const ThreadContext = createContext<ThreadContextValue | null>(null);

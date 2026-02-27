@@ -79,6 +79,7 @@ export interface TraceAPI {
   getAllLocalConfigs: () => Promise<Record<string, LocalChannelConfig>>;
   deleteLocalConfig: (channelId: string) => Promise<{ success: boolean }>;
   listRepoFiles: (repoPath: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
+  suggestScripts: (repoPath: string) => Promise<{ success: boolean; setupScript?: string; runScript?: string; error?: string }>;
   validateRepo: (repoPath: string) => Promise<{ valid: boolean; originUrl?: string; error?: string }>;
   listRepoBranches: (repoPath: string) => Promise<{ success: boolean; branches: string[]; error?: string }>;
   checkBranchesMerged: (

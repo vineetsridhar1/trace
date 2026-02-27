@@ -71,7 +71,7 @@ export function useStartupTerminals() {
     setActiveTabIdState(tabId);
   }, []);
 
-  // Create default tabs for a message (Setup if script, Run if script, Terminal 1 always)
+  // Create default tabs for a message (Setup, Run, Terminal 1 — always created)
   const initializeDefaults = useCallback((
     messageId: string,
     worktreeCwd: string,
@@ -87,25 +87,20 @@ export function useStartupTerminals() {
     const run = runCountRef.current;
     const newTerminals: TerminalTab[] = [];
 
-    if (setupScript?.trim()) {
-      newTerminals.push({
-        terminalId: `setup-${messageId}-${run}`,
-        name: 'Setup',
-        command: setupScript,
-        env,
-        readOnly: true,
-      });
-    }
+    // Always create Setup tab — runs script if configured, otherwise empty
+    newTerminals.push({
+      terminalId: `setup-${messageId}-${run}`,
+      name: 'Setup',
+      ...(setupScript?.trim() ? { command: setupScript, env } : {}),
+      readOnly: true,
+    });
 
-    if (runScript?.trim()) {
-      // Create the Run tab without a command — it only executes when
-      // the user clicks the play button (rerunTab).
-      newTerminals.push({
-        terminalId: `run-${messageId}-${run}`,
-        name: 'Run',
-        readOnly: true,
-      });
-    }
+    // Always create Run tab — only executes when user clicks play button
+    newTerminals.push({
+      terminalId: `run-${messageId}-${run}`,
+      name: 'Run',
+      readOnly: true,
+    });
 
     newTerminals.push({
       terminalId: `shell-${messageId}-${run}`,
@@ -260,6 +255,11 @@ export function useStartupTerminals() {
     }
   }, [syncToState]);
 
+  // Check if a message has already been initialized (ref-based, no state race)
+  const isInitialized = useCallback((messageId: string) => {
+    return initializedRef.current.has(messageId);
+  }, []);
+
   // Channel-level sidebar play button (stores under channelId key in the map)
   const runAllScripts = useCallback(
     (contextId: string, runCwd: string, scripts: { name: string; command: string }[], envMaps?: Record<string, string>[]) => {
@@ -302,6 +302,7 @@ export function useStartupTerminals() {
     initialized,
     selectMessage,
     initializeDefaults,
+    isInitialized,
     rerunTab,
     stopTab,
     killAllForMessage,

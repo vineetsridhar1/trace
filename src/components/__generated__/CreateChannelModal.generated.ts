@@ -8,25 +8,31 @@ export type CreateChannelMutationVariables = Types.Exact<{
   serverId?: Types.InputMaybe<Types.Scalars['String']['input']>;
   githubUrl?: Types.InputMaybe<Types.Scalars['String']['input']>;
   baseBranch?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultSetupScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultRunScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
 }>;
 
 
-export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, createdAt: string, updatedAt: string } };
+export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
 
 
 export const CreateChannelDocument = gql`
-    mutation CreateChannel($name: String!, $serverId: String, $githubUrl: String, $baseBranch: String) {
+    mutation CreateChannel($name: String!, $serverId: String, $githubUrl: String, $baseBranch: String, $defaultSetupScript: String, $defaultRunScript: String) {
   createChannel(
     name: $name
     serverId: $serverId
     githubUrl: $githubUrl
     baseBranch: $baseBranch
+    defaultSetupScript: $defaultSetupScript
+    defaultRunScript: $defaultRunScript
   ) {
     id
     serverId
     name
     baseBranch
     githubUrl
+    defaultSetupScript
+    defaultRunScript
     createdAt
     updatedAt
   }
@@ -51,6 +57,8 @@ export type CreateChannelMutationFn = Apollo.MutationFunction<CreateChannelMutat
  *      serverId: // value for 'serverId'
  *      githubUrl: // value for 'githubUrl'
  *      baseBranch: // value for 'baseBranch'
+ *      defaultSetupScript: // value for 'defaultSetupScript'
+ *      defaultRunScript: // value for 'defaultRunScript'
  *   },
  * });
  */

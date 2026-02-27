@@ -126,6 +126,9 @@ contextBridge.exposeInMainWorld('traceAPI', {
   listRepoFiles: (repoPath: string) =>
     ipcRenderer.invoke('list-repo-files', repoPath) as Promise<{ success: boolean; files: string[]; error?: string }>,
 
+  suggestScripts: (repoPath: string) =>
+    ipcRenderer.invoke('suggest-scripts', repoPath) as Promise<{ success: boolean; setupScript?: string; runScript?: string; error?: string }>,
+
   validateRepo: (repoPath: string) =>
     ipcRenderer.invoke('validate-repo', repoPath) as Promise<{ valid: boolean; originUrl?: string; error?: string }>,
 

@@ -1,4 +1,4 @@
-import { FiPlay, FiRefreshCw, FiSquare, FiX } from 'react-icons/fi';
+import { FiPlay, FiRefreshCw, FiSettings, FiSquare, FiX } from 'react-icons/fi';
 import { useTerminal } from '../hooks/useTerminal';
 import { Tooltip } from './Tooltip';
 import type { TerminalTab } from '../hooks/useStartupTerminals';
@@ -34,6 +34,8 @@ interface TerminalTabsProps {
   cwd: string;
   runScriptRunning: boolean;
   scriptsAvailable: boolean;
+  hasSetupScript: boolean;
+  hasRunScript: boolean;
   onSelectTab: (terminalId: string) => void;
   onCloseTab: (terminalId: string) => void;
   onCloseAll: () => void;
@@ -41,9 +43,10 @@ interface TerminalTabsProps {
   onRunScript: () => void;
   onStopScript: () => void;
   onRerunSetup: () => void;
+  onOpenSettings: () => void;
 }
 
-export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, scriptsAvailable, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
   const runTab = terminals.find((t) => t.name === 'Run');
   const setupTab = terminals.find((t) => t.name === 'Setup');
   return (
@@ -100,8 +103,8 @@ export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, sc
         </Tooltip>
       </div>
 
-      {/* Setup action bar */}
-      {activeTabId === setupTab?.terminalId && (
+      {/* Setup action bar — only when script is configured */}
+      {hasSetupScript && activeTabId === setupTab?.terminalId && (
         <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
           <Tooltip text="Re-run setup">
             <button
@@ -116,8 +119,8 @@ export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, sc
         </div>
       )}
 
-      {/* Run script action bar */}
-      {scriptsAvailable && activeTabId === runTab?.terminalId && (
+      {/* Run script action bar — only when script is configured */}
+      {hasRunScript && activeTabId === runTab?.terminalId && (
         <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
           {runScriptRunning ? (
             <Tooltip text="Stop script">
@@ -145,19 +148,53 @@ export function TerminalTabs({ terminals, activeTabId, cwd, runScriptRunning, sc
         </div>
       )}
 
-      {/* Terminal content -- all mounted, visibility toggled via CSS */}
+      {/* Terminal content */}
       <div className="relative min-h-0 flex-1">
-        {terminals.map((t) => (
-          <TerminalTabContent
-            key={t.terminalId}
-            terminalId={t.terminalId}
-            cwd={cwd}
-            command={t.command}
-            visible={t.terminalId === activeTabId}
-            env={t.env}
-            readOnly={t.readOnly}
-          />
-        ))}
+        {/* Configure placeholders for unconfigured script tabs */}
+        {!hasSetupScript && activeTabId === setupTab?.terminalId && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1b26]">
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+            >
+              <FiSettings className="h-5 w-5" aria-hidden="true" />
+              <span>Configure Setup Script</span>
+            </button>
+            <p className="mt-3 text-xs text-[#3b4261]">Runs automatically when a workspace is created</p>
+          </div>
+        )}
+        {!hasRunScript && activeTabId === runTab?.terminalId && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1b26]">
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+            >
+              <FiSettings className="h-5 w-5" aria-hidden="true" />
+              <span>Configure Run Script</span>
+            </button>
+            <p className="mt-3 text-xs text-[#3b4261]">Runs when you click the play button</p>
+          </div>
+        )}
+
+        {/* Actual terminal content — skip mounting for unconfigured script tabs */}
+        {terminals.map((t) => {
+          const isSetupUnconfigured = t.name === 'Setup' && !hasSetupScript;
+          const isRunUnconfigured = t.name === 'Run' && !hasRunScript;
+          if (isSetupUnconfigured || isRunUnconfigured) return null;
+          return (
+            <TerminalTabContent
+              key={t.terminalId}
+              terminalId={t.terminalId}
+              cwd={cwd}
+              command={t.command}
+              visible={t.terminalId === activeTabId}
+              env={t.env}
+              readOnly={t.readOnly}
+            />
+          );
+        })}
       </div>
     </div>
   );
