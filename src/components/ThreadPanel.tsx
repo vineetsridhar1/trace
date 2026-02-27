@@ -78,8 +78,6 @@ export function ThreadPanel() {
     clearPendingRun,
   } = useClaudeActions();
 
-  const threadOpen = threadWidth > 0;
-
   const lastUserMessageTime = useMemo(() => {
     for (let i = threadNodes.length - 1; i >= 0; i--) {
       const node = threadNodes[i];
@@ -157,11 +155,9 @@ export function ThreadPanel() {
     }
   }, [selectedMessageId]);
 
-  if (!threadOpen) return null;
-
   return (
     <>
-      {threadOpen && !isFullscreen && (
+      {!isFullscreen && (
         <div
           className={`resize-handle ${dragging === "right" ? "active" : ""}`}
           onMouseDown={(e) => {
@@ -175,7 +171,7 @@ export function ThreadPanel() {
         id="thread-panel"
         className={`flex shrink-0 min-h-0 flex-col overflow-hidden border-l border-[#292e42] bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
         style={
-          isFullscreen ? { flex: "1 1 50%" } : { width: `${threadWidth}px` }
+          isFullscreen ? { flex: "1 1 0%" } : { width: `${threadWidth}px` }
         }
       >
         <ThreadHeader

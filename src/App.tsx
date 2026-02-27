@@ -20,7 +20,7 @@ import { ThreadProvider } from './context/ThreadContext';
 import { ChannelPanel } from './components/ChannelPanel';
 import { ChannelTopBar } from './components/ChannelTopBar';
 import { MessagePanel } from './components/MessagePanel';
-import { ThreadPanel } from './components/ThreadPanel';
+
 import { ChannelSettingsModal } from './components/ChannelSettingsModal';
 import { CreateChannelModal } from './components/CreateChannelModal';
 import { CreateServerModal } from './components/CreateServerModal';
@@ -319,7 +319,6 @@ function AppContent() {
 
       if (selectedMessageId === messageId) {
         closeThreadPanel();
-        setChannelWidth(220);
       }
 
       try {
@@ -419,9 +418,9 @@ function AppContent() {
 
   const handleOpenThread = useCallback(
     (message: ChannelMessage) => {
-      setChannelWidth(0);
       resetScroll();
       openThreadPanel(message);
+      setMiddlePanelView('workspaces');
       setAttentionMessageIds((current) => {
         if (!current.has(message.id)) return current;
         const next = new Set(current);
@@ -626,12 +625,10 @@ function AppContent() {
     if (isFullscreen) {
       setIsFullscreen(false);
       setChannelWidth(savedWidthsRef.current.channel);
-      setThreadWidth(savedWidthsRef.current.thread);
       return;
     }
     closeThreadPanel();
-    setChannelWidth(220);
-  }, [closeThreadPanel, isFullscreen, setThreadWidth]);
+  }, [closeThreadPanel, isFullscreen]);
 
   const enterFullscreen = useCallback(async () => {
     const currentRepoPath = getChannelRepoPath();
@@ -859,7 +856,7 @@ function AppContent() {
 
             <div
               className="flex min-h-0 min-w-0 flex-col panel-animate"
-              style={{ flex: isFullscreen ? '0 0 0px' : '1 1 0%', overflow: 'hidden' }}
+              style={{ flex: '1 1 0%', overflow: 'hidden' }}
             >
               {!isFullscreen && !activeAiChatId && (
                 <ChannelTopBar
@@ -888,12 +885,12 @@ function AppContent() {
                     kanbanColumns={kanbanColumns}
                     kanbanLoading={kanbanLoading}
                     onMoveTicket={handleMoveTicket}
+                    isFullscreen={isFullscreen}
                   />
                 )}
               </div>
             </div>
 
-            <ThreadPanel />
           </div>
 
           {settingsChannel && (

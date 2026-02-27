@@ -4,6 +4,7 @@ import { KanbanBoard } from './KanbanBoard';
 import { MessageInput } from './MessageInput';
 import { MessageItem } from './MessageItem';
 import { ChatEmptyState } from './ChatEmptyState';
+import { ThreadPanel } from './ThreadPanel';
 
 interface MessagePanelProps {
   panelTitle: string;
@@ -17,6 +18,7 @@ interface MessagePanelProps {
   kanbanLoading: boolean;
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
   onDeleteMessage?: (messageId: string) => void;
+  isFullscreen?: boolean;
 }
 
 export function MessagePanel({
@@ -31,6 +33,7 @@ export function MessagePanel({
   kanbanLoading,
   onDeleteMessage,
   onMoveTicket,
+  isFullscreen,
 }: MessagePanelProps) {
   const feedListRef = useRef<HTMLDivElement | null>(null);
 
@@ -118,28 +121,32 @@ export function MessagePanel({
           <MessageInput />
         </>
       ) : (
-        <>
-          <div
-            id="workspaces-list"
-            ref={feedListRef}
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
-          >
-            <div className="flex-1" />
-            {sortedMessages.map((message) => (
-              <MessageItem
-                key={message.id}
-                message={message}
-                ticket={ticketByMessageId.get(message.id) ?? null}
-                isSelected={message.id === selectedMessageId}
-                needsAttention={attentionMessageIds.has(message.id)}
-                onOpenThread={onOpenThread}
-                dimmed={message.status === 'merged'}
-              />
-            ))}
-          </div>
-
-          <MessageInput />
-        </>
+        <div className="flex min-h-0 flex-1">
+          {!(isFullscreen && selectedMessageId) && (
+            <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: 200 }}>
+              <div
+                id="workspaces-list"
+                ref={feedListRef}
+                className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-2"
+              >
+                <div className="flex-1" />
+                {sortedMessages.map((message) => (
+                  <MessageItem
+                    key={message.id}
+                    message={message}
+                    ticket={ticketByMessageId.get(message.id) ?? null}
+                    isSelected={message.id === selectedMessageId}
+                    needsAttention={attentionMessageIds.has(message.id)}
+                    onOpenThread={onOpenThread}
+                    dimmed={message.status === 'merged'}
+                  />
+                ))}
+              </div>
+              <MessageInput />
+            </div>
+          )}
+          {selectedMessageId && <ThreadPanel />}
+        </div>
       )}
     </div>
   );
