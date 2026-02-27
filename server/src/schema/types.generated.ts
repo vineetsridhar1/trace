@@ -79,6 +79,9 @@ export type Channel = {
   __typename?: 'Channel';
   baseBranch?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['DateTime']['output'];
+  defaultRepoPath?: Maybe<Scalars['String']['output']>;
+  defaultRunScript?: Maybe<Scalars['String']['output']>;
+  defaultSetupScript?: Maybe<Scalars['String']['output']>;
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -304,6 +307,9 @@ export type MutationsetTicketDependenciesArgs = {
 
 export type MutationupdateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
+  defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
+  defaultRunScript?: InputMaybe<Scalars['String']['input']>;
+  defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -803,6 +809,9 @@ export type AttachmentResolvers<ContextType = any, ParentType extends ResolversP
 export type ChannelResolvers<ContextType = any, ParentType extends ResolversParentTypes['Channel'] = ResolversParentTypes['Channel']> = {
   baseBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  defaultRepoPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  defaultRunScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  defaultSetupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   githubUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;

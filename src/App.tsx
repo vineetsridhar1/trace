@@ -572,13 +572,18 @@ function AppContent() {
 
   const handleSwitchServer = useCallback(
     (serverId: string) => {
+      if (serverId === activeServerId) {
+        setChannelWidth((w) => (w > 0 ? 0 : 220));
+        return;
+      }
       switchServer(serverId);
+      setChannelWidth(220);
       const firstChannel = enrichedChannels.find((ch) => ch.serverId === serverId);
       if (firstChannel) {
         handleSwitchChannel(firstChannel.id);
       }
     },
-    [switchServer, enrichedChannels, handleSwitchChannel],
+    [switchServer, enrichedChannels, handleSwitchChannel, activeServerId],
   );
 
   const handleSwitchAiChat = useCallback(

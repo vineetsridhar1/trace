@@ -44,6 +44,9 @@ type Attachment {
 type Channel {
   baseBranch: String
   createdAt: DateTime!
+  defaultRepoPath: String
+  defaultRunScript: String
+  defaultSetupScript: String
   githubUrl: String
   id: ID!
   name: String!
@@ -150,7 +153,7 @@ type Mutation {
   renameAiChat(id: ID!, title: String!): AiChat!
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
   setTicketDependencies(channelId: ID!, dependsOnMessageIds: [ID!]!, messageId: ID!, runConfig: JSON!): Message!
-  updateChannel(baseBranch: String, githubUrl: String, id: ID!, name: String): Channel!
+  updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, id: ID!, name: String): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateMessagePreview(channelId: ID!, messageId: ID!, preview: String!): Message!
   updateMessageStatus(channelId: ID!, messageId: ID!, status: String!): Message!

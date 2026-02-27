@@ -68,6 +68,9 @@ export type Channel = {
   __typename?: 'Channel';
   baseBranch?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['DateTime']['output'];
+  defaultRepoPath?: Maybe<Scalars['String']['output']>;
+  defaultRunScript?: Maybe<Scalars['String']['output']>;
+  defaultSetupScript?: Maybe<Scalars['String']['output']>;
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -146,6 +149,13 @@ export type MessageConnection = {
 export type MessageDeletedPayload = {
   __typename?: 'MessageDeletedPayload';
   channelId: Scalars['String']['output'];
+  messageId: Scalars['String']['output'];
+};
+
+export type MessageReadyForReviewPayload = {
+  __typename?: 'MessageReadyForReviewPayload';
+  channelId: Scalars['String']['output'];
+  claudeSessionId?: Maybe<Scalars['String']['output']>;
   messageId: Scalars['String']['output'];
 };
 
@@ -286,6 +296,9 @@ export type MutationSetTicketDependenciesArgs = {
 
 export type MutationUpdateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
+  defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
+  defaultRunScript?: InputMaybe<Scalars['String']['input']>;
+  defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -469,6 +482,7 @@ export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
   messageDeleted: MessageDeletedPayload;
+  messageReadyForReview: MessageReadyForReviewPayload;
   messageUpserted: Message;
   threadEventCreated: ThreadEventPayload;
   threadEventUpdated: ThreadEventPayload;
@@ -483,6 +497,11 @@ export type SubscriptionAiChatStreamArgs = {
 
 
 export type SubscriptionMessageDeletedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionMessageReadyForReviewArgs = {
   channelId: Scalars['ID']['input'];
 };
 

@@ -34,9 +34,6 @@ export async function createChannel(data: {
   serverId: string;
   baseBranch?: string | null;
   githubUrl?: string | null;
-  defaultRepoPath?: string | null;
-  defaultSetupScript?: string | null;
-  defaultRunScript?: string | null;
 }) {
   return prisma.channel.create({ data });
 }
