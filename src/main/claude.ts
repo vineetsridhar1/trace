@@ -47,6 +47,7 @@ export async function spawnClaude(
   model?: string,
   effort?: string,
   systemInstructions?: string,
+  permissionMode?: string,
 ): Promise<string> {
   const { worktreePath, created } = await ensureWorktree(workspaceId, repoPath);
 
@@ -103,7 +104,9 @@ export async function spawnClaude(
     runningProcesses.delete(workspaceId);
   }
 
-  const args = ['--dangerously-skip-permissions'];
+  const args = permissionMode === 'plan'
+    ? ['--permission-mode', 'plan']
+    : ['--dangerously-skip-permissions'];
   if (resumeSessionId) {
     args.push('--resume', resumeSessionId);
   }

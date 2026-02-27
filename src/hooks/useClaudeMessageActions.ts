@@ -98,6 +98,7 @@ interface SpawnOptions {
   model?: string;
   effort?: string;
   systemInstructions?: string;
+  permissionMode?: string;
 }
 
 export function useClaudeWorkspaceActions({
@@ -136,7 +137,7 @@ export function useClaudeWorkspaceActions({
       spawnedWorkspaceIdsRef.current.add(workspaceId);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions);
+        const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions, options.permissionMode);
 
         if (!result.success) {
           spawnedWorkspaceIdsRef.current.delete(workspaceId);
@@ -255,9 +256,7 @@ export function useClaudeWorkspaceActions({
       const editedPrompt = promptText.trim();
       if (!pendingRunWorkspaceId || !editedPrompt) return;
 
-      const prompt = planMode
-        ? `<trace-internal>\nBefore implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n</trace-internal>\n\n${editedPrompt}`
-        : editedPrompt;
+      const prompt = editedPrompt;
 
       const workspaceId = pendingRunWorkspaceId;
       const filePaths = pendingRunFilePaths;
@@ -296,6 +295,7 @@ export function useClaudeWorkspaceActions({
         model: selectedModel,
         effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
         systemInstructions: instructionParts.join('\n\n'),
+        permissionMode: planMode ? 'plan' : undefined,
       });
 
       if (!success && setupCommands.length > 0) {
@@ -307,9 +307,7 @@ export function useClaudeWorkspaceActions({
 
   const autoRunQueuedTicket = useCallback(
     async (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
-      const prompt = runConfig.planMode
-        ? `<trace-internal>\nBefore implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n</trace-internal>\n\n${runConfig.prompt}`
-        : runConfig.prompt;
+      const prompt = runConfig.prompt;
 
       const creationCommands = getSetupCommands();
 
@@ -333,6 +331,7 @@ export function useClaudeWorkspaceActions({
         model: runConfig.model,
         effort: runConfig.model !== 'haiku' ? runConfig.effort : undefined,
         systemInstructions: instructionParts.join('\n\n'),
+        permissionMode: runConfig.planMode ? 'plan' : undefined,
       });
 
       if (!success && creationCommands.length > 0) {
@@ -469,14 +468,12 @@ export function useClaudeWorkspaceActions({
         );
         if (!persisted) return;
 
-        // Wrap with trace-internal instructions so Claude revises the plan
-        const wrappedPrompt = `<trace-internal>\nThe user has provided feedback on your plan. Go back into plan mode and revise the plan based on their suggestions below. Only revise the plan — do not start implementing yet.\n</trace-internal>\n\n${trimmed}`;
-
-        await spawnClaudeForWorkspace(selectedWorkspace.id, wrappedPrompt, {
+        await spawnClaudeForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: 'Failed to spawn claude for plan revision',
           resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
           model: selectedModel,
           effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+          permissionMode: 'plan',
         });
       }
     },
