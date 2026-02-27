@@ -1,7 +1,4 @@
 import prisma from '../lib/prisma';
-import { getOrCreateDefaultServer } from './serverService';
-
-let defaultChannelId: string | null = null;
 
 function withTeamIds<T extends { teamLinks?: { teamId: string }[] }>(channel: T): T & { teamIds: string[] } {
   const { teamLinks, ...rest } = channel;
@@ -25,21 +22,6 @@ export async function getChannel(id: string) {
     },
   });
   return channel ? withTeamIds(channel) : null;
-}
-
-export async function getDefaultChannel() {
-  if (defaultChannelId) {
-    return defaultChannelId;
-  }
-  let channel = await prisma.channel.findFirst({ where: { name: 'general' } });
-  if (!channel) {
-    const serverId = await getOrCreateDefaultServer();
-    channel = await prisma.channel.create({
-      data: { name: 'general', baseBranch: 'main', serverId },
-    });
-  }
-  defaultChannelId = channel.id;
-  return defaultChannelId;
 }
 
 export async function createChannel(data: {

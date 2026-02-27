@@ -1,6 +1,5 @@
 import { createApp, schema } from './app';
 import { config } from './config';
-import { getDefaultChannel } from './services/channelService';
 import { initStorage } from './services/storageService';
 import { WebSocketServer } from 'ws';
 import { useServer } from 'graphql-ws/use/ws';
@@ -10,8 +9,7 @@ initStorage(config.storagePath);
 async function main() {
   const app = await createApp();
 
-  const httpServer = app.listen(config.port, async () => {
-    await getDefaultChannel();
+  const httpServer = app.listen(config.port, () => {
     console.log(`Trace server listening on http://localhost:${config.port}`);
   });
 
