@@ -11,6 +11,7 @@ interface ChannelSettingsModalProps {
   onClose: () => void;
   onSave: (
     channelData: {
+      name?: string;
       workspacesEnabled?: boolean;
       teamIds?: string[];
       defaultSetupScript?: string | null;
@@ -22,6 +23,7 @@ interface ChannelSettingsModalProps {
 
 export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onSave }: ChannelSettingsModalProps) {
   // Channel settings
+  const [draftName, setDraftName] = useState(channel.name);
   const [draftWorkspacesEnabled, setDraftWorkspacesEnabled] = useState(channel.workspacesEnabled);
   const [draftTeamIds, setDraftTeamIds] = useState<string[]>(channel.teamIds ?? []);
   const [teamsDropdownOpen, setTeamsDropdownOpen] = useState(false);
@@ -39,6 +41,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
   const [repoError, setRepoError] = useState<string | null>(null);
 
   useEffect(() => {
+    setDraftName(channel.name);
     setDraftWorkspacesEnabled(channel.workspacesEnabled);
     setDraftTeamIds(channel.teamIds ?? []);
     setDraftDefaultSetupScript(channel.defaultSetupScript ?? '');
@@ -47,7 +50,8 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
     setDraftSetupScript(localConfig?.setupScript ?? '');
     setDraftRunScript(localConfig?.runScript ?? '');
     setDraftSystemInstructions(localConfig?.systemInstructions ?? '');
-  }, [channel, localConfig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel.id]);
 
   const repoPath = draftLocalRepoPath || channel.localRepoPath || null;
 
@@ -77,11 +81,13 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
     setSaving(true);
     try {
       const channelData: {
+        name?: string;
         workspacesEnabled?: boolean;
         teamIds?: string[];
         defaultSetupScript?: string | null;
         defaultRunScript?: string | null;
       } = {
+        name: draftName.trim() || undefined,
         workspacesEnabled: draftWorkspacesEnabled,
         defaultSetupScript: draftDefaultSetupScript.trim() || null,
         defaultRunScript: draftDefaultRunScript.trim() || null,
@@ -102,10 +108,12 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
 
       await onSave(channelData, updatedLocalConfig);
       onClose();
+    } catch (err) {
+      console.error('[ChannelSettingsModal] Save failed:', err);
     } finally {
       setSaving(false);
     }
-  }, [channel.type, draftWorkspacesEnabled, draftTeamIds, draftDefaultSetupScript, draftDefaultRunScript, draftLocalRepoPath, draftSetupScript, draftRunScript, draftSystemInstructions, onSave, onClose]);
+  }, [channel.type, draftName, draftWorkspacesEnabled, draftTeamIds, draftDefaultSetupScript, draftDefaultRunScript, draftLocalRepoPath, draftSetupScript, draftRunScript, draftSystemInstructions, onSave, onClose]);
 
   const handleSuggestScripts = useCallback(async () => {
     if (!repoPath) return;
@@ -148,6 +156,17 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
           {/* ═══ General Settings ═══ */}
           <div>
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7aa2f7]">{typeLabel} Settings</h3>
+
+            {/* Name */}
+            <div className="mb-4">
+              <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Name</label>
+              <input
+                type="text"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
+              />
+            </div>
 
             {/* Associated Teams (projects only) */}
             {channel.type === 'project' && (

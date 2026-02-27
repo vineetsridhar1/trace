@@ -693,6 +693,7 @@ function AppContent() {
   const handleSaveSettings = useCallback(
     async (
       channelData: {
+        name?: string;
         workspacesEnabled?: boolean;
         teamIds?: string[];
         defaultSetupScript?: string | null;
@@ -808,6 +809,14 @@ function AppContent() {
   const hasRunScript = Boolean(enrichedActiveChannel?.runScript?.trim());
   const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
   const panelTitle = displayChannel ? `# ${displayChannel.name}` : '';
+
+  const teamProjects = useMemo(
+    () =>
+      displayChannel?.type === 'team'
+        ? serverChannels.filter((ch) => ch.type === 'project' && ch.teamIds.includes(displayChannel.id))
+        : [],
+    [displayChannel, serverChannels],
+  );
   const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const activeChannelBaseBranch = enrichedActiveChannel?.baseBranch ?? 'main';
 
@@ -967,6 +976,8 @@ function AppContent() {
                     kanbanLoading={kanbanLoading}
                     onMoveTicket={handleMoveTicket}
                     isFullscreen={isFullscreen}
+                    teamProjects={teamProjects}
+                    onSwitchChannel={handleSwitchChannel}
                   />
                 )}
               </div>

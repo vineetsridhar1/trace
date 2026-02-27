@@ -20,6 +20,7 @@ export function ChannelTopBar({
   onOpenSettings,
 }: ChannelTopBarProps) {
   const showTracker = channelType === 'team' || channelType === 'project';
+  const showProjects = channelType === 'team';
   const showWorkspaces = showTracker && workspacesEnabled;
 
   return (
@@ -51,6 +52,19 @@ export function ChannelTopBar({
               }`}
             >
               Tracker
+            </button>
+          )}
+          {showProjects && (
+            <button
+              type="button"
+              onClick={() => onSetView('projects')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                middlePanelView === 'projects'
+                  ? 'bg-violet-500/20 text-violet-300'
+                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+              }`}
+            >
+              Projects
             </button>
           )}
           {showWorkspaces && (

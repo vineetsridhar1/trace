@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiChevronRight, FiColumns, FiList, FiShare2 } from 'react-icons/fi';
-import type { ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
+import type { Channel, ChannelMessage, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { KanbanBoard } from './KanbanBoard';
 import { MessageInput } from './MessageInput';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
@@ -65,6 +65,8 @@ interface MessagePanelProps {
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
   onDeleteMessage?: (messageId: string) => void;
   isFullscreen?: boolean;
+  teamProjects?: Channel[];
+  onSwitchChannel?: (channelId: string) => void;
 }
 
 export function MessagePanel({
@@ -80,6 +82,8 @@ export function MessagePanel({
   onDeleteMessage,
   onMoveTicket,
   isFullscreen,
+  teamProjects = [],
+  onSwitchChannel,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -231,6 +235,31 @@ export function MessagePanel({
           )}
           <MessageInput />
         </>
+      ) : middlePanelView === 'projects' ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {teamProjects.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+              No projects associated with this team
+            </div>
+          ) : (
+            <div className="flex flex-col py-2">
+              {teamProjects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => onSwitchChannel?.(project.id)}
+                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#1f2335]"
+                >
+                  <span className="text-[#565f89] text-sm">#</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-[#c0caf5]">{project.name}</div>
+                  </div>
+                  <FiChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-[#565f89]" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1">
           {!(isFullscreen && selectedMessageId) && (

@@ -26,6 +26,7 @@ export function useChannelSettings() {
   const [executeUpdateChannel] = useUpdateChannelMutation();
 
   const updateChannel = useCallback(async (channelId: string, data: {
+    name?: string;
     workspacesEnabled?: boolean;
     teamIds?: string[];
     baseBranch?: string | null;
