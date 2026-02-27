@@ -19,6 +19,7 @@ interface WorkspaceTerminalState {
   terminals: TerminalTab[];
   activeTabId: string | null;
   cwd: string;
+  env?: Record<string, string>;
 }
 
 export function useStartupTerminals() {
@@ -126,12 +127,14 @@ export function useStartupTerminals() {
     newTerminals.push({
       terminalId: `shell-${workspaceId}-${run}`,
       name: 'Terminal 1',
+      env,
     });
 
     const entry: WorkspaceTerminalState = {
       terminals: newTerminals,
       activeTabId: newTerminals[0]?.terminalId ?? null,
       cwd: worktreeCwd,
+      env,
     };
     allTerminalsRef.current.set(workspaceId, entry);
 
@@ -271,6 +274,7 @@ export function useStartupTerminals() {
     const tab: TerminalTab = {
       terminalId: `user-terminal-${wsId}-${maxN + 1}-${Date.now()}`,
       name: `Terminal ${maxN + 1}`,
+      env: entry.env,
     };
 
     entry.terminals = [...entry.terminals, tab];
