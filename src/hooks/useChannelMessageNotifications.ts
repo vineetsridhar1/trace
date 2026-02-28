@@ -19,6 +19,8 @@ const CHANNEL_MESSAGE_CREATED_IN_SERVER_SUBSCRIPTION = gql`
   }
 `;
 
+const NOTIFICATION_THROTTLE_MS = 5000;
+
 interface UseChannelMessageNotificationsOptions {
   activeServerId: string;
   activeChannelId: string | null;
@@ -35,11 +37,26 @@ export function useChannelMessageNotifications({
   const { user } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const prevServerIdRef = useRef(activeServerId);
+  const activeChannelIdRef = useRef(activeChannelId);
+  const activeAiChatIdRef = useRef(activeAiChatId);
+  const serverChannelsRef = useRef(serverChannels);
+  const lastNotificationTimeRef = useRef<Record<string, number>>({});
+
+  activeChannelIdRef.current = activeChannelId;
+  activeAiChatIdRef.current = activeAiChatId;
+  serverChannelsRef.current = serverChannels;
+
+  // Build a set of channel IDs for fast lookup
+  const channelIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    channelIdsRef.current = new Set(serverChannels.map((ch) => ch.id));
+  }, [serverChannels]);
 
   // Reset counts when server changes
   useEffect(() => {
     if (activeServerId !== prevServerIdRef.current) {
       setUnreadCounts({});
+      lastNotificationTimeRef.current = {};
       prevServerIdRef.current = activeServerId;
     }
   }, [activeServerId]);
@@ -61,12 +78,6 @@ export function useChannelMessageNotifications({
     skip: !activeServerId,
   });
 
-  // Build a set of channel IDs for fast lookup
-  const channelIdsRef = useRef(new Set<string>());
-  useEffect(() => {
-    channelIdsRef.current = new Set(serverChannels.map((ch) => ch.id));
-  }, [serverChannels]);
-
   useEffect(() => {
     if (!subData?.channelMessageCreatedInServer) return;
     const msg = subData.channelMessageCreatedInServer;
@@ -77,7 +88,7 @@ export function useChannelMessageNotifications({
     // Skip channels not in sidebar
     if (!channelIdsRef.current.has(msg.channelId)) return;
 
-    const isViewingChannel = msg.channelId === activeChannelId && !activeAiChatId;
+    const isViewingChannel = msg.channelId === activeChannelIdRef.current && !activeAiChatIdRef.current;
 
     // Increment unread count for non-active channels
     if (!isViewingChannel) {
@@ -88,17 +99,23 @@ export function useChannelMessageNotifications({
     }
 
     // Show Mac notification if app not focused or message is for a non-active channel
+    // Throttle to one notification per channel per 5 seconds
     if ((!document.hasFocus() || !isViewingChannel) && 'Notification' in window && Notification.permission === 'granted') {
-      const channel = serverChannels.find((ch) => ch.id === msg.channelId);
-      const channelName = channel?.name ?? 'unknown';
-      const notification = new Notification(`${msg.author.name} in #${channelName}`, {
-        body: msg.content,
-      });
-      notification.onclick = () => {
-        void window.traceAPI.focusWindow();
-      };
+      const now = Date.now();
+      const lastTime = lastNotificationTimeRef.current[msg.channelId] ?? 0;
+      if (now - lastTime >= NOTIFICATION_THROTTLE_MS) {
+        lastNotificationTimeRef.current[msg.channelId] = now;
+        const channel = serverChannelsRef.current.find((ch) => ch.id === msg.channelId);
+        const channelName = channel?.name ?? 'unknown';
+        const notification = new Notification(`${msg.author.name} in #${channelName}`, {
+          body: msg.content,
+        });
+        notification.onclick = () => {
+          void window.traceAPI.focusWindow();
+        };
+      }
     }
-  }, [subData, user?.id, activeChannelId, activeAiChatId, serverChannels]);
+  }, [subData, user?.id]);
 
   return { unreadCounts };
 }
