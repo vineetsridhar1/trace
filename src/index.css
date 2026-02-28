@@ -24,6 +24,13 @@ body,
   flex-shrink: 0;
 }
 
+.resize-handle::before {
+  content: '';
+  display: block;
+  height: 52px;
+  border-bottom: 1px solid #292e42;
+}
+
 .resize-handle:hover,
 .resize-handle.active {
   background: #7c3aed;
