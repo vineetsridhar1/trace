@@ -370,6 +370,7 @@ export type Query = {
   channels: Array<Channel>;
   checkPRStatuses: Array<PRStatus>;
   event?: Maybe<Event>;
+  generateBranchName?: Maybe<Scalars['String']['output']>;
   me?: Maybe<AuthUser>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
@@ -410,6 +411,11 @@ export type QuerycheckPRStatusesArgs = {
 
 export type QueryeventArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerygenerateBranchNameArgs = {
+  prompt: Scalars['String']['input'];
 };
 
 
@@ -941,6 +947,7 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
   checkPRStatuses?: Resolver<Array<ResolversTypes['PRStatus']>, ParentType, ContextType, RequireFields<QuerycheckPRStatusesArgs, 'branches' | 'channelId'>>;
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
+  generateBranchName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QuerygenerateBranchNameArgs, 'prompt'>>;
   me?: Resolver<Maybe<ResolversTypes['AuthUser']>, ParentType, ContextType>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;

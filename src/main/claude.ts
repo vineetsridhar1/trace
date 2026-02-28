@@ -31,15 +31,18 @@ const MAX_CAPTURE_CHARS = 20_000;
 async function generateBranchName(prompt: string, workspaceId: string): Promise<string> {
   const fallback = `trace/${workspaceId.slice(0, 8)}`;
   try {
-    const res = await fetch(`${SERVER_URL}/api/generate-branch-name`, {
+    const res = await fetch(`${SERVER_URL}/graphql`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        query: 'query GenerateBranchName($prompt: String!) { generateBranchName(prompt: $prompt) }',
+        variables: { prompt },
+      }),
     });
     if (!res.ok) return fallback;
-    const { name } = (await res.json()) as { name: string | null };
-    if (!name) return fallback;
-    return `trace/${name}`.slice(0, 50);
+    const { data } = (await res.json()) as { data?: { generateBranchName: string | null } };
+    if (!data?.generateBranchName) return fallback;
+    return `trace/${data.generateBranchName}`.slice(0, 50);
   } catch {
     return fallback;
   }

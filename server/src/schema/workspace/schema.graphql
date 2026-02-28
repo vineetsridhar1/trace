@@ -1,6 +1,7 @@
 extend type Query {
   workspaces(channelId: ID!, limit: Int, offset: Int): WorkspaceConnection!
   checkPRStatuses(channelId: ID!, branches: [String!]!): [PRStatus!]!
+  generateBranchName(prompt: String!): String
 }
 
 type PRStatus {
