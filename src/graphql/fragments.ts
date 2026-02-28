@@ -5,6 +5,7 @@ export const WORKSPACE_FIELDS = gql`
     id
     channelId
     cliSessionId
+    userId
     preview
     importance
     status
@@ -16,6 +17,11 @@ export const WORKSPACE_FIELDS = gql`
       sessionId
       cwd
       status
+    }
+    user {
+      id
+      name
+      avatarUrl
     }
     sessionCount
     queuedRunConfig

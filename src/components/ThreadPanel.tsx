@@ -18,6 +18,7 @@ import { StickyTodoList } from "./StickyTodoList";
 import { useClaudeActions } from "../context/ClaudeActionsContext";
 import { useThreadContext } from "../context/ThreadContext";
 import { useThreadEventsContext } from "../context/ThreadEventsContext";
+import { useAuth } from "../context/AuthContext";
 import { normalizeToolName, stripTraceInternal } from "../utils";
 
 type ViewMode = "agent" | "ticket" | "files" | "terminal";
@@ -32,6 +33,7 @@ export function ThreadPanel() {
     expandedTurnGroupIds,
     selectedWorkspaceId,
     workspaceStatus,
+    workspaceUserId,
     selectedTicket: ticket,
     deletingWorktree,
     hasWorktree,
@@ -87,6 +89,9 @@ export function ThreadPanel() {
     markMerged,
     clearPendingRun,
   } = useClaudeActions();
+
+  const { user: authUser } = useAuth();
+  const isLockedByOther = Boolean(workspaceUserId && authUser && workspaceUserId !== authUser.id);
 
   const lastUserMessageTime = useMemo(() => {
     for (let i = sessionNodes.length - 1; i >= 0; i--) {
@@ -347,7 +352,11 @@ export function ThreadPanel() {
         )}
 
         {viewMode === "agent" && (
-          pendingRunWorkspaceId === selectedWorkspaceId && !isClaudeRunning ? (
+          isLockedByOther ? (
+            <div className="flex items-center justify-center border-t border-[#292e42] px-4 py-3">
+              <span className="text-xs text-[#565f89]">Workspace locked by another user (read-only)</span>
+            </div>
+          ) : pendingRunWorkspaceId === selectedWorkspaceId && !isClaudeRunning ? (
             <RunButtons
               initialPrompt={pendingRunInitialPrompt}
               onRun={(planMode, prompt) => {

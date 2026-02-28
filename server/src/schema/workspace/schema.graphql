@@ -23,6 +23,7 @@ type Workspace {
   id: ID!
   channelId: String!
   cliSessionId: String!
+  userId: String
   preview: String
   importance: String!
   status: String!
@@ -31,8 +32,15 @@ type Workspace {
   claudeSessionId: String
   createdAt: DateTime!
   cliSession: WorkspaceCliSession
+  user: WorkspaceUser
   sessionCount: Int!
   queuedRunConfig: JSON
+}
+
+type WorkspaceUser {
+  id: ID!
+  name: String!
+  avatarUrl: String
 }
 
 type WorkspaceCliSession {

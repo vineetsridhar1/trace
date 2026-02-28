@@ -387,6 +387,11 @@ function AppContent() {
     return selected?.queuedRunConfig ?? null;
   }, [workspaces, selectedWorkspaceId]);
 
+  const selectedWorkspaceUserId = useMemo(() => {
+    const selected = workspaces.find((ws) => ws.id === selectedWorkspaceId);
+    return selected?.userId ?? null;
+  }, [workspaces, selectedWorkspaceId]);
+
   const selectedTicket = useMemo(() => {
     if (!selectedWorkspaceId) return null;
     for (const col of kanbanColumns) {
@@ -939,6 +944,7 @@ function AppContent() {
       updateQueuedRunConfig: handleUpdateQueuedRunConfig,
       isClaudeRunning,
       workspaceStatus: selectedWorkspaceStatus,
+      workspaceUserId: selectedWorkspaceUserId,
       queuedRunConfig: selectedWorkspaceQueuedRunConfig,
       selectedTicket,
       isFullscreen,
@@ -973,7 +979,7 @@ function AppContent() {
       closeThreadPanel, toggleReadGroup, toggleTurnGroup, setHasWorktree, setThreadWidth,
       loadSessionEvents, deleteWorktree, switchSession, clearSession,
       channelTickets, handleSetTicketDependencies, handleRemoveTicketDependency, handleUpdateQueuedRunConfig,
-      isClaudeRunning, selectedWorkspaceStatus, selectedWorkspaceQueuedRunConfig, selectedTicket,
+      isClaudeRunning, selectedWorkspaceStatus, selectedWorkspaceUserId, selectedWorkspaceQueuedRunConfig, selectedTicket,
       isFullscreen, scriptsAvailable, hasSetupScript, hasRunScript, dragging,
       handleCloseThread, handleDeleteWorktree, handleInitializeTerminals, handleRerunScript, handleStopScript,
       startDragging, enterFullscreen, exitFullscreen,
@@ -1040,6 +1046,7 @@ function AppContent() {
                 ) : (
                   <MessagePanel
                     panelTitle={panelTitle}
+                    channelId={activeChannelId}
                     channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
                     workspaces={workspaces}
                     selectedWorkspaceId={selectedWorkspaceId}

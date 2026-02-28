@@ -1,0 +1,32 @@
+extend type Query {
+  channelMessages(channelId: ID!, limit: Int, offset: Int): ChannelMessageConnection!
+}
+
+extend type Mutation {
+  sendChannelMessage(channelId: ID!, content: String!): ChannelMessage!
+}
+
+extend type Subscription {
+  channelMessageCreated(channelId: ID!): ChannelMessage!
+}
+
+type ChannelMessage {
+  id: ID!
+  channelId: String!
+  content: String!
+  createdAt: DateTime!
+  author: ChannelMessageAuthor!
+}
+
+type ChannelMessageAuthor {
+  id: ID!
+  name: String!
+  avatarUrl: String
+}
+
+type ChannelMessageConnection {
+  messages: [ChannelMessage!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}

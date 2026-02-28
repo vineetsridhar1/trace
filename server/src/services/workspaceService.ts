@@ -11,6 +11,7 @@ type WorkspaceWithSessions = Prisma.WorkspaceGetPayload<{
 type FeedWorkspace = Prisma.WorkspaceGetPayload<{
   include: {
     cliSession: { select: { sessionId: true; cwd: true; status: true } };
+    user: { select: { id: true; name: true; avatarUrl: true } };
     _count: { select: { sessions: true } };
   };
 }>;
@@ -79,6 +80,7 @@ export async function getWorkspaceByIdForFeed(workspaceId: string): Promise<Feed
     where: { id: workspaceId },
     include: {
       cliSession: { select: { sessionId: true, cwd: true, status: true } },
+      user: { select: { id: true, name: true, avatarUrl: true } },
       _count: { select: { sessions: true } },
     },
   });
@@ -107,6 +109,7 @@ export async function getWorkspacesByChannel(
       take: limit,
       include: {
         cliSession: { select: { sessionId: true, cwd: true, status: true } },
+        user: { select: { id: true, name: true, avatarUrl: true } },
         _count: { select: { sessions: true } },
       },
     }),
@@ -412,6 +415,13 @@ export async function getSessionsByWorkspace(workspaceId: string) {
     where: { workspaceId },
     orderBy: { createdAt: 'asc' },
     include: { _count: { select: { events: true } } },
+  });
+}
+
+export async function claimWorkspace(workspaceId: string, userId: string) {
+  return prisma.workspace.update({
+    where: { id: workspaceId },
+    data: { userId },
   });
 }
 
