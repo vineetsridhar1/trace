@@ -8,7 +8,7 @@ export type BoardQueryVariables = Types.Exact<{
 }>;
 
 
-export type BoardQuery = { __typename?: 'Query', board: Array<{ __typename?: 'KanbanColumn', id: string, channelId: string, name: string, slug: string, color?: string | null, sortOrder: number, tickets: Array<{ __typename?: 'Ticket', id: string, workspaceId: string, columnId: string, title: string, description?: string | null, solutionApproach?: string | null, status: string, metadata?: unknown | null, sortOrder: number, createdAt: string, updatedAt: string, workspace?: { __typename?: 'TicketWorkspace', id: string, branch?: string | null, status: string, createdAt: string, attachments: Array<{ __typename?: 'TicketAttachment', id: string, key: string, filename: string, contentType: string, url: string }> } | null }> }> };
+export type BoardQuery = { __typename?: 'Query', board: Array<{ __typename?: 'KanbanColumn', id: string, channelId: string, name: string, slug: string, color?: string | null, sortOrder: number, tickets: Array<{ __typename?: 'Ticket', id: string, workspaceId: string, columnId: string, title: string, description?: string | null, solutionApproach?: string | null, status: string, metadata?: unknown | null, sortOrder: number, createdAt: string, updatedAt: string, workspace?: { __typename?: 'TicketWorkspace', id: string, branch?: string | null, prUrl?: string | null, status: string, createdAt: string, attachments: Array<{ __typename?: 'TicketAttachment', id: string, key: string, filename: string, contentType: string, url: string }> } | null }> }> };
 
 export type MoveTicketMutationVariables = Types.Exact<{
   ticketId: Types.Scalars['ID']['input'];
@@ -44,6 +44,7 @@ export const BoardDocument = gql`
       workspace {
         id
         branch
+        prUrl
         status
         createdAt
         attachments {

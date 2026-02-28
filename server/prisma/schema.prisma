@@ -134,6 +134,7 @@ model Workspace {
   status          String   @default("pending")
   summary         String?
   branch          String?
+  prUrl           String?  @map("pr_url")
   claudeSessionId String?  @map("claude_session_id")
   createdAt       DateTime @default(now()) @map("created_at")
 

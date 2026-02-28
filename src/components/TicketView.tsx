@@ -34,7 +34,7 @@ const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = 
   high: { label: 'High', className: 'text-red-400 bg-red-400/10' },
 };
 
-export function TicketView({ ticket, prUrl }: { ticket: KanbanTicket; prUrl: string | null }) {
+export function TicketView({ ticket }: { ticket: KanbanTicket }) {
   const statusConfig = STATUS_CONFIG[ticket.workspace.status] ?? STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
   const attachments = ticket.workspace.attachments ?? [];
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -61,10 +61,10 @@ export function TicketView({ ticket, prUrl }: { ticket: KanbanTicket; prUrl: str
             {ticket.workspace.branch}
           </span>
         )}
-        {prUrl && (
+        {ticket.workspace.prUrl && (
           <button
             type="button"
-            onClick={() => window.open(prUrl, '_blank')}
+            onClick={() => window.open(ticket.workspace.prUrl!, '_blank')}
             className="inline-flex items-center gap-1 rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] font-medium text-[#7aa2f7] hover:bg-[#292e42] transition-colors"
           >
             PR

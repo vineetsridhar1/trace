@@ -581,6 +581,7 @@ export type TicketWorkspace = {
   branch?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
+  prUrl?: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
 };
 
@@ -1038,6 +1039,7 @@ export type TicketWorkspaceResolvers<ContextType = any, ParentType extends Resol
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 

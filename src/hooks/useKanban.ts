@@ -27,6 +27,7 @@ const GQL_BOARD = gql`
         workspace {
           id
           branch
+          prUrl
           status
           createdAt
           attachments {

@@ -30,6 +30,21 @@ export const checkPRStatuses: NonNullable<QueryResolvers['checkPRStatuses']> = a
 
   const results = await checkPRsForBranches(dbUser.githubAccessToken, repoOwner, repoName.replace(/\.git$/, ''), branches);
 
+  // Persist PR URLs on workspace records so they survive app restarts
+  const branchesWithUrls = branches.filter((b) => results[b]?.prUrl);
+  if (branchesWithUrls.length > 0) {
+    const workspaces = await prisma.workspace.findMany({
+      where: { channelId, branch: { in: branchesWithUrls } },
+      select: { id: true, branch: true, prUrl: true },
+    });
+    for (const ws of workspaces) {
+      const url = results[ws.branch!]?.prUrl;
+      if (url && ws.prUrl !== url) {
+        await prisma.workspace.update({ where: { id: ws.id }, data: { prUrl: url } });
+      }
+    }
+  }
+
   return branches.map((branch) => ({
     branch,
     hasPR: results[branch]?.hasPR ?? false,

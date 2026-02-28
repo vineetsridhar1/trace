@@ -259,6 +259,7 @@ type TicketWorkspace {
   branch: String
   createdAt: DateTime!
   id: ID!
+  prUrl: String
   status: String!
 }
 

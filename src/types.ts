@@ -197,6 +197,7 @@ export interface KanbanTicket {
   workspace: {
     id: string;
     branch: string | null;
+    prUrl: string | null;
     status: string;
     createdAt: string;
     attachments?: TicketAttachment[];

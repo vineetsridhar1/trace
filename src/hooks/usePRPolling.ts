@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { gql } from '@apollo/client';
 import type { Workspace, TicketStatus } from '../types';
 import { useCheckPrStatusesLazyQuery } from './__generated__/usePRPolling.generated';
@@ -28,7 +28,6 @@ export function usePRPolling({
   const updateStatusRef = useRef(updateWorkspaceStatus);
   updateStatusRef.current = updateWorkspaceStatus;
 
-  const [prUrlMap, setPrUrlMap] = useState<Record<string, string>>({});
   const [executeCheckPRStatuses] = useCheckPrStatusesLazyQuery();
 
   const checkPRs = useCallback(async () => {
@@ -55,14 +54,9 @@ export function usePRPolling({
 
       const prMap = new Map(data.checkPRStatuses.map((pr) => [pr.branch, pr]));
 
-      const newUrls: Record<string, string> = {};
       for (const ws of candidates) {
         const pr = prMap.get(ws.branch);
         if (!pr) continue;
-
-        if (pr.prUrl) {
-          newUrls[ws.id] = pr.prUrl;
-        }
 
         if (ws.status === 'completed' && pr.hasPR) {
           await updateStatusRef.current(ws.id, 'review');
@@ -72,7 +66,6 @@ export function usePRPolling({
           await updateStatusRef.current(ws.id, 'completed');
         }
       }
-      setPrUrlMap((prev) => ({ ...prev, ...newUrls }));
     } catch {
       // Silent failure — PR polling is best-effort
     }
@@ -90,5 +83,5 @@ export function usePRPolling({
     };
   }, [checkPRs]);
 
-  return { triggerCheck: checkPRs, prUrlMap };
+  return { triggerCheck: checkPRs };
 }

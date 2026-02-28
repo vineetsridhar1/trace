@@ -64,7 +64,6 @@ export function ThreadPanel() {
     onCloseAllTerminals,
     onAddTerminal,
     onOpenSettings,
-    prUrl,
   } = useThreadContext();
 
   const {
@@ -207,7 +206,7 @@ export function ThreadPanel() {
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
           {viewMode === "ticket" && ticket ? (
-            <TicketView ticket={ticket} prUrl={prUrl} />
+            <TicketView ticket={ticket} />
           ) : viewMode === "files" ? (
             <WorktreeChanges workspaceId={selectedWorkspaceId} baseBranch={baseBranch} />
           ) : viewMode === "terminal" ? null : (
