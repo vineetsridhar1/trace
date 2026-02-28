@@ -50,6 +50,8 @@ interface MessageItemProps {
   needsAttention?: boolean;
   onOpenWorkspace: (workspace: Workspace) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
+  onDeleteWorktree?: (workspaceId: string) => void;
+  hasActiveWorktree?: boolean;
   dimmed?: boolean;
 }
 
@@ -60,6 +62,8 @@ export const MessageItem = memo(function MessageItem({
   needsAttention,
   onOpenWorkspace,
   onDeleteWorkspace,
+  onDeleteWorktree,
+  hasActiveWorktree,
   dimmed,
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
@@ -94,6 +98,28 @@ export const MessageItem = memo(function MessageItem({
       {/* Status icon */}
       <StatusIcon status={status} />
 
+      {/* Delete worktree button for merged items with active worktrees */}
+      {hasActiveWorktree && onDeleteWorktree && (
+        <div
+          role="button"
+          tabIndex={-1}
+          title="Delete worktree"
+          className="flex-shrink-0 cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteWorktree(workspace.id);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              onDeleteWorktree(workspace.id);
+            }
+          }}
+        >
+          <FiTrash2 className="h-3 w-3" />
+        </div>
+      )}
+
       {/* Delete button (hover only) */}
       {onDeleteWorkspace && (
         <div
@@ -125,7 +151,9 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.isSelected === next.isSelected &&
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
+    prev.hasActiveWorktree === next.hasActiveWorktree &&
     prev.onOpenWorkspace === next.onOpenWorkspace &&
-    prev.onDeleteWorkspace === next.onDeleteWorkspace
+    prev.onDeleteWorkspace === next.onDeleteWorkspace &&
+    prev.onDeleteWorktree === next.onDeleteWorktree
   );
 }

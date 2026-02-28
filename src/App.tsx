@@ -215,6 +215,7 @@ function AppContent() {
   const [settingsChannelId, setSettingsChannelId] = useState<string | null>(null);
   const [createChannelType, setCreateChannelType] = useState<ChannelType | null>(null);
   const [showCreateServer, setShowCreateServer] = useState(false);
+  const [worktreeWorkspaceIds, setWorktreeWorkspaceIds] = useState<Set<string>>(new Set());
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const autoRunRef = useRef<((workspaceId: string, runConfig: unknown) => void) | null>(null);
 
@@ -225,6 +226,38 @@ function AppContent() {
       void Notification.requestPermission();
     }
   }, []);
+
+  // Check worktree existence for merged workspaces
+  useEffect(() => {
+    const repoPath = getChannelRepoPath();
+    if (!repoPath || !window.traceAPI?.checkWorktreeExists) return;
+
+    const mergedWorkspaces = workspaces.filter((ws) => ws.status === 'merged');
+    if (mergedWorkspaces.length === 0) {
+      setWorktreeWorkspaceIds((prev) => prev.size === 0 ? prev : new Set());
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const ids = new Set<string>();
+      for (const ws of mergedWorkspaces) {
+        try {
+          const result = await window.traceAPI.checkWorktreeExists(ws.id, repoPath);
+          if (result.success && result.exists) {
+            ids.add(ws.id);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (!cancelled) {
+        setWorktreeWorkspaceIds(ids);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [workspaces, getChannelRepoPath]);
 
   const handleNeedsAttention = useCallback(
     (workspaceId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => {
@@ -809,6 +842,41 @@ function AppContent() {
     void deleteWorktree((workspaceId) => void updateWorkspaceStatus(workspaceId, 'completed'));
   }, [killTerminalsForWorkspace, selectedWorkspaceId, deleteWorktree, updateWorkspaceStatus]);
 
+  const handleDeleteWorktreeById = useCallback(
+    async (workspaceId: string) => {
+      const repoPath = getChannelRepoPath();
+      if (!repoPath) return;
+
+      const confirmed = window.confirm(
+        'Delete this worktree? This removes local files for this workspace.',
+      );
+      if (!confirmed) return;
+
+      killTerminalsForWorkspace(workspaceId);
+      void window.traceAPI.releasePorts(workspaceId);
+
+      try {
+        const result = await window.traceAPI.deleteWorktree(workspaceId, repoPath);
+        if (!result.success) {
+          console.error('Failed to delete worktree:', result.error);
+          return;
+        }
+        setWorktreeWorkspaceIds((prev) => {
+          const next = new Set(prev);
+          next.delete(workspaceId);
+          return next;
+        });
+        // Update hasWorktree if this is the selected workspace
+        if (workspaceId === selectedWorkspaceId) {
+          setHasWorktree(false);
+        }
+      } catch (err) {
+        console.error('Failed to delete worktree:', err);
+      }
+    },
+    [getChannelRepoPath, killTerminalsForWorkspace, selectedWorkspaceId, setHasWorktree],
+  );
+
   const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
   const hasSetupScript = Boolean(enrichedActiveChannel?.setupScript?.trim());
   const hasRunScript = Boolean(enrichedActiveChannel?.runScript?.trim());
@@ -976,6 +1044,8 @@ function AppContent() {
                     attentionWorkspaceIds={attentionWorkspaceIds}
                     onOpenWorkspace={handleOpenWorkspace}
                     onDeleteWorkspace={handleDeleteWorkspace}
+                    onDeleteWorktree={handleDeleteWorktreeById}
+                    worktreeWorkspaceIds={worktreeWorkspaceIds}
                     middlePanelView={middlePanelView}
                     kanbanColumns={kanbanColumns}
                     kanbanLoading={kanbanLoading}
