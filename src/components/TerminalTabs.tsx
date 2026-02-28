@@ -121,8 +121,8 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
         </div>
       )}
 
-      {/* Run script action bar — only when script is configured */}
-      {hasRunScript && activeTabId === runTab?.terminalId && (
+      {/* Run script action bar — only when script has been executed (has command) */}
+      {hasRunScript && runTab?.command && activeTabId === runTab?.terminalId && (
         <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
           {runScriptRunning ? (
             <Tooltip text="Stop script">
@@ -136,14 +136,14 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
               </button>
             </Tooltip>
           ) : (
-            <Tooltip text="Run script">
+            <Tooltip text="Re-run script">
               <button
                 type="button"
                 onClick={onRunScript}
                 className="flex items-center gap-1.5 rounded border border-[#292e42] px-2 py-1 text-xs text-green-400 transition-colors hover:bg-[#292e42] hover:text-green-300"
               >
-                <FiPlay className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Run</span>
+                <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Re-run</span>
               </button>
             </Tooltip>
           )}
