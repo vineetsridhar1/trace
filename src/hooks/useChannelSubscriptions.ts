@@ -200,6 +200,19 @@ export function useChannelSubscriptions({
       if (refreshWorkspaces && activeChannelId) {
         setTimeout(() => void refreshWorkspaces(activeChannelId), 500);
       }
+    } else {
+      // Optimistically mark the cliSession as active when a non-Stop event
+      // arrives. After PR #45 linked cliSessionId to the real CLI session,
+      // the status stays 'stopped' from the previous run until the server's
+      // workspaceUpserted subscription arrives with the new session — causing
+      // isClaudeRunning to briefly (or permanently) return false.
+      const existing = workspacesRef.current.find((item) => item.id === payload.workspaceId);
+      if (existing && existing.cliSession.status === 'stopped') {
+        upsertWorkspace({
+          ...existing,
+          cliSession: { ...existing.cliSession, status: 'active' },
+        });
+      }
     }
 
     if (payload.event.hookEventName === 'AskUserQuestion') {
