@@ -8,12 +8,20 @@ import { LoginScreen } from './components/LoginScreen';
 import './index.css';
 
 function AuthGate() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isRetrying } = useAuth();
 
   if (isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1a2e', color: '#888' }}>
         Loading...
+      </div>
+    );
+  }
+
+  if (isRetrying) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1a2e', color: '#888' }}>
+        Reconnecting to server...
       </div>
     );
   }
