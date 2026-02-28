@@ -100,6 +100,7 @@ interface UseChannelSubscriptionsOptions {
   onTicketReadyToRun?: (workspaceId: string, runConfig: unknown) => void;
   onWorkspaceCompleted?: () => void;
   refreshWorkspaces?: (channelId: string) => Promise<void>;
+  onActiveRunStopped?: (workspaceId: string) => void;
 }
 
 export function useChannelSubscriptions({
@@ -117,6 +118,7 @@ export function useChannelSubscriptions({
   onTicketReadyToRun,
   onWorkspaceCompleted,
   refreshWorkspaces,
+  onActiveRunStopped,
 }: UseChannelSubscriptionsOptions) {
   const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
 
@@ -181,6 +183,7 @@ export function useChannelSubscriptions({
     void reportClaudeActivity(payload.workspaceId, payload.event.hookEventName, payload.event.cliSessionId);
 
     if (payload.event.hookEventName === 'Stop') {
+      onActiveRunStopped?.(payload.workspaceId);
       const existing = workspacesRef.current.find((item) => item.id === payload.workspaceId);
       if (existing && existing.cliSession.status !== 'stopped') {
         upsertWorkspace({
@@ -228,7 +231,7 @@ export function useChannelSubscriptions({
     if (currentSessionId && payload.event.sessionId !== currentSessionId) return;
 
     appendSessionEvent(payload.event as ServerEvent);
-  }, [sessionEventData, activeChannelId, reportClaudeActivity, workspacesRef, upsertWorkspace, selectedWorkspaceIdRef, activeSessionIdRef, onNeedsAttention, appendSessionEvent, refreshWorkspaces]);
+  }, [sessionEventData, activeChannelId, reportClaudeActivity, workspacesRef, upsertWorkspace, selectedWorkspaceIdRef, activeSessionIdRef, onNeedsAttention, appendSessionEvent, refreshWorkspaces, onActiveRunStopped]);
 
   // --- Session event updated ---
   const { data: sessionEventUpdatedData } = useSubscription(SESSION_EVENT_UPDATED_SUBSCRIPTION, {

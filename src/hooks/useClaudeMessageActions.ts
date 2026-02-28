@@ -124,6 +124,7 @@ export function useClaudeWorkspaceActions({
   const [executeUpdatePreview] = useUpdateWorkspacePreviewMutation();
 
   const spawnedWorkspaceIdsRef = useRef(new Set<string>());
+  const [activeRunWorkspaceIds, setActiveRunWorkspaceIds] = useState(() => new Set<string>());
   const [pendingRunWorkspaceId, setPendingRunWorkspaceId] = useState<string | null>(
     null,
   );
@@ -135,12 +136,14 @@ export function useClaudeWorkspaceActions({
   const spawnClaudeForWorkspace = useCallback(
     async (workspaceId: string, prompt: string, options: SpawnOptions) => {
       spawnedWorkspaceIdsRef.current.add(workspaceId);
+      setActiveRunWorkspaceIds(prev => { const next = new Set(prev); next.add(workspaceId); return next; });
       try {
         const repoPath = getChannelRepoPath();
         const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions, options.permissionMode);
 
         if (!result.success) {
           spawnedWorkspaceIdsRef.current.delete(workspaceId);
+          setActiveRunWorkspaceIds(prev => { const next = new Set(prev); next.delete(workspaceId); return next; });
           console.error(`${options.errorPrefix}:`, result.error);
           return false;
         }
@@ -156,6 +159,7 @@ export function useClaudeWorkspaceActions({
         return true;
       } catch {
         spawnedWorkspaceIdsRef.current.delete(workspaceId);
+        setActiveRunWorkspaceIds(prev => { const next = new Set(prev); next.delete(workspaceId); return next; });
         console.error(options.errorPrefix);
         return false;
       }
@@ -523,6 +527,15 @@ export function useClaudeWorkspaceActions({
     return spawnedWorkspaceIdsRef.current.has(workspaceId);
   }, []);
 
+  const clearActiveRun = useCallback((workspaceId: string) => {
+    setActiveRunWorkspaceIds(prev => {
+      if (!prev.has(workspaceId)) return prev;
+      const next = new Set(prev);
+      next.delete(workspaceId);
+      return next;
+    });
+  }, []);
+
   return {
     pendingRunWorkspaceId,
     pendingRunInitialPrompt,
@@ -540,5 +553,7 @@ export function useClaudeWorkspaceActions({
     markMerged,
     clearPendingRun,
     isWorkspaceSpawned,
+    activeRunWorkspaceIds,
+    clearActiveRun,
   };
 }
