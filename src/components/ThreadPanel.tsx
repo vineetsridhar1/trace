@@ -85,7 +85,6 @@ export function ThreadPanel() {
     stopClaude,
     sendThreadMessage,
     sendPlanResponse,
-    mergeToMain,
     markMerged,
     clearPendingRun,
   } = useClaudeActions();
@@ -202,7 +201,6 @@ export function ThreadPanel() {
           onDeleteWorktree={onDeleteWorktree}
           onEnterFullscreen={onEnterFullscreen}
           onExitFullscreen={onExitFullscreen}
-          onMergeToMain={() => void mergeToMain()}
           onMarkMerged={() => void markMerged()}
           sessions={sessions}
           activeSessionId={activeSessionId}
