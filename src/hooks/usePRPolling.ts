@@ -38,7 +38,7 @@ export function usePRPolling({
     const workspaces = workspacesRef.current;
     const candidates = workspaces.filter(
       (ws): ws is Workspace & { branch: string } =>
-        (ws.status === 'completed' || ws.status === 'review')
+        (ws.status === 'completed' || ws.status === 'review' || ws.status === 'merged')
         && typeof ws.branch === 'string'
         && ws.branch.length > 0,
     );
