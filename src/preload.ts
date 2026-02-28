@@ -153,4 +153,10 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   githubLogin: () =>
     ipcRenderer.invoke('github-login') as Promise<{ success: boolean; token?: string; user?: { id: string; email: string; name: string; avatarUrl: string | null }; error?: string }>,
+
+  checkMainStatus: (repoPath: string, baseBranch: string) =>
+    ipcRenderer.invoke('check-main-status', repoPath, baseBranch) as Promise<{ success: boolean; isUpToDate?: boolean; commitsBehind?: number; localSha?: string; remoteSha?: string; error?: string }>,
+
+  pullMain: (repoPath: string, baseBranch: string) =>
+    ipcRenderer.invoke('pull-main', repoPath, baseBranch) as Promise<{ success: boolean; error?: string }>,
 });
