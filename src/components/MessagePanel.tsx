@@ -77,6 +77,7 @@ interface MessagePanelProps {
   isFullscreen?: boolean;
   teamProjects?: Channel[];
   onSwitchChannel?: (channelId: string) => void;
+  workspacesWithRunningProcesses?: Set<string>;
 }
 
 export function MessagePanel({
@@ -97,6 +98,7 @@ export function MessagePanel({
   isFullscreen,
   teamProjects = [],
   onSwitchChannel,
+  workspacesWithRunningProcesses,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -183,6 +185,7 @@ export function MessagePanel({
             onDeleteWorkspace={showDelete ? onDeleteWorkspace : undefined}
             onDeleteWorktree={workspace.status === 'merged' ? onDeleteWorktree : undefined}
             hasActiveWorktree={worktreeWorkspaceIds?.has(workspace.id)}
+            hasRunningProcess={workspacesWithRunningProcesses?.has(workspace.id)}
             dimmed={workspace.status === 'merged'}
           />
         ))}

@@ -68,6 +68,7 @@ export interface TraceAPI {
   writePty: (terminalId: string, data: string) => Promise<{ success: boolean }>;
   resizePty: (terminalId: string, cols: number, rows: number) => Promise<{ success: boolean }>;
   killPty: (terminalId: string) => Promise<{ success: boolean }>;
+  hasPty: (terminalId: string) => Promise<{ success: boolean; exists: boolean }>;
   onPtyData: (callback: (terminalId: string, data: string) => void) => () => void;
   onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
   getWorktreeDiff: (workspaceId: string, baseBranch: string) => Promise<WorktreeDiffResult>;

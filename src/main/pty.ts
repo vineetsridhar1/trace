@@ -72,6 +72,10 @@ export function getPtyCwd(terminalId: string): string | undefined {
   return lastCwdByTerminalId.get(terminalId);
 }
 
+export function hasPty(terminalId: string): boolean {
+  return sessions.has(terminalId);
+}
+
 export function killAllPtys(): void {
   for (const [id] of sessions) {
     killPty(id);

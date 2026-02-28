@@ -84,6 +84,9 @@ contextBridge.exposeInMainWorld('traceAPI', {
   killPty: (terminalId: string) =>
     ipcRenderer.invoke('pty-kill', terminalId),
 
+  hasPty: (terminalId: string) =>
+    ipcRenderer.invoke('pty-has', terminalId),
+
   onPtyData: (callback: (terminalId: string, data: string) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, terminalId: string, data: string) =>
       callback(terminalId, data);

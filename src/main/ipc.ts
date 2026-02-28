@@ -4,7 +4,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
-import { createPty, writePty, resizePty, killPty, getPtyCwd } from './pty';
+import { createPty, writePty, resizePty, killPty, getPtyCwd, hasPty } from './pty';
 import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
 import { getChannelLocalConfig, setChannelLocalConfig, getAllChannelLocalConfigs, deleteChannelLocalConfig } from './localConfig';
@@ -37,6 +37,7 @@ const LIST_REPO_BRANCHES_CHANNEL = 'list-repo-branches';
 const CHECK_BRANCHES_MERGED_CHANNEL = 'check-branches-merged';
 const WATCH_BASE_BRANCH_CHANNEL = 'watch-base-branch';
 const UNWATCH_BASE_BRANCH_CHANNEL = 'unwatch-base-branch';
+const PTY_HAS_CHANNEL = 'pty-has';
 const GITHUB_LOGIN_CHANNEL = 'github-login';
 
 let mainWindowRef: BrowserWindow | null = null;
@@ -85,6 +86,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(CHECK_BRANCHES_MERGED_CHANNEL);
   ipcMain.removeHandler(WATCH_BASE_BRANCH_CHANNEL);
   ipcMain.removeHandler(UNWATCH_BASE_BRANCH_CHANNEL);
+  ipcMain.removeHandler(PTY_HAS_CHANNEL);
   ipcMain.removeHandler(GITHUB_LOGIN_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string) => {
@@ -195,6 +197,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(PTY_KILL_CHANNEL, (_event, terminalId: string) => {
     return { success: killPty(terminalId) };
+  });
+
+  ipcMain.handle(PTY_HAS_CHANNEL, (_event, terminalId: string) => {
+    return { success: true, exists: hasPty(terminalId) };
   });
 
   ipcMain.handle(GET_WORKTREE_DIFF_CHANNEL, async (_event, workspaceId: string, baseBranch: string) => {

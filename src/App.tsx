@@ -183,6 +183,10 @@ function AppContent() {
     killTerminal,
     addTerminal,
     runAllScripts,
+    detachAll: detachAllTerminals,
+    reattach: reattachTerminals,
+    runningPtyIds,
+    workspacesWithRunningProcesses,
   } = useStartupTerminals();
 
   const {
@@ -570,8 +574,9 @@ function AppContent() {
     if (activeChannelId) {
       void refreshWorkspaces(activeChannelId);
       void fetchBoard(activeChannelId);
+      reattachTerminals();
     }
-  }, [activeChannelId, refreshWorkspaces, fetchBoard]);
+  }, [activeChannelId, refreshWorkspaces, fetchBoard, reattachTerminals]);
 
   // Fetch AI chats when server changes
   useEffect(() => {
@@ -608,9 +613,9 @@ function AppContent() {
       setMiddlePanelView('chat');
       closeThreadPanel();
       setChannelWidth(220);
-      killAllTerminals();
+      detachAllTerminals();
     },
-    [switchChannel, clearWorkspaces, clearBoard, closeThreadPanel, killAllTerminals, selectedWorkspaceId],
+    [switchChannel, clearWorkspaces, clearBoard, closeThreadPanel, detachAllTerminals, selectedWorkspaceId],
   );
 
 
@@ -953,7 +958,7 @@ function AppContent() {
       onInitializeTerminals: (): void => { void handleInitializeTerminals(); },
       onRerunScript: (tabName: string): void => { void handleRerunScript(tabName); },
       onStopScript: (tabName: string): void => { void handleStopScript(tabName); },
-      runScriptRunning: terminalList.some((t) => t.name === 'Run' && Boolean(t.command)),
+      runScriptRunning: terminalList.some((t) => t.name === 'Run' && runningPtyIds.has(t.terminalId)),
       onStartDrag: () => startDragging('right'),
       onEnterFullscreen: (): void => { void enterFullscreen(); },
       onExitFullscreen: exitFullscreen,
@@ -982,6 +987,7 @@ function AppContent() {
       activeChannelBaseBranch, terminalList, allTerminalEntries, terminalsInitialized, activeTabId,
       terminalsCwd, activeChannelRepoPath, setActiveTabId,
       killTerminal, killTerminalsForWorkspace, addTerminal, handleOpenSettings, activeChannelId,
+      runningPtyIds,
     ],
   );
 
@@ -1058,6 +1064,7 @@ function AppContent() {
                     isFullscreen={isFullscreen}
                     teamProjects={teamProjects}
                     onSwitchChannel={handleSwitchChannel}
+                    workspacesWithRunningProcesses={workspacesWithRunningProcesses}
                   />
                 )}
               </div>
