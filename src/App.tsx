@@ -794,15 +794,14 @@ function AppContent() {
     const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedWorkspaceId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
+    const env: Record<string, string> = {
+      REPO_FOLDER: worktreeResult.worktreePath,
+    };
     const portResult = await window.traceAPI.allocatePorts(selectedWorkspaceId, 10);
-    let env: Record<string, string> | undefined;
     if (portResult.success && portResult.ports) {
       const ports = portResult.ports;
-      env = {
-        PORT: String(ports[0]),
-        TRACE_BASE_PORT: String(ports[0]),
-        REPO_FOLDER: worktreeResult.worktreePath,
-      };
+      env.PORT = String(ports[0]);
+      env.TRACE_BASE_PORT = String(ports[0]);
       for (let i = 0; i < ports.length; i += 1) {
         env[`TRACE_PORT_${i}`] = String(ports[i]);
       }
@@ -820,18 +819,17 @@ function AppContent() {
     const script = tabName === 'Setup' ? channel?.setupScript : channel?.runScript;
     if (!script?.trim()) return;
 
-    let env: Record<string, string> | undefined;
+    const env: Record<string, string> = {
+      REPO_FOLDER: worktreeResult.worktreePath,
+    };
     if (tabName === 'Run') {
       // Release old ports, allocate fresh ones
       await window.traceAPI.releasePorts(selectedWorkspaceId);
       const portResult = await window.traceAPI.allocatePorts(selectedWorkspaceId, 10);
       if (portResult.success && portResult.ports) {
         const ports = portResult.ports;
-        env = {
-          PORT: String(ports[0]),
-          TRACE_BASE_PORT: String(ports[0]),
-          REPO_FOLDER: worktreeResult.worktreePath,
-        };
+        env.PORT = String(ports[0]);
+        env.TRACE_BASE_PORT = String(ports[0]);
         for (let i = 0; i < ports.length; i += 1) {
           env[`TRACE_PORT_${i}`] = String(ports[i]);
         }
@@ -841,11 +839,11 @@ function AppContent() {
     rerunTab(tabName, script, env);
   }, [activeChannelId, enrichedChannels, repoPath, rerunTab, selectedWorkspaceId]);
 
-  const handleStopScript = useCallback(async (tabName: string) => {
-    if (tabName === 'Run' && selectedWorkspaceId) {
-      await window.traceAPI.releasePorts(selectedWorkspaceId);
-    }
+  const handleStopScript = useCallback((tabName: string) => {
     stopTab(tabName);
+    if (tabName === 'Run' && selectedWorkspaceId) {
+      void window.traceAPI.releasePorts(selectedWorkspaceId);
+    }
   }, [selectedWorkspaceId, stopTab]);
 
   // Initialize terminal tabs (and run setup script) when a worktree is detected
@@ -984,7 +982,7 @@ function AppContent() {
       onDeleteWorktree: handleDeleteWorktree,
       onInitializeTerminals: (): void => { void handleInitializeTerminals(); },
       onRerunScript: (tabName: string): void => { void handleRerunScript(tabName); },
-      onStopScript: (tabName: string): void => { void handleStopScript(tabName); },
+      onStopScript: (tabName: string): void => { handleStopScript(tabName); },
       runScriptRunning: terminalList.some((t) => t.name === 'Run' && runningPtyIds.has(t.terminalId)),
       onStartDrag: () => startDragging('right'),
       onEnterFullscreen: (): void => { void enterFullscreen(); },

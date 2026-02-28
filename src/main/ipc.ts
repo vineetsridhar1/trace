@@ -4,7 +4,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
 import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
-import { createPty, writePty, resizePty, killPty, getPtyCwd, hasPty } from './pty';
+import { createPty, writePty, resizePty, killPty, getPtyCwd, getPtyEnv, hasPty } from './pty';
 import { allocatePorts, releasePorts } from './ports';
 import { getWorktreeDiff } from './diff';
 import { getChannelLocalConfig, setChannelLocalConfig, getAllChannelLocalConfigs, deleteChannelLocalConfig } from './localConfig';
@@ -173,7 +173,7 @@ export function registerIpcHandlers() {
       const cwd = getPtyCwd(terminalId);
       if (cwd) {
         try {
-          createPty(terminalId, cwd, mainWindowRef);
+          createPty(terminalId, cwd, mainWindowRef, getPtyEnv(terminalId));
           success = writePty(terminalId, data);
         } catch {
           success = false;
@@ -189,7 +189,7 @@ export function registerIpcHandlers() {
       const cwd = getPtyCwd(terminalId);
       if (cwd) {
         try {
-          createPty(terminalId, cwd, mainWindowRef);
+          createPty(terminalId, cwd, mainWindowRef, getPtyEnv(terminalId));
           success = resizePty(terminalId, cols, rows);
         } catch {
           success = false;
