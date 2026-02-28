@@ -168,7 +168,7 @@ export async function ingestEvent(payload: HookEvent) {
     },
     update: {
       lastSeenAt: new Date(),
-      ...(payload.hook_event_name === 'Stop' ? { status: 'stopped' } : {}),
+      status: payload.hook_event_name === 'Stop' ? 'stopped' : 'active',
       ...(payload.transcript_path ? { transcriptPath: payload.transcript_path } : {}),
       ...(payload.cwd ? { cwd: payload.cwd } : {}),
       ...(payload.permission_mode ? { permissionMode: payload.permission_mode } : {}),
@@ -181,7 +181,10 @@ export async function ingestEvent(payload: HookEvent) {
   if (payload.session_id !== 'user-manual-input') {
     await prisma.workspace.update({
       where: { id: workspace.id },
-      data: { claudeSessionId: payload.session_id },
+      data: {
+        claudeSessionId: payload.session_id,
+        cliSessionId: payload.session_id,
+      },
     });
   }
 
