@@ -17,7 +17,7 @@ export function usePanelResize(
         setChannelWidth(clamp(event.clientX - leftOffset, 160, 400));
         return;
       }
-      setThreadWidth(clamp(window.innerWidth - event.clientX, 280, 600));
+      setThreadWidth(Math.max(window.innerWidth - event.clientX, 280));
     };
 
     const onMouseUp = () => setDragging(null);
