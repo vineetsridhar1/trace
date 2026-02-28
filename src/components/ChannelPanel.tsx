@@ -21,8 +21,6 @@ interface ChannelPanelProps {
   aiChats: AiChat[];
   activeAiChatId: string | null;
   onSwitchChannel: (id: string) => void;
-  onOpenSettings: (channelId: string) => void;
-  onRunStartupScripts: (channelId: string) => void;
   onCreateTeam: () => void;
   onCreateProject: () => void;
   onCreateChannel: () => void;
@@ -80,7 +78,7 @@ export function ChannelPanel({
           <Tooltip text="Create team" position="bottom">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onCreateTeam(); }}
+              onClick={onCreateTeam}
               className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
@@ -92,7 +90,7 @@ export function ChannelPanel({
           <Tooltip text="Create project" position="bottom">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onCreateProject(); }}
+              onClick={onCreateProject}
               className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
@@ -104,7 +102,7 @@ export function ChannelPanel({
           <Tooltip text="Create channel" position="bottom">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onCreateChannel(); }}
+              onClick={onCreateChannel}
               className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
@@ -116,7 +114,6 @@ export function ChannelPanel({
           <Tooltip text="New DM" position="bottom">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); }}
               className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
@@ -128,15 +125,13 @@ export function ChannelPanel({
           <Tooltip text="New AI chat" position="bottom">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onCreateAiChat(); }}
+              onClick={onCreateAiChat}
               className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#bb9af7]"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
             </button>
           </Tooltip>
         );
-      default:
-        return null;
     }
   };
 
@@ -237,12 +232,7 @@ export function ChannelPanel({
                 className="relative border-b border-[#292e42] bg-[#16161e] py-2 last:border-b-0"
                 whileDrag={{ zIndex: 50 }}
               >
-                <button
-                  type="button"
-                  aria-expanded={!isCollapsed}
-                  onClick={() => toggleCollapsed(id)}
-                  className="mb-1 flex w-full cursor-pointer items-center justify-between px-2"
-                >
+                <div className="mb-1 flex w-full items-center justify-between px-2">
                   <div className="flex items-center gap-1.5">
                     <Icon className="h-3 w-3 text-[#565f89]" />
                     <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">
@@ -251,11 +241,19 @@ export function ChannelPanel({
                   </div>
                   <div className="flex items-center gap-1">
                     {renderActionButton(id)}
-                    <FiChevronRight
-                      className={`h-3 w-3 text-[#565f89] transition-transform duration-150 ${!isCollapsed ? 'rotate-90' : ''}`}
-                    />
+                    <button
+                      type="button"
+                      aria-expanded={!isCollapsed}
+                      aria-label={`Toggle ${config.label}`}
+                      onClick={() => toggleCollapsed(id)}
+                      className="cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-[#292e42]"
+                    >
+                      <FiChevronRight
+                        className={`h-3 w-3 transition-transform duration-150 ${!isCollapsed ? 'rotate-90' : ''}`}
+                      />
+                    </button>
                   </div>
-                </button>
+                </div>
                 <div
                   className="grid transition-[grid-template-rows] duration-200 ease-out"
                   style={{ gridTemplateRows: isCollapsed ? '0fr' : '1fr' }}
