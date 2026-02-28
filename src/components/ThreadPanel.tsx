@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { AskUserQuestionNode, PlanReviewNode, SessionStatus } from "../types";
+import type {
+  AskUserQuestionNode,
+  PlanReviewNode,
+  SessionStatus,
+} from "../types";
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
 import { CollapsedTurnGroup } from "./CollapsedTurnGroup";
@@ -90,7 +94,9 @@ export function ThreadPanel() {
   } = useClaudeActions();
 
   const { user: authUser } = useAuth();
-  const isLockedByOther = Boolean(workspaceUserId && authUser && workspaceUserId !== authUser.id);
+  const isLockedByOther = Boolean(
+    workspaceUserId && authUser && workspaceUserId !== authUser.id,
+  );
 
   const lastUserMessageTime = useMemo(() => {
     for (let i = sessionNodes.length - 1; i >= 0; i--) {
@@ -140,7 +146,9 @@ export function ThreadPanel() {
     return null;
   }, [sessionNodes, isClaudeRunning]);
 
-  const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
+  const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(
+    null,
+  );
   const showQuestion =
     activeQuestionNode && activeQuestionNode.id !== dismissedQuestionId
       ? activeQuestionNode
@@ -162,10 +170,9 @@ export function ThreadPanel() {
   const [viewMode, setViewMode] = useState<ViewMode>("agent");
 
   useEffect(() => {
-    setViewMode(workspaceStatus === 'merged' ? 'ticket' : 'agent');
+    setViewMode(workspaceStatus === "merged" ? "ticket" : "agent");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
-
 
   const isOpen = selectedWorkspaceId !== null;
 
@@ -183,9 +190,11 @@ export function ThreadPanel() {
 
       <div
         id="thread-panel"
-        className={`flex shrink-0 min-h-0 flex-col overflow-hidden ${isOpen ? 'border-l border-[#292e42]' : ''} bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
+        className={`flex shrink-0 min-h-0 flex-col overflow-hidden ${isOpen ? "border-l border-[#292e42]" : ""} bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
         style={
-          isFullscreen ? { flex: "1 1 0%" } : { width: isOpen ? `${threadWidth}px` : 0 }
+          isFullscreen
+            ? { flex: "1 1 0%" }
+            : { width: isOpen ? `${threadWidth}px` : 0 }
         }
       >
         <ThreadHeader
@@ -212,7 +221,10 @@ export function ThreadPanel() {
           {viewMode === "ticket" && ticket ? (
             <TicketView ticket={ticket} />
           ) : viewMode === "files" ? (
-            <WorktreeChanges workspaceId={selectedWorkspaceId} baseBranch={baseBranch} />
+            <WorktreeChanges
+              workspaceId={selectedWorkspaceId}
+              baseBranch={baseBranch}
+            />
           ) : viewMode === "terminal" ? null : (
             <>
               <div
@@ -223,7 +235,9 @@ export function ThreadPanel() {
               >
                 <div className="thread-events-list">
                   {loadingOlderEvents && (
-                    <div className="py-2 text-center text-xs text-[#565f89]">Loading older events...</div>
+                    <div className="py-2 text-center text-xs text-[#565f89]">
+                      Loading older events...
+                    </div>
                   )}
                   <ThreadStatusMessage
                     status={sessionStatus}
@@ -235,7 +249,10 @@ export function ThreadPanel() {
                     return sessionNodes.map((node) => {
                       if (node.kind === "session-divider") {
                         return (
-                          <div key={node.id} className="my-3 flex items-center gap-3 px-2">
+                          <div
+                            key={node.id}
+                            className="my-3 flex items-center gap-3 px-2"
+                          >
                             <div className="h-px flex-1 bg-violet-500/20" />
                             <span className="text-[10px] font-medium uppercase tracking-wider text-violet-400/60">
                               New Context
@@ -245,15 +262,22 @@ export function ThreadPanel() {
                         );
                       }
                       if (node.kind === "readglob-group") {
-                        const groupAssistantText = node.events[0]?.lastAssistantMessage
-                          ? stripTraceInternal(node.events[0].lastAssistantMessage).trim()
-                          : '';
+                        const groupAssistantText = node.events[0]
+                          ?.lastAssistantMessage
+                          ? stripTraceInternal(
+                              node.events[0].lastAssistantMessage,
+                            ).trim()
+                          : "";
                         return (
                           <React.Fragment key={node.id}>
-                            {groupAssistantText && <AssistantTextRow text={groupAssistantText} />}
+                            {groupAssistantText && (
+                              <AssistantTextRow text={groupAssistantText} />
+                            )}
                             <ReadGlobGroup
                               node={node}
-                              isExpanded={Boolean(expandedReadGroupIds[node.id])}
+                              isExpanded={Boolean(
+                                expandedReadGroupIds[node.id],
+                              )}
                               onToggle={() => toggleReadGroup(node.id)}
                             />
                           </React.Fragment>
@@ -275,7 +299,9 @@ export function ThreadPanel() {
                         return <PlanReview key={node.id} node={node} />;
                       }
                       if (node.kind === "ask-user-question") {
-                        return <AskUserQuestionInline key={node.id} node={node} />;
+                        return (
+                          <AskUserQuestionInline key={node.id} node={node} />
+                        );
                       }
                       if (node.kind !== "event") {
                         return null;
@@ -284,7 +310,10 @@ export function ThreadPanel() {
                         lastUserPromptTime = node.event.timestamp;
                       }
                       let duration: number | undefined;
-                      if (node.event.hookEventName === "Stop" && lastUserPromptTime) {
+                      if (
+                        node.event.hookEventName === "Stop" &&
+                        lastUserPromptTime
+                      ) {
                         duration = Math.floor(
                           (new Date(node.event.timestamp).getTime() -
                             new Date(lastUserPromptTime).getTime()) /
@@ -292,7 +321,11 @@ export function ThreadPanel() {
                         );
                       }
                       return (
-                        <ThreadEvent key={node.event.id} event={node.event} duration={duration} />
+                        <ThreadEvent
+                          key={node.event.id}
+                          event={node.event}
+                          duration={duration}
+                        />
                       );
                     });
                   })()}
@@ -312,7 +345,7 @@ export function ThreadPanel() {
           {/* Terminal area — always mounted to preserve PTYs across workspace/view switches */}
           <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
-            style={{ display: viewMode === 'terminal' ? 'flex' : 'none' }}
+            style={{ display: viewMode === "terminal" ? "flex" : "none" }}
           >
             {hasWorktree === false ? (
               <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
@@ -333,9 +366,9 @@ export function ThreadPanel() {
                 onCloseTab={onCloseTerminalTab}
                 onCloseAll={onCloseAllTerminals}
                 onAddTab={onAddTerminal}
-                onRunScript={() => onRerunScript('Run')}
-                onStopScript={() => onStopScript('Run')}
-                onRerunSetup={() => onRerunScript('Setup')}
+                onRunScript={() => onRerunScript("Run")}
+                onStopScript={() => onStopScript("Run")}
+                onRerunSetup={() => onRerunScript("Setup")}
                 onOpenSettings={onOpenSettings}
               />
             ) : (
@@ -350,12 +383,15 @@ export function ThreadPanel() {
           <StickyTodoList todos={latestTodos} />
         )}
 
-        {viewMode === "agent" && (
-          isLockedByOther ? (
+        {viewMode === "agent" &&
+          (isLockedByOther ? (
             <div className="flex items-center justify-center border-t border-[#292e42] px-4 py-3">
-              <span className="text-xs text-[#565f89]">Workspace locked by another user (read-only)</span>
+              <span className="text-xs text-[#565f89]">
+                Workspace locked by another user (read-only)
+              </span>
             </div>
-          ) : pendingRunWorkspaceId === selectedWorkspaceId && !isClaudeRunning ? (
+          ) : pendingRunWorkspaceId === selectedWorkspaceId &&
+            !isClaudeRunning ? (
             <RunButtons
               initialPrompt={pendingRunInitialPrompt}
               onRun={(planMode, prompt) => {
@@ -365,20 +401,27 @@ export function ThreadPanel() {
               currentWorkspaceId={pendingRunWorkspaceId}
               onRunAfter={(depIds, runConfig) => {
                 if (pendingRunWorkspaceId) {
-                  setTicketDependencies(pendingRunWorkspaceId, depIds, runConfig);
+                  setTicketDependencies(
+                    pendingRunWorkspaceId,
+                    depIds,
+                    runConfig,
+                  );
                   clearPendingRun();
                 }
               }}
             />
-          ) : workspaceStatus === 'creation' ? (
+          ) : workspaceStatus === "creation" ? (
             <CreationStatusBar />
-          ) : workspaceStatus === 'queued' ? (
-            <QueuedStatusBar key={selectedWorkspaceId} workspaceId={selectedWorkspaceId!} />
+          ) : workspaceStatus === "queued" ? (
+            <QueuedStatusBar
+              key={selectedWorkspaceId}
+              workspaceId={selectedWorkspaceId!}
+            />
           ) : showQuestion ? (
             <AskUserQuestionBar
               node={showQuestion}
               onResponse={(text) => {
-                void sendPlanResponse(text, 'keep-context');
+                void sendPlanResponse(text, "keep-context");
               }}
               onDismiss={() => {
                 setDismissedQuestionId(showQuestion.id);
@@ -410,9 +453,7 @@ export function ThreadPanel() {
               onStopClaude={() => void stopClaude()}
               onClearThread={clearSession}
             />
-          )
-        )}
-
+          ))}
       </div>
     </>
   );
