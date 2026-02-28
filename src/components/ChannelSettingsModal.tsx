@@ -240,7 +240,8 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
               </div>
             )}
 
-            {/* Workspaces toggle */}
+            {/* Workspaces toggle (hidden for chat-only channels) */}
+            {channel.type !== 'channel' && (<>
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <label className="text-xs font-medium text-[#a9b1d6]">Enable Workspaces</label>
@@ -381,10 +382,11 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                 )}
               </>
             )}
+          </>)}
           </div>
 
           {/* ═══ My Settings ═══ (only when repo linked) */}
-          {draftWorkspacesEnabled && repoPath && (
+          {channel.type !== 'channel' && draftWorkspacesEnabled && repoPath && (
             <>
               <div className="border-t border-[#292e42]" />
               <div>

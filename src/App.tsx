@@ -1013,6 +1013,7 @@ function AppContent() {
               onRunStartupScripts={handleRunChannelScript}
               onCreateTeam={() => setCreateChannelType('team')}
               onCreateProject={() => setCreateChannelType('project')}
+              onCreateChannel={() => setCreateChannelType('channel')}
               onSwitchAiChat={handleSwitchAiChat}
               onCreateAiChat={() => { void handleCreateAiChat(); }}
               onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
