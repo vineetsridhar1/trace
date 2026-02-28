@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiCheck, FiClock, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
+import { FiCheck, FiClock, FiLoader, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
 import type { SessionInfo } from '../hooks/useThread';
@@ -261,7 +261,7 @@ export const ThreadHeader = memo(function ThreadHeader({
           </Tooltip>
         )}
         {hasWorktree === true && (
-          <Tooltip text="Delete worktree" position="bottom">
+          <Tooltip text={deletingWorktree ? "Deleting worktree" : "Delete worktree"} position="bottom">
             <button
               id="thread-delete-worktree"
               type="button"
@@ -269,7 +269,9 @@ export const ThreadHeader = memo(function ThreadHeader({
               onClick={onDeleteWorktree}
               className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <FiTrash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {deletingWorktree
+                ? <FiLoader className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                : <FiTrash2 className="h-3.5 w-3.5" aria-hidden="true" />}
             </button>
           </Tooltip>
         )}

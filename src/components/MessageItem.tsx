@@ -53,6 +53,7 @@ interface MessageItemProps {
   onDeleteWorktree?: (workspaceId: string) => void;
   hasActiveWorktree?: boolean;
   hasRunningProcess?: boolean;
+  isDeletingWorktree?: boolean;
   dimmed?: boolean;
 }
 
@@ -66,6 +67,7 @@ export const MessageItem = memo(function MessageItem({
   onDeleteWorktree,
   hasActiveWorktree,
   hasRunningProcess,
+  isDeletingWorktree,
   dimmed,
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
@@ -115,24 +117,30 @@ export const MessageItem = memo(function MessageItem({
 
       {/* Delete worktree button for merged items with active worktrees */}
       {hasActiveWorktree && onDeleteWorktree && (
-        <div
-          role="button"
-          tabIndex={-1}
-          title="Delete worktree"
-          className="flex-shrink-0 cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteWorktree(workspace.id);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
+        isDeletingWorktree ? (
+          <div title="Deleting worktree" className="flex-shrink-0 p-0.5 text-[#565f89]">
+            <FiLoader className="h-3 w-3 animate-spin" />
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={-1}
+            title="Delete worktree"
+            className="flex-shrink-0 cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors"
+            onClick={(e) => {
               e.stopPropagation();
               onDeleteWorktree(workspace.id);
-            }
-          }}
-        >
-          <FiTrash2 className="h-3 w-3" />
-        </div>
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                onDeleteWorktree(workspace.id);
+              }
+            }}
+          >
+            <FiTrash2 className="h-3 w-3" />
+          </div>
+        )
       )}
 
       {/* Delete button (hover only) */}
@@ -168,6 +176,7 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.dimmed === next.dimmed &&
     prev.hasActiveWorktree === next.hasActiveWorktree &&
     prev.hasRunningProcess === next.hasRunningProcess &&
+    prev.isDeletingWorktree === next.isDeletingWorktree &&
     prev.onOpenWorkspace === next.onOpenWorkspace &&
     prev.onDeleteWorkspace === next.onDeleteWorkspace &&
     prev.onDeleteWorktree === next.onDeleteWorktree
