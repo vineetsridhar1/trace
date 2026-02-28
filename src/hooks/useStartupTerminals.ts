@@ -189,12 +189,6 @@ export function useStartupTerminals() {
         ? { terminalId: newTerminalId, name: tabName, command, env, readOnly: t.readOnly }
         : t,
     );
-    // If the replaced tab was active, keep focus on it
-    const wasActive = entry.activeTabId === entry.terminals.find(t => t.name === tabName)?.terminalId;
-    if (wasActive || entry.activeTabId === null) {
-      entry.activeTabId = newTerminalId;
-    }
-    // Always set active to the rerun tab
     entry.activeTabId = newTerminalId;
 
     // Track the new terminal as running
@@ -298,6 +292,8 @@ export function useStartupTerminals() {
   // Close a single terminal tab
   const killTerminal = useCallback((terminalId: string) => {
     void window.traceAPI.killPty(terminalId);
+    runningPtyIdsRef.current.delete(terminalId);
+    setRunningPtyIds(new Set(runningPtyIdsRef.current));
     const wsId = currentWorkspaceIdRef.current;
     if (!wsId) return;
     const entry = allTerminalsRef.current.get(wsId);

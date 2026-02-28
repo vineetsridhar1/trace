@@ -66,6 +66,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
 
     let terminal: Terminal | null = null;
     let fitAddon: FitAddon | null = null;
+    let initializing = false;
     let inputDisposable: { dispose: () => void } | null = null;
     let resizeDisposable: { dispose: () => void } | null = null;
     let cleanupData: (() => void) | null = null;
@@ -75,7 +76,8 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     const miscTimers: ReturnType<typeof setTimeout>[] = [];
 
     const init = async () => {
-      if (terminal) return;
+      if (terminal || initializing) return;
+      initializing = true;
 
       terminal = new Terminal({
         theme: TOKYO_NIGHT_THEME,
