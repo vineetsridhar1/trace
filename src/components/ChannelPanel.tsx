@@ -219,8 +219,10 @@ export function ChannelPanel({
     }
   };
 
-  const handleDragLeave = () => {
-    setDragOverId(null);
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOverId(null);
+    }
   };
 
   const handleDrop = (targetId: SidebarSectionId) => {
@@ -282,6 +284,7 @@ export function ChannelPanel({
               >
                 <button
                   type="button"
+                  aria-expanded={!isCollapsed}
                   onClick={() => toggleCollapsed(id)}
                   className="mb-1 flex w-full cursor-pointer items-center justify-between px-2"
                 >
