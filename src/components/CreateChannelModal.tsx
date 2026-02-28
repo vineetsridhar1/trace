@@ -181,7 +181,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
         className="w-[520px] max-h-[80vh] overflow-y-auto rounded-lg border border-[#292e42] bg-[#1a1b26] shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-[#292e42] px-5 py-3">
-          <h2 className="text-sm font-semibold text-[#c0caf5]">Create {channelType === 'team' ? 'Team' : 'Project'}</h2>
+          <h2 className="text-sm font-semibold text-[#c0caf5]">Create {channelType === 'team' ? 'Team' : channelType === 'channel' ? 'Channel' : 'Project'}</h2>
           <button type="button" onClick={onClose} className="text-[#565f89] hover:text-[#c0caf5]">
             <FiX className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
@@ -194,7 +194,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={channelType === 'team' ? 'my-team' : 'my-project'}
+              placeholder={channelType === 'team' ? 'my-team' : channelType === 'channel' ? 'general' : 'my-project'}
               autoFocus
               className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
             />
@@ -257,7 +257,8 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
             </div>
           )}
 
-          {/* Enable Workspaces toggle */}
+          {/* Enable Workspaces toggle (hidden for chat-only channels) */}
+          {channelType !== 'channel' && (<>
           <div className="flex items-center justify-between">
             <div>
               <label className="text-xs font-medium text-[#a9b1d6]">Enable Workspaces</label>
@@ -476,6 +477,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
               )}
             </>
           )}
+          </>)}
 
           {error && repoValid !== false && (
             <p className="text-xs text-[#f7768e]">{error}</p>

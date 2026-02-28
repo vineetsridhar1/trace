@@ -29,6 +29,7 @@ export function ChannelTopBar({
         {panelTitle}
       </h2>
       <div className="flex items-center gap-2">
+        {channelType !== 'channel' && (
         <div className="flex rounded-lg bg-[#1f2335] p-0.5">
           <button
             type="button"
@@ -81,6 +82,7 @@ export function ChannelTopBar({
             </button>
           )}
         </div>
+        )}
         <Tooltip text="Channel settings" position="bottom">
           <button
             type="button"

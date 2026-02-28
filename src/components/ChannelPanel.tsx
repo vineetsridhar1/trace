@@ -15,6 +15,7 @@ interface ChannelPanelProps {
   onRunStartupScripts: (channelId: string) => void;
   onCreateTeam: () => void;
   onCreateProject: () => void;
+  onCreateChannel: () => void;
   onSwitchAiChat: (id: string) => void;
   onCreateAiChat: () => void;
   onDeleteAiChat: (id: string) => void;
@@ -34,11 +35,13 @@ export function ChannelPanel({
   onRunStartupScripts,
   onCreateTeam,
   onCreateProject,
+  onCreateChannel,
   onSwitchAiChat,
   onCreateAiChat,
   onDeleteAiChat,
   onStartDrag,
 }: ChannelPanelProps) {
+  const chatChannels = channels.filter((c) => c.type === 'channel');
   const teamChannels = channels.filter((c) => c.type === 'team');
   const projectChannels = channels.filter((c) => c.type === 'project');
 
@@ -75,16 +78,29 @@ export function ChannelPanel({
         )}
 
         <div id="channel-items" className="flex-1 overflow-y-auto px-2 py-1">
-          {/* Channels (placeholder) */}
+          {/* Channels */}
           <div className="mt-1 mb-1 flex items-center justify-between px-2">
             <div className="flex items-center gap-1.5">
               <FiHash className="h-3 w-3 text-[#565f89]" />
               <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">Channels</h2>
             </div>
+            <Tooltip text="Create channel" position="bottom">
+              <button
+                type="button"
+                onClick={onCreateChannel}
+                className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+              >
+                <FiPlus className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
-          <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">Coming soon...</span>
-          </div>
+          {chatChannels.length === 0 ? (
+            <div className="px-3 py-1.5">
+              <span className="text-xs italic text-[#565f89]">No channels yet</span>
+            </div>
+          ) : (
+            renderChannelItems(chatChannels)
+          )}
 
           {/* Teams */}
           <div className="mt-4 mb-1 flex items-center justify-between px-2">
