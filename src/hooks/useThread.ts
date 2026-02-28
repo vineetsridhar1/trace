@@ -351,7 +351,11 @@ export function useThread({
     (workspace: Workspace) => {
       selectWorkspace(workspace);
       setHasWorktree(null);
-      setThreadWidth(clamp(Math.floor(window.innerWidth * 0.65), 280, 1600));
+      const saved = parseInt(localStorage.getItem('trace:threadWidth') ?? '', 10);
+      const width = saved >= 280
+        ? clamp(saved, 280, window.innerWidth - 200)
+        : clamp(Math.floor(window.innerWidth * 0.65), 280, 1600);
+      setThreadWidth(width);
       resetSessionViewState();
       void loadSessionEvents(workspace);
       void checkWorktree(workspace.id);

@@ -20,7 +20,13 @@ export function usePanelResize(
       setThreadWidth(Math.max(window.innerWidth - event.clientX, 280));
     };
 
-    const onMouseUp = () => setDragging(null);
+    const onMouseUp = (event: MouseEvent) => {
+      if (dragging === 'right') {
+        const finalWidth = window.innerWidth - event.clientX;
+        localStorage.setItem('trace:threadWidth', String(finalWidth));
+      }
+      setDragging(null);
+    };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
