@@ -192,13 +192,26 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
             <p className="mt-3 text-xs text-[#3b4261]">Runs when you click the play button</p>
           </div>
         )}
+        {hasRunScript && !runTab?.command && activeTabId === runTab?.terminalId && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
+            <button
+              type="button"
+              onClick={onRunScript}
+              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+            >
+              <FiPlay className="h-5 w-5" aria-hidden="true" />
+              <span>Run</span>
+            </button>
+            <p className="mt-3 text-xs text-[#3b4261]">Runs when you click the play button</p>
+          </div>
+        )}
 
         {/* All messages' terminals — persistently mounted to preserve PTYs */}
         {allTerminalEntries.flatMap((entry) =>
           entry.terminals.map((t) => {
             const isSetupIdle = t.name === 'Setup' && !t.command;
-            const isRunUnconfigured = t.name === 'Run' && !hasRunScript;
-            if (isSetupIdle || isRunUnconfigured) return null;
+            const isRunIdle = t.name === 'Run' && !t.command;
+            if (isSetupIdle || isRunIdle) return null;
             const isCurrent = entry.workspaceId === currentWorkspaceId;
             const isActiveTab = t.terminalId === entry.activeTabId;
             return (
