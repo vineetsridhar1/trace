@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { Reorder } from 'framer-motion';
 import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight } from 'react-icons/fi';
 import type { AiChat, Channel, DragTarget } from '../types';
 import { Tooltip } from './Tooltip';
@@ -53,10 +53,6 @@ export function ChannelPanel({
   const teamChannels = channels.filter((c) => c.type === 'team');
   const projectChannels = channels.filter((c) => c.type === 'project');
   const { sectionOrder, collapsedSections, reorder, toggleCollapsed } = useSidebarPrefs();
-
-  const draggedRef = useRef<SidebarSectionId | null>(null);
-  const [draggingId, setDraggingId] = useState<SidebarSectionId | null>(null);
-  const [dragOverId, setDragOverId] = useState<SidebarSectionId | null>(null);
 
   const renderChannelItems = (items: Channel[]) =>
     items.map((channel) => {
@@ -207,49 +203,6 @@ export function ChannelPanel({
     }
   };
 
-  const handleDragStart = (id: SidebarSectionId) => {
-    draggedRef.current = id;
-    setDraggingId(id);
-  };
-
-  const handleDragOver = (e: React.DragEvent, id: SidebarSectionId) => {
-    e.preventDefault();
-    if (draggedRef.current && draggedRef.current !== id) {
-      setDragOverId(id);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDragOverId(null);
-    }
-  };
-
-  const handleDrop = (targetId: SidebarSectionId) => {
-    const sourceId = draggedRef.current;
-    if (!sourceId || sourceId === targetId) {
-      setDragOverId(null);
-      setDraggingId(null);
-      draggedRef.current = null;
-      return;
-    }
-    const newOrder = [...sectionOrder];
-    const sourceIdx = newOrder.indexOf(sourceId);
-    const targetIdx = newOrder.indexOf(targetId);
-    newOrder.splice(sourceIdx, 1);
-    newOrder.splice(targetIdx, 0, sourceId);
-    reorder(newOrder);
-    setDragOverId(null);
-    setDraggingId(null);
-    draggedRef.current = null;
-  };
-
-  const handleDragEnd = () => {
-    setDraggingId(null);
-    setDragOverId(null);
-    draggedRef.current = null;
-  };
-
   return (
     <>
       <div
@@ -263,24 +216,26 @@ export function ChannelPanel({
           </div>
         )}
 
-        <div id="channel-items" className="flex-1 overflow-y-auto px-2 py-1">
+        <Reorder.Group
+          id="channel-items"
+          axis="y"
+          values={sectionOrder}
+          onReorder={reorder}
+          className="flex-1 overflow-y-auto px-2 py-1"
+          as="div"
+        >
           {sectionOrder.map((id) => {
             const config = SECTION_CONFIG[id];
             const Icon = config.icon;
             const isCollapsed = collapsedSections.has(id);
-            const isDragging = draggingId === id;
-            const isDragOver = dragOverId === id;
 
             return (
-              <div
+              <Reorder.Item
                 key={id}
-                draggable
-                onDragStart={() => handleDragStart(id)}
-                onDragOver={(e) => handleDragOver(e, id)}
-                onDragLeave={handleDragLeave}
-                onDrop={() => handleDrop(id)}
-                onDragEnd={handleDragEnd}
-                className={`mt-1 transition-opacity ${isDragging ? 'opacity-40' : ''} ${isDragOver ? 'border-t-2 border-[#7c3aed]' : 'border-t-2 border-transparent'}`}
+                value={id}
+                as="div"
+                className="relative border-b border-[#292e42] bg-[#16161e] py-2 last:border-b-0"
+                whileDrag={{ zIndex: 50 }}
               >
                 <button
                   type="button"
@@ -289,15 +244,17 @@ export function ChannelPanel({
                   className="mb-1 flex w-full cursor-pointer items-center justify-between px-2"
                 >
                   <div className="flex items-center gap-1.5">
-                    <FiChevronRight
-                      className={`h-3 w-3 text-[#565f89] transition-transform duration-150 ${!isCollapsed ? 'rotate-90' : ''}`}
-                    />
                     <Icon className="h-3 w-3 text-[#565f89]" />
                     <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">
                       {config.label}
                     </h2>
                   </div>
-                  {renderActionButton(id)}
+                  <div className="flex items-center gap-1">
+                    {renderActionButton(id)}
+                    <FiChevronRight
+                      className={`h-3 w-3 text-[#565f89] transition-transform duration-150 ${!isCollapsed ? 'rotate-90' : ''}`}
+                    />
+                  </div>
                 </button>
                 <div
                   className="grid transition-[grid-template-rows] duration-200 ease-out"
@@ -307,10 +264,10 @@ export function ChannelPanel({
                     {renderSectionContent(id)}
                   </div>
                 </div>
-              </div>
+              </Reorder.Item>
             );
           })}
-        </div>
+        </Reorder.Group>
       </div>
 
       {channelWidth > 0 && (
