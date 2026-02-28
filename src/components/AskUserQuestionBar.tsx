@@ -26,7 +26,7 @@ export function AskUserQuestionBar({
     currentCustom,
     isFirstPage,
     isLastPage,
-    hasAnyAnswer,
+    hasAllAnswers,
     toggleOption,
     setCustomText,
     goNext,
@@ -42,7 +42,7 @@ export function AskUserQuestionBar({
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (currentCustom.trim()) {
+      if (currentCustom.trim() && hasAllAnswers) {
         handleSubmit();
       }
     }
@@ -131,7 +131,7 @@ export function AskUserQuestionBar({
         <Tooltip text="Send answers">
           <button
             type="button"
-            disabled={!hasAnyAnswer}
+            disabled={!hasAllAnswers}
             onClick={handleSubmit}
             className="cursor-pointer rounded-md bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
           >

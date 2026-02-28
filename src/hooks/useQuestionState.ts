@@ -17,9 +17,11 @@ export function useQuestionState(node: AskUserQuestionNode) {
   const isLastPage = page === total - 1;
   const isFirstPage = page === 0;
 
-  const hasAnyAnswer =
-    Object.values(selections).some((s: Set<string>) => s.size > 0) ||
-    Object.values(customTexts).some((t: string) => t.trim().length > 0);
+  const hasAllAnswers = Array.from({ length: total }, (_, i) => {
+    const sel = selections[i];
+    const custom = (customTexts[i] ?? '').trim();
+    return (sel && sel.size > 0) || custom.length > 0;
+  }).every(Boolean);
 
   const toggleOption = useCallback(
     (label: string) => {
@@ -80,7 +82,7 @@ export function useQuestionState(node: AskUserQuestionNode) {
     currentCustom,
     isFirstPage,
     isLastPage,
-    hasAnyAnswer,
+    hasAllAnswers,
     toggleOption,
     setCustomText,
     goNext,
