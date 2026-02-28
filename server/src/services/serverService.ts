@@ -19,7 +19,11 @@ export async function createServer(data: { name: string; avatarUrl?: string | nu
 }
 
 export async function getOrCreateDefaultServer(): Promise<string> {
-  if (defaultServerId) return defaultServerId;
+  if (defaultServerId) {
+    const exists = await prisma.server.findUnique({ where: { id: defaultServerId }, select: { id: true } });
+    if (exists) return defaultServerId;
+    defaultServerId = null;
+  }
   let server = await prisma.server.findFirst({ orderBy: { createdAt: 'asc' } });
   if (!server) {
     server = await prisma.server.create({ data: { name: 'Trace' } });

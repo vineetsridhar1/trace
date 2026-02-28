@@ -48,6 +48,10 @@ export async function ensureKanbanColumns(channelId: string) {
   });
 
   if (existing.length === 0) {
+    // Verify the channel exists before creating columns
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) return [];
+
     const columns = await prisma.$transaction(
       DEFAULT_COLUMNS.map((col) =>
         prisma.kanbanColumn.create({
