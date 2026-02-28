@@ -38,11 +38,18 @@ export async function createChannelMessage(
     },
     include: {
       user: { select: { id: true, name: true, avatarUrl: true } },
+      channel: { select: { serverId: true } },
     },
   });
 
+  const { serverId } = message.channel;
+
   pubsub.publish(TOPICS.CHANNEL_MESSAGE_CREATED(channelId), {
     channelMessageCreated: message,
+  });
+
+  pubsub.publish(TOPICS.CHANNEL_MESSAGE_CREATED_SERVER(serverId), {
+    channelMessageCreatedInServer: message,
   });
 
   return message;

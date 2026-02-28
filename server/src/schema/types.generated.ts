@@ -525,6 +525,7 @@ export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
   channelMessageCreated: ChannelMessage;
+  channelMessageCreatedInServer: ChannelMessage;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
@@ -541,6 +542,11 @@ export type SubscriptionaiChatStreamArgs = {
 
 export type SubscriptionchannelMessageCreatedArgs = {
   channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionchannelMessageCreatedInServerArgs = {
+  serverId: Scalars['ID']['input'];
 };
 
 
@@ -1070,6 +1076,7 @@ export type SessionEventPayloadResolvers<ContextType = any, ParentType extends R
 export type SubscriptionResolvers<ContextType = any, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
   aiChatStream?: SubscriptionResolver<ResolversTypes['AiChatStreamPayload'], "aiChatStream", ParentType, ContextType, RequireFields<SubscriptionaiChatStreamArgs, 'chatId'>>;
   channelMessageCreated?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreated", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedArgs, 'channelId'>>;
+  channelMessageCreatedInServer?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreatedInServer", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedInServerArgs, 'serverId'>>;
   sessionEventCreated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventCreated", ParentType, ContextType, RequireFields<SubscriptionsessionEventCreatedArgs, 'channelId'>>;
   sessionEventUpdated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventUpdated", ParentType, ContextType, RequireFields<SubscriptionsessionEventUpdatedArgs, 'channelId'>>;
   ticketReadyToRun?: SubscriptionResolver<ResolversTypes['TicketReadyToRunPayload'], "ticketReadyToRun", ParentType, ContextType, RequireFields<SubscriptionticketReadyToRunArgs, 'channelId'>>;

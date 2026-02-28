@@ -227,6 +227,7 @@ type SessionEventPayload {
 type Subscription {
   aiChatStream(chatId: ID!): AiChatStreamPayload!
   channelMessageCreated(channelId: ID!): ChannelMessage!
+  channelMessageCreatedInServer(serverId: ID!): ChannelMessage!
   sessionEventCreated(channelId: ID!): SessionEventPayload!
   sessionEventUpdated(channelId: ID!): SessionEventPayload!
   ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!

@@ -8,6 +8,7 @@ extend type Mutation {
 
 extend type Subscription {
   channelMessageCreated(channelId: ID!): ChannelMessage!
+  channelMessageCreatedInServer(serverId: ID!): ChannelMessage!
 }
 
 type ChannelMessage {

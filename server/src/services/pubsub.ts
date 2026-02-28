@@ -11,4 +11,5 @@ export const TOPICS = {
   TICKET_READY_TO_RUN: (channelId: string) => `TICKET_READY_TO_RUN.${channelId}`,
   AI_CHAT_STREAM: (chatId: string) => `AI_CHAT_STREAM.${chatId}`,
   CHANNEL_MESSAGE_CREATED: (channelId: string) => `CHANNEL_MESSAGE_CREATED.${channelId}`,
+  CHANNEL_MESSAGE_CREATED_SERVER: (serverId: string) => `CHANNEL_MESSAGE_CREATED_SERVER.${serverId}`,
 } as const;

@@ -512,6 +512,7 @@ export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
   channelMessageCreated: ChannelMessage;
+  channelMessageCreatedInServer: ChannelMessage;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
@@ -528,6 +529,11 @@ export type SubscriptionAiChatStreamArgs = {
 
 export type SubscriptionChannelMessageCreatedArgs = {
   channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionChannelMessageCreatedInServerArgs = {
+  serverId: Scalars['ID']['input'];
 };
 
 
