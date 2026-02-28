@@ -104,4 +104,7 @@ export function killAllPtys(): void {
   for (const [id] of sessions) {
     killPty(id);
   }
+  lastCwdByTerminalId.clear();
+  lastEnvByTerminalId.clear();
+  suppressExitIds.clear();
 }

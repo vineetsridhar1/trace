@@ -804,7 +804,7 @@ function AppContent() {
     const script = tabName === 'Setup' ? channel?.setupScript : channel?.runScript;
     if (!script?.trim()) return;
 
-    let env: Record<string, string> = {
+    const env: Record<string, string> = {
       REPO_FOLDER: worktreeResult.worktreePath,
     };
     if (tabName === 'Run') {
