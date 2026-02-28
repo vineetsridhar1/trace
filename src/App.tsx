@@ -1092,6 +1092,7 @@ function AppContent() {
                     teamProjects={teamProjects}
                     onSwitchChannel={handleSwitchChannel}
                     workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+                    activeRunWorkspaceIds={activeRunWorkspaceIds}
                   />
                 )}
               </div>
