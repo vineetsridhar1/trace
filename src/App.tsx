@@ -9,6 +9,7 @@ import { useThread } from './hooks/useThread';
 import { useThreadScroll } from './hooks/useThreadScroll';
 import { usePanelResize } from './hooks/usePanelResize';
 import { useChannelSubscriptions } from './hooks/useChannelSubscriptions';
+import { useChannelMessageNotifications } from './hooks/useChannelMessageNotifications';
 import { useStartupTerminals } from './hooks/useStartupTerminals';
 import { useClaudeWorkspaceActions } from './hooks/useClaudeMessageActions';
 import { usePRPolling } from './hooks/usePRPolling';
@@ -337,6 +338,13 @@ function AppContent() {
     }, []),
     onWorkspaceCompleted: triggerPRCheck,
     refreshWorkspaces,
+  });
+
+  const { unreadCounts } = useChannelMessageNotifications({
+    activeServerId,
+    activeChannelId,
+    activeAiChatId,
+    serverChannels,
   });
 
   const handleSetView = useCallback(
@@ -1026,6 +1034,7 @@ function AppContent() {
               serverName={activeServer?.name}
               aiChats={aiChats}
               activeAiChatId={activeAiChatId}
+              unreadCounts={unreadCounts}
               onSwitchChannel={handleSwitchChannel}
               onCreateTeam={() => setCreateChannelType('team')}
               onCreateProject={() => setCreateChannelType('project')}

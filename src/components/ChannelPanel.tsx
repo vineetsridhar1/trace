@@ -20,6 +20,7 @@ interface ChannelPanelProps {
   serverName?: string;
   aiChats: AiChat[];
   activeAiChatId: string | null;
+  unreadCounts?: Record<string, number>;
   onSwitchChannel: (id: string) => void;
   onCreateTeam: () => void;
   onCreateProject: () => void;
@@ -46,6 +47,7 @@ export function ChannelPanel({
   onCreateAiChat,
   onDeleteAiChat,
   onStartDrag,
+  unreadCounts = {},
 }: ChannelPanelProps) {
   const chatChannels = channels.filter((c) => c.type === 'channel');
   const teamChannels = channels.filter((c) => c.type === 'team');
@@ -55,6 +57,7 @@ export function ChannelPanel({
   const renderChannelItems = (items: Channel[]) =>
     items.map((channel) => {
       const isActive = channel.id === activeChannelId && !activeAiChatId;
+      const count = unreadCounts[channel.id] ?? 0;
       return (
         <div key={channel.id} className="my-0.5 flex items-center">
           <button
@@ -66,6 +69,11 @@ export function ChannelPanel({
           >
             <span className="text-xs text-[#565f89]">#</span>
             <span className="truncate">{channel.name}</span>
+            {!isActive && count > 0 && (
+              <span className="ml-auto shrink-0 rounded-full bg-[#7aa2f7] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                {count > 99 ? '99+' : count}
+              </span>
+            )}
           </button>
         </div>
       );
