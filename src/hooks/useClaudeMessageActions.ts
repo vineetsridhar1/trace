@@ -359,17 +359,38 @@ export function useClaudeWorkspaceActions({
       const selectedWorkspace = selectedWorkspaceRef.current;
       if (!text || !selectedWorkspace || !activeChannelId) return false;
 
+      // Mark workspace as actively running BEFORE any async work so that
+      // isClaudeRunning becomes true on the next React render (during the
+      // first await). Without this, the subscription event from persistPrompt
+      // arrives and triggers a re-evaluation where the workspace isn't yet in
+      // the set, leaving the input enabled during the gap.
+      const workspaceId = selectedWorkspace.id;
+      setActiveRunWorkspaceIds(prev => {
+        if (prev.has(workspaceId)) return prev;
+        const next = new Set(prev);
+        next.add(workspaceId);
+        return next;
+      });
+
       const currentSessionId = activeSessionIdRef.current ?? undefined;
 
       const persisted = await persistPrompt(
-        selectedWorkspace.id,
+        workspaceId,
         text,
         'Failed to persist session prompt',
         attachmentIds,
         undefined,
         currentSessionId,
       );
-      if (!persisted) return false;
+      if (!persisted) {
+        setActiveRunWorkspaceIds(prev => {
+          if (!prev.has(workspaceId)) return prev;
+          const next = new Set(prev);
+          next.delete(workspaceId);
+          return next;
+        });
+        return false;
+      }
 
       // If active session has events → resume existing session
       // If active session is empty (just cleared) → spawn fresh
@@ -398,7 +419,7 @@ export function useClaudeWorkspaceActions({
         spawnOptions.systemInstructions = instructionParts.join('\n\n');
       }
 
-      await spawnClaudeForWorkspace(selectedWorkspace.id, text, spawnOptions);
+      await spawnClaudeForWorkspace(workspaceId, text, spawnOptions);
       return true;
     },
     [activeChannelId, activeSessionIdRef, sessionEventsRef, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, selectedWorkspaceRef, selectedModel, selectedEffort, spawnClaudeForWorkspace],
