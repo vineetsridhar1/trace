@@ -497,9 +497,19 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(PULL_MAIN_CHANNEL, async (_event, repoPath: string, baseBranch: string) => {
     try {
-      const result = await runProcess('git', ['pull', 'origin', baseBranch], repoPath);
-      if (result.code !== 0) {
-        return { success: false, error: result.stderr.trim() };
+      // Fetch latest from remote
+      const fetchResult = await runProcess('git', ['fetch', 'origin', baseBranch], repoPath);
+      if (fetchResult.code !== 0) {
+        return { success: false, error: `Failed to fetch: ${fetchResult.stderr.trim()}` };
+      }
+
+      // Fast-forward the local ref to match remote without affecting the working tree.
+      // This is safe regardless of which branch is currently checked out.
+      const updateResult = await runProcess(
+        'git', ['update-ref', `refs/heads/${baseBranch}`, `origin/${baseBranch}`], repoPath,
+      );
+      if (updateResult.code !== 0) {
+        return { success: false, error: `Failed to update ref: ${updateResult.stderr.trim()}` };
       }
       return { success: true };
     } catch (err) {

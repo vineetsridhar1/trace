@@ -19,24 +19,28 @@ export function useMainBranchStatus(repoPath: string | null | undefined, baseBra
 
   const branch = baseBranch || 'main';
 
-  const check = useCallback(async () => {
+  const checkImpl = useCallback(async (silent: boolean) => {
     if (!repoPath) return;
-    setIsChecking(true);
-    setError(null);
+    if (!silent) setIsChecking(true);
     try {
       const result = await window.traceAPI.checkMainStatus(repoPath, branch);
       if (result.success) {
         setIsUpToDate(result.isUpToDate ?? null);
         setCommitsBehind(result.commitsBehind ?? 0);
+        setError(null);
       } else {
+        setIsUpToDate(null);
         setError(result.error ?? 'Failed to check status');
       }
     } catch (err) {
+      setIsUpToDate(null);
       setError(String(err));
     } finally {
-      setIsChecking(false);
+      if (!silent) setIsChecking(false);
     }
   }, [repoPath, branch]);
+
+  const check = useCallback(() => checkImpl(false), [checkImpl]);
 
   const pull = useCallback(async () => {
     if (!repoPath) return;
@@ -57,13 +61,13 @@ export function useMainBranchStatus(repoPath: string | null | undefined, baseBra
     }
   }, [repoPath, branch]);
 
-  // Check on mount and poll every 30 seconds
+  // Check on mount and poll every 30 seconds (silent to avoid spinner flash)
   useEffect(() => {
     if (!repoPath) return;
-    void check();
-    const interval = setInterval(() => void check(), 30_000);
+    void checkImpl(false);
+    const interval = setInterval(() => void checkImpl(true), 30_000);
     return () => clearInterval(interval);
-  }, [check, repoPath]);
+  }, [checkImpl, repoPath]);
 
   return { isChecking, isPulling, isUpToDate, commitsBehind, error, check, pull };
 }

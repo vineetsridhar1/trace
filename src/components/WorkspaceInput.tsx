@@ -105,10 +105,10 @@ export function WorkspaceInput() {
               <FiRefreshCw className="h-3 w-3 animate-spin text-[#565f89]" />
               <span className="text-xs text-[#565f89]">Checking {enrichedActiveChannel?.baseBranch || 'main'}...</span>
             </>
-          ) : mainStatus.isUpToDate ? (
+          ) : mainStatus.error ? (
             <>
-              <FiCheck className="h-3 w-3 text-green-400" />
-              <span className="text-xs text-green-400">{enrichedActiveChannel?.baseBranch || 'main'} is up to date</span>
+              <FiAlertCircle className="h-3 w-3 text-red-400" />
+              <span className="text-xs text-red-400 truncate">{mainStatus.error}</span>
               <button
                 type="button"
                 onClick={() => void mainStatus.check()}
@@ -117,10 +117,10 @@ export function WorkspaceInput() {
                 <FiRefreshCw className="h-3 w-3" />
               </button>
             </>
-          ) : mainStatus.error ? (
+          ) : mainStatus.isUpToDate ? (
             <>
-              <FiAlertCircle className="h-3 w-3 text-red-400" />
-              <span className="text-xs text-red-400 truncate">{mainStatus.error}</span>
+              <FiCheck className="h-3 w-3 text-green-400" />
+              <span className="text-xs text-green-400">{enrichedActiveChannel?.baseBranch || 'main'} is up to date</span>
               <button
                 type="button"
                 onClick={() => void mainStatus.check()}
