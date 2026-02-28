@@ -358,6 +358,7 @@ export type Query = {
   channels: Array<Channel>;
   checkPRStatuses: Array<PrStatus>;
   event?: Maybe<Event>;
+  generateBranchName?: Maybe<Scalars['String']['output']>;
   me?: Maybe<AuthUser>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
@@ -398,6 +399,11 @@ export type QueryCheckPrStatusesArgs = {
 
 export type QueryEventArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryGenerateBranchNameArgs = {
+  prompt: Scalars['String']['input'];
 };
 
 

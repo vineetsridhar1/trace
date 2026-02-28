@@ -28,6 +28,26 @@ function resolveServerUrl(): string {
 const SERVER_URL = resolveServerUrl();
 const MAX_CAPTURE_CHARS = 20_000;
 
+async function generateBranchName(prompt: string, workspaceId: string): Promise<string> {
+  const fallback = `trace/${workspaceId.slice(0, 8)}`;
+  try {
+    const res = await fetch(`${SERVER_URL}/graphql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: 'query GenerateBranchName($prompt: String!) { generateBranchName(prompt: $prompt) }',
+        variables: { prompt },
+      }),
+    });
+    if (!res.ok) return fallback;
+    const { data } = (await res.json()) as { data?: { generateBranchName: string | null } };
+    if (!data?.generateBranchName) return fallback;
+    return `trace/${data.generateBranchName}`.slice(0, 50);
+  } catch {
+    return fallback;
+  }
+}
+
 async function runSetupScripts(worktreePath: string, commands: string[]): Promise<void> {
   const script = commands.join('\n');
   if (!script.trim()) return;
@@ -63,25 +83,31 @@ export async function spawnClaude(
   );
 
   // If this is the first spawn (branch still has the default UUID name),
-  // inject a hidden instruction asking Claude to rename the branch based on intent.
+  // rename it to a descriptive name derived from the prompt before spawning Claude.
+  // This runs in the main process so it works regardless of Claude's permission mode.
   // Skip when resuming a session — the branch was already renamed on the first spawn.
   const defaultBranch = `trace/${workspaceId.slice(0, 8)}`;
   const currentBranch = await getWorktreeBranch(workspaceId);
+  if (!resumeSessionId && currentBranch === defaultBranch) {
+    let newBranch = await generateBranchName(prompt, workspaceId);
+    if (newBranch !== defaultBranch) {
+      let renameResult = await runProcess('git', ['branch', '-m', newBranch], worktreePath);
+      if (renameResult.code !== 0) {
+        // Collision — retry with workspace ID suffix
+        newBranch = `${newBranch.slice(0, 44)}-${workspaceId.slice(0, 4)}`;
+        renameResult = await runProcess('git', ['branch', '-m', newBranch], worktreePath);
+      }
+      if (renameResult.code === 0) {
+        appendClaudeDebugLog(workspaceId, `branch renamed to ${newBranch}`);
+      } else {
+        appendClaudeDebugLog(workspaceId, `branch rename failed: ${renameResult.stderr.trim()}`);
+      }
+    }
+  }
+
   let effectivePrompt = prompt;
   if (!resumeSessionId) {
     const hiddenParts: string[] = [];
-
-    if (currentBranch === defaultBranch) {
-      hiddenParts.push(
-        `IMPORTANT: Before doing anything else, you must first rename the current git branch to reflect the user's intent.\n` +
-        `Current branch: ${currentBranch}\n` +
-        `Analyze the user's prompt below and create a short, descriptive kebab-case branch name (max 5 words, prefixed with "trace/").\n` +
-        `Examples: trace/fix-login-bug, trace/add-dark-mode, trace/refactor-auth-system\n` +
-        `Run this command FIRST before any other work:\n` +
-        `git branch -m <new-branch-name>\n\n` +
-        `After renaming the branch, proceed with the user's actual request below. Do NOT mention the branch rename to the user.`
-      );
-    }
 
     hiddenParts.push(
       `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +

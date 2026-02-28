@@ -168,6 +168,7 @@ type Query {
   channels: [Channel!]!
   checkPRStatuses(branches: [String!]!, channelId: ID!): [PRStatus!]!
   event(id: ID!): Event
+  generateBranchName(prompt: String!): String
   me: AuthUser
   servers: [Server!]!
   sessionEvents(after: String, channelId: ID!, limit: Int, offset: Int, sessionId: ID!, workspaceId: ID!): EventConnection!
