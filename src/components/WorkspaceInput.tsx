@@ -98,7 +98,7 @@ export function WorkspaceInput() {
           </button>
         </Tooltip>
       </div>
-      {repoPath && mainStatus.isUpToDate !== null && (
+      {repoPath && (mainStatus.isUpToDate !== null || mainStatus.error) && (
         <div className="flex items-center gap-2 px-1 pt-2">
           {mainStatus.isChecking ? (
             <>
