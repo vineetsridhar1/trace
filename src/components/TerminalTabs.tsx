@@ -105,8 +105,8 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
         </Tooltip>
       </div>
 
-      {/* Setup action bar — only when script is configured */}
-      {hasSetupScript && activeTabId === setupTab?.terminalId && (
+      {/* Setup action bar — only when setup has been run (command exists) */}
+      {hasSetupScript && setupTab?.command && activeTabId === setupTab?.terminalId && (
         <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
           <Tooltip text="Re-run setup">
             <button
@@ -153,6 +153,19 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
       {/* Terminal content */}
       <div className="relative min-h-0 flex-1">
         {/* Configure placeholders for unconfigured script tabs — current message only */}
+        {hasSetupScript && !setupTab?.command && activeTabId === setupTab?.terminalId && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
+            <button
+              type="button"
+              onClick={onRerunSetup}
+              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+            >
+              <FiPlay className="h-5 w-5" aria-hidden="true" />
+              <span>Run Setup</span>
+            </button>
+            <p className="mt-3 text-xs text-[#3b4261]">Setup has already run during workspace creation</p>
+          </div>
+        )}
         {!hasSetupScript && activeTabId === setupTab?.terminalId && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
             <button
@@ -183,9 +196,9 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
         {/* All messages' terminals — persistently mounted to preserve PTYs */}
         {allTerminalEntries.flatMap((entry) =>
           entry.terminals.map((t) => {
-            const isSetupUnconfigured = t.name === 'Setup' && !hasSetupScript;
+            const isSetupIdle = t.name === 'Setup' && !t.command;
             const isRunUnconfigured = t.name === 'Run' && !hasRunScript;
-            if (isSetupUnconfigured || isRunUnconfigured) return null;
+            if (isSetupIdle || isRunUnconfigured) return null;
             const isCurrent = entry.workspaceId === currentWorkspaceId;
             const isActiveTab = t.terminalId === entry.activeTabId;
             return (

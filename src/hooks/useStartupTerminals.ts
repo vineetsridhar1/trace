@@ -97,8 +97,6 @@ export function useStartupTerminals() {
   const initializeDefaults = useCallback((
     workspaceId: string,
     worktreeCwd: string,
-    setupScript?: string,
-    runScript?: string,
     env?: Record<string, string>,
   ) => {
     // Guard: don't re-initialize
@@ -109,11 +107,10 @@ export function useStartupTerminals() {
     const run = runCountRef.current;
     const newTerminals: TerminalTab[] = [];
 
-    // Always create Setup tab — runs script if configured, otherwise empty
+    // Always create Setup tab — user can manually trigger via "Run Setup" button
     newTerminals.push({
       terminalId: `setup-${workspaceId}-${run}`,
       name: 'Setup',
-      ...(setupScript?.trim() ? { command: setupScript, env } : {}),
       readOnly: true,
     });
 
@@ -132,7 +129,7 @@ export function useStartupTerminals() {
 
     const entry: WorkspaceTerminalState = {
       terminals: newTerminals,
-      activeTabId: newTerminals[0]?.terminalId ?? null,
+      activeTabId: newTerminals[2]?.terminalId ?? null,
       cwd: worktreeCwd,
       env,
     };
