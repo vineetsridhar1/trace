@@ -16,11 +16,11 @@ export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string;
 
 export const STATUS_GROUP_ORDER: TicketStatus[] = [
   'needs_input',
-  'in_progress',
-  'creation',
   'queued',
-  'review',
   'pending',
+  'creation',
+  'in_progress',
+  'review',
   'merged',
 ];
 
