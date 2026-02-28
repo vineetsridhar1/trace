@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { Workspace, ServerEvent, TicketStatus, ClaudeModel, EffortLevel } from '../types';
@@ -125,6 +125,31 @@ export function useClaudeWorkspaceActions({
 
   const spawnedWorkspaceIdsRef = useRef(new Set<string>());
   const [activeRunWorkspaceIds, setActiveRunWorkspaceIds] = useState(() => new Set<string>());
+
+  const addActiveRun = useCallback((workspaceId: string) => {
+    setActiveRunWorkspaceIds(prev => {
+      if (prev.has(workspaceId)) return prev;
+      const next = new Set(prev);
+      next.add(workspaceId);
+      return next;
+    });
+  }, []);
+
+  const clearActiveRun = useCallback((workspaceId: string) => {
+    setActiveRunWorkspaceIds(prev => {
+      if (!prev.has(workspaceId)) return prev;
+      const next = new Set(prev);
+      next.delete(workspaceId);
+      return next;
+    });
+  }, []);
+
+  // Clear active runs when switching channels — Stop events from the old
+  // channel's subscription are lost, so stale entries would never be cleared.
+  useEffect(() => {
+    setActiveRunWorkspaceIds(prev => prev.size === 0 ? prev : new Set());
+  }, [activeChannelId]);
+
   const [pendingRunWorkspaceId, setPendingRunWorkspaceId] = useState<string | null>(
     null,
   );
@@ -136,14 +161,14 @@ export function useClaudeWorkspaceActions({
   const spawnClaudeForWorkspace = useCallback(
     async (workspaceId: string, prompt: string, options: SpawnOptions) => {
       spawnedWorkspaceIdsRef.current.add(workspaceId);
-      setActiveRunWorkspaceIds(prev => { const next = new Set(prev); next.add(workspaceId); return next; });
+      addActiveRun(workspaceId);
       try {
         const repoPath = getChannelRepoPath();
         const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions, options.permissionMode);
 
         if (!result.success) {
           spawnedWorkspaceIdsRef.current.delete(workspaceId);
-          setActiveRunWorkspaceIds(prev => { const next = new Set(prev); next.delete(workspaceId); return next; });
+          clearActiveRun(workspaceId);
           console.error(`${options.errorPrefix}:`, result.error);
           return false;
         }
@@ -159,12 +184,12 @@ export function useClaudeWorkspaceActions({
         return true;
       } catch {
         spawnedWorkspaceIdsRef.current.delete(workspaceId);
-        setActiveRunWorkspaceIds(prev => { const next = new Set(prev); next.delete(workspaceId); return next; });
+        clearActiveRun(workspaceId);
         console.error(options.errorPrefix);
         return false;
       }
     },
-    [getChannelRepoPath, setHasWorktree, updateWorkspaceStatus],
+    [addActiveRun, clearActiveRun, getChannelRepoPath, setHasWorktree, updateWorkspaceStatus],
   );
 
   const updatePreviewForPendingRun = useCallback(
@@ -364,13 +389,10 @@ export function useClaudeWorkspaceActions({
       // first await). Without this, the subscription event from persistPrompt
       // arrives and triggers a re-evaluation where the workspace isn't yet in
       // the set, leaving the input enabled during the gap.
+      // Note: spawnClaudeForWorkspace also calls addActiveRun (no-op due to
+      // the has() guard), so this is intentionally set twice.
       const workspaceId = selectedWorkspace.id;
-      setActiveRunWorkspaceIds(prev => {
-        if (prev.has(workspaceId)) return prev;
-        const next = new Set(prev);
-        next.add(workspaceId);
-        return next;
-      });
+      addActiveRun(workspaceId);
 
       const currentSessionId = activeSessionIdRef.current ?? undefined;
 
@@ -383,12 +405,7 @@ export function useClaudeWorkspaceActions({
         currentSessionId,
       );
       if (!persisted) {
-        setActiveRunWorkspaceIds(prev => {
-          if (!prev.has(workspaceId)) return prev;
-          const next = new Set(prev);
-          next.delete(workspaceId);
-          return next;
-        });
+        clearActiveRun(workspaceId);
         return false;
       }
 
@@ -422,7 +439,7 @@ export function useClaudeWorkspaceActions({
       await spawnClaudeForWorkspace(workspaceId, text, spawnOptions);
       return true;
     },
-    [activeChannelId, activeSessionIdRef, sessionEventsRef, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, selectedWorkspaceRef, selectedModel, selectedEffort, spawnClaudeForWorkspace],
+    [activeChannelId, activeSessionIdRef, addActiveRun, clearActiveRun, sessionEventsRef, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, selectedWorkspaceRef, selectedModel, selectedEffort, spawnClaudeForWorkspace],
   );
 
   const sendPlanResponse = useCallback(
@@ -546,15 +563,6 @@ export function useClaudeWorkspaceActions({
 
   const isWorkspaceSpawned = useCallback((workspaceId: string) => {
     return spawnedWorkspaceIdsRef.current.has(workspaceId);
-  }, []);
-
-  const clearActiveRun = useCallback((workspaceId: string) => {
-    setActiveRunWorkspaceIds(prev => {
-      if (!prev.has(workspaceId)) return prev;
-      const next = new Set(prev);
-      next.delete(workspaceId);
-      return next;
-    });
   }, []);
 
   return {
