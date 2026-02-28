@@ -30,7 +30,7 @@ export async function allocatePorts(
 
   const allocated: number[] = [];
   const reserved = getAllAllocatedPorts();
-  let candidate = 3100;
+  let candidate = 20000;
 
   while (allocated.length < count) {
     if (!reserved.has(candidate) && (await isPortAvailable(candidate))) {
