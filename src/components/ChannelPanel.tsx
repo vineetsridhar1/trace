@@ -206,7 +206,7 @@ export function ChannelPanel({
         style={{ width: `${channelWidth}px`, overflow: channelWidth === 0 ? 'hidden' : undefined }}
       >
         {serverName && (
-          <div className="border-b border-[#292e42] px-4 pt-3 pb-2">
+          <div className="flex h-[52px] items-center border-b border-[#292e42] px-4">
             <h1 className="truncate text-sm font-bold text-[#c0caf5]">{serverName}</h1>
           </div>
         )}

@@ -24,7 +24,7 @@ export function ChannelTopBar({
   const showWorkspaces = showTracker && workspacesEnabled;
 
   return (
-    <div className="flex shrink-0 items-center justify-between border-b border-[#292e42] px-4 py-3">
+    <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-[#292e42] px-4">
       <h2 id="panel-title" className="text-sm font-semibold text-violet-300">
         {panelTitle}
       </h2>
