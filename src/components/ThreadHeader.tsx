@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiCheck, FiClock, FiGitMerge, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
+import { FiCheck, FiClock, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
 import type { SessionInfo } from '../hooks/useThread';
@@ -52,7 +52,6 @@ interface ThreadHeaderProps {
   isFullscreen: boolean;
   onClose: () => void;
   onDeleteWorktree: () => void;
-  onMergeToMain: () => void;
   onMarkMerged: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
@@ -72,7 +71,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   isFullscreen,
   onClose,
   onDeleteWorktree,
-  onMergeToMain,
   onMarkMerged,
   onEnterFullscreen,
   onExitFullscreen,
@@ -227,19 +225,6 @@ export const ThreadHeader = memo(function ThreadHeader({
               </div>
             )}
           </div>
-        )}
-        {hasWorktree === true && (workspaceStatus === 'in_progress' || workspaceStatus === 'completed' || workspaceStatus === 'review') && (
-          <Tooltip text="Merge to main" position="bottom">
-            <button
-              id="thread-merge-to-main"
-              type="button"
-              disabled={!selectedWorkspaceId}
-              onClick={onMergeToMain}
-              className="flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs text-[#565f89] transition-colors hover:border-green-400/50 hover:text-green-300 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <FiGitMerge className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </Tooltip>
         )}
         {workspaceStatus === 'completed' && (
           <Tooltip text="Mark as merged" position="bottom">
