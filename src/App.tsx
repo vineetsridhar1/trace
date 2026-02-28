@@ -774,10 +774,6 @@ function AppContent() {
     const worktreeResult = await window.traceAPI.checkWorktreeExists(selectedWorkspaceId, repoPath);
     if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
 
-    const channel = enrichedChannels.find((item) => item.id === activeChannelId);
-    const setupScript = channel?.setupScript;
-    const runScript = channel?.runScript;
-
     const portResult = await window.traceAPI.allocatePorts(selectedWorkspaceId, 10);
     let env: Record<string, string> | undefined;
     if (portResult.success && portResult.ports) {
@@ -792,8 +788,8 @@ function AppContent() {
       }
     }
 
-    initializeTerminalDefaults(selectedWorkspaceId, worktreeResult.worktreePath, setupScript ?? undefined, runScript ?? undefined, env);
-  }, [activeChannelId, enrichedChannels, repoPath, initializeTerminalDefaults, isTerminalInitialized, selectedWorkspaceId]);
+    initializeTerminalDefaults(selectedWorkspaceId, worktreeResult.worktreePath, env);
+  }, [activeChannelId, repoPath, initializeTerminalDefaults, isTerminalInitialized, selectedWorkspaceId]);
 
   const handleRerunScript = useCallback(async (tabName: string) => {
     if (!selectedWorkspaceId || !activeChannelId || !repoPath) return;
