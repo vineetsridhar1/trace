@@ -74,6 +74,7 @@ interface MessagePanelProps {
   onDeleteWorkspace?: (workspaceId: string) => void;
   onDeleteWorktree?: (workspaceId: string) => void;
   worktreeWorkspaceIds?: Set<string>;
+  deletingWorktreeIds?: Set<string>;
   isFullscreen?: boolean;
   teamProjects?: Channel[];
   onSwitchChannel?: (channelId: string) => void;
@@ -94,6 +95,7 @@ export function MessagePanel({
   onDeleteWorkspace,
   onDeleteWorktree,
   worktreeWorkspaceIds,
+  deletingWorktreeIds,
   onMoveTicket,
   isFullscreen,
   teamProjects = [],
@@ -186,6 +188,7 @@ export function MessagePanel({
             onDeleteWorktree={workspace.status === 'merged' ? onDeleteWorktree : undefined}
             hasActiveWorktree={worktreeWorkspaceIds?.has(workspace.id)}
             hasRunningProcess={workspacesWithRunningProcesses?.has(workspace.id)}
+            isDeletingWorktree={deletingWorktreeIds?.has(workspace.id)}
             dimmed={workspace.status === 'merged'}
           />
         ))}

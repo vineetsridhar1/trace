@@ -222,6 +222,7 @@ function AppContent() {
   const [createChannelType, setCreateChannelType] = useState<ChannelType | null>(null);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [worktreeWorkspaceIds, setWorktreeWorkspaceIds] = useState<Set<string>>(new Set());
+  const [deletingWorktreeIds, setDeletingWorktreeIds] = useState<Set<string>>(new Set());
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const autoRunRef = useRef<((workspaceId: string, runConfig: unknown) => void) | null>(null);
 
@@ -861,6 +862,12 @@ function AppContent() {
       killTerminalsForWorkspace(workspaceId);
       void window.traceAPI.releasePorts(workspaceId);
 
+      setDeletingWorktreeIds((prev) => {
+        const next = new Set(prev);
+        next.add(workspaceId);
+        return next;
+      });
+
       try {
         const result = await window.traceAPI.deleteWorktree(workspaceId, repoPath);
         if (!result.success) {
@@ -878,6 +885,12 @@ function AppContent() {
         }
       } catch (err) {
         console.error('Failed to delete worktree:', err);
+      } finally {
+        setDeletingWorktreeIds((prev) => {
+          const next = new Set(prev);
+          next.delete(workspaceId);
+          return next;
+        });
       }
     },
     [getChannelRepoPath, killTerminalsForWorkspace, selectedWorkspaceId, setHasWorktree],
@@ -1058,6 +1071,7 @@ function AppContent() {
                     onDeleteWorkspace={handleDeleteWorkspace}
                     onDeleteWorktree={handleDeleteWorktreeById}
                     worktreeWorkspaceIds={worktreeWorkspaceIds}
+                    deletingWorktreeIds={deletingWorktreeIds}
                     middlePanelView={middlePanelView}
                     kanbanColumns={kanbanColumns}
                     kanbanLoading={kanbanLoading}
