@@ -191,6 +191,7 @@ export function ThreadPanel() {
         <ThreadHeader
           selectedWorkspaceId={selectedWorkspaceId}
           workspaceStatus={workspaceStatus}
+          isClaudeRunning={isClaudeRunning}
           hasTicket={ticket !== null}
           viewMode={viewMode}
           onSetViewMode={setViewMode}
