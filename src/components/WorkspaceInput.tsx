@@ -1,16 +1,20 @@
 import { useCallback, useRef, useState } from 'react';
-import { FiSend } from 'react-icons/fi';
+import { FiSend, FiCheck, FiAlertCircle, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { useClaudeActions } from '../context/ClaudeActionsContext';
+import { useChannelContext } from '../context/ChannelContext';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useFileMention } from '../hooks/useFileMention';
 import { useImageAttachments } from '../hooks/useImageAttachments';
+import { useMainBranchStatus } from '../hooks/useMainBranchStatus';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { FileMentionMenu } from './FileMentionMenu';
 import { ImageThumbnails } from './ImageThumbnails';
 
 export function WorkspaceInput() {
   const { sendMessage, repoPath } = useClaudeActions();
+  const { enrichedActiveChannel } = useChannelContext();
+  const mainStatus = useMainBranchStatus(repoPath, enrichedActiveChannel?.baseBranch);
   const [messageInput, setMessageInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashCommands = useSlashCommands(messageInput, setMessageInput);
@@ -94,6 +98,60 @@ export function WorkspaceInput() {
           </button>
         </Tooltip>
       </div>
+      {repoPath && (mainStatus.isUpToDate !== null || mainStatus.error) && (
+        <div className="flex items-center gap-2 px-1 pt-2">
+          {mainStatus.isChecking ? (
+            <>
+              <FiRefreshCw className="h-3 w-3 animate-spin text-[#565f89]" />
+              <span className="text-xs text-[#565f89]">Checking {enrichedActiveChannel?.baseBranch || 'main'}...</span>
+            </>
+          ) : mainStatus.error ? (
+            <>
+              <FiAlertCircle className="h-3 w-3 text-red-400" />
+              <span className="text-xs text-red-400 truncate">{mainStatus.error}</span>
+              <button
+                type="button"
+                onClick={() => void mainStatus.check()}
+                className="cursor-pointer text-xs text-[#565f89] hover:text-[#c0caf5] transition-colors"
+              >
+                <FiRefreshCw className="h-3 w-3" />
+              </button>
+            </>
+          ) : mainStatus.isUpToDate ? (
+            <>
+              <FiCheck className="h-3 w-3 text-green-400" />
+              <span className="text-xs text-green-400">{enrichedActiveChannel?.baseBranch || 'main'} is up to date</span>
+              <button
+                type="button"
+                onClick={() => void mainStatus.check()}
+                className="cursor-pointer text-xs text-[#565f89] hover:text-[#c0caf5] transition-colors"
+              >
+                <FiRefreshCw className="h-3 w-3" />
+              </button>
+            </>
+          ) : (
+            <>
+              <FiAlertCircle className="h-3 w-3 text-yellow-400" />
+              <span className="text-xs text-yellow-400">
+                {enrichedActiveChannel?.baseBranch || 'main'} is {mainStatus.commitsBehind} commit{mainStatus.commitsBehind !== 1 ? 's' : ''} behind
+              </span>
+              <button
+                type="button"
+                onClick={() => void mainStatus.pull()}
+                disabled={mainStatus.isPulling}
+                className="flex cursor-pointer items-center gap-1 rounded bg-[#292e42] px-2 py-0.5 text-xs text-[#c0caf5] hover:bg-[#343a55] transition-colors disabled:opacity-50"
+              >
+                {mainStatus.isPulling ? (
+                  <FiRefreshCw className="h-3 w-3 animate-spin" />
+                ) : (
+                  <FiDownload className="h-3 w-3" />
+                )}
+                Pull
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -39,6 +39,8 @@ const WATCH_BASE_BRANCH_CHANNEL = 'watch-base-branch';
 const UNWATCH_BASE_BRANCH_CHANNEL = 'unwatch-base-branch';
 const PTY_HAS_CHANNEL = 'pty-has';
 const GITHUB_LOGIN_CHANNEL = 'github-login';
+const CHECK_MAIN_STATUS_CHANNEL = 'check-main-status';
+const PULL_MAIN_CHANNEL = 'pull-main';
 
 let mainWindowRef: BrowserWindow | null = null;
 let branchWatchers: fs.FSWatcher[] = [];
@@ -88,6 +90,8 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(UNWATCH_BASE_BRANCH_CHANNEL);
   ipcMain.removeHandler(PTY_HAS_CHANNEL);
   ipcMain.removeHandler(GITHUB_LOGIN_CHANNEL);
+  ipcMain.removeHandler(CHECK_MAIN_STATUS_CHANNEL);
+  ipcMain.removeHandler(PULL_MAIN_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string) => {
     try {
@@ -460,6 +464,63 @@ export function registerIpcHandlers() {
     for (const w of branchWatchers) w.close();
     branchWatchers = [];
     return { success: true };
+  });
+
+  ipcMain.handle(CHECK_MAIN_STATUS_CHANNEL, async (_event, repoPath: string, baseBranch: string) => {
+    try {
+      // Fetch latest remote refs
+      const fetchResult = await runProcess('git', ['fetch', 'origin', baseBranch], repoPath);
+      if (fetchResult.code !== 0) {
+        return { success: false, error: `Failed to fetch: ${fetchResult.stderr.trim()}` };
+      }
+
+      // Compare local base branch with remote
+      const localRef = await runProcess('git', ['rev-parse', baseBranch], repoPath);
+      const remoteRef = await runProcess('git', ['rev-parse', `origin/${baseBranch}`], repoPath);
+
+      if (localRef.code !== 0 || remoteRef.code !== 0) {
+        return { success: false, error: 'Failed to resolve branch refs' };
+      }
+
+      const localSha = localRef.stdout.trim();
+      const remoteSha = remoteRef.stdout.trim();
+      const isUpToDate = localSha === remoteSha;
+
+      // Count how many commits behind
+      let commitsBehind = 0;
+      if (!isUpToDate) {
+        const countResult = await runProcess('git', ['rev-list', '--count', `${baseBranch}..origin/${baseBranch}`], repoPath);
+        if (countResult.code === 0) {
+          commitsBehind = parseInt(countResult.stdout.trim(), 10) || 0;
+        }
+      }
+
+      return { success: true, isUpToDate, commitsBehind, localSha, remoteSha };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(PULL_MAIN_CHANNEL, async (_event, repoPath: string, baseBranch: string) => {
+    try {
+      // Fetch latest from remote
+      const fetchResult = await runProcess('git', ['fetch', 'origin', baseBranch], repoPath);
+      if (fetchResult.code !== 0) {
+        return { success: false, error: `Failed to fetch: ${fetchResult.stderr.trim()}` };
+      }
+
+      // Fast-forward the local ref to match remote without affecting the working tree.
+      // This is safe regardless of which branch is currently checked out.
+      const updateResult = await runProcess(
+        'git', ['update-ref', `refs/heads/${baseBranch}`, `origin/${baseBranch}`], repoPath,
+      );
+      if (updateResult.code !== 0) {
+        return { success: false, error: `Failed to update ref: ${updateResult.stderr.trim()}` };
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
   });
 
   ipcMain.handle(GITHUB_LOGIN_CHANNEL, async () => {

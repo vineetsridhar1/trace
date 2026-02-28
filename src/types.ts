@@ -93,6 +93,8 @@ export interface TraceAPI {
   unwatchBaseBranch: () => Promise<{ success: boolean }>;
   onBaseBranchChanged: (callback: () => void) => () => void;
   githubLogin: () => Promise<{ success: boolean; token?: string; user?: { id: string; email: string; name: string; avatarUrl: string | null }; error?: string }>;
+  checkMainStatus: (repoPath: string, baseBranch: string) => Promise<{ success: boolean; isUpToDate?: boolean; commitsBehind?: number; localSha?: string; remoteSha?: string; error?: string }>;
+  pullMain: (repoPath: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {
