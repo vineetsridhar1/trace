@@ -1028,8 +1028,6 @@ function AppContent() {
               aiChats={aiChats}
               activeAiChatId={activeAiChatId}
               onSwitchChannel={handleSwitchChannel}
-              onOpenSettings={handleOpenSettings}
-              onRunStartupScripts={handleRunChannelScript}
               onCreateTeam={() => setCreateChannelType('team')}
               onCreateProject={() => setCreateChannelType('project')}
               onCreateChannel={() => setCreateChannelType('channel')}

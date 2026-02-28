@@ -1,6 +1,16 @@
-import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder } from 'react-icons/fi';
-import type { AiChat, Channel, ChannelType, DragTarget } from '../types';
+import { Reorder } from 'framer-motion';
+import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight } from 'react-icons/fi';
+import type { AiChat, Channel, DragTarget } from '../types';
 import { Tooltip } from './Tooltip';
+import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
+
+const SECTION_CONFIG: Record<SidebarSectionId, { icon: typeof FiHash; label: string }> = {
+  channels: { icon: FiHash, label: 'Channels' },
+  teams: { icon: FiLayers, label: 'Teams' },
+  projects: { icon: FiFolder, label: 'Projects' },
+  dms: { icon: FiUsers, label: 'Direct Messages' },
+  'ai-chats': { icon: FiMessageCircle, label: 'AI Chats' },
+};
 
 interface ChannelPanelProps {
   channels: Channel[];
@@ -11,8 +21,6 @@ interface ChannelPanelProps {
   aiChats: AiChat[];
   activeAiChatId: string | null;
   onSwitchChannel: (id: string) => void;
-  onOpenSettings: (channelId: string) => void;
-  onRunStartupScripts: (channelId: string) => void;
   onCreateTeam: () => void;
   onCreateProject: () => void;
   onCreateChannel: () => void;
@@ -31,8 +39,6 @@ export function ChannelPanel({
   aiChats,
   activeAiChatId,
   onSwitchChannel,
-  onOpenSettings,
-  onRunStartupScripts,
   onCreateTeam,
   onCreateProject,
   onCreateChannel,
@@ -44,6 +50,7 @@ export function ChannelPanel({
   const chatChannels = channels.filter((c) => c.type === 'channel');
   const teamChannels = channels.filter((c) => c.type === 'team');
   const projectChannels = channels.filter((c) => c.type === 'project');
+  const { sectionOrder, collapsedSections, reorder, toggleCollapsed } = useSidebarPrefs();
 
   const renderChannelItems = (items: Channel[]) =>
     items.map((channel) => {
@@ -64,6 +71,133 @@ export function ChannelPanel({
       );
     });
 
+  const renderActionButton = (id: SidebarSectionId) => {
+    switch (id) {
+      case 'teams':
+        return (
+          <Tooltip text="Create team" position="bottom">
+            <button
+              type="button"
+              onClick={onCreateTeam}
+              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+            >
+              <FiPlus className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        );
+      case 'projects':
+        return (
+          <Tooltip text="Create project" position="bottom">
+            <button
+              type="button"
+              onClick={onCreateProject}
+              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+            >
+              <FiPlus className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        );
+      case 'channels':
+        return (
+          <Tooltip text="Create channel" position="bottom">
+            <button
+              type="button"
+              onClick={onCreateChannel}
+              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+            >
+              <FiPlus className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        );
+      case 'dms':
+        return (
+          <Tooltip text="New DM" position="bottom">
+            <button
+              type="button"
+              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+            >
+              <FiPlus className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        );
+      case 'ai-chats':
+        return (
+          <Tooltip text="New AI chat" position="bottom">
+            <button
+              type="button"
+              onClick={onCreateAiChat}
+              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#bb9af7]"
+            >
+              <FiPlus className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </Tooltip>
+        );
+    }
+  };
+
+  const renderSectionContent = (id: SidebarSectionId) => {
+    switch (id) {
+      case 'channels':
+        return chatChannels.length === 0 ? (
+          <div className="px-3 py-1.5">
+            <span className="text-xs italic text-[#565f89]">No channels yet</span>
+          </div>
+        ) : (
+          renderChannelItems(chatChannels)
+        );
+      case 'teams':
+        return teamChannels.length === 0 ? (
+          <div className="px-3 py-1.5">
+            <span className="text-xs italic text-[#565f89]">No teams yet</span>
+          </div>
+        ) : (
+          renderChannelItems(teamChannels)
+        );
+      case 'projects':
+        return projectChannels.length === 0 ? (
+          <div className="px-3 py-1.5">
+            <span className="text-xs italic text-[#565f89]">No projects yet</span>
+          </div>
+        ) : (
+          renderChannelItems(projectChannels)
+        );
+      case 'dms':
+        return (
+          <div className="px-3 py-1.5">
+            <span className="text-xs italic text-[#565f89]">Coming soon...</span>
+          </div>
+        );
+      case 'ai-chats':
+        return aiChats.map((chat) => {
+          const isActive = chat.id === activeAiChatId;
+          return (
+            <div key={chat.id} className="group my-0.5 flex items-center">
+              <button
+                type="button"
+                onClick={() => onSwitchAiChat(chat.id)}
+                className={`channel-item flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
+                  isActive ? 'bg-[#292e42] font-semibold text-[#bb9af7]' : 'text-[#a9b1d6]'
+                }`}
+              >
+                <FiMessageCircle className="h-3 w-3 shrink-0 text-[#565f89]" />
+                <span className="truncate">{chat.title}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteAiChat(chat.id);
+                }}
+                className="mr-1 rounded p-0.5 text-[#565f89] opacity-0 hover:bg-[#292e42] hover:text-[#f7768e] group-hover:opacity-100"
+              >
+                <FiTrash2 className="h-3 w-3" />
+              </button>
+            </div>
+          );
+        });
+    }
+  };
+
   return (
     <>
       <div
@@ -77,142 +211,61 @@ export function ChannelPanel({
           </div>
         )}
 
-        <div id="channel-items" className="flex-1 overflow-y-auto px-2 py-1">
-          {/* Channels */}
-          <div className="mt-1 mb-1 flex items-center justify-between px-2">
-            <div className="flex items-center gap-1.5">
-              <FiHash className="h-3 w-3 text-[#565f89]" />
-              <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">Channels</h2>
-            </div>
-            <Tooltip text="Create channel" position="bottom">
-              <button
-                type="button"
-                onClick={onCreateChannel}
-                className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
-              >
-                <FiPlus className="h-3 w-3" aria-hidden="true" />
-              </button>
-            </Tooltip>
-          </div>
-          {chatChannels.length === 0 ? (
-            <div className="px-3 py-1.5">
-              <span className="text-xs italic text-[#565f89]">No channels yet</span>
-            </div>
-          ) : (
-            renderChannelItems(chatChannels)
-          )}
+        <Reorder.Group
+          id="channel-items"
+          axis="y"
+          values={sectionOrder}
+          onReorder={reorder}
+          className="flex-1 overflow-y-auto px-2 py-1"
+          as="div"
+        >
+          {sectionOrder.map((id) => {
+            const config = SECTION_CONFIG[id];
+            const Icon = config.icon;
+            const isCollapsed = collapsedSections.has(id);
 
-          {/* Teams */}
-          <div className="mt-4 mb-1 flex items-center justify-between px-2">
-            <div className="flex items-center gap-1.5">
-              <FiLayers className="h-3 w-3 text-[#565f89]" />
-              <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">Teams</h2>
-            </div>
-            <Tooltip text="Create team" position="bottom">
-              <button
-                type="button"
-                onClick={onCreateTeam}
-                className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
-              >
-                <FiPlus className="h-3 w-3" aria-hidden="true" />
-              </button>
-            </Tooltip>
-          </div>
-          {teamChannels.length === 0 ? (
-            <div className="px-3 py-1.5">
-              <span className="text-xs italic text-[#565f89]">No teams yet</span>
-            </div>
-          ) : (
-            renderChannelItems(teamChannels)
-          )}
-
-          {/* Projects */}
-          <div className="mt-4 mb-1 flex items-center justify-between px-2">
-            <div className="flex items-center gap-1.5">
-              <FiFolder className="h-3 w-3 text-[#565f89]" />
-              <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">Projects</h2>
-            </div>
-            <Tooltip text="Create project" position="bottom">
-              <button
-                type="button"
-                onClick={onCreateProject}
-                className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
-              >
-                <FiPlus className="h-3 w-3" aria-hidden="true" />
-              </button>
-            </Tooltip>
-          </div>
-          {projectChannels.length === 0 ? (
-            <div className="px-3 py-1.5">
-              <span className="text-xs italic text-[#565f89]">No projects yet</span>
-            </div>
-          ) : (
-            renderChannelItems(projectChannels)
-          )}
-
-          {/* Direct Messages placeholder */}
-          <div className="mt-4 mb-1 flex items-center justify-between px-2">
-            <div className="flex items-center gap-1.5">
-              <FiUsers className="h-3 w-3 text-[#565f89]" />
-              <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">Direct Messages</h2>
-            </div>
-            <Tooltip text="New DM" position="bottom">
-              <button
-                type="button"
-                className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
-              >
-                <FiPlus className="h-3 w-3" aria-hidden="true" />
-              </button>
-            </Tooltip>
-          </div>
-          <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">Coming soon...</span>
-          </div>
-
-          {/* AI Chats */}
-          <div className="mt-4 mb-1 flex items-center justify-between px-2">
-            <div className="flex items-center gap-1.5">
-              <FiMessageCircle className="h-3 w-3 text-[#565f89]" />
-              <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">AI Chats</h2>
-            </div>
-            <Tooltip text="New AI chat" position="bottom">
-              <button
-                type="button"
-                onClick={onCreateAiChat}
-                className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#bb9af7]"
-              >
-                <FiPlus className="h-3 w-3" aria-hidden="true" />
-              </button>
-            </Tooltip>
-          </div>
-          {aiChats.map((chat) => {
-            const isActive = chat.id === activeAiChatId;
             return (
-              <div key={chat.id} className="group my-0.5 flex items-center">
-                <button
-                  type="button"
-                  onClick={() => onSwitchAiChat(chat.id)}
-                  className={`channel-item flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-                    isActive ? 'bg-[#292e42] font-semibold text-[#bb9af7]' : 'text-[#a9b1d6]'
-                  }`}
+              <Reorder.Item
+                key={id}
+                value={id}
+                as="div"
+                className="relative border-b border-[#292e42] bg-[#16161e] py-2 last:border-b-0"
+                whileDrag={{ zIndex: 50 }}
+              >
+                <div className="mb-1 flex w-full items-center justify-between px-2">
+                  <div className="flex items-center gap-1.5">
+                    <Icon className="h-3 w-3 text-[#565f89]" />
+                    <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">
+                      {config.label}
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {renderActionButton(id)}
+                    <button
+                      type="button"
+                      aria-expanded={!isCollapsed}
+                      aria-label={`Toggle ${config.label}`}
+                      onClick={() => toggleCollapsed(id)}
+                      className="cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-[#292e42]"
+                    >
+                      <FiChevronRight
+                        className={`h-3 w-3 transition-transform duration-150 ${!isCollapsed ? 'rotate-90' : ''}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="grid transition-[grid-template-rows] duration-200 ease-out"
+                  style={{ gridTemplateRows: isCollapsed ? '0fr' : '1fr' }}
                 >
-                  <FiMessageCircle className="h-3 w-3 shrink-0 text-[#565f89]" />
-                  <span className="truncate">{chat.title}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteAiChat(chat.id);
-                  }}
-                  className="mr-1 rounded p-0.5 text-[#565f89] opacity-0 hover:bg-[#292e42] hover:text-[#f7768e] group-hover:opacity-100"
-                >
-                  <FiTrash2 className="h-3 w-3" />
-                </button>
-              </div>
+                  <div className="overflow-hidden">
+                    {renderSectionContent(id)}
+                  </div>
+                </div>
+              </Reorder.Item>
             );
           })}
-        </div>
+        </Reorder.Group>
       </div>
 
       {channelWidth > 0 && (
