@@ -100,6 +100,7 @@ interface UseChannelSubscriptionsOptions {
   onTicketReadyToRun?: (workspaceId: string, runConfig: unknown) => void;
   onWorkspaceCompleted?: () => void;
   refreshWorkspaces?: (channelId: string) => Promise<void>;
+  onActiveRunStopped?: (workspaceId: string) => void;
 }
 
 export function useChannelSubscriptions({
@@ -117,6 +118,7 @@ export function useChannelSubscriptions({
   onTicketReadyToRun,
   onWorkspaceCompleted,
   refreshWorkspaces,
+  onActiveRunStopped,
 }: UseChannelSubscriptionsOptions) {
   const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
 
@@ -181,6 +183,7 @@ export function useChannelSubscriptions({
     void reportClaudeActivity(payload.workspaceId, payload.event.hookEventName, payload.event.cliSessionId);
 
     if (payload.event.hookEventName === 'Stop') {
+      onActiveRunStopped?.(payload.workspaceId);
       const existing = workspacesRef.current.find((item) => item.id === payload.workspaceId);
       if (existing && existing.cliSession.status !== 'stopped') {
         upsertWorkspace({
@@ -200,6 +203,19 @@ export function useChannelSubscriptions({
       if (refreshWorkspaces && activeChannelId) {
         setTimeout(() => void refreshWorkspaces(activeChannelId), 500);
       }
+    } else {
+      // Optimistically mark the cliSession as active when a non-Stop event
+      // arrives. After PR #45 linked cliSessionId to the real CLI session,
+      // the status stays 'stopped' from the previous run until the server's
+      // workspaceUpserted subscription arrives with the new session — causing
+      // isClaudeRunning to briefly (or permanently) return false.
+      const existing = workspacesRef.current.find((item) => item.id === payload.workspaceId);
+      if (existing && existing.cliSession.status === 'stopped') {
+        upsertWorkspace({
+          ...existing,
+          cliSession: { ...existing.cliSession, status: 'active' },
+        });
+      }
     }
 
     if (payload.event.hookEventName === 'AskUserQuestion') {
@@ -215,7 +231,7 @@ export function useChannelSubscriptions({
     if (currentSessionId && payload.event.sessionId !== currentSessionId) return;
 
     appendSessionEvent(payload.event as ServerEvent);
-  }, [sessionEventData, activeChannelId, reportClaudeActivity, workspacesRef, upsertWorkspace, selectedWorkspaceIdRef, activeSessionIdRef, onNeedsAttention, appendSessionEvent, refreshWorkspaces]);
+  }, [sessionEventData, activeChannelId, reportClaudeActivity, workspacesRef, upsertWorkspace, selectedWorkspaceIdRef, activeSessionIdRef, onNeedsAttention, appendSessionEvent, refreshWorkspaces, onActiveRunStopped]);
 
   // --- Session event updated ---
   const { data: sessionEventUpdatedData } = useSubscription(SESSION_EVENT_UPDATED_SUBSCRIPTION, {

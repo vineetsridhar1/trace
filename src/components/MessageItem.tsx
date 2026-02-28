@@ -58,6 +58,7 @@ interface MessageItemProps {
   hasRunningProcess?: boolean;
   isDeletingWorktree?: boolean;
   dimmed?: boolean;
+  activelyRunning?: boolean;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -72,6 +73,7 @@ export const MessageItem = memo(function MessageItem({
   hasRunningProcess,
   isDeletingWorktree,
   dimmed,
+  activelyRunning,
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
@@ -116,7 +118,7 @@ export const MessageItem = memo(function MessageItem({
       )}
 
       {/* Status icon */}
-      <StatusIcon status={status} isRunning={workspace.cliSession.status !== 'stopped'} />
+      <StatusIcon status={status} isRunning={activelyRunning || workspace.cliSession.status !== 'stopped'} />
 
       {/* Delete worktree button for merged items with active worktrees */}
       {hasActiveWorktree && onDeleteWorktree && (

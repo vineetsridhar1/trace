@@ -79,6 +79,7 @@ interface MessagePanelProps {
   teamProjects?: Channel[];
   onSwitchChannel?: (channelId: string) => void;
   workspacesWithRunningProcesses?: Set<string>;
+  activeRunWorkspaceIds?: Set<string>;
 }
 
 export function MessagePanel({
@@ -101,6 +102,7 @@ export function MessagePanel({
   teamProjects = [],
   onSwitchChannel,
   workspacesWithRunningProcesses,
+  activeRunWorkspaceIds,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -190,6 +192,7 @@ export function MessagePanel({
             hasRunningProcess={workspacesWithRunningProcesses?.has(workspace.id)}
             isDeletingWorktree={deletingWorktreeIds?.has(workspace.id)}
             dimmed={workspace.status === 'merged'}
+            activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
           />
         ))}
       </CollapsibleStatusGroup>

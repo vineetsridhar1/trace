@@ -225,6 +225,7 @@ function AppContent() {
   const [deletingWorktreeIds, setDeletingWorktreeIds] = useState<Set<string>>(new Set());
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
   const autoRunRef = useRef<((workspaceId: string, runConfig: unknown) => void) | null>(null);
+  const clearActiveRunRef = useRef<((workspaceId: string) => void) | null>(null);
 
   const { dragging, startDragging } = usePanelResize(setChannelWidth, setThreadWidth, SERVER_RAIL_WIDTH);
 
@@ -337,6 +338,9 @@ function AppContent() {
     }, []),
     onWorkspaceCompleted: triggerPRCheck,
     refreshWorkspaces,
+    onActiveRunStopped: useCallback((workspaceId: string) => {
+      clearActiveRunRef.current?.(workspaceId);
+    }, []),
   });
 
   const handleSetView = useCallback(
@@ -520,6 +524,11 @@ function AppContent() {
     };
   }, [claudeActions.autoRunQueuedTicket]);
 
+  // Populate clearActiveRunRef so Stop events can clear the active run state
+  useEffect(() => {
+    clearActiveRunRef.current = claudeActions.clearActiveRun;
+  }, [claudeActions.clearActiveRun]);
+
   const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const claudeActionsContextValue = useMemo(
     () => ({
@@ -561,14 +570,20 @@ function AppContent() {
   );
 
   const isWorkspaceSpawned = claudeActions.isWorkspaceSpawned;
+  const activeRunWorkspaceIds = claudeActions.activeRunWorkspaceIds;
   const isClaudeRunning = useMemo(() => {
-    if (!selectedWorkspaceId || !isWorkspaceSpawned(selectedWorkspaceId)) return false;
-    // After /clear, the session is empty – Claude isn't running on it
+    if (!selectedWorkspaceId) return false;
+    // Immediately true when we've spawned Claude (before any events arrive).
+    // The set is cleared when a Stop event arrives, so a spawned workspace
+    // that has already stopped will not be in the set.
+    if (activeRunWorkspaceIds.has(selectedWorkspaceId)) return true;
+    // Fall back to event-based detection (e.g. after app reload when state is lost)
+    if (!isWorkspaceSpawned(selectedWorkspaceId)) return false;
     if (sessionStatus === 'empty') return false;
     const lastEvent = sessionEvents[sessionEvents.length - 1];
     if (lastEvent?.hookEventName === 'Stop') return false;
     return true;
-  }, [isWorkspaceSpawned, selectedWorkspaceId, sessionEvents, sessionStatus]);
+  }, [selectedWorkspaceId, activeRunWorkspaceIds, isWorkspaceSpawned, sessionEvents, sessionStatus]);
 
   useEffect(() => {
     if (activeChannelId) {
@@ -1077,6 +1092,7 @@ function AppContent() {
                     teamProjects={teamProjects}
                     onSwitchChannel={handleSwitchChannel}
                     workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+                    activeRunWorkspaceIds={activeRunWorkspaceIds}
                   />
                 )}
               </div>
