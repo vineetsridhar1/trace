@@ -370,8 +370,9 @@ export function useClaudeWorkspaceActions({
       // If active session has events → resume existing session
       // If active session is empty (just cleared) → spawn fresh
       const hasEvents = (sessionEventsRef.current?.length ?? 0) > 0;
+      // Keep "review" status when sending follow-ups — show a spinner instead of switching states
       const spawnOptions: SpawnOptions = {
-        statusOnSuccess: 'in_progress',
+        statusOnSuccess: selectedWorkspace.status === 'review' ? undefined : 'in_progress',
         errorPrefix: 'Failed to spawn claude',
         creationCommands: getSetupCommands(),
         filePaths: filePaths && filePaths.length > 0 ? filePaths : undefined,
@@ -404,6 +405,9 @@ export function useClaudeWorkspaceActions({
       const selectedWorkspace = selectedWorkspaceRef.current;
       if (!selectedWorkspace || !activeChannelId) return;
 
+      // Keep "review" status — don't transition to in_progress
+      const statusOnSuccess = selectedWorkspace.status === 'review' ? undefined : 'in_progress';
+
       if (mode === 'clear-context') {
         // Build prompt with the plan content for a fresh Claude process
         const implementPrompt = planFilePath
@@ -433,7 +437,7 @@ export function useClaudeWorkspaceActions({
 
         await spawnClaudeForWorkspace(selectedWorkspace.id, implementPrompt, {
           errorPrefix: 'Failed to spawn claude for plan implementation',
-          statusOnSuccess: 'in_progress',
+          statusOnSuccess,
           model: selectedModel,
           effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
           systemInstructions: instructionParts.join('\n\n'),
@@ -453,7 +457,7 @@ export function useClaudeWorkspaceActions({
 
         await spawnClaudeForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: 'Failed to spawn claude for plan response',
-          statusOnSuccess: 'in_progress',
+          statusOnSuccess,
           resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
           model: selectedModel,
           effort: selectedModel !== 'haiku' ? selectedEffort : undefined,

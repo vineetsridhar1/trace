@@ -27,7 +27,7 @@ export const STATUS_GROUP_ORDER: TicketStatus[] = [
 const ACTIVE_STATUSES = new Set<TicketStatus>(['in_progress', 'creation']);
 const DONE_STATUSES = new Set<TicketStatus>(['completed']);
 
-function StatusIcon({ status }: { status: TicketStatus }) {
+function StatusIcon({ status, isRunning }: { status: TicketStatus; isRunning: boolean }) {
   if (ACTIVE_STATUSES.has(status)) {
     return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-blue-400" />;
   }
@@ -35,6 +35,9 @@ function StatusIcon({ status }: { status: TicketStatus }) {
     return <FiCheck className="h-4 w-4 flex-shrink-0 text-green-400" />;
   }
   if (status === 'review') {
+    if (isRunning) {
+      return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-teal-400" />;
+    }
     return <FiGitPullRequest className="h-4 w-4 flex-shrink-0 text-teal-400" />;
   }
   if (status === 'merged') {
@@ -113,7 +116,7 @@ export const MessageItem = memo(function MessageItem({
       )}
 
       {/* Status icon */}
-      <StatusIcon status={status} />
+      <StatusIcon status={status} isRunning={workspace.cliSession.status !== 'stopped'} />
 
       {/* Delete worktree button for merged items with active worktrees */}
       {hasActiveWorktree && onDeleteWorktree && (

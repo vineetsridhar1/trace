@@ -44,6 +44,7 @@ const HEADER_STATUS_CONFIG: Record<
 interface ThreadHeaderProps {
   selectedWorkspaceId: string | null;
   workspaceStatus: TicketStatus;
+  isClaudeRunning: boolean;
   hasTicket: boolean;
   viewMode: ViewMode;
   onSetViewMode: (mode: ViewMode) => void;
@@ -63,6 +64,7 @@ interface ThreadHeaderProps {
 export const ThreadHeader = memo(function ThreadHeader({
   selectedWorkspaceId,
   workspaceStatus,
+  isClaudeRunning,
   hasTicket,
   viewMode,
   onSetViewMode,
@@ -108,8 +110,11 @@ export const ThreadHeader = memo(function ThreadHeader({
         </h3>
         {selectedWorkspaceId && (
           <span
-            className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}
+            className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}
           >
+            {workspaceStatus === 'review' && isClaudeRunning && (
+              <FiLoader className="h-3 w-3 animate-spin-slow" />
+            )}
             {statusConfig.label}
           </span>
         )}
