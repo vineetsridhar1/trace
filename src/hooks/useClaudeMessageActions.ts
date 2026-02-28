@@ -344,7 +344,10 @@ export function useClaudeWorkspaceActions({
   const stopClaude = useCallback(async () => {
     if (!selectedWorkspaceId) return;
     await window.traceAPI.stopClaude(selectedWorkspaceId);
-  }, [selectedWorkspaceId]);
+    if (selectedWorkspaceRef.current?.status === 'needs_input') {
+      await updateWorkspaceStatus(selectedWorkspaceId, 'completed');
+    }
+  }, [selectedWorkspaceId, selectedWorkspaceRef, updateWorkspaceStatus]);
 
   const sendThreadMessage = useCallback(
     async (rawText: string, attachmentIds?: string[], filePaths?: string[]) => {
