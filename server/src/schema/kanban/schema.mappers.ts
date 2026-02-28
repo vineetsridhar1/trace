@@ -26,6 +26,7 @@ export interface TicketMapper {
 export interface TicketWorkspaceMapper {
   id: string;
   branch: string | null;
+  prUrl: string | null;
   status: string;
   createdAt: Date;
   attachments: TicketAttachmentMapper[];

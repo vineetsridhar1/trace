@@ -17,6 +17,7 @@ function resolveTicketAttachmentUrls<T extends { workspace: { attachments: { id:
 const TICKET_WORKSPACE_SELECT = {
   id: true,
   branch: true,
+  prUrl: true,
   status: true,
   createdAt: true,
   attachments: { select: { id: true, key: true, filename: true, contentType: true } },

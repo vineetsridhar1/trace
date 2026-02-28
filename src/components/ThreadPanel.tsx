@@ -158,7 +158,8 @@ export function ThreadPanel() {
   const [viewMode, setViewMode] = useState<ViewMode>("agent");
 
   useEffect(() => {
-    setViewMode("agent");
+    setViewMode(workspaceStatus === 'merged' ? 'ticket' : 'agent');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
 
 

@@ -569,6 +569,7 @@ export type TicketWorkspace = {
   branch?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
+  prUrl?: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
 };
 

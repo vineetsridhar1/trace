@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { gql } from '@apollo/client';
-import { FiLink } from 'react-icons/fi';
+import { FiExternalLink, FiLink } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { KanbanTicket } from '../types';
@@ -60,6 +60,16 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
           <span className="rounded bg-[#1f2335] px-1.5 py-0.5 font-mono text-[11px] text-[#7aa2f7]">
             {ticket.workspace.branch}
           </span>
+        )}
+        {ticket.workspace.prUrl && (
+          <button
+            type="button"
+            onClick={() => window.open(ticket.workspace.prUrl!, '_blank')}
+            className="inline-flex items-center gap-1 rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] font-medium text-[#7aa2f7] hover:bg-[#292e42] transition-colors"
+          >
+            PR
+            <FiExternalLink className="h-3 w-3" />
+          </button>
         )}
       </div>
 
