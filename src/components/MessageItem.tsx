@@ -81,11 +81,19 @@ export const MessageItem = memo(function MessageItem({
       title={workspace.cliSessionId}
     >
       {/* Avatar */}
-      <div
-        className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
-      >
-        {avatarInitial(workspace.cliSessionId)}
-      </div>
+      {workspace.user?.avatarUrl ? (
+        <img
+          src={workspace.user.avatarUrl}
+          alt={workspace.user.name}
+          className={`h-6 w-6 flex-shrink-0 rounded-full ring-2 ${avatarConfig.avatarBg}`}
+        />
+      ) : (
+        <div
+          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
+        >
+          {workspace.user ? workspace.user.name.charAt(0).toUpperCase() : avatarInitial(workspace.cliSessionId)}
+        </div>
+      )}
 
       {/* Title + branch stacked */}
       <div className="min-w-0 flex-1">
@@ -94,25 +102,6 @@ export const MessageItem = memo(function MessageItem({
           <div className="truncate font-mono text-[10px] text-[#565f89]">{branch}</div>
         )}
       </div>
-
-      {/* Owner badge */}
-      {workspace.user && (
-        workspace.user.avatarUrl ? (
-          <img
-            src={workspace.user.avatarUrl}
-            alt={workspace.user.name}
-            title={workspace.user.name}
-            className="h-4 w-4 flex-shrink-0 rounded-full"
-          />
-        ) : (
-          <div
-            title={workspace.user.name}
-            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/30 text-[8px] font-bold text-violet-300"
-          >
-            {workspace.user.name.charAt(0).toUpperCase()}
-          </div>
-        )
-      )}
 
       {/* Status icon */}
       <StatusIcon status={status} />
