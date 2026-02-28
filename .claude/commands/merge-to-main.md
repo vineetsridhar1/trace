@@ -1,11 +1,13 @@
 ---
 description: Commit all changes, merge current worktree branch to the base branch, and push
-allowed-tools: Bash(git:*), Bash(cd:*)
+allowed-tools: Bash(git:*), Bash(cd:*), Bash(gh:*)
 ---
 
-# Merge to Base Branch
+# Merge to Base Branch via PR
 
-You are merging the current worktree branch into the base branch and pushing. The base branch is passed as an argument (e.g. `/merge-to-main main` or `/merge-to-main develop`). If no argument is provided, default to `main`.
+You are merging the current worktree branch into the base branch by creating a GitHub PR and auto-merging it. The base branch is passed as an argument (e.g. `/merge-to-main main` or `/merge-to-main develop`). If no argument is provided, default to `main`.
+
+**Important:** Never merge directly into the base branch locally. All merges must go through a GitHub pull request.
 
 Follow these steps exactly:
 
@@ -29,32 +31,38 @@ Run `git branch --show-current` to get the current branch name. If on a detached
 
 ## Step 4: Rebase onto the base branch (in the worktree)
 
-This step ensures merge conflicts are resolved in the worktree branch, not in the main repo. This is critical because if conflicts occur in the main repo, the app can crash mid-merge.
+This step ensures merge conflicts are resolved in the worktree branch, not in the main repo.
 
-1. Run `git fetch origin <base-branch>:<base-branch>` to update the local base branch to match the remote.
-2. Run `git rebase <base-branch>`.
+1. Run `git fetch origin <base-branch>` to update the remote tracking branch.
+2. Run `git rebase origin/<base-branch>`.
 3. If there are merge conflicts, stop and inform the user about the conflicts. Do NOT force resolve. The user can resolve them here in the worktree safely.
-4. If the rebase succeeds, the subsequent merge will be a clean fast-forward.
+4. If the rebase succeeds, the branch is up to date with the base branch.
 
-## Step 5: Get the main repo working directory
+## Step 5: Push branch to remote
 
-Run `git rev-parse --git-common-dir` to find the common git dir path. The main repo working directory is the parent of the `.git` directory (strip the `/.git` suffix). Store this path.
+Run `git push -u origin <branch-name> --force-with-lease` to push the branch (force-with-lease is needed after rebase).
 
-## Step 6: Merge into the base branch
+## Step 6: Create PR
 
-1. `cd` into the main repo working directory.
-2. Run `git checkout <base-branch>` where `<base-branch>` is the argument provided (or `main` if none).
-3. Run `git merge <branch-name>` where `<branch-name>` is from Step 2. This should be a fast-forward merge since we rebased in Step 4.
-4. If there are merge conflicts (should not happen after rebase), stop and inform the user. Do NOT force resolve.
+1. Analyze the changes using `git log origin/<base-branch>..HEAD --oneline` and `git diff origin/<base-branch>...HEAD --stat` to understand what's being merged.
+2. Create a PR with `gh pr create --base <base-branch> --title "<concise title>" --body "<description>"`. The title should summarize the changes concisely. The body should include a brief summary of the commits/changes.
+3. Capture the PR URL from the output.
 
-## Step 7: Push
+## Step 7: Auto-merge the PR
 
-Run `git push` from the main repo directory to push the base branch to the remote.
+Run `gh pr merge <pr-url> --merge --delete-branch` to merge the PR immediately and delete the remote branch.
 
-## Step 8: Return to worktree
+If the merge fails (e.g. due to branch protection rules requiring reviews), inform the user that the PR was created but could not be auto-merged, and provide the PR URL so they can merge manually.
 
-`cd` back to the original worktree directory and confirm success to the user, including:
+## Step 8: Update local base branch
+
+1. Run `git fetch origin <base-branch>:<base-branch>` to fast-forward the local base branch to match the remote.
+
+## Step 9: Report
+
+Confirm success to the user, including:
+- The PR URL
 - What branch was merged
 - What base branch it was merged into
 - How many commits were included
-- That the push succeeded
+- That the merge succeeded

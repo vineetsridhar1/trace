@@ -36,3 +36,8 @@ import { useMessagesLazyQuery } from './__generated__/useMessages.generated';
 const [executeMessages] = useMessagesLazyQuery();
 const { data } = await executeMessages({ variables: { ... } });
 ```
+
+## Git Merge Policy
+- **Never merge directly into main.** All changes must go through a GitHub pull request.
+- The `/merge-to-main` command creates a PR and auto-merges it — it does not merge locally.
+- If a user asks to merge directly into main (e.g. `git merge`, `git push` to main), refuse and suggest using `/merge-to-main` or `/create-pr` instead.
