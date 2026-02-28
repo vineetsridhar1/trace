@@ -740,19 +740,17 @@ function AppContent() {
     const setupScript = channel?.setupScript;
     const runScript = channel?.runScript;
 
+    const portResult = await window.traceAPI.allocatePorts(selectedWorkspaceId, 10);
     let env: Record<string, string> | undefined;
-    if (runScript?.trim()) {
-      const portResult = await window.traceAPI.allocatePorts(selectedWorkspaceId, 10);
-      if (portResult.success && portResult.ports) {
-        const ports = portResult.ports;
-        env = {
-          PORT: String(ports[0]),
-          TRACE_BASE_PORT: String(ports[0]),
-          REPO_FOLDER: worktreeResult.worktreePath,
-        };
-        for (let i = 0; i < ports.length; i += 1) {
-          env[`TRACE_PORT_${i}`] = String(ports[i]);
-        }
+    if (portResult.success && portResult.ports) {
+      const ports = portResult.ports;
+      env = {
+        PORT: String(ports[0]),
+        TRACE_BASE_PORT: String(ports[0]),
+        REPO_FOLDER: worktreeResult.worktreePath,
+      };
+      for (let i = 0; i < ports.length; i += 1) {
+        env[`TRACE_PORT_${i}`] = String(ports[i]);
       }
     }
 

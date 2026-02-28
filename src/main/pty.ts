@@ -22,7 +22,7 @@ export function createPty(
   const baseEnv = Object.fromEntries(
     Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
   ) as Record<string, string>;
-  const proc = pty.spawn(shell, [], {
+  const proc = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
