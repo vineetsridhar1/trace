@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 
 export interface TerminalTab {
   terminalId: string;
@@ -39,6 +39,21 @@ export function useStartupTerminals() {
   const [initialized, setInitialized] = useState(false);
   // All workspaces' terminal entries (for persistent rendering)
   const [allTerminalEntries, setAllTerminalEntries] = useState<TerminalEntry[]>([]);
+
+  // Track which terminal IDs have running processes
+  const runningPtyIdsRef = useRef<Set<string>>(new Set());
+  const [runningPtyIds, setRunningPtyIds] = useState<Set<string>>(new Set());
+
+  // Listen for PTY exits globally to update running state
+  useEffect(() => {
+    const cleanup = window.traceAPI.onPtyExit((terminalId) => {
+      if (runningPtyIdsRef.current.has(terminalId)) {
+        runningPtyIdsRef.current.delete(terminalId);
+        setRunningPtyIds(new Set(runningPtyIdsRef.current));
+      }
+    });
+    return cleanup;
+  }, []);
 
   // Rebuild allTerminalEntries from the ref map
   const syncAllToState = useCallback(() => {
@@ -135,6 +150,14 @@ export function useStartupTerminals() {
     };
     allTerminalsRef.current.set(workspaceId, entry);
 
+    // Track terminals with commands as running
+    for (const t of newTerminals) {
+      if (t.command) {
+        runningPtyIdsRef.current.add(t.terminalId);
+      }
+    }
+    setRunningPtyIds(new Set(runningPtyIdsRef.current));
+
     // Update React state if this is the current workspace
     if (currentWorkspaceIdRef.current === workspaceId) {
       syncToState(workspaceId);
@@ -150,6 +173,13 @@ export function useStartupTerminals() {
     const entry = allTerminalsRef.current.get(wsId);
     if (!entry) return;
 
+    // Kill the old PTY for this tab
+    const oldTab = entry.terminals.find((t) => t.name === tabName);
+    if (oldTab) {
+      void window.traceAPI.killPty(oldTab.terminalId);
+      runningPtyIdsRef.current.delete(oldTab.terminalId);
+    }
+
     runCountRef.current += 1;
     const run = runCountRef.current;
     const newTerminalId = `${tabName.toLowerCase()}-${wsId}-${run}`;
@@ -159,13 +189,11 @@ export function useStartupTerminals() {
         ? { terminalId: newTerminalId, name: tabName, command, env, readOnly: t.readOnly }
         : t,
     );
-    // If the replaced tab was active, keep focus on it
-    const wasActive = entry.activeTabId === entry.terminals.find(t => t.name === tabName)?.terminalId;
-    if (wasActive || entry.activeTabId === null) {
-      entry.activeTabId = newTerminalId;
-    }
-    // Always set active to the rerun tab
     entry.activeTabId = newTerminalId;
+
+    // Track the new terminal as running
+    runningPtyIdsRef.current.add(newTerminalId);
+    setRunningPtyIds(new Set(runningPtyIdsRef.current));
 
     if (currentWorkspaceIdRef.current === wsId) {
       syncToState(wsId);
@@ -184,6 +212,7 @@ export function useStartupTerminals() {
 
     // Kill the running PTY
     void window.traceAPI.killPty(existing.terminalId);
+    runningPtyIdsRef.current.delete(existing.terminalId);
 
     // Replace with a new idle terminal (no command)
     runCountRef.current += 1;
@@ -199,6 +228,8 @@ export function useStartupTerminals() {
       entry.activeTabId = newTerminalId;
     }
 
+    setRunningPtyIds(new Set(runningPtyIdsRef.current));
+
     if (currentWorkspaceIdRef.current === wsId) {
       syncToState(wsId);
     }
@@ -206,8 +237,16 @@ export function useStartupTerminals() {
 
   // Delete all terminals for a specific workspace
   const killAllForWorkspace = useCallback((workspaceId: string) => {
+    const entry = allTerminalsRef.current.get(workspaceId);
+    if (entry) {
+      for (const t of entry.terminals) {
+        void window.traceAPI.killPty(t.terminalId);
+        runningPtyIdsRef.current.delete(t.terminalId);
+      }
+    }
     allTerminalsRef.current.delete(workspaceId);
     initializedRef.current.delete(workspaceId);
+    setRunningPtyIds(new Set(runningPtyIdsRef.current));
     if (currentWorkspaceIdRef.current === workspaceId) {
       syncToState(workspaceId);
     } else {
@@ -217,6 +256,13 @@ export function useStartupTerminals() {
 
   // Clear everything (channel switch)
   const killAll = useCallback(() => {
+    // Kill all PTYs before clearing state
+    for (const [, state] of allTerminalsRef.current) {
+      for (const t of state.terminals) {
+        void window.traceAPI.killPty(t.terminalId);
+        runningPtyIdsRef.current.delete(t.terminalId);
+      }
+    }
     allTerminalsRef.current.clear();
     initializedRef.current.clear();
     currentWorkspaceIdRef.current = null;
@@ -225,10 +271,29 @@ export function useStartupTerminals() {
     setCwd('');
     setInitialized(false);
     setAllTerminalEntries([]);
+    setRunningPtyIds(new Set(runningPtyIdsRef.current));
   }, []);
+
+  // Detach all terminals from React state without killing PTYs (for channel switch)
+  const detachAll = useCallback(() => {
+    currentWorkspaceIdRef.current = null;
+    setTerminals([]);
+    setActiveTabIdState(null);
+    setCwd('');
+    setInitialized(false);
+    setAllTerminalEntries([]);
+  }, []);
+
+  // Reattach terminals from refs back into React state (for channel return)
+  const reattach = useCallback(() => {
+    syncAllToState();
+  }, [syncAllToState]);
 
   // Close a single terminal tab
   const killTerminal = useCallback((terminalId: string) => {
+    void window.traceAPI.killPty(terminalId);
+    runningPtyIdsRef.current.delete(terminalId);
+    setRunningPtyIds(new Set(runningPtyIdsRef.current));
     const wsId = currentWorkspaceIdRef.current;
     if (!wsId) return;
     const entry = allTerminalsRef.current.get(wsId);
@@ -315,11 +380,34 @@ export function useStartupTerminals() {
 
       allTerminalsRef.current.set(contextId, entry);
       initializedRef.current.add(contextId);
+
+      // Track terminals with commands as running
+      for (const t of newTerminals) {
+        if (t.command) {
+          runningPtyIdsRef.current.add(t.terminalId);
+        }
+      }
+      setRunningPtyIds(new Set(runningPtyIdsRef.current));
+
       currentWorkspaceIdRef.current = contextId;
       syncToState(contextId);
     },
     [syncToState],
   );
+
+  // Derive which workspaces have running processes
+  const workspacesWithRunningProcesses = useMemo(() => {
+    const result = new Set<string>();
+    for (const [wsId, state] of allTerminalsRef.current) {
+      for (const t of state.terminals) {
+        if (runningPtyIds.has(t.terminalId)) {
+          result.add(wsId);
+          break;
+        }
+      }
+    }
+    return result;
+  }, [runningPtyIds]);
 
   return {
     terminals,
@@ -338,5 +426,9 @@ export function useStartupTerminals() {
     killTerminal,
     addTerminal,
     runAllScripts,
+    detachAll,
+    reattach,
+    runningPtyIds,
+    workspacesWithRunningProcesses,
   };
 }

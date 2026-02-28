@@ -66,6 +66,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
 
     let terminal: Terminal | null = null;
     let fitAddon: FitAddon | null = null;
+    let initializing = false;
     let inputDisposable: { dispose: () => void } | null = null;
     let resizeDisposable: { dispose: () => void } | null = null;
     let cleanupData: (() => void) | null = null;
@@ -74,8 +75,9 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     const focusTimers: ReturnType<typeof setTimeout>[] = [];
     const miscTimers: ReturnType<typeof setTimeout>[] = [];
 
-    const init = () => {
-      if (terminal) return;
+    const init = async () => {
+      if (terminal || initializing) return;
+      initializing = true;
 
       terminal = new Terminal({
         theme: TOKYO_NIGHT_THEME,
@@ -105,7 +107,21 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
         focusTimers.push(timer);
       }
 
-      void window.traceAPI.createPty(terminalId, cwd, env).then((result) => {
+      // Check if the PTY already exists (reconnect after navigation)
+      let ptyExists = false;
+      try {
+        const hasResult = await window.traceAPI.hasPty(terminalId);
+        ptyExists = hasResult.success && hasResult.exists;
+      } catch {
+        // Assume no existing PTY
+      }
+
+      if (ptyExists) {
+        // Reconnect: just set up listeners and trigger a resize
+        terminal.write('\r\n[Reconnected]\r\n');
+      } else {
+        // Create a new PTY
+        const result = await window.traceAPI.createPty(terminalId, cwd, env);
         if (!result.success) {
           terminal?.write(`\r\n[PTY start failed: ${result.error ?? 'unknown error'}]\r\n`);
         } else if (command) {
@@ -136,7 +152,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
           }, 3000);
           miscTimers.push(fallback);
         }
-      });
+      }
 
       if (!readOnly) {
         inputDisposable = terminal.onData((data) => {
@@ -155,6 +171,12 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
       resizeDisposable = terminal.onResize(({ cols, rows }) => {
         void window.traceAPI.resizePty(terminalId, cols, rows);
       });
+
+      // Trigger a resize so the PTY gets the correct dimensions
+      if (fitAddon) {
+        const t = setTimeout(() => fitAddon?.fit(), 50);
+        miscTimers.push(t);
+      }
     };
 
     const handleWindowFocus = () => focusInput();
@@ -164,7 +186,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     // The container may start at zero size during CSS transitions.
     const observer = new ResizeObserver(() => {
       if (!terminal && container.clientWidth > 0 && container.clientHeight > 0) {
-        init();
+        void init();
       } else if (fitAddon && container.clientWidth > 0 && container.clientHeight > 0) {
         fitAddon.fit();
       }
@@ -172,7 +194,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     observer.observe(container);
 
     if (container.clientWidth > 0 && container.clientHeight > 0) {
-      init();
+      void init();
     }
 
     return () => {
@@ -186,7 +208,6 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
       cleanupExit?.();
       cleanupCmdReady?.();
       terminal?.dispose();
-      void window.traceAPI.killPty(terminalId);
       terminalRef.current = null;
       fitAddonRef.current = null;
     };

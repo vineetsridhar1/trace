@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { FiCheck, FiGitMerge, FiGitPullRequest, FiLoader, FiTrash2 } from 'react-icons/fi';
+import { FiCheck, FiGitMerge, FiGitPullRequest, FiLoader, FiTerminal, FiTrash2 } from 'react-icons/fi';
 import type { Workspace, KanbanTicket, TicketStatus } from '../types';
 import { avatarInitial } from '../utils';
 
@@ -52,6 +52,7 @@ interface MessageItemProps {
   onDeleteWorkspace?: (workspaceId: string) => void;
   onDeleteWorktree?: (workspaceId: string) => void;
   hasActiveWorktree?: boolean;
+  hasRunningProcess?: boolean;
   dimmed?: boolean;
 }
 
@@ -64,6 +65,7 @@ export const MessageItem = memo(function MessageItem({
   onDeleteWorkspace,
   onDeleteWorktree,
   hasActiveWorktree,
+  hasRunningProcess,
   dimmed,
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
@@ -102,6 +104,11 @@ export const MessageItem = memo(function MessageItem({
           <div className="truncate font-mono text-[10px] text-[#565f89]">{branch}</div>
         )}
       </div>
+
+      {/* Running process indicator */}
+      {hasRunningProcess && (
+        <FiTerminal className="h-3 w-3 flex-shrink-0 text-green-400" title="Running process" />
+      )}
 
       {/* Status icon */}
       <StatusIcon status={status} />
@@ -160,6 +167,7 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
     prev.hasActiveWorktree === next.hasActiveWorktree &&
+    prev.hasRunningProcess === next.hasRunningProcess &&
     prev.onOpenWorkspace === next.onOpenWorkspace &&
     prev.onDeleteWorkspace === next.onDeleteWorkspace &&
     prev.onDeleteWorktree === next.onDeleteWorktree
