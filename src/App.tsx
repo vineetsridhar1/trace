@@ -567,9 +567,8 @@ function AppContent() {
     if (sessionStatus === 'empty') return false;
     const lastEvent = sessionEvents[sessionEvents.length - 1];
     if (lastEvent?.hookEventName === 'Stop') return false;
-    const workspace = workspaces.find((item) => item.id === selectedWorkspaceId);
-    return workspace ? workspace.cliSession.status !== 'stopped' : false;
-  }, [isWorkspaceSpawned, workspaces, selectedWorkspaceId, sessionEvents, sessionStatus]);
+    return true;
+  }, [isWorkspaceSpawned, selectedWorkspaceId, sessionEvents, sessionStatus]);
 
   useEffect(() => {
     if (activeChannelId) {
