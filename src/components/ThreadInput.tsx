@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-import { FiSend } from 'react-icons/fi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FiSend, FiX, FiClock } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { ModelEffortSelector } from './ModelEffortSelector';
 import { useClaudeRunStore } from '../stores/claudeRunStore';
@@ -37,6 +37,7 @@ export function ThreadInput({
   const setSelectedModel = useClaudeRunStore((s) => s.setSelectedModel);
   const setSelectedEffort = useClaudeRunStore((s) => s.setSelectedEffort);
   const [threadInput, setThreadInput] = useState('');
+  const [isQueued, setIsQueued] = useState(false);
   const [mode, setMode] = useState<InteractionMode>('code');
   const cycleMode = () => {
     const modes: InteractionMode[] = ['code', 'plan', 'ask'];
@@ -47,13 +48,14 @@ export function ThreadInput({
   const fileMention = useFileMention(threadInput, setThreadInput, repoPath, textareaRef);
   const imageAttachments = useImageAttachments();
 
-  const handleSendThreadMessage = useCallback(async () => {
+  const sendNow = useCallback(async () => {
     const text = threadInput.trim();
-    if (!text || isClaudeRunning) return;
+    if (!text) return;
 
     // Intercept /clear command
     if (text === '/clear' || text.startsWith('/clear ')) {
       setThreadInput('');
+      setIsQueued(false);
       await onClearThread();
       return;
     }
@@ -76,10 +78,34 @@ export function ThreadInput({
     );
     if (sent) {
       setThreadInput('');
+      setIsQueued(false);
       imageAttachments.clearAttachments();
       fileMention.clearMentions();
     }
-  }, [threadInput, mode, isClaudeRunning, onSendThreadMessage, onClearThread, imageAttachments, fileMention]);
+  }, [threadInput, mode, onSendThreadMessage, onClearThread, imageAttachments, fileMention]);
+
+  const handleSendOrQueue = useCallback(() => {
+    const text = threadInput.trim();
+    if (!text) return;
+
+    if (isClaudeRunning) {
+      // Queue the message for when Claude finishes
+      setIsQueued(true);
+    } else {
+      void sendNow();
+    }
+  }, [threadInput, isClaudeRunning, sendNow]);
+
+  // Auto-send queued message when Claude finishes
+  const wasRunningRef = useRef(isClaudeRunning);
+  useEffect(() => {
+    const wasRunning = wasRunningRef.current;
+    wasRunningRef.current = isClaudeRunning;
+
+    if (wasRunning && !isClaudeRunning && isQueued) {
+      void sendNow();
+    }
+  }, [isClaudeRunning, isQueued, sendNow]);
 
   return (
     <div className="border-t border-[#292e42] px-3 py-3">
@@ -109,6 +135,20 @@ export function ThreadInput({
           {lastUserMessageTime && (
             <ElapsedTimer startTime={lastUserMessageTime} />
           )}
+        </div>
+      )}
+      {isQueued && (
+        <div className="mb-2 flex items-center gap-2 px-1">
+          <FiClock className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+          <span className="text-xs text-amber-400">Message queued — will send when Claude finishes</span>
+          <button
+            type="button"
+            onClick={() => setIsQueued(false)}
+            className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[#565f89] transition-colors hover:bg-[#292e42] hover:text-[#c0caf5]"
+          >
+            <FiX className="h-3 w-3" />
+            Cancel
+          </button>
         </div>
       )}
       <ImageThumbnails
@@ -159,8 +199,10 @@ export function ThreadInput({
             id="thread-input"
             rows={1}
             value={threadInput}
-            disabled={isClaudeRunning}
-            onChange={(e) => setThreadInput(e.target.value)}
+            onChange={(e) => {
+              setThreadInput(e.target.value);
+              if (!e.target.value.trim()) setIsQueued(false);
+            }}
             onSelect={fileMention.handleSelect}
             onPaste={(e) => void imageAttachments.handlePaste(e)}
             onKeyDown={(e) => {
@@ -173,40 +215,58 @@ export function ThreadInput({
               if (slashCommands.handleKeyDown(e)) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isClaudeRunning) void handleSendThreadMessage();
+                handleSendOrQueue();
               }
             }}
             placeholder={
-              isClaudeRunning ? 'Waiting for Claude...' : 'Send to Claude...'
+              isClaudeRunning
+                ? isQueued
+                  ? 'Edit your queued message...'
+                  : 'Type a message to queue...'
+                : 'Send to Claude...'
             }
             style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-            className={`w-full resize-none rounded-md border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isClaudeRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`w-full resize-none rounded-md border bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isQueued ? 'border-amber-500/50' : 'border-[#292e42]'}`}
           />
         </div>
         {isClaudeRunning ? (
-          <Tooltip text="Stop Claude">
-            <button
-              id="thread-stop"
-              type="button"
-              onClick={onStopClaude}
-              className="h-[38px] cursor-pointer rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="currentColor"
-                aria-hidden="true"
+          <div className="flex gap-1.5">
+            {!isQueued && threadInput.trim() && (
+              <Tooltip text="Queue message">
+                <button
+                  id="thread-queue"
+                  type="button"
+                  onClick={handleSendOrQueue}
+                  className="h-[38px] cursor-pointer rounded-md bg-amber-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-600"
+                >
+                  <FiClock className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip text="Stop Claude">
+              <button
+                id="thread-stop"
+                type="button"
+                onClick={onStopClaude}
+                className="h-[38px] cursor-pointer rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
               >
-                <rect x="6" y="6" width="12" height="12" rx="1" />
-              </svg>
-            </button>
-          </Tooltip>
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              </button>
+            </Tooltip>
+          </div>
         ) : (
           <Tooltip text="Send message">
             <button
               id="thread-send"
               type="button"
-              onClick={() => void handleSendThreadMessage()}
+              onClick={() => void sendNow()}
               className="h-[38px] cursor-pointer rounded-md bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
             >
               <FiSend className="h-4 w-4" aria-hidden="true" />
