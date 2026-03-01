@@ -242,7 +242,6 @@ export async function spawnClaude(
 
   child.on('close', async (code) => {
     const tag = `[claude:${workspaceId.slice(0, 8)}]`;
-    console.log(`${tag} exited with code ${code}`);
     appendClaudeDebugLog(
       workspaceId,
       `close code=${code} durationMs=${Date.now() - startedAt} stderrLen=${stderrBuffer.length}`,
@@ -271,7 +270,7 @@ export async function spawnClaude(
       const claudeSessionId = enrichment.sessionId;
 
       if (!claudeSessionId) {
-        console.warn(`${tag} no session_id from stream — Claude likely exited before producing output (code=${code} stderr=${stderrBuffer.trim().slice(0, 200) || 'none'})`);
+        appendClaudeDebugLog(workspaceId, `no session_id from stream (code=${code} stderrLen=${stderrBuffer.length})`);
       }
 
       // Resolve git branch
@@ -327,7 +326,6 @@ export async function spawnClaude(
         ...(branchName && { branch_name: branchName }),
       };
 
-      console.log(`${tag} posting Stop session=${payload.session_id.slice(0, 8)} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'}`);
       appendClaudeDebugLog(workspaceId, `stop payload session=${payload.session_id} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'} msgLen=${messageToPersist.length}`);
 
       const response = await fetch(`${SERVER_URL}/events`, {
@@ -335,7 +333,6 @@ export async function spawnClaude(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      console.log(`${tag} Stop posted status=${response.status}`);
       appendClaudeDebugLog(workspaceId, `stop event posted status=${response.status} ok=${response.ok}`);
     } catch (err) {
       console.error(`${tag} close handler error:`, err);

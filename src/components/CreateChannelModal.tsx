@@ -105,14 +105,11 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
 
   const handleSuggestScripts = useCallback(async () => {
     if (!localRepoPath) {
-      console.warn('[SuggestScripts] No localRepoPath');
       return;
     }
-    console.log('[SuggestScripts] Calling suggestScripts with', localRepoPath);
     setSuggesting(true);
     try {
       const result = await window.traceAPI.suggestScripts(localRepoPath);
-      console.log('[SuggestScripts] Result:', result);
       if (result.success) {
         if (result.setupScript) setDefaultSetupScript(result.setupScript);
         if (result.runScript) setDefaultRunScript(result.runScript);

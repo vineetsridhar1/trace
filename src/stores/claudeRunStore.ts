@@ -15,9 +15,7 @@ interface ClaudeWorkspaceActions {
   markMerged: () => Promise<void>;
 }
 
-const noopWarn = (name: string) => (..._args: unknown[]) => {
-  console.warn(`claudeRunStore.${name} called before registration`);
-};
+const noopWarn = (_name: string) => (..._args: unknown[]) => {};
 
 const defaultWorkspaceActions: ClaudeWorkspaceActions = {
   sendMessage: noopWarn('sendMessage') as ClaudeWorkspaceActions['sendMessage'],

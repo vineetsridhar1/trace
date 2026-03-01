@@ -14,9 +14,7 @@ interface ThreadSyncActions {
   reportClaudeActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
 }
 
-const noopWarn = (name: string) => (..._args: unknown[]) => {
-  console.warn(`threadStore.${name} called before registration`);
-};
+const noopWarn = (_name: string) => (..._args: unknown[]) => {};
 
 const defaultSyncActions: ThreadSyncActions = {
   loadSessionEvents: noopWarn('loadSessionEvents') as ThreadSyncActions['loadSessionEvents'],

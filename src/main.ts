@@ -56,10 +56,6 @@ const createWindow = () => {
 };
 
 app.on('ready', () => {
-  const rawEnv = process.env.TRACE_SERVER_URL;
-  const backendUrl = rawEnv ? (rawEnv.startsWith('http') ? rawEnv : `http://localhost:${rawEnv}`) : 'http://localhost:3100';
-  console.log(`[Trace] Backend server URL: ${backendUrl}`);
-  console.log(`[Trace] TRACE_SERVER_URL env: ${rawEnv ?? '(not set, using default)'}`);
   setWorktreeBase(path.join(app.getPath('userData'), 'worktrees'));
   createWindow();
 });
@@ -84,7 +80,6 @@ app.on('before-quit', () => {
       stopWatchdog(id, 'app-before-quit');
       runStateByWorkspaceId.delete(id);
       proc.kill('SIGTERM');
-      console.log(`Killed claude process for ${id.slice(0, 8)}`);
     }
   }
   runningProcesses.clear();

@@ -54,11 +54,6 @@ export function useWorktreeState({
           console.error('Failed to delete worktree:', result.error);
           return;
         }
-        console.log(
-          result.removed
-            ? `Deleted worktree: ${result.worktreePath}`
-            : `Worktree already missing: ${result.worktreePath}`,
-        );
         setHasWorktree(false);
         onDeleted?.(workspace.id);
       } finally {
@@ -86,7 +81,6 @@ export function useWorktreeState({
         console.error('Failed to merge worktree:', result.error);
         return;
       }
-      console.log(`Merged branch ${result.branch} into ${baseBranch}`);
     } finally {
       setMergingWorktree(false);
     }

@@ -121,13 +121,9 @@ async function runAutoCompleteIfNeeded(
       return !filePath.includes('/.claude/');
     }).length;
 
-    console.log(`[event] auto-complete: writes=${writeEvents.length} repoWrites=${repoWriteCount} ws=${workspaceId.slice(0, 8)}`);
-
     await updateWorkspaceStatus(workspaceId, 'completed');
     void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'completed');
     void checkAndTriggerDependents(workspaceId, channelId);
-
-    console.log(`[event] status: ${currentStatus} -> completed ws=${workspaceId.slice(0, 8)}`);
   }
 
   // Broadcast the final workspace status to the frontend
@@ -152,7 +148,6 @@ export async function ingestEvent(payload: HookEvent) {
     ? await getWorkspaceByIdWithSessions(resolvedWorkspaceId)
     : null;
   if (!workspace) {
-    console.log(`[event] DROPPED ${payload.hook_event_name} — no workspace found (cwd=${payload.cwd?.slice(-40)} resolvedId=${resolvedWorkspaceId})`);
     return null;
   }
 
@@ -350,7 +345,6 @@ export async function ingestEvent(payload: HookEvent) {
     });
 
     if (recentStop) {
-      console.log(`[event] Stop DEDUPED ws=${workspace.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} existingId=${recentStop.id.slice(0, 8)} age=${Date.now() - recentStop.timestamp.getTime()}ms`);
       const updates: Record<string, unknown> = {};
       // Prefer newer enriched Stop text from the close handler.
       if (
@@ -432,7 +426,6 @@ export async function ingestEvent(payload: HookEvent) {
   }
 
   const event = await prisma.event.create({ data: eventData });
-  console.log(`[event] ${payload.hook_event_name}${eventData.toolName ? ':' + eventData.toolName : ''} ws=${workspace.id.slice(0, 8)} session=${payload.session_id.slice(0, 8)} status=${currentStatus}`);
 
   // Auto-transition in_progress -> needs_input when AskUserQuestion or ExitPlanMode is detected
   if ((eventData.toolName === 'AskUserQuestion' || eventData.toolName === 'ExitPlanMode') && currentStatus === 'in_progress') {
