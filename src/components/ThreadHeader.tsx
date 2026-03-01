@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiCheck, FiClock, FiLoader, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
+import { FiCheck, FiClock, FiCopy, FiExternalLink, FiLoader, FiMaximize2, FiMinimize2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
 import type { SessionInfo } from '../hooks/useThread';
@@ -50,6 +50,7 @@ interface ThreadHeaderProps {
   onSetViewMode: (mode: ViewMode) => void;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
+  worktreePath: string | null;
   isFullscreen: boolean;
   onClose: () => void;
   onDeleteWorktree: () => void;
@@ -70,6 +71,7 @@ export const ThreadHeader = memo(function ThreadHeader({
   onSetViewMode,
   deletingWorktree,
   hasWorktree,
+  worktreePath,
   isFullscreen,
   onClose,
   onDeleteWorktree,
@@ -96,6 +98,46 @@ export const ThreadHeader = memo(function ThreadHeader({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [historyOpen]);
+
+  // ─── Open In dropdown ──────────────────────────────────────────
+  const [openInOpen, setOpenInOpen] = useState(false);
+  const [installedApps, setInstalledApps] = useState<Array<{ id: string; label: string }> | null>(null);
+  const openInRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!openInOpen || installedApps !== null) return;
+    void (async () => {
+      try {
+        const result = await window.traceAPI.detectInstalledApps();
+        setInstalledApps(result.success && result.apps.length > 0
+          ? result.apps
+          : [{ id: 'finder', label: 'Finder' }, { id: 'terminal', label: 'Terminal' }]);
+      } catch {
+        setInstalledApps([{ id: 'finder', label: 'Finder' }, { id: 'terminal', label: 'Terminal' }]);
+      }
+    })();
+  }, [openInOpen, installedApps]);
+
+  useEffect(() => {
+    if (!openInOpen) return;
+    const handleClickOutsideOpenIn = (e: MouseEvent) => {
+      if (openInRef.current && !openInRef.current.contains(e.target as Node)) {
+        setOpenInOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutsideOpenIn);
+    return () => document.removeEventListener('mousedown', handleClickOutsideOpenIn);
+  }, [openInOpen]);
+
+  const handleOpenInApp = async (appId: string) => {
+    if (!worktreePath) return;
+    if (appId === 'copy-path') {
+      await navigator.clipboard.writeText(worktreePath);
+    } else {
+      await window.traceAPI.openInApp(appId, worktreePath);
+    }
+    setOpenInOpen(false);
+  };
 
   return (
     <div
@@ -227,6 +269,57 @@ export const ThreadHeader = memo(function ThreadHeader({
                     </button>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+        {hasWorktree === true && worktreePath && (
+          <div className="relative" ref={openInRef}>
+            <Tooltip text="Open in…" position="bottom">
+              <button
+                type="button"
+                onClick={() => setOpenInOpen((prev) => !prev)}
+                className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
+                  openInOpen
+                    ? 'border-violet-400/50 text-violet-300'
+                    : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
+                }`}
+              >
+                <FiExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </Tooltip>
+            {openInOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#565f89]">
+                  Open In
+                </div>
+                {installedApps === null ? (
+                  <div className="flex items-center justify-center py-3">
+                    <FiLoader className="h-3.5 w-3.5 animate-spin text-[#565f89]" />
+                  </div>
+                ) : (
+                  <>
+                    {installedApps.map((app) => (
+                      <button
+                        key={app.id}
+                        type="button"
+                        onClick={() => void handleOpenInApp(app.id)}
+                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                      >
+                        {app.label}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-[#292e42]" />
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenInApp('copy-path')}
+                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                    >
+                      <FiCopy className="h-3 w-3" aria-hidden="true" />
+                      Copy path
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

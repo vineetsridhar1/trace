@@ -49,6 +49,7 @@ interface ThreadState {
 
   // Worktree
   hasWorktree: boolean | null;
+  worktreePath: string | null;
   deletingWorktree: boolean;
   mergingWorktree: boolean;
 
@@ -85,6 +86,7 @@ interface ThreadState {
 
   // Actions: Worktree
   setHasWorktree: (value: boolean | null) => void;
+  setWorktreePath: (value: string | null) => void;
   setDeletingWorktree: (value: boolean) => void;
   setMergingWorktree: (value: boolean) => void;
 }
@@ -110,6 +112,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   // Worktree
   hasWorktree: null,
+  worktreePath: null,
   deletingWorktree: false,
   mergingWorktree: false,
 
@@ -206,6 +209,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       selectedWorkspaceId: workspace.id,
       selectedWorkspace: workspace,
       hasWorktree: null,
+      worktreePath: null,
       threadWidth: width,
       // Reset session view state
       expandedReadGroupIds: {},
@@ -229,6 +233,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       sessionTotal: 0,
       loadingOlderEvents: false,
       tokenUsage: null,
+      worktreePath: null,
     }),
 
   toggleReadGroup: (groupId) =>
@@ -258,6 +263,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   // Actions: Worktree
   setHasWorktree: (value) => set({ hasWorktree: value }),
+  setWorktreePath: (value) => set({ worktreePath: value }),
   setDeletingWorktree: (value) => set({ deletingWorktree: value }),
   setMergingWorktree: (value) => set({ mergingWorktree: value }),
 }));

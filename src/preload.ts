@@ -168,4 +168,10 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   pullMain: (repoPath: string, baseBranch: string) =>
     ipcRenderer.invoke('pull-main', repoPath, baseBranch) as Promise<{ success: boolean; error?: string }>,
+
+  detectInstalledApps: () =>
+    ipcRenderer.invoke('detect-installed-apps') as Promise<{ success: boolean; apps: Array<{ id: string; label: string }>; error?: string }>,
+
+  openInApp: (appId: string, targetPath: string) =>
+    ipcRenderer.invoke('open-in-app', appId, targetPath) as Promise<{ success: boolean; error?: string }>,
 });

@@ -186,14 +186,18 @@ export function useThreadSync(
     async (workspaceId: string) => {
       if (!window.traceAPI || typeof window.traceAPI.checkWorktreeExists !== 'function') {
         useThreadStore.getState().setHasWorktree(false);
+        useThreadStore.getState().setWorktreePath(null);
         return;
       }
       try {
         const repoPath = getChannelRepoPath();
         const result = await window.traceAPI.checkWorktreeExists(workspaceId, repoPath);
-        useThreadStore.getState().setHasWorktree(result.success && result.exists === true);
+        const exists = result.success && result.exists === true;
+        useThreadStore.getState().setHasWorktree(exists);
+        useThreadStore.getState().setWorktreePath(exists && result.worktreePath ? result.worktreePath : null);
       } catch {
         useThreadStore.getState().setHasWorktree(false);
+        useThreadStore.getState().setWorktreePath(null);
       }
     },
     [getChannelRepoPath],
@@ -216,6 +220,7 @@ export function useThreadSync(
           return;
         }
         useThreadStore.getState().setHasWorktree(false);
+        useThreadStore.getState().setWorktreePath(null);
         onDeleted?.(workspace.id);
       } finally {
         useThreadStore.getState().setDeletingWorktree(false);

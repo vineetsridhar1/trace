@@ -96,6 +96,8 @@ export interface TraceAPI {
   githubLogin: () => Promise<{ success: boolean; token?: string; user?: { id: string; email: string; name: string; avatarUrl: string | null }; error?: string }>;
   checkMainStatus: (repoPath: string, baseBranch: string) => Promise<{ success: boolean; isUpToDate?: boolean; commitsBehind?: number; localSha?: string; remoteSha?: string; error?: string }>;
   pullMain: (repoPath: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>;
+  detectInstalledApps: () => Promise<{ success: boolean; apps: Array<{ id: string; label: string }>; error?: string }>;
+  openInApp: (appId: string, targetPath: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

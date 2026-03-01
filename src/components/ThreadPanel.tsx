@@ -61,6 +61,7 @@ export function ThreadPanel() {
   const expandedReadGroupIds = useThreadStore((s) => s.expandedReadGroupIds);
   const expandedTurnGroupIds = useThreadStore((s) => s.expandedTurnGroupIds);
   const hasWorktree = useThreadStore((s) => s.hasWorktree);
+  const worktreePath = useThreadStore((s) => s.worktreePath);
   const deletingWorktree = useThreadStore((s) => s.deletingWorktree);
   const toggleReadGroup = useThreadStore((s) => s.toggleReadGroup);
   const toggleTurnGroup = useThreadStore((s) => s.toggleTurnGroup);
@@ -408,6 +409,7 @@ export function ThreadPanel() {
           onSetViewMode={setViewMode}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
+          worktreePath={worktreePath}
           isFullscreen={isFullscreen}
           onClose={handleClose}
           onDeleteWorktree={handleDeleteWorktree}

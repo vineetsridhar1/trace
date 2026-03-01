@@ -42,6 +42,24 @@ const PTY_GET_PROCESSES_CHANNEL = 'pty-get-processes';
 const GITHUB_LOGIN_CHANNEL = 'github-login';
 const CHECK_MAIN_STATUS_CHANNEL = 'check-main-status';
 const PULL_MAIN_CHANNEL = 'pull-main';
+const DETECT_INSTALLED_APPS_CHANNEL = 'detect-installed-apps';
+const OPEN_IN_APP_CHANNEL = 'open-in-app';
+
+// Curated allow-list of dev tools we show in the "Open In" menu.
+// Maps bundle identifier → { id, label, openArgs } used by the open-in-app handler.
+const ALLOWED_APPS: Record<string, { id: string; label: string; openArgs: string[] }> = {
+  'com.apple.finder':                { id: 'finder',   label: 'Finder',    openArgs: [] },
+  'com.todesktop.230313mzl4w4u92':   { id: 'cursor',   label: 'Cursor',    openArgs: ['-a', 'Cursor'] },
+  'com.microsoft.VSCode':            { id: 'vscode',   label: 'VS Code',   openArgs: ['-a', 'Visual Studio Code'] },
+  'com.googlecode.iterm2':           { id: 'iterm',    label: 'iTerm',     openArgs: ['-a', 'iTerm'] },
+  'com.apple.Terminal':              { id: 'terminal', label: 'Terminal',  openArgs: ['-a', 'Terminal'] },
+};
+
+// Display order for the menu
+const APP_DISPLAY_ORDER = ['finder', 'cursor', 'vscode', 'iterm', 'terminal'];
+
+// Module-level cache so we only query Launch Services once per app lifetime
+let installedAppsCache: Array<{ id: string; label: string }> | null = null;
 
 let mainWindowRef: BrowserWindow | null = null;
 let branchWatchers: fs.FSWatcher[] = [];
@@ -94,6 +112,8 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(GITHUB_LOGIN_CHANNEL);
   ipcMain.removeHandler(CHECK_MAIN_STATUS_CHANNEL);
   ipcMain.removeHandler(PULL_MAIN_CHANNEL);
+  ipcMain.removeHandler(DETECT_INSTALLED_APPS_CHANNEL);
+  ipcMain.removeHandler(OPEN_IN_APP_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string) => {
     try {
@@ -579,5 +599,60 @@ export function registerIpcHandlers() {
         resolve({ success: false, error: 'Window closed by user' });
       });
     });
+  });
+
+  ipcMain.handle(DETECT_INSTALLED_APPS_CHANNEL, async () => {
+    if (installedAppsCache) {
+      return { success: true, apps: installedAppsCache };
+    }
+    try {
+      const allowedBundleIds = Object.keys(ALLOWED_APPS);
+      // Use NSWorkspace.URLForApplicationWithBundleIdentifier to check each app.
+      // This queries the Launch Services database directly — fast and always up-to-date.
+      const jxaScript = `
+ObjC.import('AppKit');
+var ws = $.NSWorkspace.sharedWorkspace;
+var ids = ${JSON.stringify(allowedBundleIds)};
+var found = [];
+for (var i = 0; i < ids.length; i++) {
+  var url = ws.URLForApplicationWithBundleIdentifier(ids[i]);
+  if (url && url.path) {
+    found.push(ids[i]);
+  }
+}
+JSON.stringify(found);
+`;
+      const result = await runProcess('osascript', ['-l', 'JavaScript', '-'], '/', jxaScript);
+      if (result.code === 0 && result.stdout.trim()) {
+        const foundBundleIds: string[] = JSON.parse(result.stdout.trim());
+        const apps = allowedBundleIds
+          .filter((bid) => foundBundleIds.includes(bid))
+          .map((bid) => ({ id: ALLOWED_APPS[bid].id, label: ALLOWED_APPS[bid].label }));
+        // Sort by display order
+        apps.sort((a, b) => APP_DISPLAY_ORDER.indexOf(a.id) - APP_DISPLAY_ORDER.indexOf(b.id));
+        installedAppsCache = apps;
+        return { success: true, apps };
+      }
+      // Fallback: assume at least Finder and Terminal (don't cache so it retries next time)
+      const fallback = [{ id: 'finder', label: 'Finder' }, { id: 'terminal', label: 'Terminal' }];
+      return { success: true, apps: fallback };
+    } catch (err) {
+      const fallback = [{ id: 'finder', label: 'Finder' }, { id: 'terminal', label: 'Terminal' }];
+      return { success: false, apps: fallback, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(OPEN_IN_APP_CHANNEL, async (_event, appId: string, targetPath: string) => {
+    try {
+      const appEntry = Object.values(ALLOWED_APPS).find((a) => a.id === appId);
+      if (!appEntry) {
+        return { success: false, error: `Unknown app: ${appId}` };
+      }
+      const args = [...appEntry.openArgs, targetPath];
+      const result = await runProcess('open', args, targetPath);
+      return { success: result.code === 0, error: result.code !== 0 ? result.stderr : undefined };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
   });
 }
