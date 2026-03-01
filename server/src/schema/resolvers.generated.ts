@@ -74,6 +74,7 @@ import    { TicketDependency } from './kanban/resolvers/TicketDependency';
 import    { TicketReadyToRunPayload } from './kanban/resolvers/TicketReadyToRunPayload';
 import    { TicketUpsertPayload } from './kanban/resolvers/TicketUpsertPayload';
 import    { TicketWorkspace } from './kanban/resolvers/TicketWorkspace';
+import    { TokenUsage } from './event/resolvers/TokenUsage';
 import    { Workspace } from './workspace/resolvers/Workspace';
 import    { WorkspaceCliSession } from './workspace/resolvers/WorkspaceCliSession';
 import    { WorkspaceConnection } from './workspace/resolvers/WorkspaceConnection';
@@ -111,6 +112,7 @@ TicketDependency: TicketDependency,
 TicketReadyToRunPayload: TicketReadyToRunPayload,
 TicketUpsertPayload: TicketUpsertPayload,
 TicketWorkspace: TicketWorkspace,
+TokenUsage: TokenUsage,
 Workspace: Workspace,
 WorkspaceCliSession: WorkspaceCliSession,
 WorkspaceConnection: WorkspaceConnection,

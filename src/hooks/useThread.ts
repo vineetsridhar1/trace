@@ -17,6 +17,13 @@ export interface SessionInfo {
   eventCount: number;
 }
 
+export interface TokenUsageInfo {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cliCostUsd?: number;
+}
+
 const GQL_SESSIONS = gql`
   query Sessions($channelId: ID!, $workspaceId: ID!) {
     sessions(channelId: $channelId, workspaceId: $workspaceId) {
@@ -63,6 +70,12 @@ const GQL_SESSION_EVENTS = gql`
       total
       limit
       offset
+      tokenUsage {
+        inputTokens
+        outputTokens
+        totalTokens
+      }
+      cliCostUsd
     }
   }
 `;

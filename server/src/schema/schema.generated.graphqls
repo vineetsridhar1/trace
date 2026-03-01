@@ -131,9 +131,12 @@ type Event {
 }
 
 type EventConnection {
+  cliCostUsd: Float
   events: [Event!]!
+  latestContextTokens: Int
   limit: Int!
   offset: Int!
+  tokenUsage: TokenUsage
   total: Int!
 }
 
@@ -286,6 +289,12 @@ type TicketWorkspace {
   id: ID!
   prUrl: String
   status: String!
+}
+
+type TokenUsage {
+  inputTokens: Int!
+  outputTokens: Int!
+  totalTokens: Int!
 }
 
 type Workspace {

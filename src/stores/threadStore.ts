@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Workspace, ServerEvent, SessionStatus } from '../types';
-import type { SessionInfo } from '../hooks/useThread';
+import type { SessionInfo, TokenUsageInfo } from '../hooks/useThread';
 import { clamp } from '../utils';
 
 // Registerable async actions provided by useThreadSync
@@ -40,6 +40,7 @@ interface ThreadState {
   sessionStatus: SessionStatus;
   sessionTotal: number;
   loadingOlderEvents: boolean;
+  tokenUsage: TokenUsageInfo | null;
 
   // Thread UI
   threadWidth: number;
@@ -71,6 +72,7 @@ interface ThreadState {
   setSessionStatus: (status: SessionStatus) => void;
   setSessionTotal: (total: number | ((prev: number) => number)) => void;
   setLoadingOlderEvents: (loading: boolean) => void;
+  setTokenUsage: (usage: TokenUsageInfo | null) => void;
   prependSessionEvents: (events: ServerEvent[]) => void;
 
   // Actions: Thread UI
@@ -99,6 +101,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   sessionStatus: 'idle',
   sessionTotal: 0,
   loadingOlderEvents: false,
+  tokenUsage: null,
 
   // Thread UI
   threadWidth: 0,
@@ -184,6 +187,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   setLoadingOlderEvents: (loading) => set({ loadingOlderEvents: loading }),
 
+  setTokenUsage: (usage) => set({ tokenUsage: usage }),
+
   prependSessionEvents: (events) =>
     set((state) => ({
       sessionEvents: [...events, ...state.sessionEvents],
@@ -223,6 +228,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       expandedTurnGroupIds: {},
       sessionTotal: 0,
       loadingOlderEvents: false,
+      tokenUsage: null,
     }),
 
   toggleReadGroup: (groupId) =>
@@ -247,6 +253,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       expandedTurnGroupIds: {},
       sessionTotal: 0,
       loadingOlderEvents: false,
+      tokenUsage: null,
     }),
 
   // Actions: Worktree

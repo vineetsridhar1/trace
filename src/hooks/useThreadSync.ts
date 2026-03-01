@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { gql } from '@apollo/client';
 import type { Workspace, ServerEvent } from '../types';
 import type { SessionInfo } from './useThread';
 import {
@@ -8,67 +7,6 @@ import {
   useSessionEventsLazyQuery,
 } from './__generated__/useThread.generated';
 import { useThreadStore } from '../stores/threadStore';
-
-const GQL_SESSIONS = gql`
-  query Sessions($channelId: ID!, $workspaceId: ID!) {
-    sessions(channelId: $channelId, workspaceId: $workspaceId) {
-      id
-      workspaceId
-      createdAt
-      eventCount
-    }
-  }
-`;
-
-const GQL_SESSION_EVENTS = gql`
-  query SessionEvents(
-    $channelId: ID!
-    $workspaceId: ID!
-    $sessionId: ID!
-    $limit: Int
-    $offset: Int
-    $after: String
-  ) {
-    sessionEvents(
-      channelId: $channelId
-      workspaceId: $workspaceId
-      sessionId: $sessionId
-      limit: $limit
-      offset: $offset
-      after: $after
-    ) {
-      events {
-        id
-        cliSessionId
-        hookEventName
-        timestamp
-        toolName
-        toolInput
-        toolResponse
-        toolUseId
-        stopHookActive
-        lastAssistantMessage
-        rawPayload
-        sessionId
-        importance
-      }
-      total
-      limit
-      offset
-    }
-  }
-`;
-
-const GQL_CREATE_SESSION = gql`
-  mutation CreateSession($channelId: ID!, $workspaceId: ID!) {
-    createSession(channelId: $channelId, workspaceId: $workspaceId) {
-      id
-      workspaceId
-      createdAt
-      eventCount
-    }
-  }
-`;
 
 const SESSION_PAGE_SIZE = 100;
 
@@ -109,10 +47,19 @@ export function useThreadSync(
       const result = eventsData?.sessionEvents;
       const events: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
       const total = result?.total ?? events.length;
-      useThreadStore.getState().setSessionEvents(events);
-      useThreadStore.getState().setSessionTotal(total);
+      const threadState = useThreadStore.getState();
+      threadState.setSessionEvents(events);
+      threadState.setSessionTotal(total);
+      if (result?.tokenUsage) {
+        threadState.setTokenUsage({
+          inputTokens: result.tokenUsage.inputTokens,
+          outputTokens: result.tokenUsage.outputTokens,
+          totalTokens: result.tokenUsage.totalTokens,
+          cliCostUsd: result.cliCostUsd ?? undefined,
+        });
+      }
       sessionQueryRef.current = { channelId, workspaceId, sessionId };
-      useThreadStore.getState().setSessionStatus(events.length === 0 ? 'empty' : 'ready');
+      threadState.setSessionStatus(events.length === 0 ? 'empty' : 'ready');
     },
     [executeSessionEvents],
   );
