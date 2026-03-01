@@ -71,16 +71,22 @@ export function ThreadInput({
     const imageFilePaths = imageAttachments.getFilePaths();
     const mentionedFiles = fileMention.getMentionedFiles();
     const allFilePaths = [...imageFilePaths, ...mentionedFiles];
+
+    // Clear input optimistically to prevent queue button flash
+    const previousInput = threadInput;
+    setThreadInput('');
+    setIsQueued(false);
+    imageAttachments.clearAttachments();
+    fileMention.clearMentions();
+
     const sent = await onSendThreadMessage(
       finalText,
       attachmentIds.length > 0 ? attachmentIds : undefined,
       allFilePaths.length > 0 ? allFilePaths : undefined,
     );
-    if (sent) {
-      setThreadInput('');
-      setIsQueued(false);
-      imageAttachments.clearAttachments();
-      fileMention.clearMentions();
+    if (!sent) {
+      // Restore input on failure
+      setThreadInput(previousInput);
     }
   }, [threadInput, mode, onSendThreadMessage, onClearThread, imageAttachments, fileMention]);
 
