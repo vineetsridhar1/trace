@@ -23,7 +23,7 @@ function CollapsibleStatusGroup({
   children: React.ReactNode;
   count: number;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(status !== 'merged');
   const config = STATUS_CONFIG[status];
 
   return (
