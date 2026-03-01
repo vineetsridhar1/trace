@@ -162,9 +162,12 @@ export type Event = {
 
 export type EventConnection = {
   __typename?: 'EventConnection';
+  cliCostUsd?: Maybe<Scalars['Float']['output']>;
   events: Array<Event>;
+  latestContextTokens?: Maybe<Scalars['Int']['output']>;
   limit: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
+  tokenUsage?: Maybe<TokenUsage>;
   total: Scalars['Int']['output'];
 };
 
@@ -622,6 +625,13 @@ export type TicketWorkspace = {
   id: Scalars['ID']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
+};
+
+export type TokenUsage = {
+  __typename?: 'TokenUsage';
+  inputTokens: Scalars['Int']['output'];
+  outputTokens: Scalars['Int']['output'];
+  totalTokens: Scalars['Int']['output'];
 };
 
 export type Workspace = {

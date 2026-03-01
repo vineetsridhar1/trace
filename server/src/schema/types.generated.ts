@@ -175,9 +175,12 @@ export type Event = {
 
 export type EventConnection = {
   __typename?: 'EventConnection';
+  cliCostUsd?: Maybe<Scalars['Float']['output']>;
   events: Array<Event>;
+  latestContextTokens?: Maybe<Scalars['Int']['output']>;
   limit: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
+  tokenUsage?: Maybe<TokenUsage>;
   total: Scalars['Int']['output'];
 };
 
@@ -637,6 +640,13 @@ export type TicketWorkspace = {
   status: Scalars['String']['output'];
 };
 
+export type TokenUsage = {
+  __typename?: 'TokenUsage';
+  inputTokens: Scalars['Int']['output'];
+  outputTokens: Scalars['Int']['output'];
+  totalTokens: Scalars['Int']['output'];
+};
+
 export type Workspace = {
   __typename?: 'Workspace';
   branch?: Maybe<Scalars['String']['output']>;
@@ -777,6 +787,7 @@ export type ResolversTypes = {
   DateTime: ResolverTypeWrapper<Scalars['DateTime']['output']>;
   Event: ResolverTypeWrapper<EventMapper>;
   EventConnection: ResolverTypeWrapper<EventConnectionMapper>;
+  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
@@ -792,6 +803,7 @@ export type ResolversTypes = {
   TicketReadyToRunPayload: ResolverTypeWrapper<TicketReadyToRunPayload>;
   TicketUpsertPayload: ResolverTypeWrapper<TicketUpsertPayloadMapper>;
   TicketWorkspace: ResolverTypeWrapper<TicketWorkspaceMapper>;
+  TokenUsage: ResolverTypeWrapper<TokenUsage>;
   Workspace: ResolverTypeWrapper<WorkspaceMapper>;
   WorkspaceCliSession: ResolverTypeWrapper<WorkspaceCliSessionMapper>;
   WorkspaceConnection: ResolverTypeWrapper<WorkspaceConnectionMapper>;
@@ -821,6 +833,7 @@ export type ResolversParentTypes = {
   DateTime: Scalars['DateTime']['output'];
   Event: EventMapper;
   EventConnection: EventConnectionMapper;
+  Float: Scalars['Float']['output'];
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
   Mutation: Record<PropertyKey, never>;
@@ -836,6 +849,7 @@ export type ResolversParentTypes = {
   TicketReadyToRunPayload: TicketReadyToRunPayload;
   TicketUpsertPayload: TicketUpsertPayloadMapper;
   TicketWorkspace: TicketWorkspaceMapper;
+  TokenUsage: TokenUsage;
   Workspace: WorkspaceMapper;
   WorkspaceCliSession: WorkspaceCliSessionMapper;
   WorkspaceConnection: WorkspaceConnectionMapper;
@@ -978,9 +992,12 @@ export type EventResolvers<ContextType = any, ParentType extends ResolversParent
 };
 
 export type EventConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['EventConnection'] = ResolversParentTypes['EventConnection']> = {
+  cliCostUsd?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType>;
+  latestContextTokens?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  tokenUsage?: Resolver<Maybe<ResolversTypes['TokenUsage']>, ParentType, ContextType>;
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
@@ -1137,6 +1154,12 @@ export type TicketWorkspaceResolvers<ContextType = any, ParentType extends Resol
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type TokenUsageResolvers<ContextType = any, ParentType extends ResolversParentTypes['TokenUsage'] = ResolversParentTypes['TokenUsage']> = {
+  inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  outputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  totalTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+};
+
 export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversParentTypes['Workspace'] = ResolversParentTypes['Workspace']> = {
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1211,6 +1234,7 @@ export type Resolvers<ContextType = any> = {
   TicketReadyToRunPayload?: TicketReadyToRunPayloadResolvers<ContextType>;
   TicketUpsertPayload?: TicketUpsertPayloadResolvers<ContextType>;
   TicketWorkspace?: TicketWorkspaceResolvers<ContextType>;
+  TokenUsage?: TokenUsageResolvers<ContextType>;
   Workspace?: WorkspaceResolvers<ContextType>;
   WorkspaceCliSession?: WorkspaceCliSessionResolvers<ContextType>;
   WorkspaceConnection?: WorkspaceConnectionResolvers<ContextType>;

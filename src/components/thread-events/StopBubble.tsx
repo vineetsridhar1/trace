@@ -2,7 +2,35 @@ import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ServerEvent } from '../../types';
+import type { TokenUsageInfo } from '../../hooks/useThread';
 import { formatDuration, stripTraceInternal } from '../../utils';
+import { useThreadStore } from '../../stores/threadStore';
+import { Tooltip } from '../Tooltip';
+
+function formatNumber(n: number): string {
+  return n.toLocaleString();
+}
+
+function TokenUsageTooltip({ tokenUsage }: { tokenUsage: TokenUsageInfo }) {
+  return (
+    <div className="w-48 whitespace-normal">
+      <div className="border-b border-[#292e42] pb-1.5 mb-1.5">
+        <div className="flex justify-between">
+          <span className="text-[#565f89]">Input</span>
+          <span>{formatNumber(tokenUsage.inputTokens)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#565f89]">Output</span>
+          <span>{formatNumber(tokenUsage.outputTokens)}</span>
+        </div>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-[#565f89]">Cost</span>
+        <span>{tokenUsage.cliCostUsd != null ? `$${tokenUsage.cliCostUsd.toFixed(2)}` : '—'}</span>
+      </div>
+    </div>
+  );
+}
 
 function CopyMessageButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -55,6 +83,7 @@ export const StopBubble = memo(function StopBubble({
   time: string;
   duration?: number;
 }) {
+  const tokenUsage = useThreadStore((s) => s.tokenUsage);
   const message = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage) : '';
   const stopReason = (event.rawPayload as Record<string, unknown>)?.stop_reason;
   const isUserStop = stopReason === 'user';
@@ -84,7 +113,13 @@ export const StopBubble = memo(function StopBubble({
       </div>
       <div className="mt-1.5 flex items-center gap-3">
         {duration != null && (
-          <span className="text-[11px] text-[#565f89]">{formatDuration(duration)}</span>
+          <Tooltip
+            text={tokenUsage && tokenUsage.totalTokens > 0
+              ? <TokenUsageTooltip tokenUsage={tokenUsage} />
+              : null}
+          >
+            <span className="text-[11px] text-[#565f89]">{formatDuration(duration)}</span>
+          </Tooltip>
         )}
         {message && <CopyMessageButton text={message} />}
       </div>

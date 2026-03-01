@@ -21,7 +21,7 @@ export type SessionEventsQueryVariables = Types.Exact<{
 }>;
 
 
-export type SessionEventsQuery = { __typename?: 'Query', sessionEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, events: Array<{ __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, sessionId: string, importance: string }> } };
+export type SessionEventsQuery = { __typename?: 'Query', sessionEvents: { __typename?: 'EventConnection', total: number, limit: number, offset: number, cliCostUsd?: number | null, events: Array<{ __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, sessionId: string, importance: string }>, tokenUsage?: { __typename?: 'TokenUsage', inputTokens: number, outputTokens: number, totalTokens: number } | null } };
 
 export type CreateSessionMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
@@ -107,6 +107,12 @@ export const SessionEventsDocument = gql`
     total
     limit
     offset
+    tokenUsage {
+      inputTokens
+      outputTokens
+      totalTokens
+    }
+    cliCostUsd
   }
 }
     `;

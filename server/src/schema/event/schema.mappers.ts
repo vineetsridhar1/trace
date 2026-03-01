@@ -19,6 +19,9 @@ export interface EventConnectionMapper {
   total: number;
   limit: number;
   offset: number;
+  tokenUsage?: { inputTokens: number; outputTokens: number; totalTokens: number };
+  latestContextTokens?: number;
+  cliCostUsd?: number;
 }
 
 export interface SessionEventPayloadMapper {
