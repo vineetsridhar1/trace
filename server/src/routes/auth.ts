@@ -10,9 +10,13 @@ import {
 const router = Router();
 
 // Redirect to GitHub OAuth authorize page
-router.get('/github', (_req, res) => {
+router.get('/github', (req, res) => {
+  const protocol = req.protocol;
+  const host = req.get('host');
+  const redirectUri = `${protocol}://${host}/auth/github/callback`;
   const params = new URLSearchParams({
     client_id: config.githubClientId,
+    redirect_uri: redirectUri,
     scope: 'user:email,repo',
   });
   res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
