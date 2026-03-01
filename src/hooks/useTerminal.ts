@@ -38,6 +38,17 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
+  // Store env/command/readOnly in refs so the effect doesn't re-fire when
+  // the env object reference changes across renders.  These values only
+  // meaningfully change alongside a new terminalId (which triggers a fresh
+  // component mount via React key), so reading them from refs is safe.
+  const envRef = useRef(env);
+  const commandRef = useRef(command);
+  const readOnlyRef = useRef(readOnly);
+  envRef.current = env;
+  commandRef.current = command;
+  readOnlyRef.current = readOnly;
+
   const focusInput = useCallback(() => {
     const term = terminalRef.current;
     if (!term) return;
@@ -64,9 +75,17 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     const container = containerRef.current;
     if (!container) return;
 
+    // Snapshot values from refs at effect start
+    const currentEnv = envRef.current;
+    const currentCommand = commandRef.current;
+    const currentReadOnly = readOnlyRef.current;
+
     let terminal: Terminal | null = null;
     let fitAddon: FitAddon | null = null;
     let initializing = false;
+    // Guard: set to true when the effect cleans up so that the async init()
+    // stops doing work (creating PTYs, registering listeners, etc.).
+    let disposed = false;
     let inputDisposable: { dispose: () => void } | null = null;
     let resizeDisposable: { dispose: () => void } | null = null;
     let cleanupData: (() => void) | null = null;
@@ -83,8 +102,8 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
         theme: TOKYO_NIGHT_THEME,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         fontSize: 13,
-        cursorBlink: !readOnly,
-        disableStdin: readOnly,
+        cursorBlink: !currentReadOnly,
+        disableStdin: currentReadOnly,
         convertEol: true,
       });
       fitAddon = new FitAddon();
@@ -116,45 +135,52 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
         // Assume no existing PTY
       }
 
+      // Bail out if the effect was cleaned up while we were awaiting
+      if (disposed) return;
+
       if (ptyExists) {
         // Reconnect: just set up listeners and trigger a resize
         terminal.write('\r\n[Reconnected]\r\n');
       } else {
         // Create a new PTY
-        const result = await window.traceAPI.createPty(terminalId, cwd, env);
+        const result = await window.traceAPI.createPty(terminalId, cwd, currentEnv);
+        // Bail out if cleaned up during createPty
+        if (disposed) return;
         if (!result.success) {
           terminal?.write(`\r\n[PTY start failed: ${result.error ?? 'unknown error'}]\r\n`);
-        } else if (command) {
+        } else if (currentCommand) {
           // Wait for the shell to emit its first output (prompt) before
           // sending the startup command.  This avoids a fixed timeout that
           // can be too short when multiple PTYs start concurrently.
           let sent = false;
           cleanupCmdReady = window.traceAPI.onPtyData((id, _data) => {
-            if (id === terminalId && !sent) {
+            if (id === terminalId && !sent && !disposed) {
               sent = true;
               cleanupCmdReady?.();
               cleanupCmdReady = null;
               // Small delay after first output to let the prompt fully render
               const t = setTimeout(() => {
-                void window.traceAPI.writePty(terminalId, `${command}\n`);
+                if (!disposed) {
+                  void window.traceAPI.writePty(terminalId, `${currentCommand}\n`);
+                }
               }, 80);
               miscTimers.push(t);
             }
           });
           // Fallback: if we never get PTY data within 3s, send anyway
           const fallback = setTimeout(() => {
-            if (!sent) {
+            if (!sent && !disposed) {
               sent = true;
               cleanupCmdReady?.();
               cleanupCmdReady = null;
-              void window.traceAPI.writePty(terminalId, `${command}\n`);
+              void window.traceAPI.writePty(terminalId, `${currentCommand}\n`);
             }
           }, 3000);
           miscTimers.push(fallback);
         }
       }
 
-      if (!readOnly) {
+      if (!currentReadOnly) {
         inputDisposable = terminal.onData((data) => {
           void window.traceAPI.writePty(terminalId, data);
         });
@@ -198,6 +224,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     }
 
     return () => {
+      disposed = true;
       observer.disconnect();
       window.removeEventListener('focus', handleWindowFocus);
       for (const timer of focusTimers) clearTimeout(timer);
@@ -211,7 +238,10 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [terminalId, cwd, env, command, focusInput]);
+    // env/command/readOnly are read from refs — only terminalId and cwd
+    // should trigger a full teardown/reinit of the PTY session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminalId, cwd, focusInput]);
 
   return { containerRef, fit, focus };
 }
