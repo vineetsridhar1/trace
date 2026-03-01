@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FiExternalLink, FiTrash2, FiX, FiZap } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
+import { gitUrlsMatch } from '../utils/gitUrl';
 import type { Channel, LocalChannelConfig } from '../types';
 
 interface ChannelSettingsModalProps {
@@ -72,13 +73,22 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
         setRepoError(validateResult.error ?? 'Invalid repository');
         return;
       }
+
+      // Validate origin URL matches channel's githubUrl
+      if (channel.githubUrl && validateResult.originUrl) {
+        if (!gitUrlsMatch(channel.githubUrl, validateResult.originUrl)) {
+          setRepoError("This folder's git remote doesn't match the channel's repository");
+          return;
+        }
+      }
+
       setDraftLocalRepoPath(selectedPath);
     } catch {
       setRepoError('Failed to validate path');
     } finally {
       setValidating(false);
     }
-  }, []);
+  }, [channel.githubUrl]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);

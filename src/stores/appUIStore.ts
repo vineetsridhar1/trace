@@ -8,6 +8,7 @@ interface AppUIState {
   isFullscreen: boolean;
   savedWidths: { channel: number; thread: number };
   settingsChannelId: string | null;
+  joinChannelId: string | null;
   createChannelType: ChannelType | null;
   showCreateServer: boolean;
   activeAiChatId: string | null;
@@ -19,6 +20,7 @@ interface AppUIState {
   setIsFullscreen: (value: boolean) => void;
   setSavedWidths: (widths: { channel: number; thread: number }) => void;
   setSettingsChannelId: (id: string | null) => void;
+  setJoinChannelId: (id: string | null) => void;
   setCreateChannelType: (type: ChannelType | null) => void;
   setShowCreateServer: (show: boolean) => void;
   setActiveAiChatId: (id: string | null) => void;
@@ -35,6 +37,7 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   isFullscreen: false,
   savedWidths: { channel: 220, thread: 0 },
   settingsChannelId: null,
+  joinChannelId: null,
   createChannelType: null,
   showCreateServer: false,
   activeAiChatId: null,
@@ -51,6 +54,7 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   setIsFullscreen: (value) => set({ isFullscreen: value }),
   setSavedWidths: (widths) => set({ savedWidths: widths }),
   setSettingsChannelId: (id) => set({ settingsChannelId: id }),
+  setJoinChannelId: (id) => set({ joinChannelId: id }),
   setCreateChannelType: (type) => set({ createChannelType: type }),
   setShowCreateServer: (show) => set({ showCreateServer: show }),
   setActiveAiChatId: (id) => set({ activeAiChatId: id }),

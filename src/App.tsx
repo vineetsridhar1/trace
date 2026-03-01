@@ -18,6 +18,7 @@ import { ChannelPanel } from './components/ChannelPanel';
 import { ChannelTopBar } from './components/ChannelTopBar';
 import { MessagePanel } from './components/MessagePanel';
 import { ChannelSettingsModal } from './components/ChannelSettingsModal';
+import { JoinChannelModal } from './components/JoinChannelModal';
 import { CreateChannelModal } from './components/CreateChannelModal';
 import { CreateServerModal } from './components/CreateServerModal';
 import { ServerRail } from './components/ServerRail';
@@ -92,6 +93,7 @@ function AppContent() {
   const channelWidth = useAppUIStore((s) => s.channelWidth);
   const isFullscreen = useAppUIStore((s) => s.isFullscreen);
   const settingsChannelId = useAppUIStore((s) => s.settingsChannelId);
+  const joinChannelId = useAppUIStore((s) => s.joinChannelId);
   const createChannelType = useAppUIStore((s) => s.createChannelType);
   const showCreateServer = useAppUIStore((s) => s.showCreateServer);
   const activeAiChatId = useAppUIStore((s) => s.activeAiChatId);
@@ -303,7 +305,7 @@ function AppContent() {
     [activeChannelId, executeDeleteWorkspace, getChannelRepoPath],
   );
 
-  const handleSwitchChannel = useCallback(
+  const performChannelSwitch = useCallback(
     (channelId: string) => {
       const currentSelected = useThreadStore.getState().selectedWorkspaceId;
       if (currentSelected) void window.traceAPI.releasePorts(currentSelected);
@@ -318,6 +320,32 @@ function AppContent() {
       useTerminalStore.getState().detachAll();
     },
     [switchChannel],
+  );
+
+  const handleSwitchChannel = useCallback(
+    (channelId: string) => {
+      const ch = enrichedChannels.find((c) => c.id === channelId);
+      if (ch?.workspacesEnabled && ch.githubUrl && !localConfigs[channelId]?.localRepoPath) {
+        useAppUIStore.getState().setJoinChannelId(channelId);
+        return;
+      }
+      performChannelSwitch(channelId);
+    },
+    [enrichedChannels, localConfigs, performChannelSwitch],
+  );
+
+  const handleJoinChannel = useCallback(
+    async (config: LocalChannelConfig) => {
+      if (!joinChannelId) return;
+      try {
+        await setLocalConfig(joinChannelId, config);
+        useAppUIStore.getState().setJoinChannelId(null);
+        performChannelSwitch(joinChannelId);
+      } catch (err) {
+        console.error('[App] Failed to save local config:', err);
+      }
+    },
+    [joinChannelId, setLocalConfig, performChannelSwitch],
   );
 
   const handleSwitchServer = useCallback(
@@ -451,6 +479,11 @@ function AppContent() {
     [enrichedChannels, settingsChannelId],
   );
 
+  const joinChannel = useMemo(
+    () => enrichedChannels.find((channel) => channel.id === joinChannelId) ?? null,
+    [enrichedChannels, joinChannelId],
+  );
+
   const handleOpenSettings = useCallback((channelId: string) => {
     useAppUIStore.getState().setSettingsChannelId(channelId);
   }, []);
@@ -582,6 +615,14 @@ function AppContent() {
           onClose={() => useAppUIStore.getState().setSettingsChannelId(null)}
           onSave={handleSaveSettings}
           onDelete={handleDeleteChannel}
+        />
+      )}
+
+      {joinChannel && (
+        <JoinChannelModal
+          channel={joinChannel}
+          onJoined={handleJoinChannel}
+          onCancel={() => useAppUIStore.getState().setJoinChannelId(null)}
         />
       )}
 
