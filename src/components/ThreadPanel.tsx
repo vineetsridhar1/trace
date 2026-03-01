@@ -133,6 +133,11 @@ export function ThreadPanel() {
     return true;
   }, [selectedWorkspaceId, activeRunWorkspaceIds, sessionEvents, sessionStatus]);
 
+  const pendingPromptForDisplay = useMemo(() => {
+    if (pendingRunWorkspaceId === selectedWorkspaceId) return pendingRunInitialPrompt;
+    return workspaces.find((w) => w.id === selectedWorkspaceId)?.preview ?? '';
+  }, [pendingRunWorkspaceId, selectedWorkspaceId, pendingRunInitialPrompt, workspaces]);
+
   // ─── Channel-derived values ─────────────────────────────────────
   const repoPath = enrichedActiveChannel?.localRepoPath ?? "";
   const baseBranch = enrichedActiveChannel?.baseBranch ?? "main";
@@ -592,25 +597,33 @@ export function ThreadPanel() {
         )}
 
         {viewMode === "agent" &&
-          (isLockedByOther ? (
+          (isLockedByOther && workspaceStatus !== 'pending' ? (
             <div className="flex items-center justify-center border-t border-[#292e42] px-4 py-3">
               <span className="text-xs text-[#565f89]">
                 Workspace locked by another user (read-only)
               </span>
             </div>
-          ) : pendingRunWorkspaceId === selectedWorkspaceId &&
+          ) : (pendingRunWorkspaceId === selectedWorkspaceId ||
+            (workspaceStatus === 'pending' && !pendingRunWorkspaceId)) &&
             !isClaudeRunning ? (
             <RunButtons
-              initialPrompt={pendingRunInitialPrompt}
+              initialPrompt={pendingPromptForDisplay}
               onRun={(planMode, prompt) => {
+                if (pendingRunWorkspaceId !== selectedWorkspaceId && selectedWorkspaceId) {
+                  useClaudeRunStore.getState().setPendingRun(selectedWorkspaceId, prompt, []);
+                }
                 void runPendingWorkspace(planMode, prompt);
               }}
               channelTickets={channelTickets}
-              currentWorkspaceId={pendingRunWorkspaceId}
+              currentWorkspaceId={selectedWorkspaceId ?? pendingRunWorkspaceId}
               onRunAfter={(depIds, runConfig) => {
-                if (pendingRunWorkspaceId) {
+                const wsId = pendingRunWorkspaceId ?? selectedWorkspaceId;
+                if (wsId) {
+                  if (pendingRunWorkspaceId !== wsId) {
+                    useClaudeRunStore.getState().setPendingRun(wsId, runConfig.prompt, []);
+                  }
                   void handleSetTicketDependencies(
-                    pendingRunWorkspaceId,
+                    wsId,
                     depIds,
                     runConfig,
                   );
