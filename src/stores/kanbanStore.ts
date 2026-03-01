@@ -1,0 +1,63 @@
+import { create } from 'zustand';
+import type { KanbanColumn, KanbanTicket } from '../types';
+
+interface KanbanState {
+  columns: KanbanColumn[];
+  loading: boolean;
+
+  setColumns: (columns: KanbanColumn[]) => void;
+  setLoading: (loading: boolean) => void;
+  upsertTicket: (ticket: KanbanTicket) => void;
+  moveTicketOptimistic: (ticketId: string, columnId: string, sortOrder: number) => void;
+  clearBoard: () => void;
+}
+
+export const useKanbanStore = create<KanbanState>((set) => ({
+  columns: [],
+  loading: false,
+
+  setColumns: (columns) => set({ columns }),
+  setLoading: (loading) => set({ loading }),
+
+  upsertTicket: (ticket) =>
+    set((state) => {
+      const cleaned = state.columns.map((col) => ({
+        ...col,
+        tickets: col.tickets.filter((t) => t.id !== ticket.id),
+      }));
+
+      const targetColIndex = cleaned.findIndex(
+        (col) => col.id === ticket.columnId || (ticket.columnSlug && col.slug === ticket.columnSlug),
+      );
+
+      if (targetColIndex === -1) return state;
+
+      const updated = [...cleaned];
+      const targetCol = { ...updated[targetColIndex] };
+      targetCol.tickets = [...targetCol.tickets, ticket].sort((a, b) => a.sortOrder - b.sortOrder);
+      updated[targetColIndex] = targetCol;
+      return { columns: updated };
+    }),
+
+  moveTicketOptimistic: (ticketId, columnId, sortOrder) =>
+    set((state) => {
+      let ticket: KanbanTicket | null = null;
+      const cleaned = state.columns.map((col) => {
+        const found = col.tickets.find((t) => t.id === ticketId);
+        if (found) ticket = { ...found, columnId, sortOrder };
+        return { ...col, tickets: col.tickets.filter((t) => t.id !== ticketId) };
+      });
+
+      if (!ticket) return state;
+
+      return {
+        columns: cleaned.map((col) => {
+          if (col.id !== columnId) return col;
+          const tickets = [...col.tickets, ticket!].sort((a, b) => a.sortOrder - b.sortOrder);
+          return { ...col, tickets };
+        }),
+      };
+    }),
+
+  clearBoard: () => set({ columns: [] }),
+}));
