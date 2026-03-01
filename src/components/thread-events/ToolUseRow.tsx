@@ -18,7 +18,7 @@ export const ToolUseRow = memo(function ToolUseRow({
   const toolName = normalizeToolName(event.toolName);
   const editLike = isEditLikeEvent(event);
 
-  if (toolName === 'task') {
+  if (toolName === 'task' || toolName === 'agent') {
     return <SubagentRow event={event} />;
   }
 

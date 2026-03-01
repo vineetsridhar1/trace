@@ -188,7 +188,7 @@ export class ClaudeStreamParser {
         }
 
         // Emit PreToolUse for Task tool (subagent tracking)
-        if (toolName === 'Task') {
+        if (toolName === 'Task' || toolName === 'Agent') {
           this.trackPost({
             session_id: this.sessionId ?? `trace-local-${this.workspaceId}`,
             cwd: this.cwd,
