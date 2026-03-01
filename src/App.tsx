@@ -418,8 +418,14 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [activeChannelId, refreshWorkspaces, subscriptionsActive]);
 
-  // Sync terminal selection with workspace selection
+  // Sync terminal selection with workspace selection, killing idle PTYs on navigate away
+  const prevTerminalWorkspaceRef = useRef<string | null>(null);
   useEffect(() => {
+    const prevId = prevTerminalWorkspaceRef.current;
+    prevTerminalWorkspaceRef.current = selectedWorkspaceId;
+    if (prevId && prevId !== selectedWorkspaceId) {
+      void useTerminalStore.getState().killIdleForWorkspace(prevId);
+    }
     useTerminalStore.getState().selectWorkspace(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 

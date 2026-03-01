@@ -1,7 +1,7 @@
 import { FiPlay, FiRefreshCw, FiSettings, FiSquare, FiX } from 'react-icons/fi';
 import { useTerminal } from '../hooks/useTerminal';
 import { Tooltip } from './Tooltip';
-import type { TerminalTab, TerminalEntry } from '../hooks/useStartupTerminals';
+import type { TerminalTab, TerminalEntry } from '../stores/terminalStore';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalTabContentProps {
@@ -38,6 +38,7 @@ interface TerminalTabsProps {
   scriptsAvailable: boolean;
   hasSetupScript: boolean;
   hasRunScript: boolean;
+  ptyProcesses: Record<string, { processName: string; isShellOnly: boolean }>;
   onSelectTab: (terminalId: string) => void;
   onCloseTab: (terminalId: string) => void;
   onCloseAll: () => void;
@@ -48,7 +49,7 @@ interface TerminalTabsProps {
   onOpenSettings: () => void;
 }
 
-export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, ptyProcesses, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
   const runTab = terminals.find((t) => t.name === 'Run');
   const setupTab = terminals.find((t) => t.name === 'Setup');
   return (
@@ -58,6 +59,8 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
         <div className="flex flex-1 items-center gap-0.5 overflow-x-auto py-1">
           {terminals.map((t) => {
             const isActive = t.terminalId === activeTabId;
+            const processInfo = ptyProcesses[t.terminalId];
+            const hasRunningProcess = processInfo && !processInfo.isShellOnly;
             return (
               <div
                 key={t.terminalId}
@@ -67,6 +70,12 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
                 onClick={() => onSelectTab(t.terminalId)}
               >
                 <span className="truncate max-w-[120px]">{t.name}</span>
+                {hasRunningProcess && (
+                  <span className="flex items-center gap-1 text-[10px] text-green-400 font-mono">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                    {processInfo.processName}
+                  </span>
+                )}
                 {!t.readOnly && (
                   <Tooltip text="Close tab">
                     <button

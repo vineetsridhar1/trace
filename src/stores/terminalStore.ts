@@ -22,6 +22,11 @@ interface WorkspaceTerminalState {
   env?: Record<string, string>;
 }
 
+export interface PtyProcessInfo {
+  processName: string;
+  isShellOnly: boolean;
+}
+
 interface TerminalState {
   // Current workspace projection
   terminals: TerminalTab[];
@@ -30,6 +35,7 @@ interface TerminalState {
   initialized: boolean;
   allTerminalEntries: TerminalEntry[];
   runningPtyIds: Set<string>;
+  ptyProcesses: Record<string, PtyProcessInfo>;
   workspacesWithRunningProcesses: Set<string>;
 
   // Internal backing store
@@ -53,6 +59,8 @@ interface TerminalState {
   detachAll: () => void;
   reattach: () => void;
   onPtyExit: (terminalId: string) => void;
+  setPtyProcesses: (processes: Record<string, PtyProcessInfo>) => void;
+  killIdleForWorkspace: (workspaceId: string) => Promise<void>;
 }
 
 function buildAllEntries(map: Map<string, WorkspaceTerminalState>): TerminalEntry[] {
@@ -63,10 +71,19 @@ function buildAllEntries(map: Map<string, WorkspaceTerminalState>): TerminalEntr
   return entries;
 }
 
-function buildWorkspacesWithRunning(map: Map<string, WorkspaceTerminalState>, runningIds: Set<string>): Set<string> {
+function buildWorkspacesWithRunning(
+  map: Map<string, WorkspaceTerminalState>,
+  runningIds: Set<string>,
+  processes?: Record<string, PtyProcessInfo>,
+): Set<string> {
   const result = new Set<string>();
   for (const [wsId, ws] of map) {
     for (const t of ws.terminals) {
+      const processInfo = processes?.[t.terminalId];
+      if (processInfo && !processInfo.isShellOnly) {
+        result.add(wsId);
+        break;
+      }
       if (runningIds.has(t.terminalId)) {
         result.add(wsId);
         break;
@@ -116,6 +133,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   initialized: false,
   allTerminalEntries: [],
   runningPtyIds: new Set(),
+  ptyProcesses: {},
   workspacesWithRunningProcesses: new Set(),
 
   _allTerminals: new Map(),
@@ -161,7 +179,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
     set({
       runningPtyIds,
-      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds),
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds, state.ptyProcesses),
       ...projectWorkspace(state._allTerminals, state._initializedWorkspaces, state._currentWorkspaceId),
     });
   },
@@ -207,7 +225,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
     set({
       runningPtyIds,
-      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds),
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds, state.ptyProcesses),
       ...projectWorkspace(state._allTerminals, state._initializedWorkspaces, state._currentWorkspaceId),
     });
   },
@@ -242,7 +260,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
     set({
       runningPtyIds,
-      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds),
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds, state.ptyProcesses),
       ...projectWorkspace(state._allTerminals, state._initializedWorkspaces, state._currentWorkspaceId),
     });
   },
@@ -262,7 +280,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
     set({
       runningPtyIds,
-      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds),
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds, state.ptyProcesses),
       ...projectWorkspace(state._allTerminals, state._initializedWorkspaces, state._currentWorkspaceId),
     });
   },
@@ -318,7 +336,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
     set({
       runningPtyIds,
-      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds),
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds, state.ptyProcesses),
       ...projectWorkspace(state._allTerminals, state._initializedWorkspaces, state._currentWorkspaceId),
     });
   },
@@ -393,7 +411,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     state._currentWorkspaceId = contextId;
     set({
       runningPtyIds,
-      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds),
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds, state.ptyProcesses),
       ...projectWorkspace(state._allTerminals, state._initializedWorkspaces, contextId),
     });
   },
@@ -422,8 +440,52 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       next.delete(terminalId);
       return {
         runningPtyIds: next,
-        workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, next),
+        workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, next, state.ptyProcesses),
       };
     }),
+
+  setPtyProcesses: (processes) => {
+    set((state) => ({
+      ptyProcesses: processes,
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, state.runningPtyIds, processes),
+    }));
+  },
+
+  killIdleForWorkspace: async (workspaceId) => {
+    const state = useTerminalStore.getState();
+    const entry = state._allTerminals.get(workspaceId);
+    if (!entry) return;
+
+    const terminalIds = entry.terminals.map((t) => t.terminalId);
+    if (terminalIds.length === 0) return;
+
+    try {
+      const result = await window.traceAPI.getPtyProcesses(terminalIds);
+      if (!result.success) return;
+      const anyRunning = terminalIds.some((id) => {
+        const info = result.processes[id];
+        return info && !info.isShellOnly;
+      });
+      if (anyRunning) return;
+    } catch {
+      return;
+    }
+
+    // All terminals are idle — kill them all
+    const current = useTerminalStore.getState();
+    const runningPtyIds = new Set(current.runningPtyIds);
+    for (const t of entry.terminals) {
+      void window.traceAPI.killPty(t.terminalId);
+      runningPtyIds.delete(t.terminalId);
+    }
+    current._allTerminals.delete(workspaceId);
+    current._initializedWorkspaces.delete(workspaceId);
+
+    useTerminalStore.setState({
+      runningPtyIds,
+      workspacesWithRunningProcesses: buildWorkspacesWithRunning(current._allTerminals, runningPtyIds, current.ptyProcesses),
+      ...projectWorkspace(current._allTerminals, current._initializedWorkspaces, current._currentWorkspaceId),
+    });
+  },
 }));
 

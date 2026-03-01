@@ -4,6 +4,12 @@ import * as pty from 'node-pty';
 interface PtySession {
   process: pty.IPty;
   window: BrowserWindow;
+  shell: string;
+}
+
+export interface PtyProcessInfo {
+  processName: string;
+  isShellOnly: boolean;
 }
 
 const sessions = new Map<string, PtySession>();
@@ -63,7 +69,7 @@ export function createPty(
     }
   });
 
-  sessions.set(terminalId, { process: proc, window });
+  sessions.set(terminalId, { process: proc, window, shell });
 }
 
 export function writePty(terminalId: string, data: string): boolean {
@@ -107,4 +113,21 @@ export function killAllPtys(): void {
   lastCwdByTerminalId.clear();
   lastEnvByTerminalId.clear();
   suppressExitIds.clear();
+}
+
+export function getPtyProcesses(terminalIds: string[]): Record<string, PtyProcessInfo> {
+  const result: Record<string, PtyProcessInfo> = {};
+  for (const terminalId of terminalIds) {
+    const session = sessions.get(terminalId);
+    if (!session) continue;
+    const rawName = session.process.process;
+    // Handle login shell prefix (e.g. "-zsh" → "zsh") and full paths
+    const processName = rawName.replace(/^-/, '').split('/').pop() ?? rawName;
+    const shellName = session.shell.replace(/^-/, '').split('/').pop() ?? session.shell;
+    result[terminalId] = {
+      processName,
+      isShellOnly: processName === shellName,
+    };
+  }
+  return result;
 }

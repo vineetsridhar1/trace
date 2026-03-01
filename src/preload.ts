@@ -87,6 +87,12 @@ contextBridge.exposeInMainWorld('traceAPI', {
   hasPty: (terminalId: string) =>
     ipcRenderer.invoke('pty-has', terminalId),
 
+  getPtyProcesses: (terminalIds: string[]) =>
+    ipcRenderer.invoke('pty-get-processes', terminalIds) as Promise<{
+      success: boolean;
+      processes: Record<string, { processName: string; isShellOnly: boolean }>;
+    }>,
+
   onPtyData: (callback: (terminalId: string, data: string) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, terminalId: string, data: string) =>
       callback(terminalId, data);

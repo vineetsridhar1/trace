@@ -71,6 +71,7 @@ export function ThreadPanel() {
   const activeTerminalTabId = useTerminalStore((s) => s.activeTabId);
   const terminalCwd = useTerminalStore((s) => s.cwd);
   const runningPtyIds = useTerminalStore((s) => s.runningPtyIds);
+  const ptyProcesses = useTerminalStore((s) => s.ptyProcesses);
 
   // ─── UI store state ─────────────────────────────────────────────
   const isFullscreen = useAppUIStore((s) => s.isFullscreen);
@@ -563,6 +564,7 @@ export function ThreadPanel() {
                 scriptsAvailable={scriptsAvailable}
                 hasSetupScript={hasSetupScript}
                 hasRunScript={hasRunScript}
+                ptyProcesses={ptyProcesses}
                 onSelectTab={useTerminalStore.getState().setActiveTabId}
                 onCloseTab={useTerminalStore.getState().killTerminal}
                 onCloseAll={() => {
