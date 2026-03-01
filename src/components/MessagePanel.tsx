@@ -283,8 +283,9 @@ export function MessagePanel({
           <div
             ref={chatScrollRef}
             onScroll={handleChatScroll}
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+            className="min-h-0 flex-1 overflow-y-auto"
           >
+          <div className="flex min-h-full flex-col">
             <div className="flex-1" />
             <ChatEmptyState
               channelName={panelTitle.replace(/^#\s*/, '')}
@@ -321,6 +322,7 @@ export function MessagePanel({
                 );
               })}
             </div>
+          </div>
           </div>
           {/* Input */}
           <div className="border-t border-[#292e42] px-3 py-3">
