@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Workspace, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
 import { WORKSPACE_FIELDS } from './graphql/fragments';
-import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation, useSetTicketDependenciesMutation, useRemoveTicketDependencyMutation, useUpdateQueuedRunConfigMutation } from './__generated__/App.generated';
-import { buildSessionNodes } from './utils';
+import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation } from './__generated__/App.generated';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync';
 import { useThreadSync } from './hooks/useThreadSync';
-import { useThreadScroll } from './hooks/useThreadScroll';
 import { usePanelResize } from './hooks/usePanelResize';
 import { useChannelSubscriptions } from './hooks/useChannelSubscriptionsV2';
 import { useChannelMessageNotifications } from './hooks/useChannelMessageNotifications';
@@ -15,9 +13,7 @@ import { useClaudeWorkspaceActions } from './hooks/useClaudeWorkspaceActions';
 import { usePRPolling } from './hooks/usePRPolling';
 import { useKanbanSync } from './hooks/useKanbanSync';
 import { useAiChatSync } from './hooks/useAiChatSync';
-import { ClaudeActionsProvider } from './context/ClaudeActionsContext';
 import { ChannelProvider, useChannelContext } from './context/ChannelContext';
-import { ThreadProvider } from './context/ThreadContext';
 import { ChannelPanel } from './components/ChannelPanel';
 import { ChannelTopBar } from './components/ChannelTopBar';
 import { MessagePanel } from './components/MessagePanel';
@@ -49,29 +45,6 @@ const GQL_DELETE_WORKSPACE = gql`
     deleteWorkspace(channelId: $channelId, workspaceId: $workspaceId)
   }
 `;
-
-const GQL_SET_TICKET_DEPENDENCIES = gql`
-  mutation SetTicketDependencies($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceIds: [ID!]!, $runConfig: JSON!) {
-    setTicketDependencies(channelId: $channelId, workspaceId: $workspaceId, dependsOnWorkspaceIds: $dependsOnWorkspaceIds, runConfig: $runConfig) {
-      ...WorkspaceFields
-    }
-  }
-  ${WORKSPACE_FIELDS}
-`;
-
-const GQL_REMOVE_TICKET_DEPENDENCY = gql`
-  mutation RemoveTicketDependency($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceId: ID!) {
-    removeTicketDependency(channelId: $channelId, workspaceId: $workspaceId, dependsOnWorkspaceId: $dependsOnWorkspaceId)
-  }
-`;
-
-const GQL_UPDATE_QUEUED_RUN_CONFIG = gql`
-  mutation UpdateQueuedRunConfig($workspaceId: ID!, $runConfig: JSON!) {
-    updateQueuedRunConfig(workspaceId: $workspaceId, runConfig: $runConfig)
-  }
-`;
-
-const SERVER_RAIL_WIDTH = 60;
 
 export default function App() {
   return (
@@ -108,24 +81,7 @@ function AppContent() {
   const deletingWorktreeIds = useWorkspaceStore((s) => s.deletingWorktreeIds);
 
   const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
-  const activeSessionId = useThreadStore((s) => s.activeSessionId);
-  const sessions = useThreadStore((s) => s.sessions);
-  const sessionEvents = useThreadStore((s) => s.sessionEvents);
-  const sessionStatus = useThreadStore((s) => s.sessionStatus);
-  const threadWidth = useThreadStore((s) => s.threadWidth);
-  const expandedReadGroupIds = useThreadStore((s) => s.expandedReadGroupIds);
-  const expandedTurnGroupIds = useThreadStore((s) => s.expandedTurnGroupIds);
-  const hasWorktree = useThreadStore((s) => s.hasWorktree);
-  const deletingWorktree = useThreadStore((s) => s.deletingWorktree);
-  const hasMoreEvents = useThreadStore((s) => s.sessionTotal > s.sessionEvents.length);
-  const loadingOlderEvents = useThreadStore((s) => s.loadingOlderEvents);
 
-  const terminalList = useTerminalStore((s) => s.terminals);
-  const activeTabId = useTerminalStore((s) => s.activeTabId);
-  const terminalsCwd = useTerminalStore((s) => s.cwd);
-  const terminalsInitialized = useTerminalStore((s) => s.initialized);
-  const allTerminalEntries = useTerminalStore((s) => s.allTerminalEntries);
-  const runningPtyIds = useTerminalStore((s) => s.runningPtyIds);
   const workspacesWithRunningProcesses = useTerminalStore((s) => s.workspacesWithRunningProcesses);
 
   const kanbanColumns = useKanbanStore((s) => s.columns);
@@ -139,23 +95,9 @@ function AppContent() {
   const showCreateServer = useAppUIStore((s) => s.showCreateServer);
   const activeAiChatId = useAppUIStore((s) => s.activeAiChatId);
   const aiChats = useAppUIStore((s) => s.aiChats);
+  const dragging = useAppUIStore((s) => s.dragging);
 
-  const pendingRunWorkspaceId = useClaudeRunStore((s) => s.pendingRunWorkspaceId);
-  const pendingRunInitialPrompt = useClaudeRunStore((s) => s.pendingRunInitialPrompt);
-  const selectedModel = useClaudeRunStore((s) => s.selectedModel);
-  const selectedEffort = useClaudeRunStore((s) => s.selectedEffort);
   const activeRunWorkspaceIds = useClaudeRunStore((s) => s.activeRunWorkspaceIds);
-
-  // ─── Store actions (stable references) ─────────────────────────────
-  const setThreadWidth = useThreadStore((s) => s.setThreadWidth);
-  const closeThreadPanel = useThreadStore((s) => s.closeThreadPanel);
-  const toggleReadGroup = useThreadStore((s) => s.toggleReadGroup);
-  const toggleTurnGroup = useThreadStore((s) => s.toggleTurnGroup);
-
-  const setActiveTabId = useTerminalStore((s) => s.setActiveTabId);
-  const killTerminalsForWorkspace = useTerminalStore((s) => s.killAllForWorkspace);
-  const killTerminal = useTerminalStore((s) => s.killTerminal);
-  const addTerminal = useTerminalStore((s) => s.addTerminal);
 
   // ─── Stable channel ref for callbacks ──────────────────────────────
   const activeChannelRef = useRef<Channel | null>(null);
@@ -170,28 +112,18 @@ function AppContent() {
   const { fetchBoard, moveTicket } = useKanbanSync();
   const { fetchAiChats, createAiChat, deleteAiChat: deleteAiChatMutation } = useAiChatSync();
 
-  const threadSync = useThreadSync(getActiveChannelId, getChannelRepoPath, getChannelBaseBranch);
-  const { loadSessionEvents, loadOlderEvents, switchSession, clearSession, deleteWorktree, openThreadPanel, reportClaudeActivity } = threadSync;
+  // Thread sync — registers sync actions on threadStore
+  useThreadSync(getActiveChannelId, getChannelRepoPath, getChannelBaseBranch);
 
   // Terminal PTY exit listener
   useTerminalInit();
 
-  const savedWidthsRef = useRef({ channel: 220, thread: 0 });
-
   // ─── Panel resize ─────────────────────────────────────────────────
-  const setChannelWidth = useAppUIStore((s) => s.setChannelWidth);
-  const { dragging, startDragging } = usePanelResize(
-    useCallback((w: number) => useAppUIStore.getState().setChannelWidth(w), []),
-    setThreadWidth,
-    SERVER_RAIL_WIDTH,
-  );
+  usePanelResize();
 
   // ─── Mutations ────────────────────────────────────────────────────
   const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
   const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
-  const [executeSetTicketDependencies] = useSetTicketDependenciesMutation();
-  const [executeRemoveTicketDependency] = useRemoveTicketDependencyMutation();
-  const [executeUpdateQueuedRunConfig] = useUpdateQueuedRunConfigMutation();
 
   // ─── Notification permission ──────────────────────────────────────
   useEffect(() => {
@@ -283,46 +215,33 @@ function AppContent() {
     updateWorkspaceStatus,
   });
 
-  // ─── Claude actions ──────────────────────────────────────────────
-  const getSetupCommands = useCallback((): string[] => {
-    if (!enrichedActiveChannel?.setupScript) return [];
-    return enrichedActiveChannel.setupScript.split('\n').map((l) => l.trim()).filter(Boolean);
-  }, [enrichedActiveChannel]);
-
-  const activeSystemInstructions = activeChannelId ? localConfigs[activeChannelId]?.systemInstructions : undefined;
-  const getSystemInstructions = useCallback((): string | undefined => activeSystemInstructions, [activeSystemInstructions]);
-
+  // ─── Open workspace handler ───────────────────────────────────────
   const handleOpenWorkspace = useCallback(
     (workspace: Workspace) => {
-      resetScroll();
-      openThreadPanel(workspace);
+      useThreadStore.getState().syncActions.openThreadPanel(workspace);
       useAppUIStore.getState().setMiddlePanelView('workspaces');
       useWorkspaceStore.getState().clearAttention(workspace.id);
     },
-    [openThreadPanel],
+    [],
   );
 
-  const claudeActions = useClaudeWorkspaceActions({
-    activeChannelId,
-    onWorkspaceCreated: handleOpenWorkspace,
-    loadSessionEvents,
-    upsertWorkspace: upsertAndSyncWorkspace,
-    updateWorkspaceStatus,
-    getSetupCommands,
-    getChannelRepoPath,
-    getChannelBaseBranch,
-    getSystemInstructions,
-    clearSession,
-  });
+  // ─── Claude workspace actions (registers on claudeRunStore) ───────
+  useClaudeWorkspaceActions({ updateWorkspaceStatus, onWorkspaceCreated: handleOpenWorkspace });
 
   // ─── Subscriptions ───────────────────────────────────────────────
+  const reportClaudeActivity = useCallback(
+    (workspaceId: string, eventType: string, sessionId?: string) =>
+      useThreadStore.getState().syncActions.reportClaudeActivity(workspaceId, eventType, sessionId),
+    [],
+  );
+
   const autoRunRef = useRef<((workspaceId: string, runConfig: unknown) => void) | null>(null);
   useEffect(() => {
     autoRunRef.current = (workspaceId: string, runConfig: unknown) => {
       const config = runConfig as { prompt: string; model: string; effort: string; planMode: boolean };
-      void claudeActions.autoRunQueuedTicket(workspaceId, config);
+      void useClaudeRunStore.getState().workspaceActions.autoRunQueuedTicket(workspaceId, config);
     };
-  }, [claudeActions.autoRunQueuedTicket]);
+  }, []);
 
   const { subscriptionsActive } = useChannelSubscriptions({
     activeChannelId,
@@ -340,71 +259,6 @@ function AppContent() {
     activeChannelId,
     activeAiChatId,
     serverChannels,
-  });
-
-  // ─── Derived state ───────────────────────────────────────────────
-  const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
-
-  const isClaudeRunning = useMemo(() => {
-    if (!selectedWorkspaceId) return false;
-    if (activeRunWorkspaceIds.has(selectedWorkspaceId)) return true;
-    if (!useClaudeRunStore.getState().isWorkspaceSpawned(selectedWorkspaceId)) return false;
-    if (sessionStatus === 'empty') return false;
-    const lastEvent = sessionEvents[sessionEvents.length - 1];
-    if (lastEvent?.hookEventName === 'Stop') return false;
-    return true;
-  }, [selectedWorkspaceId, activeRunWorkspaceIds, sessionEvents, sessionStatus]);
-
-  const sessionNodes = useMemo(() => buildSessionNodes(sessionEvents), [sessionEvents]);
-
-  const selectedWorkspaceStatus: TicketStatus = useMemo(() => {
-    const selected = workspaces.find((ws) => ws.id === selectedWorkspaceId);
-    return (selected?.status ?? 'pending') as TicketStatus;
-  }, [workspaces, selectedWorkspaceId]);
-
-  const selectedWorkspaceQueuedRunConfig = useMemo(() => {
-    const selected = workspaces.find((ws) => ws.id === selectedWorkspaceId);
-    return selected?.queuedRunConfig ?? null;
-  }, [workspaces, selectedWorkspaceId]);
-
-  const selectedWorkspaceUserId = useMemo(() => {
-    const selected = workspaces.find((ws) => ws.id === selectedWorkspaceId);
-    return selected?.userId ?? null;
-  }, [workspaces, selectedWorkspaceId]);
-
-  const selectedTicket = useMemo(() => {
-    if (!selectedWorkspaceId) return null;
-    for (const col of kanbanColumns) {
-      const found = col.tickets.find((t) => t.workspaceId === selectedWorkspaceId);
-      if (found) return found;
-    }
-    return null;
-  }, [kanbanColumns, selectedWorkspaceId]);
-
-  const channelTickets = useMemo(
-    () => kanbanColumns.flatMap((col) =>
-      col.tickets.map((t) => ({
-        workspaceId: t.workspaceId,
-        title: t.title,
-        status: t.workspace?.status ?? 'pending',
-      })),
-    ),
-    [kanbanColumns],
-  );
-
-  // ─── Scroll ──────────────────────────────────────────────────────
-  const {
-    threadContentRef,
-    showJumpToLatest,
-    scrollThreadToBottom,
-    onThreadScroll,
-    resetScroll,
-  } = useThreadScroll({
-    sessionEvents,
-    selectedWorkspaceId,
-    hasMoreEvents,
-    loadingOlderEvents,
-    loadOlderEvents,
   });
 
   // ─── Channel/view switching ──────────────────────────────────────
@@ -444,44 +298,6 @@ function AppContent() {
       }
     },
     [activeChannelId, executeDeleteWorkspace, getChannelRepoPath],
-  );
-
-  const handleSetTicketDependencies = useCallback(
-    async (workspaceId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
-      if (!activeChannelId) return;
-      try {
-        const { data } = await executeSetTicketDependencies({
-          variables: { channelId: activeChannelId, workspaceId, dependsOnWorkspaceIds: depIds, runConfig },
-        });
-        if (data?.setTicketDependencies) upsertAndSyncWorkspace(data.setTicketDependencies as Workspace);
-      } catch {
-        console.error('Failed to set ticket dependencies');
-      }
-    },
-    [activeChannelId, executeSetTicketDependencies, upsertAndSyncWorkspace],
-  );
-
-  const handleRemoveTicketDependency = useCallback(
-    async (workspaceId: string, dependsOnWorkspaceId: string) => {
-      if (!activeChannelId) return;
-      try {
-        await executeRemoveTicketDependency({ variables: { channelId: activeChannelId, workspaceId, dependsOnWorkspaceId } });
-      } catch {
-        console.error('Failed to remove ticket dependency');
-      }
-    },
-    [activeChannelId, executeRemoveTicketDependency],
-  );
-
-  const handleUpdateQueuedRunConfig = useCallback(
-    async (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
-      try {
-        await executeUpdateQueuedRunConfig({ variables: { workspaceId, runConfig } });
-      } catch {
-        console.error('Failed to update queued run config');
-      }
-    },
-    [executeUpdateQueuedRunConfig],
   );
 
   const handleSwitchChannel = useCallback(
@@ -547,145 +363,6 @@ function AppContent() {
     [deleteAiChatMutation],
   );
 
-  const handleCloseThread = useCallback(() => {
-    if (useAppUIStore.getState().isFullscreen) {
-      useAppUIStore.getState().setIsFullscreen(false);
-      useAppUIStore.getState().setChannelWidth(savedWidthsRef.current.channel);
-      return;
-    }
-    useThreadStore.getState().closeThreadPanel();
-  }, []);
-
-  const enterFullscreen = useCallback(async () => {
-    const currentRepoPath = getChannelRepoPath();
-    const wsId = useThreadStore.getState().selectedWorkspaceId;
-    if (!wsId || !currentRepoPath) return;
-    const result = await window.traceAPI.checkWorktreeExists(wsId, currentRepoPath);
-    if (!result.success || !result.exists || !result.worktreePath) return;
-
-    const ui = useAppUIStore.getState();
-    savedWidthsRef.current = { channel: ui.channelWidth, thread: useThreadStore.getState().threadWidth };
-    useAppUIStore.getState().setChannelWidth(0);
-    useAppUIStore.getState().setIsFullscreen(true);
-  }, [getChannelRepoPath]);
-
-  const exitFullscreen = useCallback(() => {
-    useAppUIStore.getState().setIsFullscreen(false);
-    useAppUIStore.getState().setChannelWidth(savedWidthsRef.current.channel);
-    useThreadStore.getState().setThreadWidth(savedWidthsRef.current.thread);
-  }, []);
-
-  useEffect(() => {
-    if (isFullscreen && hasWorktree === false) exitFullscreen();
-  }, [exitFullscreen, hasWorktree, isFullscreen]);
-
-  // ─── Channel-switch effects ──────────────────────────────────────
-  useEffect(() => {
-    if (activeChannelId) {
-      void refreshWorkspaces(activeChannelId);
-      void fetchBoard(activeChannelId);
-      useTerminalStore.getState().reattach();
-    }
-  }, [activeChannelId, refreshWorkspaces, fetchBoard]);
-
-  useEffect(() => {
-    if (activeServerId) void fetchAiChats(activeServerId);
-  }, [activeServerId, fetchAiChats]);
-
-  // Fallback polling when subscriptions are down
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!activeChannelId || subscriptionsActive) return;
-      void refreshWorkspaces(activeChannelId);
-      const selectedWs = useThreadStore.getState().selectedWorkspace;
-      if (selectedWs) void loadSessionEvents(selectedWs);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [activeChannelId, loadSessionEvents, refreshWorkspaces, subscriptionsActive]);
-
-  // Sync terminal selection with workspace selection
-  useEffect(() => {
-    useTerminalStore.getState().selectWorkspace(selectedWorkspaceId);
-  }, [selectedWorkspaceId]);
-
-  // Keyboard shortcut: Cmd+T for new terminal
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === 't' && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
-        event.preventDefault();
-        useTerminalStore.getState().addTerminal();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
-
-  // ─── Terminal initialization ─────────────────────────────────────
-  const handleInitializeTerminals = useCallback(async () => {
-    const wsId = useThreadStore.getState().selectedWorkspaceId;
-    if (!wsId || !activeChannelId || !repoPath) return;
-    if (useTerminalStore.getState().isInitialized(wsId)) return;
-    const worktreeResult = await window.traceAPI.checkWorktreeExists(wsId, repoPath);
-    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
-
-    const env: Record<string, string> = { REPO_FOLDER: worktreeResult.worktreePath };
-    const portResult = await window.traceAPI.allocatePorts(wsId, 10);
-    if (portResult.success && portResult.ports) {
-      const ports = portResult.ports;
-      env.PORT = String(ports[0]);
-      env.TRACE_BASE_PORT = String(ports[0]);
-      for (let i = 0; i < ports.length; i += 1) env[`TRACE_PORT_${i}`] = String(ports[i]);
-    }
-
-    useTerminalStore.getState().initializeDefaults(wsId, worktreeResult.worktreePath, env);
-  }, [activeChannelId, repoPath]);
-
-  const handleRerunScript = useCallback(async (tabName: string) => {
-    const wsId = useThreadStore.getState().selectedWorkspaceId;
-    if (!wsId || !activeChannelId || !repoPath) return;
-    const worktreeResult = await window.traceAPI.checkWorktreeExists(wsId, repoPath);
-    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
-
-    const channel = enrichedChannels.find((item) => item.id === activeChannelId);
-    const script = tabName === 'Setup' ? channel?.setupScript : channel?.runScript;
-    if (!script?.trim()) return;
-
-    const env: Record<string, string> = { REPO_FOLDER: worktreeResult.worktreePath };
-    if (tabName === 'Run') {
-      await window.traceAPI.releasePorts(wsId);
-      const portResult = await window.traceAPI.allocatePorts(wsId, 10);
-      if (portResult.success && portResult.ports) {
-        const ports = portResult.ports;
-        env.PORT = String(ports[0]);
-        env.TRACE_BASE_PORT = String(ports[0]);
-        for (let i = 0; i < ports.length; i += 1) env[`TRACE_PORT_${i}`] = String(ports[i]);
-      }
-    }
-
-    useTerminalStore.getState().rerunTab(tabName, script, env);
-  }, [activeChannelId, enrichedChannels, repoPath]);
-
-  const handleStopScript = useCallback((tabName: string) => {
-    useTerminalStore.getState().stopTab(tabName);
-    if (tabName === 'Run') {
-      const wsId = useThreadStore.getState().selectedWorkspaceId;
-      if (wsId) void window.traceAPI.releasePorts(wsId);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (hasWorktree === true && selectedWorkspaceId) void handleInitializeTerminals();
-  }, [hasWorktree, selectedWorkspaceId, handleInitializeTerminals]);
-
-  const handleDeleteWorktree = useCallback(() => {
-    const wsId = useThreadStore.getState().selectedWorkspaceId;
-    if (wsId) {
-      useTerminalStore.getState().killAllForWorkspace(wsId);
-      void window.traceAPI.releasePorts(wsId);
-    }
-    void deleteWorktree((workspaceId) => void updateWorkspaceStatus(workspaceId, 'completed'));
-  }, [deleteWorktree, updateWorkspaceStatus]);
-
   const handleDeleteWorktreeById = useCallback(
     async (workspaceId: string) => {
       const repoPath = getChannelRepoPath();
@@ -716,6 +393,47 @@ function AppContent() {
     },
     [getChannelRepoPath],
   );
+
+  // ─── Channel-switch effects ──────────────────────────────────────
+  useEffect(() => {
+    if (activeChannelId) {
+      void refreshWorkspaces(activeChannelId);
+      void fetchBoard(activeChannelId);
+      useTerminalStore.getState().reattach();
+    }
+  }, [activeChannelId, refreshWorkspaces, fetchBoard]);
+
+  useEffect(() => {
+    if (activeServerId) void fetchAiChats(activeServerId);
+  }, [activeServerId, fetchAiChats]);
+
+  // Fallback polling when subscriptions are down
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!activeChannelId || subscriptionsActive) return;
+      void refreshWorkspaces(activeChannelId);
+      const selectedWs = useThreadStore.getState().selectedWorkspace;
+      if (selectedWs) void useThreadStore.getState().syncActions.loadSessionEvents(selectedWs);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeChannelId, refreshWorkspaces, subscriptionsActive]);
+
+  // Sync terminal selection with workspace selection
+  useEffect(() => {
+    useTerminalStore.getState().selectWorkspace(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
+
+  // Keyboard shortcut: Cmd+T for new terminal
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 't' && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        useTerminalStore.getState().addTerminal();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // ─── Settings / channel modals ───────────────────────────────────
   const settingsChannel = useMemo(
@@ -755,13 +473,8 @@ function AppContent() {
   );
 
   // ─── Computed values ─────────────────────────────────────────────
-  const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
-  const hasSetupScript = Boolean(enrichedActiveChannel?.setupScript?.trim());
-  const hasRunScript = Boolean(enrichedActiveChannel?.runScript?.trim());
   const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
   const panelTitle = displayChannel ? `# ${displayChannel.name}` : '';
-  const activeChannelRepoPath = enrichedActiveChannel?.localRepoPath ?? '';
-  const activeChannelBaseBranch = enrichedActiveChannel?.baseBranch ?? 'main';
 
   const teamProjects = useMemo(
     () =>
@@ -771,240 +484,123 @@ function AppContent() {
     [displayChannel, serverChannels],
   );
 
-  // ─── Context values (assembled from stores) ──────────────────────
-  const claudeActionsContextValue = useMemo(
-    () => ({
-      repoPath,
-      pendingRunWorkspaceId,
-      pendingRunInitialPrompt,
-      selectedModel,
-      selectedEffort,
-      setSelectedModel: useClaudeRunStore.getState().setSelectedModel,
-      setSelectedEffort: useClaudeRunStore.getState().setSelectedEffort,
-      sendMessage: claudeActions.sendMessage,
-      runPendingWorkspace: claudeActions.runPendingWorkspace,
-      autoRunQueuedTicket: claudeActions.autoRunQueuedTicket,
-      stopClaude: claudeActions.stopClaude,
-      sendThreadMessage: claudeActions.sendThreadMessage,
-      sendPlanResponse: claudeActions.sendPlanResponse,
-      mergeToMain: claudeActions.mergeToMain,
-      markMerged: claudeActions.markMerged,
-      clearPendingRun: useClaudeRunStore.getState().clearPendingRun,
-    }),
-    [repoPath, pendingRunWorkspaceId, pendingRunInitialPrompt, selectedModel, selectedEffort, claudeActions],
-  );
-
-  const threadEventsContextValue = useMemo(
-    () => ({
-      sessionEvents,
-      sessionNodes,
-      sessionStatus,
-      hasMoreEvents,
-      loadingOlderEvents,
-      threadContentRef,
-      showJumpToLatest,
-      scrollToLatest: () => scrollThreadToBottom('smooth'),
-      onThreadScroll,
-    }),
-    [sessionEvents, sessionNodes, sessionStatus, hasMoreEvents, loadingOlderEvents, threadContentRef, showJumpToLatest, scrollThreadToBottom, onThreadScroll],
-  );
-
-  const threadContextValue = useMemo(
-    () => ({
-      selectedWorkspaceId,
-      activeSessionId,
-      sessions,
-      threadWidth: isFullscreen ? 9999 : threadWidth,
-      deletingWorktree,
-      hasWorktree,
-      expandedReadGroupIds,
-      expandedTurnGroupIds,
-      openThreadPanel,
-      closeThreadPanel,
-      toggleReadGroup,
-      toggleTurnGroup,
-      setHasWorktree: useThreadStore.getState().setHasWorktree,
-      setThreadWidth,
-      loadSessionEvents,
-      deleteWorktree,
-      switchSession,
-      clearSession,
-      channelTickets,
-      setTicketDependencies: handleSetTicketDependencies,
-      removeTicketDependency: handleRemoveTicketDependency,
-      updateQueuedRunConfig: handleUpdateQueuedRunConfig,
-      isClaudeRunning,
-      workspaceStatus: selectedWorkspaceStatus,
-      workspaceUserId: selectedWorkspaceUserId,
-      queuedRunConfig: selectedWorkspaceQueuedRunConfig,
-      selectedTicket,
-      isFullscreen,
-      scriptsAvailable,
-      hasSetupScript,
-      hasRunScript,
-      dragging,
-      onClose: handleCloseThread,
-      onDeleteWorktree: handleDeleteWorktree,
-      onInitializeTerminals: (): void => { void handleInitializeTerminals(); },
-      onRerunScript: (tabName: string): void => { void handleRerunScript(tabName); },
-      onStopScript: (tabName: string): void => { handleStopScript(tabName); },
-      runScriptRunning: terminalList.some((t) => t.name === 'Run' && runningPtyIds.has(t.terminalId)),
-      onStartDrag: () => startDragging('right'),
-      onEnterFullscreen: (): void => { void enterFullscreen(); },
-      onExitFullscreen: exitFullscreen,
-      baseBranch: activeChannelBaseBranch,
-      terminals: terminalList,
-      allTerminalEntries,
-      terminalsInitialized,
-      activeTerminalTabId: activeTabId,
-      terminalCwd: terminalsCwd || activeChannelRepoPath,
-      onSelectTerminalTab: setActiveTabId,
-      onCloseTerminalTab: killTerminal,
-      onCloseAllTerminals: (): void => {
-        const wsId = useThreadStore.getState().selectedWorkspaceId;
-        if (wsId) useTerminalStore.getState().killAllForWorkspace(wsId);
-      },
-      onAddTerminal: addTerminal,
-      onOpenSettings: (): void => { if (activeChannelId) handleOpenSettings(activeChannelId); },
-    }),
-    [
-      selectedWorkspaceId, activeSessionId, sessions, threadWidth,
-      deletingWorktree, hasWorktree, expandedReadGroupIds, expandedTurnGroupIds, openThreadPanel,
-      closeThreadPanel, toggleReadGroup, toggleTurnGroup, setThreadWidth,
-      loadSessionEvents, deleteWorktree, switchSession, clearSession,
-      channelTickets, handleSetTicketDependencies, handleRemoveTicketDependency, handleUpdateQueuedRunConfig,
-      isClaudeRunning, selectedWorkspaceStatus, selectedWorkspaceUserId, selectedWorkspaceQueuedRunConfig, selectedTicket,
-      isFullscreen, scriptsAvailable, hasSetupScript, hasRunScript, dragging,
-      handleCloseThread, handleDeleteWorktree, handleInitializeTerminals, handleRerunScript, handleStopScript,
-      startDragging, enterFullscreen, exitFullscreen,
-      activeChannelBaseBranch, terminalList, allTerminalEntries, terminalsInitialized, activeTabId,
-      terminalsCwd, activeChannelRepoPath, setActiveTabId,
-      killTerminal, addTerminal, handleOpenSettings, activeChannelId,
-      runningPtyIds,
-    ],
-  );
-
   // ─── Render ──────────────────────────────────────────────────────
   return (
-    <ClaudeActionsProvider value={claudeActionsContextValue}>
-      <ThreadProvider value={threadContextValue} eventsValue={threadEventsContextValue}>
-        <div className="flex h-screen flex-col overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            {!isFullscreen && (
-              <ServerRail
-                servers={servers}
-                activeServerId={activeServerId}
-                onSwitchServer={handleSwitchServer}
-                onCreateServer={() => useAppUIStore.getState().setShowCreateServer(true)}
+    <div className="flex h-screen flex-col overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {!isFullscreen && (
+          <ServerRail
+            servers={servers}
+            activeServerId={activeServerId}
+            onSwitchServer={handleSwitchServer}
+            onCreateServer={() => useAppUIStore.getState().setShowCreateServer(true)}
+          />
+        )}
+
+        <ChannelPanel
+          channels={serverChannels}
+          activeChannelId={activeChannelId}
+          channelWidth={isFullscreen ? 0 : channelWidth}
+          dragging={dragging}
+          serverName={activeServer?.name}
+          aiChats={aiChats}
+          activeAiChatId={activeAiChatId}
+          unreadCounts={unreadCounts}
+          onSwitchChannel={handleSwitchChannel}
+          onCreateTeam={() => useAppUIStore.getState().setCreateChannelType('team')}
+          onCreateProject={() => useAppUIStore.getState().setCreateChannelType('project')}
+          onCreateChannel={() => useAppUIStore.getState().setCreateChannelType('channel')}
+          onSwitchAiChat={handleSwitchAiChat}
+          onCreateAiChat={() => { void handleCreateAiChat(); }}
+          onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
+          onStartDrag={() => useAppUIStore.getState().setDragging('left')}
+        />
+
+        <div
+          className="flex min-h-0 min-w-0 flex-col panel-animate"
+          style={{ flex: '1 1 0%', overflow: 'hidden' }}
+        >
+          {!isFullscreen && !activeAiChatId && (
+            <ChannelTopBar
+              panelTitle={panelTitle}
+              channelType={(displayChannel?.type ?? 'project') as ChannelType}
+              workspacesEnabled={displayChannel?.workspacesEnabled ?? true}
+              middlePanelView={middlePanelView}
+              onSetView={handleSetView}
+              onOpenSettings={() => { if (displayChannel) handleOpenSettings(displayChannel.id); }}
+            />
+          )}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {activeAiChatId ? (
+              <AiChatPanel
+                chatId={activeAiChatId}
+                chatTitle={aiChats.find((c) => c.id === activeAiChatId)?.title ?? 'AI Chat'}
+              />
+            ) : (
+              <MessagePanel
+                panelTitle={panelTitle}
+                channelId={activeChannelId}
+                channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
+                workspaces={workspaces}
+                selectedWorkspaceId={selectedWorkspaceId}
+                attentionWorkspaceIds={attentionWorkspaceIds}
+                onOpenWorkspace={handleOpenWorkspace}
+                onDeleteWorkspace={handleDeleteWorkspace}
+                onDeleteWorktree={handleDeleteWorktreeById}
+                worktreeWorkspaceIds={worktreeWorkspaceIds}
+                deletingWorktreeIds={deletingWorktreeIds}
+                middlePanelView={middlePanelView}
+                kanbanColumns={kanbanColumns}
+                kanbanLoading={kanbanLoading}
+                onMoveTicket={handleMoveTicket}
+                isFullscreen={isFullscreen}
+                teamProjects={teamProjects}
+                onSwitchChannel={handleSwitchChannel}
+                workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+                activeRunWorkspaceIds={activeRunWorkspaceIds}
               />
             )}
-
-            <ChannelPanel
-              channels={serverChannels}
-              activeChannelId={activeChannelId}
-              channelWidth={isFullscreen ? 0 : channelWidth}
-              dragging={dragging}
-              serverName={activeServer?.name}
-              aiChats={aiChats}
-              activeAiChatId={activeAiChatId}
-              unreadCounts={unreadCounts}
-              onSwitchChannel={handleSwitchChannel}
-              onCreateTeam={() => useAppUIStore.getState().setCreateChannelType('team')}
-              onCreateProject={() => useAppUIStore.getState().setCreateChannelType('project')}
-              onCreateChannel={() => useAppUIStore.getState().setCreateChannelType('channel')}
-              onSwitchAiChat={handleSwitchAiChat}
-              onCreateAiChat={() => { void handleCreateAiChat(); }}
-              onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
-              onStartDrag={() => startDragging('left')}
-            />
-
-            <div
-              className="flex min-h-0 min-w-0 flex-col panel-animate"
-              style={{ flex: '1 1 0%', overflow: 'hidden' }}
-            >
-              {!isFullscreen && !activeAiChatId && (
-                <ChannelTopBar
-                  panelTitle={panelTitle}
-                  channelType={(displayChannel?.type ?? 'project') as ChannelType}
-                  workspacesEnabled={displayChannel?.workspacesEnabled ?? true}
-                  middlePanelView={middlePanelView}
-                  onSetView={handleSetView}
-                  onOpenSettings={() => { if (displayChannel) handleOpenSettings(displayChannel.id); }}
-                />
-              )}
-              <div className="flex min-h-0 flex-1 flex-col">
-                {activeAiChatId ? (
-                  <AiChatPanel
-                    chatId={activeAiChatId}
-                    chatTitle={aiChats.find((c) => c.id === activeAiChatId)?.title ?? 'AI Chat'}
-                  />
-                ) : (
-                  <MessagePanel
-                    panelTitle={panelTitle}
-                    channelId={activeChannelId}
-                    channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
-                    workspaces={workspaces}
-                    selectedWorkspaceId={selectedWorkspaceId}
-                    attentionWorkspaceIds={attentionWorkspaceIds}
-                    onOpenWorkspace={handleOpenWorkspace}
-                    onDeleteWorkspace={handleDeleteWorkspace}
-                    onDeleteWorktree={handleDeleteWorktreeById}
-                    worktreeWorkspaceIds={worktreeWorkspaceIds}
-                    deletingWorktreeIds={deletingWorktreeIds}
-                    middlePanelView={middlePanelView}
-                    kanbanColumns={kanbanColumns}
-                    kanbanLoading={kanbanLoading}
-                    onMoveTicket={handleMoveTicket}
-                    isFullscreen={isFullscreen}
-                    teamProjects={teamProjects}
-                    onSwitchChannel={handleSwitchChannel}
-                    workspacesWithRunningProcesses={workspacesWithRunningProcesses}
-                    activeRunWorkspaceIds={activeRunWorkspaceIds}
-                  />
-                )}
-              </div>
-            </div>
           </div>
-
-          {settingsChannel && (
-            <ChannelSettingsModal
-              channel={settingsChannel}
-              teams={serverChannels.filter((ch) => ch.type === 'team')}
-              localConfig={getLocalConfig(settingsChannel.id)}
-              onClose={() => useAppUIStore.getState().setSettingsChannelId(null)}
-              onSave={handleSaveSettings}
-              onDelete={handleDeleteChannel}
-            />
-          )}
-
-          {createChannelType && (
-            <CreateChannelModal
-              serverId={activeServerId}
-              channelType={createChannelType}
-              teams={serverChannels.filter((ch) => ch.type === 'team')}
-              onClose={() => useAppUIStore.getState().setCreateChannelType(null)}
-              onCreated={() => {
-                useAppUIStore.getState().setCreateChannelType(null);
-                void refreshChannels();
-              }}
-              onLocalConfigSave={setLocalConfig}
-            />
-          )}
-
-          {showCreateServer && (
-            <CreateServerModal
-              onClose={() => useAppUIStore.getState().setShowCreateServer(false)}
-              onCreated={(server) => {
-                useAppUIStore.getState().setShowCreateServer(false);
-                void refreshServers();
-                void refreshChannels();
-                switchServer(server.id);
-                if (server.channels.length > 0) handleSwitchChannel(server.channels[0].id);
-              }}
-            />
-          )}
         </div>
-      </ThreadProvider>
-    </ClaudeActionsProvider>
+      </div>
+
+      {settingsChannel && (
+        <ChannelSettingsModal
+          channel={settingsChannel}
+          teams={serverChannels.filter((ch) => ch.type === 'team')}
+          localConfig={getLocalConfig(settingsChannel.id)}
+          onClose={() => useAppUIStore.getState().setSettingsChannelId(null)}
+          onSave={handleSaveSettings}
+          onDelete={handleDeleteChannel}
+        />
+      )}
+
+      {createChannelType && (
+        <CreateChannelModal
+          serverId={activeServerId}
+          channelType={createChannelType}
+          teams={serverChannels.filter((ch) => ch.type === 'team')}
+          onClose={() => useAppUIStore.getState().setCreateChannelType(null)}
+          onCreated={() => {
+            useAppUIStore.getState().setCreateChannelType(null);
+            void refreshChannels();
+          }}
+          onLocalConfigSave={setLocalConfig}
+        />
+      )}
+
+      {showCreateServer && (
+        <CreateServerModal
+          onClose={() => useAppUIStore.getState().setShowCreateServer(false)}
+          onCreated={(server) => {
+            useAppUIStore.getState().setShowCreateServer(false);
+            void refreshServers();
+            void refreshChannels();
+            switchServer(server.id);
+            if (server.channels.length > 0) handleSwitchChannel(server.channels[0].id);
+          }}
+        />
+      )}
+    </div>
   );
 }

@@ -1,9 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AskUserQuestionNode,
   PlanReviewNode,
   SessionStatus,
+  TicketStatus,
 } from "../types";
+import { gql } from "@apollo/client";
+import { WORKSPACE_FIELDS } from "../graphql/fragments";
+import { useUpdateWorkspaceStatusMutation } from "../__generated__/App.generated";
+import { useSetTicketDependenciesMutation } from "./__generated__/ThreadPanel.generated";
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
 import { CollapsedTurnGroup } from "./CollapsedTurnGroup";
@@ -19,85 +24,283 @@ import { RunButtons } from "./RunButtons";
 import { CreationStatusBar } from "./CreationStatusBar";
 import { QueuedStatusBar } from "./QueuedStatusBar";
 import { StickyTodoList } from "./StickyTodoList";
-import { useClaudeActions } from "../context/ClaudeActionsContext";
-import { useThreadContext } from "../context/ThreadContext";
-import { useThreadEventsContext } from "../context/ThreadEventsContext";
+import { useClaudeRunStore } from "../stores/claudeRunStore";
+import { useThreadStore } from "../stores/threadStore";
+import { useTerminalStore } from "../stores/terminalStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import { useKanbanStore } from "../stores/kanbanStore";
+import { useAppUIStore } from "../stores/appUIStore";
+import { useChannelContext } from "../context/ChannelContext";
+import { useThreadScroll } from "../hooks/useThreadScroll";
 import { useAuth } from "../context/AuthContext";
-import { normalizeToolName, stripTraceInternal } from "../utils";
+import { buildSessionNodes, normalizeToolName, stripTraceInternal } from "../utils";
+
+// GQL used by setTicketDependencies (already defined in App.generated, just need the hook)
+const _GQL_SET_TICKET_DEPENDENCIES = gql`
+  mutation SetTicketDependencies($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceIds: [ID!]!, $runConfig: JSON!) {
+    setTicketDependencies(channelId: $channelId, workspaceId: $workspaceId, dependsOnWorkspaceIds: $dependsOnWorkspaceIds, runConfig: $runConfig) {
+      ...WorkspaceFields
+    }
+  }
+  ${WORKSPACE_FIELDS}
+`;
 
 type ViewMode = "agent" | "ticket" | "files" | "terminal";
 
 export function ThreadPanel() {
-  const {
-    threadWidth,
-    dragging,
-    activeSessionId,
-    sessions,
-    expandedReadGroupIds,
-    expandedTurnGroupIds,
-    selectedWorkspaceId,
-    workspaceStatus,
-    workspaceUserId,
-    selectedTicket: ticket,
-    deletingWorktree,
-    hasWorktree,
-    isClaudeRunning,
-    scriptsAvailable,
-    hasSetupScript,
-    hasRunScript,
-    isFullscreen,
-    channelTickets,
-    setTicketDependencies,
-    clearSession,
-    switchSession,
-    onRerunScript,
-    onStopScript,
-    runScriptRunning,
-    toggleReadGroup,
-    toggleTurnGroup,
-    onClose,
-    onDeleteWorktree,
-    onEnterFullscreen,
-    onExitFullscreen,
-    onStartDrag,
-    baseBranch,
-    terminals,
-    allTerminalEntries,
-    activeTerminalTabId,
-    terminalCwd,
-    onSelectTerminalTab,
-    onCloseTerminalTab,
-    onCloseAllTerminals,
-    onAddTerminal,
-    onOpenSettings,
-  } = useThreadContext();
+  const { activeChannelId, enrichedActiveChannel, enrichedChannels } = useChannelContext();
 
+  // ─── Thread store state ─────────────────────────────────────────
+  const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
+  const activeSessionId = useThreadStore((s) => s.activeSessionId);
+  const sessions = useThreadStore((s) => s.sessions);
+  const sessionEvents = useThreadStore((s) => s.sessionEvents);
+  const sessionStatus = useThreadStore((s) => s.sessionStatus);
+  const loadingOlderEvents = useThreadStore((s) => s.loadingOlderEvents);
+  const threadWidth = useThreadStore((s) => s.threadWidth);
+  const expandedReadGroupIds = useThreadStore((s) => s.expandedReadGroupIds);
+  const expandedTurnGroupIds = useThreadStore((s) => s.expandedTurnGroupIds);
+  const hasWorktree = useThreadStore((s) => s.hasWorktree);
+  const deletingWorktree = useThreadStore((s) => s.deletingWorktree);
+  const toggleReadGroup = useThreadStore((s) => s.toggleReadGroup);
+  const toggleTurnGroup = useThreadStore((s) => s.toggleTurnGroup);
+
+  // ─── Terminal store state ───────────────────────────────────────
+  const terminals = useTerminalStore((s) => s.terminals);
+  const allTerminalEntries = useTerminalStore((s) => s.allTerminalEntries);
+  const activeTerminalTabId = useTerminalStore((s) => s.activeTabId);
+  const terminalCwd = useTerminalStore((s) => s.cwd);
+  const runningPtyIds = useTerminalStore((s) => s.runningPtyIds);
+
+  // ─── UI store state ─────────────────────────────────────────────
+  const isFullscreen = useAppUIStore((s) => s.isFullscreen);
+  const dragging = useAppUIStore((s) => s.dragging);
+
+  // ─── Claude run store state ────────────────────────────────────
+  const pendingRunWorkspaceId = useClaudeRunStore((s) => s.pendingRunWorkspaceId);
+  const pendingRunInitialPrompt = useClaudeRunStore((s) => s.pendingRunInitialPrompt);
+  const clearPendingRun = useClaudeRunStore((s) => s.clearPendingRun);
+  const activeRunWorkspaceIds = useClaudeRunStore((s) => s.activeRunWorkspaceIds);
+  const runPendingWorkspace = useClaudeRunStore((s) => s.workspaceActions.runPendingWorkspace);
+  const stopClaude = useClaudeRunStore((s) => s.workspaceActions.stopClaude);
+  const sendThreadMessage = useClaudeRunStore((s) => s.workspaceActions.sendThreadMessage);
+  const sendPlanResponse = useClaudeRunStore((s) => s.workspaceActions.sendPlanResponse);
+  const markMerged = useClaudeRunStore((s) => s.workspaceActions.markMerged);
+
+  // ─── Derived state ──────────────────────────────────────────────
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const kanbanColumns = useKanbanStore((s) => s.columns);
+
+  const workspaceStatus: TicketStatus = useMemo(() => {
+    const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
+    return (ws?.status ?? "pending") as TicketStatus;
+  }, [workspaces, selectedWorkspaceId]);
+
+  const workspaceUserId = useMemo(() => {
+    const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
+    return ws?.userId ?? null;
+  }, [workspaces, selectedWorkspaceId]);
+
+  const ticket = useMemo(() => {
+    if (!selectedWorkspaceId) return null;
+    for (const col of kanbanColumns) {
+      const found = col.tickets.find((t) => t.workspaceId === selectedWorkspaceId);
+      if (found) return found;
+    }
+    return null;
+  }, [kanbanColumns, selectedWorkspaceId]);
+
+  const channelTickets = useMemo(
+    () => kanbanColumns.flatMap((col) =>
+      col.tickets.map((t) => ({
+        workspaceId: t.workspaceId,
+        title: t.title,
+        status: t.workspace?.status ?? "pending",
+      })),
+    ),
+    [kanbanColumns],
+  );
+
+  const isClaudeRunning = useMemo(() => {
+    if (!selectedWorkspaceId) return false;
+    if (activeRunWorkspaceIds.has(selectedWorkspaceId)) return true;
+    if (!useClaudeRunStore.getState().isWorkspaceSpawned(selectedWorkspaceId)) return false;
+    if (sessionStatus === "empty") return false;
+    const lastEvent = sessionEvents[sessionEvents.length - 1];
+    if (lastEvent?.hookEventName === "Stop") return false;
+    return true;
+  }, [selectedWorkspaceId, activeRunWorkspaceIds, sessionEvents, sessionStatus]);
+
+  // ─── Channel-derived values ─────────────────────────────────────
+  const repoPath = enrichedActiveChannel?.localRepoPath ?? "";
+  const baseBranch = enrichedActiveChannel?.baseBranch ?? "main";
+  const scriptsAvailable = Boolean(activeChannelId && hasWorktree === true);
+  const hasSetupScript = Boolean(enrichedActiveChannel?.setupScript?.trim());
+  const hasRunScript = Boolean(enrichedActiveChannel?.runScript?.trim());
+  const effectiveTerminalCwd = terminalCwd || repoPath;
+  const runScriptRunning = terminals.some((t) => t.name === "Run" && runningPtyIds.has(t.terminalId));
+
+  // ─── Session nodes (derived from events) ────────────────────────
+  const sessionNodes = useMemo(() => buildSessionNodes(sessionEvents), [sessionEvents]);
+
+  // ─── Scroll ─────────────────────────────────────────────────────
   const {
-    sessionNodes,
-    sessionStatus,
-    showJumpToLatest,
     threadContentRef,
-    loadingOlderEvents,
+    showJumpToLatest,
+    scrollThreadToBottom,
     onThreadScroll,
-    scrollToLatest,
-  } = useThreadEventsContext();
+  } = useThreadScroll();
+  const scrollToLatest = useMemo(() => () => scrollThreadToBottom("smooth"), [scrollThreadToBottom]);
 
-  const {
-    pendingRunWorkspaceId,
-    pendingRunInitialPrompt,
-    runPendingWorkspace,
-    stopClaude,
-    sendThreadMessage,
-    sendPlanResponse,
-    markMerged,
-    clearPendingRun,
-  } = useClaudeActions();
+  // ─── Mutations ──────────────────────────────────────────────────
+  const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
 
+  // ─── Saved widths ref for fullscreen ────────────────────────────
+  const savedWidthsRef = useRef({ channel: 220, thread: 0 });
+
+  // ─── Callbacks ──────────────────────────────────────────────────
+  const handleClose = useCallback(() => {
+    if (useAppUIStore.getState().isFullscreen) {
+      useAppUIStore.getState().setIsFullscreen(false);
+      useAppUIStore.getState().setChannelWidth(savedWidthsRef.current.channel);
+      return;
+    }
+    useThreadStore.getState().closeThreadPanel();
+  }, []);
+
+  const handleEnterFullscreen = useCallback(async () => {
+    const wsId = useThreadStore.getState().selectedWorkspaceId;
+    if (!wsId || !repoPath) return;
+    const result = await window.traceAPI.checkWorktreeExists(wsId, repoPath);
+    if (!result.success || !result.exists || !result.worktreePath) return;
+
+    const ui = useAppUIStore.getState();
+    savedWidthsRef.current = { channel: ui.channelWidth, thread: useThreadStore.getState().threadWidth };
+    useAppUIStore.getState().setChannelWidth(0);
+    useAppUIStore.getState().setIsFullscreen(true);
+  }, [repoPath]);
+
+  const handleExitFullscreen = useCallback(() => {
+    useAppUIStore.getState().setIsFullscreen(false);
+    useAppUIStore.getState().setChannelWidth(savedWidthsRef.current.channel);
+    useThreadStore.getState().setThreadWidth(savedWidthsRef.current.thread);
+  }, []);
+
+  // Exit fullscreen when worktree is deleted
+  useEffect(() => {
+    if (isFullscreen && hasWorktree === false) handleExitFullscreen();
+  }, [handleExitFullscreen, hasWorktree, isFullscreen]);
+
+  // Terminal initialization
+  const handleInitializeTerminals = useCallback(async () => {
+    const wsId = useThreadStore.getState().selectedWorkspaceId;
+    if (!wsId || !activeChannelId || !repoPath) return;
+    if (useTerminalStore.getState().isInitialized(wsId)) return;
+    const worktreeResult = await window.traceAPI.checkWorktreeExists(wsId, repoPath);
+    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
+
+    const env: Record<string, string> = { REPO_FOLDER: worktreeResult.worktreePath };
+    const portResult = await window.traceAPI.allocatePorts(wsId, 10);
+    if (portResult.success && portResult.ports) {
+      const ports = portResult.ports;
+      env.PORT = String(ports[0]);
+      env.TRACE_BASE_PORT = String(ports[0]);
+      for (let i = 0; i < ports.length; i += 1) env[`TRACE_PORT_${i}`] = String(ports[i]);
+    }
+
+    useTerminalStore.getState().initializeDefaults(wsId, worktreeResult.worktreePath, env);
+  }, [activeChannelId, repoPath]);
+
+  useEffect(() => {
+    if (hasWorktree === true && selectedWorkspaceId) void handleInitializeTerminals();
+  }, [hasWorktree, selectedWorkspaceId, handleInitializeTerminals]);
+
+  const handleDeleteWorktree = useCallback(() => {
+    const wsId = useThreadStore.getState().selectedWorkspaceId;
+    if (wsId) {
+      useTerminalStore.getState().killAllForWorkspace(wsId);
+      void window.traceAPI.releasePorts(wsId);
+    }
+    void useThreadStore.getState().syncActions.deleteWorktree(async (workspaceId) => {
+      const chId = activeChannelId;
+      if (!chId) return;
+      try {
+        const { data } = await executeUpdateWorkspaceStatus({
+          variables: { channelId: chId, workspaceId, status: 'completed' },
+        });
+        if (data?.updateWorkspaceStatus) {
+          useWorkspaceStore.getState().upsertWorkspace(data.updateWorkspaceStatus as import("../types").Workspace);
+          useThreadStore.getState().syncSelectedWorkspace(data.updateWorkspaceStatus as import("../types").Workspace);
+        }
+      } catch {
+        console.error('Failed to update workspace status after worktree deletion');
+      }
+    });
+  }, [activeChannelId, executeUpdateWorkspaceStatus]);
+
+  const handleRerunScript = useCallback(async (tabName: string) => {
+    const wsId = useThreadStore.getState().selectedWorkspaceId;
+    if (!wsId || !activeChannelId || !repoPath) return;
+    const worktreeResult = await window.traceAPI.checkWorktreeExists(wsId, repoPath);
+    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
+
+    const channel = enrichedChannels.find((item) => item.id === activeChannelId);
+    const script = tabName === "Setup" ? channel?.setupScript : channel?.runScript;
+    if (!script?.trim()) return;
+
+    const env: Record<string, string> = { REPO_FOLDER: worktreeResult.worktreePath };
+    if (tabName === "Run") {
+      await window.traceAPI.releasePorts(wsId);
+      const portResult = await window.traceAPI.allocatePorts(wsId, 10);
+      if (portResult.success && portResult.ports) {
+        const ports = portResult.ports;
+        env.PORT = String(ports[0]);
+        env.TRACE_BASE_PORT = String(ports[0]);
+        for (let i = 0; i < ports.length; i += 1) env[`TRACE_PORT_${i}`] = String(ports[i]);
+      }
+    }
+
+    useTerminalStore.getState().rerunTab(tabName, script, env);
+  }, [activeChannelId, enrichedChannels, repoPath]);
+
+  const handleStopScript = useCallback((tabName: string) => {
+    useTerminalStore.getState().stopTab(tabName);
+    if (tabName === "Run") {
+      const wsId = useThreadStore.getState().selectedWorkspaceId;
+      if (wsId) void window.traceAPI.releasePorts(wsId);
+    }
+  }, []);
+
+  const switchSession = useThreadStore((s) => s.syncActions.switchSession);
+  const clearSession = useThreadStore((s) => s.syncActions.clearSession);
+
+  // ─── Ticket dependencies mutation ───────────────────────────────
+  const [executeSetTicketDependencies] = useSetTicketDependenciesMutation();
+  const handleSetTicketDependencies = useCallback(
+    async (workspaceId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+      if (!activeChannelId) return;
+      try {
+        const { data } = await executeSetTicketDependencies({
+          variables: { channelId: activeChannelId, workspaceId, dependsOnWorkspaceIds: depIds, runConfig },
+        });
+        if (data?.setTicketDependencies) {
+          useWorkspaceStore.getState().upsertWorkspace(data.setTicketDependencies as import("../types").Workspace);
+          useThreadStore.getState().syncSelectedWorkspace(data.setTicketDependencies as import("../types").Workspace);
+        }
+      } catch {
+        console.error("Failed to set ticket dependencies");
+      }
+    },
+    [activeChannelId, executeSetTicketDependencies],
+  );
+
+  // ─── Auth ───────────────────────────────────────────────────────
   const { user: authUser } = useAuth();
   const isLockedByOther = Boolean(
     workspaceUserId && authUser && workspaceUserId !== authUser.id,
   );
 
+  // ─── Memos ──────────────────────────────────────────────────────
   const lastUserMessageTime = useMemo(() => {
     for (let i = sessionNodes.length - 1; i >= 0; i--) {
       const node = sessionNodes[i];
@@ -131,8 +334,6 @@ export function ThreadPanel() {
 
   const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
     if (isClaudeRunning) return null;
-    // Scan backward for the most recent unanswered question,
-    // stopping at a UserPromptSubmit boundary (which means it was answered)
     for (let i = sessionNodes.length - 1; i >= 0; i--) {
       const node = sessionNodes[i];
       if (node.kind === "ask-user-question") return node;
@@ -183,7 +384,7 @@ export function ThreadPanel() {
           className={`resize-handle ${dragging === "right" ? "active" : ""}`}
           onMouseDown={(e) => {
             e.preventDefault();
-            onStartDrag();
+            useAppUIStore.getState().setDragging("right");
           }}
         />
       )}
@@ -207,10 +408,10 @@ export function ThreadPanel() {
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
           isFullscreen={isFullscreen}
-          onClose={onClose}
-          onDeleteWorktree={onDeleteWorktree}
-          onEnterFullscreen={onEnterFullscreen}
-          onExitFullscreen={onExitFullscreen}
+          onClose={handleClose}
+          onDeleteWorktree={handleDeleteWorktree}
+          onEnterFullscreen={() => { void handleEnterFullscreen(); }}
+          onExitFullscreen={handleExitFullscreen}
           onMarkMerged={() => void markMerged()}
           sessions={sessions}
           activeSessionId={activeSessionId}
@@ -357,19 +558,22 @@ export function ThreadPanel() {
                 allTerminalEntries={allTerminalEntries}
                 currentWorkspaceId={selectedWorkspaceId}
                 activeTabId={activeTerminalTabId}
-                cwd={terminalCwd}
+                cwd={effectiveTerminalCwd}
                 runScriptRunning={runScriptRunning}
                 scriptsAvailable={scriptsAvailable}
                 hasSetupScript={hasSetupScript}
                 hasRunScript={hasRunScript}
-                onSelectTab={onSelectTerminalTab}
-                onCloseTab={onCloseTerminalTab}
-                onCloseAll={onCloseAllTerminals}
-                onAddTab={onAddTerminal}
-                onRunScript={() => onRerunScript("Run")}
-                onStopScript={() => onStopScript("Run")}
-                onRerunSetup={() => onRerunScript("Setup")}
-                onOpenSettings={onOpenSettings}
+                onSelectTab={useTerminalStore.getState().setActiveTabId}
+                onCloseTab={useTerminalStore.getState().killTerminal}
+                onCloseAll={() => {
+                  const wsId = useThreadStore.getState().selectedWorkspaceId;
+                  if (wsId) useTerminalStore.getState().killAllForWorkspace(wsId);
+                }}
+                onAddTab={useTerminalStore.getState().addTerminal}
+                onRunScript={() => { void handleRerunScript("Run"); }}
+                onStopScript={() => handleStopScript("Run")}
+                onRerunSetup={() => { void handleRerunScript("Setup"); }}
+                onOpenSettings={() => { if (activeChannelId) useAppUIStore.getState().setSettingsChannelId(activeChannelId); }}
               />
             ) : (
               <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
@@ -401,7 +605,7 @@ export function ThreadPanel() {
               currentWorkspaceId={pendingRunWorkspaceId}
               onRunAfter={(depIds, runConfig) => {
                 if (pendingRunWorkspaceId) {
-                  setTicketDependencies(
+                  void handleSetTicketDependencies(
                     pendingRunWorkspaceId,
                     depIds,
                     runConfig,

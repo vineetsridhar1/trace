@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 import { FiSend, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { PlanReviewNode } from '../types';
-import type { PlanResponseMode } from '../context/ClaudeActionsContext';
+import type { PlanResponseMode } from '../stores/claudeRunStore';
 import { QuestionOptionPill } from './QuestionOptionPill';
 
 const PLAN_PRESETS: { label: string; mode: PlanResponseMode }[] = [

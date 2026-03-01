@@ -3,6 +3,31 @@ import type { Workspace, ServerEvent, SessionStatus } from '../types';
 import type { SessionInfo } from '../hooks/useThread';
 import { clamp } from '../utils';
 
+// Registerable async actions provided by useThreadSync
+interface ThreadSyncActions {
+  loadSessionEvents: (workspace: Workspace) => Promise<void>;
+  loadOlderEvents: () => Promise<number>;
+  switchSession: (sessionId: string) => Promise<void>;
+  clearSession: () => Promise<string | null>;
+  deleteWorktree: (onDeleted?: (workspaceId: string) => void) => Promise<void>;
+  openThreadPanel: (workspace: Workspace) => void;
+  reportClaudeActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
+}
+
+const noopWarn = (name: string) => (..._args: unknown[]) => {
+  console.warn(`threadStore.${name} called before registration`);
+};
+
+const defaultSyncActions: ThreadSyncActions = {
+  loadSessionEvents: noopWarn('loadSessionEvents') as ThreadSyncActions['loadSessionEvents'],
+  loadOlderEvents: noopWarn('loadOlderEvents') as ThreadSyncActions['loadOlderEvents'],
+  switchSession: noopWarn('switchSession') as ThreadSyncActions['switchSession'],
+  clearSession: noopWarn('clearSession') as ThreadSyncActions['clearSession'],
+  deleteWorktree: noopWarn('deleteWorktree') as ThreadSyncActions['deleteWorktree'],
+  openThreadPanel: noopWarn('openThreadPanel') as ThreadSyncActions['openThreadPanel'],
+  reportClaudeActivity: noopWarn('reportClaudeActivity') as ThreadSyncActions['reportClaudeActivity'],
+};
+
 interface ThreadState {
   // Selection
   selectedWorkspaceId: string | null;
@@ -26,6 +51,11 @@ interface ThreadState {
   deletingWorktree: boolean;
   mergingWorktree: boolean;
 
+  // Registered sync actions
+  syncActions: ThreadSyncActions;
+  registerSyncActions: (actions: ThreadSyncActions) => void;
+  clearSyncActions: () => void;
+
   // Actions: Selection
   selectWorkspace: (workspace: Workspace) => void;
   syncSelectedWorkspace: (workspace: Workspace) => void;
@@ -45,7 +75,7 @@ interface ThreadState {
 
   // Actions: Thread UI
   setThreadWidth: (width: number) => void;
-  openThreadPanel: (workspace: Workspace) => void;
+  openThreadPanelUI: (workspace: Workspace) => void;
   closeThreadPanel: () => void;
   toggleReadGroup: (groupId: string) => void;
   toggleTurnGroup: (groupId: string) => void;
@@ -79,6 +109,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   hasWorktree: null,
   deletingWorktree: false,
   mergingWorktree: false,
+
+  // Registered sync actions
+  syncActions: { ...defaultSyncActions },
+  registerSyncActions: (actions) => set({ syncActions: actions }),
+  clearSyncActions: () => set({ syncActions: { ...defaultSyncActions } }),
 
   // Actions: Selection
   selectWorkspace: (workspace) =>
@@ -157,7 +192,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   // Actions: Thread UI
   setThreadWidth: (width) => set({ threadWidth: width }),
 
-  openThreadPanel: (workspace) => {
+  openThreadPanelUI: (workspace) => {
     const saved = parseInt(localStorage.getItem('trace:threadWidth') ?? '', 10);
     const width = saved >= 280
       ? clamp(saved, 280, window.innerWidth - 200)

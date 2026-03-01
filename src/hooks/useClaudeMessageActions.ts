@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { Workspace, ServerEvent, TicketStatus, ClaudeModel, EffortLevel } from '../types';
-import type { PlanResponseMode } from '../context/ClaudeActionsContext';
+import type { PlanResponseMode } from '../stores/claudeRunStore';
 import { WORKSPACE_FIELDS } from '../graphql/fragments';
 import {
   useCreateWorkspaceMutation,

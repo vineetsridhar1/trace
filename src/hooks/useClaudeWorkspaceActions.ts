@@ -1,7 +1,7 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { gql } from '@apollo/client';
 import type { Workspace, TicketStatus } from '../types';
-import type { PlanResponseMode } from '../context/ClaudeActionsContext';
+import type { PlanResponseMode } from '../stores/claudeRunStore';
 import { WORKSPACE_FIELDS } from '../graphql/fragments';
 import {
   useCreateWorkspaceMutation,
@@ -11,6 +11,8 @@ import {
 import { useClaudeRunStore } from '../stores/claudeRunStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useChannelContext } from '../context/ChannelContext';
+import { useAppUIStore } from '../stores/appUIStore';
 
 const GQL_CREATE_WORKSPACE = gql`
   mutation CreateWorkspace($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
@@ -85,33 +87,45 @@ interface SpawnOptions {
 }
 
 interface UseClaudeWorkspaceActionsOptions {
-  activeChannelId: string | null;
-  onWorkspaceCreated: (workspace: Workspace) => void;
-  loadSessionEvents: (workspace: Workspace) => Promise<void>;
-  upsertWorkspace: (workspace: Workspace) => void;
   updateWorkspaceStatus: (workspaceId: string, status: TicketStatus) => Promise<void>;
-  getSetupCommands: () => string[];
-  getChannelRepoPath: () => string;
-  getChannelBaseBranch: () => string;
-  getSystemInstructions: () => string | undefined;
-  clearSession: () => Promise<string | null>;
+  onWorkspaceCreated: (workspace: Workspace) => void;
 }
 
 export function useClaudeWorkspaceActions({
-  activeChannelId,
-  onWorkspaceCreated,
-  loadSessionEvents,
-  upsertWorkspace,
   updateWorkspaceStatus,
-  getSetupCommands,
-  getChannelRepoPath,
-  getChannelBaseBranch,
-  getSystemInstructions,
-  clearSession,
+  onWorkspaceCreated,
 }: UseClaudeWorkspaceActionsOptions) {
+  const { activeChannelId, enrichedActiveChannel, localConfigs } = useChannelContext();
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
   const [executeAppendPrompt] = useAppendPromptMutation();
   const [executeUpdatePreview] = useUpdateWorkspacePreviewMutation();
+
+  // Stable refs for channel data to avoid stale closures
+  const channelRef = useRef(enrichedActiveChannel);
+  channelRef.current = enrichedActiveChannel;
+  const activeChannelIdRef = useRef(activeChannelId);
+  activeChannelIdRef.current = activeChannelId;
+  const localConfigsRef = useRef(localConfigs);
+  localConfigsRef.current = localConfigs;
+
+  // Derived channel helpers via refs (stable callbacks)
+  const getChannelRepoPath = useCallback(() => channelRef.current?.localRepoPath ?? '', []);
+  const getChannelBaseBranch = useCallback(() => channelRef.current?.baseBranch ?? 'main', []);
+  const getSetupCommands = useCallback((): string[] => {
+    const script = channelRef.current?.setupScript;
+    if (!script) return [];
+    return script.split('\n').map((l) => l.trim()).filter(Boolean);
+  }, []);
+  const getSystemInstructions = useCallback((): string | undefined => {
+    const chId = activeChannelIdRef.current;
+    return chId ? localConfigsRef.current[chId]?.systemInstructions : undefined;
+  }, []);
+
+  // Helper: upsert workspace in both workspace store and thread store
+  const upsertWorkspace = useCallback((workspace: Workspace) => {
+    useWorkspaceStore.getState().upsertWorkspace(workspace);
+    useThreadStore.getState().syncSelectedWorkspace(workspace);
+  }, []);
 
   // Clear active runs when switching channels
   useEffect(() => {
@@ -155,10 +169,11 @@ export function useClaudeWorkspaceActions({
 
   const updatePreviewForPendingRun = useCallback(
     async (workspaceId: string, preview: string) => {
-      if (!activeChannelId) return;
+      const chId = activeChannelIdRef.current;
+      if (!chId) return;
       try {
         const { data } = await executeUpdatePreview({
-          variables: { channelId: activeChannelId, workspaceId, preview },
+          variables: { channelId: chId, workspaceId, preview },
         });
         if (!data) return;
         upsertWorkspace(data.updateWorkspacePreview as Workspace);
@@ -166,15 +181,16 @@ export function useClaudeWorkspaceActions({
         // Preview updates are best-effort
       }
     },
-    [activeChannelId, executeUpdatePreview, upsertWorkspace],
+    [executeUpdatePreview, upsertWorkspace],
   );
 
   const persistPrompt = useCallback(
     async (workspaceId: string, text: string, errorLabel: string, attachmentIds?: string[], createNewSession?: boolean, sessionId?: string) => {
-      if (!activeChannelId) return null;
+      const chId = activeChannelIdRef.current;
+      if (!chId) return null;
       try {
         const { data } = await executeAppendPrompt({
-          variables: { channelId: activeChannelId, workspaceId, text, attachmentIds, createNewSession, sessionId },
+          variables: { channelId: chId, workspaceId, text, attachmentIds, createNewSession, sessionId },
         });
         if (!data?.appendPrompt) {
           console.error(errorLabel);
@@ -183,7 +199,7 @@ export function useClaudeWorkspaceActions({
         const workspace = data.appendPrompt.workspace as Workspace;
         upsertWorkspace(workspace);
         if (useThreadStore.getState().selectedWorkspaceId === workspace.id) {
-          void loadSessionEvents(workspace);
+          void useThreadStore.getState().syncActions.loadSessionEvents(workspace);
         }
         return workspace;
       } catch {
@@ -191,16 +207,17 @@ export function useClaudeWorkspaceActions({
         return null;
       }
     },
-    [activeChannelId, executeAppendPrompt, loadSessionEvents, upsertWorkspace],
+    [executeAppendPrompt, upsertWorkspace],
   );
 
   const sendMessage = useCallback(
     async (rawText: string, attachmentIds?: string[], filePaths?: string[]) => {
       const text = rawText.trim();
-      if (!text || !activeChannelId) return false;
+      const chId = activeChannelIdRef.current;
+      if (!text || !chId) return false;
       try {
         const { data } = await executeCreateWorkspace({
-          variables: { channelId: activeChannelId, text, attachmentIds },
+          variables: { channelId: chId, text, attachmentIds },
         });
         if (!data?.createWorkspace) return false;
         const workspace = data.createWorkspace.workspace as Workspace;
@@ -213,7 +230,7 @@ export function useClaudeWorkspaceActions({
         return false;
       }
     },
-    [activeChannelId, executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
+    [executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
   );
 
   const runPendingWorkspace = useCallback(
@@ -314,7 +331,8 @@ export function useClaudeWorkspaceActions({
     async (rawText: string, attachmentIds?: string[], filePaths?: string[]) => {
       const text = rawText.trim();
       const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
-      if (!text || !selectedWorkspace || !activeChannelId) return false;
+      const chId = activeChannelIdRef.current;
+      if (!text || !selectedWorkspace || !chId) return false;
 
       const workspaceId = selectedWorkspace.id;
       useClaudeRunStore.getState().addActiveRun(workspaceId);
@@ -354,13 +372,14 @@ export function useClaudeWorkspaceActions({
       await spawnClaudeForWorkspace(workspaceId, text, spawnOptions);
       return true;
     },
-    [activeChannelId, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace],
+    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace],
   );
 
   const sendPlanResponse = useCallback(
     async (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => {
       const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
-      if (!selectedWorkspace || !activeChannelId) return;
+      const chId = activeChannelIdRef.current;
+      if (!selectedWorkspace || !chId) return;
 
       const statusOnSuccess = selectedWorkspace.status === 'review' ? undefined : 'in_progress';
       const { selectedModel, selectedEffort } = useClaudeRunStore.getState();
@@ -370,6 +389,7 @@ export function useClaudeWorkspaceActions({
           ? `Implement the following approved plan. The plan file is at ${planFilePath}.\n\n${planContent ?? text}`
           : `Implement the following approved plan:\n\n${planContent ?? text}`;
 
+        const clearSession = useThreadStore.getState().syncActions.clearSession;
         const newSessionId = (await clearSession()) ?? undefined;
 
         const persisted = await persistPrompt(selectedWorkspace.id, implementPrompt, 'Failed to persist plan approval prompt', undefined, undefined, newSessionId);
@@ -419,12 +439,13 @@ export function useClaudeWorkspaceActions({
         });
       }
     },
-    [activeChannelId, clearSession, getChannelBaseBranch, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace],
+    [getChannelBaseBranch, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace],
   );
 
   const mergeToMain = useCallback(async () => {
     const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
-    if (!selectedWorkspace || !activeChannelId) return;
+    const chId = activeChannelIdRef.current;
+    if (!selectedWorkspace || !chId) return;
 
     const baseBranch = getChannelBaseBranch();
     const prompt = `/merge-to-main ${baseBranch}`;
@@ -435,14 +456,30 @@ export function useClaudeWorkspaceActions({
       errorPrefix: 'Failed to spawn claude for merge-to-main',
       setHasWorktreeOnSuccess: false,
     });
-  }, [activeChannelId, getChannelBaseBranch, persistPrompt, spawnClaudeForWorkspace]);
+  }, [getChannelBaseBranch, persistPrompt, spawnClaudeForWorkspace]);
 
   const markMerged = useCallback(async () => {
     const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
-    if (!selectedWorkspace || !activeChannelId) return;
+    const chId = activeChannelIdRef.current;
+    if (!selectedWorkspace || !chId) return;
     if (selectedWorkspace.status !== 'completed') return;
     await updateWorkspaceStatus(selectedWorkspace.id, 'merged');
-  }, [activeChannelId, updateWorkspaceStatus]);
+  }, [updateWorkspaceStatus]);
+
+  // Register all workspace actions on the claude run store
+  useEffect(() => {
+    useClaudeRunStore.getState().registerWorkspaceActions({
+      sendMessage,
+      runPendingWorkspace,
+      autoRunQueuedTicket,
+      stopClaude,
+      sendThreadMessage,
+      sendPlanResponse,
+      mergeToMain,
+      markMerged,
+    });
+    return () => useClaudeRunStore.getState().clearWorkspaceActions();
+  }, [sendMessage, runPendingWorkspace, autoRunQueuedTicket, stopClaude, sendThreadMessage, sendPlanResponse, mergeToMain, markMerged]);
 
   return {
     sendMessage,

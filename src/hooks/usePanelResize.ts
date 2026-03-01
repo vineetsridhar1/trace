@@ -1,23 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { DragTarget } from '../types';
+import { useEffect } from 'react';
 import { clamp } from '../utils';
+import { useAppUIStore } from '../stores/appUIStore';
+import { useThreadStore } from '../stores/threadStore';
 
-export function usePanelResize(
-  setChannelWidth: (w: number) => void,
-  setThreadWidth: (w: number) => void,
-  leftOffset: number = 0,
-) {
-  const [dragging, setDragging] = useState<DragTarget>(null);
+const SERVER_RAIL_WIDTH = 60;
+
+export function usePanelResize() {
+  const dragging = useAppUIStore((s) => s.dragging);
 
   useEffect(() => {
     if (!dragging) return;
 
     const onMouseMove = (event: MouseEvent) => {
       if (dragging === 'left') {
-        setChannelWidth(clamp(event.clientX - leftOffset, 160, 400));
+        useAppUIStore.getState().setChannelWidth(clamp(event.clientX - SERVER_RAIL_WIDTH, 160, 400));
         return;
       }
-      setThreadWidth(Math.max(window.innerWidth - event.clientX, 280));
+      useThreadStore.getState().setThreadWidth(Math.max(window.innerWidth - event.clientX, 280));
     };
 
     const onMouseUp = (event: MouseEvent) => {
@@ -25,7 +24,7 @@ export function usePanelResize(
         const finalWidth = window.innerWidth - event.clientX;
         localStorage.setItem('trace:threadWidth', String(finalWidth));
       }
-      setDragging(null);
+      useAppUIStore.getState().setDragging(null);
     };
 
     document.addEventListener('mousemove', onMouseMove);
@@ -39,9 +38,5 @@ export function usePanelResize(
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [dragging, setChannelWidth, setThreadWidth, leftOffset]);
-
-  const startDragging = useCallback((target: DragTarget) => setDragging(target), []);
-
-  return { dragging, startDragging };
+  }, [dragging]);
 }

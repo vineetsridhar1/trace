@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { gql } from '@apollo/client';
 import type { Workspace, ServerEvent } from '../types';
 import type { SessionInfo } from './useThread';
@@ -299,12 +299,26 @@ export function useThreadSync(
 
   const openThreadPanel = useCallback(
     (workspace: Workspace) => {
-      useThreadStore.getState().openThreadPanel(workspace);
+      useThreadStore.getState().openThreadPanelUI(workspace);
       void loadSessionEvents(workspace);
       void checkWorktree(workspace.id);
     },
     [loadSessionEvents, checkWorktree],
   );
+
+  // Register all sync actions on the store so consumers can call them directly
+  useEffect(() => {
+    useThreadStore.getState().registerSyncActions({
+      loadSessionEvents,
+      loadOlderEvents,
+      switchSession,
+      clearSession,
+      deleteWorktree,
+      openThreadPanel,
+      reportClaudeActivity,
+    });
+    return () => useThreadStore.getState().clearSyncActions();
+  }, [loadSessionEvents, loadOlderEvents, switchSession, clearSession, deleteWorktree, openThreadPanel, reportClaudeActivity]);
 
   return {
     loadSessionEvents,

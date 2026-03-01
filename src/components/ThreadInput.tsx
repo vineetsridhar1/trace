@@ -2,7 +2,8 @@ import { useCallback, useRef, useState } from 'react';
 import { FiSend } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { ModelEffortSelector } from './ModelEffortSelector';
-import { useClaudeActions } from '../context/ClaudeActionsContext';
+import { useClaudeRunStore } from '../stores/claudeRunStore';
+import { useChannelContext } from '../context/ChannelContext';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useFileMention } from '../hooks/useFileMention';
 import { useImageAttachments } from '../hooks/useImageAttachments';
@@ -29,13 +30,12 @@ export function ThreadInput({
   onStopClaude: () => void;
   onClearThread: () => Promise<string | null>;
 }) {
-  const {
-    repoPath,
-    selectedModel,
-    selectedEffort,
-    setSelectedModel,
-    setSelectedEffort,
-  } = useClaudeActions();
+  const { enrichedActiveChannel } = useChannelContext();
+  const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
+  const selectedModel = useClaudeRunStore((s) => s.selectedModel);
+  const selectedEffort = useClaudeRunStore((s) => s.selectedEffort);
+  const setSelectedModel = useClaudeRunStore((s) => s.setSelectedModel);
+  const setSelectedEffort = useClaudeRunStore((s) => s.setSelectedEffort);
   const [threadInput, setThreadInput] = useState('');
   const [mode, setMode] = useState<InteractionMode>('code');
   const cycleMode = () => {
