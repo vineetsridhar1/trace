@@ -217,6 +217,7 @@ export function MessagePanel({
     prevChannelIdRef.current = channelId;
     renderedIdsRef.current = new Set();
     isInitialLoadRef.current = true;
+    chatNearBottomRef.current = true;
   }
 
   // Compute which message IDs are new (should animate)
@@ -247,12 +248,23 @@ export function MessagePanel({
     }
   }, [chatMessages]);
 
+  // Scroll to bottom when channel changes
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [channelId]);
+
   // Auto-scroll chat on new messages
   useEffect(() => {
     const el = chatScrollRef.current;
     if (!el) return;
     if (chatNearBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
     }
   }, [chatMessages]);
 
@@ -266,6 +278,11 @@ export function MessagePanel({
     if (!chatInput.trim()) return;
     void sendChatMessage(chatInput);
     setChatInput('');
+    chatNearBottomRef.current = true;
+    requestAnimationFrame(() => {
+      const el = chatScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   }, [chatInput, sendChatMessage]);
 
   const handleChatKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
