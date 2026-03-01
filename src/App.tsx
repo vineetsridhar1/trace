@@ -10,7 +10,7 @@ import { useChannelSubscriptions } from './hooks/useChannelSubscriptionsV2';
 import { useChannelMessageNotifications } from './hooks/useChannelMessageNotifications';
 import { useTerminalInit } from './hooks/useTerminalInit';
 import { useClaudeWorkspaceActions } from './hooks/useClaudeWorkspaceActions';
-import { usePRPolling } from './hooks/usePRPolling';
+import { useSyncPolling } from './hooks/useSyncPolling';
 import { useKanbanSync } from './hooks/useKanbanSync';
 import { useAiChatSync } from './hooks/useAiChatSync';
 import { ChannelProvider, useChannelContext } from './context/ChannelContext';
@@ -30,6 +30,7 @@ import { useTerminalStore } from './stores/terminalStore';
 import { useKanbanStore } from './stores/kanbanStore';
 import { useAppUIStore } from './stores/appUIStore';
 import { useClaudeRunStore } from './stores/claudeRunStore';
+import { useSyncStore } from './stores/syncStore';
 
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
   mutation UpdateWorkspaceStatus($channelId: ID!, $workspaceId: ID!, $status: String!) {
@@ -206,12 +207,14 @@ function AppContent() {
     [activeChannelId, executeUpdateWorkspaceStatus, upsertAndSyncWorkspace],
   );
 
-  // ─── PR polling ──────────────────────────────────────────────────
+  // ─── Sync polling (main branch + PR statuses) ───────────────────
   const workspacesRef = useRef(workspaces);
   workspacesRef.current = workspaces;
-  const { triggerCheck: triggerPRCheck } = usePRPolling({
+  const { triggerSync } = useSyncPolling({
     workspacesRef,
     getChannelId: getActiveChannelId,
+    getRepoPath: getChannelRepoPath,
+    getBaseBranch: getChannelBaseBranch,
     updateWorkspaceStatus,
   });
 
@@ -250,7 +253,7 @@ function AppContent() {
     onTicketReadyToRun: useCallback((workspaceId: string, runConfig: unknown) => {
       autoRunRef.current?.(workspaceId, runConfig);
     }, []),
-    onWorkspaceCompleted: triggerPRCheck,
+    onWorkspaceCompleted: triggerSync,
     refreshWorkspaces,
   });
 
@@ -307,6 +310,7 @@ function AppContent() {
       useAppUIStore.getState().setActiveAiChatId(null);
       switchChannel(channelId);
       useWorkspaceStore.getState().clearWorkspaces();
+      useSyncStore.getState().reset();
       useKanbanStore.getState().clearBoard();
       useAppUIStore.getState().setMiddlePanelView('chat');
       useThreadStore.getState().closeThreadPanel();

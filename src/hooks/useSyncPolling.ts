@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { gql } from '@apollo/client';
 import type { Workspace, TicketStatus } from '../types';
-import { useCheckPrStatusesLazyQuery } from './__generated__/usePRPolling.generated';
+import { useCheckPrStatusesLazyQuery } from './__generated__/useSyncPolling.generated';
+import { useSyncStore } from '../stores/syncStore';
 
 const GQL_CHECK_PR_STATUSES = gql`
   query CheckPRStatuses($channelId: ID!, $branches: [String!]!) {
@@ -14,17 +15,21 @@ const GQL_CHECK_PR_STATUSES = gql`
   }
 `;
 
-interface UsePRPollingOptions {
+interface UseSyncPollingOptions {
   workspacesRef: React.RefObject<Workspace[]>;
   getChannelId: () => string | null;
+  getRepoPath: () => string;
+  getBaseBranch: () => string;
   updateWorkspaceStatus: (workspaceId: string, status: TicketStatus) => Promise<void>;
 }
 
-export function usePRPolling({
+export function useSyncPolling({
   workspacesRef,
   getChannelId,
+  getRepoPath,
+  getBaseBranch,
   updateWorkspaceStatus,
-}: UsePRPollingOptions) {
+}: UseSyncPollingOptions) {
   const updateStatusRef = useRef(updateWorkspaceStatus);
   updateStatusRef.current = updateWorkspaceStatus;
 
@@ -71,17 +76,28 @@ export function usePRPolling({
     }
   }, [workspacesRef, getChannelId, executeCheckPRStatuses]);
 
+  const tick = useCallback(async (silent = true) => {
+    const repoPath = getRepoPath();
+    const baseBranch = getBaseBranch();
+
+    await Promise.allSettled([
+      useSyncStore.getState().checkMainBranch(repoPath, baseBranch, silent),
+      checkPRs(),
+    ]);
+  }, [getRepoPath, getBaseBranch, checkPRs]);
+
   useEffect(() => {
-    void checkPRs();
+    // Immediate check on mount (non-silent for main branch to show spinner)
+    void tick(false);
 
     const interval = window.setInterval(() => {
-      void checkPRs();
+      void tick();
     }, 30_000);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [checkPRs]);
+  }, [tick]);
 
-  return { triggerCheck: checkPRs };
+  return { triggerSync: tick };
 }
