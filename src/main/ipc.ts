@@ -564,6 +564,17 @@ export function registerIpcHandlers() {
 
       authWindow.loadURL(`${serverUrl}/auth/github`);
 
+      // When the server is remote (LAN), GitHub still redirects to localhost.
+      // Intercept that redirect and rewrite it to the actual server URL.
+      authWindow.webContents.on('will-navigate', (_event, url) => {
+        if (url.includes('/auth/github/callback') && !url.startsWith(serverUrl)) {
+          _event.preventDefault();
+          const callbackUrl = new URL(url);
+          const rewritten = `${serverUrl}${callbackUrl.pathname}${callbackUrl.search}`;
+          authWindow.loadURL(rewritten);
+        }
+      });
+
       authWindow.webContents.on('did-navigate', async (_event, url) => {
         if (url.includes('/auth/github/callback')) {
           try {
