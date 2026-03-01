@@ -37,6 +37,28 @@ const [executeMessages] = useMessagesLazyQuery();
 const { data } = await executeMessages({ variables: { ... } });
 ```
 
+## Frontend Patterns
+
+### State Management (Zustand)
+- Use Zustand stores in `src/stores/` for shared/global state
+- Read state with selectors: `useXxxStore((s) => s.field)` — this minimizes re-renders
+- Call actions imperatively via `useXxxStore.getState().action()` in callbacks/effects
+- Existing stores: `appUIStore`, `workspaceStore`, `threadStore`, `claudeRunStore`, `terminalStore`, `kanbanStore`
+- Do not create new React Context providers for state — use Zustand stores instead
+- The remaining Context providers (`AuthContext`, `ChannelContext`) are intentional exceptions
+
+### Component Guidelines
+- Keep components small and focused — extract sub-components when a piece has its own state or is reusable
+- Extract complex logic into custom hooks in `src/hooks/`
+- Use `memo()` with custom comparators for list items rendered in loops
+- Localize state: use `useState` for UI-only concerns (toggles, hover, local input) rather than putting everything in a global store
+
+### Re-render Optimization
+- Use Zustand selectors (not full-store subscriptions) to avoid unnecessary re-renders
+- Wrap callbacks passed to children in `useCallback`
+- Memoize expensive derived data with `useMemo`
+- Use providers/wrappers to isolate frequently-updating state from static layout
+
 ## Git Merge Policy
 - **Never merge directly into main.** All changes must go through a GitHub pull request.
 - The `/merge-to-main` command creates a PR and auto-merges it — it does not merge locally.
