@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { FiSend, FiCheck, FiAlertCircle, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
-import { useClaudeActions } from '../context/ClaudeActionsContext';
+import { useClaudeRunStore } from '../stores/claudeRunStore';
 import { useChannelContext } from '../context/ChannelContext';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useFileMention } from '../hooks/useFileMention';
@@ -12,8 +12,9 @@ import { FileMentionMenu } from './FileMentionMenu';
 import { ImageThumbnails } from './ImageThumbnails';
 
 export function WorkspaceInput() {
-  const { sendMessage, repoPath } = useClaudeActions();
+  const sendMessage = useClaudeRunStore((s) => s.workspaceActions.sendMessage);
   const { enrichedActiveChannel } = useChannelContext();
+  const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
   const mainStatus = useMainBranchStatus(repoPath, enrichedActiveChannel?.baseBranch);
   const [messageInput, setMessageInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);

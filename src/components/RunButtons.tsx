@@ -3,7 +3,7 @@ import { FiEdit3, FiMap, FiHelpCircle, FiChevronDown } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { ModelEffortSelector } from './ModelEffortSelector';
 import { TicketDependencySelector } from './TicketDependencySelector';
-import { useClaudeActions } from '../context/ClaudeActionsContext';
+import { useClaudeRunStore } from '../stores/claudeRunStore';
 
 export type InteractionMode = 'code' | 'plan' | 'ask';
 
@@ -122,12 +122,10 @@ export function RunButtons({
   currentWorkspaceId?: string;
   onRunAfter?: (dependsOnWorkspaceIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
 }) {
-  const {
-    selectedModel,
-    selectedEffort,
-    setSelectedModel,
-    setSelectedEffort,
-  } = useClaudeActions();
+  const selectedModel = useClaudeRunStore((s) => s.selectedModel);
+  const selectedEffort = useClaudeRunStore((s) => s.selectedEffort);
+  const setSelectedModel = useClaudeRunStore((s) => s.setSelectedModel);
+  const setSelectedEffort = useClaudeRunStore((s) => s.setSelectedEffort);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [mode, setMode] = useState<InteractionMode>('plan');
   const [showRunAfter, setShowRunAfter] = useState(false);

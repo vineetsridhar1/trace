@@ -1,24 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ServerEvent } from '../types';
+import { useThreadStore } from '../stores/threadStore';
 
 const THREAD_NEAR_BOTTOM_THRESHOLD_PX = 100;
 const THREAD_NEAR_TOP_THRESHOLD_PX = 100;
 
-interface UseThreadScrollOptions {
-  sessionEvents: ServerEvent[];
-  selectedWorkspaceId: string | null;
-  hasMoreEvents: boolean;
-  loadingOlderEvents: boolean;
-  loadOlderEvents: () => Promise<number>;
-}
+export function useThreadScroll() {
+  const sessionEvents = useThreadStore((s) => s.sessionEvents);
+  const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
+  const hasMoreEvents = useThreadStore((s) => s.sessionTotal > s.sessionEvents.length);
+  const loadingOlderEvents = useThreadStore((s) => s.loadingOlderEvents);
 
-export function useThreadScroll({
-  sessionEvents,
-  selectedWorkspaceId,
-  hasMoreEvents,
-  loadingOlderEvents,
-  loadOlderEvents,
-}: UseThreadScrollOptions) {
   const threadContentRef = useRef<HTMLDivElement | null>(null);
   const threadNearBottomRef = useRef(true);
   const prevThreadEventCountRef = useRef(0);
@@ -99,6 +90,7 @@ export function useThreadScroll({
       const prevScrollHeight = el.scrollHeight;
       isPrependingRef.current = true;
 
+      const loadOlderEvents = useThreadStore.getState().syncActions.loadOlderEvents;
       void loadOlderEvents().then((count) => {
         if (count > 0) {
           // Preserve scroll position after older events are prepended
@@ -114,7 +106,7 @@ export function useThreadScroll({
         }
       });
     }
-  }, [isThreadNearBottom, hasMoreEvents, loadingOlderEvents, loadOlderEvents]);
+  }, [isThreadNearBottom, hasMoreEvents, loadingOlderEvents]);
 
   const resetScroll = useCallback(() => {
     setShowJumpToLatest(false);
