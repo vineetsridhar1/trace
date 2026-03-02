@@ -412,6 +412,7 @@ export type Query = {
   sessionEvents: EventConnection;
   sessions: Array<Session>;
   ticketDependencies: Array<TicketDependency>;
+  workspace?: Maybe<Workspace>;
   workspaceEvents: EventConnection;
   workspaces: WorkspaceConnection;
 };
@@ -480,6 +481,11 @@ export type QuerySessionsArgs = {
 
 export type QueryTicketDependenciesArgs = {
   workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QueryWorkspaceArgs = {
+  id: Scalars['ID']['input'];
 };
 
 

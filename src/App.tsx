@@ -329,6 +329,20 @@ function AppContent() {
     [performChannelSwitch],
   );
 
+  // ─── Thread link navigation (cross-channel support) ────────────────
+  const handleOpenThreadLink = useCallback(
+    (targetChannelId: string, workspaceId: string) => {
+      if (targetChannelId === activeChannelId) {
+        const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
+        if (ws) handleOpenWorkspace(ws);
+        return;
+      }
+      useAppUIStore.getState().setPendingThreadOpen({ channelId: targetChannelId, workspaceId });
+      performChannelSwitch(targetChannelId);
+    },
+    [activeChannelId, handleOpenWorkspace, performChannelSwitch],
+  );
+
   const handleJoinChannel = useCallback(
     async (config: LocalChannelConfig) => {
       const targetId = joinChannelId ?? activeChannelId;
@@ -444,6 +458,15 @@ function AppContent() {
     }, 3000);
     return () => clearInterval(interval);
   }, [activeChannelId, refreshWorkspaces, subscriptionsActive]);
+
+  // Auto-open thread panel after cross-channel navigation
+  useEffect(() => {
+    const pending = useAppUIStore.getState().pendingThreadOpen;
+    if (!pending || pending.channelId !== activeChannelId || workspaces.length === 0) return;
+    const ws = workspaces.find((w) => w.id === pending.workspaceId);
+    if (ws) handleOpenWorkspace(ws);
+    useAppUIStore.getState().setPendingThreadOpen(null);
+  }, [workspaces, activeChannelId, handleOpenWorkspace]);
 
   // Sync terminal selection with workspace selection, killing idle PTYs on navigate away
   const prevTerminalWorkspaceRef = useRef<string | null>(null);
@@ -610,6 +633,7 @@ function AppContent() {
                 activeRunWorkspaceIds={activeRunWorkspaceIds}
                 needsJoin={needsJoin}
                 onJoinChannel={handleOpenJoinModal}
+                onOpenThreadLink={handleOpenThreadLink}
               />
             )}
           </div>

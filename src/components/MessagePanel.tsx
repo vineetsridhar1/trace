@@ -6,8 +6,52 @@ import { WorkspaceInput } from './WorkspaceInput';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { ChatEmptyState } from './ChatEmptyState';
 import { ThreadPanel } from './ThreadPanel';
+import { ThreadLinkPreview } from './ThreadLinkPreview';
 import { useChannelMessages } from '../hooks/useChannelMessages';
 import { useAuth } from '../context/AuthContext';
+
+const THREAD_LINK_RE = /https?:\/\/[^\s/]+\/thread\/([a-f0-9-]+)\/([a-f0-9-]+)/g;
+
+function renderMessageContent(
+  content: string,
+  onNavigateToThread: (channelId: string, workspaceId: string) => void,
+): React.ReactNode {
+  const segments: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  THREAD_LINK_RE.lastIndex = 0;
+  while ((match = THREAD_LINK_RE.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push(
+        <span key={key++} className="whitespace-pre-wrap">
+          {content.slice(lastIndex, match.index)}
+        </span>,
+      );
+    }
+    const channelId = match[1];
+    const workspaceId = match[2];
+    segments.push(
+      <ThreadLinkPreview key={key++} channelId={channelId} workspaceId={workspaceId} onNavigate={onNavigateToThread} />,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex === 0) {
+    return <span className="whitespace-pre-wrap">{content}</span>;
+  }
+
+  if (lastIndex < content.length) {
+    segments.push(
+      <span key={key++} className="whitespace-pre-wrap">
+        {content.slice(lastIndex)}
+      </span>,
+    );
+  }
+
+  return segments;
+}
 
 interface StatusGroup {
   status: TicketStatus;
@@ -82,6 +126,7 @@ interface MessagePanelProps {
   activeRunWorkspaceIds?: Set<string>;
   needsJoin?: boolean;
   onJoinChannel?: () => void;
+  onOpenThreadLink?: (channelId: string, workspaceId: string) => void;
 }
 
 export function MessagePanel({
@@ -107,6 +152,7 @@ export function MessagePanel({
   activeRunWorkspaceIds,
   needsJoin,
   onJoinChannel,
+  onOpenThreadLink,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -370,7 +416,7 @@ export function MessagePanel({
                           <span className="text-[10px] text-[#565f89]">{formatMessageTime(msg.createdAt)}</span>
                         </div>
                       )}
-                      <div className="whitespace-pre-wrap text-sm text-[#a9b1d6]">{msg.content}</div>
+                      <div className="text-sm text-[#a9b1d6]">{onOpenThreadLink ? renderMessageContent(msg.content, onOpenThreadLink) : <span className="whitespace-pre-wrap">{msg.content}</span>}</div>
                     </div>
                   </div>
                 );

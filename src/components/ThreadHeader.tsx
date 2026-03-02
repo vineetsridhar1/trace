@@ -1,7 +1,8 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiCheck, FiClock, FiCopy, FiExternalLink, FiLoader, FiMaximize2, FiMinimize2, FiMoreVertical, FiShare2, FiTrash2, FiX } from 'react-icons/fi';
+import { FiCheck, FiClock, FiCopy, FiExternalLink, FiLink, FiLoader, FiMaximize2, FiMinimize2, FiMoreVertical, FiShare2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
+import { getServerUrl } from '../types';
 import type { SessionInfo } from '../hooks/useThread';
 
 type ViewMode = 'agent' | 'ticket' | 'files' | 'terminal';
@@ -43,6 +44,7 @@ const HEADER_STATUS_CONFIG: Record<
 
 interface ThreadHeaderProps {
   selectedWorkspaceId: string | null;
+  channelId: string | null;
   workspaceStatus: TicketStatus;
   isClaudeRunning: boolean;
   hasTicket: boolean;
@@ -67,6 +69,7 @@ interface ThreadHeaderProps {
 
 export const ThreadHeader = memo(function ThreadHeader({
   selectedWorkspaceId,
+  channelId,
   workspaceStatus,
   isClaudeRunning,
   hasTicket,
@@ -160,7 +163,13 @@ export const ThreadHeader = memo(function ThreadHeader({
     return () => document.removeEventListener('mousedown', handleClickOutsideMenu);
   }, [menuOpen]);
 
-  const hasMenuItems = hasWorktree === true || isFullscreen || workspaceStatus === 'completed' || canHandoff;
+  const handleCopyLink = async () => {
+    if (!channelId || !selectedWorkspaceId) return;
+    const url = `${getServerUrl()}/thread/${channelId}/${selectedWorkspaceId}`;
+    await navigator.clipboard.writeText(url);
+  };
+
+  const hasMenuItems = selectedWorkspaceId !== null || hasWorktree === true || isFullscreen || workspaceStatus === 'completed' || canHandoff;
 
   return (
     <div
@@ -375,6 +384,16 @@ export const ThreadHeader = memo(function ThreadHeader({
             )}
             {menuOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
+                {selectedWorkspaceId && channelId && (
+                  <button
+                    type="button"
+                    onClick={() => { void handleCopyLink(); setMenuOpen(false); }}
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                  >
+                    <FiLink className="h-3 w-3" aria-hidden="true" />
+                    Copy link
+                  </button>
+                )}
                 {canHandoff && (
                   <button
                     type="button"

@@ -469,6 +469,7 @@ export function ThreadPanel() {
       >
         <ThreadHeader
           selectedWorkspaceId={selectedWorkspaceId}
+          channelId={activeChannelId}
           workspaceStatus={workspaceStatus}
           isClaudeRunning={isClaudeRunning}
           hasTicket={ticket !== null}

@@ -13,6 +13,7 @@ interface AppUIState {
   showCreateServer: boolean;
   activeAiChatId: string | null;
   aiChats: AiChat[];
+  pendingThreadOpen: { channelId: string; workspaceId: string } | null;
 
   setMiddlePanelView: (view: MiddlePanelView) => void;
   setChannelWidth: (width: number | ((prev: number) => number)) => void;
@@ -28,6 +29,7 @@ interface AppUIState {
   upsertAiChat: (chat: Partial<AiChat> & { id: string }) => void;
   removeAiChat: (id: string) => void;
   prependAiChat: (chat: AiChat) => void;
+  setPendingThreadOpen: (value: { channelId: string; workspaceId: string } | null) => void;
 }
 
 export const useAppUIStore = create<AppUIState>((set) => ({
@@ -42,6 +44,7 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   showCreateServer: false,
   activeAiChatId: null,
   aiChats: [],
+  pendingThreadOpen: null,
 
   setMiddlePanelView: (view) => set({ middlePanelView: view }),
 
@@ -74,4 +77,6 @@ export const useAppUIStore = create<AppUIState>((set) => ({
     set((state) => ({
       aiChats: [chat, ...state.aiChats],
     })),
+
+  setPendingThreadOpen: (value) => set({ pendingThreadOpen: value }),
 }));
