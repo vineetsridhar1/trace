@@ -2,9 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { createHighlighter, type Highlighter } from 'shiki';
 
 let highlighterPromise: Promise<Highlighter> | null = null;
-const loadedLanguages = new Set<string>();
+export const loadedLanguages = new Set<string>();
 
-function getHighlighter(): Promise<Highlighter> {
+export function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
       themes: ['tokyo-night'],
@@ -75,7 +75,7 @@ const EXT_TO_LANG: Record<string, string> = {
   prisma: 'prisma',
 };
 
-function langFromPath(filePath: string): string | null {
+export function langFromPath(filePath: string): string | null {
   const name = filePath.split('/').pop() ?? '';
   if (name.toLowerCase() === 'dockerfile') return 'dockerfile';
   const ext = name.split('.').pop()?.toLowerCase();

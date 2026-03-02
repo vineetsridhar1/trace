@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DiffRuntime, ParsedDiffFile, ParsedHunk } from '../types';
 import { loadDiffRuntime } from '../utils';
 import { useWorktreeChanges } from '../hooks/useWorktreeChanges';
+import { useDiffSyntaxTokens } from '../utils/shikiDiffTokens';
 
 const MAX_FILES_SHOWN = 20;
 
@@ -229,12 +230,13 @@ function DiffFileAccordion({
   const dirPath = displayPath.includes('/') ? displayPath.slice(0, displayPath.lastIndexOf('/') + 1) : '';
   const { additions, deletions } = countChanges(hunks);
   const { Diff, Hunk } = runtime;
+  const { tokens, renderToken } = useDiffSyntaxTokens(hunks, displayPath, runtime, expanded);
 
   useEffect(() => {
     if (contentRef.current) {
       setContentHeight(contentRef.current.scrollHeight);
     }
-  }, [expanded, hunks]);
+  }, [expanded, hunks, tokens]);
 
   return (
     <div className={!isLast ? 'border-b border-[#3b3f5c]' : ''}>
@@ -263,7 +265,7 @@ function DiffFileAccordion({
         style={{ maxHeight: expanded ? contentHeight : 0 }}
       >
         <div ref={contentRef} className="edit-diff-body-fullscreen bg-[#16161e]">
-          <Diff viewType="unified" diffType={file?.type ?? 'modify'} hunks={hunks}>
+          <Diff viewType="unified" diffType={file?.type ?? 'modify'} hunks={hunks} tokens={tokens} renderToken={renderToken}>
             {(renderedHunks: ParsedHunk[]) =>
               renderedHunks.map((hunk, idx) => (
                 <Hunk key={hunk?.content ?? idx} hunk={hunk} />

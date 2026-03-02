@@ -654,6 +654,9 @@ export async function loadDiffRuntime(): Promise<DiffRuntime | null> {
         if (!runtime.Diff || !runtime.Hunk || typeof runtime.parseDiff !== 'function') {
           return null;
         }
+        if (typeof runtime.tokenize !== 'function' || typeof runtime.markEdits !== 'function') {
+          return null;
+        }
 
         return runtime as DiffRuntime;
       } catch {

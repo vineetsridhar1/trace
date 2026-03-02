@@ -352,4 +352,6 @@ export interface DiffRuntime {
   Diff: ComponentType<DiffComponentProps>;
   Hunk: ComponentType<HunkComponentProps>;
   parseDiff: (diffText: string) => ParsedDiffFile[];
+  tokenize: (hunks: ParsedHunk[], options?: Record<string, unknown>) => { old: unknown[][]; new: unknown[][] };
+  markEdits: (hunks: ParsedHunk[], options?: Record<string, unknown>) => unknown;
 }
