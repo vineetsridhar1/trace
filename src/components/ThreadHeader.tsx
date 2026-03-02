@@ -58,6 +58,7 @@ interface ThreadHeaderProps {
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
   canHandoff: boolean;
+  handingOff: boolean;
   onHandoff: () => void;
   sessions: SessionInfo[];
   activeSessionId: string | null;
@@ -81,6 +82,7 @@ export const ThreadHeader = memo(function ThreadHeader({
   onEnterFullscreen,
   onExitFullscreen,
   canHandoff,
+  handingOff,
   onHandoff,
   sessions,
   activeSessionId,
@@ -347,19 +349,27 @@ export const ThreadHeader = memo(function ThreadHeader({
         )}
         {hasMenuItems && (
           <div className="relative" ref={menuRef}>
-            <Tooltip text="More actions" position="bottom">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((prev) => !prev)}
-                className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
-                  menuOpen
-                    ? 'border-violet-400/50 text-violet-300'
-                    : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
-                }`}
-              >
-                <FiMoreVertical className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </Tooltip>
+            {handingOff ? (
+              <Tooltip text="Handing off..." position="bottom">
+                <div className="flex items-center justify-center h-7 w-7 rounded-md border border-amber-400/50 text-amber-400">
+                  <FiLoader className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                </div>
+              </Tooltip>
+            ) : (
+              <Tooltip text="More actions" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((prev) => !prev)}
+                  className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
+                    menuOpen
+                      ? 'border-violet-400/50 text-violet-300'
+                      : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
+                  }`}
+                >
+                  <FiMoreVertical className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </Tooltip>
+            )}
             {menuOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
                 {canHandoff && (

@@ -328,24 +328,27 @@ export function ThreadPanel() {
     HANDOFF_ALLOWED_STATUSES.has(workspaceStatus),
   );
 
+  const [handingOff, setHandingOff] = useState(false);
+
   const handleHandoff = useCallback(async () => {
     const wsId = useThreadStore.getState().selectedWorkspaceId;
     const chId = activeChannelId;
     if (!wsId || !chId) return;
 
-    // Stop Claude if running
-    if (isClaudeRunning) {
-      await window.traceAPI.stopClaude(wsId);
-    }
-
-    // Kill terminals and release ports
-    useTerminalStore.getState().killAllForWorkspace(wsId);
-    void window.traceAPI.releasePorts(wsId);
-
-    // Commit any uncommitted changes so they appear in branchDiff for the next user
-    await window.traceAPI.commitWorktreeChanges(wsId).catch(() => {});
-
+    setHandingOff(true);
     try {
+      // Stop Claude if running
+      if (isClaudeRunning) {
+        await window.traceAPI.stopClaude(wsId);
+      }
+
+      // Kill terminals and release ports
+      useTerminalStore.getState().killAllForWorkspace(wsId);
+      void window.traceAPI.releasePorts(wsId);
+
+      // Commit any uncommitted changes so they appear in branchDiff for the next user
+      await window.traceAPI.commitWorktreeChanges(wsId).catch(() => {});
+
       const { data } = await executeHandoffWorkspace({
         variables: { channelId: chId, workspaceId: wsId },
       });
@@ -358,6 +361,8 @@ export function ThreadPanel() {
       }
     } catch {
       console.error('Failed to hand off workspace');
+    } finally {
+      setHandingOff(false);
     }
   }, [activeChannelId, isClaudeRunning, executeHandoffWorkspace]);
 
@@ -473,6 +478,7 @@ export function ThreadPanel() {
           onClose={handleClose}
           onDeleteWorktree={handleDeleteWorktree}
           canHandoff={canHandoff}
+          handingOff={handingOff}
           onHandoff={() => { void handleHandoff(); }}
           onEnterFullscreen={() => { void handleEnterFullscreen(); }}
           onExitFullscreen={handleExitFullscreen}
