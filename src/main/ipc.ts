@@ -70,7 +70,7 @@ export function setMainWindow(win: BrowserWindow) {
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
-  if (!raw) return 'http://localhost:3100';
+  if (!raw) return process.env.TRACE_PROD ? 'https://trace-6kt7.onrender.com' : 'http://localhost:3100';
   if (raw.startsWith('http')) return raw;
   return `http://localhost:${raw}`;
 }

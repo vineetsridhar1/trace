@@ -5,7 +5,7 @@ export interface KanbanColumnMapper {
   slug: string;
   color: string | null;
   sortOrder: number;
-  tickets: TicketMapper[];
+  tickets?: TicketMapper[];
 }
 
 export interface TicketMapper {
@@ -20,7 +20,7 @@ export interface TicketMapper {
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
-  workspace: TicketWorkspaceMapper;
+  workspace: TicketWorkspaceMapper | null;
 }
 
 export interface TicketWorkspaceMapper {
@@ -37,7 +37,7 @@ export interface TicketAttachmentMapper {
   key: string;
   filename: string;
   contentType: string;
-  url: string;
+  url?: string;
 }
 
 export interface TicketUpsertPayloadMapper {

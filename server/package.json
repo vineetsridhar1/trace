@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && prisma migrate deploy && tsc",
-    "start": "node dist/index.js",
+    "build": "prisma generate && prisma migrate deploy && tsc -p tsconfig.build.json && cp src/schema/schema.generated.graphqls dist/src/schema/",
+    "start": "node dist/src/index.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "codegen": "graphql-codegen --config codegen.ts"

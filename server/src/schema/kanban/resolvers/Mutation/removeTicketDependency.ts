@@ -1,4 +1,5 @@
 import type { MutationResolvers } from './../../../types.generated';
+import { Prisma } from '../../../../../prisma/generated/prisma/client';
 import prisma from '../../../../lib/prisma';
 import { updateWorkspaceStatus as updateStatus, getWorkspaceByIdForFeed } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
@@ -22,7 +23,7 @@ export const removeTicketDependency: NonNullable<MutationResolvers['removeTicket
   if (remaining === 0) {
     await prisma.workspace.update({
       where: { id: workspaceId },
-      data: { queuedRunConfig: null },
+      data: { queuedRunConfig: Prisma.DbNull },
     });
     await updateStatus(workspaceId, 'pending');
     const workspace = await getWorkspaceByIdForFeed(workspaceId);

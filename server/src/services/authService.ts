@@ -41,9 +41,10 @@ export async function exchangeGitHubCode(code: string): Promise<string> {
     }),
   });
 
-  const data = (await response.json()) as GitHubTokenResponse;
+  const data = (await response.json()) as GitHubTokenResponse & { error?: string; error_description?: string };
   if (!data.access_token) {
-    throw new Error('Failed to exchange GitHub code for access token');
+    console.error('[OAuth] Token exchange failed:', data.error, data.error_description);
+    throw new Error(`Failed to exchange GitHub code: ${data.error_description || data.error || 'unknown'}`);
   }
   return data.access_token;
 }
@@ -52,6 +53,10 @@ export async function fetchGitHubUser(accessToken: string): Promise<GitHubUser> 
   const response = await fetch('https://api.github.com/user', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  if (!response.ok) {
+    const body = await response.text();
+    console.error('[OAuth] GitHub user fetch failed:', response.status, body);
+  }
 
   if (!response.ok) {
     throw new Error('Failed to fetch GitHub user profile');
