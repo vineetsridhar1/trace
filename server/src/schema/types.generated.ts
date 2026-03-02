@@ -2,7 +2,7 @@ import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from '
 import { AiChatMapper, AiChatMessageMapper, AiChatMessageConnectionMapper, AiChatStreamPayloadMapper } from './aiChat/schema.mappers';
 import { AttachmentMapper } from './attachment/schema.mappers';
 import { AuthUserMapper } from './auth/schema.mappers';
-import { ChannelMapper } from './channel/schema.mappers';
+import { ChannelMapper, ChannelChangeEventMapper } from './channel/schema.mappers';
 import { ChannelMessageMapper, ChannelMessageAuthorMapper, ChannelMessageConnectionMapper } from './channelMessage/schema.mappers';
 import { CliSessionMapper, CliSessionConnectionMapper } from './cli-session/schema.mappers';
 import { CreateWorkspacePayloadMapper, PRStatusMapper, WorkspaceMapper, WorkspaceCliSessionMapper, WorkspaceConnectionMapper, WorkspaceDeletedPayloadMapper, WorkspaceUserMapper } from './workspace/schema.mappers';
@@ -101,6 +101,12 @@ export type Channel = {
   type: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
   workspacesEnabled: Scalars['Boolean']['output'];
+};
+
+export type ChannelChangeEvent = {
+  __typename?: 'ChannelChangeEvent';
+  action: Scalars['String']['output'];
+  channelId: Scalars['String']['output'];
 };
 
 export type ChannelMessage = {
@@ -527,6 +533,7 @@ export type SessionEventPayload = {
 export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
+  channelChangedInServer: ChannelChangeEvent;
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
   sessionEventCreated: SessionEventPayload;
@@ -540,6 +547,11 @@ export type Subscription = {
 
 export type SubscriptionaiChatStreamArgs = {
   chatId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionchannelChangedInServerArgs = {
+  serverId: Scalars['ID']['input'];
 };
 
 
@@ -778,6 +790,7 @@ export type ResolversTypes = {
   AuthUser: ResolverTypeWrapper<AuthUserMapper>;
   Channel: ResolverTypeWrapper<ChannelMapper>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
+  ChannelChangeEvent: ResolverTypeWrapper<ChannelChangeEventMapper>;
   ChannelMessage: ResolverTypeWrapper<ChannelMessageMapper>;
   ChannelMessageAuthor: ResolverTypeWrapper<ChannelMessageAuthorMapper>;
   ChannelMessageConnection: ResolverTypeWrapper<ChannelMessageConnectionMapper>;
@@ -824,6 +837,7 @@ export type ResolversParentTypes = {
   AuthUser: AuthUserMapper;
   Channel: ChannelMapper;
   Boolean: Scalars['Boolean']['output'];
+  ChannelChangeEvent: ChannelChangeEventMapper;
   ChannelMessage: ChannelMessageMapper;
   ChannelMessageAuthor: ChannelMessageAuthorMapper;
   ChannelMessageConnection: ChannelMessageConnectionMapper;
@@ -922,6 +936,11 @@ export type ChannelResolvers<ContextType = any, ParentType extends ResolversPare
   type?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workspacesEnabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+};
+
+export type ChannelChangeEventResolvers<ContextType = any, ParentType extends ResolversParentTypes['ChannelChangeEvent'] = ResolversParentTypes['ChannelChangeEvent']> = {
+  action?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type ChannelMessageResolvers<ContextType = any, ParentType extends ResolversParentTypes['ChannelMessage'] = ResolversParentTypes['ChannelMessage']> = {
@@ -1092,6 +1111,7 @@ export type SessionEventPayloadResolvers<ContextType = any, ParentType extends R
 
 export type SubscriptionResolvers<ContextType = any, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = {
   aiChatStream?: SubscriptionResolver<ResolversTypes['AiChatStreamPayload'], "aiChatStream", ParentType, ContextType, RequireFields<SubscriptionaiChatStreamArgs, 'chatId'>>;
+  channelChangedInServer?: SubscriptionResolver<ResolversTypes['ChannelChangeEvent'], "channelChangedInServer", ParentType, ContextType, RequireFields<SubscriptionchannelChangedInServerArgs, 'serverId'>>;
   channelMessageCreated?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreated", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedArgs, 'channelId'>>;
   channelMessageCreatedInServer?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreatedInServer", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedInServerArgs, 'serverId'>>;
   sessionEventCreated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventCreated", ParentType, ContextType, RequireFields<SubscriptionsessionEventCreatedArgs, 'channelId'>>;
@@ -1210,6 +1230,7 @@ export type Resolvers<ContextType = any> = {
   Attachment?: AttachmentResolvers<ContextType>;
   AuthUser?: AuthUserResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
+  ChannelChangeEvent?: ChannelChangeEventResolvers<ContextType>;
   ChannelMessage?: ChannelMessageResolvers<ContextType>;
   ChannelMessageAuthor?: ChannelMessageAuthorResolvers<ContextType>;
   ChannelMessageConnection?: ChannelMessageConnectionResolvers<ContextType>;

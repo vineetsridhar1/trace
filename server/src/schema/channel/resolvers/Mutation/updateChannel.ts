@@ -1,5 +1,6 @@
 import type { MutationResolvers } from './../../../types.generated';
 import { updateChannel as updateChannelService } from '../../../../services/channelService';
+import { pubsub, TOPICS } from '../../../../services/pubsub';
 
 export const updateChannel: NonNullable<MutationResolvers['updateChannel']> = async (_parent, { id, name, workspacesEnabled, teamIds, baseBranch, githubUrl, defaultRepoPath, defaultSetupScript, defaultRunScript }, _ctx) => {
   const data: {
@@ -20,5 +21,9 @@ export const updateChannel: NonNullable<MutationResolvers['updateChannel']> = as
   if (defaultRepoPath !== undefined) data.defaultRepoPath = defaultRepoPath;
   if (defaultSetupScript !== undefined) data.defaultSetupScript = defaultSetupScript;
   if (defaultRunScript !== undefined) data.defaultRunScript = defaultRunScript;
-  return updateChannelService(id, data);
+  const channel = await updateChannelService(id, data);
+  void pubsub.publish(TOPICS.CHANNEL_CHANGED_SERVER(channel.serverId), {
+    channelChangedInServer: { channelId: channel.id, action: 'updated' },
+  });
+  return channel;
 };

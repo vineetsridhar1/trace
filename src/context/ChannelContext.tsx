@@ -5,6 +5,7 @@ import { useChannels } from '../hooks/useChannels';
 import { useServers } from '../hooks/useServers';
 import { useLocalConfig } from '../hooks/useLocalConfig';
 import { useChannelSettings } from '../hooks/useChannelSettings';
+import { useChannelChangeSubscription } from '../hooks/useChannelChangeSubscription';
 
 export interface ChannelContextValue {
   // Servers
@@ -88,6 +89,8 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
   );
 
   const { updateChannel: updateChannelSettings, deleteChannel } = useChannelSettings();
+
+  useChannelChangeSubscription({ activeServerId, refreshChannels });
 
   // One-time migration: copy DB localRepoPath/creationScript into local config
   const migrationRanRef = useRef(false);

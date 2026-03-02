@@ -90,6 +90,12 @@ export type Channel = {
   workspacesEnabled: Scalars['Boolean']['output'];
 };
 
+export type ChannelChangeEvent = {
+  __typename?: 'ChannelChangeEvent';
+  action: Scalars['String']['output'];
+  channelId: Scalars['String']['output'];
+};
+
 export type ChannelMessage = {
   __typename?: 'ChannelMessage';
   author: ChannelMessageAuthor;
@@ -514,6 +520,7 @@ export type SessionEventPayload = {
 export type Subscription = {
   __typename?: 'Subscription';
   aiChatStream: AiChatStreamPayload;
+  channelChangedInServer: ChannelChangeEvent;
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
   sessionEventCreated: SessionEventPayload;
@@ -527,6 +534,11 @@ export type Subscription = {
 
 export type SubscriptionAiChatStreamArgs = {
   chatId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionChannelChangedInServerArgs = {
+  serverId: Scalars['ID']['input'];
 };
 
 

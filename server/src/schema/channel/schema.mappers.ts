@@ -1,3 +1,8 @@
+export interface ChannelChangeEventMapper {
+  channelId: string;
+  action: string;
+}
+
 export interface ChannelMapper {
   id: string;
   serverId: string;

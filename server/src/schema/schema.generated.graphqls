@@ -65,6 +65,11 @@ type Channel {
   workspacesEnabled: Boolean!
 }
 
+type ChannelChangeEvent {
+  action: String!
+  channelId: String!
+}
+
 type ChannelMessage {
   author: ChannelMessageAuthor!
   channelId: String!
@@ -229,6 +234,7 @@ type SessionEventPayload {
 
 type Subscription {
   aiChatStream(chatId: ID!): AiChatStreamPayload!
+  channelChangedInServer(serverId: ID!): ChannelChangeEvent!
   channelMessageCreated(channelId: ID!): ChannelMessage!
   channelMessageCreatedInServer(serverId: ID!): ChannelMessage!
   sessionEventCreated(channelId: ID!): SessionEventPayload!

@@ -9,6 +9,15 @@ extend type Mutation {
   deleteChannel(id: ID!): Boolean!
 }
 
+extend type Subscription {
+  channelChangedInServer(serverId: ID!): ChannelChangeEvent!
+}
+
+type ChannelChangeEvent {
+  channelId: String!
+  action: String!
+}
+
 type Channel {
   id: ID!
   serverId: String!
