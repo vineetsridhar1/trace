@@ -15,7 +15,7 @@ interface ScrambleTextProps {
   speed?: number;
 }
 
-export function ScrambleText({ text, className, speed = 50 }: ScrambleTextProps) {
+export function ScrambleText({ text, className, speed = 38 }: ScrambleTextProps) {
   const [revealed, setRevealed] = useState(text.length);
   const [scrambled, setScrambled] = useState('');
   const prevTextRef = useRef<string | null>(null);
