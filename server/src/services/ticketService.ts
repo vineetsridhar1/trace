@@ -250,9 +250,15 @@ export async function syncTicketWithWorkspaceStatus(
   if (!ticket) return null;
 
   // Don't move backwards (e.g., don't move from "merged" to "completed")
-  if (ticket.column.slug === 'merged') return null;
+  if (ticket.column.slug === 'merged') {
+    await refreshTicketBroadcast(workspaceId, channelId);
+    return null;
+  }
   // Don't move if already in the target column
-  if (ticket.column.slug === targetSlug) return null;
+  if (ticket.column.slug === targetSlug) {
+    await refreshTicketBroadcast(workspaceId, channelId);
+    return null;
+  }
 
   const targetColumn = await prisma.kanbanColumn.findUnique({
     where: { channelId_slug: { channelId, slug: targetSlug } },

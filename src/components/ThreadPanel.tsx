@@ -94,6 +94,7 @@ export function ThreadPanel() {
   const pendingRunInitialPrompt = useClaudeRunStore((s) => s.pendingRunInitialPrompt);
   const clearPendingRun = useClaudeRunStore((s) => s.clearPendingRun);
   const activeRunWorkspaceIds = useClaudeRunStore((s) => s.activeRunWorkspaceIds);
+  const spawnedWorkspaceIds = useClaudeRunStore((s) => s.spawnedWorkspaceIds);
   const runPendingWorkspace = useClaudeRunStore((s) => s.workspaceActions.runPendingWorkspace);
   const stopClaude = useClaudeRunStore((s) => s.workspaceActions.stopClaude);
   const sendThreadMessage = useClaudeRunStore((s) => s.workspaceActions.sendThreadMessage);
@@ -137,12 +138,12 @@ export function ThreadPanel() {
   const isClaudeRunning = useMemo(() => {
     if (!selectedWorkspaceId) return false;
     if (activeRunWorkspaceIds.has(selectedWorkspaceId)) return true;
-    if (!useClaudeRunStore.getState().isWorkspaceSpawned(selectedWorkspaceId)) return false;
+    if (!spawnedWorkspaceIds.has(selectedWorkspaceId)) return false;
     if (sessionStatus === "empty") return false;
     const lastEvent = sessionEvents[sessionEvents.length - 1];
     if (lastEvent?.hookEventName === "Stop") return false;
     return true;
-  }, [selectedWorkspaceId, activeRunWorkspaceIds, sessionEvents, sessionStatus]);
+  }, [selectedWorkspaceId, activeRunWorkspaceIds, spawnedWorkspaceIds, sessionEvents, sessionStatus]);
 
   const pendingPromptForDisplay = useMemo(() => {
     if (pendingRunWorkspaceId === selectedWorkspaceId) return pendingRunInitialPrompt;
