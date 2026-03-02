@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FiChevronRight, FiColumns, FiList, FiSend, FiShare2 } from 'react-icons/fi';
+import { FiChevronRight, FiColumns, FiFolder, FiList, FiSend, FiShare2 } from 'react-icons/fi';
 import type { Channel, Workspace, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { KanbanBoard } from './KanbanBoard';
 import { WorkspaceInput } from './WorkspaceInput';
@@ -80,6 +80,8 @@ interface MessagePanelProps {
   onSwitchChannel?: (channelId: string) => void;
   workspacesWithRunningProcesses?: Set<string>;
   activeRunWorkspaceIds?: Set<string>;
+  needsJoin?: boolean;
+  onJoinChannel?: () => void;
 }
 
 export function MessagePanel({
@@ -103,6 +105,8 @@ export function MessagePanel({
   onSwitchChannel,
   workspacesWithRunningProcesses,
   activeRunWorkspaceIds,
+  needsJoin,
+  onJoinChannel,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -291,6 +295,32 @@ export function MessagePanel({
       handleSendChat();
     }
   }, [handleSendChat]);
+
+  if (needsJoin) {
+    const channelName = panelTitle.replace(/^#\s*/, '');
+    return (
+      <div id="messages-panel" className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[#1a1b26]" style={{ minWidth: 200 }}>
+        <div className="flex max-w-sm flex-col items-center text-center">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#7aa2f7]/10">
+            <FiFolder className="h-6 w-6 text-[#7aa2f7]" />
+          </div>
+          <h3 className="mb-2 text-base font-semibold text-[#c0caf5]">
+            Join #{channelName}
+          </h3>
+          <p className="mb-5 text-sm text-[#565f89]">
+            Connect your local repository to start creating workspaces in this channel.
+          </p>
+          <button
+            type="button"
+            onClick={onJoinChannel}
+            className="rounded-md bg-[#7aa2f7] px-4 py-2 text-sm font-medium text-[#1a1b26] transition-colors hover:bg-[#89b4fa]"
+          >
+            Set Up Local Repo
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="messages-panel" className="flex min-h-0 flex-1 flex-col bg-[#1a1b26]" style={{ minWidth: 200 }}>

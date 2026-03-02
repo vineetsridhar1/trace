@@ -324,28 +324,23 @@ function AppContent() {
 
   const handleSwitchChannel = useCallback(
     (channelId: string) => {
-      const ch = enrichedChannels.find((c) => c.id === channelId);
-      if (ch?.workspacesEnabled && ch.githubUrl && !localConfigs[channelId]?.localRepoPath) {
-        useAppUIStore.getState().setJoinChannelId(channelId);
-        return;
-      }
       performChannelSwitch(channelId);
     },
-    [enrichedChannels, localConfigs, performChannelSwitch],
+    [performChannelSwitch],
   );
 
   const handleJoinChannel = useCallback(
     async (config: LocalChannelConfig) => {
-      if (!joinChannelId) return;
+      const targetId = joinChannelId ?? activeChannelId;
+      if (!targetId) return;
       try {
-        await setLocalConfig(joinChannelId, config);
+        await setLocalConfig(targetId, config);
         useAppUIStore.getState().setJoinChannelId(null);
-        performChannelSwitch(joinChannelId);
       } catch (err) {
         console.error('[App] Failed to save local config:', err);
       }
     },
-    [joinChannelId, setLocalConfig, performChannelSwitch],
+    [joinChannelId, activeChannelId, setLocalConfig],
   );
 
   const handleSwitchServer = useCallback(
@@ -519,6 +514,17 @@ function AppContent() {
   const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
   const panelTitle = displayChannel ? `# ${displayChannel.name}` : '';
 
+  const needsJoin = !!(
+    displayChannel?.workspacesEnabled &&
+    displayChannel.githubUrl &&
+    activeChannelId &&
+    !localConfigs[activeChannelId]?.localRepoPath
+  );
+
+  const handleOpenJoinModal = useCallback(() => {
+    if (activeChannelId) useAppUIStore.getState().setJoinChannelId(activeChannelId);
+  }, [activeChannelId]);
+
   const teamProjects = useMemo(
     () =>
       displayChannel?.type === 'team'
@@ -549,6 +555,7 @@ function AppContent() {
           aiChats={aiChats}
           activeAiChatId={activeAiChatId}
           unreadCounts={unreadCounts}
+          localConfigs={localConfigs}
           onSwitchChannel={handleSwitchChannel}
           onCreateTeam={() => useAppUIStore.getState().setCreateChannelType('team')}
           onCreateProject={() => useAppUIStore.getState().setCreateChannelType('project')}
@@ -601,6 +608,8 @@ function AppContent() {
                 onSwitchChannel={handleSwitchChannel}
                 workspacesWithRunningProcesses={workspacesWithRunningProcesses}
                 activeRunWorkspaceIds={activeRunWorkspaceIds}
+                needsJoin={needsJoin}
+                onJoinChannel={handleOpenJoinModal}
               />
             )}
           </div>

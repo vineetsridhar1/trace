@@ -1,6 +1,6 @@
 import { Reorder } from 'framer-motion';
 import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight } from 'react-icons/fi';
-import type { AiChat, Channel, DragTarget } from '../types';
+import type { AiChat, Channel, DragTarget, LocalChannelConfig } from '../types';
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
 
@@ -21,6 +21,7 @@ interface ChannelPanelProps {
   aiChats: AiChat[];
   activeAiChatId: string | null;
   unreadCounts?: Record<string, number>;
+  localConfigs?: Record<string, LocalChannelConfig>;
   onSwitchChannel: (id: string) => void;
   onCreateTeam: () => void;
   onCreateProject: () => void;
@@ -48,6 +49,7 @@ export function ChannelPanel({
   onDeleteAiChat,
   onStartDrag,
   unreadCounts = {},
+  localConfigs = {},
 }: ChannelPanelProps) {
   const chatChannels = channels.filter((c) => c.type === 'channel');
   const teamChannels = channels.filter((c) => c.type === 'team');
@@ -58,6 +60,7 @@ export function ChannelPanel({
     items.map((channel) => {
       const isActive = channel.id === activeChannelId && !activeAiChatId;
       const count = unreadCounts[channel.id] ?? 0;
+      const needsJoin = !!(channel.workspacesEnabled && channel.githubUrl && !localConfigs[channel.id]?.localRepoPath);
       return (
         <div key={channel.id} className="my-0.5 flex items-center">
           <button
@@ -68,12 +71,16 @@ export function ChannelPanel({
             }`}
           >
             <span className="text-xs text-[#565f89]">#</span>
-            <span className="truncate">{channel.name}</span>
-            {!isActive && count > 0 && (
+            <span className={`truncate ${needsJoin && !isActive ? 'text-[#565f89]' : ''}`}>{channel.name}</span>
+            {needsJoin ? (
+              <span className="ml-auto shrink-0 rounded border border-[#7aa2f7]/30 px-1.5 py-0.5 text-[10px] font-medium leading-none text-[#7aa2f7]">
+                Join
+              </span>
+            ) : !isActive && count > 0 ? (
               <span className="ml-auto shrink-0 rounded-full bg-[#7aa2f7] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                 {count > 99 ? '99+' : count}
               </span>
-            )}
+            ) : null}
           </button>
         </div>
       );
