@@ -380,6 +380,8 @@ export function useClaudeWorkspaceActions({
     const selectedWorkspaceId = useThreadStore.getState().selectedWorkspaceId;
     if (!selectedWorkspaceId) return;
     await window.traceAPI.stopClaude(selectedWorkspaceId);
+    // If the user dismisses a question/plan (status is already needs_input),
+    // transition to completed since they don't want to answer.
     const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
     if (selectedWorkspace?.status === 'needs_input') {
       await updateWorkspaceStatus(selectedWorkspaceId, 'completed');

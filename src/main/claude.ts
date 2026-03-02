@@ -224,6 +224,14 @@ export async function spawnClaude(
     callbacks: {
       onSessionId: (id) => appendClaudeDebugLog(workspaceId, `stream session_id=${id}`),
       onActivity: () => resetWatchdog(workspaceId, 'stream-json'),
+      onInputRequired: () => {
+        // Kill the process immediately so execution stops and the
+        // question/plan surfaces in the UI via the Stop event.
+        appendClaudeDebugLog(workspaceId, 'input-required: killing process');
+        if (!child.killed) {
+          child.kill('SIGTERM');
+        }
+      },
     },
     log: (line) => appendClaudeDebugLog(workspaceId, line),
   });

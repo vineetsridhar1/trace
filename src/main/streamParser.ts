@@ -9,6 +9,9 @@
 interface StreamParserCallbacks {
   onSessionId: (id: string) => void;
   onActivity: () => void;
+  /** Called when Claude requests user input (AskUserQuestion / ExitPlanMode).
+   *  The host should kill the process so execution stops immediately. */
+  onInputRequired: () => void;
 }
 
 interface PendingToolUse {
@@ -178,13 +181,16 @@ export class ClaudeStreamParser {
           this.pendingToolUses.set(toolId, { name: toolName, input: toolInput, assistantText });
         }
 
-        // Detect AskUserQuestion / ExitPlanMode
+        // Detect AskUserQuestion / ExitPlanMode — kill the process so
+        // execution stops immediately and the question/plan surfaces in the UI.
         if (toolName === 'AskUserQuestion') {
           this.detectedToolName = 'AskUserQuestion';
           this.detectedToolInput = toolInput;
+          this.callbacks.onInputRequired();
         } else if (toolName === 'ExitPlanMode') {
           this.detectedToolName = 'ExitPlanMode';
           this.detectedToolInput = toolInput;
+          this.callbacks.onInputRequired();
         }
 
         // Emit PreToolUse for Task tool (subagent tracking)
