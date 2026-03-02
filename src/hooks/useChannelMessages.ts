@@ -81,10 +81,29 @@ export function useChannelMessages(channelId: string | null) {
       return;
     }
 
+    let stale = false;
+
     void (async () => {
+      // Try cache-only read first for instant display
+      const { data: cachedData } = await fetchMessages({
+        variables: { channelId, limit: 100 },
+        fetchPolicy: 'cache-only',
+      });
+      if (!stale && cachedData) {
+        const cached = cachedData.channelMessages.messages as ChannelMessage[];
+        if (cached.length > 0) {
+          setMessages(cached);
+          seenIdsRef.current = new Set(cached.map((m) => m.id));
+        }
+      }
+
+      // Always fetch from network for fresh data
       try {
-        const { data } = await fetchMessages({ variables: { channelId, limit: 100 } });
-        if (data) {
+        const { data } = await fetchMessages({
+          variables: { channelId, limit: 100 },
+          fetchPolicy: 'network-only',
+        });
+        if (!stale && data) {
           const fetched = data.channelMessages.messages as ChannelMessage[];
           setMessages(fetched);
           seenIdsRef.current = new Set(fetched.map((m) => m.id));
@@ -93,6 +112,8 @@ export function useChannelMessages(channelId: string | null) {
         console.error('[useChannelMessages] fetch failed:', err);
       }
     })();
+
+    return () => { stale = true; };
   }, [channelId, fetchMessages]);
 
   // Subscribe to new messages

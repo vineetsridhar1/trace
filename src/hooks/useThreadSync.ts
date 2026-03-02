@@ -35,23 +35,15 @@ export function useThreadSync(
     [],
   );
 
-  const loadEventsForSession = useCallback(
-    async (channelId: string, workspaceId: string, sessionId: string) => {
-      const store = useThreadStore.getState();
-      store.resetSessionViewState();
-
-      const { data: eventsData } = await executeSessionEvents({
-        variables: { channelId, workspaceId, sessionId, limit: SESSION_PAGE_SIZE },
-      });
-
-      const result = eventsData?.sessionEvents;
+  const applyEventsResult = useCallback(
+    (channelId: string, workspaceId: string, sessionId: string, result: { events?: unknown[]; total?: number; tokenUsage?: { inputTokens: number; outputTokens: number; totalTokens: number } | null; cliCostUsd?: number | null } | undefined) => {
       const events: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
       const total = result?.total ?? events.length;
-      const threadState = useThreadStore.getState();
-      threadState.setSessionEvents(events);
-      threadState.setSessionTotal(total);
+      const store = useThreadStore.getState();
+      store.setSessionEvents(events);
+      store.setSessionTotal(total);
       if (result?.tokenUsage) {
-        threadState.setTokenUsage({
+        store.setTokenUsage({
           inputTokens: result.tokenUsage.inputTokens,
           outputTokens: result.tokenUsage.outputTokens,
           totalTokens: result.tokenUsage.totalTokens,
@@ -59,22 +51,81 @@ export function useThreadSync(
         });
       }
       sessionQueryRef.current = { channelId, workspaceId, sessionId };
-      threadState.setSessionStatus(events.length === 0 ? 'empty' : 'ready');
+      store.setSessionStatus(events.length === 0 ? 'empty' : 'ready');
     },
-    [executeSessionEvents],
+    [],
+  );
+
+  const tryPopulateFromCache = useCallback(
+    async (channelId: string, workspaceId: string, sessionId: string): Promise<boolean> => {
+      try {
+        const { data: cachedData } = await executeSessionEvents({
+          variables: { channelId, workspaceId, sessionId, limit: SESSION_PAGE_SIZE },
+          fetchPolicy: 'cache-only',
+        });
+        const events = (cachedData?.sessionEvents?.events ?? []) as ServerEvent[];
+        if (events.length === 0) return false;
+        applyEventsResult(channelId, workspaceId, sessionId, cachedData?.sessionEvents);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [executeSessionEvents, applyEventsResult],
+  );
+
+  const loadEventsForSession = useCallback(
+    async (channelId: string, workspaceId: string, sessionId: string) => {
+      const store = useThreadStore.getState();
+      store.resetSessionViewState();
+
+      const { data: eventsData } = await executeSessionEvents({
+        variables: { channelId, workspaceId, sessionId, limit: SESSION_PAGE_SIZE },
+        fetchPolicy: 'network-only',
+      });
+
+      // Bail if workspace changed during the network request
+      if (useThreadStore.getState().selectedWorkspaceId !== workspaceId) return;
+
+      applyEventsResult(channelId, workspaceId, sessionId, eventsData?.sessionEvents);
+    },
+    [executeSessionEvents, applyEventsResult],
   );
 
   const loadSessionEvents = useCallback(
     async (workspace: Workspace) => {
       try {
-        const store = useThreadStore.getState();
-        if (store.sessionStatus === 'idle' || store.sessionStatus === 'error') {
-          useThreadStore.getState().setSessionStatus('loading');
+        // Try cache-only sessions read first to skip loading spinner
+        let cacheHit = false;
+        const { data: cachedSessions } = await executeSessions({
+          variables: { channelId: workspace.channelId, workspaceId: workspace.id },
+          fetchPolicy: 'cache-only',
+        });
+        const cachedList = (cachedSessions?.sessions ?? []) as SessionInfo[];
+        if (cachedList.length > 0) {
+          cacheHit = true;
+          useThreadStore.getState().setSessions(cachedList);
+          const latestCached = cachedList[cachedList.length - 1];
+          useThreadStore.getState().setActiveSessionId(latestCached.id);
+          await tryPopulateFromCache(workspace.channelId, workspace.id, latestCached.id);
         }
 
+        // Only show loading spinner if we didn't get cache data
+        if (!cacheHit) {
+          const store = useThreadStore.getState();
+          if (store.sessionStatus === 'idle' || store.sessionStatus === 'error') {
+            useThreadStore.getState().setSessionStatus('loading');
+          }
+        }
+
+        // Always fetch from network for fresh data
         const { data: sessionsData } = await executeSessions({
           variables: { channelId: workspace.channelId, workspaceId: workspace.id },
+          fetchPolicy: 'network-only',
         });
+
+        // Bail if workspace changed during the network request
+        if (useThreadStore.getState().selectedWorkspaceId !== workspace.id) return;
 
         const sessionList = (sessionsData?.sessions ?? []) as SessionInfo[];
         useThreadStore.getState().setSessions(sessionList);
@@ -103,7 +154,7 @@ export function useThreadSync(
         useThreadStore.getState().setSessionStatus('error');
       }
     },
-    [executeSessions, loadEventsForSession, reportClaudeActivity],
+    [executeSessions, loadEventsForSession, tryPopulateFromCache, reportClaudeActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
@@ -143,7 +194,12 @@ export function useThreadSync(
       if (!workspace) return;
 
       useThreadStore.getState().setActiveSessionId(sessionId);
-      useThreadStore.getState().setSessionStatus('loading');
+
+      // Try cache pre-read to avoid showing loading spinner
+      const hadCache = await tryPopulateFromCache(workspace.channelId, workspace.id, sessionId);
+      if (!hadCache) {
+        useThreadStore.getState().setSessionStatus('loading');
+      }
 
       try {
         await loadEventsForSession(workspace.channelId, workspace.id, sessionId);
@@ -151,7 +207,7 @@ export function useThreadSync(
         useThreadStore.getState().setSessionStatus('error');
       }
     },
-    [loadEventsForSession],
+    [loadEventsForSession, tryPopulateFromCache],
   );
 
   const clearSession = useCallback(async (): Promise<string | null> => {
