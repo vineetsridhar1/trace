@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
-import { checkWorktreeExists, commitWorktreeChanges, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
+import { checkWorktreeExists, commitWorktreeChanges, deleteWorktree, ensureWorktreeForBranch, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
 import { createPty, writePty, resizePty, killPty, getPtyCwd, getPtyEnv, hasPty, getPtyProcesses } from './pty';
 import { allocatePorts, releasePorts } from './ports';
@@ -48,6 +48,8 @@ const OPEN_IN_APP_CHANNEL = 'open-in-app';
 const LIST_SLASH_COMMANDS_CHANNEL = 'list-slash-commands';
 const CHECK_GH_AUTH_CHANNEL = 'check-gh-auth';
 const CHECK_PR_STATUSES_LOCAL_CHANNEL = 'check-pr-statuses-local';
+const LIST_PULL_REQUESTS_CHANNEL = 'list-pull-requests';
+const CHECKOUT_PULL_REQUEST_CHANNEL = 'checkout-pull-request';
 
 // Curated allow-list of dev tools we show in the "Open In" menu.
 // Maps bundle identifier → { id, label, openArgs } used by the open-in-app handler.
@@ -126,6 +128,8 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(LIST_SLASH_COMMANDS_CHANNEL);
   ipcMain.removeHandler(CHECK_GH_AUTH_CHANNEL);
   ipcMain.removeHandler(CHECK_PR_STATUSES_LOCAL_CHANNEL);
+  ipcMain.removeHandler(LIST_PULL_REQUESTS_CHANNEL);
+  ipcMain.removeHandler(CHECKOUT_PULL_REQUEST_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string, baseBranch?: string) => {
     try {
@@ -768,6 +772,36 @@ JSON.stringify(found);
       const statuses = await Promise.all(branches.map(checkBranch));
       return { success: true, statuses };
     } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(LIST_PULL_REQUESTS_CHANNEL, async (_event, repoPath: string) => {
+    try {
+      const result = await runProcess('gh', [
+        'pr', 'list',
+        '--json', 'number,title,headRefName,author,createdAt,updatedAt,isDraft,url,labels',
+        '--state', 'open',
+        '--limit', '50',
+      ], repoPath);
+
+      if (result.code !== 0) {
+        return { success: false, error: result.stderr.trim() || 'gh pr list failed' };
+      }
+
+      const pullRequests = JSON.parse(result.stdout.trim() || '[]');
+      return { success: true, pullRequests };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(CHECKOUT_PULL_REQUEST_CHANNEL, async (_event, repoPath: string, branchName: string, workspaceId: string, setupCommands?: string[]) => {
+    try {
+      const { worktreePath } = await ensureWorktreeForBranch(workspaceId, repoPath, branchName, setupCommands);
+      return { success: true, worktreePath };
+    } catch (err) {
+      console.error('Failed to checkout pull request:', err);
       return { success: false, error: String(err) };
     }
   });

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { Workspace, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Workspace, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, PullRequest, TicketStatus } from './types';
 import { gql } from '@apollo/client';
 import { WORKSPACE_FIELDS } from './graphql/fragments';
 import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation, useSetWorkspacePrUrlMutation } from './__generated__/App.generated';
+import { useCreateWorkspaceMutation } from './hooks/__generated__/useClaudeWorkspaceActions.generated';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync';
 import { useThreadSync } from './hooks/useThreadSync';
 import { usePanelResize } from './hooks/usePanelResize';
@@ -134,6 +135,8 @@ function AppContent() {
   const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
   const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
   const [executeSetWorkspacePrUrl] = useSetWorkspacePrUrlMutation();
+  const [executeCreateWorkspace] = useCreateWorkspaceMutation();
+  const [pullingPRNumbers, setPullingPRNumbers] = useState<Set<number>>(new Set());
 
   // ─── Notification permission ──────────────────────────────────────
   useEffect(() => {
@@ -485,6 +488,63 @@ function AppContent() {
     [getChannelRepoPath],
   );
 
+  // ─── Pull PR into workspace ─────────────────────────────────────
+  const handlePullPR = useCallback(
+    async (pr: PullRequest) => {
+      if (!activeChannelId) return;
+      const repoPath = getChannelRepoPath();
+      if (!repoPath) return;
+
+      setPullingPRNumbers((prev) => new Set(prev).add(pr.number));
+
+      try {
+        // 1. Create workspace with PR title
+        const { data } = await executeCreateWorkspace({
+          variables: { channelId: activeChannelId, text: pr.title },
+        });
+        if (!data?.createWorkspace) {
+          console.error('Failed to create workspace for PR');
+          return;
+        }
+        const workspace = data.createWorkspace.workspace as Workspace;
+        upsertAndSyncWorkspace(workspace);
+
+        // 2. Checkout the PR branch into a worktree
+        const setupScript = enrichedActiveChannel?.setupScript;
+        const setupCommands = setupScript
+          ? setupScript.split('\n').map((l: string) => l.trim()).filter(Boolean)
+          : [];
+        const checkoutResult = await window.traceAPI.checkoutPullRequest(
+          repoPath,
+          pr.headRefName,
+          workspace.id,
+          setupCommands,
+        );
+        if (!checkoutResult.success) {
+          console.error('Failed to checkout PR:', checkoutResult.error);
+          return;
+        }
+
+        // 3. Set PR URL on the workspace
+        await executeSetWorkspacePrUrl({
+          variables: { channelId: activeChannelId, workspaceId: workspace.id, prUrl: pr.url },
+        });
+
+        // 4. Switch to workspaces view and open the workspace
+        handleOpenWorkspace(workspace);
+      } catch (err) {
+        console.error('Failed to pull PR:', err);
+      } finally {
+        setPullingPRNumbers((prev) => {
+          const next = new Set(prev);
+          next.delete(pr.number);
+          return next;
+        });
+      }
+    },
+    [activeChannelId, enrichedActiveChannel, executeCreateWorkspace, executeSetWorkspacePrUrl, getChannelRepoPath, handleOpenWorkspace, upsertAndSyncWorkspace],
+  );
+
   // ─── Channel-switch effects ──────────────────────────────────────
   useEffect(() => {
     if (activeChannelId) {
@@ -670,6 +730,7 @@ function AppContent() {
               middlePanelView={middlePanelView}
               onSetView={handleSetView}
               onOpenSettings={() => { if (displayChannel) handleOpenSettings(displayChannel.id); }}
+              hasGithubUrl={!!displayChannel?.githubUrl}
             />
           )}
           <div className="flex min-h-0 flex-1 flex-col">
@@ -703,6 +764,9 @@ function AppContent() {
                 needsJoin={needsJoin}
                 onJoinChannel={handleOpenJoinModal}
                 onOpenThreadLink={handleOpenThreadLink}
+                repoPath={enrichedActiveChannel?.localRepoPath}
+                onPullPR={handlePullPR}
+                pullingPRNumbers={pullingPRNumbers}
               />
             )}
           </div>

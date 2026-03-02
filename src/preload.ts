@@ -197,4 +197,20 @@ contextBridge.exposeInMainWorld('traceAPI', {
       statuses?: Array<{ branch: string; state: 'open' | 'closed' | 'merged' | 'none'; prUrl: string | null }>;
       error?: string;
     }>,
+
+  listPullRequests: async (repoPath: string) => {
+    try {
+      return await ipcRenderer.invoke('list-pull-requests', repoPath);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  checkoutPullRequest: async (repoPath: string, branchName: string, workspaceId: string, setupCommands?: string[]) => {
+    try {
+      return await ipcRenderer.invoke('checkout-pull-request', repoPath, branchName, workspaceId, setupCommands);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
 });

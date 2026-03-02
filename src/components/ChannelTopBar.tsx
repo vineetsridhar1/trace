@@ -9,6 +9,7 @@ interface ChannelTopBarProps {
   middlePanelView: MiddlePanelView;
   onSetView: (view: MiddlePanelView) => void;
   onOpenSettings: () => void;
+  hasGithubUrl?: boolean;
 }
 
 export function ChannelTopBar({
@@ -17,11 +18,13 @@ export function ChannelTopBar({
   workspacesEnabled,
   middlePanelView,
   onSetView,
+  hasGithubUrl,
   onOpenSettings,
 }: ChannelTopBarProps) {
   const showTracker = channelType === 'team' || channelType === 'project';
   const showProjects = channelType === 'team';
   const showWorkspaces = showTracker && workspacesEnabled;
+  const showPRs = showWorkspaces && hasGithubUrl;
 
   return (
     <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-[#292e42] px-4">
@@ -79,6 +82,19 @@ export function ChannelTopBar({
               }`}
             >
               Workspaces
+            </button>
+          )}
+          {showPRs && (
+            <button
+              type="button"
+              onClick={() => onSetView('pull-requests')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                middlePanelView === 'pull-requests'
+                  ? 'bg-violet-500/20 text-violet-300'
+                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+              }`}
+            >
+              PRs
             </button>
           )}
         </div>

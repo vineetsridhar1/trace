@@ -109,6 +109,16 @@ export interface TraceAPI {
     statuses?: Array<{ branch: string; state: 'open' | 'closed' | 'merged' | 'none'; prUrl: string | null }>;
     error?: string;
   }>;
+  listPullRequests: (repoPath: string) => Promise<{
+    success: boolean;
+    pullRequests?: PullRequest[];
+    error?: string;
+  }>;
+  checkoutPullRequest: (repoPath: string, branchName: string, workspaceId: string, setupCommands?: string[]) => Promise<{
+    success: boolean;
+    worktreePath?: string;
+    error?: string;
+  }>;
 }
 
 declare global {
@@ -190,7 +200,19 @@ export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';
 export type SessionStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type DragTarget = 'left' | 'right' | null;
-export type MiddlePanelView = 'chat' | 'board' | 'workspaces' | 'projects';
+export type MiddlePanelView = 'chat' | 'board' | 'workspaces' | 'projects' | 'pull-requests';
+
+export interface PullRequest {
+  number: number;
+  title: string;
+  headRefName: string;
+  author: { login: string };
+  createdAt: string;
+  updatedAt: string;
+  isDraft: boolean;
+  url: string;
+  labels: Array<{ name: string; color: string }>;
+}
 
 export interface TicketAttachment {
   id: string;

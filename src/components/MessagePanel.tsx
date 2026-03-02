@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiChevronRight, FiColumns, FiFolder, FiList, FiSend, FiShare2 } from 'react-icons/fi';
-import type { Channel, Workspace, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
+import type { Channel, PullRequest, Workspace, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
 import { KanbanBoard } from './KanbanBoard';
 import { WorkspaceInput } from './WorkspaceInput';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { ChatEmptyState } from './ChatEmptyState';
 import { ThreadPanel } from './ThreadPanel';
 import { ThreadLinkPreview } from './ThreadLinkPreview';
+import { PullRequestListView } from './PullRequestListView';
 import { useChannelMessages } from '../hooks/useChannelMessages';
 import { useAuth } from '../context/AuthContext';
 
@@ -127,6 +128,9 @@ interface MessagePanelProps {
   needsJoin?: boolean;
   onJoinChannel?: () => void;
   onOpenThreadLink?: (channelId: string, workspaceId: string) => void;
+  repoPath?: string | null;
+  onPullPR?: (pr: PullRequest) => void;
+  pullingPRNumbers?: Set<number>;
 }
 
 export function MessagePanel({
@@ -153,6 +157,9 @@ export function MessagePanel({
   needsJoin,
   onJoinChannel,
   onOpenThreadLink,
+  repoPath,
+  onPullPR,
+  pullingPRNumbers,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -513,6 +520,14 @@ export function MessagePanel({
             </div>
           )}
         </div>
+      ) : middlePanelView === 'pull-requests' ? (
+        <PullRequestListView
+          repoPath={repoPath ?? null}
+          onPullPR={onPullPR ?? (() => {})}
+          onOpenWorkspace={onOpenWorkspace}
+          workspaces={workspaces}
+          pullingPRNumbers={pullingPRNumbers ?? new Set()}
+        />
       ) : (
         <div className="flex min-h-0 flex-1">
           {!(isFullscreen && selectedWorkspaceId) && (

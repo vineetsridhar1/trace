@@ -90,6 +90,59 @@ export async function ensureWorktree(workspaceId: string, repoPath: string, base
   return result;
 }
 
+export async function ensureWorktreeForBranch(
+  workspaceId: string,
+  repoPath: string,
+  branchName: string,
+  setupCommands?: string[],
+): Promise<EnsureWorktreeResult> {
+  const worktreePath = getWorktreePath(workspaceId);
+
+  if (fs.existsSync(worktreePath)) {
+    return { worktreePath, created: false };
+  }
+
+  const base = getWorktreeBase();
+  if (!fs.existsSync(base)) {
+    fs.mkdirSync(base, { recursive: true });
+  }
+
+  // Fetch the branch from remote
+  await runProcess('git', ['fetch', 'origin', branchName], repoPath);
+
+  // Try using local branch if it exists
+  let result = await runProcess('git', ['worktree', 'add', worktreePath, branchName], repoPath);
+
+  if (result.code !== 0) {
+    // Create local branch tracking the remote
+    result = await runProcess(
+      'git',
+      ['worktree', 'add', '-b', branchName, worktreePath, `origin/${branchName}`],
+      repoPath,
+    );
+  }
+
+  if (result.code !== 0) {
+    throw new Error(`Failed to create worktree for branch ${branchName}: ${result.stderr}`);
+  }
+
+  // Set upstream tracking
+  await runProcess('git', ['branch', '--set-upstream-to', `origin/${branchName}`], worktreePath);
+
+  // Run setup commands if provided
+  if (setupCommands && setupCommands.length > 0) {
+    const script = setupCommands.join('\n');
+    if (script.trim()) {
+      const setupResult = await runProcess('sh', ['-c', `set -e\n${script}`], worktreePath);
+      if (setupResult.code !== 0) {
+        console.error(`[setup-script] script failed (exit ${setupResult.code}):\n${setupResult.stderr}`);
+      }
+    }
+  }
+
+  return { worktreePath, created: true };
+}
+
 export function stopClaudeProcess(workspaceId: string): { stopped: boolean } {
   const existing = runningProcesses.get(workspaceId);
   if (!existing || existing.killed) {
