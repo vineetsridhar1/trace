@@ -187,4 +187,14 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   listSlashCommands: (repoPath: string) =>
     ipcRenderer.invoke('list-slash-commands', repoPath) as Promise<{ success: boolean; commands: Array<{ name: string; description: string }>; error?: string }>,
+
+  checkGhAuth: () =>
+    ipcRenderer.invoke('check-gh-auth') as Promise<{ success: boolean; available: boolean }>,
+
+  checkPRStatusesLocal: (repoPath: string, branches: string[]) =>
+    ipcRenderer.invoke('check-pr-statuses-local', repoPath, branches) as Promise<{
+      success: boolean;
+      statuses?: Array<{ branch: string; state: 'open' | 'closed' | 'merged' | 'none'; prUrl: string | null }>;
+      error?: string;
+    }>,
 });

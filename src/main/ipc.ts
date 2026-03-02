@@ -46,6 +46,8 @@ const DETECT_INSTALLED_APPS_CHANNEL = 'detect-installed-apps';
 const COMMIT_WORKTREE_CHANGES_CHANNEL = 'commit-worktree-changes';
 const OPEN_IN_APP_CHANNEL = 'open-in-app';
 const LIST_SLASH_COMMANDS_CHANNEL = 'list-slash-commands';
+const CHECK_GH_AUTH_CHANNEL = 'check-gh-auth';
+const CHECK_PR_STATUSES_LOCAL_CHANNEL = 'check-pr-statuses-local';
 
 // Curated allow-list of dev tools we show in the "Open In" menu.
 // Maps bundle identifier → { id, label, openArgs } used by the open-in-app handler.
@@ -62,6 +64,10 @@ const APP_DISPLAY_ORDER = ['finder', 'cursor', 'vscode', 'iterm', 'terminal'];
 
 // Module-level cache so we only query Launch Services once per app lifetime
 let installedAppsCache: Array<{ id: string; label: string }> | null = null;
+
+// Cache gh CLI auth status with TTL
+let ghAuthCache: { available: boolean; checkedAt: number } | null = null;
+const GH_AUTH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 let mainWindowRef: BrowserWindow | null = null;
 let branchWatchers: fs.FSWatcher[] = [];
@@ -118,6 +124,8 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(COMMIT_WORKTREE_CHANGES_CHANNEL);
   ipcMain.removeHandler(OPEN_IN_APP_CHANNEL);
   ipcMain.removeHandler(LIST_SLASH_COMMANDS_CHANNEL);
+  ipcMain.removeHandler(CHECK_GH_AUTH_CHANNEL);
+  ipcMain.removeHandler(CHECK_PR_STATUSES_LOCAL_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string, baseBranch?: string) => {
     try {
@@ -704,6 +712,63 @@ JSON.stringify(found);
       return { success: true, commands };
     } catch (err) {
       return { success: false, commands: [], error: String(err) };
+    }
+  });
+
+  ipcMain.handle(CHECK_GH_AUTH_CHANNEL, async () => {
+    // Return cached result if still fresh
+    if (ghAuthCache && Date.now() - ghAuthCache.checkedAt < GH_AUTH_CACHE_TTL) {
+      return { success: true, available: ghAuthCache.available };
+    }
+    try {
+      const result = await runProcess('gh', ['auth', 'status', '--hostname', 'github.com'], '/');
+      const available = result.code === 0;
+      ghAuthCache = { available, checkedAt: Date.now() };
+      return { success: true, available };
+    } catch {
+      // gh not installed (ENOENT) or other error
+      ghAuthCache = { available: false, checkedAt: Date.now() };
+      return { success: true, available: false };
+    }
+  });
+
+  ipcMain.handle(CHECK_PR_STATUSES_LOCAL_CHANNEL, async (_event, repoPath: string, branches: string[]) => {
+    type PRStatus = { branch: string; state: 'open' | 'closed' | 'merged' | 'none'; prUrl: string | null };
+
+    async function checkBranch(branch: string): Promise<PRStatus> {
+      try {
+        const result = await runProcess('gh', [
+          'pr', 'list',
+          '--head', branch,
+          '--state', 'all',
+          '--json', 'state,url',
+          '--limit', '1',
+        ], repoPath);
+
+        if (result.code !== 0) {
+          return { branch, state: 'none', prUrl: null };
+        }
+
+        const prs = JSON.parse(result.stdout.trim() || '[]') as Array<{ state: string; url: string }>;
+        if (prs.length === 0) {
+          return { branch, state: 'none', prUrl: null };
+        }
+
+        const pr = prs[0];
+        const state = pr.state === 'MERGED' ? 'merged' as const
+          : pr.state === 'OPEN' ? 'open' as const
+          : 'closed' as const;
+        return { branch, state, prUrl: pr.url || null };
+      } catch {
+        return { branch, state: 'none', prUrl: null };
+      }
+    }
+
+    try {
+      const statuses = await Promise.all(branches.map(checkBranch));
+      return { success: true, statuses };
+    } catch (err) {
+      return { success: false, error: String(err) };
     }
   });
 }

@@ -14,7 +14,7 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   in_progress: ['completed', 'needs_input'],
   needs_input: ['in_progress', 'completed'],
   completed: ['review', 'merged', 'in_progress'],
-  review: ['merged'],
+  review: ['merged', 'in_progress'],
   merged: [],
 };
 

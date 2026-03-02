@@ -221,6 +221,7 @@ export type Mutation = {
   sendAiChatMessage: AiChatMessage;
   sendChannelMessage: ChannelMessage;
   setTicketDependencies: Workspace;
+  setWorkspacePrUrl: Scalars['Boolean']['output'];
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateQueuedRunConfig: Scalars['Boolean']['output'];
@@ -350,6 +351,13 @@ export type MutationsetTicketDependenciesArgs = {
   channelId: Scalars['ID']['input'];
   dependsOnWorkspaceIds: Array<Scalars['ID']['input']>;
   runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationsetWorkspacePrUrlArgs = {
+  channelId: Scalars['ID']['input'];
+  prUrl: Scalars['String']['input'];
   workspaceId: Scalars['ID']['input'];
 };
 
@@ -1066,6 +1074,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   sendAiChatMessage?: Resolver<ResolversTypes['AiChatMessage'], ParentType, ContextType, RequireFields<MutationsendAiChatMessageArgs, 'chatId' | 'content'>>;
   sendChannelMessage?: Resolver<ResolversTypes['ChannelMessage'], ParentType, ContextType, RequireFields<MutationsendChannelMessageArgs, 'channelId' | 'content'>>;
   setTicketDependencies?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationsetTicketDependenciesArgs, 'channelId' | 'dependsOnWorkspaceIds' | 'runConfig' | 'workspaceId'>>;
+  setWorkspacePrUrl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationsetWorkspacePrUrlArgs, 'channelId' | 'prUrl' | 'workspaceId'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationupdateChannelArgs, 'id'>>;
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;
   updateQueuedRunConfig?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationupdateQueuedRunConfigArgs, 'runConfig' | 'workspaceId'>>;

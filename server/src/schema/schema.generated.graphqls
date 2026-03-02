@@ -176,6 +176,7 @@ type Mutation {
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
   sendChannelMessage(channelId: ID!, content: String!): ChannelMessage!
   setTicketDependencies(channelId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!, workspaceId: ID!): Workspace!
+  setWorkspacePrUrl(channelId: ID!, prUrl: String!, workspaceId: ID!): Boolean!
   updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, id: ID!, name: String, teamIds: [String!], workspacesEnabled: Boolean): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateQueuedRunConfig(runConfig: JSON!, workspaceId: ID!): Boolean!

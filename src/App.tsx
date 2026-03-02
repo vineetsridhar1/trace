@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Workspace, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, TicketStatus } from './types';
 import { gql } from '@apollo/client';
 import { WORKSPACE_FIELDS } from './graphql/fragments';
-import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation } from './__generated__/App.generated';
+import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation, useSetWorkspacePrUrlMutation } from './__generated__/App.generated';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync';
 import { useThreadSync } from './hooks/useThreadSync';
 import { usePanelResize } from './hooks/usePanelResize';
@@ -45,6 +45,12 @@ const GQL_UPDATE_WORKSPACE_STATUS = gql`
 const GQL_DELETE_WORKSPACE = gql`
   mutation DeleteWorkspace($channelId: ID!, $workspaceId: ID!) {
     deleteWorkspace(channelId: $channelId, workspaceId: $workspaceId)
+  }
+`;
+
+const GQL_SET_WORKSPACE_PR_URL = gql`
+  mutation SetWorkspacePrUrl($channelId: ID!, $workspaceId: ID!, $prUrl: String!) {
+    setWorkspacePrUrl(channelId: $channelId, workspaceId: $workspaceId, prUrl: $prUrl)
   }
 `;
 
@@ -127,6 +133,7 @@ function AppContent() {
   // ─── Mutations ────────────────────────────────────────────────────
   const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
   const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
+  const [executeSetWorkspacePrUrl] = useSetWorkspacePrUrlMutation();
 
   // ─── Notification permission ──────────────────────────────────────
   useEffect(() => {
@@ -209,6 +216,21 @@ function AppContent() {
     [activeChannelId, executeUpdateWorkspaceStatus, upsertAndSyncWorkspace],
   );
 
+  // ─── Persist PR URL mutation ─────────────────────────────────────
+  const persistPrUrl = useCallback(
+    async (workspaceId: string, prUrl: string) => {
+      if (!activeChannelId) return;
+      try {
+        await executeSetWorkspacePrUrl({
+          variables: { channelId: activeChannelId, workspaceId, prUrl },
+        });
+      } catch {
+        // Silent — best-effort persistence
+      }
+    },
+    [activeChannelId, executeSetWorkspacePrUrl],
+  );
+
   // ─── Sync polling (main branch + PR statuses) ───────────────────
   const workspacesRef = useRef(workspaces);
   workspacesRef.current = workspaces;
@@ -218,6 +240,7 @@ function AppContent() {
     getRepoPath: getChannelRepoPath,
     getBaseBranch: getChannelBaseBranch,
     updateWorkspaceStatus,
+    persistPrUrl,
   });
 
   // ─── Open workspace handler ───────────────────────────────────────

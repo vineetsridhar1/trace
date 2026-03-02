@@ -208,6 +208,7 @@ export type Mutation = {
   sendAiChatMessage: AiChatMessage;
   sendChannelMessage: ChannelMessage;
   setTicketDependencies: Workspace;
+  setWorkspacePrUrl: Scalars['Boolean']['output'];
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateQueuedRunConfig: Scalars['Boolean']['output'];
@@ -337,6 +338,13 @@ export type MutationSetTicketDependenciesArgs = {
   channelId: Scalars['ID']['input'];
   dependsOnWorkspaceIds: Array<Scalars['ID']['input']>;
   runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationSetWorkspacePrUrlArgs = {
+  channelId: Scalars['ID']['input'];
+  prUrl: Scalars['String']['input'];
   workspaceId: Scalars['ID']['input'];
 };
 

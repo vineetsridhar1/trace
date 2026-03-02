@@ -19,6 +19,7 @@ extend type Mutation {
   updateWorkspaceStatus(channelId: ID!, workspaceId: ID!, status: String!): Workspace!
   deleteWorkspace(channelId: ID!, workspaceId: ID!): Boolean!
   handoffWorkspace(channelId: ID!, workspaceId: ID!): Workspace!
+  setWorkspacePrUrl(channelId: ID!, workspaceId: ID!, prUrl: String!): Boolean!
 }
 
 type Workspace {

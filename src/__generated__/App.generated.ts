@@ -21,6 +21,15 @@ export type DeleteWorkspaceMutationVariables = Types.Exact<{
 
 export type DeleteWorkspaceMutation = { __typename?: 'Mutation', deleteWorkspace: boolean };
 
+export type SetWorkspacePrUrlMutationVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+  workspaceId: Types.Scalars['ID']['input'];
+  prUrl: Types.Scalars['String']['input'];
+}>;
+
+
+export type SetWorkspacePrUrlMutation = { __typename?: 'Mutation', setWorkspacePrUrl: boolean };
+
 
 export const UpdateWorkspaceStatusDocument = gql`
     mutation UpdateWorkspaceStatus($channelId: ID!, $workspaceId: ID!, $status: String!) {
@@ -93,3 +102,40 @@ export function useDeleteWorkspaceMutation(baseOptions?: Apollo.MutationHookOpti
 export type DeleteWorkspaceMutationHookResult = ReturnType<typeof useDeleteWorkspaceMutation>;
 export type DeleteWorkspaceMutationResult = Apollo.MutationResult<DeleteWorkspaceMutation>;
 export type DeleteWorkspaceMutationOptions = Apollo.BaseMutationOptions<DeleteWorkspaceMutation, DeleteWorkspaceMutationVariables>;
+export const SetWorkspacePrUrlDocument = gql`
+    mutation SetWorkspacePrUrl($channelId: ID!, $workspaceId: ID!, $prUrl: String!) {
+  setWorkspacePrUrl(
+    channelId: $channelId
+    workspaceId: $workspaceId
+    prUrl: $prUrl
+  )
+}
+    `;
+export type SetWorkspacePrUrlMutationFn = Apollo.MutationFunction<SetWorkspacePrUrlMutation, SetWorkspacePrUrlMutationVariables>;
+
+/**
+ * __useSetWorkspacePrUrlMutation__
+ *
+ * To run a mutation, you first call `useSetWorkspacePrUrlMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useSetWorkspacePrUrlMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [setWorkspacePrUrlMutation, { data, loading, error }] = useSetWorkspacePrUrlMutation({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *      workspaceId: // value for 'workspaceId'
+ *      prUrl: // value for 'prUrl'
+ *   },
+ * });
+ */
+export function useSetWorkspacePrUrlMutation(baseOptions?: Apollo.MutationHookOptions<SetWorkspacePrUrlMutation, SetWorkspacePrUrlMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<SetWorkspacePrUrlMutation, SetWorkspacePrUrlMutationVariables>(SetWorkspacePrUrlDocument, options);
+      }
+export type SetWorkspacePrUrlMutationHookResult = ReturnType<typeof useSetWorkspacePrUrlMutation>;
+export type SetWorkspacePrUrlMutationResult = Apollo.MutationResult<SetWorkspacePrUrlMutation>;
+export type SetWorkspacePrUrlMutationOptions = Apollo.BaseMutationOptions<SetWorkspacePrUrlMutation, SetWorkspacePrUrlMutationVariables>;

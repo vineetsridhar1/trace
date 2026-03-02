@@ -103,6 +103,12 @@ export interface TraceAPI {
   detectInstalledApps: () => Promise<{ success: boolean; apps: Array<{ id: string; label: string }>; error?: string }>;
   openInApp: (appId: string, targetPath: string) => Promise<{ success: boolean; error?: string }>;
   listSlashCommands: (repoPath: string) => Promise<{ success: boolean; commands: Array<{ name: string; description: string }>; error?: string }>;
+  checkGhAuth: () => Promise<{ success: boolean; available: boolean }>;
+  checkPRStatusesLocal: (repoPath: string, branches: string[]) => Promise<{
+    success: boolean;
+    statuses?: Array<{ branch: string; state: 'open' | 'closed' | 'merged' | 'none'; prUrl: string | null }>;
+    error?: string;
+  }>;
 }
 
 declare global {
