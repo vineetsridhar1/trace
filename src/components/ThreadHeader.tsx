@@ -221,11 +221,14 @@ export const ThreadHeader = memo(function ThreadHeader({
           </button>
           <button
             type="button"
+            disabled={hasWorktree !== true}
             onClick={() => onSetViewMode('terminal')}
-            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-              viewMode === 'terminal'
-                ? 'bg-violet-500/20 text-violet-300'
-                : 'text-[#565f89] hover:text-[#a9b1d6]'
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              hasWorktree !== true
+                ? 'opacity-40 cursor-not-allowed text-[#565f89]'
+                : viewMode === 'terminal'
+                  ? 'cursor-pointer bg-violet-500/20 text-violet-300'
+                  : 'cursor-pointer text-[#565f89] hover:text-[#a9b1d6]'
             }`}
           >
             Terminal

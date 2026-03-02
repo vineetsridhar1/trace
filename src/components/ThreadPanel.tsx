@@ -206,9 +206,12 @@ export function ThreadPanel() {
     useThreadStore.getState().setThreadWidth(savedWidthsRef.current.thread);
   }, []);
 
-  // Exit fullscreen when worktree is deleted
+  // Exit fullscreen and terminal view when worktree is deleted
   useEffect(() => {
-    if (isFullscreen && hasWorktree === false) handleExitFullscreen();
+    if (hasWorktree === false) {
+      if (isFullscreen) handleExitFullscreen();
+      setViewMode((prev) => (prev === 'terminal' ? 'agent' : prev));
+    }
   }, [handleExitFullscreen, hasWorktree, isFullscreen]);
 
   // Terminal initialization
