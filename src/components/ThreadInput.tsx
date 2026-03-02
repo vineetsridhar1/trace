@@ -44,7 +44,7 @@ export function ThreadInput({
     setMode((m) => modes[(modes.indexOf(m) + 1) % 3]);
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const slashCommands = useSlashCommands(threadInput, setThreadInput);
+  const slashCommands = useSlashCommands(threadInput, setThreadInput, repoPath);
   const fileMention = useFileMention(threadInput, setThreadInput, repoPath, textareaRef);
   const imageAttachments = useImageAttachments();
 

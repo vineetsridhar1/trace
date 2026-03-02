@@ -184,4 +184,7 @@ contextBridge.exposeInMainWorld('traceAPI', {
 
   openInApp: (appId: string, targetPath: string) =>
     ipcRenderer.invoke('open-in-app', appId, targetPath) as Promise<{ success: boolean; error?: string }>,
+
+  listSlashCommands: (repoPath: string) =>
+    ipcRenderer.invoke('list-slash-commands', repoPath) as Promise<{ success: boolean; commands: Array<{ name: string; description: string }>; error?: string }>,
 });

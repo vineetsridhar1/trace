@@ -23,7 +23,7 @@ export function WorkspaceInput() {
   const syncError = useSyncStore((s) => s.error);
   const [messageInput, setMessageInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const slashCommands = useSlashCommands(messageInput, setMessageInput);
+  const slashCommands = useSlashCommands(messageInput, setMessageInput, repoPath);
   const fileMention = useFileMention(messageInput, setMessageInput, repoPath, textareaRef);
   const imageAttachments = useImageAttachments();
 

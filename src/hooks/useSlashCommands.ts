@@ -7,12 +7,7 @@ export interface SlashCommand {
   source: 'custom' | 'built-in';
 }
 
-const COMMANDS: SlashCommand[] = [
-  // Custom commands first
-  { name: 'create-pr', displayName: '/create-pr', description: 'Create a GitHub pull request', source: 'custom' },
-  { name: 'merge-to-main', displayName: '/merge-to-main', description: 'Merge worktree branch to main', source: 'custom' },
-  { name: 'rebase-onto-main', displayName: '/rebase-onto-main', description: 'Rebase current branch onto latest main', source: 'custom' },
-  // Built-in commands
+const BUILT_IN_COMMANDS: SlashCommand[] = [
   { name: 'clear', displayName: '/clear', description: 'Clear thread and start fresh', source: 'built-in' },
   { name: 'compact', displayName: '/compact', description: 'Compact conversation history', source: 'built-in' },
   { name: 'config', displayName: '/config', description: 'Open configuration', source: 'built-in' },
@@ -23,18 +18,64 @@ const COMMANDS: SlashCommand[] = [
   { name: 'status', displayName: '/status', description: 'Show session status', source: 'built-in' },
 ];
 
-export function useSlashCommands(inputValue: string, onInputChange: (value: string) => void) {
+// Module-level cache so both WorkspaceInput and ThreadInput share the same results
+const commandCache = new Map<string, SlashCommand[]>();
+const fetchPromises = new Map<string, Promise<SlashCommand[]>>();
+
+function getProjectCommands(repoPath: string): Promise<SlashCommand[]> {
+  const cached = commandCache.get(repoPath);
+  if (cached) return Promise.resolve(cached);
+
+  let promise = fetchPromises.get(repoPath);
+  if (!promise) {
+    promise = window.traceAPI.listSlashCommands(repoPath).then((result) => {
+      fetchPromises.delete(repoPath);
+      const commands: SlashCommand[] = result.success
+        ? result.commands.map((cmd) => ({
+            name: cmd.name,
+            displayName: `/${cmd.name}`,
+            description: cmd.description || `Run ${cmd.name} command`,
+            source: 'custom' as const,
+          }))
+        : [];
+      commandCache.set(repoPath, commands);
+      return commands;
+    });
+    fetchPromises.set(repoPath, promise);
+  }
+  return promise;
+}
+
+export function useSlashCommands(inputValue: string, onInputChange: (value: string) => void, repoPath?: string) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
+
+  useEffect(() => {
+    if (!repoPath) {
+      setProjectCommands([]);
+      return;
+    }
+    let stale = false;
+    getProjectCommands(repoPath).then((cmds) => {
+      if (!stale) setProjectCommands(cmds);
+    });
+    return () => { stale = true; };
+  }, [repoPath]);
+
+  const allCommands = useMemo(
+    () => [...projectCommands, ...BUILT_IN_COMMANDS],
+    [projectCommands],
+  );
 
   const query = inputValue.startsWith('/') ? inputValue.slice(1).toLowerCase() : null;
 
   const filteredCommands = useMemo(() => {
     if (query === null) return [];
-    return COMMANDS.filter(
+    return allCommands.filter(
       (cmd) => cmd.name.includes(query) || cmd.description.toLowerCase().includes(query),
     );
-  }, [query]);
+  }, [query, allCommands]);
 
   const isOpen = query !== null && !dismissed && filteredCommands.length > 0;
 

@@ -102,6 +102,7 @@ export interface TraceAPI {
   pullMain: (repoPath: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>;
   detectInstalledApps: () => Promise<{ success: boolean; apps: Array<{ id: string; label: string }>; error?: string }>;
   openInApp: (appId: string, targetPath: string) => Promise<{ success: boolean; error?: string }>;
+  listSlashCommands: (repoPath: string) => Promise<{ success: boolean; commands: Array<{ name: string; description: string }>; error?: string }>;
 }
 
 declare global {

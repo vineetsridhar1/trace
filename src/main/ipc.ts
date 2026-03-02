@@ -45,6 +45,7 @@ const PULL_MAIN_CHANNEL = 'pull-main';
 const DETECT_INSTALLED_APPS_CHANNEL = 'detect-installed-apps';
 const COMMIT_WORKTREE_CHANGES_CHANNEL = 'commit-worktree-changes';
 const OPEN_IN_APP_CHANNEL = 'open-in-app';
+const LIST_SLASH_COMMANDS_CHANNEL = 'list-slash-commands';
 
 // Curated allow-list of dev tools we show in the "Open In" menu.
 // Maps bundle identifier → { id, label, openArgs } used by the open-in-app handler.
@@ -116,6 +117,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(DETECT_INSTALLED_APPS_CHANNEL);
   ipcMain.removeHandler(COMMIT_WORKTREE_CHANGES_CHANNEL);
   ipcMain.removeHandler(OPEN_IN_APP_CHANNEL);
+  ipcMain.removeHandler(LIST_SLASH_COMMANDS_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string, baseBranch?: string) => {
     try {
@@ -675,6 +677,33 @@ JSON.stringify(found);
       return { success: result.code === 0, error: result.code !== 0 ? result.stderr : undefined };
     } catch (err) {
       return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(LIST_SLASH_COMMANDS_CHANNEL, (_event, repoPath: string) => {
+    try {
+      const commandsDir = path.join(repoPath, '.claude', 'commands');
+      if (!fs.existsSync(commandsDir)) {
+        return { success: true, commands: [] };
+      }
+      const files = fs.readdirSync(commandsDir).filter((f) => f.endsWith('.md'));
+      const commands = files.map((file) => {
+        const name = file.replace(/\.md$/, '');
+        let description = '';
+        try {
+          const content = fs.readFileSync(path.join(commandsDir, file), 'utf-8');
+          // Parse YAML frontmatter for description
+          const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+          if (fmMatch) {
+            const descMatch = fmMatch[1].match(/^description:\s*(.+)$/m);
+            if (descMatch) description = descMatch[1].trim();
+          }
+        } catch { /* ignore read errors */ }
+        return { name, description };
+      });
+      return { success: true, commands };
+    } catch (err) {
+      return { success: false, commands: [], error: String(err) };
     }
   });
 }
