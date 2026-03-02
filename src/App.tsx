@@ -29,7 +29,7 @@ import { useWorkspaceStore } from './stores/workspaceStore';
 import { useThreadStore } from './stores/threadStore';
 import { useTerminalStore } from './stores/terminalStore';
 import { useKanbanStore } from './stores/kanbanStore';
-import { useAppUIStore } from './stores/appUIStore';
+import { useAppUIStore, isViewValidForChannel } from './stores/appUIStore';
 import { useClaudeRunStore } from './stores/claudeRunStore';
 import { useSyncStore } from './stores/syncStore';
 
@@ -247,7 +247,12 @@ function AppContent() {
   const handleOpenWorkspace = useCallback(
     (workspace: Workspace) => {
       useThreadStore.getState().syncActions.openThreadPanel(workspace);
-      useAppUIStore.getState().setMiddlePanelView('workspaces');
+      const chId = activeChannelRef.current?.id;
+      if (chId) {
+        useAppUIStore.getState().setChannelView(chId, 'workspaces');
+      } else {
+        useAppUIStore.getState().setMiddlePanelView('workspaces');
+      }
       useWorkspaceStore.getState().clearAttention(workspace.id);
     },
     [],
@@ -292,7 +297,11 @@ function AppContent() {
   // ─── Channel/view switching ──────────────────────────────────────
   const handleSetView = useCallback(
     (view: MiddlePanelView) => {
-      useAppUIStore.getState().setMiddlePanelView(view);
+      if (activeChannelId) {
+        useAppUIStore.getState().setChannelView(activeChannelId, view);
+      } else {
+        useAppUIStore.getState().setMiddlePanelView(view);
+      }
       if (view === 'board' && activeChannelId) void fetchBoard(activeChannelId);
     },
     [activeChannelId, fetchBoard],
@@ -333,17 +342,34 @@ function AppContent() {
     (channelId: string) => {
       const currentSelected = useThreadStore.getState().selectedWorkspaceId;
       if (currentSelected) void window.traceAPI.releasePorts(currentSelected);
+
+      // Save current channel's view before switching
+      const uiState = useAppUIStore.getState();
+      if (activeChannelId) {
+        uiState.setChannelView(activeChannelId, uiState.middlePanelView);
+      }
+
       useAppUIStore.getState().setActiveAiChatId(null);
       switchChannel(channelId);
-      useWorkspaceStore.getState().clearWorkspaces();
       useSyncStore.getState().reset();
-      useKanbanStore.getState().clearBoard();
-      useAppUIStore.getState().setMiddlePanelView('chat');
+
+      // Restore saved view for target channel (validated)
+      const savedView = useAppUIStore.getState().channelViewMap[channelId];
+      const targetChannel = enrichedChannels.find((ch) => ch.id === channelId);
+      const targetType = targetChannel?.type ?? 'channel';
+      const targetWsEnabled = targetChannel?.workspacesEnabled ?? false;
+      const restoredView = savedView && isViewValidForChannel(savedView, targetType, targetWsEnabled)
+        ? savedView
+        : 'chat';
+      useAppUIStore.getState().setMiddlePanelView(restoredView);
+
+      if (restoredView === 'board') void fetchBoard(channelId);
+
       useThreadStore.getState().closeThreadPanel();
       useAppUIStore.getState().setChannelWidth(220);
       useTerminalStore.getState().detachAll();
     },
-    [switchChannel],
+    [switchChannel, activeChannelId, enrichedChannels, fetchBoard],
   );
 
   const handleSwitchChannel = useCallback(

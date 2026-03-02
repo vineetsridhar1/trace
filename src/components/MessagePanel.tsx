@@ -249,9 +249,7 @@ export function MessagePanel({
     ));
 
   // Channel messaging
-  const { messages: chatMessages, sendMessage: sendChatMessage } = useChannelMessages(
-    middlePanelView === 'chat' ? channelId : null,
-  );
+  const { messages: chatMessages, sendMessage: sendChatMessage } = useChannelMessages(channelId);
   const { user: authUser } = useAuth();
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const chatNearBottomRef = useRef(true);
