@@ -340,29 +340,36 @@ export function MessagePanel({
             />
             {/* Message list */}
             <div className="px-3 py-2">
-              {chatMessages.map((msg) => {
+              {chatMessages.map((msg, i) => {
                 const isOwn = authUser?.id === msg.author.id;
                 const isNew = newMessageIds.has(msg.id);
+                const isFirstInGroup = i === 0 || chatMessages[i - 1].author.id !== msg.author.id;
                 return (
-                  <div key={msg.id} className={`mb-3 flex items-start gap-2${isNew ? ' message-enter' : ''}`}>
-                    {msg.author.avatarUrl ? (
-                      <img
-                        src={msg.author.avatarUrl}
-                        alt={msg.author.name}
-                        className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full"
-                      />
+                  <div key={msg.id} className={`${isFirstInGroup ? 'mb-3 mt-3 first:mt-0' : 'mb-0.5'} flex items-start gap-2${isNew ? ' message-enter' : ''}`}>
+                    {isFirstInGroup ? (
+                      msg.author.avatarUrl ? (
+                        <img
+                          src={msg.author.avatarUrl}
+                          alt={msg.author.name}
+                          className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full"
+                        />
+                      ) : (
+                        <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/30 text-[10px] font-bold text-violet-300">
+                          {msg.author.name.charAt(0).toUpperCase()}
+                        </div>
+                      )
                     ) : (
-                      <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/30 text-[10px] font-bold text-violet-300">
-                        {msg.author.name.charAt(0).toUpperCase()}
-                      </div>
+                      <div className="h-0 w-6 flex-shrink-0" />
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className={`text-xs font-semibold ${isOwn ? 'text-violet-300' : 'text-[#c0caf5]'}`}>
-                          {msg.author.name}
-                        </span>
-                        <span className="text-[10px] text-[#565f89]">{formatMessageTime(msg.createdAt)}</span>
-                      </div>
+                      {isFirstInGroup && (
+                        <div className="flex items-baseline gap-2">
+                          <span className={`text-xs font-semibold ${isOwn ? 'text-violet-300' : 'text-[#c0caf5]'}`}>
+                            {msg.author.name}
+                          </span>
+                          <span className="text-[10px] text-[#565f89]">{formatMessageTime(msg.createdAt)}</span>
+                        </div>
+                      )}
                       <div className="whitespace-pre-wrap text-sm text-[#a9b1d6]">{msg.content}</div>
                     </div>
                   </div>
