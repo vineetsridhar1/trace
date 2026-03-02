@@ -703,22 +703,13 @@ export function ThreadPanel() {
               key={selectedWorkspaceId}
               workspaceId={selectedWorkspaceId!}
             />
-          ) : showQuestion ? (
-            <AskUserQuestionBar
-              node={showQuestion}
-              onResponse={(text) => {
-                void sendPlanResponse(text, "keep-context");
-              }}
-              onDismiss={() => {
-                setDismissedQuestionId(showQuestion.id);
-                void stopClaude();
-              }}
-            />
           ) : showPlan ? (
             <PlanResponseBar
               node={showPlan}
+              questionNode={activeQuestionNode}
               onPlanResponse={(text, mode) => {
                 setDismissedPlanId(showPlan.id);
+                if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
                 void sendPlanResponse(
                   text,
                   mode,
@@ -728,6 +719,20 @@ export function ThreadPanel() {
               }}
               onDismiss={() => {
                 setDismissedPlanId(showPlan.id);
+                if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
+                void stopClaude();
+              }}
+            />
+          ) : showQuestion ? (
+            <AskUserQuestionBar
+              node={showQuestion}
+              onResponse={(text) => {
+                if (activePlanNode) setDismissedPlanId(activePlanNode.id);
+                void sendPlanResponse(text, "keep-context");
+              }}
+              onDismiss={() => {
+                setDismissedQuestionId(showQuestion.id);
+                if (activePlanNode) setDismissedPlanId(activePlanNode.id);
                 void stopClaude();
               }}
             />
