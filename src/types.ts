@@ -59,6 +59,9 @@ export interface TraceAPI {
     repoPath: string,
     baseBranch: string,
   ) => Promise<{ success: boolean; branch?: string; error?: string }>;
+  commitWorktreeChanges: (
+    workspaceId: string,
+  ) => Promise<{ success: boolean; committed?: boolean; error?: string }>;
   reportClaudeActivity: (
     workspaceId: string,
     eventType: string,

@@ -341,6 +341,9 @@ export function ThreadPanel() {
     useTerminalStore.getState().killAllForWorkspace(wsId);
     void window.traceAPI.releasePorts(wsId);
 
+    // Commit any uncommitted changes so they appear in branchDiff for the next user
+    await window.traceAPI.commitWorktreeChanges(wsId).catch(() => {});
+
     try {
       const { data } = await executeHandoffWorkspace({
         variables: { channelId: chId, workspaceId: wsId },

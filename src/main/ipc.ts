@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
-import { checkWorktreeExists, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
+import { checkWorktreeExists, commitWorktreeChanges, deleteWorktree, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
 import { createPty, writePty, resizePty, killPty, getPtyCwd, getPtyEnv, hasPty, getPtyProcesses } from './pty';
 import { allocatePorts, releasePorts } from './ports';
@@ -43,6 +43,7 @@ const GITHUB_LOGIN_CHANNEL = 'github-login';
 const CHECK_MAIN_STATUS_CHANNEL = 'check-main-status';
 const PULL_MAIN_CHANNEL = 'pull-main';
 const DETECT_INSTALLED_APPS_CHANNEL = 'detect-installed-apps';
+const COMMIT_WORKTREE_CHANGES_CHANNEL = 'commit-worktree-changes';
 const OPEN_IN_APP_CHANNEL = 'open-in-app';
 
 // Curated allow-list of dev tools we show in the "Open In" menu.
@@ -113,6 +114,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(CHECK_MAIN_STATUS_CHANNEL);
   ipcMain.removeHandler(PULL_MAIN_CHANNEL);
   ipcMain.removeHandler(DETECT_INSTALLED_APPS_CHANNEL);
+  ipcMain.removeHandler(COMMIT_WORKTREE_CHANGES_CHANNEL);
   ipcMain.removeHandler(OPEN_IN_APP_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string) => {
@@ -151,6 +153,15 @@ export function registerIpcHandlers() {
     } catch (err) {
       console.error('Failed to merge worktree:', err);
       return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(COMMIT_WORKTREE_CHANGES_CHANNEL, async (_event, workspaceId: string) => {
+    try {
+      const result = await commitWorktreeChanges(workspaceId);
+      return { success: true, ...result };
+    } catch (err) {
+      return { success: false, committed: false, error: String(err) };
     }
   });
 

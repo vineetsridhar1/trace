@@ -60,6 +60,15 @@ contextBridge.exposeInMainWorld('traceAPI', {
       return { success: false, error: String(err) };
     }
   },
+  commitWorktreeChanges: async (
+    workspaceId: string,
+  ): Promise<{ success: boolean; committed?: boolean; error?: string }> => {
+    try {
+      return await ipcRenderer.invoke('commit-worktree-changes', workspaceId);
+    } catch (err) {
+      return { success: false, committed: false, error: String(err) };
+    }
+  },
   reportClaudeActivity: async (
     workspaceId: string,
     eventType: string,

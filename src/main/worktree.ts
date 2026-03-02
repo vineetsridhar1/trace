@@ -114,6 +114,39 @@ export async function getWorktreeBranch(workspaceId: string): Promise<string> {
   return branch;
 }
 
+export async function commitWorktreeChanges(workspaceId: string): Promise<{ committed: boolean; error?: string }> {
+  const worktreePath = getWorktreePath(workspaceId);
+
+  if (!fs.existsSync(worktreePath)) {
+    return { committed: false, error: 'Worktree does not exist' };
+  }
+
+  try {
+    // Stage everything (untracked, modified, deletions)
+    await runProcess('git', ['add', '-A'], worktreePath);
+
+    // Check if there's anything to commit
+    const status = await runProcess('git', ['status', '--porcelain'], worktreePath);
+    if (!status.stdout.trim()) {
+      return { committed: false };
+    }
+
+    // Commit with --no-verify to skip pre-commit hooks (automated WIP commit)
+    const commit = await runProcess(
+      'git',
+      ['commit', '--no-verify', '-m', 'WIP: uncommitted changes before handoff'],
+      worktreePath,
+    );
+    if (commit.code !== 0) {
+      return { committed: false, error: commit.stderr.trim() };
+    }
+
+    return { committed: true };
+  } catch (err) {
+    return { committed: false, error: String(err) };
+  }
+}
+
 export async function checkWorktreeExists(workspaceId: string, repoPath: string): Promise<{ exists: boolean; worktreePath: string }> {
   void repoPath;
   const worktreePath = getWorktreePath(workspaceId);
