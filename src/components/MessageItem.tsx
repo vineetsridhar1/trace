@@ -77,7 +77,7 @@ export const MessageItem = memo(function MessageItem({
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  const title = ticket?.title || workspace.cliSessionId;
+  const title = ticket?.title || workspace.preview || workspace.cliSessionId;
   const branch = workspace.branch?.replace(/^trace\//, '');
 
   return (
@@ -87,7 +87,7 @@ export const MessageItem = memo(function MessageItem({
         isSelected ? 'selected' : ''
       } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
       onClick={() => onOpenWorkspace(workspace)}
-      title={workspace.cliSessionId}
+      title={title}
     >
       {/* Avatar */}
       {workspace.user?.avatarUrl ? (
