@@ -110,6 +110,9 @@ export async function ensureWorktreeForBranch(
   // Fetch the branch from remote
   await runProcess('git', ['fetch', 'origin', branchName], repoPath);
 
+  // Clean up stale worktree references (e.g. directory deleted without `git worktree remove`)
+  await runProcess('git', ['worktree', 'prune'], repoPath);
+
   // Try using local branch if it exists
   let result = await runProcess('git', ['worktree', 'add', worktreePath, branchName], repoPath);
 
@@ -120,6 +123,16 @@ export async function ensureWorktreeForBranch(
       ['worktree', 'add', '-b', branchName, worktreePath, `origin/${branchName}`],
       repoPath,
     );
+
+    // If it failed because the branch already exists locally, delete it and retry
+    if (result.code !== 0 && result.stderr.includes('already exists')) {
+      await runProcess('git', ['branch', '-D', branchName], repoPath);
+      result = await runProcess(
+        'git',
+        ['worktree', 'add', '-b', branchName, worktreePath, `origin/${branchName}`],
+        repoPath,
+      );
+    }
   }
 
   if (result.code !== 0) {
