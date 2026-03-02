@@ -114,6 +114,10 @@ export function useChannelSubscriptions({
   // Tracks in-flight session reloads to prevent duplicate requests
   const reloadingSessionRef = useRef<string | null>(null);
 
+  // Guard against stale subscription payloads from a previous channel
+  const channelIdRef = useRef(activeChannelId);
+  channelIdRef.current = activeChannelId;
+
   const triggerSessionReload = (workspaceId: string) => {
     if (reloadingSessionRef.current === workspaceId) return;
 
@@ -139,6 +143,7 @@ export function useChannelSubscriptions({
   useEffect(() => {
     if (!workspaceData?.workspaceUpserted || !activeChannelId) return;
     const workspace = workspaceData.workspaceUpserted as Workspace;
+    if (workspace.channelId !== channelIdRef.current) return;
 
     let transitionedToCompleted = false;
     if (workspace.status === 'completed' || workspace.status === 'merged' || workspace.status === 'needs_input') {
@@ -172,6 +177,7 @@ export function useChannelSubscriptions({
 
   useEffect(() => {
     if (!workspaceDeletedData?.workspaceDeleted || !activeChannelId) return;
+    if (workspaceDeletedData.workspaceDeleted.channelId !== channelIdRef.current) return;
     const deletedWorkspaceId = workspaceDeletedData.workspaceDeleted.workspaceId;
     useWorkspaceStore.getState().removeWorkspace(deletedWorkspaceId);
     useKanbanStore.getState().removeTicketByWorkspaceId(deletedWorkspaceId);
@@ -187,6 +193,7 @@ export function useChannelSubscriptions({
   useEffect(() => {
     if (!sessionEventData?.sessionEventCreated || !activeChannelId) return;
     const payload = sessionEventData.sessionEventCreated;
+    if (payload.channelId !== channelIdRef.current) return;
 
     void reportClaudeActivity(payload.workspaceId, payload.event.hookEventName, payload.event.cliSessionId);
 
@@ -253,6 +260,7 @@ export function useChannelSubscriptions({
   useEffect(() => {
     if (!sessionEventUpdatedData?.sessionEventUpdated || !activeChannelId) return;
     const payload = sessionEventUpdatedData.sessionEventUpdated;
+    if (payload.channelId !== channelIdRef.current) return;
 
     if (payload.event.toolName === 'AskUserQuestion') {
       const selectedWorkspaceId = useThreadStore.getState().selectedWorkspaceId;
@@ -282,6 +290,7 @@ export function useChannelSubscriptions({
   useEffect(() => {
     if (!ticketData?.ticketUpserted || !activeChannelId) return;
     const payload = ticketData.ticketUpserted;
+    if (payload.channelId !== channelIdRef.current) return;
     useKanbanStore.getState().upsertTicket({ ...payload.ticket, columnSlug: payload.columnSlug } as KanbanTicket);
   }, [ticketData, activeChannelId]);
 
@@ -290,6 +299,7 @@ export function useChannelSubscriptions({
 
   useEffect(() => {
     if (!ticketReadyData?.ticketReadyToRun || !activeChannelId || !onTicketReadyToRun) return;
+    if (ticketReadyData.ticketReadyToRun.channelId !== channelIdRef.current) return;
     const { workspaceId, runConfig } = ticketReadyData.ticketReadyToRun;
     onTicketReadyToRun(workspaceId, runConfig);
   }, [ticketReadyData, activeChannelId, onTicketReadyToRun]);

@@ -70,6 +70,8 @@ export function useChannelMessages(channelId: string | null) {
   const [executeSendMessage] = useSendChannelMessageMutation();
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const seenIdsRef = useRef(new Set<string>());
+  const channelIdRef = useRef(channelId);
+  channelIdRef.current = channelId;
 
   // Fetch messages when channelId changes
   useEffect(() => {
@@ -102,6 +104,7 @@ export function useChannelMessages(channelId: string | null) {
   useEffect(() => {
     if (!subData?.channelMessageCreated) return;
     const msg = subData.channelMessageCreated as ChannelMessage;
+    if (msg.channelId !== channelIdRef.current) return;
     if (seenIdsRef.current.has(msg.id)) return;
     seenIdsRef.current.add(msg.id);
     setMessages((prev) => [...prev, msg]);
