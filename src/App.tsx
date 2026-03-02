@@ -29,7 +29,7 @@ import { useWorkspaceStore } from './stores/workspaceStore';
 import { useThreadStore } from './stores/threadStore';
 import { useTerminalStore } from './stores/terminalStore';
 import { useKanbanStore } from './stores/kanbanStore';
-import { useAppUIStore, isViewValidForChannel } from './stores/appUIStore';
+import { useAppUIStore, isViewValidForChannel, getDefaultViewForChannel } from './stores/appUIStore';
 import { useClaudeRunStore } from './stores/claudeRunStore';
 import { useSyncStore } from './stores/syncStore';
 
@@ -360,7 +360,7 @@ function AppContent() {
       const targetWsEnabled = targetChannel?.workspacesEnabled ?? false;
       const restoredView = savedView && isViewValidForChannel(savedView, targetType, targetWsEnabled)
         ? savedView
-        : 'chat';
+        : getDefaultViewForChannel(targetType, targetWsEnabled);
       useAppUIStore.getState().setMiddlePanelView(restoredView);
 
       if (restoredView === 'board') void fetchBoard(channelId);
@@ -508,6 +508,25 @@ function AppContent() {
     }, 3000);
     return () => clearInterval(interval);
   }, [activeChannelId, refreshWorkspaces, subscriptionsActive]);
+
+  // One-time initial view correction after channel data loads
+  const initialViewCorrectedRef = useRef(false);
+  useEffect(() => {
+    if (initialViewCorrectedRef.current || !enrichedActiveChannel) return;
+    initialViewCorrectedRef.current = true;
+
+    const { channelViewMap, middlePanelView } = useAppUIStore.getState();
+    const savedView = channelViewMap[enrichedActiveChannel.id];
+    const channelType = enrichedActiveChannel.type;
+    const wsEnabled = enrichedActiveChannel.workspacesEnabled ?? false;
+
+    if (savedView && isViewValidForChannel(savedView, channelType, wsEnabled)) return;
+
+    const correctView = getDefaultViewForChannel(channelType, wsEnabled);
+    if (correctView !== middlePanelView) {
+      useAppUIStore.getState().setChannelView(enrichedActiveChannel.id, correctView);
+    }
+  }, [enrichedActiveChannel]);
 
   // Auto-open thread panel after cross-channel navigation
   useEffect(() => {

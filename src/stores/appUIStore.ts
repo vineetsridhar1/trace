@@ -1,6 +1,35 @@
 import { create } from 'zustand';
 import type { MiddlePanelView, DragTarget, ChannelType, AiChat } from '../types';
 
+const CHANNEL_VIEW_MAP_KEY = 'trace:channelViewMap';
+const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'board', 'projects'];
+
+function loadChannelViewMap(): Record<string, MiddlePanelView> {
+  try {
+    const raw = localStorage.getItem(CHANNEL_VIEW_MAP_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    const result: Record<string, MiddlePanelView> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string' && VALID_VIEWS.includes(value as MiddlePanelView)) {
+        result[key] = value as MiddlePanelView;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function saveChannelViewMap(map: Record<string, MiddlePanelView>): void {
+  try {
+    localStorage.setItem(CHANNEL_VIEW_MAP_KEY, JSON.stringify(map));
+  } catch {
+    // Quota error — ignore
+  }
+}
+
 /** Check whether a saved view is still valid for a given channel configuration. */
 export function isViewValidForChannel(
   view: MiddlePanelView,
@@ -13,6 +42,17 @@ export function isViewValidForChannel(
   if (view === 'projects') return channelType === 'team';
   if (view === 'workspaces') return workspacesEnabled;
   return false;
+}
+
+/** Return the default view for a channel based on its type and workspace config. */
+export function getDefaultViewForChannel(
+  channelType: ChannelType,
+  workspacesEnabled: boolean,
+): MiddlePanelView {
+  if ((channelType === 'team' || channelType === 'project') && workspacesEnabled) {
+    return 'workspaces';
+  }
+  return 'chat';
 }
 
 interface AppUIState {
@@ -48,8 +88,13 @@ interface AppUIState {
   setPendingThreadOpen: (value: { channelId: string; workspaceId: string } | null) => void;
 }
 
+const initialChannelViewMap = loadChannelViewMap();
+const initialActiveChannelId = localStorage.getItem('activeChannelId');
+const initialMiddlePanelView: MiddlePanelView =
+  (initialActiveChannelId && initialChannelViewMap[initialActiveChannelId]) || 'chat';
+
 export const useAppUIStore = create<AppUIState>((set) => ({
-  middlePanelView: 'chat',
+  middlePanelView: initialMiddlePanelView,
   channelWidth: 220,
   dragging: null,
   isFullscreen: false,
@@ -60,16 +105,17 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   showCreateServer: false,
   activeAiChatId: null,
   aiChats: [],
-  channelViewMap: {},
+  channelViewMap: initialChannelViewMap,
   pendingThreadOpen: null,
 
   setMiddlePanelView: (view) => set({ middlePanelView: view }),
 
   setChannelView: (channelId, view) =>
-    set((state) => ({
-      middlePanelView: view,
-      channelViewMap: { ...state.channelViewMap, [channelId]: view },
-    })),
+    set((state) => {
+      const channelViewMap = { ...state.channelViewMap, [channelId]: view };
+      saveChannelViewMap(channelViewMap);
+      return { middlePanelView: view, channelViewMap };
+    }),
 
   setChannelWidth: (width) =>
     set((state) => ({
