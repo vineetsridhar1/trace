@@ -7,6 +7,7 @@ import type { KanbanTicket } from '../types';
 import { getServerUrl } from '../types';
 import { ImageLightbox } from './ImageLightbox';
 import { useTicketDependenciesLazyQuery } from './__generated__/TicketView.generated';
+import { ScrambleText } from './ScrambleText';
 
 const GQL_TICKET_DEPENDENCIES = gql`
   query TicketDependencies($workspaceId: ID!) {
@@ -50,7 +51,7 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      <h2 className="mb-3 text-lg font-semibold text-[#c0caf5]">{ticket.title}</h2>
+      <h2 className="mb-3 text-lg font-semibold text-[#c0caf5]"><ScrambleText text={ticket.title} /></h2>
 
       <div className="mb-4 flex items-center gap-2">
         <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}>

@@ -5,6 +5,7 @@ import { FiLink } from 'react-icons/fi';
 import type { KanbanTicket } from '../types';
 import { formatTime } from '../utils';
 import { CopyableBranch } from './CopyableBranch';
+import { ScrambleText } from './ScrambleText';
 
 interface KanbanCardProps {
   ticket: KanbanTicket;
@@ -27,7 +28,7 @@ export const KanbanCard = memo(function KanbanCard({
       onClick={() => onClickTicket(ticket.workspaceId)}
       className="group cursor-pointer rounded-md border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
     >
-      <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]">{ticket.title}</h4>
+      <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]"><ScrambleText text={ticket.title} /></h4>
 
       {ticket.workspace.status === 'queued' && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-cyan-400">

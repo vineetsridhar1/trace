@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { FiCheck, FiGitMerge, FiGitPullRequest, FiLoader, FiTerminal, FiTrash2 } from 'react-icons/fi';
 import type { Workspace, KanbanTicket, TicketStatus } from '../types';
 import { avatarInitial } from '../utils';
+import { ScrambleText } from './ScrambleText';
 
 export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; avatarBg: string; avatarText: string }> = {
   pending: { label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', avatarBg: 'bg-yellow-500/20', avatarText: 'text-yellow-400' },
@@ -106,7 +107,7 @@ export const MessageItem = memo(function MessageItem({
 
       {/* Title + branch stacked */}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm text-[#c0caf5]">{title}</div>
+        <div className="truncate text-sm text-[#c0caf5]"><ScrambleText text={title} /></div>
         {branch && (
           <div className="truncate font-mono text-[10px] text-[#565f89]">{branch}</div>
         )}
