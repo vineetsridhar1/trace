@@ -169,6 +169,7 @@ type Mutation {
   deleteChannel(id: ID!): Boolean!
   deleteColumn(columnId: ID!): Boolean!
   deleteWorkspace(channelId: ID!, workspaceId: ID!): Boolean!
+  handoffWorkspace(channelId: ID!, workspaceId: ID!): Workspace!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
   removeTicketDependency(channelId: ID!, dependsOnWorkspaceId: ID!, workspaceId: ID!): Boolean!
   renameAiChat(id: ID!, title: String!): AiChat!

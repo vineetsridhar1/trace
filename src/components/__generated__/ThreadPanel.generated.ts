@@ -14,6 +14,14 @@ export type SetTicketDependenciesMutationVariables = Types.Exact<{
 
 export type SetTicketDependenciesMutation = { __typename?: 'Mutation', setTicketDependencies: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null } };
 
+export type HandoffWorkspaceMutationVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+  workspaceId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type HandoffWorkspaceMutation = { __typename?: 'Mutation', handoffWorkspace: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null } };
+
 
 export const SetTicketDependenciesDocument = gql`
     mutation SetTicketDependencies($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceIds: [ID!]!, $runConfig: JSON!) {
@@ -56,3 +64,37 @@ export function useSetTicketDependenciesMutation(baseOptions?: Apollo.MutationHo
 export type SetTicketDependenciesMutationHookResult = ReturnType<typeof useSetTicketDependenciesMutation>;
 export type SetTicketDependenciesMutationResult = Apollo.MutationResult<SetTicketDependenciesMutation>;
 export type SetTicketDependenciesMutationOptions = Apollo.BaseMutationOptions<SetTicketDependenciesMutation, SetTicketDependenciesMutationVariables>;
+export const HandoffWorkspaceDocument = gql`
+    mutation HandoffWorkspace($channelId: ID!, $workspaceId: ID!) {
+  handoffWorkspace(channelId: $channelId, workspaceId: $workspaceId) {
+    ...WorkspaceFields
+  }
+}
+    ${WorkspaceFieldsFragmentDoc}`;
+export type HandoffWorkspaceMutationFn = Apollo.MutationFunction<HandoffWorkspaceMutation, HandoffWorkspaceMutationVariables>;
+
+/**
+ * __useHandoffWorkspaceMutation__
+ *
+ * To run a mutation, you first call `useHandoffWorkspaceMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useHandoffWorkspaceMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [handoffWorkspaceMutation, { data, loading, error }] = useHandoffWorkspaceMutation({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *      workspaceId: // value for 'workspaceId'
+ *   },
+ * });
+ */
+export function useHandoffWorkspaceMutation(baseOptions?: Apollo.MutationHookOptions<HandoffWorkspaceMutation, HandoffWorkspaceMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<HandoffWorkspaceMutation, HandoffWorkspaceMutationVariables>(HandoffWorkspaceDocument, options);
+      }
+export type HandoffWorkspaceMutationHookResult = ReturnType<typeof useHandoffWorkspaceMutation>;
+export type HandoffWorkspaceMutationResult = Apollo.MutationResult<HandoffWorkspaceMutation>;
+export type HandoffWorkspaceMutationOptions = Apollo.BaseMutationOptions<HandoffWorkspaceMutation, HandoffWorkspaceMutationVariables>;

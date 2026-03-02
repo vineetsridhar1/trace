@@ -201,6 +201,7 @@ export type Mutation = {
   deleteChannel: Scalars['Boolean']['output'];
   deleteColumn: Scalars['Boolean']['output'];
   deleteWorkspace: Scalars['Boolean']['output'];
+  handoffWorkspace: Workspace;
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
@@ -289,6 +290,12 @@ export type MutationDeleteColumnArgs = {
 
 
 export type MutationDeleteWorkspaceArgs = {
+  channelId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationHandoffWorkspaceArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId: Scalars['ID']['input'];
 };

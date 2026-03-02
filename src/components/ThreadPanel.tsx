@@ -8,7 +8,7 @@ import type {
 import { gql } from "@apollo/client";
 import { WORKSPACE_FIELDS } from "../graphql/fragments";
 import { useUpdateWorkspaceStatusMutation } from "../__generated__/App.generated";
-import { useSetTicketDependenciesMutation } from "./__generated__/ThreadPanel.generated";
+import { useSetTicketDependenciesMutation, useHandoffWorkspaceMutation } from "./__generated__/ThreadPanel.generated";
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
 import { CollapsedTurnGroup } from "./CollapsedTurnGroup";
@@ -45,7 +45,18 @@ const _GQL_SET_TICKET_DEPENDENCIES = gql`
   ${WORKSPACE_FIELDS}
 `;
 
+const _GQL_HANDOFF_WORKSPACE = gql`
+  mutation HandoffWorkspace($channelId: ID!, $workspaceId: ID!) {
+    handoffWorkspace(channelId: $channelId, workspaceId: $workspaceId) {
+      ...WorkspaceFields
+    }
+  }
+  ${WORKSPACE_FIELDS}
+`;
+
 type ViewMode = "agent" | "ticket" | "files" | "terminal";
+
+const HANDOFF_ALLOWED_STATUSES = new Set(['in_progress', 'needs_input', 'completed', 'creation']);
 
 export function ThreadPanel() {
   const { activeChannelId, enrichedActiveChannel, enrichedChannels } = useChannelContext();
@@ -161,6 +172,7 @@ export function ThreadPanel() {
 
   // ─── Mutations ──────────────────────────────────────────────────
   const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
+  const [executeHandoffWorkspace] = useHandoffWorkspaceMutation();
 
   // ─── Saved widths ref for fullscreen ────────────────────────────
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
@@ -307,6 +319,44 @@ export function ThreadPanel() {
     workspaceUserId && authUser && workspaceUserId !== authUser.id,
   );
 
+  // ─── Handoff ──────────────────────────────────────────────────
+  const canHandoff = Boolean(
+    selectedWorkspaceId &&
+    authUser &&
+    workspaceUserId === authUser.id &&
+    HANDOFF_ALLOWED_STATUSES.has(workspaceStatus),
+  );
+
+  const handleHandoff = useCallback(async () => {
+    const wsId = useThreadStore.getState().selectedWorkspaceId;
+    const chId = activeChannelId;
+    if (!wsId || !chId) return;
+
+    // Stop Claude if running
+    if (isClaudeRunning) {
+      await window.traceAPI.stopClaude(wsId);
+    }
+
+    // Kill terminals and release ports
+    useTerminalStore.getState().killAllForWorkspace(wsId);
+    void window.traceAPI.releasePorts(wsId);
+
+    try {
+      const { data } = await executeHandoffWorkspace({
+        variables: { channelId: chId, workspaceId: wsId },
+      });
+      if (data?.handoffWorkspace) {
+        const workspace = data.handoffWorkspace as import("../types").Workspace;
+        useWorkspaceStore.getState().upsertWorkspace(workspace);
+        useThreadStore.getState().syncSelectedWorkspace(workspace);
+        useClaudeRunStore.getState().removeSpawnedWorkspace(wsId);
+        useClaudeRunStore.getState().clearActiveRun(wsId);
+      }
+    } catch {
+      console.error('Failed to hand off workspace');
+    }
+  }, [activeChannelId, isClaudeRunning, executeHandoffWorkspace]);
+
   // ─── Memos ──────────────────────────────────────────────────────
   const lastUserMessageTime = useMemo(() => {
     for (let i = sessionNodes.length - 1; i >= 0; i--) {
@@ -418,6 +468,8 @@ export function ThreadPanel() {
           isFullscreen={isFullscreen}
           onClose={handleClose}
           onDeleteWorktree={handleDeleteWorktree}
+          canHandoff={canHandoff}
+          onHandoff={() => { void handleHandoff(); }}
           onEnterFullscreen={() => { void handleEnterFullscreen(); }}
           onExitFullscreen={handleExitFullscreen}
           onMarkMerged={() => void markMerged()}

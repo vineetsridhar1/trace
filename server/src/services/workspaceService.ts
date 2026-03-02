@@ -425,6 +425,13 @@ export async function claimWorkspace(workspaceId: string, userId: string) {
   });
 }
 
+export async function releaseWorkspace(workspaceId: string) {
+  return prisma.workspace.update({
+    where: { id: workspaceId },
+    data: { userId: null },
+  });
+}
+
 export async function getEventsBySession(
   sessionId: string,
   options: { limit?: number; offset?: number; after?: string } = {},

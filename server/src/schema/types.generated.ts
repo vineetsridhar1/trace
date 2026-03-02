@@ -214,6 +214,7 @@ export type Mutation = {
   deleteChannel: Scalars['Boolean']['output'];
   deleteColumn: Scalars['Boolean']['output'];
   deleteWorkspace: Scalars['Boolean']['output'];
+  handoffWorkspace: Workspace;
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
@@ -302,6 +303,12 @@ export type MutationdeleteColumnArgs = {
 
 
 export type MutationdeleteWorkspaceArgs = {
+  channelId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationhandoffWorkspaceArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId: Scalars['ID']['input'];
 };
@@ -1046,6 +1053,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   deleteChannel?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteChannelArgs, 'id'>>;
   deleteColumn?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteColumnArgs, 'columnId'>>;
   deleteWorkspace?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteWorkspaceArgs, 'channelId' | 'workspaceId'>>;
+  handoffWorkspace?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationhandoffWorkspaceArgs, 'channelId' | 'workspaceId'>>;
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
   removeTicketDependency?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationremoveTicketDependencyArgs, 'channelId' | 'dependsOnWorkspaceId' | 'workspaceId'>>;
   renameAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationrenameAiChatArgs, 'id' | 'title'>>;

@@ -244,6 +244,62 @@ export function useClaudeWorkspaceActions({
 
       useClaudeRunStore.getState().clearPendingRun();
 
+      // Detect handoff: workspace has sessionCount > 1 (previous user already worked on it)
+      const workspace = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
+      const isHandoff = workspace && workspace.sessionCount > 1;
+
+      if (isHandoff) {
+        // Handoff pickup: create a new session, include diff context, skip setup commands
+        const baseBranch = getChannelBaseBranch();
+
+        // Build diff context from the worktree
+        let diffContext = '';
+        try {
+          const diffResult = await window.traceAPI.getWorktreeDiff(workspaceId, baseBranch);
+          if (diffResult.success && diffResult.branchDiff) {
+            diffContext = `<trace-internal>\nThis ticket was handed off from another user. Here is the diff of changes made so far:\n\n${diffResult.branchDiff}\n</trace-internal>\n\n`;
+          }
+        } catch {
+          // Diff is best-effort
+        }
+
+        const enhancedPrompt = diffContext + editedPrompt;
+
+        // Create a new empty session
+        const clearSession = useThreadStore.getState().syncActions.clearSession;
+        const newSessionId = (await clearSession()) ?? undefined;
+
+        // Persist prompt in the new session
+        const persisted = await persistPrompt(workspaceId, enhancedPrompt, 'Failed to persist handoff prompt', undefined, undefined, newSessionId);
+        if (!persisted) return;
+
+        const userInstructions = getSystemInstructions();
+        const instructionParts = [
+          `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
+        ];
+
+        const portResult = await window.traceAPI.allocatePorts(workspaceId, 10);
+        const ports = portResult.success && portResult.ports ? portResult.ports : [];
+        if (ports.length > 0) {
+          const portLines = ports.map((p: number, i: number) => `TRACE_PORT_${i}=${p}`).join(', ');
+          instructionParts.push(`Available ports: ${portLines}`);
+        }
+        if (userInstructions) instructionParts.push(userInstructions);
+
+        // Spawn Claude fresh (no resumeSessionId), skip setup commands (worktree already exists)
+        await spawnClaudeForWorkspace(workspaceId, enhancedPrompt, {
+          statusOnSuccess: 'in_progress',
+          errorPrefix: 'Failed to spawn claude for handoff pickup',
+          creationCommands: [],
+          filePaths: filePaths.length > 0 ? filePaths : undefined,
+          model: selectedModel,
+          effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+          systemInstructions: instructionParts.join('\n\n'),
+          permissionMode: planMode ? 'plan' : undefined,
+        });
+        return;
+      }
+
       const setupCommands = getSetupCommands();
       if (setupCommands.length > 0) {
         await updateWorkspaceStatus(workspaceId, 'creation');
@@ -280,7 +336,7 @@ export function useClaudeWorkspaceActions({
         await updateWorkspaceStatus(workspaceId, 'pending');
       }
     },
-    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, spawnClaudeForWorkspace, updateWorkspaceStatus, updatePreviewForPendingRun],
+    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace, updateWorkspaceStatus, updatePreviewForPendingRun],
   );
 
   const autoRunQueuedTicket = useCallback(
