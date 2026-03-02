@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { gql, useSubscription } from '@apollo/client';
 import { WORKSPACE_FIELDS, SESSION_EVENT_PAYLOAD_FIELDS } from '../graphql/fragments';
 import { subscribeWsConnection, getWsConnectionSnapshot } from '../graphql/client';
@@ -111,6 +111,28 @@ export function useChannelSubscriptions({
   const skip = !activeChannelId;
   const variables = { channelId: activeChannelId ?? '' };
 
+  // Tracks in-flight session reloads to prevent duplicate requests
+  const reloadingSessionRef = useRef<string | null>(null);
+
+  const triggerSessionReload = (workspaceId: string) => {
+    if (reloadingSessionRef.current === workspaceId) return;
+
+    const threadState = useThreadStore.getState();
+    const { sessions, activeSessionId } = threadState;
+
+    // Don't auto-switch if the user is deliberately viewing an older session
+    const latestSession = sessions[sessions.length - 1];
+    if (latestSession && activeSessionId !== latestSession.id) return;
+
+    const workspace = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
+    if (!workspace) return;
+
+    reloadingSessionRef.current = workspaceId;
+    useThreadStore.getState().syncActions.loadSessionEvents(workspace).finally(() => {
+      reloadingSessionRef.current = null;
+    });
+  };
+
   // --- Workspace upserted ---
   const { data: workspaceData } = useSubscription(WORKSPACE_UPSERTED_SUBSCRIPTION, { variables, skip });
 
@@ -212,7 +234,13 @@ export function useChannelSubscriptions({
     if (threadState.selectedWorkspaceId !== payload.workspaceId) return;
 
     const currentSessionId = threadState.activeSessionId;
-    if (currentSessionId && payload.event.sessionId !== currentSessionId) return;
+    if (currentSessionId && payload.event.sessionId !== currentSessionId) {
+      const isKnownSession = threadState.sessions.some((s) => s.id === payload.event.sessionId);
+      if (!isKnownSession) {
+        triggerSessionReload(payload.workspaceId);
+      }
+      return;
+    }
 
     useThreadStore.getState().appendSessionEvent(payload.event as ServerEvent);
   }, [sessionEventData, activeChannelId, reportClaudeActivity, onNeedsAttention, refreshWorkspaces]);
@@ -235,7 +263,13 @@ export function useChannelSubscriptions({
     if (threadState.selectedWorkspaceId !== payload.workspaceId) return;
 
     const currentSessionId = threadState.activeSessionId;
-    if (currentSessionId && payload.event.sessionId !== currentSessionId) return;
+    if (currentSessionId && payload.event.sessionId !== currentSessionId) {
+      const isKnownSession = threadState.sessions.some((s) => s.id === payload.event.sessionId);
+      if (!isKnownSession) {
+        triggerSessionReload(payload.workspaceId);
+      }
+      return;
+    }
 
     useThreadStore.getState().updateSessionEvent(payload.event as ServerEvent);
   }, [sessionEventUpdatedData, activeChannelId, onNeedsAttention]);
