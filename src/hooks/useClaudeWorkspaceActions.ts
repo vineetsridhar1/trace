@@ -130,6 +130,7 @@ export function useClaudeWorkspaceActions({
   // Clear active runs when switching channels
   useEffect(() => {
     useClaudeRunStore.getState().clearAllActiveRuns();
+    useClaudeRunStore.getState().clearPendingRun();
   }, [activeChannelId]);
 
   const spawnClaudeForWorkspace = useCallback(

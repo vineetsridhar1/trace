@@ -656,7 +656,7 @@ export function ThreadPanel() {
               </span>
             </div>
           ) : (pendingRunWorkspaceId === selectedWorkspaceId ||
-            (workspaceStatus === 'pending' && !pendingRunWorkspaceId)) &&
+            workspaceStatus === 'pending') &&
             !isClaudeRunning ? (
             <RunButtons
               initialPrompt={pendingPromptForDisplay}

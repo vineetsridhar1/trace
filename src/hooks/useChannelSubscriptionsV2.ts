@@ -135,6 +135,11 @@ export function useChannelSubscriptions({
     useWorkspaceStore.getState().upsertWorkspace(workspace);
     useThreadStore.getState().syncSelectedWorkspace(workspace);
 
+    const pendingId = useClaudeRunStore.getState().pendingRunWorkspaceId;
+    if (pendingId === workspace.id && workspace.status !== 'pending') {
+      useClaudeRunStore.getState().clearPendingRun();
+    }
+
     if (transitionedToCompleted && onWorkspaceCompleted) {
       setTimeout(onWorkspaceCompleted, 0);
     }
@@ -146,6 +151,10 @@ export function useChannelSubscriptions({
   useEffect(() => {
     if (!workspaceDeletedData?.workspaceDeleted || !activeChannelId) return;
     useWorkspaceStore.getState().removeWorkspace(workspaceDeletedData.workspaceDeleted.workspaceId);
+    const pendingId = useClaudeRunStore.getState().pendingRunWorkspaceId;
+    if (pendingId === workspaceDeletedData.workspaceDeleted.workspaceId) {
+      useClaudeRunStore.getState().clearPendingRun();
+    }
   }, [workspaceDeletedData, activeChannelId]);
 
   // --- Session event created ---
