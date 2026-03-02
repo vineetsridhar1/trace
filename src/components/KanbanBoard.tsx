@@ -7,9 +7,10 @@ interface KanbanBoardProps {
   loading: boolean;
   onClickTicket: (workspaceId: string) => void;
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
 }
 
-export function KanbanBoard({ columns, loading, onClickTicket, onMoveTicket }: KanbanBoardProps) {
+export function KanbanBoard({ columns, loading, onClickTicket, onMoveTicket, onDeleteWorkspace }: KanbanBoardProps) {
   const handleDropTicket = useCallback(
     (ticketId: string, columnId: string, sortOrder: number) => {
       onMoveTicket(ticketId, columnId, sortOrder);
@@ -33,6 +34,7 @@ export function KanbanBoard({ columns, loading, onClickTicket, onMoveTicket }: K
           column={column}
           onClickTicket={onClickTicket}
           onDropTicket={handleDropTicket}
+          onDeleteWorkspace={onDeleteWorkspace}
         />
       ))}
     </div>

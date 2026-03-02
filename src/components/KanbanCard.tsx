@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { FiLink } from 'react-icons/fi';
+import { FiLink, FiTrash2 } from 'react-icons/fi';
 import type { KanbanTicket } from '../types';
 import { formatTime } from '../utils';
 import { CopyableBranch } from './CopyableBranch';
@@ -11,12 +11,14 @@ interface KanbanCardProps {
   ticket: KanbanTicket;
   onClickTicket: (workspaceId: string) => void;
   onDragStart: (ticketId: string) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
 }
 
 export const KanbanCard = memo(function KanbanCard({
   ticket,
   onClickTicket,
   onDragStart,
+  onDeleteWorkspace,
 }: KanbanCardProps) {
   return (
     <div
@@ -26,8 +28,20 @@ export const KanbanCard = memo(function KanbanCard({
         onDragStart(ticket.id);
       }}
       onClick={() => onClickTicket(ticket.workspaceId)}
-      className="group cursor-pointer rounded-md border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
+      className="group relative cursor-pointer rounded-md border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
     >
+      {onDeleteWorkspace && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteWorkspace(ticket.workspaceId);
+          }}
+          className="absolute top-2 right-2 hidden rounded p-1 text-[#565f89] transition-colors hover:bg-red-500/20 hover:text-red-400 group-hover:block"
+        >
+          <FiTrash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
       <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]"><ScrambleText text={ticket.title} /></h4>
 
       {ticket.workspace.status === 'queued' && (

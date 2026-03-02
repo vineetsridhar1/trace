@@ -6,11 +6,12 @@ interface KanbanColumnProps {
   column: KanbanColumnType;
   onClickTicket: (workspaceId: string) => void;
   onDropTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
 }
 
 const noop = () => {};
 
-export function KanbanColumn({ column, onClickTicket, onDropTicket }: KanbanColumnProps) {
+export function KanbanColumn({ column, onClickTicket, onDropTicket, onDeleteWorkspace }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -62,6 +63,7 @@ export function KanbanColumn({ column, onClickTicket, onDropTicket }: KanbanColu
             ticket={ticket}
             onClickTicket={onClickTicket}
             onDragStart={noop}
+            onDeleteWorkspace={onDeleteWorkspace}
           />
         ))}
         {column.tickets.length === 0 && (

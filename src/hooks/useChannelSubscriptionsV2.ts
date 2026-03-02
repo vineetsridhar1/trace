@@ -172,9 +172,11 @@ export function useChannelSubscriptions({
 
   useEffect(() => {
     if (!workspaceDeletedData?.workspaceDeleted || !activeChannelId) return;
-    useWorkspaceStore.getState().removeWorkspace(workspaceDeletedData.workspaceDeleted.workspaceId);
+    const deletedWorkspaceId = workspaceDeletedData.workspaceDeleted.workspaceId;
+    useWorkspaceStore.getState().removeWorkspace(deletedWorkspaceId);
+    useKanbanStore.getState().removeTicketByWorkspaceId(deletedWorkspaceId);
     const pendingId = useClaudeRunStore.getState().pendingRunWorkspaceId;
-    if (pendingId === workspaceDeletedData.workspaceDeleted.workspaceId) {
+    if (pendingId === deletedWorkspaceId) {
       useClaudeRunStore.getState().clearPendingRun();
     }
   }, [workspaceDeletedData, activeChannelId]);

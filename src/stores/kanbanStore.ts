@@ -9,6 +9,7 @@ interface KanbanState {
   setLoading: (loading: boolean) => void;
   upsertTicket: (ticket: KanbanTicket) => void;
   moveTicketOptimistic: (ticketId: string, columnId: string, sortOrder: number) => void;
+  removeTicketByWorkspaceId: (workspaceId: string) => void;
   clearBoard: () => void;
 }
 
@@ -58,6 +59,14 @@ export const useKanbanStore = create<KanbanState>((set) => ({
         }),
       };
     }),
+
+  removeTicketByWorkspaceId: (workspaceId) =>
+    set((state) => ({
+      columns: state.columns.map((col) => ({
+        ...col,
+        tickets: col.tickets.filter((t) => t.workspaceId !== workspaceId),
+      })),
+    })),
 
   clearBoard: () => set({ columns: [] }),
 }));

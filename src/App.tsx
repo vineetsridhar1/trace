@@ -295,6 +295,7 @@ function AppContent() {
       try {
         await executeDeleteWorkspace({ variables: { channelId: activeChannelId, workspaceId } });
         useWorkspaceStore.getState().removeWorkspace(workspaceId);
+        useKanbanStore.getState().removeTicketByWorkspaceId(workspaceId);
         useTerminalStore.getState().killAllForWorkspace(workspaceId);
         void window.traceAPI.releasePorts(workspaceId);
         void window.traceAPI.deleteWorktree(workspaceId, getChannelRepoPath());
