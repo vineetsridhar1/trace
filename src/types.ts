@@ -42,6 +42,7 @@ export interface TraceAPI {
     effort?: string,
     systemInstructions?: string,
     permissionMode?: string,
+    baseBranch?: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
   stopClaude: (
     workspaceId: string,

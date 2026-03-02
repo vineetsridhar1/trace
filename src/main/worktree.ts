@@ -34,7 +34,7 @@ export interface EnsureWorktreeResult {
   created: boolean;
 }
 
-export async function ensureWorktree(workspaceId: string, repoPath: string): Promise<EnsureWorktreeResult> {
+export async function ensureWorktree(workspaceId: string, repoPath: string, baseBranch?: string): Promise<EnsureWorktreeResult> {
   const worktreePath = getWorktreePath(workspaceId);
 
   if (fs.existsSync(worktreePath)) {
@@ -47,9 +47,10 @@ export async function ensureWorktree(workspaceId: string, repoPath: string): Pro
   }
 
   const branchName = `trace/${workspaceId.slice(0, 8)}`;
+  const startPoint = baseBranch || 'HEAD';
 
   const result = await new Promise<EnsureWorktreeResult>((resolve, reject) => {
-    const proc = spawn('git', ['worktree', 'add', '-b', branchName, worktreePath], {
+    const proc = spawn('git', ['worktree', 'add', '-b', branchName, worktreePath, startPoint], {
       cwd: repoPath,
       stdio: 'pipe',
     });
@@ -80,7 +81,7 @@ export async function ensureWorktree(workspaceId: string, repoPath: string): Pro
 
   // Store the base branch SHA so merge detection can tell if base moved (for FF merges)
   if (result.created) {
-    const baseSha = await runProcess('git', ['rev-parse', 'HEAD'], repoPath);
+    const baseSha = await runProcess('git', ['rev-parse', startPoint], repoPath);
     if (baseSha.code === 0) {
       await runProcess('git', ['config', getBaseShaConfigKey(workspaceId), baseSha.stdout.trim()], repoPath);
     }

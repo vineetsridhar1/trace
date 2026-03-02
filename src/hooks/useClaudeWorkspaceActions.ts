@@ -84,6 +84,7 @@ interface SpawnOptions {
   effort?: string;
   systemInstructions?: string;
   permissionMode?: string;
+  baseBranch?: string;
 }
 
 interface UseClaudeWorkspaceActionsOptions {
@@ -140,7 +141,8 @@ export function useClaudeWorkspaceActions({
       runStore.addActiveRun(workspaceId);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions, options.permissionMode);
+        const baseBranch = options.baseBranch ?? getChannelBaseBranch();
+        const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions, options.permissionMode, baseBranch);
 
         if (!result.success) {
           useClaudeRunStore.getState().removeSpawnedWorkspace(workspaceId);
@@ -165,7 +167,7 @@ export function useClaudeWorkspaceActions({
         return false;
       }
     },
-    [getChannelRepoPath, updateWorkspaceStatus],
+    [getChannelBaseBranch, getChannelRepoPath, updateWorkspaceStatus],
   );
 
   const updatePreviewForPendingRun = useCallback(

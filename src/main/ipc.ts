@@ -117,9 +117,9 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(COMMIT_WORKTREE_CHANGES_CHANNEL);
   ipcMain.removeHandler(OPEN_IN_APP_CHANNEL);
 
-  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string) => {
+  ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string, baseBranch?: string) => {
     try {
-      const worktreePath = await spawnClaude(workspaceId, prompt, repoPath, creationCommands, resumeSessionId, filePaths, model, effort, systemInstructions, permissionMode);
+      const worktreePath = await spawnClaude(workspaceId, prompt, repoPath, creationCommands, resumeSessionId, filePaths, model, effort, systemInstructions, permissionMode, baseBranch);
       return { success: true, worktreePath };
     } catch (err) {
       console.error('Failed to spawn claude:', err);

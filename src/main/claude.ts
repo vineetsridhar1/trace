@@ -86,8 +86,9 @@ export async function spawnClaude(
   effort?: string,
   systemInstructions?: string,
   permissionMode?: string,
+  baseBranch?: string,
 ): Promise<string> {
-  const { worktreePath, created } = await ensureWorktree(workspaceId, repoPath);
+  const { worktreePath, created } = await ensureWorktree(workspaceId, repoPath, baseBranch);
 
   if (created && creationCommands && creationCommands.length > 0) {
     appendClaudeDebugLog(workspaceId, `running ${creationCommands.length} setup script(s)`);
