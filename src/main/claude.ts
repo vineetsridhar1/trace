@@ -28,6 +28,24 @@ function resolveServerUrl(): string {
 const SERVER_URL = resolveServerUrl();
 const MAX_CAPTURE_CHARS = 20_000;
 
+let effortSupportedPromise: Promise<boolean> | null = null;
+
+async function detectEffortSupport(): Promise<boolean> {
+  try {
+    const result = await runProcess('claude', ['--help'], '/');
+    return (result.stdout + result.stderr).includes('--effort');
+  } catch {
+    return false;
+  }
+}
+
+function isEffortSupported(): Promise<boolean> {
+  if (!effortSupportedPromise) {
+    effortSupportedPromise = detectEffortSupport();
+  }
+  return effortSupportedPromise;
+}
+
 async function generateBranchName(prompt: string, workspaceId: string): Promise<string> {
   const fallback = `trace/${workspaceId.slice(0, 8)}`;
   try {
@@ -141,7 +159,7 @@ export async function spawnClaude(
     args.push('--model', model);
   }
 
-  if (effort && model !== 'haiku') {
+  if (effort && model !== 'haiku' && await isEffortSupported()) {
     args.push('--effort', effort);
   }
 
