@@ -39,6 +39,8 @@ import { CreateServerModal } from "./components/CreateServerModal";
 import { AiChatPanel } from "./components/AiChatPanel";
 import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
 import { CommandPalette } from "./components/CommandPalette";
+import { Toaster, toast } from "sonner";
+import { FiCheckCircle, FiGitMerge, FiAlertCircle } from "react-icons/fi";
 
 // Zustand stores
 import { useWorkspaceStore } from "./stores/workspaceStore";
@@ -274,6 +276,8 @@ function AppContent() {
   }, [workspaces, getChannelRepoPath]);
 
   // ─── Attention / notifications ────────────────────────────────────
+  const recentToastsRef = useRef<Record<string, number>>({});
+  const openWorkspaceRef = useRef<(ws: Workspace) => void>(() => {});
   const handleNeedsAttention = useCallback(
     (
       workspaceId: string,
@@ -295,6 +299,36 @@ function AppContent() {
       )
         return;
       useWorkspaceStore.getState().addAttention(workspaceId);
+
+      // In-app toast for non-stopped reasons
+      if (reason !== "stopped") {
+        const now = Date.now();
+        const lastToast = recentToastsRef.current[workspaceId] ?? 0;
+        if (now - lastToast >= 3000) {
+          recentToastsRef.current[workspaceId] = now;
+          const TOAST_CONFIG: Record<string, { title: string; icon: React.ReactNode }> = {
+            completed: { title: "Chat completed", icon: <FiCheckCircle className="text-green-400" /> },
+            merged: { title: "Branch merged", icon: <FiGitMerge className="text-purple-400" /> },
+            needs_input: { title: "Input needed", icon: <FiAlertCircle className="text-yellow-400" /> },
+            "ask-user-question": { title: "Input needed", icon: <FiAlertCircle className="text-yellow-400" /> },
+          };
+          const config = TOAST_CONFIG[reason] ?? { title: "Chat completed", icon: <FiCheckCircle className="text-green-400" /> };
+          const ws = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
+          const description = ws?.preview || ws?.cliSession.cwd || workspaceId;
+          toast(config.title, {
+            description,
+            icon: config.icon,
+            duration: 8000,
+            action: {
+              label: "View",
+              onClick: () => {
+                const freshWs = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
+                if (freshWs) openWorkspaceRef.current(freshWs);
+              },
+            },
+          });
+        }
+      }
 
       if (
         !document.hasFocus() &&
@@ -377,6 +411,7 @@ function AppContent() {
     }
     useWorkspaceStore.getState().clearAttention(workspace.id);
   }, []);
+  openWorkspaceRef.current = handleOpenWorkspace;
 
   // ─── Workspace actions (registers on agentRunStore) ────────────────
   useWorkspaceActions({
@@ -435,11 +470,13 @@ function AppContent() {
   usePresenceReporter(activeChannelId);
   usePresenceSubscription(activeChannelId);
 
+  const switchChannelRef = useRef<(channelId: string) => void>(() => {});
   const { unreadCounts } = useChannelMessageNotifications({
     activeServerId,
     activeChannelId,
     activeAiChatId,
     serverChannels,
+    onNavigateToChannel: useCallback((channelId: string) => switchChannelRef.current(channelId), []),
   });
 
   // ─── Channel/view switching ──────────────────────────────────────
@@ -545,6 +582,7 @@ function AppContent() {
     },
     [performChannelSwitch],
   );
+  switchChannelRef.current = handleSwitchChannel;
 
   // ─── Thread link navigation (cross-channel support) ────────────────
   const handleOpenThreadLink = useCallback(
@@ -1121,6 +1159,7 @@ function AppContent() {
         onSwitchChannel={handleSwitchChannel}
         onOpenThreadLink={handleOpenThreadLink}
       />
+      <Toaster position="bottom-right" theme="dark" toastOptions={{ duration: 5000 }} />
     </div>
   );
 }

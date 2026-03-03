@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { gql, useSubscription } from '@apollo/client';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import type { Channel } from '../types';
 
@@ -26,6 +27,7 @@ interface UseChannelMessageNotificationsOptions {
   activeChannelId: string | null;
   activeAiChatId: string | null;
   serverChannels: Channel[];
+  onNavigateToChannel?: (channelId: string) => void;
 }
 
 export function useChannelMessageNotifications({
@@ -33,6 +35,7 @@ export function useChannelMessageNotifications({
   activeChannelId,
   activeAiChatId,
   serverChannels,
+  onNavigateToChannel,
 }: UseChannelMessageNotificationsOptions) {
   const { user } = useAuth();
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
@@ -42,9 +45,11 @@ export function useChannelMessageNotifications({
   const serverChannelsRef = useRef(serverChannels);
   const lastNotificationTimeRef = useRef<Record<string, number>>({});
 
+  const onNavigateRef = useRef(onNavigateToChannel);
   activeChannelIdRef.current = activeChannelId;
   activeAiChatIdRef.current = activeAiChatId;
   serverChannelsRef.current = serverChannels;
+  onNavigateRef.current = onNavigateToChannel;
 
   // Build a set of channel IDs for fast lookup
   const channelIdsRef = useRef(new Set<string>());
@@ -98,21 +103,34 @@ export function useChannelMessageNotifications({
       }));
     }
 
-    // Show Mac notification if app not focused or message is for a non-active channel
     // Throttle to one notification per channel per 5 seconds
-    if ((!document.hasFocus() || !isViewingChannel) && 'Notification' in window && Notification.permission === 'granted') {
+    if (!isViewingChannel) {
       const now = Date.now();
       const lastTime = lastNotificationTimeRef.current[msg.channelId] ?? 0;
       if (now - lastTime >= NOTIFICATION_THROTTLE_MS) {
         lastNotificationTimeRef.current[msg.channelId] = now;
         const channel = serverChannelsRef.current.find((ch) => ch.id === msg.channelId);
         const channelName = channel?.name ?? 'unknown';
-        const notification = new Notification(`${msg.author.name} in #${channelName}`, {
-          body: msg.content,
-        });
-        notification.onclick = () => {
-          void window.traceAPI.focusWindow();
-        };
+
+        if (document.hasFocus()) {
+          // In-app toast when focused but viewing a different channel
+          const msgChannelId = msg.channelId;
+          toast(msg.author.name, {
+            description: msg.content.length > 120 ? msg.content.slice(0, 120) + '…' : msg.content,
+            action: {
+              label: `#${channelName}`,
+              onClick: () => onNavigateRef.current?.(msgChannelId),
+            },
+          });
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          // Native OS notification when app is not focused
+          const notification = new Notification(`${msg.author.name} in #${channelName}`, {
+            body: msg.content,
+          });
+          notification.onclick = () => {
+            void window.traceAPI.focusWindow();
+          };
+        }
       }
     }
   }, [subData, user?.id]);

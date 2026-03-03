@@ -719,3 +719,27 @@
 input[list]::-webkit-calendar-picker-indicator {
   display: none !important;
 }
+
+/* ── Sonner toast theme overrides ── */
+[data-sonner-toaster] [data-sonner-toast] {
+  background: var(--th-surface-elevated);
+  border: 1px solid var(--th-edge);
+  color: var(--th-primary);
+}
+
+[data-sonner-toaster] [data-sonner-toast] [data-title] {
+  color: var(--th-heading);
+}
+
+[data-sonner-toaster] [data-sonner-toast] [data-description] {
+  color: var(--th-muted);
+}
+
+[data-sonner-toaster] [data-sonner-toast] button[data-button] {
+  background: var(--th-accent);
+  color: var(--th-on-accent);
+}
+
+[data-sonner-toaster] [data-sonner-toast] button[data-button]:hover {
+  opacity: 0.9;
+}
