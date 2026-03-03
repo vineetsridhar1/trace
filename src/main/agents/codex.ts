@@ -253,17 +253,32 @@ export class CodexAdapter implements AgentAdapter {
     supportsPlanMode: false,
     models: [
       {
-        value: "o3",
-        label: "o3",
+        value: "gpt-5.3-codex",
+        label: "gpt-5.3-codex",
         effortOptions: CodexAdapter.REASONING_OPTIONS,
       },
       {
-        value: "o4-mini",
-        label: "o4-mini",
+        value: "gpt-5.2-codex",
+        label: "gpt-5.2-codex",
+        effortOptions: CodexAdapter.REASONING_OPTIONS,
+      },
+      {
+        value: "gpt-5.1-codex-max",
+        label: "gpt-5.1-codex-max",
+        effortOptions: CodexAdapter.REASONING_OPTIONS,
+      },
+      {
+        value: "gpt-5.2",
+        label: "gpt-5.2",
+        effortOptions: CodexAdapter.REASONING_OPTIONS,
+      },
+      {
+        value: "gpt-5.1-codex-mini",
+        label: "gpt-5.1-codex-mini",
         effortOptions: CodexAdapter.REASONING_OPTIONS,
       },
     ],
-    defaultModel: "o3",
+    defaultModel: "gpt-5.3-codex",
     effortLabel: "Reasoning",
   };
 
