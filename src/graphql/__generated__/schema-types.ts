@@ -205,6 +205,7 @@ export type Mutation = {
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
+  reportPresence: Scalars['Boolean']['output'];
   sendAiChatMessage: AiChatMessage;
   sendChannelMessage: ChannelMessage;
   setTicketDependencies: Workspace;
@@ -324,6 +325,12 @@ export type MutationRenameAiChatArgs = {
 };
 
 
+export type MutationReportPresenceArgs = {
+  channelId: Scalars['ID']['input'];
+  workspaceId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
 export type MutationSendAiChatMessageArgs = {
   chatId: Scalars['ID']['input'];
   content: Scalars['String']['input'];
@@ -414,6 +421,19 @@ export type PrStatus = {
   prUrl?: Maybe<Scalars['String']['output']>;
 };
 
+export type PresencePayload = {
+  __typename?: 'PresencePayload';
+  channelId: Scalars['String']['output'];
+  presence: Array<WorkspacePresence>;
+};
+
+export type PresenceUser = {
+  __typename?: 'PresenceUser';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  userId: Scalars['ID']['output'];
+};
+
 export type Query = {
   __typename?: 'Query';
   aiChatMessages: AiChatMessageConnection;
@@ -421,6 +441,7 @@ export type Query = {
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channelMessages: ChannelMessageConnection;
+  channelPresence: Array<WorkspacePresence>;
   channels: Array<Channel>;
   checkPRStatuses: Array<PrStatus>;
   event?: Maybe<Event>;
@@ -462,6 +483,11 @@ export type QueryChannelMessagesArgs = {
   channelId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryChannelPresenceArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -554,6 +580,7 @@ export type Subscription = {
   channelChangedInServer: ChannelChangeEvent;
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
+  presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
@@ -580,6 +607,11 @@ export type SubscriptionChannelMessageCreatedArgs = {
 
 export type SubscriptionChannelMessageCreatedInServerArgs = {
   serverId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionPresenceUpdatedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -715,6 +747,12 @@ export type WorkspaceDeletedPayload = {
   __typename?: 'WorkspaceDeletedPayload';
   channelId: Scalars['String']['output'];
   workspaceId: Scalars['String']['output'];
+};
+
+export type WorkspacePresence = {
+  __typename?: 'WorkspacePresence';
+  viewers: Array<PresenceUser>;
+  workspaceId: Scalars['ID']['output'];
 };
 
 export type WorkspaceUser = {

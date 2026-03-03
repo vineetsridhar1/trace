@@ -55,3 +55,19 @@ export interface PRStatusMapper {
   merged: boolean;
   prUrl: string | null;
 }
+
+export interface PresenceUserMapper {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface WorkspacePresenceMapper {
+  workspaceId: string;
+  viewers: PresenceUserMapper[];
+}
+
+export interface PresencePayloadMapper {
+  channelId: string;
+  presence: WorkspacePresenceMapper[];
+}

@@ -3,6 +3,7 @@ extend type Query {
   workspaces(channelId: ID!, limit: Int, offset: Int): WorkspaceConnection!
   checkPRStatuses(channelId: ID!, branches: [String!]!): [PRStatus!]!
   generateBranchName(prompt: String!): String
+  channelPresence(channelId: ID!): [WorkspacePresence!]!
 }
 
 type PRStatus {
@@ -21,6 +22,7 @@ extend type Mutation {
   handoffWorkspace(channelId: ID!, workspaceId: ID!): Workspace!
   setWorkspacePrUrl(channelId: ID!, workspaceId: ID!, prUrl: String!): Boolean!
   updateInitialPrompt(channelId: ID!, workspaceId: ID!, text: String!, attachmentIds: [String!]): CreateWorkspacePayload!
+  reportPresence(channelId: ID!, workspaceId: ID): Boolean!
 }
 
 type Workspace {
@@ -69,9 +71,26 @@ type CreateWorkspacePayload {
 extend type Subscription {
   workspaceUpserted(channelId: ID!): Workspace!
   workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
+  presenceUpdated(channelId: ID!): PresencePayload!
 }
 
 type WorkspaceDeletedPayload {
   channelId: String!
   workspaceId: String!
+}
+
+type PresenceUser {
+  userId: ID!
+  name: String!
+  avatarUrl: String
+}
+
+type WorkspacePresence {
+  workspaceId: ID!
+  viewers: [PresenceUser!]!
+}
+
+type PresencePayload {
+  channelId: String!
+  presence: [WorkspacePresence!]!
 }

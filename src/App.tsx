@@ -56,6 +56,8 @@ import { useSyncStore } from "./stores/syncStore";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useShortcutContextSync } from "./hooks/useShortcutContextSync";
 import { useDefaultShortcuts } from "./hooks/useDefaultShortcuts";
+import { usePresenceReporter, usePresenceSubscription } from "./hooks/usePresence";
+import { usePresenceStore } from "./stores/presenceStore";
 
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
   mutation UpdateWorkspaceStatus(
@@ -409,6 +411,10 @@ function AppContent() {
     refreshWorkspaces,
   });
 
+  // ─── Presence tracking ──────────────────────────────────────────
+  usePresenceReporter(activeChannelId);
+  usePresenceSubscription(activeChannelId);
+
   const { unreadCounts } = useChannelMessageNotifications({
     activeServerId,
     activeChannelId,
@@ -487,6 +493,7 @@ function AppContent() {
       useWorkspaceStore.getState().clearWorkspaces();
       useKanbanStore.getState().setLoading(true);
       useSyncStore.getState().reset();
+      usePresenceStore.getState().clear();
 
       // Restore saved view for target channel (validated)
       const savedView = useAppUIStore.getState().channelViewMap[channelId];

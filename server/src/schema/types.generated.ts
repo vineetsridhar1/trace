@@ -5,7 +5,7 @@ import { AuthUserMapper } from './auth/schema.mappers';
 import { ChannelMapper, ChannelChangeEventMapper } from './channel/schema.mappers';
 import { ChannelMessageMapper, ChannelMessageAuthorMapper, ChannelMessageConnectionMapper } from './channelMessage/schema.mappers';
 import { CliSessionMapper, CliSessionConnectionMapper } from './cli-session/schema.mappers';
-import { CreateWorkspacePayloadMapper, PRStatusMapper, WorkspaceMapper, WorkspaceCliSessionMapper, WorkspaceConnectionMapper, WorkspaceDeletedPayloadMapper, WorkspaceUserMapper } from './workspace/schema.mappers';
+import { CreateWorkspacePayloadMapper, PRStatusMapper, PresencePayloadMapper, PresenceUserMapper, WorkspaceMapper, WorkspaceCliSessionMapper, WorkspaceConnectionMapper, WorkspaceDeletedPayloadMapper, WorkspacePresenceMapper, WorkspaceUserMapper } from './workspace/schema.mappers';
 import { EventMapper, EventConnectionMapper, SessionEventPayloadMapper } from './event/schema.mappers';
 import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketUpsertPayloadMapper, TicketWorkspaceMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
@@ -218,6 +218,7 @@ export type Mutation = {
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
+  reportPresence: Scalars['Boolean']['output'];
   sendAiChatMessage: AiChatMessage;
   sendChannelMessage: ChannelMessage;
   setTicketDependencies: Workspace;
@@ -337,6 +338,12 @@ export type MutationrenameAiChatArgs = {
 };
 
 
+export type MutationreportPresenceArgs = {
+  channelId: Scalars['ID']['input'];
+  workspaceId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
 export type MutationsendAiChatMessageArgs = {
   chatId: Scalars['ID']['input'];
   content: Scalars['String']['input'];
@@ -427,6 +434,19 @@ export type PRStatus = {
   prUrl?: Maybe<Scalars['String']['output']>;
 };
 
+export type PresencePayload = {
+  __typename?: 'PresencePayload';
+  channelId: Scalars['String']['output'];
+  presence: Array<WorkspacePresence>;
+};
+
+export type PresenceUser = {
+  __typename?: 'PresenceUser';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  userId: Scalars['ID']['output'];
+};
+
 export type Query = {
   __typename?: 'Query';
   aiChatMessages: AiChatMessageConnection;
@@ -434,6 +454,7 @@ export type Query = {
   board: Array<KanbanColumn>;
   channel?: Maybe<Channel>;
   channelMessages: ChannelMessageConnection;
+  channelPresence: Array<WorkspacePresence>;
   channels: Array<Channel>;
   checkPRStatuses: Array<PRStatus>;
   event?: Maybe<Event>;
@@ -475,6 +496,11 @@ export type QuerychannelMessagesArgs = {
   channelId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QuerychannelPresenceArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -567,6 +593,7 @@ export type Subscription = {
   channelChangedInServer: ChannelChangeEvent;
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
+  presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
@@ -593,6 +620,11 @@ export type SubscriptionchannelMessageCreatedArgs = {
 
 export type SubscriptionchannelMessageCreatedInServerArgs = {
   serverId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionpresenceUpdatedArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -730,6 +762,12 @@ export type WorkspaceDeletedPayload = {
   workspaceId: Scalars['String']['output'];
 };
 
+export type WorkspacePresence = {
+  __typename?: 'WorkspacePresence';
+  viewers: Array<PresenceUser>;
+  workspaceId: Scalars['ID']['output'];
+};
+
 export type WorkspaceUser = {
   __typename?: 'WorkspaceUser';
   avatarUrl?: Maybe<Scalars['String']['output']>;
@@ -836,6 +874,8 @@ export type ResolversTypes = {
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   PRStatus: ResolverTypeWrapper<PRStatusMapper>;
+  PresencePayload: ResolverTypeWrapper<PresencePayloadMapper>;
+  PresenceUser: ResolverTypeWrapper<PresenceUserMapper>;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
   Server: ResolverTypeWrapper<ServerMapper>;
   Session: ResolverTypeWrapper<SessionMapper>;
@@ -852,6 +892,7 @@ export type ResolversTypes = {
   WorkspaceCliSession: ResolverTypeWrapper<WorkspaceCliSessionMapper>;
   WorkspaceConnection: ResolverTypeWrapper<WorkspaceConnectionMapper>;
   WorkspaceDeletedPayload: ResolverTypeWrapper<WorkspaceDeletedPayloadMapper>;
+  WorkspacePresence: ResolverTypeWrapper<WorkspacePresenceMapper>;
   WorkspaceUser: ResolverTypeWrapper<WorkspaceUserMapper>;
 };
 
@@ -883,6 +924,8 @@ export type ResolversParentTypes = {
   KanbanColumn: KanbanColumnMapper;
   Mutation: Record<PropertyKey, never>;
   PRStatus: PRStatusMapper;
+  PresencePayload: PresencePayloadMapper;
+  PresenceUser: PresenceUserMapper;
   Query: Record<PropertyKey, never>;
   Server: ServerMapper;
   Session: SessionMapper;
@@ -899,6 +942,7 @@ export type ResolversParentTypes = {
   WorkspaceCliSession: WorkspaceCliSessionMapper;
   WorkspaceConnection: WorkspaceConnectionMapper;
   WorkspaceDeletedPayload: WorkspaceDeletedPayloadMapper;
+  WorkspacePresence: WorkspacePresenceMapper;
   WorkspaceUser: WorkspaceUserMapper;
 };
 
@@ -1081,6 +1125,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
   removeTicketDependency?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationremoveTicketDependencyArgs, 'channelId' | 'dependsOnWorkspaceId' | 'workspaceId'>>;
   renameAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationrenameAiChatArgs, 'id' | 'title'>>;
+  reportPresence?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationreportPresenceArgs, 'channelId'>>;
   sendAiChatMessage?: Resolver<ResolversTypes['AiChatMessage'], ParentType, ContextType, RequireFields<MutationsendAiChatMessageArgs, 'chatId' | 'content'>>;
   sendChannelMessage?: Resolver<ResolversTypes['ChannelMessage'], ParentType, ContextType, RequireFields<MutationsendChannelMessageArgs, 'channelId' | 'content'>>;
   setTicketDependencies?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationsetTicketDependenciesArgs, 'channelId' | 'dependsOnWorkspaceIds' | 'runConfig' | 'workspaceId'>>;
@@ -1101,12 +1146,24 @@ export type PRStatusResolvers<ContextType = any, ParentType extends ResolversPar
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };
 
+export type PresencePayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['PresencePayload'] = ResolversParentTypes['PresencePayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  presence?: Resolver<Array<ResolversTypes['WorkspacePresence']>, ParentType, ContextType>;
+};
+
+export type PresenceUserResolvers<ContextType = any, ParentType extends ResolversParentTypes['PresenceUser'] = ResolversParentTypes['PresenceUser']> = {
+  avatarUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  userId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+};
+
 export type QueryResolvers<ContextType = any, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = {
   aiChatMessages?: Resolver<ResolversTypes['AiChatMessageConnection'], ParentType, ContextType, RequireFields<QueryaiChatMessagesArgs, 'chatId'>>;
   aiChats?: Resolver<Array<ResolversTypes['AiChat']>, ParentType, ContextType, RequireFields<QueryaiChatsArgs, 'serverId'>>;
   board?: Resolver<Array<ResolversTypes['KanbanColumn']>, ParentType, ContextType, RequireFields<QueryboardArgs, 'channelId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QuerychannelArgs, 'id'>>;
   channelMessages?: Resolver<ResolversTypes['ChannelMessageConnection'], ParentType, ContextType, RequireFields<QuerychannelMessagesArgs, 'channelId'>>;
+  channelPresence?: Resolver<Array<ResolversTypes['WorkspacePresence']>, ParentType, ContextType, RequireFields<QuerychannelPresenceArgs, 'channelId'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
   checkPRStatuses?: Resolver<Array<ResolversTypes['PRStatus']>, ParentType, ContextType, RequireFields<QuerycheckPRStatusesArgs, 'branches' | 'channelId'>>;
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
@@ -1149,6 +1206,7 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   channelChangedInServer?: SubscriptionResolver<ResolversTypes['ChannelChangeEvent'], "channelChangedInServer", ParentType, ContextType, RequireFields<SubscriptionchannelChangedInServerArgs, 'serverId'>>;
   channelMessageCreated?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreated", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedArgs, 'channelId'>>;
   channelMessageCreatedInServer?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreatedInServer", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedInServerArgs, 'serverId'>>;
+  presenceUpdated?: SubscriptionResolver<ResolversTypes['PresencePayload'], "presenceUpdated", ParentType, ContextType, RequireFields<SubscriptionpresenceUpdatedArgs, 'channelId'>>;
   sessionEventCreated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventCreated", ParentType, ContextType, RequireFields<SubscriptionsessionEventCreatedArgs, 'channelId'>>;
   sessionEventUpdated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventUpdated", ParentType, ContextType, RequireFields<SubscriptionsessionEventUpdatedArgs, 'channelId'>>;
   ticketReadyToRun?: SubscriptionResolver<ResolversTypes['TicketReadyToRunPayload'], "ticketReadyToRun", ParentType, ContextType, RequireFields<SubscriptionticketReadyToRunArgs, 'channelId'>>;
@@ -1251,6 +1309,11 @@ export type WorkspaceDeletedPayloadResolvers<ContextType = any, ParentType exten
   workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type WorkspacePresenceResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspacePresence'] = ResolversParentTypes['WorkspacePresence']> = {
+  viewers?: Resolver<Array<ResolversTypes['PresenceUser']>, ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+};
+
 export type WorkspaceUserResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceUser'] = ResolversParentTypes['WorkspaceUser']> = {
   avatarUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -1279,6 +1342,8 @@ export type Resolvers<ContextType = any> = {
   KanbanColumn?: KanbanColumnResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   PRStatus?: PRStatusResolvers<ContextType>;
+  PresencePayload?: PresencePayloadResolvers<ContextType>;
+  PresenceUser?: PresenceUserResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   Server?: ServerResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
@@ -1295,6 +1360,7 @@ export type Resolvers<ContextType = any> = {
   WorkspaceCliSession?: WorkspaceCliSessionResolvers<ContextType>;
   WorkspaceConnection?: WorkspaceConnectionResolvers<ContextType>;
   WorkspaceDeletedPayload?: WorkspaceDeletedPayloadResolvers<ContextType>;
+  WorkspacePresence?: WorkspacePresenceResolvers<ContextType>;
   WorkspaceUser?: WorkspaceUserResolvers<ContextType>;
 };
 

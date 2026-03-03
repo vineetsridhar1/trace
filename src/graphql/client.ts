@@ -84,6 +84,9 @@ export function createGraphqlClient(): ApolloClient<unknown> {
         TicketUpsertPayload: { keyFields: false },
         ChannelMessageConnection: { keyFields: false },
         ChannelMessageAuthor: { keyFields: false },
+        PresenceUser: { keyFields: false },
+        WorkspacePresence: { keyFields: false },
+        PresencePayload: { keyFields: false },
       },
     }),
     defaultOptions: {

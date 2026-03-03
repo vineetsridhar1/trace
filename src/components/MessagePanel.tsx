@@ -33,6 +33,7 @@ import { TicketDetailModal } from "./TicketDetailModal";
 import { useChannelMessages } from "../hooks/useChannelMessages";
 import { useAuth } from "../context/AuthContext";
 import { useClaudeRunStore } from "../stores/claudeRunStore";
+import { usePresenceStore } from "../stores/presenceStore";
 
 const THREAD_LINK_RE =
   /https?:\/\/[^\s/]+\/thread\/([a-f0-9-]+)\/([a-f0-9-]+)/g;
@@ -223,6 +224,7 @@ export function MessagePanel({
   );
   const feedListRef = useRef<HTMLDivElement | null>(null);
   const { user: authUser } = useAuth();
+  const presenceByWorkspace = usePresenceStore((s) => s.presenceByWorkspace);
 
   const ticketByWorkspaceId = useMemo(() => {
     const map = new Map<string, KanbanTicket>();
@@ -350,6 +352,7 @@ export function MessagePanel({
             dimmed={workspace.status === "merged"}
             activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
             shortcutIndex={workspaceShortcutMap.get(workspace.id)}
+            viewers={presenceByWorkspace.get(workspace.id)}
           />
         ))}
       </CollapsibleStatusGroup>

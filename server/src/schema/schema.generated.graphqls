@@ -173,6 +173,7 @@ type Mutation {
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
   removeTicketDependency(channelId: ID!, dependsOnWorkspaceId: ID!, workspaceId: ID!): Boolean!
   renameAiChat(id: ID!, title: String!): AiChat!
+  reportPresence(channelId: ID!, workspaceId: ID): Boolean!
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
   sendChannelMessage(channelId: ID!, content: String!): ChannelMessage!
   setTicketDependencies(channelId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!, workspaceId: ID!): Workspace!
@@ -193,12 +194,24 @@ type PRStatus {
   prUrl: String
 }
 
+type PresencePayload {
+  channelId: String!
+  presence: [WorkspacePresence!]!
+}
+
+type PresenceUser {
+  avatarUrl: String
+  name: String!
+  userId: ID!
+}
+
 type Query {
   aiChatMessages(chatId: ID!, limit: Int, offset: Int): AiChatMessageConnection!
   aiChats(serverId: ID!): [AiChat!]!
   board(channelId: ID!): [KanbanColumn!]!
   channel(id: ID!): Channel
   channelMessages(channelId: ID!, limit: Int, offset: Int): ChannelMessageConnection!
+  channelPresence(channelId: ID!): [WorkspacePresence!]!
   channels: [Channel!]!
   checkPRStatuses(branches: [String!]!, channelId: ID!): [PRStatus!]!
   event(id: ID!): Event
@@ -241,6 +254,7 @@ type Subscription {
   channelChangedInServer(serverId: ID!): ChannelChangeEvent!
   channelMessageCreated(channelId: ID!): ChannelMessage!
   channelMessageCreatedInServer(serverId: ID!): ChannelMessage!
+  presenceUpdated(channelId: ID!): PresencePayload!
   sessionEventCreated(channelId: ID!): SessionEventPayload!
   sessionEventUpdated(channelId: ID!): SessionEventPayload!
   ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
@@ -341,6 +355,11 @@ type WorkspaceConnection {
 type WorkspaceDeletedPayload {
   channelId: String!
   workspaceId: String!
+}
+
+type WorkspacePresence {
+  viewers: [PresenceUser!]!
+  workspaceId: ID!
 }
 
 type WorkspaceUser {

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { FiCheck, FiGitMerge, FiGitPullRequest, FiLink, FiLoader, FiTerminal, FiTrash2 } from 'react-icons/fi';
 import type { Workspace, KanbanTicket, TicketStatus } from '../types';
 import { getServerUrl } from '../types';
+import type { PresenceUser } from '../stores/presenceStore';
 import { avatarInitial } from '../utils';
 import { ScrambleText } from './ScrambleText';
 import { TaskPopover } from './TaskPopover';
@@ -58,6 +59,43 @@ function StatusIcon({ status, isRunning }: { status: TicketStatus; isRunning: bo
   return null;
 }
 
+const MAX_VISIBLE_AVATARS = 3;
+
+function PresenceAvatars({ viewers }: { viewers: PresenceUser[] }) {
+  if (viewers.length === 0) return null;
+  const visible = viewers.slice(0, MAX_VISIBLE_AVATARS);
+  const overflow = viewers.length - MAX_VISIBLE_AVATARS;
+
+  return (
+    <div className="flex flex-shrink-0 -space-x-1.5">
+      {visible.map((v) => (
+        v.avatarUrl ? (
+          <img
+            key={v.userId}
+            src={v.avatarUrl}
+            alt={v.name}
+            title={v.name}
+            className="h-4 w-4 rounded-full ring-1 ring-surface"
+          />
+        ) : (
+          <div
+            key={v.userId}
+            title={v.name}
+            className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/30 text-[8px] font-bold text-accent-light ring-1 ring-surface"
+          >
+            {v.name.charAt(0).toUpperCase()}
+          </div>
+        )
+      ))}
+      {overflow > 0 && (
+        <div className="flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-elevated text-[8px] font-medium text-muted ring-1 ring-surface">
+          +{overflow}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface MessageItemProps {
   workspace: Workspace;
   ticket: KanbanTicket | null;
@@ -74,6 +112,7 @@ interface MessageItemProps {
   dimmed?: boolean;
   activelyRunning?: boolean;
   shortcutIndex?: number;
+  viewers?: PresenceUser[];
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -92,6 +131,7 @@ export const MessageItem = memo(function MessageItem({
   dimmed,
   activelyRunning,
   shortcutIndex,
+  viewers,
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
@@ -235,6 +275,9 @@ export const MessageItem = memo(function MessageItem({
           <FiTerminal className="h-3 w-3 flex-shrink-0 text-green-400" title="Running process" />
         )}
 
+        {/* Presence avatars */}
+        {viewers && viewers.length > 0 && <PresenceAvatars viewers={viewers} />}
+
         {/* Status icon */}
         <StatusIcon status={status} isRunning={activelyRunning || workspace.cliSession.status !== 'stopped'} />
 
@@ -368,6 +411,7 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.onDeleteWorktree === next.onDeleteWorktree &&
     prev.onMarkMerged === next.onMarkMerged &&
     prev.channelId === next.channelId &&
-    prev.shortcutIndex === next.shortcutIndex
+    prev.shortcutIndex === next.shortcutIndex &&
+    prev.viewers === next.viewers
   );
 }

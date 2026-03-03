@@ -5,6 +5,7 @@ import    { aiChats as Query_aiChats } from './aiChat/resolvers/Query/aiChats';
 import    { board as Query_board } from './kanban/resolvers/Query/board';
 import    { channel as Query_channel } from './channel/resolvers/Query/channel';
 import    { channelMessages as Query_channelMessages } from './channelMessage/resolvers/Query/channelMessages';
+import    { channelPresence as Query_channelPresence } from './workspace/resolvers/Query/channelPresence';
 import    { channels as Query_channels } from './channel/resolvers/Query/channels';
 import    { checkPRStatuses as Query_checkPRStatuses } from './workspace/resolvers/Query/checkPRStatuses';
 import    { event as Query_event } from './event/resolvers/Query/event';
@@ -32,6 +33,7 @@ import    { handoffWorkspace as Mutation_handoffWorkspace } from './workspace/re
 import    { moveTicket as Mutation_moveTicket } from './kanban/resolvers/Mutation/moveTicket';
 import    { removeTicketDependency as Mutation_removeTicketDependency } from './kanban/resolvers/Mutation/removeTicketDependency';
 import    { renameAiChat as Mutation_renameAiChat } from './aiChat/resolvers/Mutation/renameAiChat';
+import    { reportPresence as Mutation_reportPresence } from './workspace/resolvers/Mutation/reportPresence';
 import    { sendAiChatMessage as Mutation_sendAiChatMessage } from './aiChat/resolvers/Mutation/sendAiChatMessage';
 import    { sendChannelMessage as Mutation_sendChannelMessage } from './channelMessage/resolvers/Mutation/sendChannelMessage';
 import    { setTicketDependencies as Mutation_setTicketDependencies } from './kanban/resolvers/Mutation/setTicketDependencies';
@@ -47,6 +49,7 @@ import    { aiChatStream as Subscription_aiChatStream } from './aiChat/resolvers
 import    { channelChangedInServer as Subscription_channelChangedInServer } from './channel/resolvers/Subscription/channelChangedInServer';
 import    { channelMessageCreated as Subscription_channelMessageCreated } from './channelMessage/resolvers/Subscription/channelMessageCreated';
 import    { channelMessageCreatedInServer as Subscription_channelMessageCreatedInServer } from './channelMessage/resolvers/Subscription/channelMessageCreatedInServer';
+import    { presenceUpdated as Subscription_presenceUpdated } from './workspace/resolvers/Subscription/presenceUpdated';
 import    { sessionEventCreated as Subscription_sessionEventCreated } from './event/resolvers/Subscription/sessionEventCreated';
 import    { sessionEventUpdated as Subscription_sessionEventUpdated } from './event/resolvers/Subscription/sessionEventUpdated';
 import    { ticketReadyToRun as Subscription_ticketReadyToRun } from './kanban/resolvers/Subscription/ticketReadyToRun';
@@ -71,6 +74,8 @@ import    { Event } from './event/resolvers/Event';
 import    { EventConnection } from './event/resolvers/EventConnection';
 import    { KanbanColumn } from './kanban/resolvers/KanbanColumn';
 import    { PRStatus } from './workspace/resolvers/PRStatus';
+import    { PresencePayload } from './workspace/resolvers/PresencePayload';
+import    { PresenceUser } from './workspace/resolvers/PresenceUser';
 import    { Server } from './server/resolvers/Server';
 import    { Session } from './session/resolvers/Session';
 import    { SessionEventPayload } from './event/resolvers/SessionEventPayload';
@@ -85,13 +90,14 @@ import    { Workspace } from './workspace/resolvers/Workspace';
 import    { WorkspaceCliSession } from './workspace/resolvers/WorkspaceCliSession';
 import    { WorkspaceConnection } from './workspace/resolvers/WorkspaceConnection';
 import    { WorkspaceDeletedPayload } from './workspace/resolvers/WorkspaceDeletedPayload';
+import    { WorkspacePresence } from './workspace/resolvers/WorkspacePresence';
 import    { WorkspaceUser } from './workspace/resolvers/WorkspaceUser';
 import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
-      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channelMessages: Query_channelMessages,channels: Query_channels,checkPRStatuses: Query_checkPRStatuses,event: Query_event,generateBranchName: Query_generateBranchName,me: Query_me,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspace: Query_workspace,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
-      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,handoffWorkspace: Mutation_handoffWorkspace,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,sendAiChatMessage: Mutation_sendAiChatMessage,sendChannelMessage: Mutation_sendChannelMessage,setTicketDependencies: Mutation_setTicketDependencies,setWorkspacePrUrl: Mutation_setWorkspacePrUrl,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateInitialPrompt: Mutation_updateInitialPrompt,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
-      Subscription: { aiChatStream: Subscription_aiChatStream,channelChangedInServer: Subscription_channelChangedInServer,channelMessageCreated: Subscription_channelMessageCreated,channelMessageCreatedInServer: Subscription_channelMessageCreatedInServer,sessionEventCreated: Subscription_sessionEventCreated,sessionEventUpdated: Subscription_sessionEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted,workspaceDeleted: Subscription_workspaceDeleted,workspaceUpserted: Subscription_workspaceUpserted },
+      Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channelMessages: Query_channelMessages,channelPresence: Query_channelPresence,channels: Query_channels,checkPRStatuses: Query_checkPRStatuses,event: Query_event,generateBranchName: Query_generateBranchName,me: Query_me,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspace: Query_workspace,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
+      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,handoffWorkspace: Mutation_handoffWorkspace,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,reportPresence: Mutation_reportPresence,sendAiChatMessage: Mutation_sendAiChatMessage,sendChannelMessage: Mutation_sendChannelMessage,setTicketDependencies: Mutation_setTicketDependencies,setWorkspacePrUrl: Mutation_setWorkspacePrUrl,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateInitialPrompt: Mutation_updateInitialPrompt,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
+      Subscription: { aiChatStream: Subscription_aiChatStream,channelChangedInServer: Subscription_channelChangedInServer,channelMessageCreated: Subscription_channelMessageCreated,channelMessageCreatedInServer: Subscription_channelMessageCreatedInServer,presenceUpdated: Subscription_presenceUpdated,sessionEventCreated: Subscription_sessionEventCreated,sessionEventUpdated: Subscription_sessionEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted,workspaceDeleted: Subscription_workspaceDeleted,workspaceUpserted: Subscription_workspaceUpserted },
       AiChat: AiChat,
 AiChatMessage: AiChatMessage,
 AiChatMessageConnection: AiChatMessageConnection,
@@ -110,6 +116,8 @@ Event: Event,
 EventConnection: EventConnection,
 KanbanColumn: KanbanColumn,
 PRStatus: PRStatus,
+PresencePayload: PresencePayload,
+PresenceUser: PresenceUser,
 Server: Server,
 Session: Session,
 SessionEventPayload: SessionEventPayload,
@@ -124,6 +132,7 @@ Workspace: Workspace,
 WorkspaceCliSession: WorkspaceCliSession,
 WorkspaceConnection: WorkspaceConnection,
 WorkspaceDeletedPayload: WorkspaceDeletedPayload,
+WorkspacePresence: WorkspacePresence,
 WorkspaceUser: WorkspaceUser,
 DateTime: DateTime,
 JSON: JSON
