@@ -65,7 +65,7 @@ type WorkspaceConnection {
 type CreateWorkspacePayload {
   workspace: Workspace!
   session: Session!
-  event: Event!
+  event: Event
 }
 
 extend type Subscription {

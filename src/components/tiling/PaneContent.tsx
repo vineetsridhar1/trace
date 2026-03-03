@@ -11,6 +11,7 @@ import { CollapsedTurnGroup } from '../CollapsedTurnGroup';
 import { AssistantTextRow } from '../thread-events/AssistantTextRow';
 import { TicketView } from '../TicketView';
 import { WorktreeChanges } from '../WorktreeChanges';
+import { FiEdit3 } from 'react-icons/fi';
 
 // ─── Agent content (the thread scroll) ──────────────────────────
 
@@ -213,8 +214,14 @@ function ThreadStatusMessage({
   }
   if (status === 'empty') {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <span className="text-sm text-muted">Write a prompt below to get started</span>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
+          <FiEdit3 className="h-6 w-6 text-accent-light" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-medium text-primary">New Workspace</p>
+          <p className="mt-1 text-xs text-muted">Write a prompt below to get started</p>
+        </div>
       </div>
     );
   }

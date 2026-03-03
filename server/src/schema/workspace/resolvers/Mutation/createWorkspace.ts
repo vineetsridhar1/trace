@@ -17,14 +17,16 @@ export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> 
   pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
     workspaceUpserted: created.workspace,
   });
-  pubsub.publish(TOPICS.SESSION_EVENT_CREATED(channelId), {
-    sessionEventCreated: {
-      channelId,
-      workspaceId: created.workspace.id,
-      sessionId: created.session.id,
-      event: created.event,
-    },
-  });
+  if (created.event) {
+    pubsub.publish(TOPICS.SESSION_EVENT_CREATED(channelId), {
+      sessionEventCreated: {
+        channelId,
+        workspaceId: created.workspace.id,
+        sessionId: created.session.id,
+        event: created.event,
+      },
+    });
+  }
 
   if (ticketId) {
     // Link existing ticket to the new workspace

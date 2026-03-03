@@ -144,7 +144,7 @@ export type CliSessionConnection = {
 
 export type CreateWorkspacePayload = {
   __typename?: 'CreateWorkspacePayload';
-  event: Event;
+  event?: Maybe<Event>;
   session: Session;
   workspace: Workspace;
 };

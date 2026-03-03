@@ -41,7 +41,7 @@ export interface WorkspaceConnectionMapper {
 export interface CreateWorkspacePayloadMapper {
   workspace: WorkspaceMapper;
   session: SessionMapper;
-  event: EventMapper;
+  event: EventMapper | null;
 }
 
 export interface WorkspaceDeletedPayloadMapper {

@@ -205,15 +205,18 @@ export async function createUserWorkspace(channelId: string, text: string, attac
       data: { workspaceId: workspace.id },
     });
 
-    const event = await tx.event.create({
-      data: {
-        cliSessionId: USER_CLI_SESSION_ID,
-        hookEventName: 'UserPromptSubmit',
-        rawPayload: JSON.parse(JSON.stringify(buildUserPromptPayload(text, attachmentMetas))),
-        sessionId: session.id,
-        importance: 'important',
-      },
-    });
+    const hasContent = text.trim().length > 0 || attachmentMetas.length > 0;
+    const event = hasContent
+      ? await tx.event.create({
+          data: {
+            cliSessionId: USER_CLI_SESSION_ID,
+            hookEventName: 'UserPromptSubmit',
+            rawPayload: JSON.parse(JSON.stringify(buildUserPromptPayload(text, attachmentMetas))),
+            sessionId: session.id,
+            importance: 'important',
+          },
+        })
+      : null;
 
     return { workspaceId: workspace.id, session, event };
   });
@@ -322,38 +325,63 @@ export async function updateInitialPrompt(channelId: string, workspaceId: string
     orderBy: { timestamp: 'asc' },
   });
 
-  if (!event) {
-    return null;
-  }
-
   // Resolve attachment metadata if provided
   const attachmentMetas = attachmentIds ? await resolveAttachmentMetas(attachmentIds) : undefined;
 
   // Build the full updated payload
   const updatedPayload = buildUserPromptPayload(newText, attachmentMetas);
+  const isNewEvent = !event;
 
-  const [updatedEvent] = await prisma.$transaction([
-    prisma.event.update({
-      where: { id: event.id },
-      data: { rawPayload: JSON.parse(JSON.stringify(updatedPayload)) },
-    }),
-    prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        preview: newText,
-        ...(attachmentIds && attachmentIds.length > 0
-          ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
-          : {}),
-      },
-    }),
-  ]);
+  let resultEvent;
+  if (event) {
+    // Update the existing event
+    const [updated] = await prisma.$transaction([
+      prisma.event.update({
+        where: { id: event.id },
+        data: { rawPayload: JSON.parse(JSON.stringify(updatedPayload)) },
+      }),
+      prisma.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          preview: newText,
+          ...(attachmentIds && attachmentIds.length > 0
+            ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
+            : {}),
+        },
+      }),
+    ]);
+    resultEvent = updated;
+  } else {
+    // No event exists yet (empty workspace) — create one
+    const [created] = await prisma.$transaction([
+      prisma.event.create({
+        data: {
+          cliSessionId: USER_CLI_SESSION_ID,
+          hookEventName: 'UserPromptSubmit',
+          rawPayload: JSON.parse(JSON.stringify(updatedPayload)),
+          sessionId: session.id,
+          importance: 'important',
+        },
+      }),
+      prisma.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          preview: newText,
+          ...(attachmentIds && attachmentIds.length > 0
+            ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
+            : {}),
+        },
+      }),
+    ]);
+    resultEvent = created;
+  }
 
   const feedWorkspace = await getWorkspaceByIdForFeed(workspaceId);
   if (!feedWorkspace) {
     throw new Error(`Failed to load workspace ${workspaceId}`);
   }
 
-  return { workspace: feedWorkspace, session, event: updatedEvent };
+  return { workspace: feedWorkspace, session, event: resultEvent, isNewEvent };
 }
 
 export async function getEventsByWorkspace(

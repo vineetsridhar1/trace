@@ -112,7 +112,7 @@ type CliSessionConnection {
 }
 
 type CreateWorkspacePayload {
-  event: Event!
+  event: Event
   session: Session!
   workspace: Workspace!
 }

@@ -65,7 +65,7 @@ export const ThreadLinkPreview = memo(function ThreadLinkPreview({
 
   const status = (workspace.status ?? 'pending') as TicketStatus;
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  const title = ticket?.title || workspace.preview || workspace.cliSessionId;
+  const title = ticket?.title || workspace.preview || 'New Workspace';
   const branch = workspace.branch?.replace(/^trace\//, '');
 
   return (

@@ -135,7 +135,7 @@ export const MessageItem = memo(function MessageItem({
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  const title = ticket?.title || workspace.preview || workspace.cliSessionId;
+  const title = ticket?.title || workspace.preview || 'New Workspace';
   const branch = workspace.branch?.replace(/^trace\//, '');
   const todos = useWorkspaceStore((s) => s.latestTodos[workspace.id]);
 

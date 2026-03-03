@@ -14,7 +14,7 @@ export const updateInitialPrompt: NonNullable<MutationResolvers['updateInitialPr
   const result = await updatePrompt(channelId, workspaceId, trimmedText, attachmentIds ?? undefined);
 
   if (!result) {
-    throw new GraphQLError('Workspace, session, or initial prompt event not found', {
+    throw new GraphQLError('Workspace or session not found', {
       extensions: { code: 'NOT_FOUND' },
     });
   }
@@ -23,14 +23,25 @@ export const updateInitialPrompt: NonNullable<MutationResolvers['updateInitialPr
     workspaceUpserted: result.workspace,
   });
 
-  pubsub.publish(TOPICS.SESSION_EVENT_UPDATED(channelId), {
-    sessionEventUpdated: {
-      channelId,
-      workspaceId,
-      sessionId: result.session.id,
-      event: result.event,
-    },
-  });
+  if (result.isNewEvent) {
+    pubsub.publish(TOPICS.SESSION_EVENT_CREATED(channelId), {
+      sessionEventCreated: {
+        channelId,
+        workspaceId,
+        sessionId: result.session.id,
+        event: result.event,
+      },
+    });
+  } else {
+    pubsub.publish(TOPICS.SESSION_EVENT_UPDATED(channelId), {
+      sessionEventUpdated: {
+        channelId,
+        workspaceId,
+        sessionId: result.session.id,
+        event: result.event,
+      },
+    });
+  }
 
   // Fire-and-forget: create kanban ticket now that the user has written a real prompt
   if (trimmedText) {

@@ -13,7 +13,7 @@ export const UserPromptBubble = memo(function UserPromptBubble({
   time: string;
 }) {
   const rawPrompt =
-    extractPromptText(event.rawPayload) ?? event.lastAssistantMessage ?? '(prompt)';
+    extractPromptText(event.rawPayload) ?? event.lastAssistantMessage ?? '';
   const prompt = stripTraceInternal(rawPrompt);
   const attachments = extractAttachments(event.rawPayload);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);

@@ -157,7 +157,7 @@ export type CliSessionConnection = {
 
 export type CreateWorkspacePayload = {
   __typename?: 'CreateWorkspacePayload';
-  event: Event;
+  event?: Maybe<Event>;
   session: Session;
   workspace: Workspace;
 };
@@ -1060,7 +1060,7 @@ export type CliSessionConnectionResolvers<ContextType = any, ParentType extends 
 };
 
 export type CreateWorkspacePayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['CreateWorkspacePayload'] = ResolversParentTypes['CreateWorkspacePayload']> = {
-  event?: Resolver<ResolversTypes['Event'], ParentType, ContextType>;
+  event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType>;
   session?: Resolver<ResolversTypes['Session'], ParentType, ContextType>;
   workspace?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType>;
 };
