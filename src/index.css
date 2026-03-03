@@ -257,6 +257,15 @@
   animation: spin 3s linear infinite;
 }
 
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
 .thread-bubble pre {
   background: var(--th-code-bg);
   border-radius: 6px;

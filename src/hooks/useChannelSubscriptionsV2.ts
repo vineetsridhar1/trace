@@ -3,6 +3,7 @@ import { gql, useSubscription } from '@apollo/client';
 import { WORKSPACE_FIELDS, SESSION_EVENT_PAYLOAD_FIELDS } from '../graphql/fragments';
 import { subscribeWsConnection, getWsConnectionSnapshot } from '../graphql/client';
 import type { Workspace, KanbanTicket, ServerEvent } from '../types';
+import { normalizeToolName } from '../utils';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useKanbanStore } from '../stores/kanbanStore';
@@ -236,6 +237,18 @@ export function useChannelSubscriptions({
       const selectedWorkspaceId = useThreadStore.getState().selectedWorkspaceId;
       if (selectedWorkspaceId !== payload.workspaceId) {
         onNeedsAttention(payload.workspaceId, 'ask-user-question');
+      }
+    }
+
+    // Cache TodoWrite events for all workspaces so sidebar popover has fresh data
+    if (
+      payload.event.hookEventName === 'PostToolUse' &&
+      normalizeToolName(payload.event.toolName) === 'todowrite'
+    ) {
+      const input = payload.event.toolInput as Record<string, unknown> | null;
+      const todos = input?.todos as Array<{ content: string; status: string; activeForm?: string }> | undefined;
+      if (Array.isArray(todos) && todos.length > 0) {
+        useWorkspaceStore.getState().setLatestTodos(payload.workspaceId, todos);
       }
     }
 

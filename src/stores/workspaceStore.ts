@@ -15,6 +15,7 @@ interface WorkspaceState {
   worktreeWorkspaceIds: Set<string>;
   deletingWorktreeIds: Set<string>;
   ciStatuses: Record<string, CIStatus>;
+  latestTodos: Record<string, Array<{ content: string; status: string; activeForm?: string }>>;
 
   upsertWorkspace: (workspace: Workspace) => void;
   removeWorkspace: (workspaceId: string) => void;
@@ -28,6 +29,7 @@ interface WorkspaceState {
   removeDeletingWorktreeId: (id: string) => void;
   setCIStatus: (workspaceId: string, status: CIStatus) => void;
   clearCIStatuses: () => void;
+  setLatestTodos: (workspaceId: string, todos: Array<{ content: string; status: string; activeForm?: string }>) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -37,6 +39,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   worktreeWorkspaceIds: new Set(),
   deletingWorktreeIds: new Set(),
   ciStatuses: {},
+  latestTodos: {},
 
   upsertWorkspace: (workspace) =>
     set((state) => {
@@ -105,4 +108,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     })),
 
   clearCIStatuses: () => set({ ciStatuses: {} }),
+
+  setLatestTodos: (workspaceId, todos) =>
+    set((state) => ({
+      latestTodos: { ...state.latestTodos, [workspaceId]: todos },
+    })),
 }));

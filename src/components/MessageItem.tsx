@@ -4,6 +4,8 @@ import type { Workspace, KanbanTicket, TicketStatus } from '../types';
 import { getServerUrl } from '../types';
 import { avatarInitial } from '../utils';
 import { ScrambleText } from './ScrambleText';
+import { TaskPopover } from './TaskPopover';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 
 export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; avatarBg: string; avatarText: string }> = {
   pending: { label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', avatarBg: 'bg-yellow-500/20', avatarText: 'text-yellow-400' },
@@ -95,6 +97,36 @@ export const MessageItem = memo(function MessageItem({
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
   const title = ticket?.title || workspace.preview || workspace.cliSessionId;
   const branch = workspace.branch?.replace(/^trace\//, '');
+  const todos = useWorkspaceStore((s) => s.latestTodos[workspace.id]);
+
+  // ─── Task popover on hover ───────────────────────────────────
+  const [showPopover, setShowPopover] = useState(false);
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const handleMouseEnter = useCallback(() => {
+    if (!ticket) return;
+    hoverTimerRef.current = setTimeout(() => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (rect) {
+        setTriggerRect(rect);
+        setShowPopover(true);
+      }
+    }, 500);
+  }, [ticket]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+    setShowPopover(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
 
   // ─── Context menu state ──────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
@@ -103,6 +135,8 @@ export const MessageItem = memo(function MessageItem({
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setShowPopover(false);
     setCtxMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
@@ -155,12 +189,15 @@ export const MessageItem = memo(function MessageItem({
   return (
     <>
       <button
+        ref={buttonRef}
         type="button"
         className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left outline-none transition-colors ${
           isSelected ? 'selected' : ''
         } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
         onClick={() => onOpenWorkspace(workspace)}
         onContextMenu={handleContextMenu}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         title={title}
       >
         {/* Shortcut index badge */}
@@ -306,6 +343,11 @@ export const MessageItem = memo(function MessageItem({
             Delete workspace
           </button>
         </div>
+      )}
+
+      {/* Task popover on hover */}
+      {showPopover && ticket && triggerRect && !ctxMenu && (
+        <TaskPopover ticket={ticket} triggerRect={triggerRect} summary={workspace.summary} todos={todos} />
       )}
     </>
   );
