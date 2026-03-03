@@ -1,8 +1,9 @@
 import { Reorder } from 'framer-motion';
 import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight } from 'react-icons/fi';
-import type { AiChat, Channel, DragTarget, LocalChannelConfig } from '../types';
+import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server } from '../types';
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
+import { ServerSwitcher } from './ServerSwitcher';
 
 const SECTION_CONFIG: Record<SidebarSectionId, { icon: typeof FiHash; label: string }> = {
   channels: { icon: FiHash, label: 'Channels' },
@@ -17,7 +18,11 @@ interface ChannelPanelProps {
   activeChannelId: string | null;
   channelWidth: number;
   dragging: DragTarget;
-  serverName?: string;
+  servers: Server[];
+  activeServerId: string | null;
+  activeServer: Server | null;
+  onSwitchServer: (serverId: string) => void;
+  onCreateServer: () => void;
   aiChats: AiChat[];
   activeAiChatId: string | null;
   unreadCounts?: Record<string, number>;
@@ -37,7 +42,11 @@ export function ChannelPanel({
   activeChannelId,
   channelWidth,
   dragging,
-  serverName,
+  servers,
+  activeServerId,
+  activeServer,
+  onSwitchServer,
+  onCreateServer,
   aiChats,
   activeAiChatId,
   onSwitchChannel,
@@ -231,11 +240,13 @@ export function ChannelPanel({
         className={`flex min-w-0 flex-col border-r border-edge bg-surface-deep ${dragging ? '' : 'panel-animate'}`}
         style={{ width: `${channelWidth}px`, overflow: channelWidth === 0 ? 'hidden' : undefined }}
       >
-        {serverName && (
-          <div className="flex h-[52px] items-center border-b border-edge px-4">
-            <h1 className="truncate text-sm font-bold text-primary">{serverName}</h1>
-          </div>
-        )}
+        <ServerSwitcher
+          servers={servers}
+          activeServerId={activeServerId}
+          activeServer={activeServer}
+          onSwitchServer={onSwitchServer}
+          onCreateServer={onCreateServer}
+        />
 
         <Reorder.Group
           id="channel-items"

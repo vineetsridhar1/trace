@@ -22,7 +22,7 @@ import { ChannelSettingsModal } from './components/ChannelSettingsModal';
 import { JoinChannelModal } from './components/JoinChannelModal';
 import { CreateChannelModal } from './components/CreateChannelModal';
 import { CreateServerModal } from './components/CreateServerModal';
-import { ServerRail } from './components/ServerRail';
+
 import { AiChatPanel } from './components/AiChatPanel';
 import { ShortcutHelpDialog } from './components/ShortcutHelpDialog';
 
@@ -419,10 +419,7 @@ function AppContent() {
 
   const handleSwitchServer = useCallback(
     (serverId: string) => {
-      if (serverId === activeServerId) {
-        useAppUIStore.getState().setChannelWidth(useAppUIStore.getState().channelWidth > 0 ? 0 : 220);
-        return;
-      }
+      if (serverId === activeServerId) return;
       switchServer(serverId);
       useAppUIStore.getState().setChannelWidth(220);
       const firstChannel = enrichedChannels.find((ch) => ch.serverId === serverId);
@@ -704,21 +701,16 @@ function AppContent() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface text-primary">
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {!isFullscreen && (
-          <ServerRail
-            servers={servers}
-            activeServerId={activeServerId}
-            onSwitchServer={handleSwitchServer}
-            onCreateServer={() => useAppUIStore.getState().setShowCreateServer(true)}
-          />
-        )}
-
         <ChannelPanel
           channels={serverChannels}
           activeChannelId={activeChannelId}
           channelWidth={isFullscreen ? 0 : channelWidth}
           dragging={dragging}
-          serverName={activeServer?.name}
+          servers={servers}
+          activeServerId={activeServerId}
+          activeServer={activeServer}
+          onSwitchServer={handleSwitchServer}
+          onCreateServer={() => useAppUIStore.getState().setShowCreateServer(true)}
           aiChats={aiChats}
           activeAiChatId={activeAiChatId}
           unreadCounts={unreadCounts}
