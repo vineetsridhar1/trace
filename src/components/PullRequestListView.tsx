@@ -1,11 +1,18 @@
-import { useCallback, useMemo, useState } from 'react';
-import { FiExternalLink, FiGitPullRequest, FiRefreshCw, FiSearch, FiDownload, FiLoader } from 'react-icons/fi';
-import type { PullRequest, Workspace } from '../types';
-import { usePullRequests } from '../hooks/usePullRequests';
+import { useCallback, useMemo, useState } from "react";
+import {
+  FiExternalLink,
+  FiGitPullRequest,
+  FiRefreshCw,
+  FiSearch,
+  FiDownload,
+  FiLoader,
+} from "react-icons/fi";
+import type { PullRequest, Workspace } from "../types";
+import { usePullRequests } from "../hooks/usePullRequests";
 
 function timeAgo(dateStr: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
@@ -23,9 +30,15 @@ interface PullRequestListViewProps {
   pullingPRNumbers: Set<number>;
 }
 
-export function PullRequestListView({ repoPath, onPullPR, onOpenWorkspace, workspaces, pullingPRNumbers }: PullRequestListViewProps) {
+export function PullRequestListView({
+  repoPath,
+  onPullPR,
+  onOpenWorkspace,
+  workspaces,
+  pullingPRNumbers,
+}: PullRequestListViewProps) {
   const { pullRequests, loading, error, refresh } = usePullRequests(repoPath);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
 
   const workspaceByBranch = useMemo(() => {
     const map = new Map<string, Workspace>();
@@ -59,8 +72,8 @@ export function PullRequestListView({ repoPath, onPullPR, onOpenWorkspace, works
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4">
         <FiGitPullRequest className="h-8 w-8 text-muted" />
         <p className="text-center text-sm text-muted">
-          {error.includes('ENOENT') || error.includes('not found')
-            ? 'GitHub CLI (gh) is not installed or not authenticated. Install it to view pull requests.'
+          {error.includes("ENOENT") || error.includes("not found")
+            ? "GitHub CLI (gh) is not installed or not authenticated. Install it to view pull requests."
             : error}
         </p>
         <button
@@ -94,7 +107,9 @@ export function PullRequestListView({ repoPath, onPullPR, onOpenWorkspace, works
           disabled={loading}
           className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-elevated hover:text-primary disabled:opacity-50"
         >
-          <FiRefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <FiRefreshCw
+            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+          />
         </button>
       </div>
 
@@ -108,7 +123,9 @@ export function PullRequestListView({ repoPath, onPullPR, onOpenWorkspace, works
           <div className="flex flex-col items-center justify-center gap-2 py-12">
             <FiGitPullRequest className="h-6 w-6 text-muted" />
             <p className="text-sm text-muted">
-              {search.trim() ? 'No matching pull requests' : 'No open pull requests'}
+              {search.trim()
+                ? "No matching pull requests"
+                : "No open pull requests"}
             </p>
           </div>
         ) : (
@@ -124,8 +141,12 @@ export function PullRequestListView({ repoPath, onPullPR, onOpenWorkspace, works
                   <FiGitPullRequest className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-400" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-muted">#{pr.number}</span>
-                      <span className="truncate text-sm font-medium text-primary">{pr.title}</span>
+                      <span className="text-xs font-medium text-muted">
+                        #{pr.number}
+                      </span>
+                      <span className="truncate text-sm font-medium text-primary">
+                        {pr.title}
+                      </span>
                       {pr.isDraft && (
                         <span className="flex-shrink-0 rounded-full bg-surface-elevated px-1.5 py-0.5 text-[10px] font-medium text-muted">
                           Draft
@@ -141,30 +162,39 @@ export function PullRequestListView({ repoPath, onPullPR, onOpenWorkspace, works
                       </span>
                     </div>
                   </div>
-                  {existingWorkspace ? (
+                  <div className="flex flex-shrink-0 items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => onOpenWorkspace(existingWorkspace)}
-                      className="flex flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-surface-elevated px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-surface-elevated"
+                      onClick={() => window.open(pr.url, "_blank")}
+                      title="Open on GitHub"
+                      className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
                     >
-                      <FiExternalLink className="h-3 w-3" />
-                      Open
+                      <FiExternalLink className="h-3.5 w-3.5" />
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handlePull(pr)}
-                      disabled={isPulling}
-                      className="flex flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-accent/15 px-2.5 py-1.5 text-xs font-medium text-accent-light transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isPulling ? (
-                        <FiLoader className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <FiDownload className="h-3 w-3" />
-                      )}
-                      {isPulling ? 'Pulling...' : 'Pull'}
-                    </button>
-                  )}
+                    {existingWorkspace ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenWorkspace(existingWorkspace)}
+                        className="flex cursor-pointer items-center gap-1.5 rounded-md bg-surface-elevated px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-surface-elevated"
+                      >
+                        Open
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handlePull(pr)}
+                        disabled={isPulling}
+                        className="flex cursor-pointer items-center gap-1.5 rounded-md bg-accent/15 px-2.5 py-1.5 text-xs font-medium text-accent-light transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isPulling ? (
+                          <FiLoader className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <FiDownload className="h-3 w-3" />
+                        )}
+                        {isPulling ? "Pulling..." : "Pull"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
