@@ -792,14 +792,30 @@ function AppContent() {
 
   // Sync terminal selection with workspace selection, killing idle PTYs on navigate away
   const prevTerminalWorkspaceRef = useRef<string | null>(null);
+  const killIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const prevId = prevTerminalWorkspaceRef.current;
     prevTerminalWorkspaceRef.current = selectedWorkspaceId;
-    if (prevId && prevId !== selectedWorkspaceId) {
-      void useTerminalStore.getState().killIdleForWorkspace(prevId);
-    }
+
+    // selectWorkspace is cheap (synchronous projection) — run immediately
     useTerminalStore.getState().selectWorkspace(selectedWorkspaceId);
+
+    // Debounce the IPC kill-idle call so rapid navigation doesn't fire it for every intermediate workspace
+    if (killIdleTimerRef.current) clearTimeout(killIdleTimerRef.current);
+    if (prevId && prevId !== selectedWorkspaceId) {
+      const idToKill = prevId;
+      killIdleTimerRef.current = setTimeout(() => {
+        // Staleness guard: only kill if the user hasn't navigated back
+        if (useThreadStore.getState().selectedWorkspaceId === idToKill) return;
+        void useTerminalStore.getState().killIdleForWorkspace(idToKill);
+      }, 300);
+    }
   }, [selectedWorkspaceId]);
+  useEffect(() => {
+    return () => {
+      if (killIdleTimerRef.current) clearTimeout(killIdleTimerRef.current);
+    };
+  }, []);
 
   // ─── Keyboard shortcuts ─────────────────────────────────────────
   useShortcuts();

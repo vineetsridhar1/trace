@@ -22,6 +22,7 @@ export function useThreadSync(
   const lastReportedSessionEventIdByWorkspaceRef = useRef<Map<string, string>>(new Map());
   const loadingOlderRef = useRef(false);
   const sessionQueryRef = useRef<{ channelId: string; workspaceId: string; sessionId: string } | null>(null);
+  const asyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reportClaudeActivity = useCallback(
     async (workspaceId: string, eventType: string, sessionId?: string) => {
@@ -298,12 +299,27 @@ export function useThreadSync(
 
   const openThreadPanel = useCallback(
     (workspace: Workspace) => {
+      // Render pane shell immediately (synchronous)
       useThreadStore.getState().openThreadPanelUI(workspace);
-      void loadSessionEvents(workspace);
-      void checkWorktree(workspace.id);
+
+      // Debounce expensive async work so rapid navigation skips intermediate workspaces
+      if (asyncDebounceRef.current) clearTimeout(asyncDebounceRef.current);
+      asyncDebounceRef.current = setTimeout(() => {
+        // Staleness guard: skip if user already navigated away
+        if (useThreadStore.getState().selectedWorkspaceId !== workspace.id) return;
+        void loadSessionEvents(workspace);
+        void checkWorktree(workspace.id);
+      }, 150);
     },
     [loadSessionEvents, checkWorktree],
   );
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (asyncDebounceRef.current) clearTimeout(asyncDebounceRef.current);
+    };
+  }, []);
 
   // Register all sync actions on the store so consumers can call them directly
   useEffect(() => {
