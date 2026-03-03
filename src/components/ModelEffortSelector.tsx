@@ -69,7 +69,7 @@ function EffortToggle({ effort, onCycle }: { effort: EffortLevel; onCycle: () =>
       <button
         type="button"
         onClick={onCycle}
-        className="flex items-center gap-1.5 rounded-lg border border-edge bg-surface px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:border-edge-hover hover:bg-surface-elevated"
+        className="btn-secondary flex items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1 text-xs font-medium text-primary"
       >
         <EffortDots effort={effort} />
         {/* Hidden measurement spans */}
@@ -145,10 +145,10 @@ export function ModelEffortSelector({
         <button
           type="button"
           onClick={() => setModelOpen(!modelOpen)}
-          className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium ${
             modelOpen
               ? 'border-accent bg-accent/20 text-accent-light'
-              : 'border-edge bg-surface text-primary hover:border-edge-hover hover:bg-surface-elevated'
+              : 'btn-secondary border-edge text-primary'
           }`}
         >
           <FiCpu className="h-3 w-3 flex-shrink-0 text-accent-light" aria-hidden="true" />

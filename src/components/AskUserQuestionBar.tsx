@@ -71,7 +71,7 @@ export function AskUserQuestionBar({
           <button
             type="button"
             onClick={onDismiss}
-            className="flex-shrink-0 cursor-pointer text-muted transition-colors hover:text-red-400"
+            className="btn-ghost flex-shrink-0 cursor-pointer text-muted hover:text-red-400"
           >
             <FiX className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -110,7 +110,7 @@ export function AskUserQuestionBar({
                 type="button"
                 onClick={goPrev}
                 disabled={isFirstPage}
-                className="cursor-pointer rounded-md border border-edge px-2 py-1.5 text-xs text-primary transition-colors hover:border-edge-hover disabled:cursor-not-allowed disabled:opacity-30"
+                className="btn-secondary cursor-pointer rounded-md border border-edge px-2 py-1.5 text-xs text-primary"
               >
                 <FiChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
@@ -120,7 +120,7 @@ export function AskUserQuestionBar({
                 type="button"
                 onClick={goNext}
                 disabled={isLastPage}
-                className="cursor-pointer rounded-md border border-edge px-2 py-1.5 text-xs text-primary transition-colors hover:border-edge-hover disabled:cursor-not-allowed disabled:opacity-30"
+                className="btn-secondary cursor-pointer rounded-md border border-edge px-2 py-1.5 text-xs text-primary"
               >
                 <FiChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
@@ -133,7 +133,7 @@ export function AskUserQuestionBar({
             type="button"
             disabled={!hasAllAnswers}
             onClick={handleSubmit}
-            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn-primary cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium text-on-accent"
           >
             <FiSend className="h-4 w-4" aria-hidden="true" />
           </button>

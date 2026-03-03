@@ -45,7 +45,7 @@ export const KanbanCard = memo(function KanbanCard({
             e.stopPropagation();
             onDeleteWorkspace(ticket.workspaceId!);
           }}
-          className="absolute top-2 right-2 hidden rounded p-1 text-muted transition-colors hover:bg-red-500/20 hover:text-red-400 group-hover:block"
+          className="btn-ghost absolute top-2 right-2 hidden rounded p-1 text-muted hover:bg-red-500/20 hover:text-red-400 group-hover:block"
         >
           <FiTrash2 className="h-3.5 w-3.5" />
         </button>

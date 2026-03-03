@@ -21,10 +21,10 @@ export function QuestionOptionPill({
       type="button"
       title={description}
       onClick={onClick}
-      className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+      className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${
         selected
           ? 'border-accent bg-accent/20 text-accent-light'
-          : 'border-edge bg-surface text-primary hover:border-edge-hover hover:bg-surface-elevated'
+          : 'btn-secondary border-edge text-primary'
       }`}
     >
       {multiSelect ? (

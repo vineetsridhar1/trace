@@ -144,10 +144,10 @@ export function ChannelTopBar({
           <button
             type="button"
             onClick={() => onSetView('chat')}
-            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+            className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
               middlePanelView === 'chat'
                 ? 'bg-accent/20 text-accent-light'
-                : 'text-muted hover:text-primary'
+                : 'btn-ghost text-muted hover:text-primary'
             }`}
           >
             Chat
@@ -156,10 +156,10 @@ export function ChannelTopBar({
             <button
               type="button"
               onClick={() => onSetView('board')}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
                 middlePanelView === 'board'
                   ? 'bg-accent/20 text-accent-light'
-                  : 'text-muted hover:text-primary'
+                  : 'btn-ghost text-muted hover:text-primary'
               }`}
             >
               Tracker
@@ -169,10 +169,10 @@ export function ChannelTopBar({
             <button
               type="button"
               onClick={() => onSetView('projects')}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
                 middlePanelView === 'projects'
                   ? 'bg-accent/20 text-accent-light'
-                  : 'text-muted hover:text-primary'
+                  : 'btn-ghost text-muted hover:text-primary'
               }`}
             >
               Projects
@@ -182,10 +182,10 @@ export function ChannelTopBar({
             <button
               type="button"
               onClick={() => onSetView('workspaces')}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
                 middlePanelView === 'workspaces'
                   ? 'bg-accent/20 text-accent-light'
-                  : 'text-muted hover:text-primary'
+                  : 'btn-ghost text-muted hover:text-primary'
               }`}
             >
               Workspaces
@@ -195,10 +195,10 @@ export function ChannelTopBar({
             <button
               type="button"
               onClick={() => onSetView('pull-requests')}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
                 middlePanelView === 'pull-requests'
                   ? 'bg-accent/20 text-accent-light'
-                  : 'text-muted hover:text-primary'
+                  : 'btn-ghost text-muted hover:text-primary'
               }`}
             >
               PRs
@@ -210,7 +210,7 @@ export function ChannelTopBar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="cursor-pointer rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary transition-colors"
+            className="btn-ghost cursor-pointer rounded p-1 text-muted hover:text-primary"
           >
             <FiSettings className="h-3.5 w-3.5" aria-hidden="true" />
           </button>

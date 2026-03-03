@@ -60,9 +60,9 @@ function InteractionModeToggle({
       <button
         type="button"
         onClick={onCycle}
-        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
           mode === 'code'
-            ? 'border-edge bg-surface text-primary hover:border-edge-hover hover:bg-surface-elevated'
+            ? 'btn-secondary border-edge text-primary'
             : mode === 'plan'
               ? 'border-accent bg-accent/20 text-accent-light'
               : 'border-amber-500 bg-amber-500/20 text-amber-300'
@@ -202,7 +202,7 @@ export function RunButtons({
         <button
           type="button"
           onClick={handleRun}
-          className={`flex-1 cursor-pointer bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light ${hasRunAfter ? 'rounded-l-md' : 'rounded-md'}`}
+          className={`btn-primary flex-1 cursor-pointer px-4 py-2 text-sm font-medium text-on-accent ${hasRunAfter ? 'rounded-l-md' : 'rounded-md'}`}
         >
           Run
         </button>
@@ -211,7 +211,7 @@ export function RunButtons({
             <button
               type="button"
               onClick={() => setShowDropdown(!showDropdown)}
-              className="flex cursor-pointer items-center rounded-r-md border-l border-accent-light/30 bg-accent px-2 py-2 text-on-accent transition-colors hover:bg-accent-light"
+              className="btn-primary flex cursor-pointer items-center rounded-r-md border-l border-accent-light/30 px-2 py-2 text-on-accent"
             >
               <FiChevronDown className="h-4 w-4" />
             </button>

@@ -721,7 +721,7 @@ export function ChannelSettingsModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded px-3 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
+              className="btn-ghost rounded px-3 py-1.5 text-xs text-muted hover:text-primary"
             >
               Cancel
             </button>
@@ -729,7 +729,7 @@ export function ChannelSettingsModal({
               type="button"
               onClick={() => void handleSave()}
               disabled={saving}
-              className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-light disabled:opacity-50"
+              className="btn-primary rounded px-3 py-1.5 text-xs font-medium text-on-accent"
             >
               {saving ? "Saving..." : "Save"}
             </button>

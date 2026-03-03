@@ -152,7 +152,7 @@ export function TerminalTabs({
             <button
               type="button"
               onClick={onAddTab}
-              className="shrink-0 rounded px-1.5 py-1 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
+              className="btn-ghost shrink-0 rounded px-1.5 py-1 text-xs text-muted hover:text-primary"
             >
               +
             </button>
@@ -162,7 +162,7 @@ export function TerminalTabs({
           <button
             type="button"
             onClick={onCloseAll}
-            className="shrink-0 rounded px-2 py-1 text-xs text-muted hover:bg-surface-elevated hover:text-red-400"
+            className="btn-ghost shrink-0 rounded px-2 py-1 text-xs text-muted hover:text-red-400"
           >
             Close All
           </button>
@@ -178,7 +178,7 @@ export function TerminalTabs({
               <button
                 type="button"
                 onClick={onRerunSetup}
-                className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
+                className="btn-secondary flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-muted"
               >
                 <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Re-run Setup</span>
@@ -208,7 +208,7 @@ export function TerminalTabs({
                 <button
                   type="button"
                   onClick={onRunScript}
-                  className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-green-400 transition-colors hover:bg-surface-elevated hover:text-green-300"
+                  className="btn-secondary flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-green-400"
                 >
                   <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Re-run</span>
@@ -229,7 +229,7 @@ export function TerminalTabs({
               <button
                 type="button"
                 onClick={onRerunSetup}
-                className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
+                className="btn-secondary flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted"
               >
                 <FiPlay className="h-5 w-5" aria-hidden="true" />
                 <span>Run Setup</span>
@@ -244,7 +244,7 @@ export function TerminalTabs({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
+              className="btn-secondary flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted"
             >
               <FiSettings className="h-5 w-5" aria-hidden="true" />
               <span>Configure Setup Script</span>
@@ -259,7 +259,7 @@ export function TerminalTabs({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
+              className="btn-secondary flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted"
             >
               <FiSettings className="h-5 w-5" aria-hidden="true" />
               <span>Configure Run Script</span>
@@ -276,7 +276,7 @@ export function TerminalTabs({
               <button
                 type="button"
                 onClick={onRunScript}
-                className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
+                className="btn-secondary flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted"
               >
                 <FiPlay className="h-5 w-5" aria-hidden="true" />
                 <span>Run</span>

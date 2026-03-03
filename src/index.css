@@ -57,6 +57,88 @@
   --th-code-bg: #16161e;
 }
 
+/* ── Button utility classes (unlayered for highest specificity) ── */
+.btn-primary {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent-light) 40%, var(--th-accent)),
+    color-mix(in srgb, var(--th-accent) 85%, black)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, white 18%, transparent),
+    0 1px 3px 0 rgb(0 0 0 / 0.4) !important;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.btn-primary:hover {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent-light) 55%, var(--th-accent)),
+    var(--th-accent)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, white 25%, transparent),
+    0 3px 10px 0 rgb(0 0 0 / 0.45) !important;
+}
+.btn-primary:active {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent) 80%, black),
+    var(--th-accent)
+  ) !important;
+  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.4) !important;
+  transform: scale(0.97);
+}
+.btn-primary:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+.btn-primary:disabled {
+  background: var(--th-accent) !important;
+  box-shadow: none !important;
+  opacity: 0.4;
+  transform: none;
+}
+
+.btn-secondary {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.15) !important;
+  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn-secondary:hover {
+  border-color: var(--th-edge-hover);
+  background: var(--th-surface-elevated) !important;
+  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.2) !important;
+}
+.btn-secondary:active {
+  background: var(--th-surface) !important;
+  box-shadow: inset 0 1px 3px 0 rgb(0 0 0 / 0.2) !important;
+  transform: scale(0.98);
+}
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+.btn-secondary:disabled {
+  box-shadow: none !important;
+  opacity: 0.3;
+  transform: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-ghost:hover {
+  background: var(--th-surface-elevated);
+}
+.btn-ghost:active {
+  background: var(--th-surface-hover);
+  transform: scale(0.95);
+}
+.btn-ghost:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+
 @layer base {
   html,
   body,

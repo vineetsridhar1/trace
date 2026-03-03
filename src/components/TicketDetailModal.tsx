@@ -37,7 +37,7 @@ export function TicketDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-muted hover:text-primary"
+            className="btn-ghost text-muted hover:text-primary"
           >
             <FiX className="h-3.5 w-3.5" />
           </button>
@@ -52,7 +52,7 @@ export function TicketDetailModal({
             <button
               type="button"
               onClick={onOpenWorkspace}
-              className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-light"
+              className="btn-primary rounded px-3 py-1.5 text-xs font-medium text-on-accent"
             >
               Open Workspace
             </button>

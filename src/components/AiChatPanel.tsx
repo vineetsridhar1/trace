@@ -108,7 +108,7 @@ export function AiChatPanel({ chatId, chatTitle }: AiChatPanelProps) {
             type="button"
             onClick={handleSend}
             disabled={!input.trim() || isStreaming}
-            className="rounded-lg bg-accent-light p-2 text-on-accent transition-colors hover:bg-accent-light disabled:opacity-40"
+            className="btn-primary rounded-lg p-2 text-on-accent"
           >
             <FiSend className="h-4 w-4" />
           </button>

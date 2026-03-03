@@ -98,7 +98,7 @@ export function WorkspaceInput() {
             id="message-send"
             type="button"
             onClick={() => void handleSendMessage()}
-            className="h-[38px] cursor-pointer rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light"
+            className="btn-primary h-[38px] cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-on-accent"
           >
             <FiSend className="h-4 w-4" aria-hidden="true" />
           </button>
