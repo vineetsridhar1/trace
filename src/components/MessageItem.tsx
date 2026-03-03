@@ -93,7 +93,7 @@ export const MessageItem = memo(function MessageItem({
   return (
     <button
       type="button"
-      className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
+      className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left outline-none transition-colors ${
         isSelected ? 'selected' : ''
       } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
       onClick={() => onOpenWorkspace(workspace)}
