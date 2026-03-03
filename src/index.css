@@ -59,6 +59,7 @@
 
 /* ── Button utility classes (unlayered for highest specificity) ── */
 .btn-primary {
+  color: var(--th-on-accent) !important;
   background: linear-gradient(
     to bottom,
     color-mix(in srgb, var(--th-accent-light) 40%, var(--th-accent)),
@@ -153,6 +154,9 @@
 
 .resize-handle {
   width: 4px;
+  margin-right: -4px;
+  position: relative;
+  z-index: 10;
   cursor: col-resize;
   background: transparent;
   transition: background 0.15s;

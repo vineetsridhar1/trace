@@ -148,7 +148,7 @@ export function PlanResponseBar({
               setQuestionCustomTexts((prev) => ({ ...prev, [qIndex]: e.target.value }))
             }
             placeholder="Other..."
-            className="mt-1.5 w-full rounded-md border border-edge bg-surface-deep px-2.5 py-1 text-sm text-primary outline-none placeholder:text-muted focus:border-accent"
+            className="mt-1.5 w-full rounded-md border border-edge bg-surface-deep px-2.5 py-1 text-sm text-primary outline-none placeholder:text-muted focus:border-edge-hover"
           />
         </div>
       ))}
@@ -181,7 +181,7 @@ export function PlanResponseBar({
           }}
           onKeyDown={handleKeyDown}
           placeholder="Suggest changes to revise the plan..."
-          className="min-w-0 flex-1 rounded-md border border-edge bg-surface-deep px-2.5 py-1.5 text-sm text-primary outline-none placeholder:text-muted focus:border-accent"
+          className="min-w-0 flex-1 rounded-md border border-edge bg-surface-deep px-2.5 py-1.5 text-sm text-primary outline-none placeholder:text-muted focus:border-edge-hover"
         />
         <button
           type="button"

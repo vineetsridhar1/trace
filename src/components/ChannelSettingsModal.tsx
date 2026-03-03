@@ -211,7 +211,7 @@ export function ChannelSettingsModal({
   }, [channel.id, onDelete]);
 
   const textareaClass =
-    "w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none font-mono";
+    "w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-edge-hover resize-none font-mono";
 
   const typeLabel =
     channel.type === "team"
@@ -264,7 +264,7 @@ export function ChannelSettingsModal({
                 type="text"
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
-                className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
+                className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-edge-hover"
               />
             </div>
 
@@ -279,7 +279,7 @@ export function ChannelSettingsModal({
                     <button
                       type="button"
                       onClick={() => setTeamsDropdownOpen((o) => !o)}
-                      className="flex w-full items-center justify-between rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary outline-none focus:border-accent"
+                      className="flex w-full items-center justify-between rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary outline-none focus:border-edge-hover"
                     >
                       <span
                         className={
@@ -645,7 +645,7 @@ export function ChannelSettingsModal({
                     }
                     rows={3}
                     style={{ fieldSizing: "content" } as React.CSSProperties}
-                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none"
+                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-edge-hover resize-none"
                   />
                 </div>
               </div>
@@ -672,7 +672,7 @@ export function ChannelSettingsModal({
                 value={draftTerminalFont}
                 onChange={(e) => setDraftTerminalFont(e.target.value)}
                 placeholder='"MesloLGS NF", "Hack Nerd Font Mono", Menlo, monospace'
-                className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent font-mono"
+                className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-edge-hover font-mono"
               />
             </div>
           </div>

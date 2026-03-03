@@ -257,7 +257,7 @@ export function ThreadInput({
                 maxHeight: 300,
               } as React.CSSProperties
             }
-            className={`w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-accent ${isQueued ? "border-amber-500/50" : "border-edge"}`}
+            className={`w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-edge-hover ${isQueued ? "border-amber-500/50" : "border-edge"}`}
           />
         </div>
         {isClaudeRunning ? (

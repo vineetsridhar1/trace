@@ -102,7 +102,7 @@ export function AiChatPanel({ chatId, chatTitle }: AiChatPanelProps) {
             onKeyDown={handleKeyDown}
             placeholder="Ask about your code..."
             rows={1}
-            className="flex-1 resize-none rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-primary placeholder-muted focus:border-accent-light focus:outline-none"
+            className="flex-1 resize-none rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-primary placeholder-muted focus:border-edge-hover focus:outline-none"
           />
           <button
             type="button"

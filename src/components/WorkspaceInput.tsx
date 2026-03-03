@@ -90,7 +90,7 @@ export function WorkspaceInput() {
             }}
             placeholder="Create a workspace..."
             style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-            className="w-full resize-none rounded-md border border-edge bg-surface-elevated px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-accent"
+            className="w-full resize-none rounded-md border border-edge bg-surface-elevated px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-edge-hover"
           />
         </div>
         <Tooltip text="Send">

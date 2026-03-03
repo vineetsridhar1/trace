@@ -98,7 +98,7 @@ export function PullRequestListView({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter pull requests..."
-            className="w-full rounded-md border border-edge bg-surface-elevated py-1.5 pl-8 pr-3 text-xs text-primary outline-none placeholder:text-muted focus:border-accent/50"
+            className="w-full rounded-md border border-edge bg-surface-elevated py-1.5 pl-8 pr-3 text-xs text-primary outline-none placeholder:text-muted focus:border-edge-hover"
           />
         </div>
         <button

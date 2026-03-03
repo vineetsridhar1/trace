@@ -75,7 +75,7 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
               }}
               placeholder="My Server"
               autoFocus
-              className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
+              className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-edge-hover"
             />
           </div>
 

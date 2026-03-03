@@ -100,7 +100,7 @@ export function AskUserQuestionBar({
           onChange={(e) => setCustomText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Other..."
-          className="min-w-0 flex-1 rounded-md border border-edge bg-surface-deep px-2.5 py-1.5 text-sm text-primary outline-none placeholder:text-muted focus:border-accent"
+          className="min-w-0 flex-1 rounded-md border border-edge bg-surface-deep px-2.5 py-1.5 text-sm text-primary outline-none placeholder:text-muted focus:border-edge-hover"
         />
 
         {total > 1 && (

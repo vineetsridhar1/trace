@@ -167,7 +167,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
     }
   }, [name, serverId, channelType, workspacesEnabled, selectedTeamIds, localRepoPath, baseBranch, defaultSetupScript, defaultRunScript, mySetupScript, myRunScript, mySystemInstructions, detectedOriginUrl, onCreated, onLocalConfigSave, executeCreateChannel]);
 
-  const textareaClass = 'w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none font-mono';
+  const textareaClass = 'w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-edge-hover resize-none font-mono';
 
   return (
     <div
@@ -193,7 +193,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
               onChange={(e) => setName(e.target.value)}
               placeholder={channelType === 'team' ? 'my-team' : channelType === 'channel' ? 'general' : 'my-project'}
               autoFocus
-              className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
+              className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-edge-hover"
             />
           </div>
 
@@ -206,7 +206,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                   <button
                     type="button"
                     onClick={() => setTeamsDropdownOpen((o) => !o)}
-                    className="flex w-full items-center justify-between rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary outline-none focus:border-accent"
+                    className="flex w-full items-center justify-between rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary outline-none focus:border-edge-hover"
                   >
                     <span className={selectedTeamIds.length === 0 ? 'text-[#404040]' : ''}>
                       {selectedTeamIds.length === 0
@@ -347,7 +347,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                     onChange={(e) => setBaseBranch(e.target.value)}
                     list="branch-options"
                     placeholder="e.g. main"
-                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
+                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-edge-hover"
                   />
                   <datalist id="branch-options">
                     {branches.map((b) => (
@@ -466,7 +466,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                         placeholder={"e.g. This is a TypeScript monorepo. Always run tests with `npm test` from the root."}
                         rows={3}
                         style={{ fieldSizing: 'content' } as React.CSSProperties}
-                        className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none"
+                        className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-edge-hover resize-none"
                       />
                     </div>
                   </div>

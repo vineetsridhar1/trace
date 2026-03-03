@@ -73,7 +73,7 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
     });
   }, [localRepoPath, setupScript, runScript, systemInstructions, onJoined]);
 
-  const textareaClass = 'w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none font-mono';
+  const textareaClass = 'w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-edge-hover resize-none font-mono';
 
   return createPortal(
     <div
@@ -195,7 +195,7 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
                     placeholder="e.g. This is a TypeScript monorepo. Always run tests with `npm test` from the root."
                     rows={3}
                     style={{ fieldSizing: 'content' } as React.CSSProperties}
-                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none"
+                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-edge-hover resize-none"
                   />
                 </div>
               </div>
