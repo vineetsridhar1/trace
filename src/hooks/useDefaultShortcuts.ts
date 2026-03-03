@@ -126,6 +126,53 @@ export function useDefaultShortcuts({
     };
   }, []);
 
+  // ─── Navigate Workspaces (Up/Down arrows) ─────────────────────────
+  useEffect(() => {
+    const store = useShortcutStore.getState();
+
+    store.register({
+      id: 'workspace.prev',
+      keys: 'up',
+      label: 'Previous workspace',
+      category: 'navigation',
+      context: 'global',
+      action: () => {
+        const workspaces = useWorkspaceStore.getState().workspaces;
+        const flat = flattenWorkspaces(workspaces);
+        if (flat.length === 0) return;
+        const selectedId = useThreadStore.getState().selectedWorkspaceId;
+        const currentIdx = flat.findIndex((ws) => ws.id === selectedId);
+        if (currentIdx > 0) {
+          openWorkspaceRef.current(flat[currentIdx - 1]);
+        }
+      },
+    });
+
+    store.register({
+      id: 'workspace.next',
+      keys: 'down',
+      label: 'Next workspace',
+      category: 'navigation',
+      context: 'global',
+      action: () => {
+        const workspaces = useWorkspaceStore.getState().workspaces;
+        const flat = flattenWorkspaces(workspaces);
+        if (flat.length === 0) return;
+        const selectedId = useThreadStore.getState().selectedWorkspaceId;
+        const currentIdx = flat.findIndex((ws) => ws.id === selectedId);
+        if (currentIdx < flat.length - 1) {
+          openWorkspaceRef.current(flat[currentIdx + 1]);
+        }
+      },
+    });
+
+    return () => {
+      const s = useShortcutStore.getState();
+      s.unregister('workspace.prev');
+      s.unregister('workspace.next');
+    };
+  }, []);
+
   // ─── Panels ──────────────────────────────────────────────────────
   useHotkey(
     'panels.toggle-sidebar',

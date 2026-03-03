@@ -30,6 +30,11 @@ export const STATUS_GROUP_ORDER: TicketStatus[] = [
 const ACTIVE_STATUSES = new Set<TicketStatus>(['in_progress', 'creation']);
 const DONE_STATUSES = new Set<TicketStatus>(['completed']);
 
+function shortcutLabel(index: number): string | null {
+  if (index >= 1 && index <= 9) return String(index);
+  return null;
+}
+
 function StatusIcon({ status, isRunning }: { status: TicketStatus; isRunning: boolean }) {
   if (ACTIVE_STATUSES.has(status)) {
     return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-accent-light" />;
@@ -95,9 +100,9 @@ export const MessageItem = memo(function MessageItem({
       title={title}
     >
       {/* Shortcut index badge */}
-      {shortcutIndex != null && shortcutIndex <= 9 && (
+      {shortcutIndex != null && shortcutIndex <= 19 && (
         <kbd className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded border border-edge bg-surface-deep text-[10px] font-medium leading-none text-muted">
-          {shortcutIndex}
+          {shortcutLabel(shortcutIndex) ?? '\u00A0'}
         </kbd>
       )}
 

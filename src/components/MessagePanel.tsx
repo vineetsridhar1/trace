@@ -272,13 +272,13 @@ export function MessagePanel({
     [workspaces, onOpenWorkspace],
   );
 
-  // Build workspace → shortcut index (1-9) for keyboard navigation
+  // Build workspace → shortcut index (1-9, 10-19) for keyboard navigation
   const workspaceShortcutMap = useMemo(() => {
     const map = new Map<string, number>();
     let idx = 1;
     for (const group of groupedWorkspaces) {
       for (const ws of group.workspaces) {
-        if (idx <= 9) map.set(ws.id, idx);
+        if (idx <= 19) map.set(ws.id, idx);
         idx++;
       }
     }
