@@ -302,7 +302,11 @@ contextBridge.exposeInMainWorld("traceAPI", {
   listSlashCommands: (repoPath: string) =>
     ipcRenderer.invoke("list-slash-commands", repoPath) as Promise<{
       success: boolean;
-      commands: Array<{ name: string; description: string }>;
+      commands: Array<{
+        name: string;
+        description: string;
+        source: "global" | "project";
+      }>;
       error?: string;
     }>,
 
@@ -329,30 +333,60 @@ contextBridge.exposeInMainWorld("traceAPI", {
 
   listPullRequests: async (repoPath: string) => {
     try {
-      return await ipcRenderer.invoke('list-pull-requests', repoPath);
+      return await ipcRenderer.invoke("list-pull-requests", repoPath);
     } catch (err) {
       return { success: false, error: String(err) };
     }
   },
 
-  checkoutPullRequest: async (repoPath: string, branchName: string, workspaceId: string, setupCommands?: string[]) => {
+  checkoutPullRequest: async (
+    repoPath: string,
+    branchName: string,
+    workspaceId: string,
+    setupCommands?: string[],
+  ) => {
     try {
-      return await ipcRenderer.invoke('checkout-pull-request', repoPath, branchName, workspaceId, setupCommands);
+      return await ipcRenderer.invoke(
+        "checkout-pull-request",
+        repoPath,
+        branchName,
+        workspaceId,
+        setupCommands,
+      );
     } catch (err) {
       return { success: false, error: String(err) };
     }
   },
 
   checkPRCILocal: (repoPath: string, branches: string[]) =>
-    ipcRenderer.invoke('check-pr-ci-local', repoPath, branches) as Promise<{
+    ipcRenderer.invoke("check-pr-ci-local", repoPath, branches) as Promise<{
       success: boolean;
-      statuses?: Array<{ branch: string; total: number; passed: number; failed: number; pending: number }>;
+      statuses?: Array<{
+        branch: string;
+        total: number;
+        passed: number;
+        failed: number;
+        pending: number;
+      }>;
       error?: string;
     }>,
 
   pushWorktreeBranch: (workspaceId: string, repoPath: string) =>
-    ipcRenderer.invoke('push-worktree-branch', workspaceId, repoPath) as Promise<{ success: boolean; error?: string }>,
+    ipcRenderer.invoke(
+      "push-worktree-branch",
+      workspaceId,
+      repoPath,
+    ) as Promise<{ success: boolean; error?: string }>,
 
-  ensureWorktreeFromRemote: (workspaceId: string, repoPath: string, branchName: string) =>
-    ipcRenderer.invoke('ensure-worktree-from-remote', workspaceId, repoPath, branchName) as Promise<{ success: boolean; worktreePath?: string; error?: string }>,
+  ensureWorktreeFromRemote: (
+    workspaceId: string,
+    repoPath: string,
+    branchName: string,
+  ) =>
+    ipcRenderer.invoke(
+      "ensure-worktree-from-remote",
+      workspaceId,
+      repoPath,
+      branchName,
+    ) as Promise<{ success: boolean; worktreePath?: string; error?: string }>,
 });

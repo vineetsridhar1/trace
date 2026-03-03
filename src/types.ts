@@ -201,7 +201,11 @@ export interface TraceAPI {
   ) => Promise<{ success: boolean; error?: string }>;
   listSlashCommands: (repoPath: string) => Promise<{
     success: boolean;
-    commands: Array<{ name: string; description: string }>;
+    commands: Array<{
+      name: string;
+      description: string;
+      source: "global" | "project";
+    }>;
     error?: string;
   }>;
   checkGhAuth: () => Promise<{ success: boolean; available: boolean }>;

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import { spawnClaude } from "./claude";
@@ -956,34 +957,106 @@ JSON.stringify(found);
   );
 
   ipcMain.handle(LIST_SLASH_COMMANDS_CHANNEL, (_event, repoPath: string) => {
-    try {
-      const commandsDir = path.join(repoPath, ".claude", "commands");
-      if (!fs.existsSync(commandsDir)) {
-        return { success: true, commands: [] };
+    type DiscoveredCommand = {
+      name: string;
+      description: string;
+      source: "global" | "project";
+    };
+
+    function parseFrontmatter(content: string) {
+      const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+      if (!fmMatch) return {};
+      const fm: Record<string, string> = {};
+      for (const line of fmMatch[1].split("\n")) {
+        const m = line.match(/^(\w[\w-]*):\s*(.+)$/);
+        if (m) fm[m[1]] = m[2].trim();
       }
-      const files = fs
-        .readdirSync(commandsDir)
-        .filter((f) => f.endsWith(".md"));
-      const commands = files.map((file) => {
-        const name = file.replace(/\.md$/, "");
-        let description = "";
-        try {
-          const content = fs.readFileSync(
-            path.join(commandsDir, file),
-            "utf-8",
-          );
-          // Parse YAML frontmatter for description
-          const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-          if (fmMatch) {
-            const descMatch = fmMatch[1].match(/^description:\s*(.+)$/m);
-            if (descMatch) description = descMatch[1].trim();
-          }
-        } catch {
-          /* ignore read errors */
-        }
-        return { name, description };
-      });
-      return { success: true, commands };
+      return fm;
+    }
+
+    function discoverCommands(
+      dir: string,
+      source: "global" | "project",
+    ): DiscoveredCommand[] {
+      if (!fs.existsSync(dir)) return [];
+      try {
+        return fs
+          .readdirSync(dir)
+          .filter((f) => f.endsWith(".md"))
+          .map((file) => {
+            let description = "";
+            try {
+              const content = fs.readFileSync(path.join(dir, file), "utf-8");
+              const fm = parseFrontmatter(content);
+              if (fm.description) description = fm.description;
+            } catch {
+              /* ignore read errors */
+            }
+            return {
+              name: file.replace(/\.md$/, ""),
+              description,
+              source,
+            };
+          });
+      } catch {
+        return [];
+      }
+    }
+
+    function discoverSkills(
+      dir: string,
+      source: "global" | "project",
+    ): DiscoveredCommand[] {
+      if (!fs.existsSync(dir)) return [];
+      try {
+        return fs
+          .readdirSync(dir, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .flatMap((entry) => {
+            const skillFile = path.join(dir, entry.name, "SKILL.md");
+            if (!fs.existsSync(skillFile)) return [];
+            try {
+              const content = fs.readFileSync(skillFile, "utf-8");
+              const fm = parseFrontmatter(content);
+              if (fm["user-invocable"] === "false") return [];
+              return [
+                {
+                  name: fm.name || entry.name,
+                  description: fm.description || "",
+                  source,
+                },
+              ];
+            } catch {
+              return [];
+            }
+          });
+      } catch {
+        return [];
+      }
+    }
+
+    try {
+      const homeDir = os.homedir();
+      const globalSkillsDir = path.join(homeDir, ".claude", "skills");
+      const globalCommandsDir = path.join(homeDir, ".claude", "commands");
+      const projectSkillsDir = path.join(repoPath, ".claude", "skills");
+      const projectCommandsDir = path.join(repoPath, ".claude", "commands");
+
+      // Global first, then project — project overwrites global during dedup
+      const all = [
+        ...discoverSkills(globalSkillsDir, "global"),
+        ...discoverCommands(globalCommandsDir, "global"),
+        ...discoverSkills(projectSkillsDir, "project"),
+        ...discoverCommands(projectCommandsDir, "project"),
+      ];
+
+      // Dedup by name — last entry wins (project takes precedence)
+      const byName = new Map<string, DiscoveredCommand>();
+      for (const cmd of all) {
+        byName.set(cmd.name, cmd);
+      }
+
+      return { success: true, commands: Array.from(byName.values()) };
     } catch (err) {
       return { success: false, commands: [], error: String(err) };
     }

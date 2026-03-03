@@ -1,21 +1,61 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from "react";
 
 export interface SlashCommand {
   name: string;
   displayName: string;
   description: string;
-  source: 'custom' | 'built-in';
+  source: "global" | "project" | "built-in";
 }
 
 const BUILT_IN_COMMANDS: SlashCommand[] = [
-  { name: 'clear', displayName: '/clear', description: 'Clear thread and start fresh', source: 'built-in' },
-  { name: 'compact', displayName: '/compact', description: 'Compact conversation history', source: 'built-in' },
-  { name: 'config', displayName: '/config', description: 'Open configuration', source: 'built-in' },
-  { name: 'cost', displayName: '/cost', description: 'Show token usage and cost', source: 'built-in' },
-  { name: 'init', displayName: '/init', description: 'Initialize project settings', source: 'built-in' },
-  { name: 'memory', displayName: '/memory', description: 'Edit CLAUDE.md memory files', source: 'built-in' },
-  { name: 'review', displayName: '/review', description: 'Review code changes', source: 'built-in' },
-  { name: 'status', displayName: '/status', description: 'Show session status', source: 'built-in' },
+  {
+    name: "clear",
+    displayName: "/clear",
+    description: "Clear thread and start fresh",
+    source: "built-in",
+  },
+  {
+    name: "compact",
+    displayName: "/compact",
+    description: "Compact conversation history",
+    source: "built-in",
+  },
+  {
+    name: "config",
+    displayName: "/config",
+    description: "Open configuration",
+    source: "built-in",
+  },
+  {
+    name: "cost",
+    displayName: "/cost",
+    description: "Show token usage and cost",
+    source: "built-in",
+  },
+  {
+    name: "init",
+    displayName: "/init",
+    description: "Initialize project settings",
+    source: "built-in",
+  },
+  {
+    name: "memory",
+    displayName: "/memory",
+    description: "Edit CLAUDE.md memory files",
+    source: "built-in",
+  },
+  {
+    name: "review",
+    displayName: "/review",
+    description: "Review code changes",
+    source: "built-in",
+  },
+  {
+    name: "status",
+    displayName: "/status",
+    description: "Show session status",
+    source: "built-in",
+  },
 ];
 
 // Module-level cache so both WorkspaceInput and ThreadInput share the same results
@@ -35,7 +75,7 @@ function getProjectCommands(repoPath: string): Promise<SlashCommand[]> {
             name: cmd.name,
             displayName: `/${cmd.name}`,
             description: cmd.description || `Run ${cmd.name} command`,
-            source: 'custom' as const,
+            source: cmd.source,
           }))
         : [];
       commandCache.set(repoPath, commands);
@@ -46,7 +86,11 @@ function getProjectCommands(repoPath: string): Promise<SlashCommand[]> {
   return promise;
 }
 
-export function useSlashCommands(inputValue: string, onInputChange: (value: string) => void, repoPath?: string) {
+export function useSlashCommands(
+  inputValue: string,
+  onInputChange: (value: string) => void,
+  repoPath?: string,
+) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
@@ -60,7 +104,9 @@ export function useSlashCommands(inputValue: string, onInputChange: (value: stri
     getProjectCommands(repoPath).then((cmds) => {
       if (!stale) setProjectCommands(cmds);
     });
-    return () => { stale = true; };
+    return () => {
+      stale = true;
+    };
   }, [repoPath]);
 
   const allCommands = useMemo(
@@ -68,12 +114,16 @@ export function useSlashCommands(inputValue: string, onInputChange: (value: stri
     [projectCommands],
   );
 
-  const query = inputValue.startsWith('/') ? inputValue.slice(1).toLowerCase() : null;
+  const query = inputValue.startsWith("/")
+    ? inputValue.slice(1).toLowerCase()
+    : null;
 
   const filteredCommands = useMemo(() => {
     if (query === null) return [];
     return allCommands.filter(
-      (cmd) => cmd.name.includes(query) || cmd.description.toLowerCase().includes(query),
+      (cmd) =>
+        cmd.name.includes(query) ||
+        cmd.description.toLowerCase().includes(query),
     );
   }, [query, allCommands]);
 
@@ -90,7 +140,7 @@ export function useSlashCommands(inputValue: string, onInputChange: (value: stri
 
   const selectCommand = useCallback(
     (cmd: SlashCommand) => {
-      onInputChange(cmd.displayName + ' ');
+      onInputChange(cmd.displayName + " ");
     },
     [onInputChange],
   );
@@ -99,22 +149,24 @@ export function useSlashCommands(inputValue: string, onInputChange: (value: stri
     (e: React.KeyboardEvent) => {
       if (!isOpen) return false;
 
-      if (e.key === 'ArrowDown') {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((i) => (i + 1) % filteredCommands.length);
         return true;
       }
-      if (e.key === 'ArrowUp') {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length);
+        setSelectedIndex(
+          (i) => (i - 1 + filteredCommands.length) % filteredCommands.length,
+        );
         return true;
       }
-      if (e.key === 'Enter' || e.key === 'Tab') {
+      if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
         selectCommand(filteredCommands[selectedIndex]);
         return true;
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         setDismissed(true);
         return true;
@@ -124,5 +176,11 @@ export function useSlashCommands(inputValue: string, onInputChange: (value: stri
     [isOpen, filteredCommands, selectedIndex, selectCommand],
   );
 
-  return { isOpen, filteredCommands, selectedIndex, handleKeyDown, selectCommand };
+  return {
+    isOpen,
+    filteredCommands,
+    selectedIndex,
+    handleKeyDown,
+    selectCommand,
+  };
 }

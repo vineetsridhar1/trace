@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import type { SlashCommand } from '../hooks/useSlashCommands';
+import { useEffect, useRef } from "react";
+import type { SlashCommand } from "../hooks/useSlashCommands";
 
 interface SlashCommandMenuProps {
   isOpen: boolean;
@@ -8,11 +8,16 @@ interface SlashCommandMenuProps {
   onSelect: (cmd: SlashCommand) => void;
 }
 
-export function SlashCommandMenu({ isOpen, commands, selectedIndex, onSelect }: SlashCommandMenuProps) {
+export function SlashCommandMenu({
+  isOpen,
+  commands,
+  selectedIndex,
+  onSelect,
+}: SlashCommandMenuProps) {
   const selectedRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    selectedRef.current?.scrollIntoView({ block: 'nearest' });
+    selectedRef.current?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
   if (!isOpen) return null;
@@ -29,14 +34,23 @@ export function SlashCommandMenu({ isOpen, commands, selectedIndex, onSelect }: 
             onSelect(cmd);
           }}
           className={`flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
-            i === selectedIndex ? 'bg-accent/20 text-primary' : 'text-primary hover:bg-surface-elevated'
+            i === selectedIndex
+              ? "bg-accent/20 text-primary"
+              : "text-primary hover:bg-surface-elevated"
           }`}
         >
-          <span className="font-medium text-accent-light">{cmd.displayName}</span>
+          <span className="font-medium text-accent-light">
+            {cmd.displayName}
+          </span>
           <span className="flex-1 truncate text-muted">{cmd.description}</span>
-          {cmd.source === 'custom' && (
+          {cmd.source === "project" && (
             <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent-light">
               project
+            </span>
+          )}
+          {cmd.source === "global" && (
+            <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-400">
+              global
             </span>
           )}
         </button>
