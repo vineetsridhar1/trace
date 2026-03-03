@@ -125,16 +125,6 @@ async function runAutoCompleteIfNeeded(
     void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'completed');
     void checkAndTriggerDependents(workspaceId, channelId);
   }
-
-  // Broadcast the final workspace status to the frontend
-  if (currentStatus === 'in_progress') {
-    const finalWorkspace = await getWorkspaceByIdForFeed(workspaceId);
-    if (finalWorkspace) {
-      pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
-        workspaceUpserted: finalWorkspace,
-      });
-    }
-  }
 }
 
 export async function ingestEvent(payload: HookEvent) {
@@ -515,6 +505,13 @@ export async function ingestEvent(payload: HookEvent) {
     })();
   }
 
+  // Auto-complete before broadcast: determine the final workspace status when
+  // Claude stops without requesting user input, so the first broadcast already
+  // carries the correct (completed) status.
+  if (payload.hook_event_name === 'Stop') {
+    await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, eventData.toolName);
+  }
+
   const hydratedWorkspace = await getWorkspaceByIdForFeed(workspace.id);
 
   // Broadcast via GraphQL subscriptions
@@ -525,12 +522,6 @@ export async function ingestEvent(payload: HookEvent) {
     pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
       workspaceUpserted: hydratedWorkspace,
     });
-  }
-
-  // Auto-complete / auto-review: determine the final message status when
-  // Claude stops without requesting user input.
-  if (payload.hook_event_name === 'Stop') {
-    await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, eventData.toolName);
   }
 
   return { id: event.id, session_id: cliSession.sessionId };
