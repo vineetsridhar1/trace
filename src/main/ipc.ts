@@ -1117,44 +1117,57 @@ JSON.stringify(found);
   ipcMain.handle(
     CHECK_PR_STATUSES_LOCAL_CHANNEL,
     async (_event, repoPath: string, branches: string[]) => {
-      type PRStatus = {
-        branch: string;
-        state: "open" | "closed" | "merged" | "none";
-        prUrl: string | null;
-      };
+      try {
+        // Single CLI call to fetch all PRs in the repo
+        const result = await runProcess(
+          "gh",
+          [
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--json",
+            "state,url,headRefName",
+            "--limit",
+            "100",
+          ],
+          repoPath,
+        );
 
-      async function checkBranch(branch: string): Promise<PRStatus> {
-        try {
-          const result = await runProcess(
-            "gh",
-            [
-              "pr",
-              "list",
-              "--head",
+        if (result.code !== 0) {
+          return {
+            success: true,
+            statuses: branches.map((branch) => ({
               branch,
-              "--state",
-              "all",
-              "--json",
-              "state,url",
-              "--limit",
-              "1",
-            ],
-            repoPath,
-          );
+              state: "none" as const,
+              prUrl: null as string | null,
+            })),
+          };
+        }
 
-          if (result.code !== 0) {
-            return { branch, state: "none", prUrl: null };
+        const prs = JSON.parse(result.stdout.trim() || "[]") as Array<{
+          state: string;
+          url: string;
+          headRefName: string;
+        }>;
+
+        // Build a map from branch name to its most recent PR (first match,
+        // since results are ordered newest-first)
+        const prByBranch = new Map<
+          string,
+          { state: string; url: string }
+        >();
+        for (const pr of prs) {
+          if (!prByBranch.has(pr.headRefName)) {
+            prByBranch.set(pr.headRefName, pr);
           }
+        }
 
-          const prs = JSON.parse(result.stdout.trim() || "[]") as Array<{
-            state: string;
-            url: string;
-          }>;
-          if (prs.length === 0) {
-            return { branch, state: "none", prUrl: null };
+        const statuses = branches.map((branch) => {
+          const pr = prByBranch.get(branch);
+          if (!pr) {
+            return { branch, state: "none" as const, prUrl: null as string | null };
           }
-
-          const pr = prs[0];
           const state =
             pr.state === "MERGED"
               ? ("merged" as const)
@@ -1162,13 +1175,8 @@ JSON.stringify(found);
                 ? ("open" as const)
                 : ("closed" as const);
           return { branch, state, prUrl: pr.url || null };
-        } catch {
-          return { branch, state: "none", prUrl: null };
-        }
-      }
+        });
 
-      try {
-        const statuses = await Promise.all(branches.map(checkBranch));
         return { success: true, statuses };
       } catch (err) {
         return { success: false, error: String(err) };
@@ -1237,45 +1245,158 @@ JSON.stringify(found);
   ipcMain.handle(
     CHECK_PR_CI_LOCAL_CHANNEL,
     async (_event, repoPath: string, branches: string[]) => {
-      type CIStatus = {
-        branch: string;
-        total: number;
-        passed: number;
-        failed: number;
-        pending: number;
-      };
+      const emptyCIStatus = (branch: string) => ({
+        branch,
+        total: 0,
+        passed: 0,
+        failed: 0,
+        pending: 0,
+      });
 
-      async function checkBranchCI(branch: string): Promise<CIStatus> {
-        try {
-          const result = await runProcess(
-            "gh",
-            ["pr", "checks", branch, "--json", "bucket"],
-            repoPath,
-          );
-
-          if (result.code !== 0) {
-            return { branch, total: 0, passed: 0, failed: 0, pending: 0 };
-          }
-
-          const checks = JSON.parse(result.stdout.trim() || "[]") as Array<{
-            bucket: string;
-          }>;
-          let passed = 0;
-          let failed = 0;
-          let pending = 0;
-          for (const check of checks) {
-            if (check.bucket === "pass") passed++;
-            else if (check.bucket === "fail") failed++;
-            else pending++;
-          }
-          return { branch, total: checks.length, passed, failed, pending };
-        } catch {
-          return { branch, total: 0, passed: 0, failed: 0, pending: 0 };
-        }
+      if (branches.length === 0) {
+        return { success: true, statuses: [] };
       }
 
       try {
-        const statuses = await Promise.all(branches.map(checkBranchCI));
+        // Get owner/repo from git remote (local git call, no API)
+        const remoteResult = await runProcess(
+          "git",
+          ["remote", "get-url", "origin"],
+          repoPath,
+        );
+        if (remoteResult.code !== 0) {
+          return {
+            success: true,
+            statuses: branches.map(emptyCIStatus),
+          };
+        }
+
+        const remoteUrl = remoteResult.stdout.trim();
+        const match = remoteUrl.match(
+          /(?:github\.com)[/:]([^/]+)\/([^/.]+)/,
+        );
+        if (!match) {
+          return {
+            success: true,
+            statuses: branches.map(emptyCIStatus),
+          };
+        }
+        const [, owner, repo] = match;
+
+        // Build a single GraphQL query with aliased fields per branch
+        const aliasedFields = branches
+          .map((branch, i) => {
+            const alias = `pr_${i}`;
+            const escapedBranch = branch.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            return `${alias}: pullRequests(headRefName: "${escapedBranch}", first: 1, states: OPEN) {
+              nodes {
+                commits(last: 1) {
+                  nodes {
+                    commit {
+                      statusCheckRollup {
+                        contexts(first: 100) {
+                          nodes {
+                            ... on CheckRun {
+                              __typename
+                              conclusion
+                              status
+                            }
+                            ... on StatusContext {
+                              __typename
+                              state
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }`;
+          })
+          .join("\n");
+
+        const safeOwner = owner!.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const safeName = repo!.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const query = `query { repository(owner: "${safeOwner}", name: "${safeName}") { ${aliasedFields} } }`;
+
+        const graphqlResult = await runProcess(
+          "gh",
+          ["api", "graphql", "-f", `query=${query}`],
+          repoPath,
+        );
+
+        if (graphqlResult.code !== 0) {
+          return {
+            success: true,
+            statuses: branches.map(emptyCIStatus),
+          };
+        }
+
+        const data = JSON.parse(graphqlResult.stdout.trim());
+        const repoData = data?.data?.repository;
+        if (!repoData) {
+          return {
+            success: true,
+            statuses: branches.map(emptyCIStatus),
+          };
+        }
+
+        const statuses = branches.map((branch, i) => {
+          const alias = `pr_${i}`;
+          const prNodes = repoData[alias]?.nodes;
+          if (!prNodes || prNodes.length === 0) {
+            return emptyCIStatus(branch);
+          }
+
+          const commitNodes = prNodes[0]?.commits?.nodes;
+          if (!commitNodes || commitNodes.length === 0) {
+            return emptyCIStatus(branch);
+          }
+
+          const contexts =
+            commitNodes[0]?.commit?.statusCheckRollup?.contexts?.nodes || [];
+
+          let passed = 0;
+          let failed = 0;
+          let pending = 0;
+
+          for (const ctx of contexts) {
+            if (ctx.__typename === "CheckRun") {
+              if (ctx.status !== "COMPLETED") {
+                pending++;
+              } else if (
+                ctx.conclusion === "SUCCESS" ||
+                ctx.conclusion === "NEUTRAL" ||
+                ctx.conclusion === "SKIPPED"
+              ) {
+                passed++;
+              } else {
+                failed++;
+              }
+            } else if (ctx.__typename === "StatusContext") {
+              if (ctx.state === "SUCCESS") {
+                passed++;
+              } else if (
+                ctx.state === "PENDING" ||
+                ctx.state === "EXPECTED"
+              ) {
+                pending++;
+              } else {
+                failed++;
+              }
+            }
+          }
+
+          return {
+            branch,
+            total: passed + failed + pending,
+            passed,
+            failed,
+            pending,
+          };
+        });
+
         return { success: true, statuses };
       } catch (err) {
         return { success: false, error: String(err) };

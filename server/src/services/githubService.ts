@@ -12,36 +12,79 @@ export async function checkPRsForBranches(
 ): Promise<Record<string, PRInfo>> {
   const results: Record<string, PRInfo> = {};
 
-  for (const branch of branches) {
-    try {
-      const resp = await fetch(
-        `https://api.github.com/repos/${repoOwner}/${repoName}/pulls?head=${repoOwner}:${branch}&state=all&per_page=1`,
-        {
-          headers: {
-            Authorization: `Bearer ${githubAccessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        },
-      );
+  if (branches.length === 0) {
+    return results;
+  }
 
-      if (!resp.ok) {
+  try {
+    // Build a single GraphQL query with aliased fields per branch
+    const aliasedFields = branches
+      .map((branch, i) => {
+        const alias = `pr_${i}`;
+        const escapedBranch = branch.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return `${alias}: pullRequests(headRefName: "${escapedBranch}", first: 1, states: [OPEN, CLOSED, MERGED], orderBy: {field: CREATED_AT, direction: DESC}) {
+          nodes {
+            url
+            state
+          }
+        }`;
+      })
+      .join('\n');
+
+    const safeOwner = repoOwner.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const safeName = repoName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const query = `query { repository(owner: "${safeOwner}", name: "${safeName}") { ${aliasedFields} } }`;
+
+    const resp = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${githubAccessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!resp.ok) {
+      // Fall back to marking all as no PR
+      for (const branch of branches) {
         results[branch] = { hasPR: false, merged: false };
-        continue;
       }
+      return results;
+    }
 
-      const prs = (await resp.json()) as Array<{ html_url: string; merged_at: string | null; state: string }>;
-      if (prs.length === 0) {
+    const data = (await resp.json()) as {
+      data?: {
+        repository?: Record<
+          string,
+          { nodes: Array<{ url: string; state: string }> }
+        >;
+      };
+    };
+
+    const repoData = data?.data?.repository;
+
+    for (let i = 0; i < branches.length; i++) {
+      const branch = branches[i];
+      const alias = `pr_${i}`;
+      const nodes = repoData?.[alias]?.nodes;
+
+      if (!nodes || nodes.length === 0) {
         results[branch] = { hasPR: false, merged: false };
       } else {
-        const pr = prs[0];
+        const pr = nodes[0];
         results[branch] = {
           hasPR: true,
-          merged: pr.merged_at !== null,
-          prUrl: pr.html_url,
+          merged: pr.state === 'MERGED',
+          prUrl: pr.url,
         };
       }
-    } catch {
-      results[branch] = { hasPR: false, merged: false };
+    }
+  } catch {
+    // On any failure, mark all branches as no PR
+    for (const branch of branches) {
+      if (!(branch in results)) {
+        results[branch] = { hasPR: false, merged: false };
+      }
     }
   }
 
