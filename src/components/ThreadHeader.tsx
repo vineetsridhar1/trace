@@ -539,7 +539,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                     Exit fullscreen
                   </button>
                 )}
-                {workspaceStatus === "completed" && (
+                {(workspaceStatus === "completed" || workspaceStatus === "in_progress") && (
                   <button
                     type="button"
                     disabled={!selectedWorkspaceId}

@@ -548,7 +548,7 @@ export function useClaudeWorkspaceActions({
     const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
     const chId = activeChannelIdRef.current;
     if (!selectedWorkspace || !chId) return;
-    if (selectedWorkspace.status !== 'completed') return;
+    if (selectedWorkspace.status !== 'completed' && selectedWorkspace.status !== 'in_progress') return;
     await updateWorkspaceStatus(selectedWorkspace.id, 'merged');
   }, [updateWorkspaceStatus]);
 
