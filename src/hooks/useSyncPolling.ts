@@ -100,6 +100,8 @@ export function useSyncPolling({
 
         if (ws.status === "completed" && pr.state === "open") {
           await updateStatusRef.current(ws.id, "review");
+        } else if (ws.status === "completed" && pr.state === "merged") {
+          await updateStatusRef.current(ws.id, "merged");
         } else if (ws.status === "review" && pr.state === "merged") {
           await updateStatusRef.current(ws.id, "merged");
         } else if (
@@ -172,8 +174,10 @@ export function useSyncPolling({
           void persistPrUrlRef.current(ws.id, pr.prUrl);
         }
 
-        if (ws.status === "completed" && pr.hasPR) {
+        if (ws.status === "completed" && pr.hasPR && !pr.merged) {
           await updateStatusRef.current(ws.id, "review");
+        } else if (ws.status === "completed" && pr.hasPR && pr.merged) {
+          await updateStatusRef.current(ws.id, "merged");
         } else if (ws.status === "review" && pr.merged) {
           await updateStatusRef.current(ws.id, "merged");
         } else if (ws.status === "review" && !pr.hasPR) {
