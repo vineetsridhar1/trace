@@ -1,18 +1,28 @@
-import type { ServerEvent, ExtractedDiffContent, SessionRenderNode, CollapsedTurnGroupNode, DiffRuntime, Question } from './types';
+import type {
+  ServerEvent,
+  ExtractedDiffContent,
+  SessionRenderNode,
+  CollapsedTurnGroupNode,
+  DiffRuntime,
+  Question,
+} from "./types";
 
 export function stripTraceInternal(text: string): string {
-  return text.replace(/<trace-internal>[\s\S]*?<\/trace-internal>\s*/g, '');
+  return text.replace(/<trace-internal>[\s\S]*?<\/trace-internal>\s*/g, "");
 }
 
-const READ_LIKE_TOOL_NAMES = new Set(['read', 'glob']);
-const EDIT_LIKE_TOOL_NAMES = new Set(['edit', 'multiedit', 'write']);
+const READ_LIKE_TOOL_NAMES = new Set(["read", "glob"]);
+const EDIT_LIKE_TOOL_NAMES = new Set(["edit", "multiedit", "write"]);
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
 export function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(dateStr).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function avatarInitial(sessionId: string): string {
@@ -20,16 +30,16 @@ export function avatarInitial(sessionId: string): string {
 }
 
 export function extractPromptText(rawPayload: unknown): string | null {
-  if (!rawPayload || typeof rawPayload !== 'object') {
+  if (!rawPayload || typeof rawPayload !== "object") {
     return null;
   }
 
   const record = rawPayload as Record<string, unknown>;
-  const candidates = ['prompt', 'text', 'message', 'user_prompt'];
+  const candidates = ["prompt", "text", "message", "user_prompt"];
 
   for (const key of candidates) {
     const value = record[key];
-    if (typeof value === 'string' && value.trim()) {
+    if (typeof value === "string" && value.trim()) {
       return value;
     }
   }
@@ -46,8 +56,10 @@ export interface RawPayloadAttachment {
   localPath: string;
 }
 
-export function extractAttachments(rawPayload: unknown): RawPayloadAttachment[] {
-  if (!rawPayload || typeof rawPayload !== 'object') return [];
+export function extractAttachments(
+  rawPayload: unknown,
+): RawPayloadAttachment[] {
+  if (!rawPayload || typeof rawPayload !== "object") return [];
   const record = rawPayload as Record<string, unknown>;
   if (!Array.isArray(record.attachments)) return [];
   return record.attachments as RawPayloadAttachment[];
@@ -55,20 +67,24 @@ export function extractAttachments(rawPayload: unknown): RawPayloadAttachment[] 
 
 export function serializeUnknown(value: unknown, maxLen = 1000): string {
   try {
-    const serialized = JSON.stringify(value, null, 2) ?? '';
-    return serialized.length > maxLen ? `${serialized.slice(0, maxLen)}...` : serialized;
+    const serialized = JSON.stringify(value, null, 2) ?? "";
+    return serialized.length > maxLen
+      ? `${serialized.slice(0, maxLen)}...`
+      : serialized;
   } catch {
-    const fallback = String(value ?? '');
-    return fallback.length > maxLen ? `${fallback.slice(0, maxLen)}...` : fallback;
+    const fallback = String(value ?? "");
+    return fallback.length > maxLen
+      ? `${fallback.slice(0, maxLen)}...`
+      : fallback;
   }
 }
 
 export function normalizeToolName(toolName: string | null): string {
-  return (toolName ?? '').trim().toLowerCase();
+  return (toolName ?? "").trim().toLowerCase();
 }
 
 export function toRelativeDisplayPath(pathValue: string): string {
-  const normalized = pathValue.replace(/\\/g, '/').trim();
+  const normalized = pathValue.replace(/\\/g, "/").trim();
   if (!normalized) {
     return normalized;
   }
@@ -83,23 +99,29 @@ export function toRelativeDisplayPath(pathValue: string): string {
     return traceRepoMatch[1];
   }
 
-  if (normalized.startsWith('/')) {
-    const parts = normalized.split('/').filter(Boolean);
+  if (normalized.startsWith("/")) {
+    const parts = normalized.split("/").filter(Boolean);
     if (parts.length > 4) {
-      return parts.slice(-4).join('/');
+      return parts.slice(-4).join("/");
     }
-    return parts.join('/');
+    return parts.join("/");
   }
 
   return normalized;
 }
 
 export function isReadLikeEvent(event: ServerEvent): boolean {
-  return event.hookEventName === 'PostToolUse' && READ_LIKE_TOOL_NAMES.has(normalizeToolName(event.toolName));
+  return (
+    event.hookEventName === "PostToolUse" &&
+    READ_LIKE_TOOL_NAMES.has(normalizeToolName(event.toolName))
+  );
 }
 
 export function isEditLikeEvent(event: ServerEvent): boolean {
-  return event.hookEventName === 'PostToolUse' && EDIT_LIKE_TOOL_NAMES.has(normalizeToolName(event.toolName));
+  return (
+    event.hookEventName === "PostToolUse" &&
+    EDIT_LIKE_TOOL_NAMES.has(normalizeToolName(event.toolName))
+  );
 }
 
 function findFirstString(value: unknown, depth: number): string | null {
@@ -107,7 +129,7 @@ function findFirstString(value: unknown, depth: number): string | null {
     return null;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
@@ -122,7 +144,7 @@ function findFirstString(value: unknown, depth: number): string | null {
     return null;
   }
 
-  if (typeof value !== 'object') {
+  if (typeof value !== "object") {
     return null;
   }
 
@@ -156,7 +178,7 @@ export function findStringByKeys(
     return null;
   }
 
-  if (typeof value !== 'object') {
+  if (typeof value !== "object") {
     return null;
   }
 
@@ -168,7 +190,7 @@ export function findStringByKeys(
       continue;
     }
 
-    if (typeof nested === 'string') {
+    if (typeof nested === "string") {
       if (allowEmpty || nested.trim()) {
         return allowEmpty ? nested : nested.trim();
       }
@@ -190,27 +212,33 @@ export function findStringByKeys(
   return null;
 }
 
-function normalizeUnifiedDiff(rawDiff: string, filePath: string | null): string | null {
+function normalizeUnifiedDiff(
+  rawDiff: string,
+  filePath: string | null,
+): string | null {
   const trimmed = rawDiff.trim();
   if (!trimmed) {
     return null;
   }
 
-  if (trimmed.includes('diff --git') || (trimmed.includes('--- ') && trimmed.includes('+++ '))) {
+  if (
+    trimmed.includes("diff --git") ||
+    (trimmed.includes("--- ") && trimmed.includes("+++ "))
+  ) {
     return trimmed;
   }
 
-  if (!trimmed.includes('@@')) {
+  if (!trimmed.includes("@@")) {
     return null;
   }
 
-  const safePath = filePath && filePath.trim() ? filePath.trim() : 'file.txt';
+  const safePath = filePath && filePath.trim() ? filePath.trim() : "file.txt";
   return [
     `diff --git a/${safePath} b/${safePath}`,
     `--- a/${safePath}`,
     `+++ b/${safePath}`,
     trimmed,
-  ].join('\n');
+  ].join("\n");
 }
 
 function buildUnifiedDiffFromBeforeAfter(
@@ -218,9 +246,9 @@ function buildUnifiedDiffFromBeforeAfter(
   before: string,
   after: string,
 ): string {
-  const safePath = filePath && filePath.trim() ? filePath.trim() : 'file.txt';
-  const oldLines = before.split('\n');
-  const newLines = after.split('\n');
+  const safePath = filePath && filePath.trim() ? filePath.trim() : "file.txt";
+  const oldLines = before.split("\n");
+  const newLines = after.split("\n");
 
   return [
     `diff --git a/${safePath} b/${safePath}`,
@@ -229,14 +257,19 @@ function buildUnifiedDiffFromBeforeAfter(
     `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
     ...oldLines.map((line) => `-${line}`),
     ...newLines.map((line) => `+${line}`),
-  ].join('\n');
+  ].join("\n");
 }
 
 export function extractReadGlobSummary(event: ServerEvent): string {
   const rawPathSnippet =
-    findStringByKeys(event.toolInput, ['file_path', 'path', 'filepath', 'relative_path']) ??
-    findStringByKeys(event.toolResponse, ['file_path', 'path', 'filepath']) ??
-    findStringByKeys(event.rawPayload, ['file_path', 'path']);
+    findStringByKeys(event.toolInput, [
+      "file_path",
+      "path",
+      "filepath",
+      "relative_path",
+    ]) ??
+    findStringByKeys(event.toolResponse, ["file_path", "path", "filepath"]) ??
+    findStringByKeys(event.rawPayload, ["file_path", "path"]);
 
   if (rawPathSnippet) {
     const relativePath = toRelativeDisplayPath(rawPathSnippet);
@@ -244,16 +277,15 @@ export function extractReadGlobSummary(event: ServerEvent): string {
   }
 
   const patternSnippet =
-    findStringByKeys(event.toolInput, ['pattern', 'glob', 'query']) ??
-    findStringByKeys(event.rawPayload, ['pattern', 'glob']);
+    findStringByKeys(event.toolInput, ["pattern", "glob", "query"]) ??
+    findStringByKeys(event.rawPayload, ["pattern", "glob"]);
 
   if (patternSnippet) {
     return patternSnippet.slice(0, 140);
   }
 
-  return event.toolName ?? 'Read/Glob';
+  return event.toolName ?? "Read/Glob";
 }
-
 
 export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
   const nodes: SessionRenderNode[] = [];
@@ -263,7 +295,7 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
   // PreToolUse events whose toolUseId is in this set are superseded and should be skipped.
   const completedToolUseIds = new Set<string>();
   for (const event of events) {
-    if (event.hookEventName === 'PostToolUse' && event.toolUseId) {
+    if (event.hookEventName === "PostToolUse" && event.toolUseId) {
       completedToolUseIds.add(event.toolUseId);
     }
   }
@@ -275,10 +307,12 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
 
     const first = bucket[0];
     const last = bucket[bucket.length - 1];
-    const summaryLabels = [...new Set(bucket.map((event) => extractReadGlobSummary(event)))].slice(0, 4);
+    const summaryLabels = [
+      ...new Set(bucket.map((event) => extractReadGlobSummary(event))),
+    ].slice(0, 4);
 
     nodes.push({
-      kind: 'readglob-group',
+      kind: "readglob-group",
       id: `readglob-${first.id}`,
       count: bucket.length,
       startTimestamp: first.timestamp,
@@ -296,7 +330,7 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     if (currentSessionId !== null && event.sessionId !== currentSessionId) {
       flushBucket();
       nodes.push({
-        kind: 'session-divider',
+        kind: "session-divider",
         id: `session-divider-${event.id}`,
         timestamp: event.timestamp,
       });
@@ -304,7 +338,11 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     currentSessionId = event.sessionId;
 
     // Skip PreToolUse events that already have a matching PostToolUse (completed)
-    if (event.hookEventName === 'PreToolUse' && event.toolUseId && completedToolUseIds.has(event.toolUseId)) {
+    if (
+      event.hookEventName === "PreToolUse" &&
+      event.toolUseId &&
+      completedToolUseIds.has(event.toolUseId)
+    ) {
       continue;
     }
 
@@ -314,7 +352,7 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     }
 
     flushBucket();
-    nodes.push({ kind: 'event', event });
+    nodes.push({ kind: "event", event });
   }
 
   flushBucket();
@@ -324,9 +362,9 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
     if (
-      n.kind === 'event' &&
-      n.event.hookEventName === 'PostToolUse' &&
-      normalizeToolName(n.event.toolName) === 'todowrite'
+      n.kind === "event" &&
+      n.event.hookEventName === "PostToolUse" &&
+      normalizeToolName(n.event.toolName) === "todowrite"
     ) {
       if (lastTodoIdx === -1) {
         lastTodoIdx = i;
@@ -341,32 +379,42 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
   // (Claude writes the plan, then exits — user sees plan review UI to approve/reject)
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
-    if (n.kind !== 'event' || n.event.hookEventName !== 'Stop') continue;
+    if (n.kind !== "event" || n.event.hookEventName !== "Stop") continue;
 
-    const hasExitPlanMode = n.event.toolName === 'ExitPlanMode';
+    const hasExitPlanMode = n.event.toolName === "ExitPlanMode";
 
     // Look backwards for a Write or Edit event that modified a plan .md file
-    let planContent = '';
-    let planFilePath = '';
+    let planContent = "";
+    let planFilePath = "";
     let planToolIdx = -1;
     for (let j = i - 1; j >= 0; j--) {
       const candidate = nodes[j];
-      if (candidate.kind !== 'event') continue;
+      if (candidate.kind !== "event") continue;
       // Stop searching if we hit another Stop or UserPromptSubmit (different turn)
       if (
-        candidate.event.hookEventName === 'Stop' ||
-        candidate.event.hookEventName === 'UserPromptSubmit'
+        candidate.event.hookEventName === "Stop" ||
+        candidate.event.hookEventName === "UserPromptSubmit"
       ) {
         break;
       }
-      if (candidate.event.hookEventName === 'PostToolUse') {
+      if (candidate.event.hookEventName === "PostToolUse") {
         const tool = normalizeToolName(candidate.event.toolName);
-        if (tool === 'write' || tool === 'edit') {
-          const filePath = findStringByKeys(candidate.event.toolInput, ['file_path', 'path', 'filepath']) ?? '';
-          const isStrictPlanPath = filePath.includes('.claude/plans/') && filePath.endsWith('.md');
-          const isBroadPlanPath = hasExitPlanMode && filePath.endsWith('.md');
+        if (tool === "write" || tool === "edit") {
+          const filePath =
+            findStringByKeys(candidate.event.toolInput, [
+              "file_path",
+              "path",
+              "filepath",
+            ]) ?? "";
+          const isStrictPlanPath =
+            filePath.includes(".claude/plans/") && filePath.endsWith(".md");
+          const isBroadPlanPath = hasExitPlanMode && filePath.endsWith(".md");
           if (isStrictPlanPath || isBroadPlanPath) {
-            planContent = findStringByKeys(candidate.event.toolInput, ['content', 'text']) ?? '';
+            planContent =
+              findStringByKeys(candidate.event.toolInput, [
+                "content",
+                "text",
+              ]) ?? "";
             planFilePath = filePath;
             planToolIdx = j;
             break;
@@ -384,7 +432,7 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
 
     // Replace the Stop node with a plan-review node
     const planNode: SessionRenderNode = {
-      kind: 'plan-review',
+      kind: "plan-review",
       id: `plan-review-${n.event.id}`,
       planContent,
       planFilePath,
@@ -399,20 +447,22 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
   // Check if there's a PostToolUse event for AskUserQuestion (the primary source).
   // When both PostToolUse and Stop events exist for the same AskUserQuestion call,
   // remove the Stop event to avoid duplicate ask-user-question nodes.
-  const hasPostToolUseAsk = nodes.some(n =>
-    n.kind === 'event' &&
-    n.event.hookEventName === 'PostToolUse' &&
-    normalizeToolName(n.event.toolName) === 'askuserquestion',
+  const hasPostToolUseAsk = nodes.some(
+    (n) =>
+      n.kind === "event" &&
+      n.event.hookEventName === "PostToolUse" &&
+      normalizeToolName(n.event.toolName) === "askuserquestion",
   );
 
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
-    if (n.kind !== 'event' || n.event.hookEventName !== 'Stop') continue;
-    if (n.event.toolName !== 'AskUserQuestion') continue;
+    if (n.kind !== "event" || n.event.hookEventName !== "Stop") continue;
+    if (n.event.toolName !== "AskUserQuestion") continue;
 
     const toolInput = n.event.toolInput as Record<string, unknown> | null;
     const questions = toolInput?.questions as Question[] | undefined;
-    if (!questions || !Array.isArray(questions) || questions.length === 0) continue;
+    if (!questions || !Array.isArray(questions) || questions.length === 0)
+      continue;
 
     if (hasPostToolUseAsk) {
       // PostToolUse will be converted to ask-user-question below; remove the
@@ -421,7 +471,7 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
     } else {
       // Fallback: no PostToolUse exists, convert the Stop event directly.
       const askNode: SessionRenderNode = {
-        kind: 'ask-user-question',
+        kind: "ask-user-question",
         id: `ask-question-${n.event.id}`,
         questions,
         event: n.event,
@@ -434,15 +484,16 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
   // (when stdin='ignore', AskUserQuestion fires as PostToolUse, not Stop)
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
-    if (n.kind !== 'event' || n.event.hookEventName !== 'PostToolUse') continue;
-    if (normalizeToolName(n.event.toolName) !== 'askuserquestion') continue;
+    if (n.kind !== "event" || n.event.hookEventName !== "PostToolUse") continue;
+    if (normalizeToolName(n.event.toolName) !== "askuserquestion") continue;
 
     const toolInput = n.event.toolInput as Record<string, unknown> | null;
     const questions = toolInput?.questions as Question[] | undefined;
-    if (!questions || !Array.isArray(questions) || questions.length === 0) continue;
+    if (!questions || !Array.isArray(questions) || questions.length === 0)
+      continue;
 
     const askNode: SessionRenderNode = {
-      kind: 'ask-user-question',
+      kind: "ask-user-question",
       id: `ask-question-${n.event.id}`,
       questions,
       event: n.event,
@@ -467,7 +518,7 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
       let bestCount = 0;
       for (const idx of turnQuestionIndices) {
         const n = nodes[idx];
-        if (n.kind === 'ask-user-question') {
+        if (n.kind === "ask-user-question") {
           const count = n.questions.length;
           if (count >= bestCount) {
             bestCount = count;
@@ -485,9 +536,9 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
 
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
-      if (n.kind === 'event' && n.event.hookEventName === 'UserPromptSubmit') {
+      if (n.kind === "event" && n.event.hookEventName === "UserPromptSubmit") {
         flushTurnQuestions();
-      } else if (n.kind === 'ask-user-question') {
+      } else if (n.kind === "ask-user-question") {
         turnQuestionIndices.push(i);
       }
     }
@@ -507,7 +558,7 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
   while (i < nodes.length) {
     const node = nodes[i];
     const isUserPrompt =
-      node.kind === 'event' && node.event.hookEventName === 'UserPromptSubmit';
+      node.kind === "event" && node.event.hookEventName === "UserPromptSubmit";
 
     if (!isUserPrompt) {
       collapsed.push(node);
@@ -521,12 +572,16 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
       const candidate = nodes[j];
       // Hit another UserPromptSubmit or session divider — this turn has no Stop
       if (
-        candidate.kind === 'session-divider' ||
-        (candidate.kind === 'event' && candidate.event.hookEventName === 'UserPromptSubmit')
+        candidate.kind === "session-divider" ||
+        (candidate.kind === "event" &&
+          candidate.event.hookEventName === "UserPromptSubmit")
       ) {
         break;
       }
-      if (candidate.kind === 'event' && candidate.event.hookEventName === 'Stop') {
+      if (
+        candidate.kind === "event" &&
+        candidate.event.hookEventName === "Stop"
+      ) {
         stopIdx = j;
         break;
       }
@@ -549,19 +604,25 @@ export function buildSessionNodes(events: ServerEvent[]): SessionRenderNode[] {
       let toolCallCount = 0;
       let messageCount = 0;
       for (const mn of middleNodes) {
-        if (mn.kind === 'readglob-group') {
+        if (mn.kind === "readglob-group") {
           toolCallCount += mn.count;
-        } else if (mn.kind === 'event') {
-          if (mn.event.hookEventName === 'PostToolUse' || mn.event.hookEventName === 'PreToolUse') {
+        } else if (mn.kind === "event") {
+          if (
+            mn.event.hookEventName === "PostToolUse" ||
+            mn.event.hookEventName === "PreToolUse"
+          ) {
             toolCallCount++;
           }
-          if (mn.event.lastAssistantMessage && stripTraceInternal(mn.event.lastAssistantMessage).trim()) {
+          if (
+            mn.event.lastAssistantMessage &&
+            stripTraceInternal(mn.event.lastAssistantMessage).trim()
+          ) {
             messageCount++;
           }
         }
       }
       const group: CollapsedTurnGroupNode = {
-        kind: 'collapsed-turn',
+        kind: "collapsed-turn",
         id: `collapsed-turn-${(node as { event: ServerEvent }).event.id}`,
         stepCount: middleNodes.length,
         toolCallCount,
@@ -590,28 +651,80 @@ export function formatDuration(seconds: number): string {
   return remM > 0 ? `${h} hr ${remM} min` : `${h} hr`;
 }
 
-export function extractEditDiffContent(event: ServerEvent): ExtractedDiffContent {
+export function extractEditDiffContent(
+  event: ServerEvent,
+): ExtractedDiffContent {
   const rawFilePath =
-    findStringByKeys(event.toolInput, ['file_path', 'path', 'filepath', 'relative_path']) ??
-    findStringByKeys(event.toolResponse, ['file_path', 'path', 'filepath', 'relative_path']) ??
-    findStringByKeys(event.rawPayload, ['file_path', 'path', 'filepath', 'relative_path']);
+    findStringByKeys(event.toolInput, [
+      "file_path",
+      "path",
+      "filepath",
+      "relative_path",
+    ]) ??
+    findStringByKeys(event.toolResponse, [
+      "file_path",
+      "path",
+      "filepath",
+      "relative_path",
+    ]) ??
+    findStringByKeys(event.rawPayload, [
+      "file_path",
+      "path",
+      "filepath",
+      "relative_path",
+    ]);
   const filePath = rawFilePath ? toRelativeDisplayPath(rawFilePath) : null;
 
   const directDiff =
-    findStringByKeys(event.toolInput, ['diff', 'patch', 'unified_diff', 'unifiedDiff']) ??
-    findStringByKeys(event.toolResponse, ['diff', 'patch', 'unified_diff', 'unifiedDiff']) ??
-    findStringByKeys(event.rawPayload, ['diff', 'patch', 'unified_diff', 'unifiedDiff']);
+    findStringByKeys(event.toolInput, [
+      "diff",
+      "patch",
+      "unified_diff",
+      "unifiedDiff",
+    ]) ??
+    findStringByKeys(event.toolResponse, [
+      "diff",
+      "patch",
+      "unified_diff",
+      "unifiedDiff",
+    ]) ??
+    findStringByKeys(event.rawPayload, [
+      "diff",
+      "patch",
+      "unified_diff",
+      "unifiedDiff",
+    ]);
 
   let diffText = directDiff ? normalizeUnifiedDiff(directDiff, filePath) : null;
 
   if (!diffText) {
     const before =
-      findStringByKeys(event.toolInput, ['old_string', 'oldText', 'before', 'original'], 5, true) ??
-      findStringByKeys(event.toolResponse, ['old_string', 'oldText', 'before', 'original'], 5, true);
+      findStringByKeys(
+        event.toolInput,
+        ["old_string", "oldText", "before", "original"],
+        5,
+        true,
+      ) ??
+      findStringByKeys(
+        event.toolResponse,
+        ["old_string", "oldText", "before", "original"],
+        5,
+        true,
+      );
 
     const after =
-      findStringByKeys(event.toolInput, ['new_string', 'newText', 'after', 'replacement'], 5, true) ??
-      findStringByKeys(event.toolResponse, ['new_string', 'newText', 'after', 'replacement'], 5, true);
+      findStringByKeys(
+        event.toolInput,
+        ["new_string", "newText", "after", "replacement"],
+        5,
+        true,
+      ) ??
+      findStringByKeys(
+        event.toolResponse,
+        ["new_string", "newText", "after", "replacement"],
+        5,
+        true,
+      );
 
     if (before !== null && after !== null) {
       diffText = buildUnifiedDiffFromBeforeAfter(filePath, before, after);
@@ -626,7 +739,7 @@ export function extractEditDiffContent(event: ServerEvent): ExtractedDiffContent
     3500,
   );
 
-  const title = `${event.toolName ?? 'Edit'}${filePath ? ` · ${filePath}` : ''}`;
+  const title = `${event.toolName ?? "Edit"}${filePath ? ` · ${filePath}` : ""}`;
 
   return {
     title,
@@ -641,20 +754,39 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
+export function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return m % 1 === 0 ? `${m}m` : `${m.toFixed(1)}m`;
+  }
+  if (n >= 1_000) {
+    const k = n / 1_000;
+    return k % 1 === 0 ? `${k}k` : `${k.toFixed(1)}k`;
+  }
+  return String(n);
+}
+
 let diffRuntimePromise: Promise<DiffRuntime | null> | null = null;
 
 export async function loadDiffRuntime(): Promise<DiffRuntime | null> {
   if (!diffRuntimePromise) {
     diffRuntimePromise = (async () => {
       try {
-        const module = await import('react-diff-view');
-        await import('react-diff-view/style/index.css');
+        const module = await import("react-diff-view");
+        await import("react-diff-view/style/index.css");
 
         const runtime = module as unknown as Partial<DiffRuntime>;
-        if (!runtime.Diff || !runtime.Hunk || typeof runtime.parseDiff !== 'function') {
+        if (
+          !runtime.Diff ||
+          !runtime.Hunk ||
+          typeof runtime.parseDiff !== "function"
+        ) {
           return null;
         }
-        if (typeof runtime.tokenize !== 'function' || typeof runtime.markEdits !== 'function') {
+        if (
+          typeof runtime.tokenize !== "function" ||
+          typeof runtime.markEdits !== "function"
+        ) {
           return null;
         }
 
