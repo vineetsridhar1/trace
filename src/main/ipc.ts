@@ -827,19 +827,24 @@ export function registerIpcHandlers() {
 
       authWindow.loadURL(`${serverUrl}/auth/github`);
 
-      // When the server is remote (LAN), GitHub still redirects to localhost.
-      // Intercept that redirect and rewrite it to the actual server URL.
-      authWindow.webContents.on("will-navigate", (_event, url) => {
+      // GitHub's OAuth app has a fixed redirect URI (e.g. localhost:3100) but
+      // the backend may run on a different port. Intercept the callback and
+      // rewrite it to the actual server URL.  We listen on both events:
+      //   - will-navigate: client-side navigations (link clicks, window.location)
+      //   - will-redirect: server-side HTTP 302 redirects (GitHub's OAuth redirect)
+      const rewriteCallback = (event: Electron.Event, url: string) => {
         if (
           url.includes("/auth/github/callback") &&
           !url.startsWith(serverUrl)
         ) {
-          _event.preventDefault();
+          event.preventDefault();
           const callbackUrl = new URL(url);
           const rewritten = `${serverUrl}${callbackUrl.pathname}${callbackUrl.search}`;
           authWindow.loadURL(rewritten);
         }
-      });
+      };
+      authWindow.webContents.on("will-navigate", rewriteCallback);
+      authWindow.webContents.on("will-redirect", rewriteCallback);
 
       authWindow.webContents.on("did-navigate", async (_event, url) => {
         if (url.includes("/auth/github/callback")) {
