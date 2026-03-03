@@ -262,6 +262,9 @@ export interface TraceAPI {
     repoPath: string,
     branchName: string,
   ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
+  checkRunningProcesses: (
+    workspaceIds: string[],
+  ) => Promise<{ success: boolean; running: string[] }>;
 }
 
 declare global {

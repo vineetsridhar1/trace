@@ -396,4 +396,10 @@ contextBridge.exposeInMainWorld("traceAPI", {
       repoPath,
       branchName,
     ) as Promise<{ success: boolean; worktreePath?: string; error?: string }>,
+
+  checkRunningProcesses: (workspaceIds: string[]) =>
+    ipcRenderer.invoke(
+      "check-running-processes",
+      workspaceIds,
+    ) as Promise<{ success: boolean; running: string[] }>,
 });

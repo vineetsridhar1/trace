@@ -13,6 +13,7 @@ import {
   stopClaudeProcess,
   pushWorktreeBranch,
   ensureWorktreeFromRemote,
+  runningProcesses,
 } from "./worktree";
 import { resetWatchdog, stopWatchdog } from "./watchdog";
 import {
@@ -82,6 +83,7 @@ const PUSH_WORKTREE_BRANCH_CHANNEL = "push-worktree-branch";
 const ENSURE_WORKTREE_FROM_REMOTE_CHANNEL = "ensure-worktree-from-remote";
 const GET_GLOBAL_CONFIG_CHANNEL = "get-global-config";
 const SET_GLOBAL_CONFIG_CHANNEL = "set-global-config";
+const CHECK_RUNNING_PROCESSES_CHANNEL = "check-running-processes";
 
 // Curated allow-list of dev tools we show in the "Open In" menu.
 // Maps bundle identifier → { id, label, openArgs } used by the open-in-app handler.
@@ -203,6 +205,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(ENSURE_WORKTREE_FROM_REMOTE_CHANNEL);
   ipcMain.removeHandler(GET_GLOBAL_CONFIG_CHANNEL);
   ipcMain.removeHandler(SET_GLOBAL_CONFIG_CHANNEL);
+  ipcMain.removeHandler(CHECK_RUNNING_PROCESSES_CHANNEL);
 
   ipcMain.handle(
     SPAWN_CLAUDE_CHANNEL,
@@ -1428,6 +1431,14 @@ JSON.stringify(found);
       } catch (err) {
         return { success: false, error: String(err) };
       }
+    },
+  );
+
+  ipcMain.handle(
+    CHECK_RUNNING_PROCESSES_CHANNEL,
+    (_event, workspaceIds: string[]) => {
+      const running = workspaceIds.filter((id) => runningProcesses.has(id));
+      return { success: true, running };
     },
   );
 }

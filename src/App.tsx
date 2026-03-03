@@ -23,6 +23,7 @@ import { useChannelSubscriptions } from "./hooks/useChannelSubscriptionsV2";
 import { useChannelMessageNotifications } from "./hooks/useChannelMessageNotifications";
 import { useTerminalInit } from "./hooks/useTerminalInit";
 import { useClaudeWorkspaceActions } from "./hooks/useClaudeWorkspaceActions";
+import { useStuckWorkspaceReconciliation } from "./hooks/useStuckWorkspaceReconciliation";
 import { useSyncPolling } from "./hooks/useSyncPolling";
 import { useKanbanSync } from "./hooks/useKanbanSync";
 import { useAiChatSync } from "./hooks/useAiChatSync";
@@ -359,6 +360,13 @@ function AppContent() {
   useClaudeWorkspaceActions({
     updateWorkspaceStatus,
     onWorkspaceCreated: handleOpenWorkspace,
+  });
+
+  // ─── Reconcile stuck workspace statuses on startup ────────────────
+  useStuckWorkspaceReconciliation({
+    workspaces,
+    workspacesLoading,
+    updateWorkspaceStatus,
   });
 
   // ─── Subscriptions ───────────────────────────────────────────────
