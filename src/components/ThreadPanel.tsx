@@ -519,7 +519,6 @@ export function ThreadPanel() {
           selectedWorkspaceId={selectedWorkspaceId}
           channelId={activeChannelId}
           workspaceStatus={workspaceStatus}
-          isClaudeRunning={isClaudeRunning}
           hasTicket={ticket !== null}
           viewMode={viewMode}
           onSetViewMode={setViewMode}

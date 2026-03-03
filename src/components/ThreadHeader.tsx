@@ -24,50 +24,10 @@ import { formatTokenCount } from "../utils";
 
 type ViewMode = ThreadViewMode;
 
-const HEADER_STATUS_CONFIG: Record<
-  TicketStatus,
-  { label: string; className: string }
-> = {
-  pending: { label: "Pending", className: "text-yellow-400 bg-yellow-400/10" },
-  creation: {
-    label: "Creating",
-    className: "text-orange-400 bg-orange-400/10",
-  },
-  in_progress: {
-    label: "In Progress",
-    className: "text-accent-light bg-accent-light/10",
-  },
-  completed: {
-    label: "Done",
-    className: "text-green-400 bg-green-400/10",
-  },
-  merged: {
-    label: "Merged",
-    className: "text-purple-400 bg-purple-400/10",
-  },
-  needs_input: {
-    label: "Needs Input",
-    className: "text-amber-400 bg-amber-400/10",
-  },
-  queued: {
-    label: "Queued",
-    className: "text-cyan-400 bg-cyan-400/10",
-  },
-  review: {
-    label: "In Review",
-    className: "text-teal-400 bg-teal-400/10",
-  },
-  handed_off: {
-    label: "Handed Off",
-    className: "text-orange-300 bg-orange-300/10",
-  },
-};
-
 interface ThreadHeaderProps {
   selectedWorkspaceId: string | null;
   channelId: string | null;
   workspaceStatus: TicketStatus;
-  isClaudeRunning: boolean;
   hasTicket: boolean;
   viewMode: ViewMode;
   onSetViewMode: (mode: ViewMode) => void;
@@ -97,7 +57,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   selectedWorkspaceId,
   channelId,
   workspaceStatus,
-  isClaudeRunning,
   hasTicket,
   viewMode,
   onSetViewMode,
@@ -122,9 +81,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   activeSessionId,
   onSwitchSession,
 }: ThreadHeaderProps) {
-  const statusConfig =
-    HEADER_STATUS_CONFIG[workspaceStatus] ?? HEADER_STATUS_CONFIG.pending;
-
   const tokenUsage = useThreadStore((s) => s.tokenUsage);
 
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -231,21 +187,6 @@ export const ThreadHeader = memo(function ThreadHeader({
       className="flex items-center justify-between border-b border-edge px-4 py-3"
     >
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-accent-light">
-          {selectedWorkspaceId
-            ? `trace/${selectedWorkspaceId.slice(0, 8)}`
-            : "Thread"}
-        </h3>
-        {selectedWorkspaceId && (
-          <span
-            className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}
-          >
-            {workspaceStatus === "review" && isClaudeRunning && (
-              <FiLoader className="h-3 w-3 animate-spin-slow" />
-            )}
-            {statusConfig.label}
-          </span>
-        )}
         <div className="flex rounded-lg bg-surface-elevated p-0.5">
           <Tooltip text="⌘1">
             <button
