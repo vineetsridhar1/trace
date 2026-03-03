@@ -168,6 +168,7 @@ interface MessagePanelProps {
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
   onDeleteWorktree?: (workspaceId: string) => void;
+  onMarkMerged?: (workspaceId: string) => void;
   worktreeWorkspaceIds?: Set<string>;
   deletingWorktreeIds?: Set<string>;
   isFullscreen?: boolean;
@@ -197,6 +198,7 @@ export function MessagePanel({
   kanbanLoading,
   onDeleteWorkspace,
   onDeleteWorktree,
+  onMarkMerged,
   worktreeWorkspaceIds,
   deletingWorktreeIds,
   onMoveTicket,
@@ -338,6 +340,8 @@ export function MessagePanel({
             onDeleteWorktree={
               workspace.status === "merged" ? onDeleteWorktree : undefined
             }
+            onMarkMerged={onMarkMerged}
+            channelId={channelId}
             hasActiveWorktree={worktreeWorkspaceIds?.has(workspace.id)}
             hasRunningProcess={workspacesWithRunningProcesses?.has(
               workspace.id,

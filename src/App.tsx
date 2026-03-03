@@ -453,6 +453,13 @@ function AppContent() {
     [activeChannelId, executeDeleteWorkspace, getChannelRepoPath],
   );
 
+  const handleMarkMerged = useCallback(
+    async (workspaceId: string) => {
+      await updateWorkspaceStatus(workspaceId, "merged");
+    },
+    [updateWorkspaceStatus],
+  );
+
   const performChannelSwitch = useCallback(
     (channelId: string) => {
       const currentSelected = useThreadStore.getState().selectedWorkspaceId;
@@ -967,6 +974,7 @@ function AppContent() {
                 onOpenWorkspace={handleOpenWorkspace}
                 onDeleteWorkspace={handleDeleteWorkspace}
                 onDeleteWorktree={handleDeleteWorktreeById}
+                onMarkMerged={handleMarkMerged}
                 worktreeWorkspaceIds={worktreeWorkspaceIds}
                 deletingWorktreeIds={deletingWorktreeIds}
                 middlePanelView={middlePanelView}

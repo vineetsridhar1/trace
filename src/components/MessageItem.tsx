@@ -1,6 +1,7 @@
-import { memo } from 'react';
-import { FiCheck, FiGitMerge, FiGitPullRequest, FiLoader, FiTerminal, FiTrash2 } from 'react-icons/fi';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { FiCheck, FiGitMerge, FiGitPullRequest, FiLink, FiLoader, FiTerminal, FiTrash2 } from 'react-icons/fi';
 import type { Workspace, KanbanTicket, TicketStatus } from '../types';
+import { getServerUrl } from '../types';
 import { avatarInitial } from '../utils';
 import { ScrambleText } from './ScrambleText';
 
@@ -29,6 +30,7 @@ export const STATUS_GROUP_ORDER: TicketStatus[] = [
 
 const ACTIVE_STATUSES = new Set<TicketStatus>(['in_progress', 'creation']);
 const DONE_STATUSES = new Set<TicketStatus>(['completed']);
+const MARK_MERGED_STATUSES = new Set<TicketStatus>(['completed', 'in_progress']);
 
 function shortcutLabel(index: number): string | null {
   if (index >= 1 && index <= 9) return String(index);
@@ -62,6 +64,8 @@ interface MessageItemProps {
   onOpenWorkspace: (workspace: Workspace) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
   onDeleteWorktree?: (workspaceId: string) => void;
+  onMarkMerged?: (workspaceId: string) => void;
+  channelId?: string | null;
   hasActiveWorktree?: boolean;
   hasRunningProcess?: boolean;
   isDeletingWorktree?: boolean;
@@ -78,6 +82,8 @@ export const MessageItem = memo(function MessageItem({
   onOpenWorkspace,
   onDeleteWorkspace,
   onDeleteWorktree,
+  onMarkMerged,
+  channelId,
   hasActiveWorktree,
   hasRunningProcess,
   isDeletingWorktree,
@@ -90,102 +96,218 @@ export const MessageItem = memo(function MessageItem({
   const title = ticket?.title || workspace.preview || workspace.cliSessionId;
   const branch = workspace.branch?.replace(/^trace\//, '');
 
+  // ─── Context menu state ──────────────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const closeMenu = useCallback(() => setCtxMenu(null), []);
+
+  // Click-outside and Escape to close
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setCtxMenu(null);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setCtxMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [ctxMenu]);
+
+  const handleCopyLink = useCallback(async () => {
+    if (!channelId) return;
+    const url = `${getServerUrl()}/thread/${channelId}/${workspace.id}`;
+    await navigator.clipboard.writeText(url);
+    closeMenu();
+  }, [channelId, workspace.id, closeMenu]);
+
+  const handleMarkMerged = useCallback(() => {
+    onMarkMerged?.(workspace.id);
+    closeMenu();
+  }, [onMarkMerged, workspace.id, closeMenu]);
+
+  const handleDeleteWorktree = useCallback(() => {
+    onDeleteWorktree?.(workspace.id);
+    closeMenu();
+  }, [onDeleteWorktree, workspace.id, closeMenu]);
+
+  const handleDeleteWorkspace = useCallback(() => {
+    onDeleteWorkspace?.(workspace.id);
+    closeMenu();
+  }, [onDeleteWorkspace, workspace.id, closeMenu]);
+
   return (
-    <button
-      type="button"
-      className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left outline-none transition-colors ${
-        isSelected ? 'selected' : ''
-      } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
-      onClick={() => onOpenWorkspace(workspace)}
-      title={title}
-    >
-      {/* Shortcut index badge */}
-      {shortcutIndex != null && (
-        <kbd className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded border border-edge bg-surface-deep text-[10px] font-medium leading-none text-muted">
-          {shortcutLabel(shortcutIndex) ?? '\u00A0'}
-        </kbd>
-      )}
-
-      {/* Avatar */}
-      {workspace.user?.avatarUrl ? (
-        <img
-          src={workspace.user.avatarUrl}
-          alt={workspace.user.name}
-          className={`h-6 w-6 flex-shrink-0 rounded-full ring-2 ${avatarConfig.avatarBg}`}
-        />
-      ) : (
-        <div
-          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
-        >
-          {workspace.user ? workspace.user.name.charAt(0).toUpperCase() : avatarInitial(workspace.cliSessionId)}
-        </div>
-      )}
-
-      {/* Title + branch stacked */}
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm text-primary"><ScrambleText text={title} /></div>
-        {branch && (
-          <div className="truncate font-mono text-[10px] text-muted">{branch}</div>
+    <>
+      <button
+        type="button"
+        className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left outline-none transition-colors ${
+          isSelected ? 'selected' : ''
+        } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
+        onClick={() => onOpenWorkspace(workspace)}
+        onContextMenu={handleContextMenu}
+        title={title}
+      >
+        {/* Shortcut index badge */}
+        {shortcutIndex != null && (
+          <kbd className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded border border-edge bg-surface-deep text-[10px] font-medium leading-none text-muted">
+            {shortcutLabel(shortcutIndex) ?? '\u00A0'}
+          </kbd>
         )}
-      </div>
 
-      {/* Running process indicator */}
-      {hasRunningProcess && (
-        <FiTerminal className="h-3 w-3 flex-shrink-0 text-green-400" title="Running process" />
-      )}
-
-      {/* Status icon */}
-      <StatusIcon status={status} isRunning={activelyRunning || workspace.cliSession.status !== 'stopped'} />
-
-      {/* Delete worktree button for merged items with active worktrees */}
-      {hasActiveWorktree && onDeleteWorktree && (
-        isDeletingWorktree ? (
-          <div title="Deleting worktree" className="flex-shrink-0 p-0.5 text-muted">
-            <FiLoader className="h-3 w-3 animate-spin" />
-          </div>
+        {/* Avatar */}
+        {workspace.user?.avatarUrl ? (
+          <img
+            src={workspace.user.avatarUrl}
+            alt={workspace.user.name}
+            className={`h-6 w-6 flex-shrink-0 rounded-full ring-2 ${avatarConfig.avatarBg}`}
+          />
         ) : (
+          <div
+            className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
+          >
+            {workspace.user ? workspace.user.name.charAt(0).toUpperCase() : avatarInitial(workspace.cliSessionId)}
+          </div>
+        )}
+
+        {/* Title + branch stacked */}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm text-primary"><ScrambleText text={title} /></div>
+          {branch && (
+            <div className="truncate font-mono text-[10px] text-muted">{branch}</div>
+          )}
+        </div>
+
+        {/* Running process indicator */}
+        {hasRunningProcess && (
+          <FiTerminal className="h-3 w-3 flex-shrink-0 text-green-400" title="Running process" />
+        )}
+
+        {/* Status icon */}
+        <StatusIcon status={status} isRunning={activelyRunning || workspace.cliSession.status !== 'stopped'} />
+
+        {/* Delete worktree button for merged items with active worktrees */}
+        {hasActiveWorktree && onDeleteWorktree && (
+          isDeletingWorktree ? (
+            <div title="Deleting worktree" className="flex-shrink-0 p-0.5 text-muted">
+              <FiLoader className="h-3 w-3 animate-spin" />
+            </div>
+          ) : (
+            <div
+              role="button"
+              tabIndex={-1}
+              title="Delete worktree"
+              className="flex-shrink-0 cursor-pointer rounded p-0.5 text-muted hover:bg-red-500/20 hover:text-red-400 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteWorktree(workspace.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  onDeleteWorktree(workspace.id);
+                }
+              }}
+            >
+              <FiTrash2 className="h-3 w-3" />
+            </div>
+          )
+        )}
+
+        {/* Delete button (hover only) */}
+        {onDeleteWorkspace && (
           <div
             role="button"
             tabIndex={-1}
-            title="Delete worktree"
-            className="flex-shrink-0 cursor-pointer rounded p-0.5 text-muted hover:bg-red-500/20 hover:text-red-400 transition-colors"
+            className="hidden flex-shrink-0 cursor-pointer rounded p-0.5 text-muted hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
             onClick={(e) => {
               e.stopPropagation();
-              onDeleteWorktree(workspace.id);
+              onDeleteWorkspace(workspace.id);
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.stopPropagation();
-                onDeleteWorktree(workspace.id);
+                onDeleteWorkspace(workspace.id);
               }
             }}
           >
             <FiTrash2 className="h-3 w-3" />
           </div>
-        )
-      )}
+        )}
+      </button>
 
-      {/* Delete button (hover only) */}
-      {onDeleteWorkspace && (
+      {/* Right-click context menu */}
+      {ctxMenu && (
         <div
-          role="button"
-          tabIndex={-1}
-          className="hidden flex-shrink-0 cursor-pointer rounded p-0.5 text-muted hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteWorkspace(workspace.id);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-              onDeleteWorkspace(workspace.id);
-            }
-          }}
+          ref={menuRef}
+          className="fixed z-50 w-48 rounded-md border border-edge bg-surface py-1 shadow-lg"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
         >
-          <FiTrash2 className="h-3 w-3" />
+          {channelId && (
+            <button
+              type="button"
+              onClick={() => void handleCopyLink()}
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated"
+            >
+              <FiLink className="h-3 w-3" aria-hidden="true" />
+              Copy link
+            </button>
+          )}
+          {MARK_MERGED_STATUSES.has(status) && onMarkMerged && (
+            <button
+              type="button"
+              onClick={handleMarkMerged}
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated"
+            >
+              <FiCheck className="h-3 w-3" aria-hidden="true" />
+              Mark as merged
+            </button>
+          )}
+          {hasActiveWorktree && onDeleteWorktree && (
+            <>
+              <div className="my-1 h-px bg-surface-elevated" />
+              <button
+                type="button"
+                disabled={isDeletingWorktree}
+                onClick={handleDeleteWorktree}
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isDeletingWorktree ? (
+                  <FiLoader className="h-3 w-3 animate-spin" aria-hidden="true" />
+                ) : (
+                  <FiTrash2 className="h-3 w-3" aria-hidden="true" />
+                )}
+                {isDeletingWorktree ? 'Deleting worktree...' : 'Delete worktree'}
+              </button>
+            </>
+          )}
+          <div className="my-1 h-px bg-surface-elevated" />
+          <button
+            type="button"
+            onClick={handleDeleteWorkspace}
+            className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated"
+          >
+            <FiTrash2 className="h-3 w-3" aria-hidden="true" />
+            Delete workspace
+          </button>
         </div>
       )}
-    </button>
+    </>
   );
 }, areMessageItemPropsEqual);
 
@@ -202,6 +324,8 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.onOpenWorkspace === next.onOpenWorkspace &&
     prev.onDeleteWorkspace === next.onDeleteWorkspace &&
     prev.onDeleteWorktree === next.onDeleteWorktree &&
+    prev.onMarkMerged === next.onMarkMerged &&
+    prev.channelId === next.channelId &&
     prev.shortcutIndex === next.shortcutIndex
   );
 }
