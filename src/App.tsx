@@ -498,6 +498,7 @@ function AppContent() {
 
       setPullingPRNumbers((prev) => new Set(prev).add(pr.number));
 
+      let createdWorkspace: Workspace | null = null;
       try {
         // 1. Create workspace with PR title
         const { data } = await executeCreateWorkspace({
@@ -508,6 +509,7 @@ function AppContent() {
           return;
         }
         const workspace = data.createWorkspace.workspace as Workspace;
+        createdWorkspace = workspace;
         upsertAndSyncWorkspace(workspace);
 
         // 2. Checkout the PR branch into a worktree
@@ -522,8 +524,7 @@ function AppContent() {
           setupCommands,
         );
         if (!checkoutResult.success) {
-          console.error('Failed to checkout PR:', checkoutResult.error);
-          return;
+          throw new Error(checkoutResult.error || 'Checkout failed');
         }
 
         // 3. Set PR URL on the workspace
@@ -533,8 +534,18 @@ function AppContent() {
 
         // 4. Switch to workspaces view and open the workspace
         handleOpenWorkspace(workspace);
+        createdWorkspace = null; // success — don't clean up
       } catch (err) {
         console.error('Failed to pull PR:', err);
+        // Clean up the workspace if it was created but checkout/setup failed
+        if (createdWorkspace && activeChannelId) {
+          try {
+            await executeDeleteWorkspace({ variables: { channelId: activeChannelId, workspaceId: createdWorkspace.id } });
+            useWorkspaceStore.getState().removeWorkspace(createdWorkspace.id);
+          } catch {
+            console.error('Failed to clean up workspace after PR checkout failure');
+          }
+        }
       } finally {
         setPullingPRNumbers((prev) => {
           const next = new Set(prev);
@@ -543,7 +554,7 @@ function AppContent() {
         });
       }
     },
-    [activeChannelId, enrichedActiveChannel, executeCreateWorkspace, executeSetWorkspacePrUrl, getChannelRepoPath, handleOpenWorkspace, upsertAndSyncWorkspace],
+    [activeChannelId, enrichedActiveChannel, executeCreateWorkspace, executeDeleteWorkspace, executeSetWorkspacePrUrl, getChannelRepoPath, handleOpenWorkspace, upsertAndSyncWorkspace],
   );
 
   // ─── Channel-switch effects ──────────────────────────────────────

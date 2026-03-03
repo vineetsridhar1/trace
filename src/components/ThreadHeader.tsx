@@ -59,6 +59,7 @@ interface ThreadHeaderProps {
   worktreePath: string | null;
   isFullscreen: boolean;
   onClose: () => void;
+  onDeleteWorkspace: () => void;
   onDeleteWorktree: () => void;
   onMarkMerged: () => void;
   onEnterFullscreen: () => void;
@@ -84,6 +85,7 @@ export const ThreadHeader = memo(function ThreadHeader({
   worktreePath,
   isFullscreen,
   onClose,
+  onDeleteWorkspace,
   onDeleteWorktree,
   onMarkMerged,
   onEnterFullscreen,
@@ -456,6 +458,16 @@ export const ThreadHeader = memo(function ThreadHeader({
                     </button>
                   </>
                 )}
+                <div className="my-1 h-px bg-[#292e42]" />
+                <button
+                  type="button"
+                  disabled={!selectedWorkspaceId}
+                  onClick={() => { onDeleteWorkspace(); setMenuOpen(false); }}
+                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-[#1f2335] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <FiTrash2 className="h-3 w-3" aria-hidden="true" />
+                  Delete workspace
+                </button>
               </div>
             )}
           </div>

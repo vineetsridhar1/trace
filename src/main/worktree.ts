@@ -90,6 +90,52 @@ export async function ensureWorktree(workspaceId: string, repoPath: string, base
   return result;
 }
 
+/**
+ * Parse `git worktree list --porcelain` to find the worktree path that has
+ * `branchName` checked out, or `null` if the branch isn't checked out anywhere.
+ */
+async function findWorktreeForBranch(repoPath: string, branchName: string): Promise<string | null> {
+  const result = await runProcess('git', ['worktree', 'list', '--porcelain'], repoPath);
+  if (result.code !== 0) return null;
+
+  let currentWorktree: string | null = null;
+  for (const line of result.stdout.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      currentWorktree = line.slice('worktree '.length);
+    } else if (line.startsWith('branch ') && currentWorktree) {
+      const ref = line.slice('branch '.length); // e.g. refs/heads/my-branch
+      if (ref === `refs/heads/${branchName}`) {
+        return currentWorktree;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * If `branchName` is checked out in a worktree under our managed directory,
+ * force-remove that worktree so the branch becomes free.
+ * Returns true if the branch is now free, false if it's locked in an unmanaged location.
+ */
+async function freeBranchFromManagedWorktree(repoPath: string, branchName: string): Promise<{ freed: boolean; blockedBy?: string }> {
+  const worktreePath = await findWorktreeForBranch(repoPath, branchName);
+  if (!worktreePath) return { freed: true };
+
+  const managedBase = getWorktreeBase();
+  if (!worktreePath.startsWith(managedBase)) {
+    return { freed: false, blockedBy: worktreePath };
+  }
+
+  // Force-remove the stale managed worktree
+  await runProcess('git', ['worktree', 'remove', '--force', worktreePath], repoPath);
+  // If the directory still exists (e.g. git worktree remove failed), clean up manually
+  if (fs.existsSync(worktreePath)) {
+    fs.rmSync(worktreePath, { recursive: true, force: true });
+  }
+  await runProcess('git', ['worktree', 'prune'], repoPath);
+  return { freed: true };
+}
+
 export async function ensureWorktreeForBranch(
   workspaceId: string,
   repoPath: string,
@@ -113,26 +159,29 @@ export async function ensureWorktreeForBranch(
   // Clean up stale worktree references (e.g. directory deleted without `git worktree remove`)
   await runProcess('git', ['worktree', 'prune'], repoPath);
 
-  // Try using local branch if it exists
-  let result = await runProcess('git', ['worktree', 'add', worktreePath, branchName], repoPath);
+  // If the branch is checked out in a stale managed worktree, free it
+  const { freed, blockedBy } = await freeBranchFromManagedWorktree(repoPath, branchName);
+  if (!freed) {
+    throw new Error(
+      `Branch ${branchName} is already checked out in ${blockedBy} (outside managed worktree directory)`,
+    );
+  }
 
-  if (result.code !== 0) {
-    // Create local branch tracking the remote
+  // Check if the branch already exists locally
+  const revParse = await runProcess('git', ['rev-parse', '--verify', `refs/heads/${branchName}`], repoPath);
+  let result;
+
+  if (revParse.code === 0) {
+    // Branch exists locally — reset it to match origin, then create worktree from it
+    await runProcess('git', ['branch', '-f', branchName, `origin/${branchName}`], repoPath);
+    result = await runProcess('git', ['worktree', 'add', worktreePath, branchName], repoPath);
+  } else {
+    // Branch doesn't exist locally — create it tracking origin
     result = await runProcess(
       'git',
       ['worktree', 'add', '-b', branchName, worktreePath, `origin/${branchName}`],
       repoPath,
     );
-
-    // If it failed because the branch already exists locally, delete it and retry
-    if (result.code !== 0 && result.stderr.includes('already exists')) {
-      await runProcess('git', ['branch', '-D', branchName], repoPath);
-      result = await runProcess(
-        'git',
-        ['worktree', 'add', '-b', branchName, worktreePath, `origin/${branchName}`],
-        repoPath,
-      );
-    }
   }
 
   if (result.code !== 0) {

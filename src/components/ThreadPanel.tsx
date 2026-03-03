@@ -7,7 +7,7 @@ import type {
 } from "../types";
 import { gql } from "@apollo/client";
 import { WORKSPACE_FIELDS } from "../graphql/fragments";
-import { useUpdateWorkspaceStatusMutation } from "../__generated__/App.generated";
+import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation } from "../__generated__/App.generated";
 import { useSetTicketDependenciesMutation, useHandoffWorkspaceMutation } from "./__generated__/ThreadPanel.generated";
 import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
 import { ReadGlobGroup } from "./ReadGlobGroup";
@@ -179,6 +179,7 @@ export function ThreadPanel() {
 
   // ─── Mutations ──────────────────────────────────────────────────
   const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
+  const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
   const [executeHandoffWorkspace] = useHandoffWorkspaceMutation();
 
   // ─── Saved widths ref for fullscreen ────────────────────────────
@@ -266,6 +267,25 @@ export function ThreadPanel() {
       }
     });
   }, [activeChannelId, executeUpdateWorkspaceStatus]);
+
+  const handleDeleteWorkspace = useCallback(async () => {
+    const wsId = useThreadStore.getState().selectedWorkspaceId;
+    if (!wsId || !activeChannelId) return;
+    if (!window.confirm('Delete this workspace?')) return;
+
+    useThreadStore.getState().closeThreadPanel();
+
+    try {
+      await executeDeleteWorkspace({ variables: { channelId: activeChannelId, workspaceId: wsId } });
+      useWorkspaceStore.getState().removeWorkspace(wsId);
+      useKanbanStore.getState().removeTicketByWorkspaceId(wsId);
+      useTerminalStore.getState().killAllForWorkspace(wsId);
+      void window.traceAPI.releasePorts(wsId);
+      if (repoPath) void window.traceAPI.deleteWorktree(wsId, repoPath);
+    } catch {
+      console.error('Failed to delete workspace');
+    }
+  }, [activeChannelId, repoPath, executeDeleteWorkspace]);
 
   const handleRerunScript = useCallback(async (tabName: string) => {
     const wsId = useThreadStore.getState().selectedWorkspaceId;
@@ -492,6 +512,7 @@ export function ThreadPanel() {
           worktreePath={worktreePath}
           isFullscreen={isFullscreen}
           onClose={handleClose}
+          onDeleteWorkspace={() => { void handleDeleteWorkspace(); }}
           onDeleteWorktree={handleDeleteWorktree}
           canHandoff={canHandoff}
           handingOff={handingOff}
