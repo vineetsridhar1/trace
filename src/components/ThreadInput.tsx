@@ -158,7 +158,7 @@ export function ThreadInput({
               d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
             />
           </svg>
-          <span className="text-xs text-accent-light">
+          <span className="text-xs leading-none text-accent-light">
             Claude is working...
           </span>
           {lastUserMessageTime && (
