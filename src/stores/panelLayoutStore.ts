@@ -124,6 +124,8 @@ interface PanelLayoutState {
 
   // Actions
   setActiveTab: (paneId: string, tab: ViewMode) => void;
+  /** Activate a tab by ViewMode — finds the pane that contains it and switches. */
+  activateTab: (tab: ViewMode) => void;
   reorderTabs: (paneId: string, tabs: ViewMode[]) => void;
   moveTab: (fromPaneId: string, tab: ViewMode, toPaneId: string) => void;
   splitPane: (paneId: string, direction: 'horizontal' | 'vertical', side: 'first' | 'second', tab: ViewMode) => void;
@@ -169,6 +171,16 @@ export const usePanelLayoutStore = create<PanelLayoutState>((set) => ({
       if (!node || node.type !== 'pane') return state;
       const updated: PaneGroup = { ...node, activeTab: tab };
       const newRoot = replaceNode(state.root, paneId, updated);
+      return { root: newRoot, singletonOwners: updateSingletonOwners(newRoot) };
+    }),
+
+  activateTab: (tab) =>
+    set((state) => {
+      const pane = findPaneWithTab(state.root, tab);
+      if (!pane) return state;
+      if (pane.activeTab === tab) return state;
+      const updated: PaneGroup = { ...pane, activeTab: tab };
+      const newRoot = replaceNode(state.root, pane.id, updated);
       return { root: newRoot, singletonOwners: updateSingletonOwners(newRoot) };
     }),
 

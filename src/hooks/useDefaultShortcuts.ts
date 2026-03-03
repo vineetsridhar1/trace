@@ -7,6 +7,7 @@ import { useShortcutStore } from '../stores/shortcutStore';
 import { useClaudeRunStore } from '../stores/claudeRunStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useCommandPaletteStore } from '../stores/commandPaletteStore';
+import { usePanelLayoutStore } from '../stores/panelLayoutStore';
 import { useAuth } from '../context/AuthContext';
 import type { Channel, Workspace, TicketStatus } from '../types';
 import { STATUS_GROUP_ORDER } from '../components/MessageItem';
@@ -64,27 +65,27 @@ export function useDefaultShortcuts({
   authUserRef.current = authUser;
 
   // ─── Thread Panel Tabs (Mod+1-5) ─────────────────────────────────
-  useHotkey('tab.agent', 'mod+1', () => useThreadStore.getState().setThreadViewMode('agent'), {
+  useHotkey('tab.agent', 'mod+1', () => usePanelLayoutStore.getState().activateTab('agent'), {
     label: 'Agent tab',
     category: 'navigation',
     context: 'thread-open',
   });
-  useHotkey('tab.ticket', 'mod+2', () => useThreadStore.getState().setThreadViewMode('ticket'), {
+  useHotkey('tab.ticket', 'mod+2', () => usePanelLayoutStore.getState().activateTab('ticket'), {
     label: 'Ticket tab',
     category: 'navigation',
     context: 'thread-open',
   });
-  useHotkey('tab.files', 'mod+3', () => useThreadStore.getState().setThreadViewMode('files'), {
+  useHotkey('tab.files', 'mod+3', () => usePanelLayoutStore.getState().activateTab('files'), {
     label: 'Files tab',
     category: 'navigation',
     context: 'thread-open',
   });
-  useHotkey('tab.terminal', 'mod+4', () => useThreadStore.getState().setThreadViewMode('terminal'), {
+  useHotkey('tab.terminal', 'mod+4', () => usePanelLayoutStore.getState().activateTab('terminal'), {
     label: 'Terminal tab',
     category: 'navigation',
     context: 'thread-open',
   });
-  useHotkey('tab.browser', 'mod+5', () => useThreadStore.getState().setThreadViewMode('browser'), {
+  useHotkey('tab.browser', 'mod+5', () => usePanelLayoutStore.getState().activateTab('browser'), {
     label: 'Browser tab',
     category: 'navigation',
     context: 'thread-open',
