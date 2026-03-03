@@ -3,6 +3,7 @@ import { gql } from '@apollo/client';
 import type { Workspace, TicketStatus } from '../types';
 import { useCheckPrStatusesLazyQuery } from './__generated__/useSyncPolling.generated';
 import { useSyncStore } from '../stores/syncStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 
 const GQL_CHECK_PR_STATUSES = gql`
   query CheckPRStatuses($channelId: ID!, $branches: [String!]!) {
@@ -92,6 +93,33 @@ export function useSyncPolling({
           await updateStatusRef.current(ws.id, 'merged');
         } else if (ws.status === 'review' && (pr.state === 'closed' || pr.state === 'none')) {
           await updateStatusRef.current(ws.id, 'in_progress');
+        }
+      }
+
+      // Fetch CI statuses for branches with open PRs
+      const ciBranches = candidates.filter((ws) => {
+        const pr = statusMap.get(ws.branch);
+        return pr && pr.state === 'open';
+      });
+      if (ciBranches.length > 0) {
+        try {
+          const ciResult = await window.traceAPI.checkPRCILocal(repoPath, ciBranches.map((ws) => ws.branch));
+          if (ciResult.success && ciResult.statuses) {
+            const ciMap = new Map(ciResult.statuses.map((s) => [s.branch, s]));
+            for (const ws of ciBranches) {
+              const ci = ciMap.get(ws.branch);
+              if (ci && ci.total > 0) {
+                useWorkspaceStore.getState().setCIStatus(ws.id, {
+                  total: ci.total,
+                  passed: ci.passed,
+                  failed: ci.failed,
+                  pending: ci.pending,
+                });
+              }
+            }
+          }
+        } catch {
+          // Silent failure — CI checking is best-effort
         }
       }
     } catch {

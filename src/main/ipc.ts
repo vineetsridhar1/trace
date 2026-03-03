@@ -48,6 +48,7 @@ const OPEN_IN_APP_CHANNEL = 'open-in-app';
 const LIST_SLASH_COMMANDS_CHANNEL = 'list-slash-commands';
 const CHECK_GH_AUTH_CHANNEL = 'check-gh-auth';
 const CHECK_PR_STATUSES_LOCAL_CHANNEL = 'check-pr-statuses-local';
+const CHECK_PR_CI_LOCAL_CHANNEL = 'check-pr-ci-local';
 const LIST_PULL_REQUESTS_CHANNEL = 'list-pull-requests';
 const CHECKOUT_PULL_REQUEST_CHANNEL = 'checkout-pull-request';
 const PUSH_WORKTREE_BRANCH_CHANNEL = 'push-worktree-branch';
@@ -130,6 +131,7 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(LIST_SLASH_COMMANDS_CHANNEL);
   ipcMain.removeHandler(CHECK_GH_AUTH_CHANNEL);
   ipcMain.removeHandler(CHECK_PR_STATUSES_LOCAL_CHANNEL);
+  ipcMain.removeHandler(CHECK_PR_CI_LOCAL_CHANNEL);
   ipcMain.removeHandler(LIST_PULL_REQUESTS_CHANNEL);
   ipcMain.removeHandler(CHECKOUT_PULL_REQUEST_CHANNEL);
   ipcMain.removeHandler(PUSH_WORKTREE_BRANCH_CHANNEL);
@@ -822,6 +824,43 @@ JSON.stringify(found);
       return { success: true, worktreePath };
     } catch (err) {
       console.error('Failed to checkout pull request:', err);
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(CHECK_PR_CI_LOCAL_CHANNEL, async (_event, repoPath: string, branches: string[]) => {
+    type CIStatus = { branch: string; total: number; passed: number; failed: number; pending: number };
+
+    async function checkBranchCI(branch: string): Promise<CIStatus> {
+      try {
+        const result = await runProcess('gh', [
+          'pr', 'checks', branch,
+          '--json', 'bucket',
+        ], repoPath);
+
+        if (result.code !== 0) {
+          return { branch, total: 0, passed: 0, failed: 0, pending: 0 };
+        }
+
+        const checks = JSON.parse(result.stdout.trim() || '[]') as Array<{ bucket: string }>;
+        let passed = 0;
+        let failed = 0;
+        let pending = 0;
+        for (const check of checks) {
+          if (check.bucket === 'pass') passed++;
+          else if (check.bucket === 'fail') failed++;
+          else pending++;
+        }
+        return { branch, total: checks.length, passed, failed, pending };
+      } catch {
+        return { branch, total: 0, passed: 0, failed: 0, pending: 0 };
+      }
+    }
+
+    try {
+      const statuses = await Promise.all(branches.map(checkBranchCI));
+      return { success: true, statuses };
+    } catch (err) {
       return { success: false, error: String(err) };
     }
   });

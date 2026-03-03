@@ -1,11 +1,19 @@
 import { create } from 'zustand';
 import type { Workspace } from '../types';
 
+export interface CIStatus {
+  total: number;
+  passed: number;
+  failed: number;
+  pending: number;
+}
+
 interface WorkspaceState {
   workspaces: Workspace[];
   attentionWorkspaceIds: Set<string>;
   worktreeWorkspaceIds: Set<string>;
   deletingWorktreeIds: Set<string>;
+  ciStatuses: Record<string, CIStatus>;
 
   upsertWorkspace: (workspace: Workspace) => void;
   removeWorkspace: (workspaceId: string) => void;
@@ -17,6 +25,8 @@ interface WorkspaceState {
   removeWorktreeWorkspaceId: (id: string) => void;
   addDeletingWorktreeId: (id: string) => void;
   removeDeletingWorktreeId: (id: string) => void;
+  setCIStatus: (workspaceId: string, status: CIStatus) => void;
+  clearCIStatuses: () => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -24,6 +34,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   attentionWorkspaceIds: new Set(),
   worktreeWorkspaceIds: new Set(),
   deletingWorktreeIds: new Set(),
+  ciStatuses: {},
 
   upsertWorkspace: (workspace) =>
     set((state) => {
@@ -85,4 +96,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       next.delete(id);
       return { deletingWorktreeIds: next };
     }),
+
+  setCIStatus: (workspaceId, status) =>
+    set((state) => ({
+      ciStatuses: { ...state.ciStatuses, [workspaceId]: status },
+    })),
+
+  clearCIStatuses: () => set({ ciStatuses: {} }),
 }));

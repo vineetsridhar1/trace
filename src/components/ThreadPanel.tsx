@@ -103,6 +103,7 @@ export function ThreadPanel() {
 
   // ─── Derived state ──────────────────────────────────────────────
   const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const ciStatus = useWorkspaceStore((s) => selectedWorkspaceId ? s.ciStatuses[selectedWorkspaceId] ?? null : null);
   const kanbanColumns = useKanbanStore((s) => s.columns);
 
   const workspaceStatus: TicketStatus = useMemo(() => {
@@ -520,6 +521,8 @@ export function ThreadPanel() {
           onEnterFullscreen={() => { void handleEnterFullscreen(); }}
           onExitFullscreen={handleExitFullscreen}
           onMarkMerged={() => void markMerged()}
+          prUrl={ticket?.workspace?.prUrl ?? null}
+          ciStatus={ciStatus}
           sessions={sessions}
           activeSessionId={activeSessionId}
           onSwitchSession={switchSession}

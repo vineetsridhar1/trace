@@ -1,9 +1,10 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { FiCheck, FiClock, FiCopy, FiExternalLink, FiLink, FiLoader, FiMaximize2, FiMinimize2, FiMoreVertical, FiShare2, FiTrash2, FiX } from 'react-icons/fi';
+import { FiCheck, FiClock, FiCopy, FiExternalLink, FiGitPullRequest, FiLink, FiLoader, FiMaximize2, FiMinimize2, FiMoreVertical, FiShare2, FiTrash2, FiX } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import type { TicketStatus } from '../types';
 import { getServerUrl } from '../types';
 import type { SessionInfo } from '../hooks/useThread';
+import type { CIStatus } from '../stores/workspaceStore';
 
 type ViewMode = 'agent' | 'ticket' | 'files' | 'terminal';
 
@@ -67,6 +68,8 @@ interface ThreadHeaderProps {
   canHandoff: boolean;
   handingOff: boolean;
   onHandoff: () => void;
+  prUrl: string | null;
+  ciStatus: CIStatus | null;
   sessions: SessionInfo[];
   activeSessionId: string | null;
   onSwitchSession: (sessionId: string) => Promise<void>;
@@ -93,6 +96,8 @@ export const ThreadHeader = memo(function ThreadHeader({
   canHandoff,
   handingOff,
   onHandoff,
+  prUrl,
+  ciStatus,
   sessions,
   activeSessionId,
   onSwitchSession,
@@ -260,6 +265,36 @@ export const ThreadHeader = memo(function ThreadHeader({
           )}
       </div>
       <div className="flex items-center gap-2">
+        {prUrl && (() => {
+          const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+          let colorClass = 'text-green-400 border-green-400/50';
+          let tooltip = 'Open pull request';
+          if (ciStatus) {
+            if (ciStatus.failed > 0) {
+              colorClass = 'text-red-400 border-red-400/50';
+              tooltip = `${ciStatus.failed} check${ciStatus.failed === 1 ? '' : 's'} failed`;
+            } else if (ciStatus.pending > 0) {
+              colorClass = 'text-yellow-400 border-yellow-400/50';
+              tooltip = `${ciStatus.pending} check${ciStatus.pending === 1 ? '' : 's'} pending`;
+            } else if (ciStatus.total > 0 && ciStatus.passed === ciStatus.total) {
+              colorClass = 'text-green-400 border-green-400/50';
+              tooltip = `All ${ciStatus.total} checks passed`;
+            }
+          }
+          return (
+            <Tooltip text={tooltip} position="bottom">
+              <button
+                type="button"
+                onClick={() => window.open(prUrl, '_blank')}
+                className={`inline-flex items-center gap-1.5 cursor-pointer rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-white/5 ${colorClass}`}
+              >
+                <FiGitPullRequest className="h-3 w-3" aria-hidden="true" />
+                {prNumber ? `PR #${prNumber}` : 'PR'}
+                <FiExternalLink className="h-2.5 w-2.5" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          );
+        })()}
         {sessions.length > 1 && (
           <div className="relative" ref={historyRef}>
             <Tooltip text="Session history" position="bottom">

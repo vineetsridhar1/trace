@@ -1,8 +1,9 @@
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { FiLink, FiTrash2 } from 'react-icons/fi';
+import { FiGitPullRequest, FiLink, FiTrash2 } from 'react-icons/fi';
 import type { KanbanTicket } from '../types';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 import { formatTime } from '../utils';
 import { CopyableBranch } from './CopyableBranch';
 import { ScrambleText } from './ScrambleText';
@@ -20,6 +21,8 @@ export const KanbanCard = memo(function KanbanCard({
   onDragStart,
   onDeleteWorkspace,
 }: KanbanCardProps) {
+  const ciStatus = useWorkspaceStore((s) => s.ciStatuses[ticket.workspaceId] ?? null);
+  const prUrl = ticket.workspace?.prUrl ?? null;
   return (
     <div
       draggable
@@ -87,6 +90,28 @@ export const KanbanCard = memo(function KanbanCard({
         {ticket.workspace.branch && (
           <CopyableBranch branch={ticket.workspace.branch} />
         )}
+        {prUrl && (() => {
+          const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+          let colorClass = 'text-green-400 border-green-400/50';
+          if (ciStatus) {
+            if (ciStatus.failed > 0) colorClass = 'text-red-400 border-red-400/50';
+            else if (ciStatus.pending > 0) colorClass = 'text-yellow-400 border-yellow-400/50';
+            else if (ciStatus.total > 0 && ciStatus.passed === ciStatus.total) colorClass = 'text-green-400 border-green-400/50';
+          }
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(prUrl, '_blank');
+              }}
+              className={`inline-flex items-center gap-1 shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors hover:bg-white/5 ${colorClass}`}
+            >
+              <FiGitPullRequest className="h-2.5 w-2.5" />
+              {prNumber ? `#${prNumber}` : 'PR'}
+            </button>
+          );
+        })()}
         <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] text-[#565f89]">
           {formatTime(ticket.createdAt)}
         </span>

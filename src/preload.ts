@@ -214,6 +214,13 @@ contextBridge.exposeInMainWorld('traceAPI', {
     }
   },
 
+  checkPRCILocal: (repoPath: string, branches: string[]) =>
+    ipcRenderer.invoke('check-pr-ci-local', repoPath, branches) as Promise<{
+      success: boolean;
+      statuses?: Array<{ branch: string; total: number; passed: number; failed: number; pending: number }>;
+      error?: string;
+    }>,
+
   pushWorktreeBranch: (workspaceId: string, repoPath: string) =>
     ipcRenderer.invoke('push-worktree-branch', workspaceId, repoPath) as Promise<{ success: boolean; error?: string }>,
 

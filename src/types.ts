@@ -109,6 +109,11 @@ export interface TraceAPI {
     statuses?: Array<{ branch: string; state: 'open' | 'closed' | 'merged' | 'none'; prUrl: string | null }>;
     error?: string;
   }>;
+  checkPRCILocal: (repoPath: string, branches: string[]) => Promise<{
+    success: boolean;
+    statuses?: Array<{ branch: string; total: number; passed: number; failed: number; pending: number }>;
+    error?: string;
+  }>;
   listPullRequests: (repoPath: string) => Promise<{
     success: boolean;
     pullRequests?: PullRequest[];
