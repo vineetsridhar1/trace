@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { gql } from '@apollo/client';
-import type { Workspace, TicketStatus } from '../types';
-import { useCheckPrStatusesLazyQuery } from './__generated__/useSyncPolling.generated';
-import { useSyncStore } from '../stores/syncStore';
-import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { gql } from "@apollo/client";
+import type { Workspace, TicketStatus } from "../types";
+import { useCheckPrStatusesLazyQuery } from "./__generated__/useSyncPolling.generated";
+import { useSyncStore } from "../stores/syncStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
 
 const GQL_CHECK_PR_STATUSES = gql`
   query CheckPRStatuses($channelId: ID!, $branches: [String!]!) {
@@ -21,16 +21,21 @@ interface UseSyncPollingOptions {
   getChannelId: () => string | null;
   getRepoPath: () => string;
   getBaseBranch: () => string;
-  updateWorkspaceStatus: (workspaceId: string, status: TicketStatus) => Promise<void>;
+  updateWorkspaceStatus: (
+    workspaceId: string,
+    status: TicketStatus,
+  ) => Promise<void>;
   persistPrUrl: (workspaceId: string, prUrl: string) => Promise<void>;
 }
 
 function getPRCandidates(workspaces: Workspace[]) {
   return workspaces.filter(
     (ws): ws is Workspace & { branch: string } =>
-      (ws.status === 'completed' || ws.status === 'review' || ws.status === 'merged')
-      && typeof ws.branch === 'string'
-      && ws.branch.length > 0,
+      (ws.status === "completed" ||
+        ws.status === "review" ||
+        ws.status === "merged") &&
+      typeof ws.branch === "string" &&
+      ws.branch.length > 0,
   );
 }
 
@@ -54,11 +59,14 @@ export function useSyncPolling({
 
   // Check gh CLI availability on mount
   useEffect(() => {
-    window.traceAPI.checkGhAuth().then((result) => {
-      setGhAvailable(result.available);
-    }).catch(() => {
-      setGhAvailable(false);
-    });
+    window.traceAPI
+      .checkGhAuth()
+      .then((result) => {
+        setGhAvailable(result.available);
+      })
+      .catch(() => {
+        setGhAvailable(false);
+      });
   }, []);
 
   // ─── Local gh CLI path ──────────────────────────────────────────
@@ -72,7 +80,10 @@ export function useSyncPolling({
     const branches = candidates.map((ws) => ws.branch);
 
     try {
-      const result = await window.traceAPI.checkPRStatusesLocal(repoPath, branches);
+      const result = await window.traceAPI.checkPRStatusesLocal(
+        repoPath,
+        branches,
+      );
       if (!result.success || !result.statuses) return;
 
       const statusMap = new Map(result.statuses.map((s) => [s.branch, s]));
@@ -87,23 +98,29 @@ export function useSyncPolling({
           void persistPrUrlRef.current(ws.id, pr.prUrl);
         }
 
-        if (ws.status === 'completed' && pr.state === 'open') {
-          await updateStatusRef.current(ws.id, 'review');
-        } else if (ws.status === 'review' && pr.state === 'merged') {
-          await updateStatusRef.current(ws.id, 'merged');
-        } else if (ws.status === 'review' && (pr.state === 'closed' || pr.state === 'none')) {
-          await updateStatusRef.current(ws.id, 'in_progress');
+        if (ws.status === "completed" && pr.state === "open") {
+          await updateStatusRef.current(ws.id, "review");
+        } else if (ws.status === "review" && pr.state === "merged") {
+          await updateStatusRef.current(ws.id, "merged");
+        } else if (
+          ws.status === "review" &&
+          (pr.state === "closed" || pr.state === "none")
+        ) {
+          await updateStatusRef.current(ws.id, "in_progress");
         }
       }
 
       // Fetch CI statuses for branches with open PRs
       const ciBranches = candidates.filter((ws) => {
         const pr = statusMap.get(ws.branch);
-        return pr && pr.state === 'open';
+        return pr && pr.state === "open";
       });
       if (ciBranches.length > 0) {
         try {
-          const ciResult = await window.traceAPI.checkPRCILocal(repoPath, ciBranches.map((ws) => ws.branch));
+          const ciResult = await window.traceAPI.checkPRCILocal(
+            repoPath,
+            ciBranches.map((ws) => ws.branch),
+          );
           if (ciResult.success && ciResult.statuses) {
             const ciMap = new Map(ciResult.statuses.map((s) => [s.branch, s]));
             for (const ws of ciBranches) {
@@ -140,7 +157,7 @@ export function useSyncPolling({
     try {
       const { data } = await executeCheckPRStatuses({
         variables: { channelId, branches },
-        fetchPolicy: 'network-only',
+        fetchPolicy: "network-only",
       });
       if (!data?.checkPRStatuses) return;
 
@@ -150,12 +167,17 @@ export function useSyncPolling({
         const pr = prMap.get(ws.branch);
         if (!pr) continue;
 
-        if (ws.status === 'completed' && pr.hasPR) {
-          await updateStatusRef.current(ws.id, 'review');
-        } else if (ws.status === 'review' && pr.merged) {
-          await updateStatusRef.current(ws.id, 'merged');
-        } else if (ws.status === 'review' && !pr.hasPR) {
-          await updateStatusRef.current(ws.id, 'in_progress');
+        if (pr.prUrl && seenPrUrls.current.get(ws.id) !== pr.prUrl) {
+          seenPrUrls.current.set(ws.id, pr.prUrl);
+          void persistPrUrlRef.current(ws.id, pr.prUrl);
+        }
+
+        if (ws.status === "completed" && pr.hasPR) {
+          await updateStatusRef.current(ws.id, "review");
+        } else if (ws.status === "review" && pr.merged) {
+          await updateStatusRef.current(ws.id, "merged");
+        } else if (ws.status === "review" && !pr.hasPR) {
+          await updateStatusRef.current(ws.id, "in_progress");
         }
       }
     } catch {
@@ -164,17 +186,20 @@ export function useSyncPolling({
   }, [workspacesRef, getChannelId, executeCheckPRStatuses]);
 
   // ─── Unified tick ───────────────────────────────────────────────
-  const tick = useCallback(async (silent = true) => {
-    const repoPath = getRepoPath();
-    const baseBranch = getBaseBranch();
+  const tick = useCallback(
+    async (silent = true) => {
+      const repoPath = getRepoPath();
+      const baseBranch = getBaseBranch();
 
-    const prCheck = ghAvailable ? checkPRsLocal() : checkPRsServer();
+      const prCheck = ghAvailable ? checkPRsLocal() : checkPRsServer();
 
-    await Promise.allSettled([
-      useSyncStore.getState().checkMainBranch(repoPath, baseBranch, silent),
-      prCheck,
-    ]);
-  }, [getRepoPath, getBaseBranch, ghAvailable, checkPRsLocal, checkPRsServer]);
+      await Promise.allSettled([
+        useSyncStore.getState().checkMainBranch(repoPath, baseBranch, silent),
+        prCheck,
+      ]);
+    },
+    [getRepoPath, getBaseBranch, ghAvailable, checkPRsLocal, checkPRsServer],
+  );
 
   useEffect(() => {
     // Wait for gh availability check to resolve

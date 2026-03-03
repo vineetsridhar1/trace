@@ -1,48 +1,72 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Workspace, Channel, ChannelType, LocalChannelConfig, MiddlePanelView, PullRequest, TicketStatus } from './types';
-import { gql } from '@apollo/client';
-import { WORKSPACE_FIELDS } from './graphql/fragments';
-import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation, useSetWorkspacePrUrlMutation } from './__generated__/App.generated';
-import { useCreateWorkspaceMutation } from './hooks/__generated__/useClaudeWorkspaceActions.generated';
-import { useWorkspaceSync } from './hooks/useWorkspaceSync';
-import { useThreadSync } from './hooks/useThreadSync';
-import { usePanelResize } from './hooks/usePanelResize';
-import { useChannelSubscriptions } from './hooks/useChannelSubscriptionsV2';
-import { useChannelMessageNotifications } from './hooks/useChannelMessageNotifications';
-import { useTerminalInit } from './hooks/useTerminalInit';
-import { useClaudeWorkspaceActions } from './hooks/useClaudeWorkspaceActions';
-import { useSyncPolling } from './hooks/useSyncPolling';
-import { useKanbanSync } from './hooks/useKanbanSync';
-import { useAiChatSync } from './hooks/useAiChatSync';
-import { ChannelProvider, useChannelContext } from './context/ChannelContext';
-import { useAuth } from './context/AuthContext';
-import { ChannelPanel } from './components/ChannelPanel';
-import { ChannelTopBar } from './components/ChannelTopBar';
-import { MessagePanel } from './components/MessagePanel';
-import { ChannelSettingsModal } from './components/ChannelSettingsModal';
-import { JoinChannelModal } from './components/JoinChannelModal';
-import { CreateChannelModal } from './components/CreateChannelModal';
-import { CreateServerModal } from './components/CreateServerModal';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  Workspace,
+  Channel,
+  ChannelType,
+  LocalChannelConfig,
+  MiddlePanelView,
+  PullRequest,
+  TicketStatus,
+} from "./types";
+import { gql } from "@apollo/client";
+import { WORKSPACE_FIELDS } from "./graphql/fragments";
+import {
+  useUpdateWorkspaceStatusMutation,
+  useDeleteWorkspaceMutation,
+  useSetWorkspacePrUrlMutation,
+} from "./__generated__/App.generated";
+import { useCreateWorkspaceMutation } from "./hooks/__generated__/useClaudeWorkspaceActions.generated";
+import { useWorkspaceSync } from "./hooks/useWorkspaceSync";
+import { useThreadSync } from "./hooks/useThreadSync";
+import { usePanelResize } from "./hooks/usePanelResize";
+import { useChannelSubscriptions } from "./hooks/useChannelSubscriptionsV2";
+import { useChannelMessageNotifications } from "./hooks/useChannelMessageNotifications";
+import { useTerminalInit } from "./hooks/useTerminalInit";
+import { useClaudeWorkspaceActions } from "./hooks/useClaudeWorkspaceActions";
+import { useSyncPolling } from "./hooks/useSyncPolling";
+import { useKanbanSync } from "./hooks/useKanbanSync";
+import { useAiChatSync } from "./hooks/useAiChatSync";
+import { ChannelProvider, useChannelContext } from "./context/ChannelContext";
+import { useAuth } from "./context/AuthContext";
+import { ChannelPanel } from "./components/ChannelPanel";
+import { ChannelTopBar } from "./components/ChannelTopBar";
+import { MessagePanel } from "./components/MessagePanel";
+import { ChannelSettingsModal } from "./components/ChannelSettingsModal";
+import { JoinChannelModal } from "./components/JoinChannelModal";
+import { CreateChannelModal } from "./components/CreateChannelModal";
+import { CreateServerModal } from "./components/CreateServerModal";
 
-import { AiChatPanel } from './components/AiChatPanel';
-import { ShortcutHelpDialog } from './components/ShortcutHelpDialog';
-import { CommandPalette } from './components/CommandPalette';
+import { AiChatPanel } from "./components/AiChatPanel";
+import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
+import { CommandPalette } from "./components/CommandPalette";
 
 // Zustand stores
-import { useWorkspaceStore } from './stores/workspaceStore';
-import { useThreadStore } from './stores/threadStore';
-import { useTerminalStore } from './stores/terminalStore';
-import { useKanbanStore } from './stores/kanbanStore';
-import { useAppUIStore, isViewValidForChannel, getDefaultViewForChannel } from './stores/appUIStore';
-import { useClaudeRunStore } from './stores/claudeRunStore';
-import { useSyncStore } from './stores/syncStore';
-import { useShortcuts } from './hooks/useShortcuts';
-import { useShortcutContextSync } from './hooks/useShortcutContextSync';
-import { useDefaultShortcuts } from './hooks/useDefaultShortcuts';
+import { useWorkspaceStore } from "./stores/workspaceStore";
+import { useThreadStore } from "./stores/threadStore";
+import { useTerminalStore } from "./stores/terminalStore";
+import { useKanbanStore } from "./stores/kanbanStore";
+import {
+  useAppUIStore,
+  isViewValidForChannel,
+  getDefaultViewForChannel,
+} from "./stores/appUIStore";
+import { useClaudeRunStore } from "./stores/claudeRunStore";
+import { useSyncStore } from "./stores/syncStore";
+import { useShortcuts } from "./hooks/useShortcuts";
+import { useShortcutContextSync } from "./hooks/useShortcutContextSync";
+import { useDefaultShortcuts } from "./hooks/useDefaultShortcuts";
 
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
-  mutation UpdateWorkspaceStatus($channelId: ID!, $workspaceId: ID!, $status: String!) {
-    updateWorkspaceStatus(channelId: $channelId, workspaceId: $workspaceId, status: $status) {
+  mutation UpdateWorkspaceStatus(
+    $channelId: ID!
+    $workspaceId: ID!
+    $status: String!
+  ) {
+    updateWorkspaceStatus(
+      channelId: $channelId
+      workspaceId: $workspaceId
+      status: $status
+    ) {
       ...WorkspaceFields
     }
   }
@@ -56,8 +80,16 @@ const GQL_DELETE_WORKSPACE = gql`
 `;
 
 const GQL_SET_WORKSPACE_PR_URL = gql`
-  mutation SetWorkspacePrUrl($channelId: ID!, $workspaceId: ID!, $prUrl: String!) {
-    setWorkspacePrUrl(channelId: $channelId, workspaceId: $workspaceId, prUrl: $prUrl)
+  mutation SetWorkspacePrUrl(
+    $channelId: ID!
+    $workspaceId: ID!
+    $prUrl: String!
+  ) {
+    setWorkspacePrUrl(
+      channelId: $channelId
+      workspaceId: $workspaceId
+      prUrl: $prUrl
+    )
   }
 `;
 
@@ -92,13 +124,17 @@ function AppContent() {
   // ─── Zustand store state ───────────────────────────────────────────
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const workspacesLoading = useWorkspaceStore((s) => s.loading);
-  const attentionWorkspaceIds = useWorkspaceStore((s) => s.attentionWorkspaceIds);
+  const attentionWorkspaceIds = useWorkspaceStore(
+    (s) => s.attentionWorkspaceIds,
+  );
   const worktreeWorkspaceIds = useWorkspaceStore((s) => s.worktreeWorkspaceIds);
   const deletingWorktreeIds = useWorkspaceStore((s) => s.deletingWorktreeIds);
 
   const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
 
-  const workspacesWithRunningProcesses = useTerminalStore((s) => s.workspacesWithRunningProcesses);
+  const workspacesWithRunningProcesses = useTerminalStore(
+    (s) => s.workspacesWithRunningProcesses,
+  );
 
   const kanbanColumns = useKanbanStore((s) => s.columns);
   const kanbanLoading = useKanbanStore((s) => s.loading);
@@ -114,7 +150,9 @@ function AppContent() {
   const aiChats = useAppUIStore((s) => s.aiChats);
   const dragging = useAppUIStore((s) => s.dragging);
 
-  const activeRunWorkspaceIds = useClaudeRunStore((s) => s.activeRunWorkspaceIds);
+  const activeRunWorkspaceIds = useClaudeRunStore(
+    (s) => s.activeRunWorkspaceIds,
+  );
 
   const { user: authUser } = useAuth();
   const authUserIdRef = useRef<string | null>(null);
@@ -124,14 +162,27 @@ function AppContent() {
   const activeChannelRef = useRef<Channel | null>(null);
   activeChannelRef.current = enrichedActiveChannel;
 
-  const getChannelRepoPath = useCallback(() => activeChannelRef.current?.localRepoPath ?? '', []);
-  const getChannelBaseBranch = useCallback(() => activeChannelRef.current?.baseBranch ?? 'main', []);
-  const getActiveChannelId = useCallback(() => activeChannelId, [activeChannelId]);
+  const getChannelRepoPath = useCallback(
+    () => activeChannelRef.current?.localRepoPath ?? "",
+    [],
+  );
+  const getChannelBaseBranch = useCallback(
+    () => activeChannelRef.current?.baseBranch ?? "main",
+    [],
+  );
+  const getActiveChannelId = useCallback(
+    () => activeChannelId,
+    [activeChannelId],
+  );
 
   // ─── Bridge hooks (GraphQL → stores) ──────────────────────────────
   const { refreshWorkspaces } = useWorkspaceSync();
   const { fetchBoard, moveTicket } = useKanbanSync();
-  const { fetchAiChats, createAiChat, deleteAiChat: deleteAiChatMutation } = useAiChatSync();
+  const {
+    fetchAiChats,
+    createAiChat,
+    deleteAiChat: deleteAiChatMutation,
+  } = useAiChatSync();
 
   // Thread sync — registers sync actions on threadStore
   useThreadSync(getActiveChannelId, getChannelRepoPath, getChannelBaseBranch);
@@ -147,33 +198,33 @@ function AppContent() {
   const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
   const [executeSetWorkspacePrUrl] = useSetWorkspacePrUrlMutation();
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
-  const [pullingPRNumbers, setPullingPRNumbers] = useState<Set<number>>(new Set());
+  const [pullingPRNumbers, setPullingPRNumbers] = useState<Set<number>>(
+    new Set(),
+  );
 
   // ─── Notification permission ──────────────────────────────────────
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
+    if ("Notification" in window && Notification.permission === "default") {
       void Notification.requestPermission();
     }
   }, []);
 
   // ─── Upsert + sync helper ─────────────────────────────────────────
-  const upsertAndSyncWorkspace = useCallback(
-    (workspace: Workspace) => {
-      useWorkspaceStore.getState().upsertWorkspace(workspace);
-      useThreadStore.getState().syncSelectedWorkspace(workspace);
-    },
-    [],
-  );
+  const upsertAndSyncWorkspace = useCallback((workspace: Workspace) => {
+    useWorkspaceStore.getState().upsertWorkspace(workspace);
+    useThreadStore.getState().syncSelectedWorkspace(workspace);
+  }, []);
 
   // ─── Check worktree existence for merged workspaces ───────────────
   useEffect(() => {
     const repoPath = getChannelRepoPath();
     if (!repoPath || !window.traceAPI?.checkWorktreeExists) return;
 
-    const mergedWorkspaces = workspaces.filter((ws) => ws.status === 'merged');
+    const mergedWorkspaces = workspaces.filter((ws) => ws.status === "merged");
     if (mergedWorkspaces.length === 0) {
       const prev = useWorkspaceStore.getState().worktreeWorkspaceIds;
-      if (prev.size > 0) useWorkspaceStore.getState().setWorktreeWorkspaceIds(new Set());
+      if (prev.size > 0)
+        useWorkspaceStore.getState().setWorktreeWorkspaceIds(new Set());
       return;
     }
 
@@ -182,36 +233,66 @@ function AppContent() {
       const ids = new Set<string>();
       for (const ws of mergedWorkspaces) {
         try {
-          const result = await window.traceAPI.checkWorktreeExists(ws.id, repoPath);
+          const result = await window.traceAPI.checkWorktreeExists(
+            ws.id,
+            repoPath,
+          );
           if (result.success && result.exists) ids.add(ws.id);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       if (!cancelled) useWorkspaceStore.getState().setWorktreeWorkspaceIds(ids);
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [workspaces, getChannelRepoPath]);
 
   // ─── Attention / notifications ────────────────────────────────────
   const handleNeedsAttention = useCallback(
-    (workspaceId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => {
+    (
+      workspaceId: string,
+      reason:
+        | "stopped"
+        | "ask-user-question"
+        | "completed"
+        | "merged"
+        | "needs_input",
+    ) => {
       // Only glow for the current user's own workspaces
-      const workspace = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
-      if (workspace && authUserIdRef.current && workspace.userId !== authUserIdRef.current) return;
-
+      const workspace = useWorkspaceStore
+        .getState()
+        .workspaces.find((item) => item.id === workspaceId);
+      if (
+        workspace &&
+        authUserIdRef.current &&
+        workspace.userId !== authUserIdRef.current
+      )
+        return;
       useWorkspaceStore.getState().addAttention(workspaceId);
 
-      if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
+      if (
+        !document.hasFocus() &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
         const NOTIFICATION_TITLES: Record<string, string> = {
-          'ask-user-question': 'Input needed',
-          'needs_input': 'Input needed',
-          'merged': 'Branch merged',
+          "ask-user-question": "Input needed",
+          needs_input: "Input needed",
+          merged: "Branch merged",
         };
-        const title = NOTIFICATION_TITLES[reason] ?? 'Chat completed';
-        const workspace = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
-        const body = workspace?.preview || workspace?.cliSession.cwd || workspaceId;
+        const title = NOTIFICATION_TITLES[reason] ?? "Chat completed";
+        const workspace = useWorkspaceStore
+          .getState()
+          .workspaces.find((item) => item.id === workspaceId);
+        const body =
+          workspace?.preview || workspace?.cliSession.cwd || workspaceId;
         const notification = new Notification(title, { body });
-        notification.onclick = () => { void window.traceAPI.focusWindow(); };
+        notification.onclick = () => {
+          void window.traceAPI.focusWindow();
+        };
       }
     },
     [],
@@ -228,7 +309,7 @@ function AppContent() {
         if (!data) return;
         upsertAndSyncWorkspace(data.updateWorkspaceStatus as Workspace);
       } catch {
-        console.error('Failed to update workspace status');
+        console.error("Failed to update workspace status");
       }
     },
     [activeChannelId, executeUpdateWorkspaceStatus, upsertAndSyncWorkspace],
@@ -242,6 +323,7 @@ function AppContent() {
         await executeSetWorkspacePrUrl({
           variables: { channelId: activeChannelId, workspaceId, prUrl },
         });
+        useKanbanStore.getState().setTicketWorkspacePrUrl(workspaceId, prUrl);
       } catch {
         // Silent — best-effort persistence
       }
@@ -262,35 +344,46 @@ function AppContent() {
   });
 
   // ─── Open workspace handler ───────────────────────────────────────
-  const handleOpenWorkspace = useCallback(
-    (workspace: Workspace) => {
-      useThreadStore.getState().syncActions.openThreadPanel(workspace);
-      const chId = activeChannelRef.current?.id;
-      if (chId) {
-        useAppUIStore.getState().setChannelView(chId, 'workspaces');
-      } else {
-        useAppUIStore.getState().setMiddlePanelView('workspaces');
-      }
-      useWorkspaceStore.getState().clearAttention(workspace.id);
-    },
-    [],
-  );
+  const handleOpenWorkspace = useCallback((workspace: Workspace) => {
+    useThreadStore.getState().syncActions.openThreadPanel(workspace);
+    const chId = activeChannelRef.current?.id;
+    if (chId) {
+      useAppUIStore.getState().setChannelView(chId, "workspaces");
+    } else {
+      useAppUIStore.getState().setMiddlePanelView("workspaces");
+    }
+    useWorkspaceStore.getState().clearAttention(workspace.id);
+  }, []);
 
   // ─── Claude workspace actions (registers on claudeRunStore) ───────
-  useClaudeWorkspaceActions({ updateWorkspaceStatus, onWorkspaceCreated: handleOpenWorkspace });
+  useClaudeWorkspaceActions({
+    updateWorkspaceStatus,
+    onWorkspaceCreated: handleOpenWorkspace,
+  });
 
   // ─── Subscriptions ───────────────────────────────────────────────
   const reportClaudeActivity = useCallback(
     (workspaceId: string, eventType: string, sessionId?: string) =>
-      useThreadStore.getState().syncActions.reportClaudeActivity(workspaceId, eventType, sessionId),
+      useThreadStore
+        .getState()
+        .syncActions.reportClaudeActivity(workspaceId, eventType, sessionId),
     [],
   );
 
-  const autoRunRef = useRef<((workspaceId: string, runConfig: unknown) => void) | null>(null);
+  const autoRunRef = useRef<
+    ((workspaceId: string, runConfig: unknown) => void) | null
+  >(null);
   useEffect(() => {
     autoRunRef.current = (workspaceId: string, runConfig: unknown) => {
-      const config = runConfig as { prompt: string; model: string; effort: string; planMode: boolean };
-      void useClaudeRunStore.getState().workspaceActions.autoRunQueuedTicket(workspaceId, config);
+      const config = runConfig as {
+        prompt: string;
+        model: string;
+        effort: string;
+        planMode: boolean;
+      };
+      void useClaudeRunStore
+        .getState()
+        .workspaceActions.autoRunQueuedTicket(workspaceId, config);
     };
   }, []);
 
@@ -298,9 +391,12 @@ function AppContent() {
     activeChannelId,
     reportClaudeActivity,
     onNeedsAttention: handleNeedsAttention,
-    onTicketReadyToRun: useCallback((workspaceId: string, runConfig: unknown) => {
-      autoRunRef.current?.(workspaceId, runConfig);
-    }, []),
+    onTicketReadyToRun: useCallback(
+      (workspaceId: string, runConfig: unknown) => {
+        autoRunRef.current?.(workspaceId, runConfig);
+      },
+      [],
+    ),
     onWorkspaceCompleted: triggerSync,
     refreshWorkspaces,
   });
@@ -320,7 +416,7 @@ function AppContent() {
       } else {
         useAppUIStore.getState().setMiddlePanelView(view);
       }
-      if (view === 'board' && activeChannelId) void fetchBoard(activeChannelId);
+      if (view === "board" && activeChannelId) void fetchBoard(activeChannelId);
     },
     [activeChannelId, fetchBoard],
   );
@@ -336,21 +432,23 @@ function AppContent() {
   const handleDeleteWorkspace = useCallback(
     async (workspaceId: string) => {
       if (!activeChannelId) return;
-      if (!window.confirm('Delete this workspace?')) return;
+      if (!window.confirm("Delete this workspace?")) return;
 
       if (useThreadStore.getState().selectedWorkspaceId === workspaceId) {
         useThreadStore.getState().closeThreadPanel();
       }
 
       try {
-        await executeDeleteWorkspace({ variables: { channelId: activeChannelId, workspaceId } });
+        await executeDeleteWorkspace({
+          variables: { channelId: activeChannelId, workspaceId },
+        });
         useWorkspaceStore.getState().removeWorkspace(workspaceId);
         useKanbanStore.getState().removeTicketByWorkspaceId(workspaceId);
         useTerminalStore.getState().killAllForWorkspace(workspaceId);
         void window.traceAPI.releasePorts(workspaceId);
         void window.traceAPI.deleteWorktree(workspaceId, getChannelRepoPath());
       } catch {
-        console.error('Failed to delete workspace');
+        console.error("Failed to delete workspace");
       }
     },
     [activeChannelId, executeDeleteWorkspace, getChannelRepoPath],
@@ -377,14 +475,16 @@ function AppContent() {
       // Restore saved view for target channel (validated)
       const savedView = useAppUIStore.getState().channelViewMap[channelId];
       const targetChannel = enrichedChannels.find((ch) => ch.id === channelId);
-      const targetType = targetChannel?.type ?? 'channel';
+      const targetType = targetChannel?.type ?? "channel";
       const targetWsEnabled = targetChannel?.workspacesEnabled ?? false;
-      const restoredView = savedView && isViewValidForChannel(savedView, targetType, targetWsEnabled)
-        ? savedView
-        : getDefaultViewForChannel(targetType, targetWsEnabled);
+      const restoredView =
+        savedView &&
+        isViewValidForChannel(savedView, targetType, targetWsEnabled)
+          ? savedView
+          : getDefaultViewForChannel(targetType, targetWsEnabled);
       useAppUIStore.getState().setMiddlePanelView(restoredView);
 
-      if (restoredView === 'board') void fetchBoard(channelId);
+      if (restoredView === "board") void fetchBoard(channelId);
 
       useThreadStore.getState().closeThreadPanel();
       useTerminalStore.getState().detachAll();
@@ -403,11 +503,15 @@ function AppContent() {
   const handleOpenThreadLink = useCallback(
     (targetChannelId: string, workspaceId: string) => {
       if (targetChannelId === activeChannelId) {
-        const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
+        const ws = useWorkspaceStore
+          .getState()
+          .workspaces.find((w) => w.id === workspaceId);
         if (ws) handleOpenWorkspace(ws);
         return;
       }
-      useAppUIStore.getState().setPendingThreadOpen({ channelId: targetChannelId, workspaceId });
+      useAppUIStore
+        .getState()
+        .setPendingThreadOpen({ channelId: targetChannelId, workspaceId });
       performChannelSwitch(targetChannelId);
     },
     [activeChannelId, handleOpenWorkspace, performChannelSwitch],
@@ -421,7 +525,7 @@ function AppContent() {
         await setLocalConfig(targetId, config);
         useAppUIStore.getState().setJoinChannelId(null);
       } catch (err) {
-        console.error('[App] Failed to save local config:', err);
+        console.error("[App] Failed to save local config:", err);
       }
     },
     [joinChannelId, activeChannelId, setLocalConfig],
@@ -432,20 +536,19 @@ function AppContent() {
       if (serverId === activeServerId) return;
       switchServer(serverId);
       useAppUIStore.getState().setChannelWidth(220);
-      const firstChannel = enrichedChannels.find((ch) => ch.serverId === serverId);
+      const firstChannel = enrichedChannels.find(
+        (ch) => ch.serverId === serverId,
+      );
       if (firstChannel) handleSwitchChannel(firstChannel.id);
     },
     [switchServer, enrichedChannels, handleSwitchChannel, activeServerId],
   );
 
-  const handleSwitchAiChat = useCallback(
-    (chatId: string) => {
-      useAppUIStore.getState().setActiveAiChatId(chatId);
-      useThreadStore.getState().closeThreadPanel();
-      useAppUIStore.getState().setChannelWidth(220);
-    },
-    [],
-  );
+  const handleSwitchAiChat = useCallback((chatId: string) => {
+    useAppUIStore.getState().setActiveAiChatId(chatId);
+    useThreadStore.getState().closeThreadPanel();
+    useAppUIStore.getState().setChannelWidth(220);
+  }, []);
 
   const handleCreateAiChat = useCallback(async () => {
     if (!activeServerId) return;
@@ -457,7 +560,7 @@ function AppContent() {
         useAppUIStore.getState().setChannelWidth(220);
       }
     } catch (err) {
-      console.error('[App] handleCreateAiChat failed:', err);
+      console.error("[App] handleCreateAiChat failed:", err);
     }
   }, [activeServerId, createAiChat]);
 
@@ -476,7 +579,9 @@ function AppContent() {
       const repoPath = getChannelRepoPath();
       if (!repoPath) return;
 
-      const confirmed = window.confirm('Delete this worktree? This removes local files for this workspace.');
+      const confirmed = window.confirm(
+        "Delete this worktree? This removes local files for this workspace.",
+      );
       if (!confirmed) return;
 
       useTerminalStore.getState().killAllForWorkspace(workspaceId);
@@ -484,9 +589,12 @@ function AppContent() {
       useWorkspaceStore.getState().addDeletingWorktreeId(workspaceId);
 
       try {
-        const result = await window.traceAPI.deleteWorktree(workspaceId, repoPath);
+        const result = await window.traceAPI.deleteWorktree(
+          workspaceId,
+          repoPath,
+        );
         if (!result.success) {
-          console.error('Failed to delete worktree:', result.error);
+          console.error("Failed to delete worktree:", result.error);
           return;
         }
         useWorkspaceStore.getState().removeWorktreeWorkspaceId(workspaceId);
@@ -494,7 +602,7 @@ function AppContent() {
           useThreadStore.getState().setHasWorktree(false);
         }
       } catch (err) {
-        console.error('Failed to delete worktree:', err);
+        console.error("Failed to delete worktree:", err);
       } finally {
         useWorkspaceStore.getState().removeDeletingWorktreeId(workspaceId);
       }
@@ -518,7 +626,7 @@ function AppContent() {
           variables: { channelId: activeChannelId, text: pr.title },
         });
         if (!data?.createWorkspace) {
-          console.error('Failed to create workspace for PR');
+          console.error("Failed to create workspace for PR");
           return;
         }
         const workspace = data.createWorkspace.workspace as Workspace;
@@ -528,7 +636,10 @@ function AppContent() {
         // 2. Checkout the PR branch into a worktree
         const setupScript = enrichedActiveChannel?.setupScript;
         const setupCommands = setupScript
-          ? setupScript.split('\n').map((l: string) => l.trim()).filter(Boolean)
+          ? setupScript
+              .split("\n")
+              .map((l: string) => l.trim())
+              .filter(Boolean)
           : [];
         const checkoutResult = await window.traceAPI.checkoutPullRequest(
           repoPath,
@@ -537,26 +648,38 @@ function AppContent() {
           setupCommands,
         );
         if (!checkoutResult.success) {
-          throw new Error(checkoutResult.error || 'Checkout failed');
+          throw new Error(checkoutResult.error || "Checkout failed");
         }
 
         // 3. Set PR URL on the workspace
         await executeSetWorkspacePrUrl({
-          variables: { channelId: activeChannelId, workspaceId: workspace.id, prUrl: pr.url },
+          variables: {
+            channelId: activeChannelId,
+            workspaceId: workspace.id,
+            prUrl: pr.url,
+          },
         });
+        useKanbanStore.getState().setTicketWorkspacePrUrl(workspace.id, pr.url);
 
         // 4. Switch to workspaces view and open the workspace
         handleOpenWorkspace(workspace);
         createdWorkspace = null; // success — don't clean up
       } catch (err) {
-        console.error('Failed to pull PR:', err);
+        console.error("Failed to pull PR:", err);
         // Clean up the workspace if it was created but checkout/setup failed
         if (createdWorkspace && activeChannelId) {
           try {
-            await executeDeleteWorkspace({ variables: { channelId: activeChannelId, workspaceId: createdWorkspace.id } });
+            await executeDeleteWorkspace({
+              variables: {
+                channelId: activeChannelId,
+                workspaceId: createdWorkspace.id,
+              },
+            });
             useWorkspaceStore.getState().removeWorkspace(createdWorkspace.id);
           } catch {
-            console.error('Failed to clean up workspace after PR checkout failure');
+            console.error(
+              "Failed to clean up workspace after PR checkout failure",
+            );
           }
         }
       } finally {
@@ -567,7 +690,16 @@ function AppContent() {
         });
       }
     },
-    [activeChannelId, enrichedActiveChannel, executeCreateWorkspace, executeDeleteWorkspace, executeSetWorkspacePrUrl, getChannelRepoPath, handleOpenWorkspace, upsertAndSyncWorkspace],
+    [
+      activeChannelId,
+      enrichedActiveChannel,
+      executeCreateWorkspace,
+      executeDeleteWorkspace,
+      executeSetWorkspacePrUrl,
+      getChannelRepoPath,
+      handleOpenWorkspace,
+      upsertAndSyncWorkspace,
+    ],
   );
 
   // ─── Channel-switch effects ──────────────────────────────────────
@@ -589,7 +721,10 @@ function AppContent() {
       if (!activeChannelId || subscriptionsActive) return;
       void refreshWorkspaces(activeChannelId);
       const selectedWs = useThreadStore.getState().selectedWorkspace;
-      if (selectedWs) void useThreadStore.getState().syncActions.loadSessionEvents(selectedWs);
+      if (selectedWs)
+        void useThreadStore
+          .getState()
+          .syncActions.loadSessionEvents(selectedWs);
     }, 3000);
     return () => clearInterval(interval);
   }, [activeChannelId, refreshWorkspaces, subscriptionsActive]);
@@ -605,18 +740,26 @@ function AppContent() {
     const channelType = enrichedActiveChannel.type;
     const wsEnabled = enrichedActiveChannel.workspacesEnabled ?? false;
 
-    if (savedView && isViewValidForChannel(savedView, channelType, wsEnabled)) return;
+    if (savedView && isViewValidForChannel(savedView, channelType, wsEnabled))
+      return;
 
     const correctView = getDefaultViewForChannel(channelType, wsEnabled);
     if (correctView !== middlePanelView) {
-      useAppUIStore.getState().setChannelView(enrichedActiveChannel.id, correctView);
+      useAppUIStore
+        .getState()
+        .setChannelView(enrichedActiveChannel.id, correctView);
     }
   }, [enrichedActiveChannel]);
 
   // Auto-open thread panel after cross-channel navigation
   useEffect(() => {
     const pending = useAppUIStore.getState().pendingThreadOpen;
-    if (!pending || pending.channelId !== activeChannelId || workspaces.length === 0) return;
+    if (
+      !pending ||
+      pending.channelId !== activeChannelId ||
+      workspaces.length === 0
+    )
+      return;
     const ws = workspaces.find((w) => w.id === pending.workspaceId);
     if (ws) handleOpenWorkspace(ws);
     useAppUIStore.getState().setPendingThreadOpen(null);
@@ -644,12 +787,15 @@ function AppContent() {
 
   // ─── Settings / channel modals ───────────────────────────────────
   const settingsChannel = useMemo(
-    () => enrichedChannels.find((channel) => channel.id === settingsChannelId) ?? null,
+    () =>
+      enrichedChannels.find((channel) => channel.id === settingsChannelId) ??
+      null,
     [enrichedChannels, settingsChannelId],
   );
 
   const joinChannel = useMemo(
-    () => enrichedChannels.find((channel) => channel.id === joinChannelId) ?? null,
+    () =>
+      enrichedChannels.find((channel) => channel.id === joinChannelId) ?? null,
     [enrichedChannels, joinChannelId],
   );
 
@@ -659,7 +805,13 @@ function AppContent() {
 
   const handleSaveSettings = useCallback(
     async (
-      channelData: { name?: string; workspacesEnabled?: boolean; teamIds?: string[]; defaultSetupScript?: string | null; defaultRunScript?: string | null },
+      channelData: {
+        name?: string;
+        workspacesEnabled?: boolean;
+        teamIds?: string[];
+        defaultSetupScript?: string | null;
+        defaultRunScript?: string | null;
+      },
       localCfg: LocalChannelConfig | null,
     ) => {
       if (!settingsChannelId) return;
@@ -681,12 +833,18 @@ function AppContent() {
       }
       void refreshChannels();
     },
-    [deleteChannel, activeChannelId, serverChannels, switchChannel, refreshChannels],
+    [
+      deleteChannel,
+      activeChannelId,
+      serverChannels,
+      switchChannel,
+      refreshChannels,
+    ],
   );
 
   // ─── Computed values ─────────────────────────────────────────────
   const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
-  const panelTitle = displayChannel ? `# ${displayChannel.name}` : '';
+  const panelTitle = displayChannel ? `# ${displayChannel.name}` : "";
 
   const needsJoin = !!(
     displayChannel?.workspacesEnabled &&
@@ -696,13 +854,17 @@ function AppContent() {
   );
 
   const handleOpenJoinModal = useCallback(() => {
-    if (activeChannelId) useAppUIStore.getState().setJoinChannelId(activeChannelId);
+    if (activeChannelId)
+      useAppUIStore.getState().setJoinChannelId(activeChannelId);
   }, [activeChannelId]);
 
   const teamProjects = useMemo(
     () =>
-      displayChannel?.type === 'team'
-        ? serverChannels.filter((ch) => ch.type === 'project' && ch.teamIds.includes(displayChannel.id))
+      displayChannel?.type === "team"
+        ? serverChannels.filter(
+            (ch) =>
+              ch.type === "project" && ch.teamIds.includes(displayChannel.id),
+          )
         : [],
     [displayChannel, serverChannels],
   );
@@ -720,33 +882,47 @@ function AppContent() {
           activeServerId={activeServerId}
           activeServer={activeServer}
           onSwitchServer={handleSwitchServer}
-          onCreateServer={() => useAppUIStore.getState().setShowCreateServer(true)}
+          onCreateServer={() =>
+            useAppUIStore.getState().setShowCreateServer(true)
+          }
           aiChats={aiChats}
           activeAiChatId={activeAiChatId}
           unreadCounts={unreadCounts}
           localConfigs={localConfigs}
           onSwitchChannel={handleSwitchChannel}
-          onCreateTeam={() => useAppUIStore.getState().setCreateChannelType('team')}
-          onCreateProject={() => useAppUIStore.getState().setCreateChannelType('project')}
-          onCreateChannel={() => useAppUIStore.getState().setCreateChannelType('channel')}
+          onCreateTeam={() =>
+            useAppUIStore.getState().setCreateChannelType("team")
+          }
+          onCreateProject={() =>
+            useAppUIStore.getState().setCreateChannelType("project")
+          }
+          onCreateChannel={() =>
+            useAppUIStore.getState().setCreateChannelType("channel")
+          }
           onSwitchAiChat={handleSwitchAiChat}
-          onCreateAiChat={() => { void handleCreateAiChat(); }}
-          onDeleteAiChat={(id) => { void handleDeleteAiChat(id); }}
-          onStartDrag={() => useAppUIStore.getState().setDragging('left')}
+          onCreateAiChat={() => {
+            void handleCreateAiChat();
+          }}
+          onDeleteAiChat={(id) => {
+            void handleDeleteAiChat(id);
+          }}
+          onStartDrag={() => useAppUIStore.getState().setDragging("left")}
         />
 
         <div
           className="flex min-h-0 min-w-0 flex-col panel-animate"
-          style={{ flex: '1 1 0%', overflow: 'hidden' }}
+          style={{ flex: "1 1 0%", overflow: "hidden" }}
         >
           {!isFullscreen && !activeAiChatId && (
             <ChannelTopBar
               panelTitle={panelTitle}
-              channelType={(displayChannel?.type ?? 'project') as ChannelType}
+              channelType={(displayChannel?.type ?? "project") as ChannelType}
               workspacesEnabled={displayChannel?.workspacesEnabled ?? true}
               middlePanelView={middlePanelView}
               onSetView={handleSetView}
-              onOpenSettings={() => { if (displayChannel) handleOpenSettings(displayChannel.id); }}
+              onOpenSettings={() => {
+                if (displayChannel) handleOpenSettings(displayChannel.id);
+              }}
               hasGithubUrl={!!displayChannel?.githubUrl}
               serverChannels={serverChannels}
               activeChannelId={activeChannelId}
@@ -757,7 +933,10 @@ function AppContent() {
             {activeAiChatId ? (
               <AiChatPanel
                 chatId={activeAiChatId}
-                chatTitle={aiChats.find((c) => c.id === activeAiChatId)?.title ?? 'AI Chat'}
+                chatTitle={
+                  aiChats.find((c) => c.id === activeAiChatId)?.title ??
+                  "AI Chat"
+                }
               />
             ) : (
               <MessagePanel
@@ -797,7 +976,7 @@ function AppContent() {
       {settingsChannel && (
         <ChannelSettingsModal
           channel={settingsChannel}
-          teams={serverChannels.filter((ch) => ch.type === 'team')}
+          teams={serverChannels.filter((ch) => ch.type === "team")}
           localConfig={getLocalConfig(settingsChannel.id)}
           onClose={() => useAppUIStore.getState().setSettingsChannelId(null)}
           onSave={handleSaveSettings}
@@ -817,7 +996,7 @@ function AppContent() {
         <CreateChannelModal
           serverId={activeServerId}
           channelType={createChannelType}
-          teams={serverChannels.filter((ch) => ch.type === 'team')}
+          teams={serverChannels.filter((ch) => ch.type === "team")}
           onClose={() => useAppUIStore.getState().setCreateChannelType(null)}
           onCreated={() => {
             useAppUIStore.getState().setCreateChannelType(null);
@@ -835,7 +1014,8 @@ function AppContent() {
             void refreshServers();
             void refreshChannels();
             switchServer(server.id);
-            if (server.channels.length > 0) handleSwitchChannel(server.channels[0].id);
+            if (server.channels.length > 0)
+              handleSwitchChannel(server.channels[0].id);
           }}
         />
       )}
