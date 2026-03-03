@@ -6,6 +6,7 @@ import { useThreadStore } from '../stores/threadStore';
 import { useShortcutStore } from '../stores/shortcutStore';
 import { useClaudeRunStore } from '../stores/claudeRunStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useCommandPaletteStore } from '../stores/commandPaletteStore';
 import type { Channel, Workspace, TicketStatus } from '../types';
 import { STATUS_GROUP_ORDER } from '../components/MessageItem';
 
@@ -197,6 +198,15 @@ export function useDefaultShortcuts({
 
   // ─── General ─────────────────────────────────────────────────────
   useHotkey(
+    'general.command-palette',
+    'mod+k',
+    () => {
+      const store = useCommandPaletteStore.getState();
+      store.isOpen ? store.close() : store.open();
+    },
+    { label: 'Command palette', category: 'general', context: 'global' },
+  );
+  useHotkey(
     'general.settings',
     'mod+,',
     () => {
@@ -219,7 +229,9 @@ export function useDefaultShortcuts({
     'escape',
     () => {
       const ui = useAppUIStore.getState();
-      if (useShortcutStore.getState().helpDialogOpen) {
+      if (useCommandPaletteStore.getState().isOpen) {
+        useCommandPaletteStore.getState().close();
+      } else if (useShortcutStore.getState().helpDialogOpen) {
         useShortcutStore.getState().setHelpDialogOpen(false);
       } else if (ui.settingsChannelId) {
         ui.setSettingsChannelId(null);

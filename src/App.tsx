@@ -25,6 +25,7 @@ import { CreateServerModal } from './components/CreateServerModal';
 
 import { AiChatPanel } from './components/AiChatPanel';
 import { ShortcutHelpDialog } from './components/ShortcutHelpDialog';
+import { CommandPalette } from './components/CommandPalette';
 
 // Zustand stores
 import { useWorkspaceStore } from './stores/workspaceStore';
@@ -831,6 +832,11 @@ function AppContent() {
       )}
 
       <ShortcutHelpDialog />
+      <CommandPalette
+        serverChannels={serverChannels}
+        onSwitchChannel={handleSwitchChannel}
+        onOpenThreadLink={handleOpenThreadLink}
+      />
     </div>
   );
 }
