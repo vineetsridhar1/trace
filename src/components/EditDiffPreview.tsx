@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ServerEvent, DiffRuntime, ParsedDiffFile, ParsedHunk } from '../types';
-import { extractEditDiffContent, loadDiffRuntime } from '../utils';
+import { extractEditDiffContent, loadDiffRuntime, toRelativeDisplayPath } from '../utils';
+import { usePanelLayoutStore } from '../stores/panelLayoutStore';
 import { useDiffSyntaxTokens } from '../utils/shikiDiffTokens';
 
 function DiffFallback({ title, text }: { title: string; text: string }) {
@@ -30,16 +31,31 @@ function DiffFileView({
     fallbackPath ||
     'file.txt';
 
+  const relativePath = toRelativeDisplayPath(displayPath);
   const { tokens, renderToken } = useDiffSyntaxTokens(hunks, displayPath, runtime);
 
   const DiffComponent = runtime.Diff;
   const HunkComponent = runtime.Hunk;
 
+  const handleFileClick = useCallback(() => {
+    if (relativePath && relativePath !== 'file.txt') {
+      usePanelLayoutStore.getState().navigateToFile(relativePath);
+    }
+  }, [relativePath]);
+
+  const isClickable = relativePath !== 'file.txt';
+
   return (
     <div key={`${displayPath}-${fileIndex}`} className="edit-diff-file overflow-hidden rounded-md border border-edge-hover">
-      <div className="edit-diff-file-header border-b border-edge-hover bg-surface px-2 py-1 text-[11px] font-semibold text-primary">
+      <button
+        type="button"
+        onClick={handleFileClick}
+        className={`edit-diff-file-header w-full border-b border-edge-hover bg-surface px-2 py-1 text-left text-[11px] font-semibold text-primary ${
+          isClickable ? 'cursor-pointer hover:text-accent-light hover:bg-surface-elevated transition-colors' : ''
+        }`}
+      >
         {displayPath}
-      </div>
+      </button>
       <div className="edit-diff-body bg-surface-deep">
         <DiffComponent
           viewType="unified"

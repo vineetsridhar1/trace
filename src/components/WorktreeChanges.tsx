@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DiffRuntime, ParsedDiffFile, ParsedHunk } from '../types';
 import { loadDiffRuntime } from '../utils';
 import { useWorktreeChanges } from '../hooks/useWorktreeChanges';
+import { usePanelLayoutStore } from '../stores/panelLayoutStore';
 import { useDiffSyntaxTokens } from '../utils/shikiDiffTokens';
 
 const MAX_FILES_SHOWN = 20;
@@ -34,6 +35,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
   const { diffData, loading, refresh } = useWorktreeChanges(workspaceId, baseBranch);
   const [runtime, setRuntime] = useState<DiffRuntime | null>(null);
   const [activeTab, setActiveTab] = useState<DiffTab>('working');
+  const focusedFilePath = usePanelLayoutStore((s) => s.focusedFilePath);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +44,13 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
     });
     return () => { cancelled = true; };
   }, []);
+
+  // When a file is focused from the agent view, refresh the diff data
+  useEffect(() => {
+    if (focusedFilePath) {
+      void refresh();
+    }
+  }, [focusedFilePath, refresh]);
 
   const hasBranchDiff = Boolean(diffData?.branchDiff?.trim());
   const hasUncommitted = Boolean(diffData?.uncommittedDiff?.trim() || diffData?.stagedDiff?.trim());
@@ -81,7 +90,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
         {activeTab === 'branch' && (
           <>
             {hasBranchDiff ? (
-              <DiffSection title={`Changes vs ${baseBranch}`} diffText={diffData!.branchDiff!} runtime={runtime} />
+              <DiffSection title={`Changes vs ${baseBranch}`} diffText={diffData!.branchDiff!} runtime={runtime} focusedFilePath={focusedFilePath} />
             ) : (
               diffData && !loading && (
                 <p className="text-xs text-muted">No changes vs {baseBranch}.</p>
@@ -95,10 +104,10 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
             {hasUncommitted ? (
               <>
                 {diffData?.stagedDiff?.trim() && (
-                  <DiffSection title="Staged changes" diffText={diffData.stagedDiff} runtime={runtime} />
+                  <DiffSection title="Staged changes" diffText={diffData.stagedDiff} runtime={runtime} focusedFilePath={focusedFilePath} />
                 )}
                 {diffData?.uncommittedDiff?.trim() && (
-                  <DiffSection title="Uncommitted changes" diffText={diffData.uncommittedDiff} runtime={runtime} />
+                  <DiffSection title="Uncommitted changes" diffText={diffData.uncommittedDiff} runtime={runtime} focusedFilePath={focusedFilePath} />
                 )}
               </>
             ) : (
@@ -152,10 +161,12 @@ function DiffSection({
   title,
   diffText,
   runtime,
+  focusedFilePath,
 }: {
   title: string;
   diffText: string;
   runtime: DiffRuntime | null;
+  focusedFilePath: string | null;
 }) {
   if (!runtime) {
     return (
@@ -198,6 +209,7 @@ function DiffSection({
               file={file}
               runtime={runtime}
               isLast={i === visibleFiles.length - 1}
+              focusedFilePath={focusedFilePath}
             />
           );
         })}
@@ -215,13 +227,16 @@ function DiffFileAccordion({
   file,
   runtime,
   isLast,
+  focusedFilePath,
 }: {
   file: ParsedDiffFile;
   runtime: DiffRuntime;
   isLast: boolean;
+  focusedFilePath: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const accordionRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
   const hunks = Array.isArray(file?.hunks) ? file.hunks : [];
@@ -232,6 +247,23 @@ function DiffFileAccordion({
   const { Diff, Hunk } = runtime;
   const { tokens, renderToken } = useDiffSyntaxTokens(hunks, displayPath, runtime, expanded);
 
+  // Auto-expand and scroll when this file is focused
+  const isFocused = Boolean(
+    focusedFilePath &&
+    (displayPath === focusedFilePath || displayPath.endsWith(`/${focusedFilePath}`) || focusedFilePath.endsWith(`/${displayPath}`)),
+  );
+
+  useEffect(() => {
+    if (isFocused) {
+      setExpanded(true);
+      // Scroll into view after a brief delay to allow expansion
+      requestAnimationFrame(() => {
+        accordionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+      usePanelLayoutStore.getState().clearFocusedFile();
+    }
+  }, [isFocused]);
+
   useEffect(() => {
     if (contentRef.current) {
       setContentHeight(contentRef.current.scrollHeight);
@@ -239,7 +271,7 @@ function DiffFileAccordion({
   }, [expanded, hunks, tokens]);
 
   return (
-    <div className={!isLast ? 'border-b border-edge-hover' : ''}>
+    <div ref={accordionRef} className={!isLast ? 'border-b border-edge-hover' : ''}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}

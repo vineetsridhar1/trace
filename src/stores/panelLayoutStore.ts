@@ -128,6 +128,9 @@ interface PanelLayoutState {
   draggedTab: ViewMode | null;
   dragSourcePaneId: string | null;
 
+  // File navigation — path to focus/expand in the Files tab
+  focusedFilePath: string | null;
+
   // Actions
   setActiveTab: (paneId: string, tab: ViewMode) => void;
   /** Activate a tab by ViewMode — finds the pane that contains it and switches. */
@@ -144,6 +147,8 @@ interface PanelLayoutState {
   switchSingletonPanes: (from: ViewMode, to: ViewMode) => void;
   startDrag: (tab: ViewMode, paneId: string) => void;
   endDrag: () => void;
+  navigateToFile: (filePath: string) => void;
+  clearFocusedFile: () => void;
 }
 
 function isSingleton(tab: ViewMode): tab is SingletonKey {
@@ -174,6 +179,7 @@ export const usePanelLayoutStore = create<PanelLayoutState>((set) => ({
   savedLayouts: {},
   draggedTab: null,
   dragSourcePaneId: null,
+  focusedFilePath: null,
 
   setActiveTab: (paneId, tab) =>
     set((state) => {
@@ -368,4 +374,15 @@ export const usePanelLayoutStore = create<PanelLayoutState>((set) => ({
 
   startDrag: (tab, paneId) => set({ draggedTab: tab, dragSourcePaneId: paneId }),
   endDrag: () => set({ draggedTab: null, dragSourcePaneId: null }),
+
+  navigateToFile: (filePath) =>
+    set((state) => {
+      const pane = findPaneWithTab(state.root, 'files');
+      if (!pane) return { focusedFilePath: filePath };
+      const updated: PaneGroup = { ...pane, activeTab: 'files' };
+      const newRoot = replaceNode(state.root, pane.id, updated);
+      return { root: newRoot, focusedFilePath: filePath, singletonOwners: updateSingletonOwners(newRoot) };
+    }),
+
+  clearFocusedFile: () => set({ focusedFilePath: null }),
 }));
