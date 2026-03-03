@@ -183,6 +183,7 @@ export function MessagePanel({
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
+  const { user: authUser } = useAuth();
 
   const ticketByWorkspaceId = useMemo(() => {
     const map = new Map<string, KanbanTicket>();
@@ -208,15 +209,23 @@ export function MessagePanel({
       bucket.push(ws);
     }
 
+    const currentUserId = authUser?.id;
     const groups: StatusGroup[] = [];
     for (const status of STATUS_GROUP_ORDER) {
       const items = buckets.get(status);
       if (items && items.length > 0) {
+        if (currentUserId) {
+          items.sort((a, b) => {
+            const aOwn = a.userId === currentUserId ? 0 : 1;
+            const bOwn = b.userId === currentUserId ? 0 : 1;
+            return aOwn - bOwn;
+          });
+        }
         groups.push({ status, workspaces: items });
       }
     }
     return groups;
-  }, [workspaces]);
+  }, [workspaces, authUser?.id]);
 
   const nearBottomRef = useRef(true);
   const prevWorkspaceCountRef = useRef(0);
@@ -306,7 +315,6 @@ export function MessagePanel({
 
   // Channel messaging
   const { messages: chatMessages, sendMessage: sendChatMessage } = useChannelMessages(channelId);
-  const { user: authUser } = useAuth();
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const chatNearBottomRef = useRef(true);
   const [chatInput, setChatInput] = useState('');
