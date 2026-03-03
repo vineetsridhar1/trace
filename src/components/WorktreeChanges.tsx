@@ -47,7 +47,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
   const hasUncommitted = Boolean(diffData?.uncommittedDiff?.trim() || diffData?.stagedDiff?.trim());
 
   return (
-    <div className="edit-diff-view flex h-full flex-col overflow-hidden">
+    <div className="edit-diff-view flex h-full w-full flex-col overflow-hidden">
       <ChangesHeader loading={loading} onRefresh={refresh} statusText={diffData?.status} />
       <div className="flex items-center gap-1 border-b border-[#292e42] px-3 py-1">
         <button
