@@ -615,7 +615,7 @@ export type Ticket = {
   title: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
   workspace?: Maybe<TicketWorkspace>;
-  workspaceId: Scalars['String']['output'];
+  workspaceId?: Maybe<Scalars['String']['output']>;
 };
 
 export type TicketAttachment = {

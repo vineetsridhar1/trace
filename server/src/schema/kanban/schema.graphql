@@ -28,7 +28,7 @@ type KanbanColumn {
 
 type Ticket {
   id: ID!
-  workspaceId: String!
+  workspaceId: String
   columnId: String!
   title: String!
   description: String

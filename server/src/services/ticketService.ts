@@ -3,7 +3,8 @@ import { pubsub, TOPICS } from './pubsub';
 import { generateTicketFromMessage, updateTicketFromContext } from './ticketAiService';
 import { getStorage } from './storageService';
 
-function resolveTicketAttachmentUrls<T extends { workspace: { attachments: { id: string; key: string; filename: string; contentType: string }[] } }>(ticket: T) {
+function resolveTicketAttachmentUrls<T extends { workspace: { attachments: { id: string; key: string; filename: string; contentType: string }[] } | null }>(ticket: T) {
+  if (!ticket.workspace) return ticket;
   const storage = getStorage();
   return {
     ...ticket,
@@ -216,14 +217,14 @@ export async function moveTicket(ticketId: string, columnId: string, sortOrder: 
     where: { id: ticketId },
     data: { columnId, sortOrder },
     include: {
-      column: true,
+      column: { select: { id: true, slug: true, channelId: true } },
       workspace: {
-        select: { ...TICKET_WORKSPACE_SELECT, channelId: true },
+        select: TICKET_WORKSPACE_SELECT,
       },
     },
   });
 
-  const { channelId } = ticket.workspace;
+  const { channelId } = ticket.column;
 
   pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
     ticketUpserted: {

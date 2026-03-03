@@ -10,7 +10,7 @@ import { ScrambleText } from './ScrambleText';
 
 interface KanbanCardProps {
   ticket: KanbanTicket;
-  onClickTicket: (workspaceId: string) => void;
+  onClickTicket: (workspaceId: string | null) => void;
   onDragStart: (ticketId: string) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
   onCreatePR?: (workspaceId: string) => void;
@@ -23,7 +23,7 @@ export const KanbanCard = memo(function KanbanCard({
   onDeleteWorkspace,
   onCreatePR,
 }: KanbanCardProps) {
-  const ciStatus = useWorkspaceStore((s) => s.ciStatuses[ticket.workspaceId] ?? null);
+  const ciStatus = useWorkspaceStore((s) => ticket.workspaceId ? s.ciStatuses[ticket.workspaceId] : null) ?? null;
   const prUrl = ticket.workspace?.prUrl ?? null;
   return (
     <div
@@ -35,12 +35,12 @@ export const KanbanCard = memo(function KanbanCard({
       onClick={() => onClickTicket(ticket.workspaceId)}
       className="group relative cursor-pointer rounded-md border border-edge bg-surface-elevated p-3 transition-all hover:border-edge-hover hover:bg-surface-elevated active:scale-[0.98]"
     >
-      {onDeleteWorkspace && (
+      {onDeleteWorkspace && ticket.workspaceId && (
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onDeleteWorkspace(ticket.workspaceId);
+            onDeleteWorkspace(ticket.workspaceId!);
           }}
           className="absolute top-2 right-2 hidden rounded p-1 text-muted transition-colors hover:bg-red-500/20 hover:text-red-400 group-hover:block"
         >
@@ -49,7 +49,7 @@ export const KanbanCard = memo(function KanbanCard({
       )}
       <h4 className="line-clamp-2 text-sm font-medium text-primary"><ScrambleText text={ticket.title} /></h4>
 
-      {ticket.workspace.status === 'queued' && (
+      {ticket.workspace?.status === 'queued' && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-cyan-400">
           <FiLink className="h-3 w-3" />
           <span>Queued</span>
@@ -89,7 +89,7 @@ export const KanbanCard = memo(function KanbanCard({
       })()}
 
       <div className="relative mt-2 flex items-center gap-2">
-        {ticket.workspace.branch && (
+        {ticket.workspace?.branch && (
           <CopyableBranch branch={ticket.workspace.branch} />
         )}
         {prUrl ? (() => {
@@ -113,12 +113,12 @@ export const KanbanCard = memo(function KanbanCard({
               {prNumber ? `#${prNumber}` : 'PR'}
             </button>
           );
-        })() : onCreatePR && ticket.workspace.branch && (
+        })() : onCreatePR && ticket.workspaceId && ticket.workspace?.branch && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onCreatePR(ticket.workspaceId);
+              onCreatePR(ticket.workspaceId!);
             }}
             className="inline-flex items-center gap-1 shrink-0 rounded border border-faint/50 px-1.5 py-0.5 text-[10px] font-medium text-faint transition-colors hover:border-accent/50 hover:text-accent-light hover:bg-white/5"
           >

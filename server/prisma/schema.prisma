@@ -213,7 +213,7 @@ model KanbanColumn {
 
 model Ticket {
   id               String   @id @default(uuid())
-  workspaceId      String   @unique @map("message_id")
+  workspaceId      String?  @unique @map("message_id")
   columnId         String   @map("column_id")
   assigneeId       String?  @map("assignee_id")
   title            String
@@ -225,7 +225,7 @@ model Ticket {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   column    KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
   assignee  User?        @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
 

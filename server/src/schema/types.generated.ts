@@ -628,7 +628,7 @@ export type Ticket = {
   title: Scalars['String']['output'];
   updatedAt: Scalars['DateTime']['output'];
   workspace?: Maybe<TicketWorkspace>;
-  workspaceId: Scalars['String']['output'];
+  workspaceId?: Maybe<Scalars['String']['output']>;
 };
 
 export type TicketAttachment = {
@@ -1158,7 +1158,7 @@ export type TicketResolvers<ContextType = any, ParentType extends ResolversParen
   title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workspace?: Resolver<Maybe<ResolversTypes['TicketWorkspace']>, ParentType, ContextType>;
-  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  workspaceId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };
 
 export type TicketAttachmentResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketAttachment'] = ResolversParentTypes['TicketAttachment']> = {

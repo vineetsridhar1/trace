@@ -260,7 +260,7 @@ type Ticket {
   title: String!
   updatedAt: DateTime!
   workspace: TicketWorkspace
-  workspaceId: String!
+  workspaceId: String
 }
 
 type TicketAttachment {

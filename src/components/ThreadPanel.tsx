@@ -128,11 +128,13 @@ export function ThreadPanel() {
 
   const channelTickets = useMemo(
     () => kanbanColumns.flatMap((col) =>
-      col.tickets.map((t) => ({
-        workspaceId: t.workspaceId,
-        title: t.title,
-        status: t.workspace?.status ?? "pending",
-      })),
+      col.tickets
+        .filter((t): t is typeof t & { workspaceId: string } => t.workspaceId != null)
+        .map((t) => ({
+          workspaceId: t.workspaceId,
+          title: t.title,
+          status: t.workspace?.status ?? "pending",
+        })),
     ),
     [kanbanColumns],
   );

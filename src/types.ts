@@ -238,7 +238,7 @@ export interface TicketAttachment {
 
 export interface KanbanTicket {
   id: string;
-  workspaceId: string;
+  workspaceId: string | null;
   columnId: string;
   columnSlug?: string;
   title: string;
@@ -256,7 +256,7 @@ export interface KanbanTicket {
     status: string;
     createdAt: string;
     attachments?: TicketAttachment[];
-  };
+  } | null;
 }
 
 export interface KanbanColumn {

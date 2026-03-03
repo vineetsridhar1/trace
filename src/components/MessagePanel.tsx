@@ -188,7 +188,7 @@ export function MessagePanel({
     const map = new Map<string, KanbanTicket>();
     for (const col of kanbanColumns) {
       for (const ticket of col.tickets) {
-        map.set(ticket.workspaceId, ticket);
+        if (ticket.workspaceId) map.set(ticket.workspaceId, ticket);
       }
     }
     return map;
@@ -241,7 +241,8 @@ export function MessagePanel({
   }, []);
 
   const handleBoardClickTicket = useCallback(
-    (workspaceId: string) => {
+    (workspaceId: string | null) => {
+      if (!workspaceId) return;
       const workspace = workspaces.find((m) => m.id === workspaceId);
       if (workspace) onOpenWorkspace(workspace);
     },

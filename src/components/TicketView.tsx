@@ -36,16 +36,16 @@ const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = 
 };
 
 export function TicketView({ ticket }: { ticket: KanbanTicket }) {
-  const statusConfig = STATUS_CONFIG[ticket.workspace.status] ?? STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
-  const attachments = ticket.workspace.attachments ?? [];
+  const statusConfig = STATUS_CONFIG[ticket.workspace?.status ?? ''] ?? STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
+  const attachments = ticket.workspace?.attachments ?? [];
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [fetchDeps, { data: depsData }] = useTicketDependenciesLazyQuery();
 
   useEffect(() => {
-    if (ticket.workspace.status === 'queued') {
+    if (ticket.workspace?.status === 'queued' && ticket.workspaceId) {
       void fetchDeps({ variables: { workspaceId: ticket.workspaceId } });
     }
-  }, [ticket.workspaceId, ticket.workspace.status, fetchDeps]);
+  }, [ticket.workspaceId, ticket.workspace?.status, fetchDeps]);
 
   const deps = depsData?.ticketDependencies ?? [];
 
@@ -57,15 +57,15 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
         <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${statusConfig.className}`}>
           {statusConfig.label}
         </span>
-        {ticket.workspace.branch && (
+        {ticket.workspace?.branch && (
           <span className="rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-[11px] text-accent">
             {ticket.workspace.branch}
           </span>
         )}
-        {ticket.workspace.prUrl && (
+        {ticket.workspace?.prUrl && (
           <button
             type="button"
-            onClick={() => window.open(ticket.workspace.prUrl!, '_blank')}
+            onClick={() => window.open(ticket.workspace!.prUrl!, '_blank')}
             className="inline-flex items-center gap-1 rounded bg-surface-elevated px-1.5 py-0.5 text-[11px] font-medium text-accent hover:bg-surface-elevated transition-colors"
           >
             PR

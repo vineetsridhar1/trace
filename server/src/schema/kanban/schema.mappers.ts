@@ -10,7 +10,7 @@ export interface KanbanColumnMapper {
 
 export interface TicketMapper {
   id: string;
-  workspaceId: string;
+  workspaceId: string | null;
   columnId: string;
   title: string;
   description: string | null;
