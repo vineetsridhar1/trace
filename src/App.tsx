@@ -35,7 +35,6 @@ import { ChannelSettingsModal } from "./components/ChannelSettingsModal";
 import { JoinChannelModal } from "./components/JoinChannelModal";
 import { CreateChannelModal } from "./components/CreateChannelModal";
 import { CreateServerModal } from "./components/CreateServerModal";
-import { ServerRail } from "./components/ServerRail";
 import { AiChatPanel } from "./components/AiChatPanel";
 import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -892,17 +891,6 @@ function AppContent() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface text-primary">
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {!isFullscreen && (
-          <ServerRail
-            servers={servers}
-            activeServerId={activeServerId}
-            onSwitchServer={handleSwitchServer}
-            onCreateServer={() =>
-              useAppUIStore.getState().setShowCreateServer(true)
-            }
-          />
-        )}
-
         <ChannelPanel
           channels={serverChannels}
           activeChannelId={activeChannelId}
