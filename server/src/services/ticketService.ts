@@ -3,6 +3,8 @@ import { pubsub, TOPICS } from "./pubsub";
 import {
   generateTicketFromMessage,
   updateTicketFromContext,
+  mergeSemanticContext,
+  type TicketMetadata,
 } from "./ticketAiService";
 import { getStorage } from "./storageService";
 
@@ -213,6 +215,7 @@ export async function updateTicketFromEvent(
   channelId: string,
   eventsContext: string,
   summary: string,
+  fileChanges?: Array<{ file: string; operation: string }>,
 ) {
   const ticket = await prisma.ticket.findUnique({
     where: { workspaceId },
@@ -225,19 +228,41 @@ export async function updateTicketFromEvent(
       title: ticket.title,
       description: ticket.description,
       solutionApproach: ticket.solutionApproach,
+      metadata: ticket.metadata,
     },
     eventsContext,
     summary,
+    fileChanges,
   );
 
   if (!update) return null;
+
+  const existingMeta = (ticket.metadata ?? {}) as TicketMetadata;
+  const incomingMeta = update.metadata as TicketMetadata | undefined;
+
+  // Merge semantic context with existing data instead of replacing
+  const mergedSemantic = mergeSemanticContext(
+    existingMeta.semanticContext,
+    incomingMeta?.semanticContext,
+  );
+
+  const mergedMetadata: TicketMetadata = {
+    ...existingMeta,
+    ...(incomingMeta ?? {}),
+    semanticContext: mergedSemantic,
+  };
+
+  // Only include metadata in the update if it has new semantic content
+  const hasNewSemantic = incomingMeta?.semanticContext &&
+    Object.values(incomingMeta.semanticContext).some((v) => Array.isArray(v) ? v.length > 0 : !!v);
 
   const data: Record<string, unknown> = {};
   if (update.description) data.description = update.description;
   if (update.solutionApproach) data.solutionApproach = update.solutionApproach;
   if (update.status) data.status = update.status;
-  if (update.metadata)
-    data.metadata = JSON.parse(JSON.stringify(update.metadata));
+  if (hasNewSemantic || incomingMeta?.tags || incomingMeta?.complexity) {
+    data.metadata = JSON.parse(JSON.stringify(mergedMetadata));
+  }
 
   if (Object.keys(data).length === 0) return ticket;
 

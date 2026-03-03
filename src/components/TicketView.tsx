@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { gql } from '@apollo/client';
-import { FiExternalLink, FiLink } from 'react-icons/fi';
+import { FiExternalLink, FiLink, FiChevronDown, FiChevronRight, FiFile, FiCheckCircle, FiAlertTriangle, FiCpu, FiHelpCircle } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { KanbanTicket } from '../types';
-import { getServerUrl } from '../types';
+import type { KanbanTicket, SemanticContext } from '../types';
+import { getServerUrl, getTicketMetadata } from '../types';
 import { ImageLightbox } from './ImageLightbox';
 import { useTicketDependenciesLazyQuery } from './__generated__/TicketView.generated';
 import { ScrambleText } from './ScrambleText';
@@ -35,11 +35,150 @@ const COMPLEXITY_CONFIG: Record<string, { label: string; className: string }> = 
   high: { label: 'High', className: 'text-red-400 bg-red-400/10' },
 };
 
+function CollapsibleSection({
+  title,
+  icon,
+  badge,
+  badgeClassName,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  badge?: string | number;
+  badgeClassName?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#565f89] hover:text-[#7aa2f7] transition-colors"
+      >
+        {open ? <FiChevronDown className="h-3 w-3 shrink-0" /> : <FiChevronRight className="h-3 w-3 shrink-0" />}
+        {icon}
+        <span>{title}</span>
+        {badge != null && (
+          <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium ${badgeClassName ?? 'bg-[#1f2335] text-[#a9b1d6]'}`}>
+            {badge}
+          </span>
+        )}
+      </button>
+      {open && <div className="mt-1.5 pl-5">{children}</div>}
+    </div>
+  );
+}
+
+function SemanticSections({ semantic }: { semantic: SemanticContext }) {
+  const hasChanges = semantic.keyChanges && semantic.keyChanges.length > 0;
+  const hasDecisions = semantic.decisions && semantic.decisions.length > 0;
+  const hasTradeoffs = semantic.tradeoffs && semantic.tradeoffs.length > 0;
+  const hasTechnical = semantic.technicalContext && semantic.technicalContext.length > 0;
+  const hasBlockers = semantic.blockers && semantic.blockers.length > 0;
+
+  if (!hasChanges && !hasDecisions && !hasTradeoffs && !hasTechnical && !hasBlockers) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 border-t border-[#292e42] pt-3">
+      {hasChanges && (
+        <CollapsibleSection
+          title="Changes"
+          icon={<FiFile className="h-3 w-3 shrink-0" />}
+          badge={semantic.keyChanges!.length}
+          defaultOpen
+        >
+          <div className="space-y-1.5">
+            {semantic.keyChanges!.map((change, i) => (
+              <div key={i} className="text-sm text-[#a9b1d6]">
+                <span className="font-mono text-xs text-[#7aa2f7]">{change.file}</span>
+                <p className="mt-0.5 text-xs text-[#787c99] leading-relaxed">{change.summary}</p>
+              </div>
+            ))}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {hasDecisions && (
+        <CollapsibleSection
+          title="Decisions"
+          icon={<FiCheckCircle className="h-3 w-3 shrink-0" />}
+          badge={semantic.decisions!.length}
+          defaultOpen
+        >
+          <ul className="space-y-1">
+            {semantic.decisions!.map((d, i) => (
+              <li key={i} className="text-xs leading-relaxed text-[#a9b1d6]">
+                <span className="mr-1.5 text-[#565f89]">&bull;</span>{d}
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
+
+      {hasTradeoffs && (
+        <CollapsibleSection
+          title="Tradeoffs"
+          icon={<FiAlertTriangle className="h-3 w-3 shrink-0" />}
+          badge={semantic.tradeoffs!.length}
+        >
+          <ul className="space-y-1">
+            {semantic.tradeoffs!.map((t, i) => (
+              <li key={i} className="text-xs leading-relaxed text-[#a9b1d6]">
+                <span className="mr-1.5 text-[#565f89]">&bull;</span>{t}
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
+
+      {hasTechnical && (
+        <CollapsibleSection
+          title="Technical Context"
+          icon={<FiCpu className="h-3 w-3 shrink-0" />}
+          badge={semantic.technicalContext!.length}
+        >
+          <ul className="space-y-1">
+            {semantic.technicalContext!.map((t, i) => (
+              <li key={i} className="text-xs leading-relaxed text-[#a9b1d6]">
+                <span className="mr-1.5 text-[#565f89]">&bull;</span>{t}
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
+
+      {hasBlockers && (
+        <CollapsibleSection
+          title="Blockers"
+          icon={<FiHelpCircle className="h-3 w-3 shrink-0" />}
+          badge={semantic.blockers!.length}
+          badgeClassName="bg-red-400/10 text-red-400"
+          defaultOpen
+        >
+          <ul className="space-y-1">
+            {semantic.blockers!.map((b, i) => (
+              <li key={i} className="text-xs leading-relaxed text-red-300/80">
+                <span className="mr-1.5 text-red-400/50">&bull;</span>{b}
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
+    </div>
+  );
+}
+
 export function TicketView({ ticket }: { ticket: KanbanTicket }) {
   const statusConfig = STATUS_CONFIG[ticket.workspace?.status ?? ''] ?? STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.pending;
   const attachments = ticket.workspace?.attachments ?? [];
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [fetchDeps, { data: depsData }] = useTicketDependenciesLazyQuery();
+  const meta = getTicketMetadata(ticket);
 
   useEffect(() => {
     if (ticket.workspace?.status === 'queued' && ticket.workspaceId) {
@@ -112,8 +251,9 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
         </div>
       )}
 
+      {meta.semanticContext && <SemanticSections semantic={meta.semanticContext} />}
+
       {ticket.metadata != null && (() => {
-        const meta = ticket.metadata as { tags?: string[]; complexity?: string };
         const hasTags = Array.isArray(meta.tags) && meta.tags.length > 0;
         const complexityConfig = meta.complexity ? COMPLEXITY_CONFIG[meta.complexity] : null;
         if (!hasTags && !complexityConfig) return null;

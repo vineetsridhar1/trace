@@ -1,8 +1,9 @@
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FiGitPullRequest, FiLink, FiTrash2 } from "react-icons/fi";
+import { FiGitPullRequest, FiLink, FiTrash2, FiFile, FiAlertTriangle } from "react-icons/fi";
 import type { KanbanTicket } from "../types";
+import { getTicketMetadata } from "../types";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { formatTime } from "../utils";
 import { CopyableBranch } from "./CopyableBranch";
@@ -81,13 +82,29 @@ export const KanbanCard = memo(function KanbanCard({
       )}
 
       {(() => {
-        const meta = ticket.metadata as { tags?: string[] } | null;
-        if (!meta) return null;
+        const meta = getTicketMetadata(ticket);
         const hasTags = Array.isArray(meta.tags) && meta.tags.length > 0;
-        if (!hasTags) return null;
+        const semantic = meta.semanticContext;
+        const changeCount = semantic?.keyChanges?.length ?? 0;
+        const blockerCount = semantic?.blockers?.length ?? 0;
+        const hasIndicators = changeCount > 0 || blockerCount > 0;
+
+        if (!hasTags && !hasIndicators) return null;
         return (
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            {(meta.tags as string[]).map((tag) => (
+            {changeCount > 0 && (
+              <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-accent/70">
+                <FiFile className="h-2.5 w-2.5" />
+                {changeCount} {changeCount === 1 ? "file" : "files"}
+              </span>
+            )}
+            {blockerCount > 0 && (
+              <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-red-400/70">
+                <FiAlertTriangle className="h-2.5 w-2.5" />
+                {blockerCount} {blockerCount === 1 ? "blocker" : "blockers"}
+              </span>
+            )}
+            {hasTags && (meta.tags as string[]).map((tag) => (
               <span
                 key={tag}
                 className="rounded px-1.5 py-0.5 text-[10px] text-muted"

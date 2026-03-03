@@ -471,14 +471,48 @@ export async function ingestEvent(payload: HookEvent) {
     void refreshTicketBroadcast(workspace.id, channelId);
   }
 
-  // Update kanban ticket on Stop events
+  // Update kanban ticket on Stop events with enriched context
   if (payload.hook_event_name === 'Stop' && payload.last_assistant_message) {
-    void updateTicketFromEvent(
-      workspace.id,
-      channelId,
-      payload.last_assistant_message.slice(0, 1000),
-      summaryText ?? '',
-    );
+    // Gather file changes from Write/Edit events in this session for semantic context
+    void (async () => {
+      try {
+        const writeEvents = await prisma.event.findMany({
+          where: {
+            session: { workspaceId: workspace.id },
+            cliSessionId: payload.session_id,
+            hookEventName: 'PostToolUse',
+            toolName: { in: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'write', 'edit', 'multiedit', 'notebookedit'] },
+          },
+          select: { toolName: true, toolInput: true },
+          orderBy: { timestamp: 'asc' },
+        });
+
+        const fileChanges = writeEvents
+          .map((e: { toolName: string | null; toolInput: unknown }) => {
+            const input = (e.toolInput ?? {}) as Record<string, unknown>;
+            const filePath = ((input.file_path ?? input.path ?? input.filepath ?? '') as string)
+              .replace(/.*\/worktrees\/[^/]+\//, ''); // strip worktree prefix for readability
+            if (!filePath || filePath.includes('/.claude/')) return null;
+            return { file: filePath, operation: e.toolName ?? 'modified' };
+          })
+          .filter((f: { file: string; operation: string } | null): f is { file: string; operation: string } => f !== null);
+
+        // Deduplicate files, keeping the last operation
+        const fileMap = new Map<string, string>();
+        for (const f of fileChanges) fileMap.set(f.file, f.operation);
+        const dedupedChanges = [...fileMap.entries()].map(([file, operation]) => ({ file, operation }));
+
+        await updateTicketFromEvent(
+          workspace.id,
+          channelId,
+          payload.last_assistant_message!.slice(0, 2000),
+          summaryText ?? '',
+          dedupedChanges,
+        );
+      } catch (err) {
+        console.error('[eventService] enriched ticket update failed:', err);
+      }
+    })();
   }
 
   const hydratedWorkspace = await getWorkspaceByIdForFeed(workspace.id);

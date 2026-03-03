@@ -384,6 +384,20 @@ export interface TicketAttachment {
   url: string;
 }
 
+export interface SemanticContext {
+  keyChanges?: Array<{ file: string; summary: string }>;
+  decisions?: string[];
+  tradeoffs?: string[];
+  technicalContext?: string[];
+  blockers?: string[];
+}
+
+export interface TicketMetadata {
+  tags?: string[];
+  complexity?: 'low' | 'medium' | 'high';
+  semanticContext?: SemanticContext;
+}
+
 export interface KanbanTicket {
   id: string;
   workspaceId: string | null;
@@ -405,6 +419,12 @@ export interface KanbanTicket {
     createdAt: string;
     attachments?: TicketAttachment[];
   } | null;
+}
+
+/** Type-safe accessor for ticket metadata */
+export function getTicketMetadata(ticket: KanbanTicket): TicketMetadata {
+  if (!ticket.metadata || typeof ticket.metadata !== 'object') return {};
+  return ticket.metadata as TicketMetadata;
 }
 
 export interface KanbanColumn {
