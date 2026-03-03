@@ -338,7 +338,7 @@ export class CodexAdapter implements AgentAdapter {
     ];
 
     if (ctx.effort) {
-      args.push("--reasoning-effort", ctx.effort);
+      args.push("-c", `reasoning_effort=${ctx.effort}`);
     }
 
     args.push("-");
