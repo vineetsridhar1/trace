@@ -8,6 +8,7 @@ import {
   useAppendPromptMutation,
   useUpdateWorkspacePreviewMutation,
 } from './__generated__/useClaudeMessageActions.generated';
+import { useUpdateInitialPromptMutation } from './__generated__/useClaudeWorkspaceActions.generated';
 import { useClaudeRunStore } from '../stores/claudeRunStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
@@ -73,6 +74,31 @@ const GQL_UPDATE_PREVIEW = gql`
   ${WORKSPACE_FIELDS}
 `;
 
+const GQL_UPDATE_INITIAL_PROMPT = gql`
+  mutation UpdateInitialPrompt($channelId: ID!, $workspaceId: ID!, $text: String!) {
+    updateInitialPrompt(channelId: $channelId, workspaceId: $workspaceId, text: $text) {
+      workspace {
+        ...WorkspaceFields
+      }
+      session {
+        id
+        workspaceId
+        createdAt
+        eventCount
+      }
+      event {
+        id
+        cliSessionId
+        hookEventName
+        timestamp
+        sessionId
+        importance
+      }
+    }
+  }
+  ${WORKSPACE_FIELDS}
+`;
+
 interface SpawnOptions {
   statusOnSuccess?: TicketStatus;
   errorPrefix: string;
@@ -100,6 +126,7 @@ export function useClaudeWorkspaceActions({
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
   const [executeAppendPrompt] = useAppendPromptMutation();
   const [executeUpdatePreview] = useUpdateWorkspacePreviewMutation();
+  const [executeUpdateInitialPrompt] = useUpdateInitialPromptMutation();
 
   // Stable refs for channel data to avoid stale closures
   const channelRef = useRef(enrichedActiveChannel);
@@ -185,6 +212,23 @@ export function useClaudeWorkspaceActions({
       }
     },
     [executeUpdatePreview, upsertWorkspace],
+  );
+
+  const updateInitialPrompt = useCallback(
+    async (workspaceId: string, text: string) => {
+      const chId = activeChannelIdRef.current;
+      if (!chId) return;
+      try {
+        const { data } = await executeUpdateInitialPrompt({
+          variables: { channelId: chId, workspaceId, text },
+        });
+        if (!data?.updateInitialPrompt) return;
+        upsertWorkspace(data.updateInitialPrompt.workspace as Workspace);
+      } catch {
+        // Best-effort — fall back silently
+      }
+    },
+    [executeUpdateInitialPrompt, upsertWorkspace],
   );
 
   const persistPrompt = useCallback(
@@ -322,7 +366,7 @@ export function useClaudeWorkspaceActions({
         await updateWorkspaceStatus(workspaceId, 'creation');
       }
 
-      await updatePreviewForPendingRun(workspaceId, editedPrompt);
+      await updateInitialPrompt(workspaceId, editedPrompt);
 
       const portResult = await window.traceAPI.allocatePorts(workspaceId, 10);
       const ports = portResult.success && portResult.ports ? portResult.ports : [];
@@ -353,7 +397,7 @@ export function useClaudeWorkspaceActions({
         await updateWorkspaceStatus(workspaceId, 'pending');
       }
     },
-    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace, updateWorkspaceStatus, updatePreviewForPendingRun],
+    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace, updateWorkspaceStatus, updateInitialPrompt],
   );
 
   const autoRunQueuedTicket = useCallback(

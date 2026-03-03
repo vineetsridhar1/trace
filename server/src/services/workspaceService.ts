@@ -304,6 +304,51 @@ export async function appendPromptToWorkspaceSession(
   };
 }
 
+export async function updateInitialPrompt(channelId: string, workspaceId: string, newText: string) {
+  const workspace = await prisma.workspace.findFirst({
+    where: { id: workspaceId, channelId },
+    include: { sessions: { orderBy: { createdAt: 'asc' }, take: 1 } },
+  });
+
+  if (!workspace || workspace.sessions.length === 0) {
+    return null;
+  }
+
+  const session = workspace.sessions[0];
+
+  // Find the first UserPromptSubmit event in this session
+  const event = await prisma.event.findFirst({
+    where: { sessionId: session.id, hookEventName: 'UserPromptSubmit' },
+    orderBy: { timestamp: 'asc' },
+  });
+
+  if (!event) {
+    return null;
+  }
+
+  // Update the event's rawPayload, preserving other fields like attachments
+  const existingPayload = event.rawPayload as Record<string, unknown>;
+  const updatedPayload = { ...existingPayload, prompt: newText };
+
+  const [updatedEvent] = await prisma.$transaction([
+    prisma.event.update({
+      where: { id: event.id },
+      data: { rawPayload: JSON.parse(JSON.stringify(updatedPayload)) },
+    }),
+    prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { preview: newText },
+    }),
+  ]);
+
+  const feedWorkspace = await getWorkspaceByIdForFeed(workspaceId);
+  if (!feedWorkspace) {
+    throw new Error(`Failed to load workspace ${workspaceId}`);
+  }
+
+  return { workspace: feedWorkspace, session, event: updatedEvent };
+}
+
 export async function getEventsByWorkspace(
   workspaceId: string,
   options: { limit?: number; offset?: number; after?: string } = {},

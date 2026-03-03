@@ -211,6 +211,7 @@ export type Mutation = {
   setWorkspacePrUrl: Scalars['Boolean']['output'];
   updateChannel: Channel;
   updateColumn: KanbanColumn;
+  updateInitialPrompt: CreateWorkspacePayload;
   updateQueuedRunConfig: Scalars['Boolean']['output'];
   updateWorkspacePreview: Workspace;
   updateWorkspaceStatus: Workspace;
@@ -367,6 +368,13 @@ export type MutationUpdateColumnArgs = {
   columnId: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
   sortOrder?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type MutationUpdateInitialPromptArgs = {
+  channelId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 

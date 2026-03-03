@@ -224,6 +224,7 @@ export type Mutation = {
   setWorkspacePrUrl: Scalars['Boolean']['output'];
   updateChannel: Channel;
   updateColumn: KanbanColumn;
+  updateInitialPrompt: CreateWorkspacePayload;
   updateQueuedRunConfig: Scalars['Boolean']['output'];
   updateWorkspacePreview: Workspace;
   updateWorkspaceStatus: Workspace;
@@ -380,6 +381,13 @@ export type MutationupdateColumnArgs = {
   columnId: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
   sortOrder?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type MutationupdateInitialPromptArgs = {
+  channelId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -1077,6 +1085,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   setWorkspacePrUrl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationsetWorkspacePrUrlArgs, 'channelId' | 'prUrl' | 'workspaceId'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationupdateChannelArgs, 'id'>>;
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;
+  updateInitialPrompt?: Resolver<ResolversTypes['CreateWorkspacePayload'], ParentType, ContextType, RequireFields<MutationupdateInitialPromptArgs, 'channelId' | 'text' | 'workspaceId'>>;
   updateQueuedRunConfig?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationupdateQueuedRunConfigArgs, 'runConfig' | 'workspaceId'>>;
   updateWorkspacePreview?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationupdateWorkspacePreviewArgs, 'channelId' | 'preview' | 'workspaceId'>>;
   updateWorkspaceStatus?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationupdateWorkspaceStatusArgs, 'channelId' | 'status' | 'workspaceId'>>;
