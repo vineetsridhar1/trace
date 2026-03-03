@@ -396,7 +396,7 @@ export function MessagePanel({
                 const isNew = newMessageIds.has(msg.id);
                 const isFirstInGroup = i === 0 || chatMessages[i - 1].author.id !== msg.author.id;
                 return (
-                  <div key={msg.id} className={`${isFirstInGroup ? 'mb-3 mt-3 first:mt-0' : 'mb-0.5'} flex items-start gap-2${isNew ? ' message-enter' : ''}`}>
+                  <div key={msg.id} className={`${isFirstInGroup ? `mb-3 ${i === 0 ? 'mt-0' : 'mt-3'}` : 'mb-0.5'} flex items-start gap-2${isNew ? ' message-enter' : ''}`}>
                     {isFirstInGroup ? (
                       msg.author.avatarUrl ? (
                         <img
