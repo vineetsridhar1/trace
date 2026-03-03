@@ -55,8 +55,6 @@ const _GQL_HANDOFF_WORKSPACE = gql`
   ${WORKSPACE_FIELDS}
 `;
 
-type ViewMode = "agent" | "ticket" | "files" | "terminal" | "browser";
-
 const HANDOFF_ALLOWED_STATUSES = new Set(['in_progress', 'needs_input', 'completed', 'creation']);
 
 export function ThreadPanel() {
@@ -221,7 +219,8 @@ export function ThreadPanel() {
   useEffect(() => {
     if (hasWorktree === false) {
       if (isFullscreen) handleExitFullscreen();
-      setViewMode((prev) => (prev === 'terminal' || prev === 'browser' ? 'agent' : prev));
+      const current = useThreadStore.getState().threadViewMode;
+      if (current === 'terminal' || current === 'browser') setViewMode('agent');
     }
   }, [handleExitFullscreen, hasWorktree, isFullscreen]);
 
@@ -485,7 +484,8 @@ export function ThreadPanel() {
       ? activePlanNode
       : null;
 
-  const [viewMode, setViewMode] = useState<ViewMode>("agent");
+  const viewMode = useThreadStore((s) => s.threadViewMode);
+  const setViewMode = useThreadStore((s) => s.setThreadViewMode);
 
   useEffect(() => {
     setViewMode(workspaceStatus === "merged" ? "ticket" : "agent");

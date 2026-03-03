@@ -263,6 +263,19 @@ export function MessagePanel({
     [workspaces, onOpenWorkspace],
   );
 
+  // Build workspace → shortcut index (1-9) for keyboard navigation
+  const workspaceShortcutMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let idx = 1;
+    for (const group of groupedWorkspaces) {
+      for (const ws of group.workspaces) {
+        if (idx <= 9) map.set(ws.id, idx);
+        idx++;
+      }
+    }
+    return map;
+  }, [groupedWorkspaces]);
+
   const renderGroupedWorkspaces = (showDelete: boolean) =>
     groupedWorkspaces.map((group) => (
       <CollapsibleStatusGroup
@@ -285,6 +298,7 @@ export function MessagePanel({
             isDeletingWorktree={deletingWorktreeIds?.has(workspace.id)}
             dimmed={workspace.status === 'merged'}
             activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
+            shortcutIndex={workspaceShortcutMap.get(workspace.id)}
           />
         ))}
       </CollapsibleStatusGroup>

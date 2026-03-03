@@ -62,6 +62,7 @@ interface MessageItemProps {
   isDeletingWorktree?: boolean;
   dimmed?: boolean;
   activelyRunning?: boolean;
+  shortcutIndex?: number;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -77,6 +78,7 @@ export const MessageItem = memo(function MessageItem({
   isDeletingWorktree,
   dimmed,
   activelyRunning,
+  shortcutIndex,
 }: MessageItemProps) {
   const status = (workspace.status ?? 'pending') as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
@@ -92,6 +94,13 @@ export const MessageItem = memo(function MessageItem({
       onClick={() => onOpenWorkspace(workspace)}
       title={title}
     >
+      {/* Shortcut index badge */}
+      {shortcutIndex != null && shortcutIndex <= 9 && (
+        <kbd className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded border border-edge bg-surface-deep text-[10px] font-medium leading-none text-muted">
+          {shortcutIndex}
+        </kbd>
+      )}
+
       {/* Avatar */}
       {workspace.user?.avatarUrl ? (
         <img
@@ -187,6 +196,7 @@ function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps
     prev.isDeletingWorktree === next.isDeletingWorktree &&
     prev.onOpenWorkspace === next.onOpenWorkspace &&
     prev.onDeleteWorkspace === next.onDeleteWorkspace &&
-    prev.onDeleteWorktree === next.onDeleteWorktree
+    prev.onDeleteWorktree === next.onDeleteWorktree &&
+    prev.shortcutIndex === next.shortcutIndex
   );
 }

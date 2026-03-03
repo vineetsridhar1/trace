@@ -1,4 +1,6 @@
+import { useCallback } from 'react';
 import { useTerminal } from '../hooks/useTerminal';
+import { useShortcutStore } from '../stores/shortcutStore';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
@@ -58,6 +60,21 @@ export function Terminal({ terminalId, cwd }: TerminalProps) {
     requestAnimationFrame(focus);
   };
 
+  const handleTerminalFocus = useCallback(() => {
+    focusTerminal();
+    const store = useShortcutStore.getState();
+    const next = new Set(store.activeContexts);
+    next.add('terminal-focused');
+    store.setActiveContexts(next);
+  }, []);
+
+  const handleTerminalBlur = useCallback(() => {
+    const store = useShortcutStore.getState();
+    const next = new Set(store.activeContexts);
+    next.delete('terminal-focused');
+    store.setActiveContexts(next);
+  }, []);
+
   const handleFallbackKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
     const isXtermTextarea = Boolean(target?.classList?.contains('xterm-helper-textarea'));
@@ -84,7 +101,8 @@ export function Terminal({ terminalId, cwd }: TerminalProps) {
     <div
       className="flex h-full flex-col overflow-hidden outline-none"
       tabIndex={0}
-      onFocus={focusTerminal}
+      onFocus={handleTerminalFocus}
+      onBlur={handleTerminalBlur}
       onClick={focusTerminal}
       onMouseDown={focusTerminal}
       onTouchStart={focusTerminal}

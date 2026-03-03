@@ -24,6 +24,7 @@ import { CreateChannelModal } from './components/CreateChannelModal';
 import { CreateServerModal } from './components/CreateServerModal';
 import { ServerRail } from './components/ServerRail';
 import { AiChatPanel } from './components/AiChatPanel';
+import { ShortcutHelpDialog } from './components/ShortcutHelpDialog';
 
 // Zustand stores
 import { useWorkspaceStore } from './stores/workspaceStore';
@@ -33,6 +34,9 @@ import { useKanbanStore } from './stores/kanbanStore';
 import { useAppUIStore, isViewValidForChannel, getDefaultViewForChannel } from './stores/appUIStore';
 import { useClaudeRunStore } from './stores/claudeRunStore';
 import { useSyncStore } from './stores/syncStore';
+import { useShortcuts } from './hooks/useShortcuts';
+import { useShortcutContextSync } from './hooks/useShortcutContextSync';
+import { useDefaultShortcuts } from './hooks/useDefaultShortcuts';
 
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
   mutation UpdateWorkspaceStatus($channelId: ID!, $workspaceId: ID!, $status: String!) {
@@ -622,17 +626,14 @@ function AppContent() {
     useTerminalStore.getState().selectWorkspace(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
-  // Keyboard shortcut: Cmd+T for new terminal
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === 't' && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
-        event.preventDefault();
-        useTerminalStore.getState().addTerminal();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+  // ─── Keyboard shortcuts ─────────────────────────────────────────
+  useShortcuts();
+  useShortcutContextSync();
+  useDefaultShortcuts({
+    serverChannels,
+    handleSwitchChannel,
+    handleOpenWorkspace,
+  });
 
   // ─── Settings / channel modals ───────────────────────────────────
   const settingsChannel = useMemo(
@@ -836,6 +837,8 @@ function AppContent() {
           }}
         />
       )}
+
+      <ShortcutHelpDialog />
     </div>
   );
 }

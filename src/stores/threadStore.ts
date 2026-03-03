@@ -3,6 +3,8 @@ import type { Workspace, ServerEvent, SessionStatus } from '../types';
 import type { SessionInfo, TokenUsageInfo } from '../hooks/useThread';
 import { clamp } from '../utils';
 
+export type ThreadViewMode = 'agent' | 'ticket' | 'files' | 'terminal' | 'browser';
+
 // Registerable async actions provided by useThreadSync
 interface ThreadSyncActions {
   loadSessionEvents: (workspace: Workspace) => Promise<void>;
@@ -42,6 +44,7 @@ interface ThreadState {
 
   // Thread UI
   threadWidth: number;
+  threadViewMode: ThreadViewMode;
   expandedReadGroupIds: Record<string, boolean>;
   expandedTurnGroupIds: Record<string, boolean>;
 
@@ -76,6 +79,7 @@ interface ThreadState {
 
   // Actions: Thread UI
   setThreadWidth: (width: number) => void;
+  setThreadViewMode: (mode: ThreadViewMode) => void;
   openThreadPanelUI: (workspace: Workspace) => void;
   closeThreadPanel: () => void;
   toggleReadGroup: (groupId: string) => void;
@@ -105,6 +109,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   // Thread UI
   threadWidth: 0,
+  threadViewMode: 'agent',
   expandedReadGroupIds: {},
   expandedTurnGroupIds: {},
 
@@ -197,6 +202,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   // Actions: Thread UI
   setThreadWidth: (width) => set({ threadWidth: width }),
+  setThreadViewMode: (mode) => set({ threadViewMode: mode }),
 
   openThreadPanelUI: (workspace) => {
     const saved = parseInt(localStorage.getItem('trace:threadWidth') ?? '', 10);

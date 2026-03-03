@@ -56,11 +56,16 @@ export function ChannelPanel({
   const projectChannels = channels.filter((c) => c.type === 'project');
   const { sectionOrder, collapsedSections, reorder, toggleCollapsed } = useSidebarPrefs();
 
+  // Map channel id → global shortcut index (1-9) for Mod+Shift+N
+  const channelShortcutMap = new Map<string, number>();
+  channels.forEach((ch, i) => { if (i < 9) channelShortcutMap.set(ch.id, i + 1); });
+
   const renderChannelItems = (items: Channel[]) =>
     items.map((channel) => {
       const isActive = channel.id === activeChannelId && !activeAiChatId;
       const count = unreadCounts[channel.id] ?? 0;
       const needsJoin = !!(channel.workspacesEnabled && channel.githubUrl && !localConfigs[channel.id]?.localRepoPath);
+      const shortcutNum = channelShortcutMap.get(channel.id);
       return (
         <div key={channel.id} className="my-0.5 flex items-center">
           <button
@@ -79,6 +84,12 @@ export function ChannelPanel({
             ) : !isActive && count > 0 ? (
               <span className="ml-auto shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold leading-none text-on-accent">
                 {count > 99 ? '99+' : count}
+              </span>
+            ) : shortcutNum ? (
+              <span className="ml-auto inline-flex shrink-0 items-center gap-px opacity-50">
+                <kbd className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded border border-edge bg-surface-deep px-0.5 text-[9px] font-medium leading-none text-muted">⌘</kbd>
+                <kbd className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded border border-edge bg-surface-deep px-0.5 text-[9px] font-medium leading-none text-muted">⇧</kbd>
+                <kbd className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded border border-edge bg-surface-deep px-0.5 text-[9px] font-medium leading-none text-muted">{shortcutNum}</kbd>
               </span>
             ) : null}
           </button>
