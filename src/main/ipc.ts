@@ -147,7 +147,9 @@ function resolveServerUrl(): string {
   } else {
     url = `http://localhost:${raw}`;
   }
-  console.log(`[ipc] resolveServerUrl: TRACE_SERVER_URL=${raw ?? "(unset)"} → ${url}`);
+  console.log(
+    `[ipc] resolveServerUrl: TRACE_SERVER_URL=${raw ?? "(unset)"} → ${url}`,
+  );
   return url;
 }
 
@@ -793,17 +795,17 @@ export function registerIpcHandlers() {
           };
         }
 
-        // Fast-forward the local ref to match remote without affecting the working tree.
-        // This is safe regardless of which branch is currently checked out.
-        const updateResult = await runProcess(
+        // Fast-forward the local branch to match remote, updating the
+        // index and working tree so the repo stays clean.
+        const mergeResult = await runProcess(
           "git",
-          ["update-ref", `refs/heads/${baseBranch}`, `origin/${baseBranch}`],
+          ["merge", "--ff-only", `origin/${baseBranch}`],
           repoPath,
         );
-        if (updateResult.code !== 0) {
+        if (mergeResult.code !== 0) {
           return {
             success: false,
-            error: `Failed to update ref: ${updateResult.stderr.trim()}`,
+            error: `Failed to merge: ${mergeResult.stderr.trim()}`,
           };
         }
         return { success: true };
@@ -844,10 +846,14 @@ export function registerIpcHandlers() {
             event.preventDefault();
             const callbackUrl = new URL(url);
             const rewritten = `${serverUrl}${callbackUrl.pathname}${callbackUrl.search}`;
-            console.log(`[auth] Rewriting OAuth callback: ${url} → ${rewritten}`);
+            console.log(
+              `[auth] Rewriting OAuth callback: ${url} → ${rewritten}`,
+            );
             authWindow.loadURL(rewritten);
           } else {
-            console.log(`[auth] OAuth callback already targets correct server: ${url}`);
+            console.log(
+              `[auth] OAuth callback already targets correct server: ${url}`,
+            );
           }
         }
       };
