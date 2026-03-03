@@ -104,7 +104,7 @@ export class CodexStreamParser implements AgentStreamParser {
   }
 
   private handleAgentMessage(parsed: Record<string, unknown>): void {
-    const content = parsed.content as string | undefined;
+    const content = (parsed.content ?? parsed.text) as string | undefined;
     if (content) {
       this.lastAssistantText = content;
     }
@@ -115,6 +115,8 @@ export class CodexStreamParser implements AgentStreamParser {
     if (!item) return;
 
     const itemType = item.type as string | undefined;
+    if (itemType === "agent_message") return;
+
     const toolName = this.mapCodexItemToToolName(itemType, item);
     if (!toolName) return;
 
@@ -139,6 +141,15 @@ export class CodexStreamParser implements AgentStreamParser {
     if (!item) return;
 
     const itemType = item.type as string | undefined;
+
+    if (itemType === "agent_message") {
+      const text = item.text as string | undefined;
+      if (text) {
+        this.lastAssistantText = text;
+      }
+      return;
+    }
+
     const toolName = this.mapCodexItemToToolName(itemType, item);
     if (!toolName) return;
 
