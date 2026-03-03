@@ -373,7 +373,6 @@ function AppContent() {
       if (restoredView === 'board') void fetchBoard(channelId);
 
       useThreadStore.getState().closeThreadPanel();
-      useAppUIStore.getState().setChannelWidth(220);
       useTerminalStore.getState().detachAll();
     },
     [switchChannel, activeChannelId, enrichedChannels, fetchBoard],
