@@ -1,10 +1,16 @@
 import { create } from "zustand";
 import type { KanbanColumn, KanbanTicket } from "../types";
 
+interface PendingTicket {
+  ticket: KanbanTicket;
+  channelId: string;
+}
+
 interface KanbanState {
   columns: KanbanColumn[];
   channelId: string | null;
   loading: boolean;
+  pendingTickets: PendingTicket[];
 
   setColumns: (columns: KanbanColumn[], channelId: string) => void;
   setLoading: (loading: boolean) => void;
@@ -23,13 +29,48 @@ export const useKanbanStore = create<KanbanState>((set) => ({
   columns: [],
   channelId: null,
   loading: false,
+  pendingTickets: [],
 
-  setColumns: (columns, channelId) => set({ columns, channelId }),
+  setColumns: (columns, channelId) =>
+    set((state) => {
+      // Drain any pending tickets that arrived before columns were loaded
+      let updatedColumns = columns;
+      for (const pending of state.pendingTickets) {
+        if (pending.channelId !== channelId) continue;
+        // Skip if the board data already contains this ticket (fresher data)
+        const alreadyInBoard = updatedColumns.some((col) =>
+          col.tickets.some((t) => t.id === pending.ticket.id),
+        );
+        if (alreadyInBoard) continue;
+        const targetIdx = updatedColumns.findIndex(
+          (col) =>
+            col.id === pending.ticket.columnId ||
+            (pending.ticket.columnSlug && col.slug === pending.ticket.columnSlug),
+        );
+        if (targetIdx === -1) continue;
+        updatedColumns = updatedColumns.map((col, i) => {
+          if (i !== targetIdx) return col;
+          const tickets = [...col.tickets, pending.ticket].sort(
+            (a, b) => a.sortOrder - b.sortOrder,
+          );
+          return { ...col, tickets };
+        });
+      }
+      return { columns: updatedColumns, channelId, pendingTickets: [] };
+    }),
   setLoading: (loading) => set({ loading }),
 
   upsertTicket: (ticket, channelId) =>
     set((state) => {
       if (state.channelId && channelId !== state.channelId) return state;
+
+      // If columns haven't loaded yet, queue the ticket
+      if (state.columns.length === 0) {
+        return {
+          pendingTickets: [...state.pendingTickets.filter((p) => p.ticket.id !== ticket.id), { ticket, channelId }],
+        };
+      }
+
       const cleaned = state.columns.map((col) => ({
         ...col,
         tickets: col.tickets.filter((t) => t.id !== ticket.id),
@@ -96,5 +137,5 @@ export const useKanbanStore = create<KanbanState>((set) => ({
       })),
     })),
 
-  clearBoard: () => set({ columns: [], channelId: null }),
+  clearBoard: () => set({ columns: [], channelId: null, pendingTickets: [] }),
 }));

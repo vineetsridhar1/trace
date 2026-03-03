@@ -75,6 +75,7 @@ const TICKET_UPSERTED_SUBSCRIPTION = gql`
         workspace {
           id
           branch
+          prUrl
           status
           createdAt
           attachments {

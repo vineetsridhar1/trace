@@ -31,6 +31,7 @@ import { useAppUIStore } from "../stores/appUIStore";
 import { usePanelLayoutStore } from "../stores/panelLayoutStore";
 import { useChannelContext } from "../context/ChannelContext";
 import { useThreadScroll } from "../hooks/useThreadScroll";
+import { useTicketFallback } from "../hooks/useTicketFallback";
 import { useAuth } from "../context/AuthContext";
 import { buildSessionNodes, normalizeToolName } from "../utils";
 import {
@@ -164,6 +165,8 @@ export function ThreadPanel() {
     }
     return null;
   }, [kanbanColumns, selectedWorkspaceId]);
+
+  useTicketFallback(selectedWorkspaceId, activeChannelId, ticket);
 
   const channelTickets = useMemo(
     () =>
