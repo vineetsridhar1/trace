@@ -34,6 +34,7 @@ const DEFAULT_COLUMNS = [
 const STATUS_TO_SLUG: Record<string, string> = {
   pending: 'todo',
   queued: 'todo',
+  handed_off: 'todo',
   creation: 'in_progress',
   in_progress: 'in_progress',
   needs_input: 'in_review',

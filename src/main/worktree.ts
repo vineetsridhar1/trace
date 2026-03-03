@@ -214,6 +214,82 @@ export async function commitWorktreeChanges(workspaceId: string): Promise<{ comm
   }
 }
 
+export async function pushWorktreeBranch(workspaceId: string, repoPath: string): Promise<{ success: boolean; error?: string }> {
+  const worktreePath = getWorktreePath(workspaceId);
+  if (!fs.existsSync(worktreePath)) {
+    return { success: false, error: 'Worktree does not exist' };
+  }
+
+  try {
+    const branch = await getWorktreeBranch(workspaceId);
+    const result = await runProcess('git', ['push', 'origin', branch], worktreePath);
+    if (result.code !== 0) {
+      return { success: false, error: result.stderr.trim() };
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+export async function ensureWorktreeFromRemote(
+  workspaceId: string,
+  repoPath: string,
+  branchName: string,
+): Promise<{ success: boolean; worktreePath: string; error?: string }> {
+  const worktreePath = getWorktreePath(workspaceId);
+
+  if (fs.existsSync(worktreePath)) {
+    // Worktree already exists — pull latest
+    try {
+      await runProcess('git', ['pull', 'origin', branchName], worktreePath);
+    } catch {
+      // Best-effort pull
+    }
+    return { success: true, worktreePath };
+  }
+
+  const base = getWorktreeBase();
+  if (!fs.existsSync(base)) {
+    fs.mkdirSync(base, { recursive: true });
+  }
+
+  try {
+    // Fetch the remote branch
+    const fetchResult = await runProcess('git', ['fetch', 'origin', branchName], repoPath);
+    if (fetchResult.code !== 0) {
+      return { success: false, worktreePath, error: `Failed to fetch branch: ${fetchResult.stderr.trim()}` };
+    }
+
+    // Create worktree from the fetched remote branch
+    const addResult = await runProcess(
+      'git',
+      ['worktree', 'add', '-b', branchName, worktreePath, `origin/${branchName}`],
+      repoPath,
+    );
+    if (addResult.code !== 0) {
+      // Branch may already exist locally — try attaching to existing branch
+      const retryResult = await runProcess(
+        'git',
+        ['worktree', 'add', worktreePath, branchName],
+        repoPath,
+      );
+      if (retryResult.code !== 0) {
+        return { success: false, worktreePath, error: `Failed to create worktree: ${addResult.stderr.trim()} / ${retryResult.stderr.trim()}` };
+      }
+      // Local branch may be stale — reset to match remote
+      await runProcess('git', ['reset', '--hard', `origin/${branchName}`], worktreePath);
+    }
+
+    // Set up tracking
+    await runProcess('git', ['branch', '--set-upstream-to', `origin/${branchName}`, branchName], worktreePath);
+
+    return { success: true, worktreePath };
+  } catch (err) {
+    return { success: false, worktreePath, error: String(err) };
+  }
+}
+
 export async function checkWorktreeExists(workspaceId: string, repoPath: string): Promise<{ exists: boolean; worktreePath: string }> {
   void repoPath;
   const worktreePath = getWorktreePath(workspaceId);

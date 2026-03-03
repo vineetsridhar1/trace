@@ -135,6 +135,12 @@ export function ThreadPanel() {
     [kanbanColumns],
   );
 
+  const isViewingOlderSession = useMemo(() => {
+    if (!activeSessionId || sessions.length === 0) return false;
+    const latestSession = sessions[sessions.length - 1];
+    return latestSession.id !== activeSessionId;
+  }, [activeSessionId, sessions]);
+
   const isClaudeRunning = useMemo(() => {
     if (!selectedWorkspaceId) return false;
     if (activeRunWorkspaceIds.has(selectedWorkspaceId)) return true;
@@ -352,6 +358,12 @@ export function ThreadPanel() {
       // Commit any uncommitted changes so they appear in branchDiff for the next user
       await window.traceAPI.commitWorktreeChanges(wsId).catch(() => {});
 
+      // Push branch to remote so other users can fetch it
+      const rp = enrichedActiveChannel?.localRepoPath;
+      if (rp) {
+        await window.traceAPI.pushWorktreeBranch(wsId, rp).catch(() => {});
+      }
+
       const { data } = await executeHandoffWorkspace({
         variables: { channelId: chId, workspaceId: wsId },
       });
@@ -367,7 +379,7 @@ export function ThreadPanel() {
     } finally {
       setHandingOff(false);
     }
-  }, [activeChannelId, isClaudeRunning, executeHandoffWorkspace]);
+  }, [activeChannelId, isClaudeRunning, executeHandoffWorkspace, enrichedActiveChannel]);
 
   // ─── Memos ──────────────────────────────────────────────────────
   const lastUserMessageTime = useMemo(() => {
@@ -663,14 +675,15 @@ export function ThreadPanel() {
         )}
 
         {viewMode === "agent" &&
-          (isLockedByOther && workspaceStatus !== 'pending' ? (
+          (isLockedByOther && workspaceStatus !== 'pending' && workspaceStatus !== 'handed_off' ? (
             <div className="flex items-center justify-center border-t border-[#292e42] px-4 py-3">
               <span className="text-xs text-[#565f89]">
                 Workspace locked by another user (read-only)
               </span>
             </div>
           ) : (pendingRunWorkspaceId === selectedWorkspaceId ||
-            workspaceStatus === 'pending') &&
+            workspaceStatus === 'pending' ||
+            workspaceStatus === 'handed_off') &&
             !isClaudeRunning ? (
             <RunButtons
               initialPrompt={pendingPromptForDisplay}
@@ -737,6 +750,12 @@ export function ThreadPanel() {
                 void stopClaude();
               }}
             />
+          ) : isViewingOlderSession ? (
+            <div className="flex items-center justify-center border-t border-[#292e42] px-4 py-3">
+              <span className="text-xs text-[#565f89]">
+                Viewing older session (read-only)
+              </span>
+            </div>
           ) : (
             <ThreadInput
               isClaudeRunning={isClaudeRunning}

@@ -5,7 +5,7 @@ import { syncTicketWithWorkspaceStatus, checkAndTriggerDependents } from '../../
 import { requireAuth } from '../../../../lib/requireAuth';
 import { GraphQLError } from 'graphql';
 
-const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued', 'review'];
+const VALID_STATUSES = ['pending', 'in_progress', 'completed', 'creation', 'merged', 'needs_input', 'queued', 'review', 'handed_off'];
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ['creation', 'in_progress', 'queued'],
@@ -16,6 +16,7 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   completed: ['review', 'merged', 'in_progress'],
   review: ['merged', 'in_progress'],
   merged: [],
+  handed_off: ['creation', 'in_progress'],
 };
 
 const ACTIVE_STATUSES = new Set(['creation', 'in_progress', 'needs_input']);

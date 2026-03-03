@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawnClaude } from './claude';
-import { checkWorktreeExists, commitWorktreeChanges, deleteWorktree, ensureWorktreeForBranch, mergeWorktree, getWorktreePath, stopClaudeProcess } from './worktree';
+import { checkWorktreeExists, commitWorktreeChanges, deleteWorktree, ensureWorktreeForBranch, mergeWorktree, getWorktreePath, stopClaudeProcess, pushWorktreeBranch, ensureWorktreeFromRemote } from './worktree';
 import { resetWatchdog, stopWatchdog } from './watchdog';
 import { createPty, writePty, resizePty, killPty, getPtyCwd, getPtyEnv, hasPty, getPtyProcesses } from './pty';
 import { allocatePorts, releasePorts } from './ports';
@@ -50,6 +50,8 @@ const CHECK_GH_AUTH_CHANNEL = 'check-gh-auth';
 const CHECK_PR_STATUSES_LOCAL_CHANNEL = 'check-pr-statuses-local';
 const LIST_PULL_REQUESTS_CHANNEL = 'list-pull-requests';
 const CHECKOUT_PULL_REQUEST_CHANNEL = 'checkout-pull-request';
+const PUSH_WORKTREE_BRANCH_CHANNEL = 'push-worktree-branch';
+const ENSURE_WORKTREE_FROM_REMOTE_CHANNEL = 'ensure-worktree-from-remote';
 
 // Curated allow-list of dev tools we show in the "Open In" menu.
 // Maps bundle identifier → { id, label, openArgs } used by the open-in-app handler.
@@ -130,6 +132,8 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(CHECK_PR_STATUSES_LOCAL_CHANNEL);
   ipcMain.removeHandler(LIST_PULL_REQUESTS_CHANNEL);
   ipcMain.removeHandler(CHECKOUT_PULL_REQUEST_CHANNEL);
+  ipcMain.removeHandler(PUSH_WORKTREE_BRANCH_CHANNEL);
+  ipcMain.removeHandler(ENSURE_WORKTREE_FROM_REMOTE_CHANNEL);
 
   ipcMain.handle(SPAWN_CLAUDE_CHANNEL, async (_event, workspaceId: string, prompt: string, repoPath: string, creationCommands?: string[], resumeSessionId?: string, filePaths?: string[], model?: string, effort?: string, systemInstructions?: string, permissionMode?: string, baseBranch?: string) => {
     try {
@@ -733,6 +737,22 @@ JSON.stringify(found);
       // gh not installed (ENOENT) or other error
       ghAuthCache = { available: false, checkedAt: Date.now() };
       return { success: true, available: false };
+    }
+  });
+
+  ipcMain.handle(PUSH_WORKTREE_BRANCH_CHANNEL, async (_event, workspaceId: string, repoPath: string) => {
+    try {
+      return await pushWorktreeBranch(workspaceId, repoPath);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(ENSURE_WORKTREE_FROM_REMOTE_CHANNEL, async (_event, workspaceId: string, repoPath: string, branchName: string) => {
+    try {
+      return await ensureWorktreeFromRemote(workspaceId, repoPath, branchName);
+    } catch (err) {
+      return { success: false, worktreePath: '', error: String(err) };
     }
   });
 

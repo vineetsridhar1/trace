@@ -119,6 +119,15 @@ export interface TraceAPI {
     worktreePath?: string;
     error?: string;
   }>;
+  pushWorktreeBranch: (
+    workspaceId: string,
+    repoPath: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  ensureWorktreeFromRemote: (
+    workspaceId: string,
+    repoPath: string,
+    branchName: string,
+  ) => Promise<{ success: boolean; worktreePath?: string; error?: string }>;
 }
 
 declare global {
@@ -195,7 +204,7 @@ export interface Workspace {
 }
 
 export type ChannelType = 'channel' | 'team' | 'project';
-export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'review';
+export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'review' | 'handed_off';
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high';
 export type SessionStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';

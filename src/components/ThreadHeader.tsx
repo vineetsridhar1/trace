@@ -40,6 +40,10 @@ const HEADER_STATUS_CONFIG: Record<
     label: 'In Review',
     className: 'text-teal-400 bg-teal-400/10',
   },
+  handed_off: {
+    label: 'Handed Off',
+    className: 'text-orange-300 bg-orange-300/10',
+  },
 };
 
 interface ThreadHeaderProps {
@@ -245,6 +249,7 @@ export const ThreadHeader = memo(function ThreadHeader({
         </div>
         {hasWorktree === false &&
           workspaceStatus !== 'pending' &&
+          workspaceStatus !== 'handed_off' &&
           workspaceStatus !== 'creation' &&
           selectedWorkspaceId && (
             <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">

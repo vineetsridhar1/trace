@@ -13,11 +13,13 @@ export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string;
   needs_input: { label: 'Needs Input', color: 'text-amber-400', bgColor: 'bg-amber-400/10', avatarBg: 'bg-amber-500/20', avatarText: 'text-amber-400' },
   queued: { label: 'Queued', color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', avatarBg: 'bg-cyan-500/20', avatarText: 'text-cyan-400' },
   review: { label: 'In Review', color: 'text-teal-400', bgColor: 'bg-teal-400/10', avatarBg: 'bg-teal-500/20', avatarText: 'text-teal-400' },
+  handed_off: { label: 'Handed Off', color: 'text-orange-300', bgColor: 'bg-orange-300/10', avatarBg: 'bg-orange-400/20', avatarText: 'text-orange-300' },
 };
 
 export const STATUS_GROUP_ORDER: TicketStatus[] = [
   'needs_input',
   'queued',
+  'handed_off',
   'pending',
   'creation',
   'in_progress',

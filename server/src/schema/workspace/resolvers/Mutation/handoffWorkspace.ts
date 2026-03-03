@@ -29,7 +29,7 @@ export const handoffWorkspace: NonNullable<MutationResolvers['handoffWorkspace']
   }
 
   await releaseWorkspace(workspaceId);
-  await updateWorkspaceStatus(workspaceId, 'pending');
+  await updateWorkspaceStatus(workspaceId, 'handed_off');
 
   const workspace = await getWorkspaceByIdForFeed(workspaceId);
   if (!workspace) {
@@ -40,7 +40,7 @@ export const handoffWorkspace: NonNullable<MutationResolvers['handoffWorkspace']
     workspaceUpserted: workspace,
   });
 
-  void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'pending');
+  void syncTicketWithWorkspaceStatus(workspaceId, channelId, 'handed_off');
 
   return workspace;
 };

@@ -213,4 +213,10 @@ contextBridge.exposeInMainWorld('traceAPI', {
       return { success: false, error: String(err) };
     }
   },
+
+  pushWorktreeBranch: (workspaceId: string, repoPath: string) =>
+    ipcRenderer.invoke('push-worktree-branch', workspaceId, repoPath) as Promise<{ success: boolean; error?: string }>,
+
+  ensureWorktreeFromRemote: (workspaceId: string, repoPath: string, branchName: string) =>
+    ipcRenderer.invoke('ensure-worktree-from-remote', workspaceId, repoPath, branchName) as Promise<{ success: boolean; worktreePath?: string; error?: string }>,
 });

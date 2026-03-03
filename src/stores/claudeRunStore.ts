@@ -36,6 +36,7 @@ interface ClaudeRunState {
   selectedEffort: EffortLevel;
   activeRunWorkspaceIds: Set<string>;
   spawnedWorkspaceIds: Set<string>;
+  handoffPickedUpIds: Set<string>;
 
   // Registered workspace actions
   workspaceActions: ClaudeWorkspaceActions;
@@ -52,6 +53,9 @@ interface ClaudeRunState {
   addSpawnedWorkspace: (workspaceId: string) => void;
   removeSpawnedWorkspace: (workspaceId: string) => void;
   isWorkspaceSpawned: (workspaceId: string) => boolean;
+  addHandoffPickedUp: (workspaceId: string) => void;
+  clearHandoffPickedUp: (workspaceId: string) => void;
+  isHandoffPickedUp: (workspaceId: string) => boolean;
 }
 
 export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
@@ -62,6 +66,7 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
   selectedEffort: 'high',
   activeRunWorkspaceIds: new Set(),
   spawnedWorkspaceIds: new Set(),
+  handoffPickedUpIds: new Set(),
 
   // Registered workspace actions
   workspaceActions: { ...defaultWorkspaceActions },
@@ -121,4 +126,21 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
     }),
 
   isWorkspaceSpawned: (workspaceId) => get().spawnedWorkspaceIds.has(workspaceId),
+
+  addHandoffPickedUp: (workspaceId) =>
+    set((state) => {
+      const next = new Set(state.handoffPickedUpIds);
+      next.add(workspaceId);
+      return { handoffPickedUpIds: next };
+    }),
+
+  clearHandoffPickedUp: (workspaceId) =>
+    set((state) => {
+      if (!state.handoffPickedUpIds.has(workspaceId)) return state;
+      const next = new Set(state.handoffPickedUpIds);
+      next.delete(workspaceId);
+      return { handoffPickedUpIds: next };
+    }),
+
+  isHandoffPickedUp: (workspaceId) => get().handoffPickedUpIds.has(workspaceId),
 }));

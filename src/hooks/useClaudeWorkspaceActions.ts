@@ -247,13 +247,23 @@ export function useClaudeWorkspaceActions({
 
       useClaudeRunStore.getState().clearPendingRun();
 
-      // Detect handoff: workspace has sessionCount > 1 (previous user already worked on it)
+      // Detect handoff: workspace has status 'handed_off' (previous user handed it off)
       const workspace = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
-      const isHandoff = workspace && workspace.sessionCount > 1;
+      const isHandoff = workspace && workspace.status === 'handed_off';
 
       if (isHandoff) {
         // Handoff pickup: create a new session, include diff context, skip setup commands
         const baseBranch = getChannelBaseBranch();
+        const repoPath = getChannelRepoPath();
+
+        // Ensure the worktree exists from the remote branch
+        if (workspace.branch && repoPath) {
+          const remoteResult = await window.traceAPI.ensureWorktreeFromRemote(workspaceId, repoPath, workspace.branch);
+          if (!remoteResult.success) {
+            console.error('Failed to fetch worktree from remote:', remoteResult.error);
+            // Continue anyway — worktree may already exist locally
+          }
+        }
 
         // Build diff context from the worktree
         let diffContext = '';
@@ -300,6 +310,10 @@ export function useClaudeWorkspaceActions({
           systemInstructions: instructionParts.join('\n\n'),
           permissionMode: planMode ? 'plan' : undefined,
         });
+
+        // Track that this workspace was picked up from handoff so sendThreadMessage
+        // won't try to resume User A's stale CLI session on the first follow-up
+        useClaudeRunStore.getState().addHandoffPickedUp(workspaceId);
         return;
       }
 
@@ -418,7 +432,11 @@ export function useClaudeWorkspaceActions({
         effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
       };
 
-      if (hasEvents) {
+      // If this workspace was just picked up from a handoff, don't try to resume
+      // User A's CLI session — it doesn't exist on this machine. Start fresh instead.
+      // After this first fresh spawn, clear the flag so future messages resume normally.
+      const wasHandedOff = useClaudeRunStore.getState().isHandoffPickedUp(workspaceId);
+      if (hasEvents && !wasHandedOff) {
         spawnOptions.resumeSessionId = selectedWorkspace.claudeSessionId ?? undefined;
       } else {
         const baseBranch = getChannelBaseBranch();
@@ -431,6 +449,13 @@ export function useClaudeWorkspaceActions({
       }
 
       await spawnClaudeForWorkspace(workspaceId, text, spawnOptions);
+
+      // After successful fresh spawn, clear the handoff flag — claudeSessionId
+      // will be updated by the server when events arrive from this new CLI process
+      if (wasHandedOff) {
+        useClaudeRunStore.getState().clearHandoffPickedUp(workspaceId);
+      }
+
       return true;
     },
     [getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, spawnClaudeForWorkspace],
