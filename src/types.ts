@@ -1,12 +1,12 @@
-import { type ComponentType, type ReactNode } from 'react';
+import { type ComponentType, type ReactNode } from "react";
 
-const DEFAULT_SERVER_URL = 'http://localhost:3100';
+const DEFAULT_SERVER_URL = "http://localhost:3100";
 
 let cachedServerUrl: string | null = null;
 
 export function getServerUrl(): string {
   if (cachedServerUrl) return cachedServerUrl;
-  if (typeof window !== 'undefined' && window.traceAPI?.getServerUrl) {
+  if (typeof window !== "undefined" && window.traceAPI?.getServerUrl) {
     cachedServerUrl = window.traceAPI.getServerUrl();
     return cachedServerUrl;
   }
@@ -27,6 +27,10 @@ export interface LocalChannelConfig {
   setupScript?: string;
   runScript?: string;
   systemInstructions?: string;
+}
+
+export interface GlobalAppConfig {
+  terminalFontFamily?: string;
 }
 
 export interface TraceAPI {
@@ -50,11 +54,21 @@ export interface TraceAPI {
   deleteWorktree: (
     workspaceId: string,
     repoPath: string,
-  ) => Promise<{ success: boolean; removed?: boolean; worktreePath?: string; error?: string }>;
+  ) => Promise<{
+    success: boolean;
+    removed?: boolean;
+    worktreePath?: string;
+    error?: string;
+  }>;
   checkWorktreeExists: (
     workspaceId: string,
     repoPath: string,
-  ) => Promise<{ success: boolean; exists?: boolean; worktreePath?: string; error?: string }>;
+  ) => Promise<{
+    success: boolean;
+    exists?: boolean;
+    worktreePath?: string;
+    error?: string;
+  }>;
   mergeWorktree: (
     workspaceId: string,
     repoPath: string,
@@ -68,50 +82,153 @@ export interface TraceAPI {
     eventType: string,
     sessionId?: string,
   ) => Promise<{ success: boolean; error?: string }>;
-  createPty: (terminalId: string, cwd: string, extraEnv?: Record<string, string>) => Promise<{ success: boolean; error?: string }>;
+  createPty: (
+    terminalId: string,
+    cwd: string,
+    extraEnv?: Record<string, string>,
+  ) => Promise<{ success: boolean; error?: string }>;
   writePty: (terminalId: string, data: string) => Promise<{ success: boolean }>;
-  resizePty: (terminalId: string, cols: number, rows: number) => Promise<{ success: boolean }>;
+  resizePty: (
+    terminalId: string,
+    cols: number,
+    rows: number,
+  ) => Promise<{ success: boolean }>;
   killPty: (terminalId: string) => Promise<{ success: boolean }>;
-  hasPty: (terminalId: string) => Promise<{ success: boolean; exists: boolean }>;
-  getPtyProcesses: (terminalIds: string[]) => Promise<{ success: boolean; processes: Record<string, { processName: string; isShellOnly: boolean }> }>;
-  onPtyData: (callback: (terminalId: string, data: string) => void) => () => void;
-  onPtyExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
-  getWorktreeDiff: (workspaceId: string, baseBranch: string) => Promise<WorktreeDiffResult>;
-  allocatePorts: (workspaceId: string, count: number) => Promise<{ success: boolean; ports?: number[]; error?: string }>;
-  releasePorts: (workspaceId: string) => Promise<{ success: boolean; error?: string }>;
+  hasPty: (
+    terminalId: string,
+  ) => Promise<{ success: boolean; exists: boolean }>;
+  getPtyProcesses: (terminalIds: string[]) => Promise<{
+    success: boolean;
+    processes: Record<string, { processName: string; isShellOnly: boolean }>;
+  }>;
+  onPtyData: (
+    callback: (terminalId: string, data: string) => void,
+  ) => () => void;
+  onPtyExit: (
+    callback: (terminalId: string, exitCode: number) => void,
+  ) => () => void;
+  getWorktreeDiff: (
+    workspaceId: string,
+    baseBranch: string,
+  ) => Promise<WorktreeDiffResult>;
+  allocatePorts: (
+    workspaceId: string,
+    count: number,
+  ) => Promise<{ success: boolean; ports?: number[]; error?: string }>;
+  releasePorts: (
+    workspaceId: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   focusWindow: () => Promise<void>;
-  selectFolder: () => Promise<{ success: boolean; canceled?: boolean; path?: string; error?: string }>;
+  selectFolder: () => Promise<{
+    success: boolean;
+    canceled?: boolean;
+    path?: string;
+    error?: string;
+  }>;
   getLocalConfig: (channelId: string) => Promise<LocalChannelConfig | null>;
-  setLocalConfig: (channelId: string, data: LocalChannelConfig) => Promise<{ success: boolean }>;
+  setLocalConfig: (
+    channelId: string,
+    data: LocalChannelConfig,
+  ) => Promise<{ success: boolean }>;
   getAllLocalConfigs: () => Promise<Record<string, LocalChannelConfig>>;
   deleteLocalConfig: (channelId: string) => Promise<{ success: boolean }>;
-  listRepoFiles: (repoPath: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
-  suggestScripts: (repoPath: string) => Promise<{ success: boolean; setupScript?: string; runScript?: string; error?: string }>;
-  validateRepo: (repoPath: string) => Promise<{ valid: boolean; originUrl?: string; error?: string }>;
-  listRepoBranches: (repoPath: string) => Promise<{ success: boolean; branches: string[]; error?: string }>;
+  getGlobalConfig: () => Promise<GlobalAppConfig>;
+  setGlobalConfig: (data: GlobalAppConfig) => Promise<{ success: boolean }>;
+  listRepoFiles: (
+    repoPath: string,
+  ) => Promise<{ success: boolean; files: string[]; error?: string }>;
+  suggestScripts: (repoPath: string) => Promise<{
+    success: boolean;
+    setupScript?: string;
+    runScript?: string;
+    error?: string;
+  }>;
+  validateRepo: (
+    repoPath: string,
+  ) => Promise<{ valid: boolean; originUrl?: string; error?: string }>;
+  listRepoBranches: (
+    repoPath: string,
+  ) => Promise<{ success: boolean; branches: string[]; error?: string }>;
   checkBranchesMerged: (
     repoPath: string,
     targets: Array<{ workspaceId: string; branch: string }>,
     baseBranch: string,
-  ) => Promise<{ success: boolean; merged: Record<string, boolean>; error?: string }>;
-  watchBaseBranch: (repoPath: string, baseBranch: string) => Promise<{ success: boolean }>;
-  unwatchBaseBranch: () => Promise<{ success: boolean }>;
-  onBaseBranchChanged: (callback: () => void) => () => void;
-  githubLogin: () => Promise<{ success: boolean; token?: string; user?: { id: string; email: string; name: string; avatarUrl: string | null }; error?: string }>;
-  checkMainStatus: (repoPath: string, baseBranch: string) => Promise<{ success: boolean; isUpToDate?: boolean; commitsBehind?: number; localSha?: string; remoteSha?: string; error?: string }>;
-  pullMain: (repoPath: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>;
-  detectInstalledApps: () => Promise<{ success: boolean; apps: Array<{ id: string; label: string }>; error?: string }>;
-  openInApp: (appId: string, targetPath: string) => Promise<{ success: boolean; error?: string }>;
-  listSlashCommands: (repoPath: string) => Promise<{ success: boolean; commands: Array<{ name: string; description: string }>; error?: string }>;
-  checkGhAuth: () => Promise<{ success: boolean; available: boolean }>;
-  checkPRStatusesLocal: (repoPath: string, branches: string[]) => Promise<{
+  ) => Promise<{
     success: boolean;
-    statuses?: Array<{ branch: string; state: 'open' | 'closed' | 'merged' | 'none'; prUrl: string | null }>;
+    merged: Record<string, boolean>;
     error?: string;
   }>;
-  checkPRCILocal: (repoPath: string, branches: string[]) => Promise<{
+  watchBaseBranch: (
+    repoPath: string,
+    baseBranch: string,
+  ) => Promise<{ success: boolean }>;
+  unwatchBaseBranch: () => Promise<{ success: boolean }>;
+  onBaseBranchChanged: (callback: () => void) => () => void;
+  githubLogin: () => Promise<{
     success: boolean;
-    statuses?: Array<{ branch: string; total: number; passed: number; failed: number; pending: number }>;
+    token?: string;
+    user?: {
+      id: string;
+      email: string;
+      name: string;
+      avatarUrl: string | null;
+    };
+    error?: string;
+  }>;
+  checkMainStatus: (
+    repoPath: string,
+    baseBranch: string,
+  ) => Promise<{
+    success: boolean;
+    isUpToDate?: boolean;
+    commitsBehind?: number;
+    localSha?: string;
+    remoteSha?: string;
+    error?: string;
+  }>;
+  pullMain: (
+    repoPath: string,
+    baseBranch: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  detectInstalledApps: () => Promise<{
+    success: boolean;
+    apps: Array<{ id: string; label: string }>;
+    error?: string;
+  }>;
+  openInApp: (
+    appId: string,
+    targetPath: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  listSlashCommands: (repoPath: string) => Promise<{
+    success: boolean;
+    commands: Array<{ name: string; description: string }>;
+    error?: string;
+  }>;
+  checkGhAuth: () => Promise<{ success: boolean; available: boolean }>;
+  checkPRStatusesLocal: (
+    repoPath: string,
+    branches: string[],
+  ) => Promise<{
+    success: boolean;
+    statuses?: Array<{
+      branch: string;
+      state: "open" | "closed" | "merged" | "none";
+      prUrl: string | null;
+    }>;
+    error?: string;
+  }>;
+  checkPRCILocal: (
+    repoPath: string,
+    branches: string[],
+  ) => Promise<{
+    success: boolean;
+    statuses?: Array<{
+      branch: string;
+      total: number;
+      passed: number;
+      failed: number;
+      pending: number;
+    }>;
     error?: string;
   }>;
   listPullRequests: (repoPath: string) => Promise<{
@@ -119,7 +236,12 @@ export interface TraceAPI {
     pullRequests?: PullRequest[];
     error?: string;
   }>;
-  checkoutPullRequest: (repoPath: string, branchName: string, workspaceId: string, setupCommands?: string[]) => Promise<{
+  checkoutPullRequest: (
+    repoPath: string,
+    branchName: string,
+    workspaceId: string,
+    setupCommands?: string[],
+  ) => Promise<{
     success: boolean;
     worktreePath?: string;
     error?: string;
@@ -205,16 +327,35 @@ export interface Workspace {
   cliSession: WorkspaceCliSession;
   user: { id: string; name: string; avatarUrl: string | null } | null;
   sessionCount: number;
-  queuedRunConfig: { prompt: string; model: string; effort: string; planMode: boolean } | null;
+  queuedRunConfig: {
+    prompt: string;
+    model: string;
+    effort: string;
+    planMode: boolean;
+  } | null;
 }
 
-export type ChannelType = 'channel' | 'team' | 'project';
-export type TicketStatus = 'pending' | 'in_progress' | 'completed' | 'creation' | 'merged' | 'needs_input' | 'queued' | 'review' | 'handed_off';
-export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
-export type EffortLevel = 'low' | 'medium' | 'high';
-export type SessionStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
-export type DragTarget = 'left' | 'right' | null;
-export type MiddlePanelView = 'chat' | 'board' | 'workspaces' | 'projects' | 'pull-requests';
+export type ChannelType = "channel" | "team" | "project";
+export type TicketStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "creation"
+  | "merged"
+  | "needs_input"
+  | "queued"
+  | "review"
+  | "handed_off";
+export type ClaudeModel = "opus" | "sonnet" | "haiku";
+export type EffortLevel = "low" | "medium" | "high";
+export type SessionStatus = "idle" | "loading" | "ready" | "empty" | "error";
+export type DragTarget = "left" | "right" | null;
+export type MiddlePanelView =
+  | "chat"
+  | "board"
+  | "workspaces"
+  | "projects"
+  | "pull-requests";
 
 export interface PullRequest {
   number: number;
@@ -282,18 +423,18 @@ export interface AiChat {
 export interface AiChatMessage {
   id: string;
   chatId: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   createdAt: string;
 }
 
 export interface SessionEventNode {
-  kind: 'event';
+  kind: "event";
   event: ServerEvent;
 }
 
 export interface ReadGlobGroupNode {
-  kind: 'readglob-group';
+  kind: "readglob-group";
   id: string;
   count: number;
   startTimestamp: string;
@@ -303,7 +444,7 @@ export interface ReadGlobGroupNode {
 }
 
 export interface PlanReviewNode {
-  kind: 'plan-review';
+  kind: "plan-review";
   id: string;
   planContent: string;
   planFilePath: string;
@@ -323,7 +464,7 @@ export interface Question {
 }
 
 export interface AskUserQuestionNode {
-  kind: 'ask-user-question';
+  kind: "ask-user-question";
   id: string;
   questions: Question[];
   event: ServerEvent;
@@ -335,13 +476,13 @@ export interface TodoItem {
 }
 
 export interface SessionDividerNode {
-  kind: 'session-divider';
+  kind: "session-divider";
   id: string;
   timestamp: string;
 }
 
 export interface CollapsedTurnGroupNode {
-  kind: 'collapsed-turn';
+  kind: "collapsed-turn";
   id: string;
   stepCount: number;
   toolCallCount: number;
@@ -349,7 +490,13 @@ export interface CollapsedTurnGroupNode {
   innerNodes: SessionRenderNode[];
 }
 
-export type SessionRenderNode = SessionEventNode | ReadGlobGroupNode | PlanReviewNode | AskUserQuestionNode | SessionDividerNode | CollapsedTurnGroupNode;
+export type SessionRenderNode =
+  | SessionEventNode
+  | ReadGlobGroupNode
+  | PlanReviewNode
+  | AskUserQuestionNode
+  | SessionDividerNode
+  | CollapsedTurnGroupNode;
 
 export interface ExtractedDiffContent {
   title: string;
@@ -372,7 +519,7 @@ export interface ParsedDiffFile {
 }
 
 export interface DiffComponentProps {
-  viewType?: 'split' | 'unified';
+  viewType?: "split" | "unified";
   diffType?: string;
   hunks: ParsedHunk[];
   children?: (hunks: ParsedHunk[]) => ReactNode;
@@ -388,6 +535,12 @@ export interface DiffRuntime {
   Diff: ComponentType<DiffComponentProps>;
   Hunk: ComponentType<HunkComponentProps>;
   parseDiff: (diffText: string) => ParsedDiffFile[];
-  tokenize: (hunks: ParsedHunk[], options?: Record<string, unknown>) => { old: unknown[][]; new: unknown[][] };
-  markEdits: (hunks: ParsedHunk[], options?: Record<string, unknown>) => unknown;
+  tokenize: (
+    hunks: ParsedHunk[],
+    options?: Record<string, unknown>,
+  ) => { old: unknown[][]; new: unknown[][] };
+  markEdits: (
+    hunks: ParsedHunk[],
+    options?: Record<string, unknown>,
+  ) => unknown;
 }

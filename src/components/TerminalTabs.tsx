@@ -1,8 +1,9 @@
-import { FiPlay, FiRefreshCw, FiSettings, FiSquare, FiX } from 'react-icons/fi';
-import { useTerminal } from '../hooks/useTerminal';
-import { Tooltip } from './Tooltip';
-import type { TerminalTab, TerminalEntry } from '../stores/terminalStore';
-import '@xterm/xterm/css/xterm.css';
+import { useState, useEffect } from "react";
+import { FiPlay, FiRefreshCw, FiSettings, FiSquare, FiX } from "react-icons/fi";
+import { useTerminal } from "../hooks/useTerminal";
+import { Tooltip } from "./Tooltip";
+import type { TerminalTab, TerminalEntry } from "../stores/terminalStore";
+import "@xterm/xterm/css/xterm.css";
 
 interface TerminalTabContentProps {
   terminalId: string;
@@ -11,15 +12,31 @@ interface TerminalTabContentProps {
   visible: boolean;
   env?: Record<string, string>;
   readOnly?: boolean;
+  fontFamily?: string;
 }
 
-function TerminalTabContent({ terminalId, cwd, command, visible, env, readOnly }: TerminalTabContentProps) {
-  const { containerRef, focus } = useTerminal({ terminalId, cwd, env, command, readOnly });
+function TerminalTabContent({
+  terminalId,
+  cwd,
+  command,
+  visible,
+  env,
+  readOnly,
+  fontFamily,
+}: TerminalTabContentProps) {
+  const { containerRef, focus } = useTerminal({
+    terminalId,
+    cwd,
+    env,
+    command,
+    readOnly,
+    fontFamily,
+  });
 
   return (
     <div
       className="absolute inset-0 pl-2 bg-surface"
-      style={{ visibility: visible ? 'visible' : 'hidden' }}
+      style={{ visibility: visible ? "visible" : "hidden" }}
       onClick={focus}
       onMouseDown={focus}
     >
@@ -49,9 +66,40 @@ interface TerminalTabsProps {
   onOpenSettings: () => void;
 }
 
-export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId, activeTabId, cwd, runScriptRunning, scriptsAvailable, hasSetupScript, hasRunScript, ptyProcesses, onSelectTab, onCloseTab, onCloseAll, onAddTab, onRunScript, onStopScript, onRerunSetup, onOpenSettings }: TerminalTabsProps) {
-  const runTab = terminals.find((t) => t.name === 'Run');
-  const setupTab = terminals.find((t) => t.name === 'Setup');
+export function TerminalTabs({
+  terminals,
+  allTerminalEntries,
+  currentWorkspaceId,
+  activeTabId,
+  cwd,
+  runScriptRunning,
+  scriptsAvailable,
+  hasSetupScript,
+  hasRunScript,
+  ptyProcesses,
+  onSelectTab,
+  onCloseTab,
+  onCloseAll,
+  onAddTab,
+  onRunScript,
+  onStopScript,
+  onRerunSetup,
+  onOpenSettings,
+}: TerminalTabsProps) {
+  const [terminalFontFamily, setTerminalFontFamily] = useState<
+    string | undefined
+  >();
+  useEffect(() => {
+    window.traceAPI
+      .getGlobalConfig()
+      .then((cfg) => {
+        setTerminalFontFamily(cfg.terminalFontFamily);
+      })
+      .catch((): void => {});
+  }, []);
+
+  const runTab = terminals.find((t) => t.name === "Run");
+  const setupTab = terminals.find((t) => t.name === "Setup");
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Tab bar — current message only */}
@@ -65,7 +113,9 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
               <div
                 key={t.terminalId}
                 className={`group flex items-center gap-1.5 rounded px-2.5 py-1 text-xs cursor-pointer ${
-                  isActive ? 'bg-surface-elevated text-primary' : 'text-muted hover:bg-surface-elevated hover:text-primary'
+                  isActive
+                    ? "bg-surface-elevated text-primary"
+                    : "text-muted hover:bg-surface-elevated hover:text-primary"
                 }`}
                 onClick={() => onSelectTab(t.terminalId)}
               >
@@ -115,66 +165,74 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
       </div>
 
       {/* Setup action bar — only when setup has been run (command exists) */}
-      {hasSetupScript && setupTab?.command && activeTabId === setupTab?.terminalId && (
-        <div className="flex items-center bg-surface px-2 pb-1 pt-2">
-          <Tooltip text="Re-run setup">
-            <button
-              type="button"
-              onClick={onRerunSetup}
-              className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
-            >
-              <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Re-run Setup</span>
-            </button>
-          </Tooltip>
-        </div>
-      )}
-
-      {/* Run script action bar — only when script has been executed (has command) */}
-      {hasRunScript && runTab?.command && activeTabId === runTab?.terminalId && (
-        <div className="flex items-center bg-surface px-2 pb-1 pt-2">
-          {runScriptRunning ? (
-            <Tooltip text="Stop script">
+      {hasSetupScript &&
+        setupTab?.command &&
+        activeTabId === setupTab?.terminalId && (
+          <div className="flex items-center bg-surface px-2 pb-1 pt-2">
+            <Tooltip text="Re-run setup">
               <button
                 type="button"
-                onClick={onStopScript}
-                className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-red-400 transition-colors hover:bg-surface-elevated hover:text-red-300"
-              >
-                <FiSquare className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Stop</span>
-              </button>
-            </Tooltip>
-          ) : (
-            <Tooltip text="Re-run script">
-              <button
-                type="button"
-                onClick={onRunScript}
-                className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-green-400 transition-colors hover:bg-surface-elevated hover:text-green-300"
+                onClick={onRerunSetup}
+                className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
               >
                 <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Re-run</span>
+                <span>Re-run Setup</span>
               </button>
             </Tooltip>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+
+      {/* Run script action bar — only when script has been executed (has command) */}
+      {hasRunScript &&
+        runTab?.command &&
+        activeTabId === runTab?.terminalId && (
+          <div className="flex items-center bg-surface px-2 pb-1 pt-2">
+            {runScriptRunning ? (
+              <Tooltip text="Stop script">
+                <button
+                  type="button"
+                  onClick={onStopScript}
+                  className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-red-400 transition-colors hover:bg-surface-elevated hover:text-red-300"
+                >
+                  <FiSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Stop</span>
+                </button>
+              </Tooltip>
+            ) : (
+              <Tooltip text="Re-run script">
+                <button
+                  type="button"
+                  onClick={onRunScript}
+                  className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-green-400 transition-colors hover:bg-surface-elevated hover:text-green-300"
+                >
+                  <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Re-run</span>
+                </button>
+              </Tooltip>
+            )}
+          </div>
+        )}
 
       {/* Terminal content */}
       <div className="relative min-h-0 flex-1">
         {/* Configure placeholders for unconfigured script tabs — current message only */}
-        {hasSetupScript && !setupTab?.command && activeTabId === setupTab?.terminalId && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
-            <button
-              type="button"
-              onClick={onRerunSetup}
-              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
-            >
-              <FiPlay className="h-5 w-5" aria-hidden="true" />
-              <span>Run Setup</span>
-            </button>
-            <p className="mt-3 text-xs text-[#404040]">Setup has already run during workspace creation</p>
-          </div>
-        )}
+        {hasSetupScript &&
+          !setupTab?.command &&
+          activeTabId === setupTab?.terminalId && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
+              <button
+                type="button"
+                onClick={onRerunSetup}
+                className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
+              >
+                <FiPlay className="h-5 w-5" aria-hidden="true" />
+                <span>Run Setup</span>
+              </button>
+              <p className="mt-3 text-xs text-[#404040]">
+                Setup has already run during workspace creation
+              </p>
+            </div>
+          )}
         {!hasSetupScript && activeTabId === setupTab?.terminalId && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
             <button
@@ -185,7 +243,9 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
               <FiSettings className="h-5 w-5" aria-hidden="true" />
               <span>Configure Setup Script</span>
             </button>
-            <p className="mt-3 text-xs text-[#404040]">Runs automatically when a workspace is created</p>
+            <p className="mt-3 text-xs text-[#404040]">
+              Runs automatically when a workspace is created
+            </p>
           </div>
         )}
         {!hasRunScript && activeTabId === runTab?.terminalId && (
@@ -198,28 +258,34 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
               <FiSettings className="h-5 w-5" aria-hidden="true" />
               <span>Configure Run Script</span>
             </button>
-            <p className="mt-3 text-xs text-[#404040]">Runs when you click the play button</p>
+            <p className="mt-3 text-xs text-[#404040]">
+              Runs when you click the play button
+            </p>
           </div>
         )}
-        {hasRunScript && !runTab?.command && activeTabId === runTab?.terminalId && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
-            <button
-              type="button"
-              onClick={onRunScript}
-              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
-            >
-              <FiPlay className="h-5 w-5" aria-hidden="true" />
-              <span>Run</span>
-            </button>
-            <p className="mt-3 text-xs text-[#404040]">Runs when you click the play button</p>
-          </div>
-        )}
+        {hasRunScript &&
+          !runTab?.command &&
+          activeTabId === runTab?.terminalId && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
+              <button
+                type="button"
+                onClick={onRunScript}
+                className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
+              >
+                <FiPlay className="h-5 w-5" aria-hidden="true" />
+                <span>Run</span>
+              </button>
+              <p className="mt-3 text-xs text-[#404040]">
+                Runs when you click the play button
+              </p>
+            </div>
+          )}
 
         {/* All messages' terminals — persistently mounted to preserve PTYs */}
         {allTerminalEntries.flatMap((entry) =>
           entry.terminals.map((t) => {
-            const isSetupIdle = t.name === 'Setup' && !t.command;
-            const isRunIdle = t.name === 'Run' && !t.command;
+            const isSetupIdle = t.name === "Setup" && !t.command;
+            const isRunIdle = t.name === "Run" && !t.command;
             if (isSetupIdle || isRunIdle) return null;
             const isCurrent = entry.workspaceId === currentWorkspaceId;
             const isActiveTab = t.terminalId === entry.activeTabId;
@@ -232,6 +298,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
                 visible={isCurrent && isActiveTab}
                 env={t.env}
                 readOnly={t.readOnly}
+                fontFamily={terminalFontFamily}
               />
             );
           }),

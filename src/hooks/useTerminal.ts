@@ -1,53 +1,56 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import type { ThemeName } from '../stores/themeStore';
-import { useThemeStore } from '../stores/themeStore';
+import { useEffect, useRef, useCallback } from "react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import type { ThemeName } from "../stores/themeStore";
+import { useThemeStore } from "../stores/themeStore";
+
+export const DEFAULT_TERMINAL_FONT_FAMILY =
+  '"MesloLGS NF", "Hack Nerd Font Mono", "JetBrainsMono Nerd Font Mono", "FiraCode Nerd Font Mono", Menlo, Monaco, "Courier New", monospace';
 
 const TERMINAL_THEMES: Record<ThemeName, Record<string, string>> = {
   neutral: {
-    background: '#171717',
-    foreground: '#a1a1aa',
-    cursor: '#a1a1aa',
-    selectionBackground: '#3f3f46',
-    black: '#0a0a0a',
-    red: '#ef4444',
-    green: '#22c55e',
-    yellow: '#eab308',
-    blue: '#3b82f6',
-    magenta: '#a855f7',
-    cyan: '#06b6d4',
-    white: '#a1a1aa',
-    brightBlack: '#52525b',
-    brightRed: '#f87171',
-    brightGreen: '#4ade80',
-    brightYellow: '#facc15',
-    brightBlue: '#60a5fa',
-    brightMagenta: '#c084fc',
-    brightCyan: '#22d3ee',
-    brightWhite: '#d4d4d8',
+    background: "#171717",
+    foreground: "#a1a1aa",
+    cursor: "#a1a1aa",
+    selectionBackground: "#3f3f46",
+    black: "#0a0a0a",
+    red: "#ef4444",
+    green: "#22c55e",
+    yellow: "#eab308",
+    blue: "#3b82f6",
+    magenta: "#a855f7",
+    cyan: "#06b6d4",
+    white: "#a1a1aa",
+    brightBlack: "#52525b",
+    brightRed: "#f87171",
+    brightGreen: "#4ade80",
+    brightYellow: "#facc15",
+    brightBlue: "#60a5fa",
+    brightMagenta: "#c084fc",
+    brightCyan: "#22d3ee",
+    brightWhite: "#d4d4d8",
   },
   tokyonight: {
-    background: '#1a1b26',
-    foreground: '#c0caf5',
-    cursor: '#c0caf5',
-    selectionBackground: '#33467c',
-    black: '#16161e',
-    red: '#f7768e',
-    green: '#9ece6a',
-    yellow: '#e0af68',
-    blue: '#7aa2f7',
-    magenta: '#bb9af7',
-    cyan: '#7dcfff',
-    white: '#a9b1d6',
-    brightBlack: '#565f89',
-    brightRed: '#f7768e',
-    brightGreen: '#9ece6a',
-    brightYellow: '#e0af68',
-    brightBlue: '#7aa2f7',
-    brightMagenta: '#bb9af7',
-    brightCyan: '#7dcfff',
-    brightWhite: '#c0caf5',
+    background: "#1a1b26",
+    foreground: "#c0caf5",
+    cursor: "#c0caf5",
+    selectionBackground: "#33467c",
+    black: "#16161e",
+    red: "#f7768e",
+    green: "#9ece6a",
+    yellow: "#e0af68",
+    blue: "#7aa2f7",
+    magenta: "#bb9af7",
+    cyan: "#7dcfff",
+    white: "#a9b1d6",
+    brightBlack: "#565f89",
+    brightRed: "#f7768e",
+    brightGreen: "#9ece6a",
+    brightYellow: "#e0af68",
+    brightBlue: "#7aa2f7",
+    brightMagenta: "#bb9af7",
+    brightCyan: "#7dcfff",
+    brightWhite: "#c0caf5",
   },
 };
 
@@ -57,23 +60,33 @@ interface UseTerminalOptions {
   env?: Record<string, string>;
   command?: string;
   readOnly?: boolean;
+  fontFamily?: string;
 }
 
-export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerminalOptions) {
+export function useTerminal({
+  terminalId,
+  cwd,
+  env,
+  command,
+  readOnly,
+  fontFamily,
+}: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
-  // Store env/command/readOnly in refs so the effect doesn't re-fire when
+  // Store env/command/readOnly/fontFamily in refs so the effect doesn't re-fire when
   // the env object reference changes across renders.  These values only
   // meaningfully change alongside a new terminalId (which triggers a fresh
   // component mount via React key), so reading them from refs is safe.
   const envRef = useRef(env);
   const commandRef = useRef(command);
   const readOnlyRef = useRef(readOnly);
+  const fontFamilyRef = useRef(fontFamily);
   envRef.current = env;
   commandRef.current = command;
   readOnlyRef.current = readOnly;
+  fontFamilyRef.current = fontFamily;
 
   const focusInput = useCallback(() => {
     const term = terminalRef.current;
@@ -81,7 +94,9 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     term.focus();
     const textarea =
       term.textarea ??
-      (containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null);
+      (containerRef.current?.querySelector(
+        ".xterm-helper-textarea",
+      ) as HTMLTextAreaElement | null);
     if (!textarea) return;
     textarea.focus({ preventScroll: true });
     if (document.activeElement !== textarea) {
@@ -105,6 +120,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     const currentEnv = envRef.current;
     const currentCommand = commandRef.current;
     const currentReadOnly = readOnlyRef.current;
+    const currentFontFamily = fontFamilyRef.current;
 
     let terminal: Terminal | null = null;
     let fitAddon: FitAddon | null = null;
@@ -133,7 +149,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
 
       terminal = new Terminal({
         theme: TERMINAL_THEMES[useThemeStore.getState().theme],
-        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        fontFamily: currentFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
         fontSize: 13,
         cursorBlink: !currentReadOnly,
         disableStdin: currentReadOnly,
@@ -173,14 +189,20 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
 
       if (ptyExists) {
         // Reconnect: just set up listeners and trigger a resize
-        terminal.write('\r\n[Reconnected]\r\n');
+        terminal.write("\r\n[Reconnected]\r\n");
       } else {
         // Create a new PTY
-        const result = await window.traceAPI.createPty(terminalId, cwd, currentEnv);
+        const result = await window.traceAPI.createPty(
+          terminalId,
+          cwd,
+          currentEnv,
+        );
         // Bail out if cleaned up during createPty
         if (disposed) return;
         if (!result.success) {
-          terminal?.write(`\r\n[PTY start failed: ${result.error ?? 'unknown error'}]\r\n`);
+          terminal?.write(
+            `\r\n[PTY start failed: ${result.error ?? "unknown error"}]\r\n`,
+          );
         } else if (currentCommand) {
           // Wait for the shell to emit its first output (prompt) before
           // sending the startup command.  This avoids a fixed timeout that
@@ -194,7 +216,10 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
               // Small delay after first output to let the prompt fully render
               const t = setTimeout(() => {
                 if (!disposed) {
-                  void window.traceAPI.writePty(terminalId, `${currentCommand}\n`);
+                  void window.traceAPI.writePty(
+                    terminalId,
+                    `${currentCommand}\n`,
+                  );
                 }
               }, 80);
               miscTimers.push(t);
@@ -224,7 +249,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
       });
 
       cleanupExit = window.traceAPI.onPtyExit((id) => {
-        if (id === terminalId) terminal?.write('\r\n[Process exited]\r\n');
+        if (id === terminalId) terminal?.write("\r\n[Process exited]\r\n");
       });
 
       resizeDisposable = terminal.onResize(({ cols, rows }) => {
@@ -239,14 +264,22 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     };
 
     const handleWindowFocus = () => focusInput();
-    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener("focus", handleWindowFocus);
 
     // Wait for container to have dimensions before initializing xterm.
     // The container may start at zero size during CSS transitions.
     const observer = new ResizeObserver(() => {
-      if (!terminal && container.clientWidth > 0 && container.clientHeight > 0) {
+      if (
+        !terminal &&
+        container.clientWidth > 0 &&
+        container.clientHeight > 0
+      ) {
         void init();
-      } else if (fitAddon && container.clientWidth > 0 && container.clientHeight > 0) {
+      } else if (
+        fitAddon &&
+        container.clientWidth > 0 &&
+        container.clientHeight > 0
+      ) {
         fitAddon.fit();
       }
     });
@@ -259,7 +292,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     return () => {
       disposed = true;
       observer.disconnect();
-      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener("focus", handleWindowFocus);
       unsubTheme();
       for (const timer of focusTimers) clearTimeout(timer);
       for (const timer of miscTimers) clearTimeout(timer);
