@@ -1,10 +1,10 @@
-import { useCallback, useState } from 'react';
-import type { KanbanColumn as KanbanColumnType } from '../types';
-import { KanbanCard } from './KanbanCard';
+import { useCallback, useState } from "react";
+import type { KanbanColumn as KanbanColumnType, KanbanTicket } from "../types";
+import { KanbanCard } from "./KanbanCard";
 
 interface KanbanColumnProps {
   column: KanbanColumnType;
-  onClickTicket: (workspaceId: string | null) => void;
+  onClickTicket: (ticket: KanbanTicket) => void;
   onDropTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
   onCreatePR?: (workspaceId: string) => void;
@@ -12,7 +12,13 @@ interface KanbanColumnProps {
 
 const noop = () => {};
 
-export function KanbanColumn({ column, onClickTicket, onDropTicket, onDeleteWorkspace, onCreatePR }: KanbanColumnProps) {
+export function KanbanColumn({
+  column,
+  onClickTicket,
+  onDropTicket,
+  onDeleteWorkspace,
+  onCreatePR,
+}: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -28,7 +34,7 @@ export function KanbanColumn({ column, onClickTicket, onDropTicket, onDeleteWork
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
-      const ticketId = e.dataTransfer.getData('text/plain');
+      const ticketId = e.dataTransfer.getData("text/plain");
       if (ticketId) {
         onDropTicket(ticketId, column.id, column.tickets.length);
       }
@@ -40,7 +46,10 @@ export function KanbanColumn({ column, onClickTicket, onDropTicket, onDeleteWork
     <div className="flex h-full w-[280px] flex-shrink-0 flex-col rounded-lg bg-surface">
       <div className="flex items-center gap-2 px-3 py-3">
         {column.color && (
-          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: column.color }} />
+          <div
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: column.color }}
+          />
         )}
         <h3 className="text-xs font-semibold tracking-wide text-primary uppercase">
           {column.name}
@@ -52,7 +61,9 @@ export function KanbanColumn({ column, onClickTicket, onDropTicket, onDeleteWork
 
       <div
         className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 transition-colors ${
-          dragOver ? 'bg-accent/5 ring-1 ring-inset ring-accent/20 rounded-lg' : ''
+          dragOver
+            ? "bg-accent/5 ring-1 ring-inset ring-accent/20 rounded-lg"
+            : ""
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

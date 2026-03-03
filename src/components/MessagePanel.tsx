@@ -1,18 +1,41 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FiChevronRight, FiColumns, FiFolder, FiList, FiSend, FiShare2 } from 'react-icons/fi';
-import type { Channel, PullRequest, Workspace, KanbanColumn as KanbanColumnType, KanbanTicket, MiddlePanelView, TicketStatus } from '../types';
-import { KanbanBoard } from './KanbanBoard';
-import { WorkspaceInput } from './WorkspaceInput';
-import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
-import { ChatEmptyState } from './ChatEmptyState';
-import { ThreadPanel } from './ThreadPanel';
-import { ThreadLinkPreview } from './ThreadLinkPreview';
-import { PullRequestListView } from './PullRequestListView';
-import { useChannelMessages } from '../hooks/useChannelMessages';
-import { useAuth } from '../context/AuthContext';
-import { useClaudeRunStore } from '../stores/claudeRunStore';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  FiChevronRight,
+  FiColumns,
+  FiFolder,
+  FiList,
+  FiSend,
+  FiShare2,
+} from "react-icons/fi";
+import type {
+  Channel,
+  PullRequest,
+  Workspace,
+  KanbanColumn as KanbanColumnType,
+  KanbanTicket,
+  MiddlePanelView,
+  TicketStatus,
+} from "../types";
+import { KanbanBoard } from "./KanbanBoard";
+import { WorkspaceInput } from "./WorkspaceInput";
+import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from "./MessageItem";
+import { ChatEmptyState } from "./ChatEmptyState";
+import { ThreadPanel } from "./ThreadPanel";
+import { ThreadLinkPreview } from "./ThreadLinkPreview";
+import { PullRequestListView } from "./PullRequestListView";
+import { TicketDetailModal } from "./TicketDetailModal";
+import { useChannelMessages } from "../hooks/useChannelMessages";
+import { useAuth } from "../context/AuthContext";
+import { useClaudeRunStore } from "../stores/claudeRunStore";
 
-const THREAD_LINK_RE = /https?:\/\/[^\s/]+\/thread\/([a-f0-9-]+)\/([a-f0-9-]+)/g;
+const THREAD_LINK_RE =
+  /https?:\/\/[^\s/]+\/thread\/([a-f0-9-]+)\/([a-f0-9-]+)/g;
 
 function renderMessageContent(
   content: string,
@@ -35,7 +58,12 @@ function renderMessageContent(
     const channelId = match[1];
     const workspaceId = match[2];
     segments.push(
-      <ThreadLinkPreview key={key++} channelId={channelId} workspaceId={workspaceId} onNavigate={onNavigateToThread} />,
+      <ThreadLinkPreview
+        key={key++}
+        channelId={channelId}
+        workspaceId={workspaceId}
+        onNavigate={onNavigateToThread}
+      />,
     );
     lastIndex = match.index + match[0].length;
   }
@@ -69,7 +97,7 @@ function CollapsibleStatusGroup({
   children: React.ReactNode;
   count: number;
 }) {
-  const [open, setOpen] = useState(status !== 'merged');
+  const [open, setOpen] = useState(status !== "merged");
   const config = STATUS_CONFIG[status];
 
   return (
@@ -80,10 +108,14 @@ function CollapsibleStatusGroup({
         onClick={() => setOpen((v) => !v)}
       >
         <FiChevronRight
-          className={`h-3 w-3 text-muted transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+          className={`h-3 w-3 text-muted transition-transform duration-150 ${open ? "rotate-90" : ""}`}
         />
-        <div className={`h-2 w-2 flex-shrink-0 rounded-full ${config.color} bg-current`} />
-        <span className={`text-[11px] font-semibold uppercase tracking-wide ${config.color}`}>
+        <div
+          className={`h-2 w-2 flex-shrink-0 rounded-full ${config.color} bg-current`}
+        />
+        <span
+          className={`text-[11px] font-semibold uppercase tracking-wide ${config.color}`}
+        >
           {config.label}
         </span>
         <span className="rounded-full bg-surface-elevated px-1.5 py-0.5 text-[10px] font-medium text-muted">
@@ -92,7 +124,7 @@ function CollapsibleStatusGroup({
       </button>
       <div
         className="grid transition-[grid-template-rows] duration-200 ease-out"
-        style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">{children}</div>
       </div>
@@ -119,7 +151,7 @@ function WorkspaceListSkeleton() {
 
 function formatMessageTime(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 interface MessagePanelProps {
@@ -181,7 +213,12 @@ export function MessagePanel({
   pullingPRNumbers,
   workspacesLoading,
 }: MessagePanelProps) {
-  const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
+  const [projectSubView, setProjectSubView] = useState<
+    "list" | "board" | "graph"
+  >("board");
+  const [selectedTicket, setSelectedTicket] = useState<KanbanTicket | null>(
+    null,
+  );
   const feedListRef = useRef<HTMLDivElement | null>(null);
   const { user: authUser } = useAuth();
 
@@ -198,9 +235,9 @@ export function MessagePanel({
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
     for (const ws of workspaces) {
-      let status = (ws.status ?? 'pending') as TicketStatus;
+      let status = (ws.status ?? "pending") as TicketStatus;
       // "completed" is a visual sub-state of "in_progress" — group them together
-      if (status === 'completed') status = 'in_progress';
+      if (status === "completed") status = "in_progress";
       let bucket = buckets.get(status);
       if (!bucket) {
         bucket = [];
@@ -246,17 +283,13 @@ export function MessagePanel({
   const handleFeedScroll = useCallback(() => {
     const el = feedListRef.current;
     if (!el) return;
-    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    nearBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
   }, []);
 
-  const handleBoardClickTicket = useCallback(
-    (workspaceId: string | null) => {
-      if (!workspaceId) return;
-      const workspace = workspaces.find((m) => m.id === workspaceId);
-      if (workspace) onOpenWorkspace(workspace);
-    },
-    [workspaces, onOpenWorkspace],
-  );
+  const handleBoardClickTicket = useCallback((ticket: KanbanTicket) => {
+    setSelectedTicket(ticket);
+  }, []);
 
   const handleBoardCreatePR = useCallback(
     (workspaceId: string) => {
@@ -265,8 +298,9 @@ export function MessagePanel({
       if (workspace) onOpenWorkspace(workspace);
       // Send after a microtask so the workspace is selected
       queueMicrotask(() => {
-        const { sendThreadMessage } = useClaudeRunStore.getState().workspaceActions;
-        void sendThreadMessage('/create-pr', [], []);
+        const { sendThreadMessage } =
+          useClaudeRunStore.getState().workspaceActions;
+        void sendThreadMessage("/create-pr", [], []);
       });
     },
     [workspaces, onOpenWorkspace],
@@ -301,11 +335,15 @@ export function MessagePanel({
             needsAttention={attentionWorkspaceIds.has(workspace.id)}
             onOpenWorkspace={onOpenWorkspace}
             onDeleteWorkspace={showDelete ? onDeleteWorkspace : undefined}
-            onDeleteWorktree={workspace.status === 'merged' ? onDeleteWorktree : undefined}
+            onDeleteWorktree={
+              workspace.status === "merged" ? onDeleteWorktree : undefined
+            }
             hasActiveWorktree={worktreeWorkspaceIds?.has(workspace.id)}
-            hasRunningProcess={workspacesWithRunningProcesses?.has(workspace.id)}
+            hasRunningProcess={workspacesWithRunningProcesses?.has(
+              workspace.id,
+            )}
             isDeletingWorktree={deletingWorktreeIds?.has(workspace.id)}
-            dimmed={workspace.status === 'merged'}
+            dimmed={workspace.status === "merged"}
             activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
             shortcutIndex={workspaceShortcutMap.get(workspace.id)}
           />
@@ -314,10 +352,11 @@ export function MessagePanel({
     ));
 
   // Channel messaging
-  const { messages: chatMessages, sendMessage: sendChatMessage } = useChannelMessages(channelId);
+  const { messages: chatMessages, sendMessage: sendChatMessage } =
+    useChannelMessages(channelId);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const chatNearBottomRef = useRef(true);
-  const [chatInput, setChatInput] = useState('');
+  const [chatInput, setChatInput] = useState("");
 
   // Animation tracking for new messages
   const renderedIdsRef = useRef<Set<string>>(new Set());
@@ -383,13 +422,14 @@ export function MessagePanel({
   const handleChatScroll = useCallback(() => {
     const el = chatScrollRef.current;
     if (!el) return;
-    chatNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    chatNearBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
   }, []);
 
   const handleSendChat = useCallback(() => {
     if (!chatInput.trim()) return;
     void sendChatMessage(chatInput);
-    setChatInput('');
+    setChatInput("");
     chatNearBottomRef.current = true;
     requestAnimationFrame(() => {
       const el = chatScrollRef.current;
@@ -397,17 +437,24 @@ export function MessagePanel({
     });
   }, [chatInput, sendChatMessage]);
 
-  const handleChatKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendChat();
-    }
-  }, [handleSendChat]);
+  const handleChatKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendChat();
+      }
+    },
+    [handleSendChat],
+  );
 
   if (needsJoin) {
-    const channelName = panelTitle.replace(/^#\s*/, '');
+    const channelName = panelTitle.replace(/^#\s*/, "");
     return (
-      <div id="messages-panel" className="flex min-h-0 flex-1 flex-col items-center justify-center bg-surface" style={{ minWidth: 200 }}>
+      <div
+        id="messages-panel"
+        className="flex min-h-0 flex-1 flex-col items-center justify-center bg-surface"
+        style={{ minWidth: 200 }}
+      >
         <div className="flex max-w-sm flex-col items-center text-center">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
             <FiFolder className="h-6 w-6 text-accent" />
@@ -416,7 +463,8 @@ export function MessagePanel({
             Join #{channelName}
           </h3>
           <p className="mb-5 text-sm text-muted">
-            Connect your local repository to start creating workspaces in this channel.
+            Connect your local repository to start creating workspaces in this
+            channel.
           </p>
           <button
             type="button"
@@ -431,8 +479,12 @@ export function MessagePanel({
   }
 
   return (
-    <div id="messages-panel" className="flex min-h-0 flex-1 flex-col bg-surface" style={{ minWidth: 200 }}>
-      {middlePanelView === 'chat' ? (
+    <div
+      id="messages-panel"
+      className="flex min-h-0 flex-1 flex-col bg-surface"
+      style={{ minWidth: 200 }}
+    >
+      {middlePanelView === "chat" ? (
         <div className="flex min-h-0 flex-1 flex-col">
           {/* Single scroll container for empty state + messages */}
           <div
@@ -440,51 +492,67 @@ export function MessagePanel({
             onScroll={handleChatScroll}
             className="min-h-0 flex-1 overflow-y-auto"
           >
-          <div className="flex min-h-full flex-col">
-            <div className="flex-1" />
-            <ChatEmptyState
-              channelName={panelTitle.replace(/^#\s*/, '')}
-              channelCreatedAt={channelCreatedAt}
-            />
-            {/* Message list */}
-            <div className="px-3 py-2">
-              {chatMessages.map((msg, i) => {
-                const isOwn = authUser?.id === msg.author.id;
-                const isNew = newMessageIds.has(msg.id);
-                const isFirstInGroup = i === 0 || chatMessages[i - 1].author.id !== msg.author.id;
-                return (
-                  <div key={msg.id} className={`${isFirstInGroup ? `mb-3 ${i === 0 ? 'mt-0' : 'mt-3'}` : 'mb-0.5'} flex items-start gap-2${isNew ? ' message-enter' : ''}`}>
-                    {isFirstInGroup ? (
-                      msg.author.avatarUrl ? (
-                        <img
-                          src={msg.author.avatarUrl}
-                          alt={msg.author.name}
-                          className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full"
-                        />
+            <div className="flex min-h-full flex-col">
+              <div className="flex-1" />
+              <ChatEmptyState
+                channelName={panelTitle.replace(/^#\s*/, "")}
+                channelCreatedAt={channelCreatedAt}
+              />
+              {/* Message list */}
+              <div className="px-3 py-2">
+                {chatMessages.map((msg, i) => {
+                  const isOwn = authUser?.id === msg.author.id;
+                  const isNew = newMessageIds.has(msg.id);
+                  const isFirstInGroup =
+                    i === 0 || chatMessages[i - 1].author.id !== msg.author.id;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`${isFirstInGroup ? `mb-3 ${i === 0 ? "mt-0" : "mt-3"}` : "mb-0.5"} flex items-start gap-2${isNew ? " message-enter" : ""}`}
+                    >
+                      {isFirstInGroup ? (
+                        msg.author.avatarUrl ? (
+                          <img
+                            src={msg.author.avatarUrl}
+                            alt={msg.author.name}
+                            className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full"
+                          />
+                        ) : (
+                          <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent/30 text-[10px] font-bold text-accent-light">
+                            {msg.author.name.charAt(0).toUpperCase()}
+                          </div>
+                        )
                       ) : (
-                        <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent/30 text-[10px] font-bold text-accent-light">
-                          {msg.author.name.charAt(0).toUpperCase()}
-                        </div>
-                      )
-                    ) : (
-                      <div className="h-0 w-6 flex-shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      {isFirstInGroup && (
-                        <div className="flex items-baseline gap-2">
-                          <span className={`text-xs font-semibold ${isOwn ? 'text-accent-light' : 'text-primary'}`}>
-                            {msg.author.name}
-                          </span>
-                          <span className="text-[10px] text-muted">{formatMessageTime(msg.createdAt)}</span>
-                        </div>
+                        <div className="h-0 w-6 flex-shrink-0" />
                       )}
-                      <div className="text-sm text-primary">{onOpenThreadLink ? renderMessageContent(msg.content, onOpenThreadLink) : <span className="whitespace-pre-wrap">{msg.content}</span>}</div>
+                      <div className="min-w-0 flex-1">
+                        {isFirstInGroup && (
+                          <div className="flex items-baseline gap-2">
+                            <span
+                              className={`text-xs font-semibold ${isOwn ? "text-accent-light" : "text-primary"}`}
+                            >
+                              {msg.author.name}
+                            </span>
+                            <span className="text-[10px] text-muted">
+                              {formatMessageTime(msg.createdAt)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-sm text-primary">
+                          {onOpenThreadLink ? (
+                            renderMessageContent(msg.content, onOpenThreadLink)
+                          ) : (
+                            <span className="whitespace-pre-wrap">
+                              {msg.content}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
           </div>
           {/* Input */}
           <div className="border-t border-edge px-3 py-3">
@@ -495,7 +563,13 @@ export function MessagePanel({
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={handleChatKeyDown}
                 placeholder="Send a message..."
-                style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
+                style={
+                  {
+                    fieldSizing: "content",
+                    minHeight: 38,
+                    maxHeight: 300,
+                  } as React.CSSProperties
+                }
                 className="w-full resize-none rounded-md border border-edge bg-surface-elevated px-3 py-2 text-sm text-primary outline-none placeholder:text-muted focus:border-accent/50"
               />
               <button
@@ -509,23 +583,25 @@ export function MessagePanel({
             </div>
           </div>
         </div>
-      ) : middlePanelView === 'board' ? (
+      ) : middlePanelView === "board" ? (
         <>
           <div className="flex items-center gap-2 px-3 py-2">
             <div className="flex rounded-lg bg-surface-elevated p-0.5">
-              {([
-                { key: 'list', label: 'List', icon: FiList },
-                { key: 'board', label: 'Board', icon: FiColumns },
-                { key: 'graph', label: 'Graph', icon: FiShare2 },
-              ] as const).map(({ key, label, icon: Icon }) => (
+              {(
+                [
+                  { key: "list", label: "List", icon: FiList },
+                  { key: "board", label: "Board", icon: FiColumns },
+                  { key: "graph", label: "Graph", icon: FiShare2 },
+                ] as const
+              ).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setProjectSubView(key)}
                   className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                     projectSubView === key
-                      ? 'bg-accent/20 text-accent-light'
-                      : 'text-muted hover:text-primary'
+                      ? "bg-accent/20 text-accent-light"
+                      : "text-muted hover:text-primary"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -534,7 +610,7 @@ export function MessagePanel({
               ))}
             </div>
           </div>
-          {projectSubView === 'board' ? (
+          {projectSubView === "board" ? (
             <KanbanBoard
               columns={kanbanColumns}
               loading={kanbanLoading}
@@ -543,7 +619,7 @@ export function MessagePanel({
               onDeleteWorkspace={onDeleteWorkspace}
               onCreatePR={handleBoardCreatePR}
             />
-          ) : projectSubView === 'list' ? (
+          ) : projectSubView === "list" ? (
             <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
               List view coming soon
             </div>
@@ -553,7 +629,7 @@ export function MessagePanel({
             </div>
           )}
         </>
-      ) : middlePanelView === 'projects' ? (
+      ) : middlePanelView === "projects" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {teamProjects.length === 0 ? (
             <div className="flex flex-1 items-center justify-center text-sm text-muted">
@@ -570,7 +646,9 @@ export function MessagePanel({
                 >
                   <span className="text-muted text-sm">#</span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-primary">{project.name}</div>
+                    <div className="truncate text-sm font-medium text-primary">
+                      {project.name}
+                    </div>
                   </div>
                   <FiChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
                 </button>
@@ -578,7 +656,7 @@ export function MessagePanel({
             </div>
           )}
         </div>
-      ) : middlePanelView === 'pull-requests' ? (
+      ) : middlePanelView === "pull-requests" ? (
         <PullRequestListView
           repoPath={repoPath ?? null}
           onPullPR={onPullPR ?? (() => {})}
@@ -589,7 +667,10 @@ export function MessagePanel({
       ) : (
         <div className="flex min-h-0 flex-1">
           {!(isFullscreen && selectedWorkspaceId) && (
-            <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: 200 }}>
+            <div
+              className="flex min-h-0 flex-1 flex-col"
+              style={{ minWidth: 200 }}
+            >
               <div
                 id="workspaces-list"
                 ref={feedListRef}
@@ -607,6 +688,23 @@ export function MessagePanel({
           )}
           <ThreadPanel />
         </div>
+      )}
+      {selectedTicket && (
+        <TicketDetailModal
+          ticket={selectedTicket}
+          onClose={() => setSelectedTicket(null)}
+          onOpenWorkspace={
+            selectedTicket.workspaceId
+              ? () => {
+                  const workspace = workspaces.find(
+                    (w) => w.id === selectedTicket.workspaceId,
+                  );
+                  setSelectedTicket(null);
+                  if (workspace) onOpenWorkspace(workspace);
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );
