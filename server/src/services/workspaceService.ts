@@ -274,7 +274,6 @@ export async function appendPromptToWorkspaceSession(
     await tx.workspace.update({
       where: { id: workspace.id },
       data: {
-        preview: text,
         importance: 'important',
         ...(attachmentIds && attachmentIds.length > 0
           ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
