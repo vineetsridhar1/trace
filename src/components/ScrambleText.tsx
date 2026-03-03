@@ -15,7 +15,7 @@ interface ScrambleTextProps {
   speed?: number;
 }
 
-export function ScrambleText({ text, className, speed = 38 }: ScrambleTextProps) {
+export function ScrambleText({ text, className, speed = 20 }: ScrambleTextProps) {
   const [revealed, setRevealed] = useState(text.length);
   const [scrambled, setScrambled] = useState('');
   const prevTextRef = useRef<string | null>(null);
@@ -40,7 +40,7 @@ export function ScrambleText({ text, className, speed = 38 }: ScrambleTextProps)
     setScrambled(scramble(text));
 
     intervalRef.current = setInterval(() => {
-      rev++;
+      rev += 3;
       if (rev >= text.length) {
         setRevealed(text.length);
         setScrambled('');
