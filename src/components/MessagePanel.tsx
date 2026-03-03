@@ -93,10 +93,16 @@ function CollapsibleStatusGroup({
   status,
   children,
   count,
+  displayCount,
+  onExpand,
+  loading,
 }: {
   status: TicketStatus;
   children: React.ReactNode;
   count: number;
+  displayCount?: number;
+  onExpand?: () => void;
+  loading?: boolean;
 }) {
   const [open, setOpen] = useState(status !== "merged");
   const config = STATUS_CONFIG[status];
@@ -106,7 +112,11 @@ function CollapsibleStatusGroup({
       <button
         type="button"
         className="flex w-full cursor-pointer items-center gap-1.5 px-3 py-1.5 hover:bg-surface-elevated/50 transition-colors"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          const willOpen = !open;
+          setOpen(willOpen);
+          if (willOpen && onExpand) onExpand();
+        }}
       >
         <FiChevronRight
           className={`h-3 w-3 text-muted transition-transform duration-150 ${open ? "rotate-90" : ""}`}
@@ -120,14 +130,30 @@ function CollapsibleStatusGroup({
           {config.label}
         </span>
         <span className="rounded-full bg-surface-elevated px-1.5 py-0.5 text-[10px] font-medium text-muted">
-          {count}
+          {displayCount ?? count}
         </span>
       </button>
       <div
         className="grid transition-[grid-template-rows] duration-200 ease-out"
         style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
       >
-        <div className="overflow-hidden">{children}</div>
+        <div className="overflow-hidden">
+          {loading ? (
+            <div className="flex flex-col gap-1 px-1 py-2">
+              {Array.from({ length: Math.min(displayCount ?? 3, 3) }, (_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2.5">
+                  <div className="h-8 w-8 flex-shrink-0 rounded-full bg-[#292e42] animate-pulse" />
+                  <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                    <div className="h-3.5 w-3/5 rounded bg-[#292e42] animate-pulse" />
+                    <div className="h-3 w-4/5 rounded bg-[#292e42] animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            children
+          )}
+        </div>
       </div>
     </div>
   );
@@ -184,6 +210,10 @@ interface MessagePanelProps {
   onPullPR?: (pr: PullRequest) => void;
   pullingPRNumbers?: Set<number>;
   workspacesLoading?: boolean;
+  mergedCount?: number;
+  mergedWorkspacesLoaded?: boolean;
+  mergedWorkspacesLoading?: boolean;
+  onExpandMerged?: () => void;
 }
 
 export function MessagePanel({
@@ -215,6 +245,10 @@ export function MessagePanel({
   onPullPR,
   pullingPRNumbers,
   workspacesLoading,
+  mergedCount,
+  mergedWorkspacesLoaded,
+  mergedWorkspacesLoading,
+  onExpandMerged,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<
     "list" | "board" | "graph"
@@ -263,10 +297,13 @@ export function MessagePanel({
           });
         }
         groups.push({ status, workspaces: items });
+      } else if (status === "merged" && mergedCount && mergedCount > 0) {
+        // Show collapsed merged header even when merged workspaces aren't loaded yet
+        groups.push({ status, workspaces: [] });
       }
     }
     return groups;
-  }, [workspaces, authUser?.id]);
+  }, [workspaces, authUser?.id, mergedCount]);
 
   const nearBottomRef = useRef(true);
   const prevWorkspaceCountRef = useRef(0);
@@ -329,6 +366,9 @@ export function MessagePanel({
         key={group.status}
         status={group.status}
         count={group.workspaces.length}
+        displayCount={group.status === "merged" && !mergedWorkspacesLoaded ? mergedCount : undefined}
+        onExpand={group.status === "merged" && !mergedWorkspacesLoaded ? onExpandMerged : undefined}
+        loading={group.status === "merged" && mergedWorkspacesLoading}
       >
         {group.workspaces.map((workspace) => (
           <MessageItem

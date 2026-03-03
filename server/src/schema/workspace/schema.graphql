@@ -1,6 +1,6 @@
 extend type Query {
   workspace(id: ID!): Workspace
-  workspaces(channelId: ID!, limit: Int, offset: Int): WorkspaceConnection!
+  workspaces(channelId: ID!, limit: Int, offset: Int, excludeStatus: String): WorkspaceConnection!
   checkPRStatuses(channelId: ID!, branches: [String!]!): [PRStatus!]!
   generateBranchName(prompt: String!): String
   channelPresence(channelId: ID!): [WorkspacePresence!]!
@@ -58,6 +58,7 @@ type WorkspaceCliSession {
 type WorkspaceConnection {
   workspaces: [Workspace!]!
   total: Int!
+  mergedCount: Int!
   limit: Int!
   offset: Int!
 }

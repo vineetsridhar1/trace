@@ -40,12 +40,13 @@ interface UseCommandPaletteItemsParams {
 
 // Ensure the GQL query is referenced so codegen picks it up
 const _GQL_WORKSPACES = gql`
-  query Workspaces($channelId: ID!, $limit: Int, $offset: Int) {
-    workspaces(channelId: $channelId, limit: $limit, offset: $offset) {
+  query Workspaces($channelId: ID!, $limit: Int, $offset: Int, $excludeStatus: String) {
+    workspaces(channelId: $channelId, limit: $limit, offset: $offset, excludeStatus: $excludeStatus) {
       workspaces {
         ...WorkspaceFields
       }
       total
+      mergedCount
       limit
       offset
     }

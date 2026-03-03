@@ -5,12 +5,13 @@ import { WORKSPACE_FIELDS } from '../graphql/fragments';
 import { type WorkspacesQuery, useWorkspacesLazyQuery } from './__generated__/useMessages.generated';
 
 const GQL_WORKSPACES = gql`
-  query Workspaces($channelId: ID!, $limit: Int, $offset: Int) {
-    workspaces(channelId: $channelId, limit: $limit, offset: $offset) {
+  query Workspaces($channelId: ID!, $limit: Int, $offset: Int, $excludeStatus: String) {
+    workspaces(channelId: $channelId, limit: $limit, offset: $offset, excludeStatus: $excludeStatus) {
       workspaces {
         ...WorkspaceFields
       }
       total
+      mergedCount
       limit
       offset
     }

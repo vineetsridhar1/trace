@@ -8,19 +8,26 @@ export type WorkspacesQueryVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
   limit?: Types.InputMaybe<Types.Scalars['Int']['input']>;
   offset?: Types.InputMaybe<Types.Scalars['Int']['input']>;
+  excludeStatus?: Types.InputMaybe<Types.Scalars['String']['input']>;
 }>;
 
 
-export type WorkspacesQuery = { __typename?: 'Query', workspaces: { __typename?: 'WorkspaceConnection', total: number, limit: number, offset: number, workspaces: Array<{ __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null }> } };
+export type WorkspacesQuery = { __typename?: 'Query', workspaces: { __typename?: 'WorkspaceConnection', total: number, mergedCount: number, limit: number, offset: number, workspaces: Array<{ __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, claudeSessionId?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null }> } };
 
 
 export const WorkspacesDocument = gql`
-    query Workspaces($channelId: ID!, $limit: Int, $offset: Int) {
-  workspaces(channelId: $channelId, limit: $limit, offset: $offset) {
+    query Workspaces($channelId: ID!, $limit: Int, $offset: Int, $excludeStatus: String) {
+  workspaces(
+    channelId: $channelId
+    limit: $limit
+    offset: $offset
+    excludeStatus: $excludeStatus
+  ) {
     workspaces {
       ...WorkspaceFields
     }
     total
+    mergedCount
     limit
     offset
   }
@@ -42,6 +49,7 @@ export const WorkspacesDocument = gql`
  *      channelId: // value for 'channelId'
  *      limit: // value for 'limit'
  *      offset: // value for 'offset'
+ *      excludeStatus: // value for 'excludeStatus'
  *   },
  * });
  */

@@ -223,7 +223,7 @@ type Query {
   ticketDependencies(workspaceId: ID!): [TicketDependency!]!
   workspace(id: ID!): Workspace
   workspaceEvents(after: String, channelId: ID!, limit: Int, offset: Int, workspaceId: ID!): EventConnection!
-  workspaces(channelId: ID!, limit: Int, offset: Int): WorkspaceConnection!
+  workspaces(channelId: ID!, excludeStatus: String, limit: Int, offset: Int): WorkspaceConnection!
 }
 
 type Server {
@@ -347,6 +347,7 @@ type WorkspaceCliSession {
 
 type WorkspaceConnection {
   limit: Int!
+  mergedCount: Int!
   offset: Int!
   total: Int!
   workspaces: [Workspace!]!

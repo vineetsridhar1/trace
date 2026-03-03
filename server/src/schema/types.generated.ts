@@ -557,6 +557,7 @@ export type QueryworkspaceEventsArgs = {
 
 export type QueryworkspacesArgs = {
   channelId: Scalars['ID']['input'];
+  excludeStatus?: InputMaybe<Scalars['String']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
@@ -751,6 +752,7 @@ export type WorkspaceCliSession = {
 export type WorkspaceConnection = {
   __typename?: 'WorkspaceConnection';
   limit: Scalars['Int']['output'];
+  mergedCount: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
   total: Scalars['Int']['output'];
   workspaces: Array<Workspace>;
@@ -1299,6 +1301,7 @@ export type WorkspaceCliSessionResolvers<ContextType = any, ParentType extends R
 
 export type WorkspaceConnectionResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceConnection'] = ResolversParentTypes['WorkspaceConnection']> = {
   limit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  mergedCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   offset?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   workspaces?: Resolver<Array<ResolversTypes['Workspace']>, ParentType, ContextType>;

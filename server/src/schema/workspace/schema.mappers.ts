@@ -34,6 +34,7 @@ export interface WorkspaceCliSessionMapper {
 export interface WorkspaceConnectionMapper {
   workspaces: WorkspaceMapper[];
   total: number;
+  mergedCount: number;
   limit: number;
   offset: number;
 }

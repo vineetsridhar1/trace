@@ -135,6 +135,9 @@ function AppContent() {
   );
   const worktreeWorkspaceIds = useWorkspaceStore((s) => s.worktreeWorkspaceIds);
   const deletingWorktreeIds = useWorkspaceStore((s) => s.deletingWorktreeIds);
+  const mergedCount = useWorkspaceStore((s) => s.mergedCount);
+  const mergedWorkspacesLoaded = useWorkspaceStore((s) => s.mergedWorkspacesLoaded);
+  const mergedWorkspacesLoading = useWorkspaceStore((s) => s.mergedWorkspacesLoading);
 
   const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
 
@@ -182,7 +185,7 @@ function AppContent() {
   );
 
   // ─── Bridge hooks (GraphQL → stores) ──────────────────────────────
-  const { refreshWorkspaces } = useWorkspaceSync();
+  const { refreshWorkspaces, loadMergedWorkspaces } = useWorkspaceSync();
   const { fetchBoard, moveTicket } = useKanbanSync();
   const {
     fetchAiChats,
@@ -493,6 +496,10 @@ function AppContent() {
     [updateWorkspaceStatus],
   );
 
+  const handleExpandMerged = useCallback(() => {
+    if (activeChannelId) void loadMergedWorkspaces(activeChannelId);
+  }, [activeChannelId, loadMergedWorkspaces]);
+
   const performChannelSwitch = useCallback(
     (channelId: string) => {
       const currentSelected = useThreadStore.getState().selectedWorkspaceId;
@@ -764,7 +771,11 @@ function AppContent() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!activeChannelId || subscriptionsActive) return;
-      void refreshWorkspaces(activeChannelId);
+      if (useWorkspaceStore.getState().mergedWorkspacesLoaded) {
+        void loadMergedWorkspaces(activeChannelId);
+      } else {
+        void refreshWorkspaces(activeChannelId);
+      }
       const selectedWs = useThreadStore.getState().selectedWorkspace;
       if (selectedWs)
         void useThreadStore
@@ -772,7 +783,7 @@ function AppContent() {
           .syncActions.loadSessionEvents(selectedWs);
     }, 3000);
     return () => clearInterval(interval);
-  }, [activeChannelId, refreshWorkspaces, subscriptionsActive]);
+  }, [activeChannelId, refreshWorkspaces, loadMergedWorkspaces, subscriptionsActive]);
 
   // On WS reconnection (false → true), catch up on any missed updates
   const prevSubscriptionsActive = useRef(subscriptionsActive);
@@ -782,11 +793,15 @@ function AppContent() {
       !prevSubscriptionsActive.current &&
       activeChannelId
     ) {
-      void refreshWorkspaces(activeChannelId);
+      if (useWorkspaceStore.getState().mergedWorkspacesLoaded) {
+        void loadMergedWorkspaces(activeChannelId);
+      } else {
+        void refreshWorkspaces(activeChannelId);
+      }
       void fetchBoard(activeChannelId);
     }
     prevSubscriptionsActive.current = subscriptionsActive;
-  }, [subscriptionsActive, activeChannelId, refreshWorkspaces, fetchBoard]);
+  }, [subscriptionsActive, activeChannelId, refreshWorkspaces, loadMergedWorkspaces, fetchBoard]);
 
   // One-time initial view correction after channel data loads
   const initialViewCorrectedRef = useRef(false);
@@ -1043,6 +1058,10 @@ function AppContent() {
                 onPullPR={handlePullPR}
                 pullingPRNumbers={pullingPRNumbers}
                 workspacesLoading={workspacesLoading}
+                mergedCount={mergedCount}
+                mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+                mergedWorkspacesLoading={mergedWorkspacesLoading}
+                onExpandMerged={handleExpandMerged}
               />
             )}
           </div>

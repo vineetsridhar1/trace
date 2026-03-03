@@ -95,13 +95,16 @@ export async function getWorkspaceByIdWithSessions(workspaceId: string): Promise
 
 export async function getWorkspacesByChannel(
   channelId: string,
-  options: { limit?: number; offset?: number } = {},
+  options: { limit?: number; offset?: number; excludeStatus?: string } = {},
 ) {
-  const { limit = 50, offset = 0 } = options;
+  const { limit = 50, offset = 0, excludeStatus } = options;
 
-  const where = { channelId, status: { not: 'deleted' } };
+  const statusFilter = excludeStatus
+    ? { notIn: ['deleted', excludeStatus] }
+    : { not: 'deleted' };
+  const where = { channelId, status: statusFilter };
 
-  const [workspaces, total] = await Promise.all([
+  const [workspaces, total, mergedCount] = await Promise.all([
     prisma.workspace.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -114,9 +117,10 @@ export async function getWorkspacesByChannel(
       },
     }),
     prisma.workspace.count({ where }),
+    prisma.workspace.count({ where: { channelId, status: 'merged' } }),
   ]);
 
-  return { workspaces, total, limit, offset };
+  return { workspaces, total, mergedCount, limit, offset };
 }
 
 export async function getOrCreateWorkspaceForCliSession(channelId: string, cliSessionId: string) {

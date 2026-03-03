@@ -160,7 +160,15 @@ export function useChannelSubscriptions({
       }
     }
 
-    useWorkspaceStore.getState().upsertWorkspace(workspace);
+    // Skip upserting new merged workspaces when merged data hasn't been loaded yet
+    // (would show incomplete merged data). Existing workspaces transitioning to merged are fine.
+    const storeState = useWorkspaceStore.getState();
+    const alreadyInStore = storeState.workspaces.some((w) => w.id === workspace.id);
+    if (workspace.status === 'merged' && !alreadyInStore && !storeState.mergedWorkspacesLoaded) {
+      return;
+    }
+
+    storeState.upsertWorkspace(workspace);
     useThreadStore.getState().syncSelectedWorkspace(workspace);
 
     const pendingId = useAgentRunStore.getState().pendingRunWorkspaceId;

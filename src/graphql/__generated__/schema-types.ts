@@ -544,6 +544,7 @@ export type QueryWorkspaceEventsArgs = {
 
 export type QueryWorkspacesArgs = {
   channelId: Scalars['ID']['input'];
+  excludeStatus?: InputMaybe<Scalars['String']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
@@ -738,6 +739,7 @@ export type WorkspaceCliSession = {
 export type WorkspaceConnection = {
   __typename?: 'WorkspaceConnection';
   limit: Scalars['Int']['output'];
+  mergedCount: Scalars['Int']['output'];
   offset: Scalars['Int']['output'];
   total: Scalars['Int']['output'];
   workspaces: Array<Workspace>;
