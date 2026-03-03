@@ -746,6 +746,9 @@ function AppContent() {
               onSetView={handleSetView}
               onOpenSettings={() => { if (displayChannel) handleOpenSettings(displayChannel.id); }}
               hasGithubUrl={!!displayChannel?.githubUrl}
+              serverChannels={serverChannels}
+              activeChannelId={activeChannelId}
+              onSwitchChannel={handleSwitchChannel}
             />
           )}
           <div className="flex min-h-0 flex-1 flex-col">

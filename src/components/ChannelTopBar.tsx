@@ -1,6 +1,7 @@
-import { FiSettings } from 'react-icons/fi';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { FiSettings, FiChevronDown, FiCheck } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
-import type { ChannelType, MiddlePanelView } from '../types';
+import type { Channel, ChannelType, MiddlePanelView } from '../types';
 
 interface ChannelTopBarProps {
   panelTitle: string;
@@ -10,7 +11,46 @@ interface ChannelTopBarProps {
   onSetView: (view: MiddlePanelView) => void;
   onOpenSettings: () => void;
   hasGithubUrl?: boolean;
+  serverChannels: Channel[];
+  activeChannelId: string | null;
+  onSwitchChannel: (channelId: string) => void;
 }
+
+function ChannelDropdownItem({
+  channel,
+  isActive,
+  onSelect,
+}: {
+  channel: Channel;
+  isActive: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); onSelect(channel.id); }}
+      className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
+        isActive
+          ? 'bg-violet-500/20 text-violet-200'
+          : 'text-[#a9b1d6] hover:bg-[#292e42]'
+      }`}
+    >
+      {isActive ? (
+        <FiCheck className="h-3 w-3 flex-shrink-0 text-violet-400" aria-hidden="true" />
+      ) : (
+        <span className="w-3 flex-shrink-0" />
+      )}
+      <span className="truncate">{channel.name}</span>
+    </button>
+  );
+}
+
+const TYPE_ORDER: ChannelType[] = ['team', 'project', 'channel'];
+const TYPE_LABELS: Record<ChannelType, string> = {
+  team: 'Teams',
+  project: 'Projects',
+  channel: 'Channels',
+};
 
 export function ChannelTopBar({
   panelTitle,
@@ -20,17 +60,84 @@ export function ChannelTopBar({
   onSetView,
   hasGithubUrl,
   onOpenSettings,
+  serverChannels,
+  activeChannelId,
+  onSwitchChannel,
 }: ChannelTopBarProps) {
   const showTracker = channelType === 'team' || channelType === 'project';
   const showProjects = channelType === 'team';
   const showWorkspaces = showTracker && workspacesEnabled;
   const showPRs = showWorkspaces && hasGithubUrl;
 
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dropdownOpen]);
+
+  const handleSelect = useCallback(
+    (channelId: string) => {
+      onSwitchChannel(channelId);
+      setDropdownOpen(false);
+    },
+    [onSwitchChannel],
+  );
+
+  // Group channels by type
+  const grouped = TYPE_ORDER.map((type) => ({
+    type,
+    label: TYPE_LABELS[type],
+    channels: serverChannels.filter((ch) => ch.type === type),
+  })).filter((g) => g.channels.length > 0);
+
   return (
     <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-[#292e42] px-4">
-      <h2 id="panel-title" className="text-sm font-semibold text-violet-300">
-        {panelTitle}
-      </h2>
+      <div className="relative" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          className={`flex cursor-pointer items-center gap-1 text-sm font-semibold transition-colors ${
+            dropdownOpen
+              ? 'text-violet-200'
+              : 'text-violet-300 hover:text-violet-200'
+          }`}
+        >
+          {panelTitle}
+          <FiChevronDown
+            className={`h-3.5 w-3.5 opacity-60 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
+
+        {dropdownOpen && (
+          <div className="absolute left-0 top-full mt-1 w-56 rounded-md border border-[#292e42] bg-[#1f2335] py-1 shadow-lg z-50 max-h-80 overflow-y-auto">
+            {grouped.map((group, gi) => (
+              <div key={group.type}>
+                {gi > 0 && <div className="my-1 border-t border-[#292e42]" />}
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#565f89]">
+                  {group.label}
+                </div>
+                {group.channels.map((ch) => (
+                  <ChannelDropdownItem
+                    key={ch.id}
+                    channel={ch}
+                    isActive={ch.id === activeChannelId}
+                    onSelect={handleSelect}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="flex items-center gap-2">
         {channelType !== 'channel' && (
         <div className="flex rounded-lg bg-[#1f2335] p-0.5">
