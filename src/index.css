@@ -89,6 +89,45 @@
   background: var(--th-accent);
 }
 
+/* Split resize handles for tiling panes */
+.split-resize-handle-h {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.split-resize-handle-h:hover,
+.split-resize-handle-h.active {
+  background: var(--th-accent);
+}
+
+.split-resize-handle-v {
+  height: 4px;
+  cursor: row-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.split-resize-handle-v:hover,
+.split-resize-handle-v.active {
+  background: var(--th-accent);
+}
+
+/* Drop zone highlights during tab drag */
+.pane-drop-zone {
+  position: absolute;
+  background: var(--th-accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+  z-index: 20;
+}
+.pane-drop-zone.active {
+  opacity: 0.15;
+  pointer-events: auto;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }

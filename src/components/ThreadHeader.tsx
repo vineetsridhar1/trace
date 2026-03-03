@@ -19,17 +19,11 @@ import type { TicketStatus } from "../types";
 import { getServerUrl } from "../types";
 import type { SessionInfo } from "../hooks/useThread";
 import type { CIStatus } from "../stores/workspaceStore";
-import type { ThreadViewMode } from "../stores/threadStore";
-
-type ViewMode = ThreadViewMode;
 
 interface ThreadHeaderProps {
   selectedWorkspaceId: string | null;
   channelId: string | null;
   workspaceStatus: TicketStatus;
-  hasTicket: boolean;
-  viewMode: ViewMode;
-  onSetViewMode: (mode: ViewMode) => void;
   deletingWorktree: boolean;
   hasWorktree: boolean | null;
   worktreePath: string | null;
@@ -56,9 +50,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   selectedWorkspaceId,
   channelId,
   workspaceStatus,
-  hasTicket,
-  viewMode,
-  onSetViewMode,
   deletingWorktree,
   hasWorktree,
   worktreePath,
@@ -184,81 +175,15 @@ export const ThreadHeader = memo(function ThreadHeader({
       className="flex items-center justify-between border-b border-edge px-4 py-3"
     >
       <div className="flex items-center gap-2">
-        <div className="flex rounded-lg bg-surface-elevated p-0.5">
-          <Tooltip text="⌘1">
-            <button
-              type="button"
-              onClick={() => onSetViewMode("agent")}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                viewMode === "agent"
-                  ? "bg-accent/20 text-accent-light"
-                  : "text-muted hover:text-primary"
-              }`}
-            >
-              Agent
-            </button>
-          </Tooltip>
-          {hasTicket && (
-            <Tooltip text="⌘2">
-              <button
-                type="button"
-                onClick={() => onSetViewMode("ticket")}
-                className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                  viewMode === "ticket"
-                    ? "bg-accent/20 text-accent-light"
-                    : "text-muted hover:text-primary"
-                }`}
-              >
-                Ticket
-              </button>
-            </Tooltip>
+        {hasWorktree === false &&
+          workspaceStatus !== "pending" &&
+          workspaceStatus !== "handed_off" &&
+          workspaceStatus !== "creation" &&
+          selectedWorkspaceId && (
+            <span className="rounded bg-surface-elevated px-1.5 py-0.5 text-[11px] text-muted">
+              Worktree deleted
+            </span>
           )}
-          <Tooltip text="⌘3">
-            <button
-              type="button"
-              onClick={() => onSetViewMode("files")}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                viewMode === "files"
-                  ? "bg-accent/20 text-accent-light"
-                  : "text-muted hover:text-primary"
-              }`}
-            >
-              Files
-            </button>
-          </Tooltip>
-          <Tooltip text={hasWorktree !== true ? "Worktree deleted" : "⌘4"}>
-            <button
-              type="button"
-              disabled={hasWorktree !== true}
-              onClick={() => onSetViewMode("terminal")}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                hasWorktree !== true
-                  ? "opacity-40 cursor-not-allowed text-muted"
-                  : viewMode === "terminal"
-                    ? "cursor-pointer bg-accent/20 text-accent-light"
-                    : "cursor-pointer text-muted hover:text-primary"
-              }`}
-            >
-              Terminal
-            </button>
-          </Tooltip>
-          <Tooltip text={hasWorktree !== true ? "Worktree deleted" : "⌘5"}>
-            <button
-              type="button"
-              disabled={hasWorktree !== true}
-              onClick={() => onSetViewMode("browser")}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                hasWorktree !== true
-                  ? "opacity-40 cursor-not-allowed text-[#565f89]"
-                  : viewMode === "browser"
-                    ? "cursor-pointer bg-violet-500/20 text-violet-300"
-                    : "cursor-pointer text-[#565f89] hover:text-[#a9b1d6]"
-              }`}
-            >
-              Browser
-            </button>
-          </Tooltip>
-        </div>
       </div>
       <div className="flex items-center gap-2">
         {prUrl

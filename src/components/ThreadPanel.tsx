@@ -1,26 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AskUserQuestionNode,
   PlanReviewNode,
-  SessionStatus,
   TicketStatus,
 } from "../types";
 import { gql } from "@apollo/client";
 import { WORKSPACE_FIELDS } from "../graphql/fragments";
 import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation } from "../__generated__/App.generated";
 import { useSetTicketDependenciesMutation, useHandoffWorkspaceMutation } from "./__generated__/ThreadPanel.generated";
-import { ThreadEvent, PlanReview, AskUserQuestionInline } from "./ThreadEvent";
-import { ReadGlobGroup } from "./ReadGlobGroup";
-import { CollapsedTurnGroup } from "./CollapsedTurnGroup";
-import { AssistantTextRow } from "./thread-events/AssistantTextRow";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
-import { TicketView } from "./TicketView";
-import { WorktreeChanges } from "./WorktreeChanges";
-import { TerminalTabs } from "./TerminalTabs";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
-import { BrowserTab } from "./BrowserTab";
 import { RunButtons } from "./RunButtons";
 import { CreationStatusBar } from "./CreationStatusBar";
 import { QueuedStatusBar } from "./QueuedStatusBar";
@@ -31,10 +22,15 @@ import { useTerminalStore } from "../stores/terminalStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useKanbanStore } from "../stores/kanbanStore";
 import { useAppUIStore } from "../stores/appUIStore";
+import { usePanelLayoutStore } from "../stores/panelLayoutStore";
 import { useChannelContext } from "../context/ChannelContext";
 import { useThreadScroll } from "../hooks/useThreadScroll";
 import { useAuth } from "../context/AuthContext";
-import { buildSessionNodes, normalizeToolName, stripTraceInternal } from "../utils";
+import { buildSessionNodes, normalizeToolName } from "../utils";
+import { AgentContent, TicketContent, FilesContent } from "./tiling/PaneContent";
+import { SplitTreeRenderer } from "./tiling/SplitTreeRenderer";
+import { SingletonLayer } from "./tiling/SingletonLayer";
+import type { RefObject } from "react";
 
 // GQL used by setTicketDependencies (already defined in App.generated, just need the hook)
 const _GQL_SET_TICKET_DEPENDENCIES = gql`
@@ -215,12 +211,12 @@ export function ThreadPanel() {
     useThreadStore.getState().setThreadWidth(savedWidthsRef.current.thread);
   }, []);
 
-  // Exit fullscreen and terminal view when worktree is deleted
+  // Exit fullscreen and terminal/browser view when worktree is deleted
   useEffect(() => {
     if (hasWorktree === false) {
       if (isFullscreen) handleExitFullscreen();
-      const current = useThreadStore.getState().threadViewMode;
-      if (current === 'terminal' || current === 'browser') setViewMode('agent');
+      usePanelLayoutStore.getState().switchSingletonPanes('terminal', 'agent');
+      usePanelLayoutStore.getState().switchSingletonPanes('browser', 'agent');
     }
   }, [handleExitFullscreen, hasWorktree, isFullscreen]);
 
@@ -484,13 +480,22 @@ export function ThreadPanel() {
       ? activePlanNode
       : null;
 
-  const viewMode = useThreadStore((s) => s.threadViewMode);
-  const setViewMode = useThreadStore((s) => s.setThreadViewMode);
+  // ─── Layout store ─────────────────────────────────────────────
+  const layoutRoot = usePanelLayoutStore((s) => s.root);
 
   useEffect(() => {
-    setViewMode(workspaceStatus === "merged" ? "ticket" : "agent");
+    usePanelLayoutStore.getState().resetForWorkspace(
+      workspaceStatus === "merged",
+      ticket !== null,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const singletonClaimRefs = useMemo(
+    () => new Map<string, RefObject<HTMLDivElement | null>>(),
+    [],
+  );
 
   const isOpen = selectedWorkspaceId !== null;
 
@@ -519,9 +524,6 @@ export function ThreadPanel() {
           selectedWorkspaceId={selectedWorkspaceId}
           channelId={activeChannelId}
           workspaceStatus={workspaceStatus}
-          hasTicket={ticket !== null}
-          viewMode={viewMode}
-          onSetViewMode={setViewMode}
           deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
           worktreePath={worktreePath}
@@ -544,346 +546,166 @@ export function ThreadPanel() {
           onSwitchSession={switchSession}
         />
 
-        <div className="thread-panel-shell relative flex min-h-0 flex-1">
-          {viewMode === "ticket" ? (
-            ticket ? (
-              <TicketView ticket={ticket} />
-            ) : (
-              <TicketViewSkeleton />
-            )
-          ) : viewMode === "files" ? (
-            <WorktreeChanges
-              workspaceId={selectedWorkspaceId}
-              baseBranch={baseBranch}
-            />
-          ) : viewMode === "terminal" || viewMode === "browser" ? null : (
-            <>
-              <div
-                id="thread-content"
-                ref={threadContentRef}
-                onScroll={onThreadScroll}
-                className="thread-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3"
-              >
-                <div className="thread-events-list">
-                  {loadingOlderEvents && (
-                    <div className="py-2 text-center text-xs text-muted">
-                      Loading older events...
-                    </div>
-                  )}
-                  <ThreadStatusMessage
-                    status={sessionStatus}
-                    activeSessionId={activeSessionId}
-                  />
+        <div ref={containerRef} className="thread-panel-shell relative flex min-h-0 flex-1">
+          <SplitTreeRenderer
+            node={layoutRoot}
+            renderPaneContent={(mode) => {
+              if (mode === 'agent') {
+                return (
+                  <>
+                    <AgentContent
+                      threadContentRef={threadContentRef}
+                      onThreadScroll={onThreadScroll}
+                      sessionNodes={sessionNodes}
+                      sessionStatus={sessionStatus}
+                      activeSessionId={activeSessionId}
+                      loadingOlderEvents={loadingOlderEvents}
+                      expandedReadGroupIds={expandedReadGroupIds}
+                      expandedTurnGroupIds={expandedTurnGroupIds}
+                      toggleReadGroup={toggleReadGroup}
+                      toggleTurnGroup={toggleTurnGroup}
+                      showJumpToLatest={showJumpToLatest}
+                      scrollToLatest={scrollToLatest}
+                    />
 
-                  {(() => {
-                    let lastUserPromptTime: string | null = null;
-                    return sessionNodes.map((node) => {
-                      if (node.kind === "session-divider") {
-                        return (
-                          <div
-                            key={node.id}
-                            className="my-3 flex items-center gap-3 px-2"
-                          >
-                            <div className="h-px flex-1 bg-accent/20" />
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-accent-light/60">
-                              New Context
-                            </span>
-                            <div className="h-px flex-1 bg-accent/20" />
-                          </div>
-                        );
-                      }
-                      if (node.kind === "readglob-group") {
-                        const groupAssistantText = node.events[0]
-                          ?.lastAssistantMessage
-                          ? stripTraceInternal(
-                              node.events[0].lastAssistantMessage,
-                            ).trim()
-                          : "";
-                        return (
-                          <React.Fragment key={node.id}>
-                            {groupAssistantText && (
-                              <AssistantTextRow text={groupAssistantText} />
-                            )}
-                            <ReadGlobGroup
-                              node={node}
-                              isExpanded={Boolean(
-                                expandedReadGroupIds[node.id],
-                              )}
-                              onToggle={() => toggleReadGroup(node.id)}
-                            />
-                          </React.Fragment>
-                        );
-                      }
-                      if (node.kind === "collapsed-turn") {
-                        return (
-                          <CollapsedTurnGroup
-                            key={node.id}
-                            node={node}
-                            isExpanded={Boolean(expandedTurnGroupIds[node.id])}
-                            onToggle={() => toggleTurnGroup(node.id)}
-                            expandedReadGroupIds={expandedReadGroupIds}
-                            toggleReadGroup={toggleReadGroup}
-                          />
-                        );
-                      }
-                      if (node.kind === "plan-review") {
-                        return <PlanReview key={node.id} node={node} />;
-                      }
-                      if (node.kind === "ask-user-question") {
-                        return (
-                          <AskUserQuestionInline key={node.id} node={node} />
-                        );
-                      }
-                      if (node.kind !== "event") {
-                        return null;
-                      }
-                      if (node.event.hookEventName === "UserPromptSubmit") {
-                        lastUserPromptTime = node.event.timestamp;
-                      }
-                      let duration: number | undefined;
-                      if (
-                        node.event.hookEventName === "Stop" &&
-                        lastUserPromptTime
-                      ) {
-                        duration = Math.floor(
-                          (new Date(node.event.timestamp).getTime() -
-                            new Date(lastUserPromptTime).getTime()) /
-                            1000,
-                        );
-                      }
-                      return (
-                        <ThreadEvent
-                          key={node.event.id}
-                          event={node.event}
-                          duration={duration}
-                        />
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
+                    {isClaudeRunning && latestTodos && (
+                      <StickyTodoList todos={latestTodos} />
+                    )}
 
-              <button
-                type="button"
-                onClick={scrollToLatest}
-                className={`jump-latest-chip ${showJumpToLatest ? "visible" : ""}`}
-              >
-                Jump to latest
-              </button>
-            </>
-          )}
-
-          {/* Terminal area — always mounted to preserve PTYs across workspace/view switches */}
-          <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden"
-            style={{ display: viewMode === "terminal" ? "flex" : "none" }}
-          >
-            {hasWorktree === false ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-muted">
-                No worktree available
-              </div>
-            ) : allTerminalEntries.length > 0 ? (
-              <TerminalTabs
-                terminals={terminals}
-                allTerminalEntries={allTerminalEntries}
-                currentWorkspaceId={selectedWorkspaceId}
-                activeTabId={activeTerminalTabId}
-                cwd={effectiveTerminalCwd}
-                runScriptRunning={runScriptRunning}
-                scriptsAvailable={scriptsAvailable}
-                hasSetupScript={hasSetupScript}
-                hasRunScript={hasRunScript}
-                ptyProcesses={ptyProcesses}
-                onSelectTab={useTerminalStore.getState().setActiveTabId}
-                onCloseTab={useTerminalStore.getState().killTerminal}
-                onCloseAll={() => {
-                  const wsId = useThreadStore.getState().selectedWorkspaceId;
-                  if (wsId) useTerminalStore.getState().killAllForWorkspace(wsId);
-                }}
-                onAddTab={useTerminalStore.getState().addTerminal}
-                onRunScript={() => { void handleRerunScript("Run"); }}
-                onStopScript={() => handleStopScript("Run")}
-                onRerunSetup={() => { void handleRerunScript("Setup"); }}
-                onOpenSettings={() => { if (activeChannelId) useAppUIStore.getState().setSettingsChannelId(activeChannelId); }}
-              />
-            ) : (
-              <div className="flex flex-1 items-center justify-center text-sm text-muted">
-                Initializing terminals...
-              </div>
-            )}
-          </div>
-
-          {/* Browser area — always mounted to preserve webview state across tab switches */}
-          <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden"
-            style={{ display: viewMode === "browser" ? "flex" : "none" }}
-          >
-            <BrowserTab workspaceId={selectedWorkspaceId} />
-          </div>
-        </div>
-
-        {viewMode === "agent" && isClaudeRunning && latestTodos && (
-          <StickyTodoList todos={latestTodos} />
-        )}
-
-        {viewMode === "agent" &&
-          (isLockedByOther && workspaceStatus !== 'pending' && workspaceStatus !== 'handed_off' ? (
-            <div className="flex items-center justify-center border-t border-edge px-4 py-3">
-              <span className="text-xs text-muted">
-                Workspace locked by another user (read-only)
-              </span>
-            </div>
-          ) : (pendingRunWorkspaceId === selectedWorkspaceId ||
-            workspaceStatus === 'pending' ||
-            workspaceStatus === 'handed_off') &&
-            !isClaudeRunning ? (
-            <RunButtons
-              initialPrompt={pendingPromptForDisplay}
-              onRun={(planMode, prompt) => {
-                if (pendingRunWorkspaceId !== selectedWorkspaceId && selectedWorkspaceId) {
-                  useClaudeRunStore.getState().setPendingRun(selectedWorkspaceId, prompt, []);
-                }
-                void runPendingWorkspace(planMode, prompt);
-              }}
-              channelTickets={channelTickets}
-              currentWorkspaceId={selectedWorkspaceId ?? pendingRunWorkspaceId}
-              onRunAfter={(depIds, runConfig) => {
-                const wsId = pendingRunWorkspaceId ?? selectedWorkspaceId;
-                if (wsId) {
-                  if (pendingRunWorkspaceId !== wsId) {
-                    useClaudeRunStore.getState().setPendingRun(wsId, runConfig.prompt, []);
-                  }
-                  void handleSetTicketDependencies(
-                    wsId,
-                    depIds,
-                    runConfig,
-                  );
-                  clearPendingRun();
-                }
-              }}
-            />
-          ) : workspaceStatus === "creation" ? (
-            <CreationStatusBar />
-          ) : workspaceStatus === "queued" ? (
-            <QueuedStatusBar
-              key={selectedWorkspaceId}
-              workspaceId={selectedWorkspaceId!}
-            />
-          ) : showPlan ? (
-            <PlanResponseBar
-              node={showPlan}
-              questionNode={activeQuestionNode}
-              onPlanResponse={(text, mode) => {
-                setDismissedPlanId(showPlan.id);
-                if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
-                void sendPlanResponse(
-                  text,
-                  mode,
-                  showPlan.planContent,
-                  showPlan.planFilePath,
+                    {isLockedByOther && workspaceStatus !== 'pending' && workspaceStatus !== 'handed_off' ? (
+                      <div className="flex items-center justify-center border-t border-edge px-4 py-3">
+                        <span className="text-xs text-muted">
+                          Workspace locked by another user (read-only)
+                        </span>
+                      </div>
+                    ) : (pendingRunWorkspaceId === selectedWorkspaceId ||
+                      workspaceStatus === 'pending' ||
+                      workspaceStatus === 'handed_off') &&
+                      !isClaudeRunning ? (
+                      <RunButtons
+                        initialPrompt={pendingPromptForDisplay}
+                        onRun={(planMode, prompt) => {
+                          if (pendingRunWorkspaceId !== selectedWorkspaceId && selectedWorkspaceId) {
+                            useClaudeRunStore.getState().setPendingRun(selectedWorkspaceId, prompt, []);
+                          }
+                          void runPendingWorkspace(planMode, prompt);
+                        }}
+                        channelTickets={channelTickets}
+                        currentWorkspaceId={selectedWorkspaceId ?? pendingRunWorkspaceId}
+                        onRunAfter={(depIds, runConfig) => {
+                          const wsId = pendingRunWorkspaceId ?? selectedWorkspaceId;
+                          if (wsId) {
+                            if (pendingRunWorkspaceId !== wsId) {
+                              useClaudeRunStore.getState().setPendingRun(wsId, runConfig.prompt, []);
+                            }
+                            void handleSetTicketDependencies(
+                              wsId,
+                              depIds,
+                              runConfig,
+                            );
+                            clearPendingRun();
+                          }
+                        }}
+                      />
+                    ) : workspaceStatus === "creation" ? (
+                      <CreationStatusBar />
+                    ) : workspaceStatus === "queued" ? (
+                      <QueuedStatusBar
+                        key={selectedWorkspaceId}
+                        workspaceId={selectedWorkspaceId!}
+                      />
+                    ) : showPlan ? (
+                      <PlanResponseBar
+                        node={showPlan}
+                        questionNode={activeQuestionNode}
+                        onPlanResponse={(text, mode) => {
+                          setDismissedPlanId(showPlan.id);
+                          if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
+                          void sendPlanResponse(
+                            text,
+                            mode,
+                            showPlan.planContent,
+                            showPlan.planFilePath,
+                          );
+                        }}
+                        onDismiss={() => {
+                          setDismissedPlanId(showPlan.id);
+                          if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
+                          void stopClaude();
+                        }}
+                      />
+                    ) : showQuestion ? (
+                      <AskUserQuestionBar
+                        node={showQuestion}
+                        onResponse={(text) => {
+                          if (activePlanNode) setDismissedPlanId(activePlanNode.id);
+                          void sendPlanResponse(text, "keep-context");
+                        }}
+                        onDismiss={() => {
+                          setDismissedQuestionId(showQuestion.id);
+                          if (activePlanNode) setDismissedPlanId(activePlanNode.id);
+                          void stopClaude();
+                        }}
+                      />
+                    ) : isViewingOlderSession ? (
+                      <div className="flex items-center justify-center border-t border-edge px-4 py-3">
+                        <span className="text-xs text-muted">
+                          Viewing older session (read-only)
+                        </span>
+                      </div>
+                    ) : (
+                      <ThreadInput
+                        isClaudeRunning={isClaudeRunning}
+                        lastUserMessageTime={lastUserMessageTime}
+                        onSendThreadMessage={sendThreadMessage}
+                        onStopClaude={() => void stopClaude()}
+                        onClearThread={clearSession}
+                      />
+                    )}
+                  </>
                 );
-              }}
-              onDismiss={() => {
-                setDismissedPlanId(showPlan.id);
-                if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
-                void stopClaude();
-              }}
-            />
-          ) : showQuestion ? (
-            <AskUserQuestionBar
-              node={showQuestion}
-              onResponse={(text) => {
-                if (activePlanNode) setDismissedPlanId(activePlanNode.id);
-                void sendPlanResponse(text, "keep-context");
-              }}
-              onDismiss={() => {
-                setDismissedQuestionId(showQuestion.id);
-                if (activePlanNode) setDismissedPlanId(activePlanNode.id);
-                void stopClaude();
-              }}
-            />
-          ) : isViewingOlderSession ? (
-            <div className="flex items-center justify-center border-t border-edge px-4 py-3">
-              <span className="text-xs text-muted">
-                Viewing older session (read-only)
-              </span>
-            </div>
-          ) : (
-            <ThreadInput
-              isClaudeRunning={isClaudeRunning}
-              lastUserMessageTime={lastUserMessageTime}
-              onSendThreadMessage={sendThreadMessage}
-              onStopClaude={() => void stopClaude()}
-              onClearThread={clearSession}
-            />
-          ))}
+              }
+              if (mode === 'ticket') {
+                return <TicketContent ticket={ticket} />;
+              }
+              if (mode === 'files') {
+                return <FilesContent workspaceId={selectedWorkspaceId} baseBranch={baseBranch} />;
+              }
+              // terminal/browser are singletons — rendered in SingletonLayer
+              return null;
+            }}
+            singletonClaimRefs={singletonClaimRefs}
+          />
+          <SingletonLayer
+            containerRef={containerRef}
+            singletonClaimRefs={singletonClaimRefs}
+            terminals={terminals}
+            allTerminalEntries={allTerminalEntries}
+            currentWorkspaceId={selectedWorkspaceId}
+            activeTerminalTabId={activeTerminalTabId}
+            terminalCwd={effectiveTerminalCwd}
+            runScriptRunning={runScriptRunning}
+            scriptsAvailable={scriptsAvailable}
+            hasSetupScript={hasSetupScript}
+            hasRunScript={hasRunScript}
+            ptyProcesses={ptyProcesses}
+            hasWorktree={hasWorktree}
+            onSelectTab={useTerminalStore.getState().setActiveTabId}
+            onCloseTab={useTerminalStore.getState().killTerminal}
+            onCloseAll={() => {
+              const wsId = useThreadStore.getState().selectedWorkspaceId;
+              if (wsId) useTerminalStore.getState().killAllForWorkspace(wsId);
+            }}
+            onAddTab={useTerminalStore.getState().addTerminal}
+            onRunScript={() => { void handleRerunScript("Run"); }}
+            onStopScript={() => handleStopScript("Run")}
+            onRerunSetup={() => { void handleRerunScript("Setup"); }}
+            onOpenSettings={() => { if (activeChannelId) useAppUIStore.getState().setSettingsChannelId(activeChannelId); }}
+            browserWorkspaceId={selectedWorkspaceId}
+          />
+        </div>
       </div>
     </>
   );
 }
 
-function TicketViewSkeleton() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-      {/* Title */}
-      <div className="h-6 w-3/4 rounded bg-[#292e42] animate-pulse" />
-      {/* Status badges */}
-      <div className="mt-3 flex gap-2">
-        <div className="h-5 w-16 rounded-full bg-[#292e42] animate-pulse" />
-        <div className="h-5 w-20 rounded-full bg-[#292e42] animate-pulse" />
-      </div>
-      {/* Description lines */}
-      <div className="mt-5 flex flex-col gap-2">
-        <div className="h-4 w-full rounded bg-[#292e42] animate-pulse" />
-        <div className="h-4 w-5/6 rounded bg-[#292e42] animate-pulse" />
-        <div className="h-4 w-4/6 rounded bg-[#292e42] animate-pulse" />
-        <div className="h-4 w-3/4 rounded bg-[#292e42] animate-pulse" />
-      </div>
-    </div>
-  );
-}
-
-function ThreadStatusMessage({
-  status,
-  activeSessionId,
-}: {
-  status: SessionStatus;
-  activeSessionId: string | null;
-}) {
-  if (status === "loading") {
-    return (
-      <div className="flex flex-col gap-4 w-full px-2">
-        {/* User prompt skeleton */}
-        <div className="flex justify-end">
-          <div className="h-8 w-2/5 rounded-lg bg-surface-elevated animate-pulse" />
-        </div>
-        {/* Assistant text skeleton */}
-        <div className="flex flex-col gap-2">
-          <div className="h-4 w-4/5 rounded bg-surface-elevated animate-pulse" />
-          <div className="h-4 w-3/5 rounded bg-surface-elevated animate-pulse" />
-          <div className="h-4 w-2/3 rounded bg-surface-elevated animate-pulse" />
-        </div>
-        {/* Tool use row skeleton */}
-        <div className="h-6 w-1/3 rounded bg-surface-elevated animate-pulse" />
-        {/* More assistant text skeleton */}
-        <div className="flex flex-col gap-2">
-          <div className="h-4 w-3/4 rounded bg-surface-elevated animate-pulse" />
-          <div className="h-4 w-1/2 rounded bg-surface-elevated animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-  if (status === "empty") {
-    return (
-      <div className="text-sm text-muted">
-        {activeSessionId
-          ? "No events yet"
-          : "No sessions yet. Create a workspace to start."}
-      </div>
-    );
-  }
-  if (status === "error") {
-    return <div className="text-sm text-red-400">Failed to load events</div>;
-  }
-  return null;
-}
