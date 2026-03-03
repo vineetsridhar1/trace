@@ -15,6 +15,7 @@ import { useSyncPolling } from './hooks/useSyncPolling';
 import { useKanbanSync } from './hooks/useKanbanSync';
 import { useAiChatSync } from './hooks/useAiChatSync';
 import { ChannelProvider, useChannelContext } from './context/ChannelContext';
+import { useAuth } from './context/AuthContext';
 import { ChannelPanel } from './components/ChannelPanel';
 import { ChannelTopBar } from './components/ChannelTopBar';
 import { MessagePanel } from './components/MessagePanel';
@@ -115,6 +116,10 @@ function AppContent() {
 
   const activeRunWorkspaceIds = useClaudeRunStore((s) => s.activeRunWorkspaceIds);
 
+  const { user: authUser } = useAuth();
+  const authUserIdRef = useRef<string | null>(null);
+  authUserIdRef.current = authUser?.id ?? null;
+
   // ─── Stable channel ref for callbacks ──────────────────────────────
   const activeChannelRef = useRef<Channel | null>(null);
   activeChannelRef.current = enrichedActiveChannel;
@@ -190,6 +195,10 @@ function AppContent() {
   // ─── Attention / notifications ────────────────────────────────────
   const handleNeedsAttention = useCallback(
     (workspaceId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => {
+      // Only glow for the current user's own workspaces
+      const workspace = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
+      if (workspace && authUserIdRef.current && workspace.userId !== authUserIdRef.current) return;
+
       useWorkspaceStore.getState().addAttention(workspaceId);
 
       if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
