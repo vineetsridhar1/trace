@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import {
   CLAUDE_INACTIVITY_TIMEOUT_MS,
   runStateByWorkspaceId,
@@ -8,20 +8,23 @@ import {
   startWatchdog,
   resetWatchdog,
   stopWatchdog,
-} from './watchdog';
+} from "./watchdog";
 import {
   runningProcesses,
   suppressSyntheticStopFor,
   ensureWorktree,
   getWorktreeBranch,
-} from './worktree';
-import { runProcess } from './process';
-import { ClaudeStreamParser } from './streamParser';
+} from "./worktree";
+import { runProcess } from "./process";
+import { ClaudeStreamParser } from "./streamParser";
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
-  if (!raw) return process.env.TRACE_PROD ? 'https://trace-6kt7.onrender.com' : 'http://localhost:3100';
-  if (raw.startsWith('http')) return raw;
+  if (!raw)
+    return process.env.TRACE_PROD
+      ? "https://trace-6kt7.onrender.com"
+      : "http://localhost:3100";
+  if (raw.startsWith("http")) return raw;
   // Support bare port numbers like "3001"
   return `http://localhost:${raw}`;
 }
@@ -32,8 +35,8 @@ let effortSupportedPromise: Promise<boolean> | null = null;
 
 async function detectEffortSupport(): Promise<boolean> {
   try {
-    const result = await runProcess('claude', ['--help'], '/');
-    return (result.stdout + result.stderr).includes('--effort');
+    const result = await runProcess("claude", ["--help"], "/");
+    return (result.stdout + result.stderr).includes("--effort");
   } catch {
     return false;
   }
@@ -46,19 +49,25 @@ function isEffortSupported(): Promise<boolean> {
   return effortSupportedPromise;
 }
 
-async function generateBranchName(prompt: string, workspaceId: string): Promise<string> {
+async function generateBranchName(
+  prompt: string,
+  workspaceId: string,
+): Promise<string> {
   const fallback = `trace/${workspaceId.slice(0, 8)}`;
   try {
     const res = await fetch(`${SERVER_URL}/graphql`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        query: 'query GenerateBranchName($prompt: String!) { generateBranchName(prompt: $prompt) }',
+        query:
+          "query GenerateBranchName($prompt: String!) { generateBranchName(prompt: $prompt) }",
         variables: { prompt },
       }),
     });
     if (!res.ok) return fallback;
-    const { data } = (await res.json()) as { data?: { generateBranchName: string | null } };
+    const { data } = (await res.json()) as {
+      data?: { generateBranchName: string | null };
+    };
     if (!data?.generateBranchName) return fallback;
     return `trace/${data.generateBranchName}`.slice(0, 50);
   } catch {
@@ -66,12 +75,21 @@ async function generateBranchName(prompt: string, workspaceId: string): Promise<
   }
 }
 
-async function runSetupScripts(worktreePath: string, commands: string[]): Promise<void> {
-  const script = commands.join('\n');
+async function runSetupScripts(
+  worktreePath: string,
+  commands: string[],
+): Promise<void> {
+  const script = commands.join("\n");
   if (!script.trim()) return;
-  const result = await runProcess('sh', ['-c', `set -e\n${script}`], worktreePath);
+  const result = await runProcess(
+    "sh",
+    ["-c", `set -e\n${script}`],
+    worktreePath,
+  );
   if (result.code !== 0) {
-    console.error(`[setup-script] script failed (exit ${result.code}):\n${result.stderr}`);
+    console.error(
+      `[setup-script] script failed (exit ${result.code}):\n${result.stderr}`,
+    );
   }
 }
 
@@ -88,12 +106,19 @@ export async function spawnClaude(
   permissionMode?: string,
   baseBranch?: string,
 ): Promise<string> {
-  const { worktreePath, created } = await ensureWorktree(workspaceId, repoPath, baseBranch);
+  const { worktreePath, created } = await ensureWorktree(
+    workspaceId,
+    repoPath,
+    baseBranch,
+  );
 
   if (created && creationCommands && creationCommands.length > 0) {
-    appendClaudeDebugLog(workspaceId, `running ${creationCommands.length} setup script(s)`);
+    appendClaudeDebugLog(
+      workspaceId,
+      `running ${creationCommands.length} setup script(s)`,
+    );
     await runSetupScripts(worktreePath, creationCommands);
-    appendClaudeDebugLog(workspaceId, 'setup scripts completed');
+    appendClaudeDebugLog(workspaceId, "setup scripts completed");
   }
   const startedAt = Date.now();
   appendClaudeDebugLog(
@@ -110,16 +135,27 @@ export async function spawnClaude(
   if (!resumeSessionId && currentBranch === defaultBranch) {
     let newBranch = await generateBranchName(prompt, workspaceId);
     if (newBranch !== defaultBranch) {
-      let renameResult = await runProcess('git', ['branch', '-m', newBranch], worktreePath);
+      let renameResult = await runProcess(
+        "git",
+        ["branch", "-m", newBranch],
+        worktreePath,
+      );
       if (renameResult.code !== 0) {
         // Collision — retry with workspace ID suffix
         newBranch = `${newBranch.slice(0, 44)}-${workspaceId.slice(0, 4)}`;
-        renameResult = await runProcess('git', ['branch', '-m', newBranch], worktreePath);
+        renameResult = await runProcess(
+          "git",
+          ["branch", "-m", newBranch],
+          worktreePath,
+        );
       }
       if (renameResult.code === 0) {
         appendClaudeDebugLog(workspaceId, `branch renamed to ${newBranch}`);
       } else {
-        appendClaudeDebugLog(workspaceId, `branch rename failed: ${renameResult.stderr.trim()}`);
+        appendClaudeDebugLog(
+          workspaceId,
+          `branch rename failed: ${renameResult.stderr.trim()}`,
+        );
       }
     }
   }
@@ -130,47 +166,48 @@ export async function spawnClaude(
 
     hiddenParts.push(
       `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
-      `Your work takes place in ${worktreePath} which is an isolated git worktree created for this task.`
+        `Your work takes place in ${worktreePath} which is an isolated git worktree created for this task.`,
     );
 
     if (systemInstructions) {
       hiddenParts.push(systemInstructions);
     }
 
-    effectivePrompt = `<trace-internal>\n${hiddenParts.join('\n\n')}\n</trace-internal>\n\n${prompt}`;
+    effectivePrompt = `<trace-internal>\n${hiddenParts.join("\n\n")}\n</trace-internal>\n\n${prompt}`;
   }
 
   const existing = runningProcesses.get(workspaceId);
   if (existing && !existing.killed) {
     suppressSyntheticStopFor.add(workspaceId);
-    stopWatchdog(workspaceId, 'spawn-replaced');
+    stopWatchdog(workspaceId, "spawn-replaced");
     runStateByWorkspaceId.delete(workspaceId);
-    existing.kill('SIGTERM');
+    existing.kill("SIGTERM");
     runningProcesses.delete(workspaceId);
   }
 
-  const args = permissionMode === 'plan'
-    ? ['--permission-mode', 'plan']
-    : ['--dangerously-skip-permissions'];
+  const args =
+    permissionMode === "plan"
+      ? ["--permission-mode", "plan"]
+      : ["--dangerously-skip-permissions"];
   if (resumeSessionId) {
-    args.push('--resume', resumeSessionId);
+    args.push("--resume", resumeSessionId);
   }
 
   if (model) {
-    args.push('--model', model);
+    args.push("--model", model);
   }
 
-  if (effort && model !== 'haiku' && await isEffortSupported()) {
-    args.push('--effort', effort);
+  if (effort && model !== "haiku" && (await isEffortSupported())) {
+    args.push("--effort", effort);
   }
 
   // Download remote images to the worktree so Claude can read them
   if (filePaths && filePaths.length > 0) {
     const resolvedPaths: string[] = [];
-    const imgDir = path.join(worktreePath, '.trace-images');
+    const imgDir = path.join(worktreePath, ".trace-images");
     let imgDirCreated = false;
     for (const p of filePaths) {
-      if (p.startsWith('http://') || p.startsWith('https://')) {
+      if (p.startsWith("http://") || p.startsWith("https://")) {
         try {
           if (!imgDirCreated) {
             fs.mkdirSync(imgDir, { recursive: true });
@@ -180,14 +217,20 @@ export async function spawnClaude(
           const localPath = path.join(imgDir, filename);
           const response = await fetch(p);
           if (!response.ok) {
-            appendClaudeDebugLog(workspaceId, `image download failed status=${response.status} url=${p}`);
+            appendClaudeDebugLog(
+              workspaceId,
+              `image download failed status=${response.status} url=${p}`,
+            );
             continue;
           }
           const buffer = Buffer.from(await response.arrayBuffer());
           fs.writeFileSync(localPath, buffer);
           resolvedPaths.push(localPath);
         } catch (err) {
-          appendClaudeDebugLog(workspaceId, `image download error url=${p} error=${String(err)}`);
+          appendClaudeDebugLog(
+            workspaceId,
+            `image download error url=${p} error=${String(err)}`,
+          );
         }
       } else {
         resolvedPaths.push(p);
@@ -198,18 +241,18 @@ export async function spawnClaude(
 
   let finalPrompt = effectivePrompt;
   if (filePaths && filePaths.length > 0) {
-    const fileList = filePaths.map((p) => `- ${p}`).join('\n');
+    const fileList = filePaths.map((p) => `- ${p}`).join("\n");
     finalPrompt += `\n\n<trace-internal>\nThe user has referenced the following files. Read them to understand the context:\n${fileList}\n</trace-internal>`;
   }
 
-  args.push('--output-format', 'stream-json', '--verbose');
-  args.push('-p', finalPrompt);
+  args.push("--output-format", "stream-json", "--verbose");
+  args.push("-p", finalPrompt);
 
-  const child = spawn('claude', args, {
+  const child = spawn("claude", args, {
     cwd: worktreePath,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ["ignore", "pipe", "pipe"],
     env: Object.fromEntries(
-      Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
+      Object.entries(process.env).filter(([k]) => k !== "CLAUDECODE"),
     ),
   });
   appendClaudeDebugLog(workspaceId, `spawned pid=${child.pid ?? -1}`);
@@ -222,21 +265,22 @@ export async function spawnClaude(
     workspaceId,
     cwd: worktreePath,
     callbacks: {
-      onSessionId: (id) => appendClaudeDebugLog(workspaceId, `stream session_id=${id}`),
-      onActivity: () => resetWatchdog(workspaceId, 'stream-json'),
+      onSessionId: (id) =>
+        appendClaudeDebugLog(workspaceId, `stream session_id=${id}`),
+      onActivity: () => resetWatchdog(workspaceId, "stream-json"),
       onInputRequired: () => {
         // Kill the process immediately so execution stops and the
         // question/plan surfaces in the UI via the Stop event.
-        appendClaudeDebugLog(workspaceId, 'input-required: killing process');
+        appendClaudeDebugLog(workspaceId, "input-required: killing process");
         if (!child.killed) {
-          child.kill('SIGTERM');
+          child.kill("SIGTERM");
         }
       },
     },
     log: (line) => appendClaudeDebugLog(workspaceId, line),
   });
 
-  let stderrBuffer = '';
+  let stderrBuffer = "";
   let failedToSpawn: string | null = null;
 
   const appendToStderr = (existing: string, chunk: string) => {
@@ -246,28 +290,34 @@ export async function spawnClaude(
       : combined.slice(combined.length - MAX_CAPTURE_CHARS);
   };
 
-  child.stdout?.on('data', (data) => {
+  child.stdout?.on("data", (data) => {
     const chunk = data.toString();
     parser.processChunk(chunk);
-    appendClaudeDebugLog(workspaceId, `stdout bytes=${Buffer.byteLength(chunk)}`);
+    appendClaudeDebugLog(
+      workspaceId,
+      `stdout bytes=${Buffer.byteLength(chunk)}`,
+    );
   });
 
-  child.stderr?.on('data', (data) => {
+  child.stderr?.on("data", (data) => {
     const chunk = data.toString();
     stderrBuffer = appendToStderr(stderrBuffer, chunk);
-    resetWatchdog(workspaceId, 'stderr');
-    appendClaudeDebugLog(workspaceId, `stderr bytes=${Buffer.byteLength(chunk)} text=${chunk.trim().slice(0, 500)}`);
+    resetWatchdog(workspaceId, "stderr");
+    appendClaudeDebugLog(
+      workspaceId,
+      `stderr bytes=${Buffer.byteLength(chunk)} text=${chunk.trim().slice(0, 500)}`,
+    );
     console.error(`[claude:${workspaceId.slice(0, 8)}:err] ${chunk.trim()}`);
   });
 
-  child.on('error', (err) => {
+  child.on("error", (err) => {
     failedToSpawn = String(err);
-    stopWatchdog(workspaceId, 'spawn-error');
+    stopWatchdog(workspaceId, "spawn-error");
     appendClaudeDebugLog(workspaceId, `spawn error=${failedToSpawn}`);
     console.error(`[claude:${workspaceId.slice(0, 8)}:spawn] ${failedToSpawn}`);
   });
 
-  child.on('close', async (code) => {
+  child.on("close", async (code) => {
     const tag = `[claude:${workspaceId.slice(0, 8)}]`;
     appendClaudeDebugLog(
       workspaceId,
@@ -277,7 +327,7 @@ export async function spawnClaude(
     const runState = runStateByWorkspaceId.get(workspaceId);
     const timedOut = runState?.timedOut ?? false;
     const userStopped = runState?.userStopped ?? false;
-    stopWatchdog(workspaceId, 'process-close');
+    stopWatchdog(workspaceId, "process-close");
     runStateByWorkspaceId.delete(workspaceId);
 
     const suppressed = suppressSyntheticStopFor.delete(workspaceId);
@@ -297,13 +347,20 @@ export async function spawnClaude(
       const claudeSessionId = enrichment.sessionId;
 
       if (!claudeSessionId) {
-        appendClaudeDebugLog(workspaceId, `no session_id from stream (code=${code} stderrLen=${stderrBuffer.length})`);
+        appendClaudeDebugLog(
+          workspaceId,
+          `no session_id from stream (code=${code} stderrLen=${stderrBuffer.length})`,
+        );
       }
 
       // Resolve git branch
       let branchName: string | undefined;
       try {
-        const branchResult = await runProcess('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+        const branchResult = await runProcess(
+          "git",
+          ["rev-parse", "--abbrev-ref", "HEAD"],
+          worktreePath,
+        );
         if (branchResult.code === 0 && branchResult.stdout.trim()) {
           branchName = branchResult.stdout.trim();
         }
@@ -316,51 +373,72 @@ export async function spawnClaude(
       let stopReason: string | undefined;
 
       if (userStopped || code === 143) {
-        stopReason = 'user';
+        stopReason = "user";
       }
 
       // Only include stderr in the persisted message when there's no assistant
       // text or the process failed — otherwise Claude Code's startup noise
       // (e.g. "Initializing...") pollutes the message summary shown in the UI.
-      const includeStderr = !enrichment.lastAssistantText || (code !== 0 && code !== null && code !== 143);
+      const includeStderr =
+        !enrichment.lastAssistantText ||
+        (code !== 0 && code !== null && code !== 143);
 
       const fallbackMessage = [
         enrichment.lastAssistantText,
-        timedOut ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.` : '',
-        failedToSpawn ? `Spawn error: ${failedToSpawn}` : '',
-        includeStderr ? stderrOutput : '',
-        code !== 0 && code !== null && code !== 143 ? `Process exited with code ${code}` : '',
+        timedOut
+          ? `Timed out after ${CLAUDE_INACTIVITY_TIMEOUT_MS}ms of inactivity.`
+          : "",
+        failedToSpawn ? `Spawn error: ${failedToSpawn}` : "",
+        includeStderr ? stderrOutput : "",
+        code !== 0 && code !== null && code !== 143
+          ? `Process exited with code ${code}`
+          : "",
       ]
         .filter(Boolean)
-        .join('\n\n')
+        .join("\n\n")
         .trim();
 
-      const messageToPersist = fallbackMessage || (userStopped ? 'Stopped by user' : 'Claude run completed without textual output.');
+      const messageToPersist =
+        fallbackMessage ||
+        (userStopped
+          ? "Stopped by user"
+          : "Claude run completed without textual output.");
 
       // Post a single Stop event with all enrichment data inline
       const payload = {
         session_id: claudeSessionId ?? `trace-local-${workspaceId}`,
         cwd: worktreePath,
-        hook_event_name: 'Stop',
+        hook_event_name: "Stop",
         stop_hook_active: false,
         last_assistant_message: messageToPersist,
-        source: 'stream-json',
+        source: "stream-json",
         exit_code: code,
         ...(stopReason && { stop_reason: stopReason }),
         ...(enrichment.usage && { extracted_usage: enrichment.usage }),
-        ...(enrichment.detectedToolName !== undefined && { extracted_tool_name: enrichment.detectedToolName }),
-        ...(enrichment.detectedToolInput !== undefined && { extracted_tool_input: enrichment.detectedToolInput }),
+        ...(enrichment.costUsd != null && { cli_cost_usd: enrichment.costUsd }),
+        ...(enrichment.detectedToolName !== undefined && {
+          extracted_tool_name: enrichment.detectedToolName,
+        }),
+        ...(enrichment.detectedToolInput !== undefined && {
+          extracted_tool_input: enrichment.detectedToolInput,
+        }),
         ...(branchName && { branch_name: branchName }),
       };
 
-      appendClaudeDebugLog(workspaceId, `stop payload session=${payload.session_id} branch=${branchName ?? 'none'} tool=${enrichment.detectedToolName ?? 'none'} msgLen=${messageToPersist.length}`);
+      appendClaudeDebugLog(
+        workspaceId,
+        `stop payload session=${payload.session_id} branch=${branchName ?? "none"} tool=${enrichment.detectedToolName ?? "none"} msgLen=${messageToPersist.length}`,
+      );
 
       const response = await fetch(`${SERVER_URL}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      appendClaudeDebugLog(workspaceId, `stop event posted status=${response.status} ok=${response.ok}`);
+      appendClaudeDebugLog(
+        workspaceId,
+        `stop event posted status=${response.status} ok=${response.ok}`,
+      );
     } catch (err) {
       console.error(`${tag} close handler error:`, err);
       appendClaudeDebugLog(workspaceId, `close handler error=${String(err)}`);

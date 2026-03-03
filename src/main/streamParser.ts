@@ -24,17 +24,19 @@ export interface ParsedEnrichment {
   sessionId?: string;
   lastAssistantText: string;
   usage?: { input_tokens: number; output_tokens: number };
-  detectedToolName?: 'AskUserQuestion' | 'ExitPlanMode';
+  costUsd?: number;
+  detectedToolName?: "AskUserQuestion" | "ExitPlanMode";
   detectedToolInput?: unknown;
 }
 
 export class ClaudeStreamParser {
-  private buffer = '';
+  private buffer = "";
   private sessionId: string | undefined;
-  private lastAssistantText = '';
+  private lastAssistantText = "";
   private pendingAssistantText: string | undefined;
   private usage: { input_tokens: number; output_tokens: number } | undefined;
-  private detectedToolName: 'AskUserQuestion' | 'ExitPlanMode' | undefined;
+  private costUsd: number | undefined;
+  private detectedToolName: "AskUserQuestion" | "ExitPlanMode" | undefined;
   private detectedToolInput: unknown;
   private pendingToolUses = new Map<string, PendingToolUse>();
 
@@ -62,9 +64,9 @@ export class ClaudeStreamParser {
   /** Feed raw stdout chunks. Complete lines are parsed immediately. */
   processChunk(chunk: string): void {
     this.buffer += chunk;
-    const lines = this.buffer.split('\n');
+    const lines = this.buffer.split("\n");
     // Keep the last (possibly incomplete) segment in the buffer
-    this.buffer = lines.pop() ?? '';
+    this.buffer = lines.pop() ?? "";
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -79,7 +81,7 @@ export class ClaudeStreamParser {
     if (trimmed) {
       this.parseLine(trimmed);
     }
-    this.buffer = '';
+    this.buffer = "";
   }
 
   /** Return accumulated enrichment data for the final Stop event. */
@@ -88,6 +90,7 @@ export class ClaudeStreamParser {
       sessionId: this.sessionId,
       lastAssistantText: this.lastAssistantText,
       usage: this.usage,
+      costUsd: this.costUsd,
       detectedToolName: this.detectedToolName,
       detectedToolInput: this.detectedToolInput,
     };
@@ -113,19 +116,21 @@ export class ClaudeStreamParser {
     this.callbacks.onActivity();
 
     const type = parsed.type as string | undefined;
-    this.log(`stream-json: line type=${type ?? 'unknown'} keys=${Object.keys(parsed).join(',')}`);
+    this.log(
+      `stream-json: line type=${type ?? "unknown"} keys=${Object.keys(parsed).join(",")}`,
+    );
 
     switch (type) {
-      case 'system':
+      case "system":
         this.handleSystem(parsed);
         break;
-      case 'assistant':
+      case "assistant":
         this.handleAssistant(parsed);
         break;
-      case 'user':
+      case "user":
         this.handleUser(parsed);
         break;
-      case 'result':
+      case "result":
         this.handleResult(parsed);
         break;
       default:
@@ -146,11 +151,15 @@ export class ClaudeStreamParser {
     const message = parsed.message as Record<string, unknown> | undefined;
     if (!message) return;
 
-    const content = message.content as Array<Record<string, unknown>> | undefined;
+    const content = message.content as
+      | Array<Record<string, unknown>>
+      | undefined;
     if (!Array.isArray(content)) return;
 
     // Accumulate usage from assistant messages
-    const usage = message.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    const usage = message.usage as
+      | { input_tokens?: number; output_tokens?: number }
+      | undefined;
     if (usage?.input_tokens) {
       this.usage = {
         input_tokens: usage.input_tokens,
@@ -158,16 +167,18 @@ export class ClaudeStreamParser {
       };
     }
 
-    const blockTypes = content.map(b => b.type).join(',');
-    this.log(`stream-json: assistant content blocks=${content.length} types=${blockTypes}`);
+    const blockTypes = content.map((b) => b.type).join(",");
+    this.log(
+      `stream-json: assistant content blocks=${content.length} types=${blockTypes}`,
+    );
 
     for (const block of content) {
-      if (block.type === 'text' && typeof block.text === 'string') {
+      if (block.type === "text" && typeof block.text === "string") {
         this.lastAssistantText = block.text;
         this.pendingAssistantText = block.text;
       }
 
-      if (block.type === 'tool_use') {
+      if (block.type === "tool_use") {
         const toolName = block.name as string;
         const toolId = block.id as string;
         const toolInput = block.input;
@@ -178,31 +189,35 @@ export class ClaudeStreamParser {
 
         // Store for correlation with subsequent tool_result
         if (toolId) {
-          this.pendingToolUses.set(toolId, { name: toolName, input: toolInput, assistantText });
+          this.pendingToolUses.set(toolId, {
+            name: toolName,
+            input: toolInput,
+            assistantText,
+          });
         }
 
         // Detect AskUserQuestion / ExitPlanMode — kill the process so
         // execution stops immediately and the question/plan surfaces in the UI.
-        if (toolName === 'AskUserQuestion') {
-          this.detectedToolName = 'AskUserQuestion';
+        if (toolName === "AskUserQuestion") {
+          this.detectedToolName = "AskUserQuestion";
           this.detectedToolInput = toolInput;
           this.callbacks.onInputRequired();
-        } else if (toolName === 'ExitPlanMode') {
-          this.detectedToolName = 'ExitPlanMode';
+        } else if (toolName === "ExitPlanMode") {
+          this.detectedToolName = "ExitPlanMode";
           this.detectedToolInput = toolInput;
           this.callbacks.onInputRequired();
         }
 
         // Emit PreToolUse for Task tool (subagent tracking)
-        if (toolName === 'Task' || toolName === 'Agent') {
+        if (toolName === "Task" || toolName === "Agent") {
           this.trackPost({
             session_id: this.sessionId ?? `trace-local-${this.workspaceId}`,
             cwd: this.cwd,
-            hook_event_name: 'PreToolUse',
+            hook_event_name: "PreToolUse",
             tool_name: toolName,
             tool_input: toolInput,
             tool_use_id: toolId,
-            source: 'stream-json',
+            source: "stream-json",
             ...(assistantText ? { last_assistant_message: assistantText } : {}),
           });
         }
@@ -214,20 +229,26 @@ export class ClaudeStreamParser {
     const message = parsed.message as Record<string, unknown> | undefined;
     if (!message) return;
 
-    const content = message.content as Array<Record<string, unknown>> | undefined;
+    const content = message.content as
+      | Array<Record<string, unknown>>
+      | undefined;
     if (!Array.isArray(content)) return;
 
-    const userBlockTypes = content.map(b => b.type).join(',');
-    this.log(`stream-json: user content blocks=${content.length} types=${userBlockTypes}`);
+    const userBlockTypes = content.map((b) => b.type).join(",");
+    this.log(
+      `stream-json: user content blocks=${content.length} types=${userBlockTypes}`,
+    );
 
     for (const block of content) {
-      if (block.type === 'tool_result') {
+      if (block.type === "tool_result") {
         const toolUseId = block.tool_use_id as string | undefined;
         if (!toolUseId) continue;
 
         const pending = this.pendingToolUses.get(toolUseId);
         if (!pending) {
-          this.log(`stream-json: tool_result id=${toolUseId} has no pending tool_use (orphan)`);
+          this.log(
+            `stream-json: tool_result id=${toolUseId} has no pending tool_use (orphan)`,
+          );
           continue;
         }
         this.pendingToolUses.delete(toolUseId);
@@ -236,24 +257,28 @@ export class ClaudeStreamParser {
         this.trackPost({
           session_id: this.sessionId ?? `trace-local-${this.workspaceId}`,
           cwd: this.cwd,
-          hook_event_name: 'PostToolUse',
+          hook_event_name: "PostToolUse",
           tool_name: pending.name,
           tool_input: pending.input,
           tool_response: block.content,
           tool_use_id: toolUseId,
-          source: 'stream-json',
-          ...(pending.assistantText ? { last_assistant_message: pending.assistantText } : {}),
+          source: "stream-json",
+          ...(pending.assistantText
+            ? { last_assistant_message: pending.assistantText }
+            : {}),
         });
       }
     }
   }
 
   private handleResult(parsed: Record<string, unknown>): void {
-    if (typeof parsed.result === 'string') {
+    if (typeof parsed.result === "string") {
       this.lastAssistantText = parsed.result;
     }
 
-    const usage = parsed.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    const usage = parsed.usage as
+      | { input_tokens?: number; output_tokens?: number }
+      | undefined;
     if (usage?.input_tokens) {
       this.usage = {
         input_tokens: usage.input_tokens,
@@ -267,7 +292,14 @@ export class ClaudeStreamParser {
       this.callbacks.onSessionId(sid);
     }
 
-    this.log(`stream-json: result usage=${JSON.stringify(this.usage)}`);
+    const costUsd = parsed.cost_usd as number | undefined;
+    if (typeof costUsd === "number") {
+      this.costUsd = costUsd;
+    }
+
+    this.log(
+      `stream-json: result usage=${JSON.stringify(this.usage)} cost_usd=${this.costUsd ?? "n/a"}`,
+    );
   }
 
   private trackPost(payload: Record<string, unknown>): void {
@@ -278,13 +310,17 @@ export class ClaudeStreamParser {
   private async postEvent(payload: Record<string, unknown>): Promise<void> {
     try {
       const response = await fetch(`${this.serverUrl}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      this.log(`stream-json: posted ${payload.hook_event_name} tool=${payload.tool_name ?? 'n/a'} status=${response.status}`);
+      this.log(
+        `stream-json: posted ${payload.hook_event_name} tool=${payload.tool_name ?? "n/a"} status=${response.status}`,
+      );
     } catch (err) {
-      this.log(`stream-json: post failed ${payload.hook_event_name} error=${String(err)}`);
+      this.log(
+        `stream-json: post failed ${payload.hook_event_name} error=${String(err)}`,
+      );
     }
   }
 }
