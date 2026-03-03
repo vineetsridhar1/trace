@@ -759,7 +759,27 @@ function ThreadStatusMessage({
   activeSessionId: string | null;
 }) {
   if (status === "loading") {
-    return <div className="text-sm text-[#565f89]">Loading events...</div>;
+    return (
+      <div className="flex flex-col gap-4 w-full px-2">
+        {/* User prompt skeleton */}
+        <div className="flex justify-end">
+          <div className="h-8 w-2/5 rounded-lg bg-[#292e42] animate-pulse" />
+        </div>
+        {/* Assistant text skeleton */}
+        <div className="flex flex-col gap-2">
+          <div className="h-4 w-4/5 rounded bg-[#292e42] animate-pulse" />
+          <div className="h-4 w-3/5 rounded bg-[#292e42] animate-pulse" />
+          <div className="h-4 w-2/3 rounded bg-[#292e42] animate-pulse" />
+        </div>
+        {/* Tool use row skeleton */}
+        <div className="h-6 w-1/3 rounded bg-[#292e42] animate-pulse" />
+        {/* More assistant text skeleton */}
+        <div className="flex flex-col gap-2">
+          <div className="h-4 w-3/4 rounded bg-[#292e42] animate-pulse" />
+          <div className="h-4 w-1/2 rounded bg-[#292e42] animate-pulse" />
+        </div>
+      </div>
+    );
   }
   if (status === "empty") {
     return (

@@ -214,6 +214,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       expandedTurnGroupIds: {},
       sessionTotal: 0,
       loadingOlderEvents: false,
+      // Clear stale session data and show loading immediately
+      sessionEvents: [],
+      sessions: [],
+      activeSessionId: null,
+      sessionStatus: 'loading',
+      tokenUsage: null,
     });
   },
 

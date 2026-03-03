@@ -95,27 +95,16 @@ export function useThreadSync(
   const loadSessionEvents = useCallback(
     async (workspace: Workspace) => {
       try {
-        // Try cache-only sessions read first to skip loading spinner
-        let cacheHit = false;
         const { data: cachedSessions } = await executeSessions({
           variables: { channelId: workspace.channelId, workspaceId: workspace.id },
           fetchPolicy: 'cache-only',
         });
         const cachedList = (cachedSessions?.sessions ?? []) as SessionInfo[];
         if (cachedList.length > 0) {
-          cacheHit = true;
           useThreadStore.getState().setSessions(cachedList);
           const latestCached = cachedList[cachedList.length - 1];
           useThreadStore.getState().setActiveSessionId(latestCached.id);
           await tryPopulateFromCache(workspace.channelId, workspace.id, latestCached.id);
-        }
-
-        // Only show loading spinner if we didn't get cache data
-        if (!cacheHit) {
-          const store = useThreadStore.getState();
-          if (store.sessionStatus === 'idle' || store.sessionStatus === 'error') {
-            useThreadStore.getState().setSessionStatus('loading');
-          }
         }
 
         // Always fetch from network for fresh data
