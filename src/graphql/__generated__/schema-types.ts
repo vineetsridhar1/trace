@@ -373,6 +373,7 @@ export type MutationUpdateColumnArgs = {
 
 
 export type MutationUpdateInitialPromptArgs = {
+  attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
   workspaceId: Scalars['ID']['input'];

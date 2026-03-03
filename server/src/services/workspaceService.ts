@@ -304,7 +304,7 @@ export async function appendPromptToWorkspaceSession(
   };
 }
 
-export async function updateInitialPrompt(channelId: string, workspaceId: string, newText: string) {
+export async function updateInitialPrompt(channelId: string, workspaceId: string, newText: string, attachmentIds?: string[]) {
   const workspace = await prisma.workspace.findFirst({
     where: { id: workspaceId, channelId },
     include: { sessions: { orderBy: { createdAt: 'asc' }, take: 1 } },
@@ -326,9 +326,11 @@ export async function updateInitialPrompt(channelId: string, workspaceId: string
     return null;
   }
 
-  // Update the event's rawPayload, preserving other fields like attachments
-  const existingPayload = event.rawPayload as Record<string, unknown>;
-  const updatedPayload = { ...existingPayload, prompt: newText };
+  // Resolve attachment metadata if provided
+  const attachmentMetas = attachmentIds ? await resolveAttachmentMetas(attachmentIds) : undefined;
+
+  // Build the full updated payload
+  const updatedPayload = buildUserPromptPayload(newText, attachmentMetas);
 
   const [updatedEvent] = await prisma.$transaction([
     prisma.event.update({
@@ -337,7 +339,12 @@ export async function updateInitialPrompt(channelId: string, workspaceId: string
     }),
     prisma.workspace.update({
       where: { id: workspaceId },
-      data: { preview: newText },
+      data: {
+        preview: newText,
+        ...(attachmentIds && attachmentIds.length > 0
+          ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
+          : {}),
+      },
     }),
   ]);
 

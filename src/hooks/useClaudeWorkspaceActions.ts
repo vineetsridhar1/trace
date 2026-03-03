@@ -21,11 +21,13 @@ const GQL_UPDATE_INITIAL_PROMPT = gql`
     $channelId: ID!
     $workspaceId: ID!
     $text: String!
+    $attachmentIds: [String!]
   ) {
     updateInitialPrompt(
       channelId: $channelId
       workspaceId: $workspaceId
       text: $text
+      attachmentIds: $attachmentIds
     ) {
       workspace {
         ...WorkspaceFields
@@ -204,12 +206,12 @@ export function useClaudeWorkspaceActions({
   );
 
   const updateInitialPrompt = useCallback(
-    async (workspaceId: string, text: string) => {
+    async (workspaceId: string, text: string, attachmentIds?: string[]) => {
       const chId = activeChannelIdRef.current;
       if (!chId) return;
       try {
         const { data } = await executeUpdateInitialPrompt({
-          variables: { channelId: chId, workspaceId, text },
+          variables: { channelId: chId, workspaceId, text, attachmentIds },
         });
         if (!data?.updateInitialPrompt) return;
         upsertWorkspace(data.updateInitialPrompt.workspace as Workspace);
@@ -293,7 +295,7 @@ export function useClaudeWorkspaceActions({
     if (!chId) return false;
     try {
       const { data } = await executeCreateWorkspace({
-        variables: { channelId: chId, text: "New workspace" },
+        variables: { channelId: chId, text: "" },
       });
       if (!data?.createWorkspace) return false;
       const workspace = data.createWorkspace.workspace as Workspace;
@@ -335,11 +337,14 @@ export function useClaudeWorkspaceActions({
   );
 
   const runPendingWorkspace = useCallback(
-    async (planMode: boolean, promptText: string) => {
+    async (planMode: boolean, promptText: string, attachmentIds?: string[], extraFilePaths?: string[]) => {
       const editedPrompt = promptText.trim();
       const runStore = useClaudeRunStore.getState();
       const workspaceId = runStore.pendingRunWorkspaceId;
-      const filePaths = runStore.pendingRunFilePaths;
+      const storeFilePaths = runStore.pendingRunFilePaths;
+      const storeAttachmentIds = runStore.pendingRunAttachmentIds;
+      const filePaths = extraFilePaths && extraFilePaths.length > 0 ? extraFilePaths : storeFilePaths;
+      const finalAttachmentIds = attachmentIds && attachmentIds.length > 0 ? attachmentIds : storeAttachmentIds;
       const { selectedModel, selectedEffort } = runStore;
       if (!workspaceId || !editedPrompt) return;
 
@@ -442,7 +447,11 @@ export function useClaudeWorkspaceActions({
         await updateWorkspaceStatus(workspaceId, "creation");
       }
 
-      await updateInitialPrompt(workspaceId, editedPrompt);
+      await updateInitialPrompt(
+        workspaceId,
+        editedPrompt,
+        finalAttachmentIds.length > 0 ? finalAttachmentIds : undefined,
+      );
 
       const portResult = await window.traceAPI.allocatePorts(workspaceId, 10);
       const ports =

@@ -3,7 +3,9 @@ import { FiEdit3, FiMap, FiHelpCircle, FiChevronDown } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { ModelEffortSelector } from './ModelEffortSelector';
 import { TicketDependencySelector } from './TicketDependencySelector';
+import { ImageThumbnails } from './ImageThumbnails';
 import { useClaudeRunStore } from '../stores/claudeRunStore';
+import { useImageAttachments } from '../hooks/useImageAttachments';
 
 export type InteractionMode = 'code' | 'plan' | 'ask';
 
@@ -117,7 +119,7 @@ export function RunButtons({
   onRunAfter,
 }: {
   initialPrompt: string;
-  onRun: (planMode: boolean, prompt: string) => Promise<void> | void;
+  onRun: (planMode: boolean, prompt: string, attachmentIds?: string[], filePaths?: string[]) => Promise<void> | void;
   channelTickets?: ChannelTicketInfo[];
   currentWorkspaceId?: string;
   onRunAfter?: (dependsOnWorkspaceIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => void;
@@ -132,6 +134,16 @@ export function RunButtons({
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const {
+    attachments,
+    uploading,
+    handlePaste,
+    removeAttachment,
+    clearAttachments,
+    getAttachmentIds,
+    getFilePaths,
+  } = useImageAttachments();
 
   useEffect(() => {
     setPrompt(initialPrompt);
@@ -160,7 +172,15 @@ export function RunButtons({
     if (mode === 'ask') {
       finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${prompt}`;
     }
-    onRun(mode === 'plan', finalPrompt);
+    const ids = getAttachmentIds();
+    const paths = getFilePaths();
+    onRun(
+      mode === 'plan',
+      finalPrompt,
+      ids.length > 0 ? ids : undefined,
+      paths.length > 0 ? paths : undefined,
+    );
+    clearAttachments();
   };
 
   const handleRunAfter = (depIds: string[]) => {
@@ -178,7 +198,7 @@ export function RunButtons({
     setShowRunAfter(false);
   };
 
-  const hasRunAfter = channelTickets && channelTickets.length > 0 && onRunAfter;
+  const hasRunAfter = channelTickets && channelTickets.length > 0 && onRunAfter && attachments.length === 0;
 
   return (
     <div className="border-t border-edge px-3 py-3">
@@ -187,15 +207,21 @@ export function RunButtons({
         rows={1}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
+        onPaste={handlePaste}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             handleRun();
           }
         }}
+        placeholder="What would you like to build?"
         style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
         className="mb-2 w-full resize-none rounded-md border border-edge bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-edge-hover"
       />
+      <ImageThumbnails images={attachments} onRemove={removeAttachment} />
+      {uploading && (
+        <div className="mb-2 text-xs text-muted">Uploading image...</div>
+      )}
       <div className="mb-2 flex items-center gap-1.5">
         <ModelEffortSelector
           model={selectedModel}

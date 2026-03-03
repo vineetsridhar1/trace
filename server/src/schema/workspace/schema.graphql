@@ -20,7 +20,7 @@ extend type Mutation {
   deleteWorkspace(channelId: ID!, workspaceId: ID!): Boolean!
   handoffWorkspace(channelId: ID!, workspaceId: ID!): Workspace!
   setWorkspacePrUrl(channelId: ID!, workspaceId: ID!, prUrl: String!): Boolean!
-  updateInitialPrompt(channelId: ID!, workspaceId: ID!, text: String!): CreateWorkspacePayload!
+  updateInitialPrompt(channelId: ID!, workspaceId: ID!, text: String!, attachmentIds: [String!]): CreateWorkspacePayload!
 }
 
 type Workspace {

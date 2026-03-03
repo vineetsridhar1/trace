@@ -213,10 +213,8 @@ function ThreadStatusMessage({
   }
   if (status === 'empty') {
     return (
-      <div className="text-sm text-muted">
-        {activeSessionId
-          ? 'No events yet'
-          : 'No sessions yet.'}
+      <div className="flex flex-1 items-center justify-center">
+        <span className="text-sm text-muted">Write a prompt below to get started</span>
       </div>
     );
   }

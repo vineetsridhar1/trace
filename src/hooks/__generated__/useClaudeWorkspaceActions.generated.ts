@@ -8,6 +8,7 @@ export type UpdateInitialPromptMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
   workspaceId: Types.Scalars['ID']['input'];
   text: Types.Scalars['String']['input'];
+  attachmentIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
 }>;
 
 
@@ -15,11 +16,12 @@ export type UpdateInitialPromptMutation = { __typename?: 'Mutation', updateIniti
 
 
 export const UpdateInitialPromptDocument = gql`
-    mutation UpdateInitialPrompt($channelId: ID!, $workspaceId: ID!, $text: String!) {
+    mutation UpdateInitialPrompt($channelId: ID!, $workspaceId: ID!, $text: String!, $attachmentIds: [String!]) {
   updateInitialPrompt(
     channelId: $channelId
     workspaceId: $workspaceId
     text: $text
+    attachmentIds: $attachmentIds
   ) {
     workspace {
       ...WorkspaceFields
@@ -59,6 +61,7 @@ export type UpdateInitialPromptMutationFn = Apollo.MutationFunction<UpdateInitia
  *      channelId: // value for 'channelId'
  *      workspaceId: // value for 'workspaceId'
  *      text: // value for 'text'
+ *      attachmentIds: // value for 'attachmentIds'
  *   },
  * });
  */

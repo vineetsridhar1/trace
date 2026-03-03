@@ -179,7 +179,7 @@ type Mutation {
   setWorkspacePrUrl(channelId: ID!, prUrl: String!, workspaceId: ID!): Boolean!
   updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, id: ID!, name: String, teamIds: [String!], workspacesEnabled: Boolean): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
-  updateInitialPrompt(channelId: ID!, text: String!, workspaceId: ID!): CreateWorkspacePayload!
+  updateInitialPrompt(attachmentIds: [String!], channelId: ID!, text: String!, workspaceId: ID!): CreateWorkspacePayload!
   updateQueuedRunConfig(runConfig: JSON!, workspaceId: ID!): Boolean!
   updateWorkspacePreview(channelId: ID!, preview: String!, workspaceId: ID!): Workspace!
   updateWorkspaceStatus(channelId: ID!, status: String!, workspaceId: ID!): Workspace!

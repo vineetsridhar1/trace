@@ -12,7 +12,7 @@ interface ClaudeWorkspaceActions {
   ) => Promise<boolean>;
   createWorkspace: () => Promise<boolean>;
   createWorkspaceForTicket: (ticket: KanbanTicket) => Promise<boolean>;
-  runPendingWorkspace: (planMode: boolean, prompt: string) => Promise<void>;
+  runPendingWorkspace: (planMode: boolean, prompt: string, attachmentIds?: string[], filePaths?: string[]) => Promise<void>;
   autoRunQueuedTicket: (
     workspaceId: string,
     runConfig: {
@@ -71,6 +71,7 @@ interface ClaudeRunState {
   pendingRunWorkspaceId: string | null;
   pendingRunInitialPrompt: string;
   pendingRunFilePaths: string[];
+  pendingRunAttachmentIds: string[];
   selectedModel: ClaudeModel;
   selectedEffort: EffortLevel;
   activeRunWorkspaceIds: Set<string>;
@@ -86,6 +87,7 @@ interface ClaudeRunState {
     workspaceId: string,
     prompt: string,
     filePaths: string[],
+    attachmentIds?: string[],
   ) => void;
   clearPendingRun: () => void;
   setSelectedModel: (model: ClaudeModel) => void;
@@ -105,6 +107,7 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
   pendingRunWorkspaceId: null,
   pendingRunInitialPrompt: "",
   pendingRunFilePaths: [],
+  pendingRunAttachmentIds: [],
   selectedModel: "opus",
   selectedEffort: "high",
   activeRunWorkspaceIds: new Set(),
@@ -117,11 +120,12 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
   clearWorkspaceActions: () =>
     set({ workspaceActions: { ...defaultWorkspaceActions } }),
 
-  setPendingRun: (workspaceId, prompt, filePaths) =>
+  setPendingRun: (workspaceId, prompt, filePaths, attachmentIds) =>
     set({
       pendingRunWorkspaceId: workspaceId,
       pendingRunInitialPrompt: prompt,
       pendingRunFilePaths: filePaths,
+      pendingRunAttachmentIds: attachmentIds ?? [],
     }),
 
   clearPendingRun: () =>
@@ -129,6 +133,7 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
       pendingRunWorkspaceId: null,
       pendingRunInitialPrompt: "",
       pendingRunFilePaths: [],
+      pendingRunAttachmentIds: [],
     }),
 
   setSelectedModel: (model) => set({ selectedModel: model }),

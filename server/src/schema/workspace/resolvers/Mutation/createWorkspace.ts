@@ -29,8 +29,8 @@ export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> 
   if (ticketId) {
     // Link existing ticket to the new workspace
     void linkTicketToWorkspace(ticketId, created.workspace.id, channelId);
-  } else {
-    // Fire-and-forget: create a kanban ticket
+  } else if (text.trim()) {
+    // Fire-and-forget: create a kanban ticket (skip for empty workspace creation)
     const channel = await getChannel(channelId);
     void createTicketForWorkspace(
       created.workspace.id,

@@ -598,11 +598,11 @@ export function ThreadPanel() {
                       !isClaudeRunning ? (
                       <RunButtons
                         initialPrompt={pendingPromptForDisplay}
-                        onRun={(planMode, prompt) => {
+                        onRun={(planMode, prompt, attachmentIds, filePaths) => {
                           if (pendingRunWorkspaceId !== selectedWorkspaceId && selectedWorkspaceId) {
-                            useClaudeRunStore.getState().setPendingRun(selectedWorkspaceId, prompt, []);
+                            useClaudeRunStore.getState().setPendingRun(selectedWorkspaceId, prompt, filePaths ?? [], attachmentIds);
                           }
-                          void runPendingWorkspace(planMode, prompt);
+                          void runPendingWorkspace(planMode, prompt, attachmentIds, filePaths);
                         }}
                         channelTickets={channelTickets}
                         currentWorkspaceId={selectedWorkspaceId ?? pendingRunWorkspaceId}
