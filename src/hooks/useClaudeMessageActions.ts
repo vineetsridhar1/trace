@@ -9,6 +9,7 @@ import {
   useAppendPromptMutation,
   useUpdateWorkspacePreviewMutation,
 } from './__generated__/useClaudeMessageActions.generated';
+import { useTerminalStore } from '../stores/terminalStore';
 
 const GQL_CREATE_WORKSPACE = gql`
   mutation CreateWorkspace($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
@@ -173,6 +174,10 @@ export function useClaudeWorkspaceActions({
           clearActiveRun(workspaceId);
           console.error(`${options.errorPrefix}:`, result.error);
           return false;
+        }
+
+        if (result.setupOutput) {
+          useTerminalStore.getState().setSetupOutput(workspaceId, result.setupOutput);
         }
 
         if (options.setHasWorktreeOnSuccess !== false) {

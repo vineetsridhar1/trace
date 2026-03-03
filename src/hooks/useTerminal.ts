@@ -61,6 +61,7 @@ interface UseTerminalOptions {
   command?: string;
   readOnly?: boolean;
   fontFamily?: string;
+  initialContent?: string;
 }
 
 export function useTerminal({
@@ -70,6 +71,7 @@ export function useTerminal({
   command,
   readOnly,
   fontFamily,
+  initialContent,
 }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -83,10 +85,12 @@ export function useTerminal({
   const commandRef = useRef(command);
   const readOnlyRef = useRef(readOnly);
   const fontFamilyRef = useRef(fontFamily);
+  const initialContentRef = useRef(initialContent);
   envRef.current = env;
   commandRef.current = command;
   readOnlyRef.current = readOnly;
   fontFamilyRef.current = fontFamily;
+  initialContentRef.current = initialContent;
 
   const focusInput = useCallback(() => {
     const term = terminalRef.current;
@@ -121,6 +125,7 @@ export function useTerminal({
     const currentCommand = commandRef.current;
     const currentReadOnly = readOnlyRef.current;
     const currentFontFamily = fontFamilyRef.current;
+    const currentInitialContent = initialContentRef.current;
 
     let terminal: Terminal | null = null;
     let fitAddon: FitAddon | null = null;
@@ -151,8 +156,8 @@ export function useTerminal({
         theme: TERMINAL_THEMES[useThemeStore.getState().theme],
         fontFamily: currentFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
         fontSize: 13,
-        cursorBlink: !currentReadOnly,
-        disableStdin: currentReadOnly,
+        cursorBlink: !currentReadOnly && !currentInitialContent,
+        disableStdin: currentReadOnly || !!currentInitialContent,
         convertEol: true,
       });
       fitAddon = new FitAddon();
@@ -163,6 +168,14 @@ export function useTerminal({
 
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
+
+      // Static content mode: write content and skip PTY entirely
+      if (currentInitialContent) {
+        terminal.write(currentInitialContent);
+        const t = setTimeout(() => fitAddon?.fit(), 50);
+        miscTimers.push(t);
+        return;
+      }
 
       // Retry focus through the panel transition; the first attempt can fail
       // while the fullscreen layout is still settling in Electron.

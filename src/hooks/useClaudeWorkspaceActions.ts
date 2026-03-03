@@ -14,6 +14,7 @@ import { useThreadStore } from "../stores/threadStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useChannelContext } from "../context/ChannelContext";
 import { useAppUIStore } from "../stores/appUIStore";
+import { useTerminalStore } from "../stores/terminalStore";
 
 const GQL_CREATE_WORKSPACE = gql`
   mutation CreateWorkspace(
@@ -239,6 +240,10 @@ export function useClaudeWorkspaceActions({
           useClaudeRunStore.getState().clearActiveRun(workspaceId);
           console.error(`${options.errorPrefix}:`, result.error);
           return false;
+        }
+
+        if (result.setupOutput) {
+          useTerminalStore.getState().setSetupOutput(workspaceId, result.setupOutput);
         }
 
         if (options.setHasWorktreeOnSuccess !== false) {

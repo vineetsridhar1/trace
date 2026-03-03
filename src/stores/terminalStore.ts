@@ -37,6 +37,7 @@ interface TerminalState {
   runningPtyIds: Set<string>;
   ptyProcesses: Record<string, PtyProcessInfo>;
   workspacesWithRunningProcesses: Set<string>;
+  setupOutputs: Record<string, string>;
 
   // Internal backing store
   _allTerminals: Map<string, WorkspaceTerminalState>;
@@ -62,6 +63,7 @@ interface TerminalState {
   setPtyProcesses: (processes: Record<string, PtyProcessInfo>) => void;
   killIdleForWorkspace: (workspaceId: string) => Promise<void>;
   getEnvForWorkspace: (workspaceId: string) => Record<string, string> | undefined;
+  setSetupOutput: (workspaceId: string, output: string) => void;
 }
 
 function buildAllEntries(map: Map<string, WorkspaceTerminalState>): TerminalEntry[] {
@@ -136,6 +138,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   runningPtyIds: new Set(),
   ptyProcesses: {},
   workspacesWithRunningProcesses: new Set(),
+  setupOutputs: {},
 
   _allTerminals: new Map(),
   _initializedWorkspaces: new Set(),
@@ -279,8 +282,11 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     state._allTerminals.delete(workspaceId);
     state._initializedWorkspaces.delete(workspaceId);
 
+    const { [workspaceId]: _, ...remainingOutputs } = state.setupOutputs;
+
     set({
       runningPtyIds,
+      setupOutputs: remainingOutputs,
       workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, runningPtyIds, state.ptyProcesses),
       ...projectWorkspace(state._allTerminals, state._initializedWorkspaces, state._currentWorkspaceId),
     });
@@ -306,6 +312,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       initialized: false,
       allTerminalEntries: [],
       runningPtyIds,
+      setupOutputs: {},
       workspacesWithRunningProcesses: new Set(),
     });
   },
@@ -454,6 +461,12 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   getEnvForWorkspace: (workspaceId) => {
     return get()._allTerminals.get(workspaceId)?.env;
+  },
+
+  setSetupOutput: (workspaceId, output) => {
+    set((state) => ({
+      setupOutputs: { ...state.setupOutputs, [workspaceId]: output },
+    }));
   },
 
   killIdleForWorkspace: async (workspaceId) => {

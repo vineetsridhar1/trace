@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
     systemInstructions?: string,
     permissionMode?: string,
     baseBranch?: string,
-  ): Promise<{ success: boolean; worktreePath?: string; error?: string }> => {
+  ): Promise<{ success: boolean; worktreePath?: string; setupOutput?: string; error?: string }> => {
     try {
       return await ipcRenderer.invoke(
         "spawn-claude",

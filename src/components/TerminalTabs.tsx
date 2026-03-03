@@ -13,6 +13,7 @@ interface TerminalTabContentProps {
   env?: Record<string, string>;
   readOnly?: boolean;
   fontFamily?: string;
+  initialContent?: string;
 }
 
 function TerminalTabContent({
@@ -23,6 +24,7 @@ function TerminalTabContent({
   env,
   readOnly,
   fontFamily,
+  initialContent,
 }: TerminalTabContentProps) {
   const { containerRef, focus } = useTerminal({
     terminalId,
@@ -31,6 +33,7 @@ function TerminalTabContent({
     command,
     readOnly,
     fontFamily,
+    initialContent,
   });
 
   return (
@@ -55,6 +58,7 @@ interface TerminalTabsProps {
   scriptsAvailable: boolean;
   hasSetupScript: boolean;
   hasRunScript: boolean;
+  setupOutput?: string;
   ptyProcesses: Record<string, { processName: string; isShellOnly: boolean }>;
   onSelectTab: (terminalId: string) => void;
   onCloseTab: (terminalId: string) => void;
@@ -76,6 +80,7 @@ export function TerminalTabs({
   scriptsAvailable,
   hasSetupScript,
   hasRunScript,
+  setupOutput,
   ptyProcesses,
   onSelectTab,
   onCloseTab,
@@ -164,9 +169,9 @@ export function TerminalTabs({
         </Tooltip>
       </div>
 
-      {/* Setup action bar — only when setup has been run (command exists) */}
+      {/* Setup action bar — when setup has been run (command exists) or has captured output */}
       {hasSetupScript &&
-        setupTab?.command &&
+        (setupTab?.command || setupOutput) &&
         activeTabId === setupTab?.terminalId && (
           <div className="flex items-center bg-surface px-2 pb-1 pt-2">
             <Tooltip text="Re-run setup">
@@ -218,6 +223,7 @@ export function TerminalTabs({
         {/* Configure placeholders for unconfigured script tabs — current message only */}
         {hasSetupScript &&
           !setupTab?.command &&
+          !setupOutput &&
           activeTabId === setupTab?.terminalId && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
               <button
@@ -286,7 +292,10 @@ export function TerminalTabs({
           entry.terminals.map((t) => {
             const isSetupIdle = t.name === "Setup" && !t.command;
             const isRunIdle = t.name === "Run" && !t.command;
-            if (isSetupIdle || isRunIdle) return null;
+            // Show setup tab with initialContent when we have captured output
+            const setupInitialContent = isSetupIdle && entry.workspaceId === currentWorkspaceId ? setupOutput : undefined;
+            if (isSetupIdle && !setupInitialContent) return null;
+            if (isRunIdle) return null;
             const isCurrent = entry.workspaceId === currentWorkspaceId;
             const isActiveTab = t.terminalId === entry.activeTabId;
             return (
@@ -299,6 +308,7 @@ export function TerminalTabs({
                 env={t.env}
                 readOnly={t.readOnly}
                 fontFamily={terminalFontFamily}
+                initialContent={setupInitialContent}
               />
             );
           }),

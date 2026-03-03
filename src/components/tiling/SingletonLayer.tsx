@@ -18,6 +18,7 @@ interface SingletonLayerProps {
   scriptsAvailable: boolean;
   hasSetupScript: boolean;
   hasRunScript: boolean;
+  setupOutput?: string;
   ptyProcesses: Record<string, { processName: string; isShellOnly: boolean }>;
   hasWorktree: boolean | null;
   onSelectTab: (terminalId: string) => void;
@@ -44,6 +45,7 @@ export function SingletonLayer({
   scriptsAvailable,
   hasSetupScript,
   hasRunScript,
+  setupOutput,
   ptyProcesses,
   hasWorktree,
   onSelectTab,
@@ -94,6 +96,7 @@ export function SingletonLayer({
             scriptsAvailable={scriptsAvailable}
             hasSetupScript={hasSetupScript}
             hasRunScript={hasRunScript}
+            setupOutput={setupOutput}
             ptyProcesses={ptyProcesses}
             onSelectTab={onSelectTab}
             onCloseTab={onCloseTab}

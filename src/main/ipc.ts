@@ -219,7 +219,7 @@ export function registerIpcHandlers() {
       baseBranch?: string,
     ) => {
       try {
-        const worktreePath = await spawnClaude(
+        const { worktreePath, setupOutput } = await spawnClaude(
           workspaceId,
           prompt,
           repoPath,
@@ -232,7 +232,7 @@ export function registerIpcHandlers() {
           permissionMode,
           baseBranch,
         );
-        return { success: true, worktreePath };
+        return { success: true, worktreePath, setupOutput };
       } catch (err) {
         console.error("Failed to spawn claude:", err);
         return { success: false, error: String(err) };

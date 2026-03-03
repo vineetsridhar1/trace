@@ -76,12 +76,14 @@ async function generateBranchName(
   }
 }
 
+const MAX_SETUP_OUTPUT_CHARS = 50_000;
+
 async function runSetupScripts(
   worktreePath: string,
   commands: string[],
-): Promise<void> {
+): Promise<string> {
   const script = commands.join("\n");
-  if (!script.trim()) return;
+  if (!script.trim()) return "";
   const result = await runProcess(
     "sh",
     ["-c", `set -e\n${script}`],
@@ -92,6 +94,8 @@ async function runSetupScripts(
       `[setup-script] script failed (exit ${result.code}):\n${result.stderr}`,
     );
   }
+  const combined = (result.stdout + result.stderr).slice(0, MAX_SETUP_OUTPUT_CHARS);
+  return combined;
 }
 
 export async function spawnClaude(
@@ -106,19 +110,20 @@ export async function spawnClaude(
   systemInstructions?: string,
   permissionMode?: string,
   baseBranch?: string,
-): Promise<string> {
+): Promise<{ worktreePath: string; setupOutput?: string }> {
   const { worktreePath, created } = await ensureWorktree(
     workspaceId,
     repoPath,
     baseBranch,
   );
 
+  let setupOutput: string | undefined;
   if (created && creationCommands && creationCommands.length > 0) {
     appendClaudeDebugLog(
       workspaceId,
       `running ${creationCommands.length} setup script(s)`,
     );
-    await runSetupScripts(worktreePath, creationCommands);
+    setupOutput = await runSetupScripts(worktreePath, creationCommands);
     appendClaudeDebugLog(workspaceId, "setup scripts completed");
   }
   const startedAt = Date.now();
@@ -448,5 +453,5 @@ export async function spawnClaude(
     }
   });
 
-  return worktreePath;
+  return { worktreePath, setupOutput };
 }

@@ -79,6 +79,7 @@ export function ThreadPanel() {
   const terminalCwd = useTerminalStore((s) => s.cwd);
   const runningPtyIds = useTerminalStore((s) => s.runningPtyIds);
   const ptyProcesses = useTerminalStore((s) => s.ptyProcesses);
+  const setupOutput = useTerminalStore((s) => selectedWorkspaceId ? s.setupOutputs[selectedWorkspaceId] : undefined);
 
   // ─── UI store state ─────────────────────────────────────────────
   const isFullscreen = useAppUIStore((s) => s.isFullscreen);
@@ -688,6 +689,7 @@ export function ThreadPanel() {
             scriptsAvailable={scriptsAvailable}
             hasSetupScript={hasSetupScript}
             hasRunScript={hasRunScript}
+            setupOutput={setupOutput}
             ptyProcesses={ptyProcesses}
             hasWorktree={hasWorktree}
             onSelectTab={useTerminalStore.getState().setActiveTabId}
