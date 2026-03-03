@@ -59,28 +59,41 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 ];
 
 // Module-level cache so both WorkspaceInput and ThreadInput share the same results
-const commandCache = new Map<string, SlashCommand[]>();
+const CACHE_TTL_MS = 30_000;
+const commandCache = new Map<
+  string,
+  { commands: SlashCommand[]; ts: number }
+>();
 const fetchPromises = new Map<string, Promise<SlashCommand[]>>();
 
 function getProjectCommands(repoPath: string): Promise<SlashCommand[]> {
   const cached = commandCache.get(repoPath);
-  if (cached) return Promise.resolve(cached);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS)
+    return Promise.resolve(cached.commands);
 
   let promise = fetchPromises.get(repoPath);
   if (!promise) {
-    promise = window.traceAPI.listSlashCommands(repoPath).then((result) => {
-      fetchPromises.delete(repoPath);
-      const commands: SlashCommand[] = result.success
-        ? result.commands.map((cmd) => ({
-            name: cmd.name,
-            displayName: `/${cmd.name}`,
-            description: cmd.description || `Run ${cmd.name} command`,
-            source: cmd.source,
-          }))
-        : [];
-      commandCache.set(repoPath, commands);
-      return commands;
-    });
+    promise = window.traceAPI
+      .listSlashCommands(repoPath)
+      .then((result) => {
+        fetchPromises.delete(repoPath);
+        const commands: SlashCommand[] = result.success
+          ? result.commands.map((cmd) => ({
+              name: cmd.name,
+              displayName: `/${cmd.name}`,
+              description: cmd.description || `Run ${cmd.name} command`,
+              source: cmd.source,
+            }))
+          : [];
+        commandCache.set(repoPath, { commands, ts: Date.now() });
+        return commands;
+      })
+      .catch((err) => {
+        fetchPromises.delete(repoPath);
+        commandCache.delete(repoPath);
+        console.error("Failed to fetch slash commands:", err);
+        return [] as SlashCommand[];
+      });
     fetchPromises.set(repoPath, promise);
   }
   return promise;
@@ -96,12 +109,8 @@ export function useSlashCommands(
   const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
 
   useEffect(() => {
-    if (!repoPath) {
-      setProjectCommands([]);
-      return;
-    }
     let stale = false;
-    getProjectCommands(repoPath).then((cmds) => {
+    getProjectCommands(repoPath ?? "").then((cmds) => {
       if (!stale) setProjectCommands(cmds);
     });
     return () => {
@@ -109,10 +118,12 @@ export function useSlashCommands(
     };
   }, [repoPath]);
 
-  const allCommands = useMemo(
-    () => [...projectCommands, ...BUILT_IN_COMMANDS],
-    [projectCommands],
-  );
+  const allCommands = useMemo(() => {
+    const byName = new Map<string, SlashCommand>();
+    for (const cmd of BUILT_IN_COMMANDS) byName.set(cmd.name, cmd);
+    for (const cmd of projectCommands) byName.set(cmd.name, cmd);
+    return Array.from(byName.values());
+  }, [projectCommands]);
 
   const query = inputValue.startsWith("/")
     ? inputValue.slice(1).toLowerCase()
@@ -122,7 +133,7 @@ export function useSlashCommands(
     if (query === null) return [];
     return allCommands.filter(
       (cmd) =>
-        cmd.name.includes(query) ||
+        cmd.name.toLowerCase().includes(query) ||
         cmd.description.toLowerCase().includes(query),
     );
   }, [query, allCommands]);

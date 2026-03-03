@@ -1001,7 +1001,7 @@ JSON.stringify(found);
       try {
         return fs
           .readdirSync(dir)
-          .filter((f) => f.endsWith(".md"))
+          .filter((f) => f.endsWith(".md") && f !== "CLAUDE.md")
           .map((file) => {
             let description = "";
             try {
@@ -1058,16 +1058,20 @@ JSON.stringify(found);
       const homeDir = os.homedir();
       const globalSkillsDir = path.join(homeDir, ".claude", "skills");
       const globalCommandsDir = path.join(homeDir, ".claude", "commands");
-      const projectSkillsDir = path.join(repoPath, ".claude", "skills");
-      const projectCommandsDir = path.join(repoPath, ".claude", "commands");
-
       // Global first, then project — project overwrites global during dedup
       const all = [
         ...discoverSkills(globalSkillsDir, "global"),
         ...discoverCommands(globalCommandsDir, "global"),
-        ...discoverSkills(projectSkillsDir, "project"),
-        ...discoverCommands(projectCommandsDir, "project"),
       ];
+
+      if (repoPath) {
+        const projectSkillsDir = path.join(repoPath, ".claude", "skills");
+        const projectCommandsDir = path.join(repoPath, ".claude", "commands");
+        all.push(
+          ...discoverSkills(projectSkillsDir, "project"),
+          ...discoverCommands(projectCommandsDir, "project"),
+        );
+      }
 
       // Dedup by name — last entry wins (project takes precedence)
       const byName = new Map<string, DiscoveredCommand>();
@@ -1172,10 +1176,7 @@ JSON.stringify(found);
 
         // Build a map from branch name to its most recent PR (first match,
         // since results are ordered newest-first)
-        const prByBranch = new Map<
-          string,
-          { state: string; url: string }
-        >();
+        const prByBranch = new Map<string, { state: string; url: string }>();
         for (const pr of prs) {
           if (!prByBranch.has(pr.headRefName)) {
             prByBranch.set(pr.headRefName, pr);
@@ -1185,7 +1186,11 @@ JSON.stringify(found);
         const statuses = branches.map((branch) => {
           const pr = prByBranch.get(branch);
           if (!pr) {
-            return { branch, state: "none" as const, prUrl: null as string | null };
+            return {
+              branch,
+              state: "none" as const,
+              prUrl: null as string | null,
+            };
           }
           const state =
             pr.state === "MERGED"
@@ -1291,9 +1296,7 @@ JSON.stringify(found);
         }
 
         const remoteUrl = remoteResult.stdout.trim();
-        const match = remoteUrl.match(
-          /(?:github\.com)[/:]([^/]+)\/([^/.]+)/,
-        );
+        const match = remoteUrl.match(/(?:github\.com)[/:]([^/]+)\/([^/.]+)/);
         if (!match) {
           return {
             success: true,
@@ -1306,7 +1309,9 @@ JSON.stringify(found);
         const aliasedFields = branches
           .map((branch, i) => {
             const alias = `pr_${i}`;
-            const escapedBranch = branch.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const escapedBranch = branch
+              .replace(/\\/g, "\\\\")
+              .replace(/"/g, '\\"');
             return `${alias}: pullRequests(headRefName: "${escapedBranch}", first: 1, states: OPEN) {
               nodes {
                 commits(last: 1) {
@@ -1335,8 +1340,8 @@ JSON.stringify(found);
           })
           .join("\n");
 
-        const safeOwner = owner!.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        const safeName = repo!.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const safeOwner = owner!.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        const safeName = repo!.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
         const query = `query { repository(owner: "${safeOwner}", name: "${safeName}") { ${aliasedFields} } }`;
 
         const graphqlResult = await runProcess(
@@ -1396,10 +1401,7 @@ JSON.stringify(found);
             } else if (ctx.__typename === "StatusContext") {
               if (ctx.state === "SUCCESS") {
                 passed++;
-              } else if (
-                ctx.state === "PENDING" ||
-                ctx.state === "EXPECTED"
-              ) {
+              } else if (ctx.state === "PENDING" || ctx.state === "EXPECTED") {
                 pending++;
               } else {
                 failed++;
