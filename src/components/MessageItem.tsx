@@ -100,7 +100,7 @@ export const MessageItem = memo(function MessageItem({
       title={title}
     >
       {/* Shortcut index badge */}
-      {shortcutIndex != null && shortcutIndex <= 19 && (
+      {shortcutIndex != null && (
         <kbd className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded border border-edge bg-surface-deep text-[10px] font-medium leading-none text-muted">
           {shortcutLabel(shortcutIndex) ?? '\u00A0'}
         </kbd>
