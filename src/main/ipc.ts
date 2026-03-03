@@ -755,8 +755,9 @@ export function registerIpcHandlers() {
         const remoteSha = remoteRef.stdout.trim();
         const isUpToDate = localSha === remoteSha;
 
-        // Count how many commits behind
+        // Count how many commits behind and get their details
         let commitsBehind = 0;
+        let commits: { hash: string; author: string; message: string; date: string }[] = [];
         if (!isUpToDate) {
           const countResult = await runProcess(
             "git",
@@ -766,12 +767,34 @@ export function registerIpcHandlers() {
           if (countResult.code === 0) {
             commitsBehind = parseInt(countResult.stdout.trim(), 10) || 0;
           }
+
+          // Fetch commit details (limit to 20 for the popover)
+          const logResult = await runProcess(
+            "git",
+            [
+              "log",
+              `${baseBranch}..origin/${baseBranch}`,
+              "--pretty=format:%h%x00%an%x00%s%x00%ar",
+              "-20",
+            ],
+            repoPath,
+          );
+          if (logResult.code === 0 && logResult.stdout.trim()) {
+            commits = logResult.stdout
+              .trim()
+              .split("\n")
+              .map((line) => {
+                const [hash, author, message, date] = line.split("\0");
+                return { hash, author, message, date };
+              });
+          }
         }
 
         return {
           success: true,
           isUpToDate,
           commitsBehind,
+          commits,
           localSha,
           remoteSha,
         };

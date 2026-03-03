@@ -1,10 +1,18 @@
 import { create } from 'zustand';
 
+export interface SyncCommit {
+  hash: string;
+  author: string;
+  message: string;
+  date: string;
+}
+
 interface SyncState {
   isChecking: boolean;
   isPulling: boolean;
   isUpToDate: boolean | null;
   commitsBehind: number;
+  behindCommits: SyncCommit[];
   error: string | null;
   checkMainBranch: (repoPath: string, baseBranch: string, silent?: boolean) => Promise<void>;
   pullMainBranch: (repoPath: string, baseBranch: string) => Promise<void>;
@@ -16,6 +24,7 @@ const initialState = {
   isPulling: false,
   isUpToDate: null as boolean | null,
   commitsBehind: 0,
+  behindCommits: [] as SyncCommit[],
   error: null as string | null,
 };
 
@@ -31,6 +40,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         set({
           isUpToDate: result.isUpToDate ?? null,
           commitsBehind: result.commitsBehind ?? 0,
+          behindCommits: result.commits ?? [],
           error: null,
         });
       } else {
@@ -52,7 +62,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     try {
       const result = await window.traceAPI.pullMain(repoPath, baseBranch);
       if (result.success) {
-        set({ isUpToDate: true, commitsBehind: 0 });
+        set({ isUpToDate: true, commitsBehind: 0, behindCommits: [] });
       } else {
         set({ error: result.error ?? 'Failed to pull' });
       }

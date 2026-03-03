@@ -1,6 +1,8 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { FiCheck, FiAlertCircle, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import { useSyncStore } from '../stores/syncStore';
 import { useChannelContext } from '../context/ChannelContext';
+import { CommitPopover } from './CommitPopover';
 
 export function SyncStatus() {
   const { enrichedActiveChannel } = useChannelContext();
@@ -10,7 +12,37 @@ export function SyncStatus() {
   const isPulling = useSyncStore((s) => s.isPulling);
   const isUpToDate = useSyncStore((s) => s.isUpToDate);
   const commitsBehind = useSyncStore((s) => s.commitsBehind);
+  const behindCommits = useSyncStore((s) => s.behindCommits);
   const syncError = useSyncStore((s) => s.error);
+
+  // ─── Commit popover on hover ───────────────────────────────────
+  const [showPopover, setShowPopover] = useState(false);
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spanRef = useRef<HTMLSpanElement>(null);
+
+  const handleMouseEnter = useCallback(() => {
+    if (!commitsBehind || behindCommits.length === 0) return;
+    hoverTimerRef.current = setTimeout(() => {
+      const rect = spanRef.current?.getBoundingClientRect();
+      if (rect) {
+        setTriggerRect(rect);
+        setShowPopover(true);
+      }
+    }, 400);
+  }, [commitsBehind, behindCommits.length]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+    setShowPopover(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
 
   if (!repoPath || (isUpToDate === null && !syncError)) return null;
 
@@ -48,7 +80,12 @@ export function SyncStatus() {
       ) : (
         <>
           <FiAlertCircle className="h-3 w-3 text-yellow-400" />
-          <span className="text-xs text-yellow-400">
+          <span
+            ref={spanRef}
+            className="cursor-default text-xs text-yellow-400"
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+          >
             {baseBranch} is {commitsBehind} commit{commitsBehind !== 1 ? 's' : ''} behind
           </span>
           <button
@@ -64,6 +101,13 @@ export function SyncStatus() {
             )}
             Pull
           </button>
+          {showPopover && triggerRect && (
+            <CommitPopover
+              commits={behindCommits}
+              totalBehind={commitsBehind}
+              triggerRect={triggerRect}
+            />
+          )}
         </>
       )}
     </div>

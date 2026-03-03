@@ -282,6 +282,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
       success: boolean;
       isUpToDate?: boolean;
       commitsBehind?: number;
+      commits?: { hash: string; author: string; message: string; date: string }[];
       localSha?: string;
       remoteSha?: string;
       error?: string;
