@@ -27,6 +27,7 @@ export function getWsConnectionSnapshot(): boolean {
 
 export function createGraphqlClient(): ApolloClient<unknown> {
   const serverUrl = getServerUrl();
+  console.log(`[GraphQL] Connecting to server at ${serverUrl}`);
 
   const rawHttpLink = new HttpLink({ uri: `${serverUrl}/graphql` });
 
