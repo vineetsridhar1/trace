@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiArrowRight, FiRefreshCw, FiAlertTriangle } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowRight, FiRefreshCw, FiAlertTriangle, FiSmartphone } from 'react-icons/fi';
 import { useTerminalStore } from '../stores/terminalStore';
+
+const MOBILE_WIDTH = 393;
 
 declare global {
   namespace JSX {
@@ -38,6 +40,7 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
   const [canGoForward, setCanGoForward] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [port, setPort] = useState<string | undefined>(undefined);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   // Subscribe to terminal store for port
   useEffect(() => {
@@ -161,6 +164,18 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
         >
           <FiRefreshCw className="h-3 w-3" />
         </button>
+        <button
+          type="button"
+          onClick={() => setIsMobileViewport((v) => !v)}
+          title={isMobileViewport ? 'Switch to desktop viewport' : 'Switch to mobile viewport'}
+          className={`flex h-6 w-6 items-center justify-center rounded ${
+            isMobileViewport
+              ? 'text-violet-400 bg-violet-500/10'
+              : 'text-[#565f89] hover:text-[#a9b1d6]'
+          }`}
+        >
+          <FiSmartphone className="h-3.5 w-3.5" />
+        </button>
         <input
           type="text"
           value={inputUrl}
@@ -172,7 +187,7 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
       </div>
 
       {/* Content area */}
-      <div className="relative flex-1 min-h-0">
+      <div className="relative flex-1 min-h-0 flex items-stretch justify-center">
         {loadError && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#16161e]">
             <FiAlertTriangle className="h-8 w-8 text-[#565f89]" />
@@ -190,13 +205,21 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
           </div>
         )}
         {url && (
-          <webview
-            ref={webviewRef as React.RefObject<HTMLElement>}
-            src={url}
-            partition="persist:browser-tab"
-            allowpopups="true"
-            style={{ width: '100%', height: '100%' }}
-          />
+          <div
+            style={{
+              width: isMobileViewport ? `min(${MOBILE_WIDTH}px, 100%)` : '100%',
+              transition: 'width 0.2s ease',
+            }}
+            className={isMobileViewport ? 'border-x border-[#292e42]' : ''}
+          >
+            <webview
+              ref={webviewRef as React.RefObject<HTMLElement>}
+              src={url}
+              partition="persist:browser-tab"
+              allowpopups="true"
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
         )}
       </div>
     </div>
