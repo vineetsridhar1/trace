@@ -68,10 +68,14 @@ function extractPromptFromRawPayload(rawPayload: unknown): string | null {
 
 /**
  * Run auto-complete logic when a Stop event arrives without a toolName
- * (Claude is NOT waiting on user input). Transitions in_progress → completed.
+ * (Claude is NOT waiting on user input). Transitions in_progress/needs_input → completed.
+ *
+ * Also handles `needs_input` because a late-arriving Stop from a previous
+ * process (killed for ExitPlanMode/AskUserQuestion) can race with the new
+ * process and reset the status to `needs_input` after it was already recovered.
  *
  * Safe to call multiple times — checks current DB status and only acts when
- * the workspace is still `in_progress`.
+ * the workspace is still `in_progress` or `needs_input`.
  */
 async function runAutoCompleteIfNeeded(
   workspaceId: string,
@@ -89,7 +93,7 @@ async function runAutoCompleteIfNeeded(
   });
   const currentStatus = freshMessage?.status ?? 'pending';
 
-  if (currentStatus === 'in_progress') {
+  if (currentStatus === 'in_progress' || currentStatus === 'needs_input') {
     // Find the start of the current turn (most recent user prompt) so we only
     // consider writes from THIS interaction, not older turns in a resumed session.
     const lastPrompt = await prisma.event.findFirst({
@@ -383,8 +387,12 @@ export async function ingestEvent(payload: HookEvent) {
       // second Stop (from the close handler, after waitForPendingPosts) has all
       // data available. runAutoCompleteIfNeeded re-reads status from DB and is
       // a no-op if the first Stop already transitioned the status.
-      const mergedToolName = (updates.toolName ?? recentStop.toolName) as string | null;
-      await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, mergedToolName);
+      //
+      // Use the INCOMING event's toolName for auto-complete, not the merged one.
+      // When a replacement process's Stop dedupes with a stale Stop from a
+      // previous process (e.g. one killed for ExitPlanMode), the recentStop may
+      // carry a stale toolName that would incorrectly block auto-complete.
+      await runAutoCompleteIfNeeded(workspace.id, channelId, payload.session_id, session.id, eventData.toolName as string | null | undefined);
 
       // Always re-broadcast the hydrated message on deduped Stop so the UI
       // receives final session/status/summary updates even when status is

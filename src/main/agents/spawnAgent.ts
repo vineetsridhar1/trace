@@ -314,7 +314,12 @@ export async function spawnAgent(
       workspaceId,
       `close code=${code} durationMs=${Date.now() - startedAt} stderrLen=${stderrBuffer.length}`,
     );
-    runningProcesses.delete(workspaceId);
+    // Only remove from the map if this process is still the registered one.
+    // A replacement spawn may have already inserted a new child process, and
+    // blindly deleting would remove the *new* entry.
+    if (runningProcesses.get(workspaceId) === child) {
+      runningProcesses.delete(workspaceId);
+    }
     const runState = runStateByWorkspaceId.get(workspaceId);
     const timedOut = runState?.timedOut ?? false;
     const userStopped = runState?.userStopped ?? false;
