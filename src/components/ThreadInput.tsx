@@ -285,7 +285,7 @@ export function ThreadInput({
                 id="thread-stop"
                 type="button"
                 onClick={onStopClaude}
-                className="h-[38px] cursor-pointer rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600"
+                className="btn-primary h-[38px] cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-on-accent"
               >
                 <svg
                   viewBox="0 0 24 24"
