@@ -114,9 +114,15 @@ function switchActiveTabs(root: LayoutNode, from: ViewMode, to: ViewMode): Layou
 
 // ─── Store ────────────────────────────────────────────────────────
 
+interface SavedLayout {
+  root: LayoutNode;
+  singletonOwners: Record<SingletonKey, string | null>;
+}
+
 interface PanelLayoutState {
   root: LayoutNode;
   singletonOwners: Record<SingletonKey, string | null>;
+  savedLayouts: Record<string, SavedLayout>;
 
   // Drag state — tracks whether a tab is being dragged (for showing drop zones)
   draggedTab: ViewMode | null;
@@ -132,6 +138,9 @@ interface PanelLayoutState {
   closeTab: (paneId: string, tab: ViewMode) => void;
   setSplitRatio: (splitId: string, ratio: number) => void;
   resetForWorkspace: (isMerged: boolean, hasTicket: boolean) => void;
+  saveLayoutForWorkspace: (workspaceId: string) => void;
+  restoreOrResetForWorkspace: (workspaceId: string, isMerged: boolean, hasTicket: boolean) => void;
+  clearSavedLayout: (workspaceId: string) => void;
   switchSingletonPanes: (from: ViewMode, to: ViewMode) => void;
   startDrag: (tab: ViewMode, paneId: string) => void;
   endDrag: () => void;
@@ -162,6 +171,7 @@ const defaultRoot: PaneGroup = {
 export const usePanelLayoutStore = create<PanelLayoutState>((set) => ({
   root: defaultRoot,
   singletonOwners: { terminal: null, browser: null },
+  savedLayouts: {},
   draggedTab: null,
   dragSourcePaneId: null,
 
@@ -317,6 +327,37 @@ export const usePanelLayoutStore = create<PanelLayoutState>((set) => ({
       const activeTab: ViewMode = isMerged && hasTicket ? 'ticket' : 'agent';
       const newRoot: PaneGroup = { type: 'pane', id: 'root', tabs: [...ALL_TABS], activeTab };
       return { root: newRoot, singletonOwners: { terminal: null, browser: null } };
+    }),
+
+  saveLayoutForWorkspace: (workspaceId) =>
+    set((state) => ({
+      savedLayouts: {
+        ...state.savedLayouts,
+        [workspaceId]: {
+          root: structuredClone(state.root),
+          singletonOwners: { ...state.singletonOwners },
+        },
+      },
+    })),
+
+  restoreOrResetForWorkspace: (workspaceId, isMerged, hasTicket) =>
+    set((state) => {
+      const saved = state.savedLayouts[workspaceId];
+      if (saved) {
+        return {
+          root: structuredClone(saved.root),
+          singletonOwners: { ...saved.singletonOwners },
+        };
+      }
+      const activeTab: ViewMode = isMerged && hasTicket ? 'ticket' : 'agent';
+      const newRoot: PaneGroup = { type: 'pane', id: 'root', tabs: [...ALL_TABS], activeTab };
+      return { root: newRoot, singletonOwners: { terminal: null, browser: null } };
+    }),
+
+  clearSavedLayout: (workspaceId) =>
+    set((state) => {
+      const { [workspaceId]: _, ...rest } = state.savedLayouts;
+      return { savedLayouts: rest };
     }),
 
   switchSingletonPanes: (from, to) =>

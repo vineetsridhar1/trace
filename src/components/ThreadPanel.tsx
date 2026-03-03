@@ -484,11 +484,24 @@ export function ThreadPanel() {
   // ─── Layout store ─────────────────────────────────────────────
   const layoutRoot = usePanelLayoutStore((s) => s.root);
 
+  const prevWorkspaceIdRef = useRef<string | null>(null);
   useEffect(() => {
-    usePanelLayoutStore.getState().resetForWorkspace(
-      workspaceStatus === "merged",
-      ticket !== null,
-    );
+    const prevId = prevWorkspaceIdRef.current;
+    prevWorkspaceIdRef.current = selectedWorkspaceId;
+
+    // Save layout for the workspace we're leaving
+    if (prevId) {
+      usePanelLayoutStore.getState().saveLayoutForWorkspace(prevId);
+    }
+
+    // Restore or reset layout for the workspace we're entering
+    if (selectedWorkspaceId) {
+      usePanelLayoutStore.getState().restoreOrResetForWorkspace(
+        selectedWorkspaceId,
+        workspaceStatus === "merged",
+        ticket !== null,
+      );
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
 

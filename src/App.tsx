@@ -50,6 +50,7 @@ import {
   getDefaultViewForChannel,
 } from "./stores/appUIStore";
 import { useClaudeRunStore } from "./stores/claudeRunStore";
+import { usePanelLayoutStore } from "./stores/panelLayoutStore";
 import { useSyncStore } from "./stores/syncStore";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useShortcutContextSync } from "./hooks/useShortcutContextSync";
@@ -444,6 +445,7 @@ function AppContent() {
         useWorkspaceStore.getState().removeWorkspace(workspaceId);
         useKanbanStore.getState().removeTicketByWorkspaceId(workspaceId);
         useTerminalStore.getState().killAllForWorkspace(workspaceId);
+        usePanelLayoutStore.getState().clearSavedLayout(workspaceId);
         void window.traceAPI.releasePorts(workspaceId);
         void window.traceAPI.deleteWorktree(workspaceId, getChannelRepoPath());
       } catch {
