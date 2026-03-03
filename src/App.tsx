@@ -35,7 +35,7 @@ import { ChannelSettingsModal } from "./components/ChannelSettingsModal";
 import { JoinChannelModal } from "./components/JoinChannelModal";
 import { CreateChannelModal } from "./components/CreateChannelModal";
 import { CreateServerModal } from "./components/CreateServerModal";
-
+import { ServerRail } from "./components/ServerRail";
 import { AiChatPanel } from "./components/AiChatPanel";
 import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -533,7 +533,12 @@ function AppContent() {
 
   const handleSwitchServer = useCallback(
     (serverId: string) => {
-      if (serverId === activeServerId) return;
+      if (serverId === activeServerId) {
+        useAppUIStore
+          .getState()
+          .setChannelWidth(useAppUIStore.getState().channelWidth > 0 ? 0 : 220);
+        return;
+      }
       switchServer(serverId);
       useAppUIStore.getState().setChannelWidth(220);
       const firstChannel = enrichedChannels.find(
@@ -729,6 +734,20 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [activeChannelId, refreshWorkspaces, subscriptionsActive]);
 
+  // On WS reconnection (false → true), catch up on any missed updates
+  const prevSubscriptionsActive = useRef(subscriptionsActive);
+  useEffect(() => {
+    if (
+      subscriptionsActive &&
+      !prevSubscriptionsActive.current &&
+      activeChannelId
+    ) {
+      void refreshWorkspaces(activeChannelId);
+      void fetchBoard(activeChannelId);
+    }
+    prevSubscriptionsActive.current = subscriptionsActive;
+  }, [subscriptionsActive, activeChannelId, refreshWorkspaces, fetchBoard]);
+
   // One-time initial view correction after channel data loads
   const initialViewCorrectedRef = useRef(false);
   useEffect(() => {
@@ -873,6 +892,17 @@ function AppContent() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface text-primary">
       <div className="flex min-h-0 flex-1 overflow-hidden">
+        {!isFullscreen && (
+          <ServerRail
+            servers={servers}
+            activeServerId={activeServerId}
+            onSwitchServer={handleSwitchServer}
+            onCreateServer={() =>
+              useAppUIStore.getState().setShowCreateServer(true)
+            }
+          />
+        )}
+
         <ChannelPanel
           channels={serverChannels}
           activeChannelId={activeChannelId}

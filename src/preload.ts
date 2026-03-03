@@ -157,6 +157,13 @@ contextBridge.exposeInMainWorld("traceAPI", {
     return () => ipcRenderer.removeListener("pty-exit", handler);
   },
 
+  onClaudeProcessExited: (callback: (workspaceId: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, workspaceId: string) =>
+      callback(workspaceId);
+    ipcRenderer.on("claude-process-exited", handler);
+    return () => ipcRenderer.removeListener("claude-process-exited", handler);
+  },
+
   getWorktreeDiff: (workspaceId: string, baseBranch: string) =>
     ipcRenderer.invoke("get-worktree-diff", workspaceId, baseBranch),
 

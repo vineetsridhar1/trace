@@ -9,6 +9,7 @@ import {
   resetWatchdog,
   stopWatchdog,
 } from "./watchdog";
+import { sendToRenderer } from "./ipc";
 import {
   runningProcesses,
   suppressSyntheticStopFor,
@@ -442,6 +443,8 @@ export async function spawnClaude(
     } catch (err) {
       console.error(`${tag} close handler error:`, err);
       appendClaudeDebugLog(workspaceId, `close handler error=${String(err)}`);
+    } finally {
+      sendToRenderer("claude-process-exited", workspaceId);
     }
   });
 

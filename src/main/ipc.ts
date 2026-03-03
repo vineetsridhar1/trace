@@ -129,6 +129,12 @@ export function setMainWindow(win: BrowserWindow) {
   mainWindowRef = win;
 }
 
+export function sendToRenderer(channel: string, ...args: unknown[]): void {
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+    mainWindowRef.webContents.send(channel, ...args);
+  }
+}
+
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
   if (!raw)

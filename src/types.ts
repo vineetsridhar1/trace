@@ -107,6 +107,9 @@ export interface TraceAPI {
   onPtyExit: (
     callback: (terminalId: string, exitCode: number) => void,
   ) => () => void;
+  onClaudeProcessExited: (
+    callback: (workspaceId: string) => void,
+  ) => () => void;
   getWorktreeDiff: (
     workspaceId: string,
     baseBranch: string,
