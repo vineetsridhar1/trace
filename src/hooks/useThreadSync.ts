@@ -57,24 +57,6 @@ export function useThreadSync(
     [],
   );
 
-  const tryPopulateFromCache = useCallback(
-    async (channelId: string, workspaceId: string, sessionId: string): Promise<boolean> => {
-      try {
-        const { data: cachedData } = await executeSessionEvents({
-          variables: { channelId, workspaceId, sessionId, limit: SESSION_PAGE_SIZE },
-          fetchPolicy: 'cache-only',
-        });
-        const events = (cachedData?.sessionEvents?.events ?? []) as ServerEvent[];
-        if (events.length === 0) return false;
-        applyEventsResult(channelId, workspaceId, sessionId, cachedData?.sessionEvents);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    [executeSessionEvents, applyEventsResult],
-  );
-
   const loadEventsForSession = useCallback(
     async (channelId: string, workspaceId: string, sessionId: string) => {
       const store = useThreadStore.getState();
@@ -96,21 +78,6 @@ export function useThreadSync(
   const loadSessionEvents = useCallback(
     async (workspace: Workspace) => {
       try {
-        const { data: cachedSessions } = await executeSessions({
-          variables: { channelId: workspace.channelId, workspaceId: workspace.id },
-          fetchPolicy: 'cache-only',
-        });
-        const cachedList = (cachedSessions?.sessions ?? []) as SessionInfo[];
-        if (cachedList.length > 0) {
-          // Bail if workspace changed while reading cache
-          if (useThreadStore.getState().selectedWorkspaceId !== workspace.id) return;
-          useThreadStore.getState().setSessions(cachedList);
-          const latestCached = cachedList[cachedList.length - 1];
-          useThreadStore.getState().setActiveSessionId(latestCached.id);
-          await tryPopulateFromCache(workspace.channelId, workspace.id, latestCached.id);
-        }
-
-        // Always fetch from network for fresh data
         const { data: sessionsData } = await executeSessions({
           variables: { channelId: workspace.channelId, workspaceId: workspace.id },
           fetchPolicy: 'network-only',
@@ -146,7 +113,7 @@ export function useThreadSync(
         useThreadStore.getState().setSessionStatus('error');
       }
     },
-    [executeSessions, loadEventsForSession, tryPopulateFromCache, reportClaudeActivity],
+    [executeSessions, loadEventsForSession, reportClaudeActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
@@ -186,12 +153,7 @@ export function useThreadSync(
       if (!workspace) return;
 
       useThreadStore.getState().setActiveSessionId(sessionId);
-
-      // Try cache pre-read to avoid showing loading spinner
-      const hadCache = await tryPopulateFromCache(workspace.channelId, workspace.id, sessionId);
-      if (!hadCache) {
-        useThreadStore.getState().setSessionStatus('loading');
-      }
+      useThreadStore.getState().setSessionStatus('loading');
 
       try {
         await loadEventsForSession(workspace.channelId, workspace.id, sessionId);
@@ -199,7 +161,7 @@ export function useThreadSync(
         useThreadStore.getState().setSessionStatus('error');
       }
     },
-    [loadEventsForSession, tryPopulateFromCache],
+    [loadEventsForSession],
   );
 
   const clearSession = useCallback(async (): Promise<string | null> => {
