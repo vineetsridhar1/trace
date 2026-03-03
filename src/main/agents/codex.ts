@@ -16,6 +16,8 @@ import type {
 export class CodexStreamParser implements AgentStreamParser {
   private buffer = "";
   private lastAssistantText = "";
+  private sessionId: string | undefined;
+  private usage: { input_tokens: number; output_tokens: number } | undefined;
   private toolCounter = 0;
   private itemIdToToolId = new Map<string, string>();
   private pendingPosts: Promise<void>[] = [];
@@ -56,9 +58,9 @@ export class CodexStreamParser implements AgentStreamParser {
 
   getEnrichment(): ParsedEnrichment {
     return {
-      sessionId: undefined,
+      sessionId: this.sessionId,
       lastAssistantText: this.lastAssistantText,
-      usage: undefined,
+      usage: this.usage,
     };
   }
 
@@ -98,13 +100,20 @@ export class CodexStreamParser implements AgentStreamParser {
       case "error":
         this.handleError(parsed);
         break;
+      case "turn.completed":
+        this.handleTurnCompleted(parsed);
+        break;
+      case "thread.started":
+        this.handleThreadStarted(parsed);
+        break;
       default:
         break;
     }
   }
 
   private handleAgentMessage(parsed: Record<string, unknown>): void {
-    const content = (parsed.content ?? parsed.text) as string | undefined;
+    const content =
+      (parsed.text as string) ?? (parsed.content as string) ?? undefined;
     if (content) {
       this.lastAssistantText = content;
     }
@@ -115,7 +124,10 @@ export class CodexStreamParser implements AgentStreamParser {
     if (!item) return;
 
     const itemType = item.type as string | undefined;
-    if (itemType === "agent_message") return;
+    this.log(`codex: item.started item.type=${itemType ?? "unknown"}`);
+
+    // agent_message and reasoning items are not tools — skip PreToolUse
+    if (itemType === "agent_message" || itemType === "reasoning") return;
 
     const toolName = this.mapCodexItemToToolName(itemType, item);
     if (!toolName) return;
@@ -141,9 +153,11 @@ export class CodexStreamParser implements AgentStreamParser {
     if (!item) return;
 
     const itemType = item.type as string | undefined;
+    this.log(`codex: item.completed item.type=${itemType ?? "unknown"}`);
 
+    // Capture agent text output — this is the primary response from Codex
     if (itemType === "agent_message") {
-      const text = item.text as string | undefined;
+      const text = (item.text as string) ?? (item.content as string);
       if (text) {
         this.lastAssistantText = text;
       }
@@ -175,6 +189,29 @@ export class CodexStreamParser implements AgentStreamParser {
     const message =
       (parsed.message as string) ?? (parsed.error as string) ?? "Unknown error";
     this.lastAssistantText += `\nError: ${message}`;
+  }
+
+  private handleTurnCompleted(parsed: Record<string, unknown>): void {
+    const usage = parsed.usage as
+      | { input_tokens?: number; output_tokens?: number }
+      | undefined;
+    if (usage) {
+      this.usage = {
+        input_tokens: usage.input_tokens ?? 0,
+        output_tokens: usage.output_tokens ?? 0,
+      };
+      this.log(
+        `codex: turn.completed usage in=${this.usage.input_tokens} out=${this.usage.output_tokens}`,
+      );
+    }
+  }
+
+  private handleThreadStarted(parsed: Record<string, unknown>): void {
+    const threadId = parsed.thread_id as string | undefined;
+    if (threadId) {
+      this.sessionId = threadId;
+      this.log(`codex: thread.started session_id=${threadId}`);
+    }
   }
 
   private mapCodexItemToToolName(
