@@ -63,6 +63,7 @@ import {
   usePresenceSubscription,
 } from "./hooks/usePresence";
 import { usePresenceStore } from "./stores/presenceStore";
+import { ExpandableText } from "./components/thread-events/ExpandableText";
 
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
   mutation UpdateWorkspaceStatus(
@@ -316,7 +317,7 @@ function AppContent() {
           const ws = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
           const description = ws?.preview || ws?.cliSession.cwd || workspaceId;
           toast(config.title, {
-            description,
+            description: <ExpandableText text={description} lineClamp={2} />,
             icon: config.icon,
             duration: 8000,
             action: {
@@ -1159,7 +1160,7 @@ function AppContent() {
         onSwitchChannel={handleSwitchChannel}
         onOpenThreadLink={handleOpenThreadLink}
       />
-      <Toaster position="bottom-right" theme="dark" toastOptions={{ duration: 5000 }} />
+      <Toaster position="bottom-right" theme="dark" closeButton toastOptions={{ duration: 5000 }} />
     </div>
   );
 }

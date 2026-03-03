@@ -3,6 +3,7 @@ import { gql, useSubscription } from '@apollo/client';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import type { Channel } from '../types';
+import { ExpandableText } from '../components/thread-events/ExpandableText';
 
 const CHANNEL_MESSAGE_CREATED_IN_SERVER_SUBSCRIPTION = gql`
   subscription ChannelMessageCreatedInServer($serverId: ID!) {
@@ -116,7 +117,7 @@ export function useChannelMessageNotifications({
           // In-app toast when focused but viewing a different channel
           const msgChannelId = msg.channelId;
           toast(msg.author.name, {
-            description: msg.content.length > 120 ? msg.content.slice(0, 120) + '…' : msg.content,
+            description: <ExpandableText text={msg.content} lineClamp={2} />,
             action: {
               label: `#${channelName}`,
               onClick: () => onNavigateRef.current?.(msgChannelId),

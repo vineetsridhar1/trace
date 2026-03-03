@@ -743,3 +743,9 @@ input[list]::-webkit-calendar-picker-indicator {
 [data-sonner-toaster] [data-sonner-toast] button[data-button]:hover {
   opacity: 0.9;
 }
+
+[data-sonner-toaster] [data-sonner-toast] button[data-close-button] {
+  background: var(--th-surface-elevated);
+  border: 1px solid var(--th-edge);
+  color: var(--th-muted);
+}
