@@ -61,6 +61,7 @@ interface TerminalState {
   onPtyExit: (terminalId: string) => void;
   setPtyProcesses: (processes: Record<string, PtyProcessInfo>) => void;
   killIdleForWorkspace: (workspaceId: string) => Promise<void>;
+  getEnvForWorkspace: (workspaceId: string) => Record<string, string> | undefined;
 }
 
 function buildAllEntries(map: Map<string, WorkspaceTerminalState>): TerminalEntry[] {
@@ -449,6 +450,10 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       ptyProcesses: processes,
       workspacesWithRunningProcesses: buildWorkspacesWithRunning(state._allTerminals, state.runningPtyIds, processes),
     }));
+  },
+
+  getEnvForWorkspace: (workspaceId) => {
+    return get()._allTerminals.get(workspaceId)?.env;
   },
 
   killIdleForWorkspace: async (workspaceId) => {

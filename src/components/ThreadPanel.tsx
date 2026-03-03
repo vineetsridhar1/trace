@@ -20,6 +20,7 @@ import { WorktreeChanges } from "./WorktreeChanges";
 import { TerminalTabs } from "./TerminalTabs";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadInput } from "./ThreadInput";
+import { BrowserTab } from "./BrowserTab";
 import { RunButtons } from "./RunButtons";
 import { CreationStatusBar } from "./CreationStatusBar";
 import { QueuedStatusBar } from "./QueuedStatusBar";
@@ -54,7 +55,7 @@ const _GQL_HANDOFF_WORKSPACE = gql`
   ${WORKSPACE_FIELDS}
 `;
 
-type ViewMode = "agent" | "ticket" | "files" | "terminal";
+type ViewMode = "agent" | "ticket" | "files" | "terminal" | "browser";
 
 const HANDOFF_ALLOWED_STATUSES = new Set(['in_progress', 'needs_input', 'completed', 'creation']);
 
@@ -218,7 +219,7 @@ export function ThreadPanel() {
   useEffect(() => {
     if (hasWorktree === false) {
       if (isFullscreen) handleExitFullscreen();
-      setViewMode((prev) => (prev === 'terminal' ? 'agent' : prev));
+      setViewMode((prev) => (prev === 'terminal' || prev === 'browser' ? 'agent' : prev));
     }
   }, [handleExitFullscreen, hasWorktree, isFullscreen]);
 
@@ -540,7 +541,7 @@ export function ThreadPanel() {
               workspaceId={selectedWorkspaceId}
               baseBranch={baseBranch}
             />
-          ) : viewMode === "terminal" ? null : (
+          ) : viewMode === "terminal" || viewMode === "browser" ? null : (
             <>
               <div
                 id="thread-content"
@@ -695,6 +696,14 @@ export function ThreadPanel() {
                 Initializing terminals...
               </div>
             )}
+          </div>
+
+          {/* Browser area — always mounted to preserve webview state across tab switches */}
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            style={{ display: viewMode === "browser" ? "flex" : "none" }}
+          >
+            <BrowserTab workspaceId={selectedWorkspaceId} />
           </div>
         </div>
 

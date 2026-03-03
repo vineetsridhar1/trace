@@ -6,7 +6,7 @@ import { getServerUrl } from '../types';
 import type { SessionInfo } from '../hooks/useThread';
 import type { CIStatus } from '../stores/workspaceStore';
 
-type ViewMode = 'agent' | 'ticket' | 'files' | 'terminal';
+type ViewMode = 'agent' | 'ticket' | 'files' | 'terminal' | 'browser';
 
 const HEADER_STATUS_CONFIG: Record<
   TicketStatus,
@@ -252,6 +252,20 @@ export const ThreadHeader = memo(function ThreadHeader({
             }`}
           >
             Terminal
+          </button>
+          <button
+            type="button"
+            disabled={hasWorktree !== true}
+            onClick={() => onSetViewMode('browser')}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              hasWorktree !== true
+                ? 'opacity-40 cursor-not-allowed text-[#565f89]'
+                : viewMode === 'browser'
+                  ? 'cursor-pointer bg-violet-500/20 text-violet-300'
+                  : 'cursor-pointer text-[#565f89] hover:text-[#a9b1d6]'
+            }`}
+          >
+            Browser
           </button>
         </div>
         {hasWorktree === false &&
