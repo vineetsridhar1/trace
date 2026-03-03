@@ -7,11 +7,12 @@ import { useShortcutStore } from '../stores/shortcutStore';
 import { useClaudeRunStore } from '../stores/claudeRunStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useCommandPaletteStore } from '../stores/commandPaletteStore';
+import { useAuth } from '../context/AuthContext';
 import type { Channel, Workspace, TicketStatus } from '../types';
 import { STATUS_GROUP_ORDER } from '../components/MessageItem';
 
 /** Flatten workspaces in the same visual order as the workspace list. */
-function flattenWorkspaces(workspaces: Workspace[]): Workspace[] {
+function flattenWorkspaces(workspaces: Workspace[], currentUserId?: string): Workspace[] {
   const buckets = new Map<TicketStatus, Workspace[]>();
   for (const ws of workspaces) {
     let status = (ws.status ?? 'pending') as TicketStatus;
@@ -26,7 +27,16 @@ function flattenWorkspaces(workspaces: Workspace[]): Workspace[] {
   const result: Workspace[] = [];
   for (const status of STATUS_GROUP_ORDER) {
     const items = buckets.get(status);
-    if (items) result.push(...items);
+    if (items) {
+      if (currentUserId) {
+        items.sort((a, b) => {
+          const aOwn = a.userId === currentUserId ? 0 : 1;
+          const bOwn = b.userId === currentUserId ? 0 : 1;
+          return aOwn - bOwn;
+        });
+      }
+      result.push(...items);
+    }
   }
   return result;
 }
@@ -49,6 +59,9 @@ export function useDefaultShortcuts({
   switchChannelRef.current = handleSwitchChannel;
   const openWorkspaceRef = useRef(handleOpenWorkspace);
   openWorkspaceRef.current = handleOpenWorkspace;
+  const { user: authUser } = useAuth();
+  const authUserRef = useRef(authUser);
+  authUserRef.current = authUser;
 
   // ─── Thread Panel Tabs (Mod+1-5) ─────────────────────────────────
   useHotkey('tab.agent', 'mod+1', () => useThreadStore.getState().setThreadViewMode('agent'), {
@@ -114,7 +127,7 @@ export function useDefaultShortcuts({
         preventDefault: false,
         action: () => {
           const workspaces = useWorkspaceStore.getState().workspaces;
-          const flat = flattenWorkspaces(workspaces);
+          const flat = flattenWorkspaces(workspaces, authUserRef.current?.id);
           const ws = flat[idx - 1];
           if (ws) openWorkspaceRef.current(ws);
         },
@@ -138,7 +151,7 @@ export function useDefaultShortcuts({
       context: 'global',
       action: () => {
         const workspaces = useWorkspaceStore.getState().workspaces;
-        const flat = flattenWorkspaces(workspaces);
+        const flat = flattenWorkspaces(workspaces, authUserRef.current?.id);
         if (flat.length === 0) return;
         const selectedId = useThreadStore.getState().selectedWorkspaceId;
         const currentIdx = flat.findIndex((ws) => ws.id === selectedId);
@@ -156,7 +169,7 @@ export function useDefaultShortcuts({
       context: 'global',
       action: () => {
         const workspaces = useWorkspaceStore.getState().workspaces;
-        const flat = flattenWorkspaces(workspaces);
+        const flat = flattenWorkspaces(workspaces, authUserRef.current?.id);
         if (flat.length === 0) return;
         const selectedId = useThreadStore.getState().selectedWorkspaceId;
         const currentIdx = flat.findIndex((ws) => ws.id === selectedId);
