@@ -18,7 +18,7 @@ export function SlashCommandMenu({ isOpen, commands, selectedIndex, onSelect }: 
   if (!isOpen) return null;
 
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-1 max-h-56 overflow-y-auto rounded-lg border border-[#292e42] bg-[#1f2335] py-1 shadow-lg">
+    <div className="absolute bottom-full left-0 right-0 mb-1 max-h-56 overflow-y-auto rounded-lg border border-edge bg-surface-elevated py-1 shadow-lg">
       {commands.map((cmd, i) => (
         <button
           key={cmd.name}
@@ -29,13 +29,13 @@ export function SlashCommandMenu({ isOpen, commands, selectedIndex, onSelect }: 
             onSelect(cmd);
           }}
           className={`flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
-            i === selectedIndex ? 'bg-violet-500/20 text-[#c0caf5]' : 'text-[#a9b1d6] hover:bg-[#292e42]'
+            i === selectedIndex ? 'bg-accent/20 text-primary' : 'text-primary hover:bg-surface-elevated'
           }`}
         >
-          <span className="font-medium text-violet-300">{cmd.displayName}</span>
-          <span className="flex-1 truncate text-[#565f89]">{cmd.description}</span>
+          <span className="font-medium text-accent-light">{cmd.displayName}</span>
+          <span className="flex-1 truncate text-muted">{cmd.description}</span>
           {cmd.source === 'custom' && (
-            <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-medium text-violet-300">
+            <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent-light">
               project
             </span>
           )}

@@ -20,7 +20,7 @@ export const TodoListPreview = memo(function TodoListPreview({
           <svg className="h-3.5 w-3.5 flex-shrink-0 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
             <path d="M5 13l4 4L19 7" />
           </svg>
-          <span className="text-[#565f89] line-through">
+          <span className="text-muted line-through">
             {t.content}
           </span>
         </li>

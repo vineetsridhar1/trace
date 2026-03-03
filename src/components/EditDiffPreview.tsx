@@ -6,7 +6,7 @@ import { useDiffSyntaxTokens } from '../utils/shikiDiffTokens';
 function DiffFallback({ title, text }: { title: string; text: string }) {
   return (
     <div className="edit-diff-view mt-2 space-y-2">
-      <div className="edit-diff-meta text-[11px] font-semibold text-[#a9b1d6]">{title}</div>
+      <div className="edit-diff-meta text-[11px] font-semibold text-primary">{title}</div>
       <pre>{text}</pre>
     </div>
   );
@@ -36,11 +36,11 @@ function DiffFileView({
   const HunkComponent = runtime.Hunk;
 
   return (
-    <div key={`${displayPath}-${fileIndex}`} className="edit-diff-file overflow-hidden rounded-md border border-[#3b3f5c]">
-      <div className="edit-diff-file-header border-b border-[#3b3f5c] bg-[#1a1b26] px-2 py-1 text-[11px] font-semibold text-[#a9b1d6]">
+    <div key={`${displayPath}-${fileIndex}`} className="edit-diff-file overflow-hidden rounded-md border border-edge-hover">
+      <div className="edit-diff-file-header border-b border-edge-hover bg-surface px-2 py-1 text-[11px] font-semibold text-primary">
         {displayPath}
       </div>
-      <div className="edit-diff-body bg-[#16161e]">
+      <div className="edit-diff-body bg-surface-deep">
         <DiffComponent
           viewType="unified"
           diffType={file?.type ?? 'modify'}
@@ -93,7 +93,7 @@ export function EditDiffPreview({ event }: { event: ServerEvent }) {
 
   return (
     <div className="edit-diff-view mt-2 space-y-2">
-      <div className="edit-diff-meta text-[11px] font-semibold text-[#a9b1d6]">{diffContent.title}</div>
+      <div className="edit-diff-meta text-[11px] font-semibold text-primary">{diffContent.title}</div>
       {files.slice(0, 5).map((file, fileIndex) => {
         const hunks = Array.isArray(file?.hunks) ? file.hunks : [];
         if (hunks.length === 0) return null;

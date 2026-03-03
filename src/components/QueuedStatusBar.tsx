@@ -100,7 +100,7 @@ export function QueuedStatusBar({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <div className="border-t border-[#292e42] bg-cyan-500/5 px-4 py-3">
+    <div className="border-t border-edge bg-cyan-500/5 px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
         <FiClock className="h-4 w-4 shrink-0 text-cyan-400" />
         <span className="text-sm text-cyan-300">

@@ -49,7 +49,7 @@ export const ThreadLinkPreview = memo(function ThreadLinkPreview({
 
   if (!workspace && loading) {
     return (
-      <div className="my-1 inline-block rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-xs text-[#565f89]">
+      <div className="my-1 inline-block rounded-lg border border-edge bg-surface-elevated px-3 py-2 text-xs text-muted">
         Loading thread...
       </div>
     );
@@ -57,7 +57,7 @@ export const ThreadLinkPreview = memo(function ThreadLinkPreview({
 
   if (!workspace) {
     return (
-      <div className="my-1 inline-block rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-xs text-[#565f89]">
+      <div className="my-1 inline-block rounded-lg border border-edge bg-surface-elevated px-3 py-2 text-xs text-muted">
         Thread not found
       </div>
     );
@@ -72,15 +72,15 @@ export const ThreadLinkPreview = memo(function ThreadLinkPreview({
     <button
       type="button"
       onClick={() => onNavigate(channelId, workspaceId)}
-      className="my-1 flex w-full max-w-sm cursor-pointer items-center gap-2.5 rounded-lg border border-[#292e42] bg-[#1f2335] px-3 py-2 text-left transition-colors hover:border-violet-400/30 hover:bg-[#1f2335]/80"
+      className="my-1 flex w-full max-w-sm cursor-pointer items-center gap-2.5 rounded-lg border border-edge bg-surface-elevated px-3 py-2 text-left transition-colors hover:border-accent-light/30 hover:bg-surface-elevated/80"
     >
       {/* Status dot */}
       <div className={`h-2 w-2 flex-shrink-0 rounded-full ${config.color} bg-current`} />
 
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-[#c0caf5]">{title}</div>
+        <div className="truncate text-xs font-medium text-primary">{title}</div>
         {branch && (
-          <div className="truncate font-mono text-[10px] text-[#565f89]">{branch}</div>
+          <div className="truncate font-mono text-[10px] text-muted">{branch}</div>
         )}
       </div>
 

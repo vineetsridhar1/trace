@@ -167,7 +167,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
     }
   }, [name, serverId, channelType, workspacesEnabled, selectedTeamIds, localRepoPath, baseBranch, defaultSetupScript, defaultRunScript, mySetupScript, myRunScript, mySystemInstructions, detectedOriginUrl, onCreated, onLocalConfigSave, executeCreateChannel]);
 
-  const textareaClass = 'w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono';
+  const textareaClass = 'w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none font-mono';
 
   return (
     <div
@@ -175,40 +175,40 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="w-[520px] max-h-[80vh] overflow-y-auto rounded-lg border border-[#292e42] bg-[#1a1b26] shadow-xl"
+        className="w-[520px] max-h-[80vh] overflow-y-auto rounded-lg border border-edge bg-surface shadow-xl"
       >
-        <div className="flex items-center justify-between border-b border-[#292e42] px-5 py-3">
-          <h2 className="text-sm font-semibold text-[#c0caf5]">Create {channelType === 'team' ? 'Team' : channelType === 'channel' ? 'Channel' : 'Project'}</h2>
-          <button type="button" onClick={onClose} className="text-[#565f89] hover:text-[#c0caf5]">
+        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+          <h2 className="text-sm font-semibold text-primary">Create {channelType === 'team' ? 'Team' : channelType === 'channel' ? 'Channel' : 'Project'}</h2>
+          <button type="button" onClick={onClose} className="text-muted hover:text-primary">
             <FiX className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
 
         <div className="space-y-5 px-5 py-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Name</label>
+            <label className="mb-1.5 block text-xs font-medium text-primary">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={channelType === 'team' ? 'my-team' : channelType === 'channel' ? 'general' : 'my-project'}
               autoFocus
-              className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
+              className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
             />
           </div>
 
           {/* Associated Teams (projects only) */}
           {channelType === 'project' && (
             <div className="relative">
-              <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Teams</label>
+              <label className="mb-1.5 block text-xs font-medium text-primary">Teams</label>
               {teams.length > 0 ? (
                 <>
                   <button
                     type="button"
                     onClick={() => setTeamsDropdownOpen((o) => !o)}
-                    className="flex w-full items-center justify-between rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] outline-none focus:border-[#7aa2f7]"
+                    className="flex w-full items-center justify-between rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary outline-none focus:border-accent"
                   >
-                    <span className={selectedTeamIds.length === 0 ? 'text-[#3b4261]' : ''}>
+                    <span className={selectedTeamIds.length === 0 ? 'text-[#404040]' : ''}>
                       {selectedTeamIds.length === 0
                         ? 'Select teams...'
                         : teams
@@ -216,10 +216,10 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                             .map((t) => `# ${t.name}`)
                             .join(', ')}
                     </span>
-                    <svg className={`h-3 w-3 text-[#565f89] transition-transform ${teamsDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 4.5L6 7.5L9 4.5" /></svg>
+                    <svg className={`h-3 w-3 text-muted transition-transform ${teamsDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 4.5L6 7.5L9 4.5" /></svg>
                   </button>
                   {teamsDropdownOpen && (
-                    <div className="absolute left-0 right-0 z-10 mt-1 max-h-40 overflow-y-auto rounded border border-[#292e42] bg-[#16161e] py-1 shadow-lg">
+                    <div className="absolute left-0 right-0 z-10 mt-1 max-h-40 overflow-y-auto rounded border border-edge bg-surface-deep py-1 shadow-lg">
                       {teams.map((team) => {
                         const selected = selectedTeamIds.includes(team.id);
                         return (
@@ -231,13 +231,13 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                                 selected ? prev.filter((id) => id !== team.id) : [...prev, team.id],
                               )
                             }
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#a9b1d6] hover:bg-[#292e42]"
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-primary hover:bg-surface-elevated"
                           >
                             <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                              selected ? 'border-[#7aa2f7] bg-[#7aa2f7]' : 'border-[#565f89]'
+                              selected ? 'border-accent bg-accent' : 'border-muted'
                             }`}>
                               {selected && (
-                                <svg className="h-2.5 w-2.5 text-[#1a1b26]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 6L5 8.5L9.5 3.5" /></svg>
+                                <svg className="h-2.5 w-2.5 text-on-accent" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 6L5 8.5L9.5 3.5" /></svg>
                               )}
                             </span>
                             <span># {team.name}</span>
@@ -248,9 +248,9 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                   )}
                 </>
               ) : (
-                <p className="text-xs italic text-[#565f89]">No teams yet — create a team first to associate it</p>
+                <p className="text-xs italic text-muted">No teams yet — create a team first to associate it</p>
               )}
-              <p className="mt-1.5 text-xs text-[#565f89]">Optional — associate this project with one or more teams</p>
+              <p className="mt-1.5 text-xs text-muted">Optional — associate this project with one or more teams</p>
             </div>
           )}
 
@@ -258,8 +258,8 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
           {channelType !== 'channel' && (<>
           <div className="flex items-center justify-between">
             <div>
-              <label className="text-xs font-medium text-[#a9b1d6]">Enable Workspaces</label>
-              <p className="text-xs text-[#565f89]">Link a repo to run code in isolated worktrees</p>
+              <label className="text-xs font-medium text-primary">Enable Workspaces</label>
+              <p className="text-xs text-muted">Link a repo to run code in isolated worktrees</p>
             </div>
             <button
               type="button"
@@ -281,7 +281,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                 }
               }}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                workspacesEnabled ? 'bg-[#7aa2f7]' : 'bg-[#292e42]'
+                workspacesEnabled ? 'bg-accent' : 'bg-surface-elevated'
               }`}
             >
               <span
@@ -295,10 +295,10 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
           {workspacesEnabled && (
             <>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Repository</label>
+                <label className="mb-1.5 block text-xs font-medium text-primary">Repository</label>
                 {localRepoPath && repoValid ? (
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#565f89]">
+                    <div className="flex-1 rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-muted">
                       {localRepoPath}
                     </div>
                     <button
@@ -313,7 +313,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                         setDefaultRunScript('');
                         setError(null);
                       }}
-                      className="shrink-0 rounded px-2 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+                      className="shrink-0 rounded px-2 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
                     >
                       Change
                     </button>
@@ -323,38 +323,38 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                     type="button"
                     onClick={() => void handleSelectFolder()}
                     disabled={validating}
-                    className="w-full rounded border border-dashed border-[#292e42] bg-[#16161e] px-3 py-3 text-sm text-[#565f89] hover:border-[#7aa2f7] hover:text-[#c0caf5] disabled:opacity-50"
+                    className="w-full rounded border border-dashed border-edge bg-surface-deep px-3 py-3 text-sm text-muted hover:border-accent hover:text-primary disabled:opacity-50"
                   >
                     {validating ? 'Validating...' : 'Select Folder'}
                   </button>
                 )}
                 {repoValid === true && detectedOriginUrl && (
-                  <p className="mt-1 text-xs text-[#9ece6a]">
-                    Origin: <span className="text-[#565f89]">{detectedOriginUrl}</span>
+                  <p className="mt-1 text-xs text-green-400">
+                    Origin: <span className="text-muted">{detectedOriginUrl}</span>
                   </p>
                 )}
                 {repoValid === false && error && (
-                  <p className="mt-1 text-xs text-[#f7768e]">{error}</p>
+                  <p className="mt-1 text-xs text-red-400">{error}</p>
                 )}
               </div>
 
               {repoValid && branches.length > 0 && (
                 <div className="relative">
-                  <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Base Branch</label>
+                  <label className="mb-1.5 block text-xs font-medium text-primary">Base Branch</label>
                   <input
                     type="text"
                     value={baseBranch}
                     onChange={(e) => setBaseBranch(e.target.value)}
                     list="branch-options"
                     placeholder="e.g. main"
-                    className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
+                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
                   />
                   <datalist id="branch-options">
                     {branches.map((b) => (
                       <option key={b} value={b} />
                     ))}
                   </datalist>
-                  <p className="mt-1 text-xs text-[#565f89]">Branch to merge worktrees into</p>
+                  <p className="mt-1 text-xs text-muted">Branch to merge worktrees into</p>
                 </div>
               )}
 
@@ -362,30 +362,30 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                 <>
                   {/* Environment Variables (read-only reference) */}
                   <div>
-                    <p className="mb-1.5 text-xs font-medium text-[#a9b1d6]">Available environment variables</p>
-                    <div className="rounded border border-[#292e42] bg-[#16161e] px-3 py-2 space-y-0.5 text-xs text-[#565f89]">
-                      <p><code className="text-[#9ece6a]">$PORT</code> — primary port (same as $TRACE_PORT_0)</p>
-                      <p><code className="text-[#9ece6a]">$TRACE_PORT_0</code> – <code className="text-[#9ece6a]">$TRACE_PORT_9</code> — 10 allocated ports</p>
-                      <p><code className="text-[#9ece6a]">$REPO_FOLDER</code> — worktree directory path</p>
+                    <p className="mb-1.5 text-xs font-medium text-primary">Available environment variables</p>
+                    <div className="rounded border border-edge bg-surface-deep px-3 py-2 space-y-0.5 text-xs text-muted">
+                      <p><code className="text-green-400">$PORT</code> — primary port (same as $TRACE_PORT_0)</p>
+                      <p><code className="text-green-400">$TRACE_PORT_0</code> – <code className="text-green-400">$TRACE_PORT_9</code> — 10 allocated ports</p>
+                      <p><code className="text-green-400">$REPO_FOLDER</code> — worktree directory path</p>
                     </div>
                   </div>
 
                   {/* ═══ Channel Settings ═══ */}
-                  <div className="border-t border-[#292e42] pt-4">
-                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7aa2f7]">Channel Settings</h3>
+                  <div className="border-t border-edge pt-4">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-accent">Channel Settings</h3>
 
                     {/* Default Setup Script */}
                     <div className="mb-4">
                       <div className="mb-2 flex items-center justify-between">
                         <div>
-                          <label className="text-xs font-medium text-[#a9b1d6]">Default Setup Script</label>
-                          <p className="text-xs text-[#565f89]">Runs when a new workspace is created</p>
+                          <label className="text-xs font-medium text-primary">Default Setup Script</label>
+                          <p className="text-xs text-muted">Runs when a new workspace is created</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => void handleSuggestScripts()}
                           disabled={suggesting}
-                          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-[#7aa2f7] hover:bg-[#292e42] disabled:opacity-50"
+                          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-accent hover:bg-surface-elevated disabled:opacity-50"
                         >
                           <FiZap className="h-3 w-3" aria-hidden="true" />
                           {suggesting ? 'Detecting...' : 'Suggest Scripts'}
@@ -404,8 +404,8 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                     {/* Default Run Script */}
                     <div>
                       <div className="mb-2">
-                        <label className="text-xs font-medium text-[#a9b1d6]">Default Run Script</label>
-                        <p className="text-xs text-[#565f89]">Runs when you click the play button</p>
+                        <label className="text-xs font-medium text-primary">Default Run Script</label>
+                        <p className="text-xs text-muted">Runs when you click the play button</p>
                       </div>
                       <textarea
                         value={defaultRunScript}
@@ -419,14 +419,14 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                   </div>
 
                   {/* ═══ My Settings ═══ */}
-                  <div className="border-t border-[#292e42] pt-4">
-                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7aa2f7]">My Settings</h3>
+                  <div className="border-t border-edge pt-4">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-accent">My Settings</h3>
 
                     {/* Setup Script Override */}
                     <div className="mb-4">
                       <div className="mb-2">
-                        <label className="text-xs font-medium text-[#a9b1d6]">Setup Script Override</label>
-                        <p className="text-xs text-[#565f89]">Runs when a new workspace is created and will override the default setup script</p>
+                        <label className="text-xs font-medium text-primary">Setup Script Override</label>
+                        <p className="text-xs text-muted">Runs when a new workspace is created and will override the default setup script</p>
                       </div>
                       <textarea
                         value={mySetupScript}
@@ -441,8 +441,8 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                     {/* Run Script Override */}
                     <div className="mb-4">
                       <div className="mb-2">
-                        <label className="text-xs font-medium text-[#a9b1d6]">Run Script Override</label>
-                        <p className="text-xs text-[#565f89]">Runs when you click the play button and will override the default run script</p>
+                        <label className="text-xs font-medium text-primary">Run Script Override</label>
+                        <p className="text-xs text-muted">Runs when you click the play button and will override the default run script</p>
                       </div>
                       <textarea
                         value={myRunScript}
@@ -457,8 +457,8 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                     {/* System Instructions */}
                     <div>
                       <div className="mb-2">
-                        <label className="text-xs font-medium text-[#a9b1d6]">System Instructions</label>
-                        <p className="text-xs text-[#565f89]">Injected as hidden context into every new task</p>
+                        <label className="text-xs font-medium text-primary">System Instructions</label>
+                        <p className="text-xs text-muted">Injected as hidden context into every new task</p>
                       </div>
                       <textarea
                         value={mySystemInstructions}
@@ -466,7 +466,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
                         placeholder={"e.g. This is a TypeScript monorepo. Always run tests with `npm test` from the root."}
                         rows={3}
                         style={{ fieldSizing: 'content' } as React.CSSProperties}
-                        className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none"
+                        className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none"
                       />
                     </div>
                   </div>
@@ -477,15 +477,15 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
           </>)}
 
           {error && repoValid !== false && (
-            <p className="text-xs text-[#f7768e]">{error}</p>
+            <p className="text-xs text-red-400">{error}</p>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-[#292e42] px-5 py-3">
+        <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded px-3 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+            className="rounded px-3 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
           >
             Cancel
           </button>
@@ -493,7 +493,7 @@ export function CreateChannelModal({ serverId, channelType, teams, onClose, onCr
             type="button"
             onClick={() => void handleCreate()}
             disabled={creating || !name.trim()}
-            className="rounded bg-[#7aa2f7] px-3 py-1.5 text-xs font-medium text-[#1a1b26] hover:bg-[#89b4fa] disabled:opacity-50"
+            className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-light disabled:opacity-50"
           >
             {creating ? 'Creating...' : 'Create'}
           </button>

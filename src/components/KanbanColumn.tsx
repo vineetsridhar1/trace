@@ -37,22 +37,22 @@ export function KanbanColumn({ column, onClickTicket, onDropTicket, onDeleteWork
   );
 
   return (
-    <div className="flex h-full w-[280px] flex-shrink-0 flex-col rounded-lg bg-[#1a1b26]">
+    <div className="flex h-full w-[280px] flex-shrink-0 flex-col rounded-lg bg-surface">
       <div className="flex items-center gap-2 px-3 py-3">
         {column.color && (
           <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: column.color }} />
         )}
-        <h3 className="text-xs font-semibold tracking-wide text-[#a9b1d6] uppercase">
+        <h3 className="text-xs font-semibold tracking-wide text-primary uppercase">
           {column.name}
         </h3>
-        <span className="ml-auto rounded-full bg-[#1f2335] px-2 py-0.5 text-[10px] font-medium text-[#565f89]">
+        <span className="ml-auto rounded-full bg-surface-elevated px-2 py-0.5 text-[10px] font-medium text-muted">
           {column.tickets.length}
         </span>
       </div>
 
       <div
         className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 transition-colors ${
-          dragOver ? 'bg-violet-500/5 ring-1 ring-inset ring-violet-500/20 rounded-lg' : ''
+          dragOver ? 'bg-accent/5 ring-1 ring-inset ring-accent/20 rounded-lg' : ''
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -69,7 +69,7 @@ export function KanbanColumn({ column, onClickTicket, onDropTicket, onDeleteWork
           />
         ))}
         {column.tickets.length === 0 && (
-          <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-[#292e42] py-8 text-xs text-[#565f89]">
+          <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-edge py-8 text-xs text-muted">
             No tickets
           </div>
         )}

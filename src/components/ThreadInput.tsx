@@ -114,11 +114,11 @@ export function ThreadInput({
   }, [isClaudeRunning, isQueued, sendNow]);
 
   return (
-    <div className="border-t border-[#292e42] px-3 py-3">
+    <div className="border-t border-edge px-3 py-3">
       {isClaudeRunning && (
         <div className="mb-2 flex items-center gap-2 px-1">
           <svg
-            className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-violet-400"
+            className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-accent-light"
             viewBox="0 0 24 24"
             fill="none"
             aria-hidden="true"
@@ -137,7 +137,7 @@ export function ThreadInput({
               d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
             />
           </svg>
-          <span className="text-xs text-violet-400">Claude is working...</span>
+          <span className="text-xs text-accent-light">Claude is working...</span>
           {lastUserMessageTime && (
             <ElapsedTimer startTime={lastUserMessageTime} />
           )}
@@ -150,7 +150,7 @@ export function ThreadInput({
           <button
             type="button"
             onClick={() => setIsQueued(false)}
-            className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[#565f89] transition-colors hover:bg-[#292e42] hover:text-[#c0caf5]"
+            className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
           >
             <FiX className="h-3 w-3" />
             Cancel
@@ -164,7 +164,7 @@ export function ThreadInput({
       {imageAttachments.uploading && (
         <div className="flex items-center gap-2 px-1 pb-2">
           <svg
-            className="h-3.5 w-3.5 animate-spin text-violet-400"
+            className="h-3.5 w-3.5 animate-spin text-accent-light"
             viewBox="0 0 24 24"
             fill="none"
             aria-hidden="true"
@@ -183,7 +183,7 @@ export function ThreadInput({
               d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
             />
           </svg>
-          <span className="text-xs text-[#565f89]">Uploading...</span>
+          <span className="text-xs text-muted">Uploading...</span>
         </div>
       )}
       <div className="flex items-end gap-2">
@@ -232,7 +232,7 @@ export function ThreadInput({
                 : 'Send to Claude...'
             }
             style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-            className={`w-full resize-none rounded-md border bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500 ${isQueued ? 'border-amber-500/50' : 'border-[#292e42]'}`}
+            className={`w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-accent ${isQueued ? 'border-amber-500/50' : 'border-edge'}`}
           />
         </div>
         {isClaudeRunning ? (
@@ -273,7 +273,7 @@ export function ThreadInput({
               id="thread-send"
               type="button"
               onClick={() => void sendNow()}
-              className="h-[38px] cursor-pointer rounded-md bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+              className="h-[38px] cursor-pointer rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light"
             >
               <FiSend className="h-4 w-4" aria-hidden="true" />
             </button>

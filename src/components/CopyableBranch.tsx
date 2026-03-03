@@ -22,7 +22,7 @@ export function CopyableBranch({ branch }: { branch: string }) {
 
   if (copied) {
     return (
-      <span className="flex items-center gap-1 rounded bg-[#1a1b26] px-1.5 py-0.5 font-mono text-[10px] text-green-400">
+      <span className="flex items-center gap-1 rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-green-400">
         <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
@@ -37,10 +37,10 @@ export function CopyableBranch({ branch }: { branch: string }) {
       onClick={handleClick}
       onMouseDown={stopEvent}
     >
-      <span className="block truncate rounded bg-[#1a1b26] px-1.5 py-0.5 font-mono text-[10px] text-blue-400">
+      <span className="block truncate rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-accent-light">
         {displayName}
       </span>
-      <span className="pointer-events-none invisible absolute left-0 top-0 z-10 whitespace-nowrap rounded bg-[#1a1b26] px-1.5 py-0.5 font-mono text-[10px] text-blue-400 shadow-lg group-hover/branch:visible">
+      <span className="pointer-events-none invisible absolute left-0 top-0 z-10 whitespace-nowrap rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-accent-light shadow-lg group-hover/branch:visible">
         {displayName}
       </span>
     </span>

@@ -62,9 +62,9 @@ function InteractionModeToggle({
         onClick={onCycle}
         className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
           mode === 'code'
-            ? 'border-[#292e42] bg-[#1a1b26] text-[#a9b1d6] hover:border-[#3b3f5c] hover:bg-[#1f2335]'
+            ? 'border-edge bg-surface text-primary hover:border-edge-hover hover:bg-surface-elevated'
             : mode === 'plan'
-              ? 'border-violet-500 bg-violet-500/20 text-violet-300'
+              ? 'border-accent bg-accent/20 text-accent-light'
               : 'border-amber-500 bg-amber-500/20 text-amber-300'
         }`}
       >
@@ -175,7 +175,7 @@ export function RunButtons({
   const hasRunAfter = channelTickets && channelTickets.length > 0 && onRunAfter;
 
   return (
-    <div className="border-t border-[#292e42] px-3 py-3">
+    <div className="border-t border-edge px-3 py-3">
       <textarea
         rows={1}
         value={prompt}
@@ -187,7 +187,7 @@ export function RunButtons({
           }
         }}
         style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-        className="mb-2 w-full resize-none rounded-md border border-[#292e42] bg-[#1a1b26] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+        className="mb-2 w-full resize-none rounded-md border border-edge bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-accent"
       />
       <div className="mb-2 flex items-center gap-1.5">
         <ModelEffortSelector
@@ -202,7 +202,7 @@ export function RunButtons({
         <button
           type="button"
           onClick={handleRun}
-          className={`flex-1 cursor-pointer bg-violet-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 ${hasRunAfter ? 'rounded-l-md' : 'rounded-md'}`}
+          className={`flex-1 cursor-pointer bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light ${hasRunAfter ? 'rounded-l-md' : 'rounded-md'}`}
         >
           Run
         </button>
@@ -211,19 +211,19 @@ export function RunButtons({
             <button
               type="button"
               onClick={() => setShowDropdown(!showDropdown)}
-              className="flex cursor-pointer items-center rounded-r-md border-l border-violet-400/30 bg-violet-500 px-2 py-2 text-white transition-colors hover:bg-violet-700"
+              className="flex cursor-pointer items-center rounded-r-md border-l border-accent-light/30 bg-accent px-2 py-2 text-on-accent transition-colors hover:bg-accent-light"
             >
               <FiChevronDown className="h-4 w-4" />
             </button>
             {showDropdown && (
-              <div className="absolute bottom-full right-0 mb-1 w-40 rounded-md border border-[#292e42] bg-[#1f2335] py-1 shadow-lg">
+              <div className="absolute bottom-full right-0 mb-1 w-40 rounded-md border border-edge bg-surface-elevated py-1 shadow-lg">
                 <button
                   type="button"
                   onClick={() => {
                     setShowDropdown(false);
                     setShowRunAfter(true);
                   }}
-                  className="w-full cursor-pointer px-3 py-1.5 text-left text-sm text-[#c0caf5] hover:bg-[#292e42]"
+                  className="w-full cursor-pointer px-3 py-1.5 text-left text-sm text-primary hover:bg-surface-elevated"
                 >
                   Run After...
                 </button>

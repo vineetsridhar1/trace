@@ -7,7 +7,7 @@ import { ScrambleText } from './ScrambleText';
 export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; avatarBg: string; avatarText: string }> = {
   pending: { label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', avatarBg: 'bg-yellow-500/20', avatarText: 'text-yellow-400' },
   creation: { label: 'Creating', color: 'text-orange-400', bgColor: 'bg-orange-400/10', avatarBg: 'bg-orange-500/20', avatarText: 'text-orange-400' },
-  in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-400/10', avatarBg: 'bg-blue-500', avatarText: 'text-white' },
+  in_progress: { label: 'In Progress', color: 'text-accent-light', bgColor: 'bg-accent-light/10', avatarBg: 'bg-accent', avatarText: 'text-on-accent' },
   completed: { label: 'Done', color: 'text-green-400', bgColor: 'bg-green-400/10', avatarBg: 'bg-green-500/20', avatarText: 'text-green-400' },
   merged: { label: 'Merged', color: 'text-purple-400', bgColor: 'bg-purple-400/10', avatarBg: 'bg-purple-500/20', avatarText: 'text-purple-400' },
   needs_input: { label: 'Needs Input', color: 'text-amber-400', bgColor: 'bg-amber-400/10', avatarBg: 'bg-amber-500/20', avatarText: 'text-amber-400' },
@@ -32,7 +32,7 @@ const DONE_STATUSES = new Set<TicketStatus>(['completed']);
 
 function StatusIcon({ status, isRunning }: { status: TicketStatus; isRunning: boolean }) {
   if (ACTIVE_STATUSES.has(status)) {
-    return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-blue-400" />;
+    return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-accent-light" />;
   }
   if (DONE_STATUSES.has(status)) {
     return <FiCheck className="h-4 w-4 flex-shrink-0 text-green-400" />;
@@ -109,9 +109,9 @@ export const MessageItem = memo(function MessageItem({
 
       {/* Title + branch stacked */}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm text-[#c0caf5]"><ScrambleText text={title} /></div>
+        <div className="truncate text-sm text-primary"><ScrambleText text={title} /></div>
         {branch && (
-          <div className="truncate font-mono text-[10px] text-[#565f89]">{branch}</div>
+          <div className="truncate font-mono text-[10px] text-muted">{branch}</div>
         )}
       </div>
 
@@ -126,7 +126,7 @@ export const MessageItem = memo(function MessageItem({
       {/* Delete worktree button for merged items with active worktrees */}
       {hasActiveWorktree && onDeleteWorktree && (
         isDeletingWorktree ? (
-          <div title="Deleting worktree" className="flex-shrink-0 p-0.5 text-[#565f89]">
+          <div title="Deleting worktree" className="flex-shrink-0 p-0.5 text-muted">
             <FiLoader className="h-3 w-3 animate-spin" />
           </div>
         ) : (
@@ -134,7 +134,7 @@ export const MessageItem = memo(function MessageItem({
             role="button"
             tabIndex={-1}
             title="Delete worktree"
-            className="flex-shrink-0 cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors"
+            className="flex-shrink-0 cursor-pointer rounded p-0.5 text-muted hover:bg-red-500/20 hover:text-red-400 transition-colors"
             onClick={(e) => {
               e.stopPropagation();
               onDeleteWorktree(workspace.id);
@@ -156,7 +156,7 @@ export const MessageItem = memo(function MessageItem({
         <div
           role="button"
           tabIndex={-1}
-          className="hidden flex-shrink-0 cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
+          className="hidden flex-shrink-0 cursor-pointer rounded p-0.5 text-muted hover:bg-red-500/20 hover:text-red-400 transition-colors group-hover:block"
           onClick={(e) => {
             e.stopPropagation();
             onDeleteWorkspace(workspace.id);

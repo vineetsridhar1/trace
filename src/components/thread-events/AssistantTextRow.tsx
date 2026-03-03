@@ -7,7 +7,7 @@ export const AssistantTextRow = memo(function AssistantTextRow({
   text: string;
 }) {
   return (
-    <div className="px-1 py-1.5 text-[13px] leading-relaxed text-[#a9b1d6]">
+    <div className="px-1 py-1.5 text-[13px] leading-relaxed text-primary">
       <ExpandableText text={text} lineClamp={6} />
     </div>
   );

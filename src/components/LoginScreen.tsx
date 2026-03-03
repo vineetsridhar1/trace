@@ -31,8 +31,8 @@ export function LoginScreen() {
       alignItems: 'center',
       justifyContent: 'center',
       height: '100vh',
-      background: '#1a1a2e',
-      color: '#e0e0e0',
+      background: 'var(--th-surface)',
+      color: 'var(--th-heading)',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     }}>
       <div style={{
@@ -42,11 +42,11 @@ export function LoginScreen() {
         gap: '24px',
         padding: '48px',
         borderRadius: '12px',
-        background: '#16213e',
-        border: '1px solid #2a2a4a',
+        background: 'var(--th-surface-elevated)',
+        border: '1px solid var(--th-surface-hover)',
       }}>
         <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600 }}>Trace</h1>
-        <p style={{ margin: 0, color: '#888', fontSize: '14px' }}>Sign in to continue</p>
+        <p style={{ margin: 0, color: 'var(--th-muted)', fontSize: '14px' }}>Sign in to continue</p>
 
         <button
           onClick={handleGitHubLogin}

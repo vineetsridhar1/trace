@@ -702,7 +702,7 @@ function AppContent() {
 
   // ─── Render ──────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#1a1b26] text-[#c0caf5]">
+    <div className="flex h-screen flex-col overflow-hidden bg-surface text-primary">
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {!isFullscreen && (
           <ServerRail

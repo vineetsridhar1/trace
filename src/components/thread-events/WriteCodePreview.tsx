@@ -18,14 +18,14 @@ export const WriteCodePreview = memo(function WriteCodePreview({
 
   return (
     <div className="mt-2">
-      <div className="edit-diff-meta mb-1 text-[11px] font-semibold text-[#a9b1d6]">
+      <div className="edit-diff-meta mb-1 text-[11px] font-semibold text-primary">
         Write &middot; {displayPath}
       </div>
-      <div className="overflow-hidden rounded-md border border-[#3b3f5c]">
-        <div className="border-b border-[#3b3f5c] bg-[#1a1b26] px-2 py-1 text-[11px] font-semibold text-[#a9b1d6]">
+      <div className="overflow-hidden rounded-md border border-edge-hover">
+        <div className="border-b border-edge-hover bg-surface px-2 py-1 text-[11px] font-semibold text-primary">
           {displayPath}
         </div>
-        <div className="bg-[#16161e]">
+        <div className="bg-surface-deep">
           <SyntaxHighlightedCode code={truncated} filePath={rawPath} />
         </div>
       </div>

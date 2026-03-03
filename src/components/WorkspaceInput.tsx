@@ -47,15 +47,15 @@ export function WorkspaceInput() {
   }, [messageInput, sendMessage, imageAttachments, fileMention]);
 
   return (
-    <div className="border-t border-[#292e42] px-3 py-3">
+    <div className="border-t border-edge px-3 py-3">
       <ImageThumbnails images={imageAttachments.attachments} onRemove={imageAttachments.removeAttachment} />
       {imageAttachments.uploading && (
         <div className="flex items-center gap-2 px-1 pb-2">
-          <svg className="h-3.5 w-3.5 animate-spin text-violet-400" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg className="h-3.5 w-3.5 animate-spin text-accent-light" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
           </svg>
-          <span className="text-xs text-[#565f89]">Uploading...</span>
+          <span className="text-xs text-muted">Uploading...</span>
         </div>
       )}
       <div className="flex items-end gap-2">
@@ -90,7 +90,7 @@ export function WorkspaceInput() {
             }}
             placeholder="Create a workspace..."
             style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-            className="w-full resize-none rounded-md border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none transition-colors placeholder:text-[#565f89] focus:border-violet-500"
+            className="w-full resize-none rounded-md border border-edge bg-surface-elevated px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-accent"
           />
         </div>
         <Tooltip text="Send">
@@ -98,7 +98,7 @@ export function WorkspaceInput() {
             id="message-send"
             type="button"
             onClick={() => void handleSendMessage()}
-            className="h-[38px] cursor-pointer rounded-md bg-violet-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+            className="h-[38px] cursor-pointer rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light"
           >
             <FiSend className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -108,8 +108,8 @@ export function WorkspaceInput() {
         <div className="flex items-center gap-2 px-1 pt-2">
           {isChecking ? (
             <>
-              <FiRefreshCw className="h-3 w-3 animate-spin text-[#565f89]" />
-              <span className="text-xs text-[#565f89]">Checking {baseBranch}...</span>
+              <FiRefreshCw className="h-3 w-3 animate-spin text-muted" />
+              <span className="text-xs text-muted">Checking {baseBranch}...</span>
             </>
           ) : syncError ? (
             <>
@@ -118,7 +118,7 @@ export function WorkspaceInput() {
               <button
                 type="button"
                 onClick={() => void useSyncStore.getState().checkMainBranch(repoPath, baseBranch)}
-                className="cursor-pointer text-xs text-[#565f89] hover:text-[#c0caf5] transition-colors"
+                className="cursor-pointer text-xs text-muted hover:text-primary transition-colors"
               >
                 <FiRefreshCw className="h-3 w-3" />
               </button>
@@ -130,7 +130,7 @@ export function WorkspaceInput() {
               <button
                 type="button"
                 onClick={() => void useSyncStore.getState().checkMainBranch(repoPath, baseBranch)}
-                className="cursor-pointer text-xs text-[#565f89] hover:text-[#c0caf5] transition-colors"
+                className="cursor-pointer text-xs text-muted hover:text-primary transition-colors"
               >
                 <FiRefreshCw className="h-3 w-3" />
               </button>
@@ -145,7 +145,7 @@ export function WorkspaceInput() {
                 type="button"
                 onClick={() => void useSyncStore.getState().pullMainBranch(repoPath, baseBranch)}
                 disabled={isPulling}
-                className="flex cursor-pointer items-center gap-1 rounded bg-[#292e42] px-2 py-0.5 text-xs text-[#c0caf5] hover:bg-[#343a55] transition-colors disabled:opacity-50"
+                className="flex cursor-pointer items-center gap-1 rounded bg-surface-elevated px-2 py-0.5 text-xs text-primary hover:bg-surface-hover transition-colors disabled:opacity-50"
               >
                 {isPulling ? (
                   <FiRefreshCw className="h-3 w-3 animate-spin" />

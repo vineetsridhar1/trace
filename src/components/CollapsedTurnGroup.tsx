@@ -42,11 +42,11 @@ export function CollapsedTurnGroup({
         onClick={onToggle}
         className="activity-row-header w-full cursor-pointer text-left"
       >
-        <span className={`collapsed-turn-chevron text-[10px] text-[#7f8bbf] ${isExpanded ? 'open' : ''}`}>
+        <span className={`collapsed-turn-chevron text-[10px] text-muted ${isExpanded ? 'open' : ''}`}>
           ▶
         </span>
         {node.toolCallCount > 0 && (
-          <FiTerminal className="text-[12px] text-[#6472a7] shrink-0" />
+          <FiTerminal className="text-[12px] text-faint shrink-0" />
         )}
         <span className="activity-row-title opacity-60 font-light">
           {buildSummary(node)}
@@ -59,11 +59,11 @@ export function CollapsedTurnGroup({
             if (inner.kind === 'session-divider') {
               return (
                 <div key={inner.id} className="my-3 flex items-center gap-3 px-2">
-                  <div className="h-px flex-1 bg-violet-500/20" />
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-violet-400/60">
+                  <div className="h-px flex-1 bg-accent/20" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-accent-light/60">
                     New Context
                   </span>
-                  <div className="h-px flex-1 bg-violet-500/20" />
+                  <div className="h-px flex-1 bg-accent/20" />
                 </div>
               );
             }

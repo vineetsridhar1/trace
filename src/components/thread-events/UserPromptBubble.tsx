@@ -23,10 +23,10 @@ export const UserPromptBubble = memo(function UserPromptBubble({
   return (
     <>
       <div className="thread-bubble flex justify-end">
-        <div className="max-w-[85%] rounded-xl rounded-br-sm border border-violet-500/40 bg-violet-500/15 px-3 py-2">
+        <div className="max-w-[85%] rounded-xl rounded-br-sm border border-accent/40 bg-accent/15 px-3 py-2">
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-xs font-semibold text-violet-300">You</span>
-            <span className="text-xs text-[#565f89]">{time}</span>
+            <span className="text-xs font-semibold text-accent-light">You</span>
+            <span className="text-xs text-muted">{time}</span>
           </div>
           <ExpandableText text={prompt} lineClamp={4} />
           {attachments.length > 0 && (
@@ -36,7 +36,7 @@ export const UserPromptBubble = memo(function UserPromptBubble({
                   key={a.key}
                   type="button"
                   onClick={() => setLightboxSrc(`${getServerUrl()}/attachments/file/${a.key}`)}
-                  className="h-16 w-16 overflow-hidden rounded-md border border-violet-500/30 transition-colors hover:border-violet-500/60"
+                  className="h-16 w-16 overflow-hidden rounded-md border border-accent/30 transition-colors hover:border-accent/60"
                 >
                   <img
                     src={`${getServerUrl()}/attachments/file/${a.key}`}

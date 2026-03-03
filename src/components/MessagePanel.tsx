@@ -76,17 +76,17 @@ function CollapsibleStatusGroup({
     <div>
       <button
         type="button"
-        className="flex w-full cursor-pointer items-center gap-1.5 px-3 py-1.5 hover:bg-[#1f2335]/50 transition-colors"
+        className="flex w-full cursor-pointer items-center gap-1.5 px-3 py-1.5 hover:bg-surface-elevated/50 transition-colors"
         onClick={() => setOpen((v) => !v)}
       >
         <FiChevronRight
-          className={`h-3 w-3 text-[#565f89] transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+          className={`h-3 w-3 text-muted transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
         />
         <div className={`h-2 w-2 flex-shrink-0 rounded-full ${config.color} bg-current`} />
         <span className={`text-[11px] font-semibold uppercase tracking-wide ${config.color}`}>
           {config.label}
         </span>
-        <span className="rounded-full bg-[#1f2335] px-1.5 py-0.5 text-[10px] font-medium text-[#565f89]">
+        <span className="rounded-full bg-surface-elevated px-1.5 py-0.5 text-[10px] font-medium text-muted">
           {count}
         </span>
       </button>
@@ -384,21 +384,21 @@ export function MessagePanel({
   if (needsJoin) {
     const channelName = panelTitle.replace(/^#\s*/, '');
     return (
-      <div id="messages-panel" className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[#1a1b26]" style={{ minWidth: 200 }}>
+      <div id="messages-panel" className="flex min-h-0 flex-1 flex-col items-center justify-center bg-surface" style={{ minWidth: 200 }}>
         <div className="flex max-w-sm flex-col items-center text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#7aa2f7]/10">
-            <FiFolder className="h-6 w-6 text-[#7aa2f7]" />
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
+            <FiFolder className="h-6 w-6 text-accent" />
           </div>
-          <h3 className="mb-2 text-base font-semibold text-[#c0caf5]">
+          <h3 className="mb-2 text-base font-semibold text-primary">
             Join #{channelName}
           </h3>
-          <p className="mb-5 text-sm text-[#565f89]">
+          <p className="mb-5 text-sm text-muted">
             Connect your local repository to start creating workspaces in this channel.
           </p>
           <button
             type="button"
             onClick={onJoinChannel}
-            className="rounded-md bg-[#7aa2f7] px-4 py-2 text-sm font-medium text-[#1a1b26] transition-colors hover:bg-[#89b4fa]"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light"
           >
             Set Up Local Repo
           </button>
@@ -408,7 +408,7 @@ export function MessagePanel({
   }
 
   return (
-    <div id="messages-panel" className="flex min-h-0 flex-1 flex-col bg-[#1a1b26]" style={{ minWidth: 200 }}>
+    <div id="messages-panel" className="flex min-h-0 flex-1 flex-col bg-surface" style={{ minWidth: 200 }}>
       {middlePanelView === 'chat' ? (
         <div className="flex min-h-0 flex-1 flex-col">
           {/* Single scroll container for empty state + messages */}
@@ -439,7 +439,7 @@ export function MessagePanel({
                           className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full"
                         />
                       ) : (
-                        <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-500/30 text-[10px] font-bold text-violet-300">
+                        <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent/30 text-[10px] font-bold text-accent-light">
                           {msg.author.name.charAt(0).toUpperCase()}
                         </div>
                       )
@@ -449,13 +449,13 @@ export function MessagePanel({
                     <div className="min-w-0 flex-1">
                       {isFirstInGroup && (
                         <div className="flex items-baseline gap-2">
-                          <span className={`text-xs font-semibold ${isOwn ? 'text-violet-300' : 'text-[#c0caf5]'}`}>
+                          <span className={`text-xs font-semibold ${isOwn ? 'text-accent-light' : 'text-primary'}`}>
                             {msg.author.name}
                           </span>
-                          <span className="text-[10px] text-[#565f89]">{formatMessageTime(msg.createdAt)}</span>
+                          <span className="text-[10px] text-muted">{formatMessageTime(msg.createdAt)}</span>
                         </div>
                       )}
-                      <div className="text-sm text-[#a9b1d6]">{onOpenThreadLink ? renderMessageContent(msg.content, onOpenThreadLink) : <span className="whitespace-pre-wrap">{msg.content}</span>}</div>
+                      <div className="text-sm text-primary">{onOpenThreadLink ? renderMessageContent(msg.content, onOpenThreadLink) : <span className="whitespace-pre-wrap">{msg.content}</span>}</div>
                     </div>
                   </div>
                 );
@@ -464,7 +464,7 @@ export function MessagePanel({
           </div>
           </div>
           {/* Input */}
-          <div className="border-t border-[#292e42] px-3 py-3">
+          <div className="border-t border-edge px-3 py-3">
             <div className="flex items-end gap-2">
               <textarea
                 rows={1}
@@ -473,13 +473,13 @@ export function MessagePanel({
                 onKeyDown={handleChatKeyDown}
                 placeholder="Send a message..."
                 style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-                className="w-full resize-none rounded-md border border-[#292e42] bg-[#1f2335] px-3 py-2 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500/50"
+                className="w-full resize-none rounded-md border border-edge bg-surface-elevated px-3 py-2 text-sm text-primary outline-none placeholder:text-muted focus:border-accent/50"
               />
               <button
                 type="button"
                 onClick={handleSendChat}
                 disabled={!chatInput.trim()}
-                className="flex h-[38px] w-[38px] flex-shrink-0 cursor-pointer items-center justify-center rounded-md bg-violet-500/20 text-violet-300 transition-colors hover:bg-violet-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-[38px] w-[38px] flex-shrink-0 cursor-pointer items-center justify-center rounded-md bg-accent/20 text-accent-light transition-colors hover:bg-accent/30 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <FiSend className="h-4 w-4" />
               </button>
@@ -489,7 +489,7 @@ export function MessagePanel({
       ) : middlePanelView === 'board' ? (
         <>
           <div className="flex items-center gap-2 px-3 py-2">
-            <div className="flex rounded-lg bg-[#1f2335] p-0.5">
+            <div className="flex rounded-lg bg-surface-elevated p-0.5">
               {([
                 { key: 'list', label: 'List', icon: FiList },
                 { key: 'board', label: 'Board', icon: FiColumns },
@@ -501,8 +501,8 @@ export function MessagePanel({
                   onClick={() => setProjectSubView(key)}
                   className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                     projectSubView === key
-                      ? 'bg-violet-500/20 text-violet-300'
-                      : 'text-[#565f89] hover:text-[#a9b1d6]'
+                      ? 'bg-accent/20 text-accent-light'
+                      : 'text-muted hover:text-primary'
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -521,11 +521,11 @@ export function MessagePanel({
               onCreatePR={handleBoardCreatePR}
             />
           ) : projectSubView === 'list' ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-[#565f89]">
+            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
               List view coming soon
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-[#565f89]">
+            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
               Graph view coming soon
             </div>
           )}
@@ -533,7 +533,7 @@ export function MessagePanel({
       ) : middlePanelView === 'projects' ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {teamProjects.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+            <div className="flex flex-1 items-center justify-center text-sm text-muted">
               No projects associated with this team
             </div>
           ) : (
@@ -543,13 +543,13 @@ export function MessagePanel({
                   key={project.id}
                   type="button"
                   onClick={() => onSwitchChannel?.(project.id)}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#1f2335]"
+                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-elevated"
                 >
-                  <span className="text-[#565f89] text-sm">#</span>
+                  <span className="text-muted text-sm">#</span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-[#c0caf5]">{project.name}</div>
+                    <div className="truncate text-sm font-medium text-primary">{project.name}</div>
                   </div>
-                  <FiChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-[#565f89]" />
+                  <FiChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
                 </button>
               ))}
             </div>

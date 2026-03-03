@@ -19,7 +19,7 @@ const HEADER_STATUS_CONFIG: Record<
   },
   in_progress: {
     label: 'In Progress',
-    className: 'text-blue-400 bg-blue-400/10',
+    className: 'text-accent-light bg-accent-light/10',
   },
   completed: {
     label: 'Done',
@@ -189,10 +189,10 @@ export const ThreadHeader = memo(function ThreadHeader({
   return (
     <div
       id="thread-header"
-      className="flex items-center justify-between border-b border-[#292e42] px-4 py-3"
+      className="flex items-center justify-between border-b border-edge px-4 py-3"
     >
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-violet-300">
+        <h3 className="text-sm font-semibold text-accent-light">
           {selectedWorkspaceId
             ? `trace/${selectedWorkspaceId.slice(0, 8)}`
             : 'Thread'}
@@ -207,14 +207,14 @@ export const ThreadHeader = memo(function ThreadHeader({
             {statusConfig.label}
           </span>
         )}
-        <div className="flex rounded-lg bg-[#1f2335] p-0.5">
+        <div className="flex rounded-lg bg-surface-elevated p-0.5">
           <button
             type="button"
             onClick={() => onSetViewMode('agent')}
             className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
               viewMode === 'agent'
-                ? 'bg-violet-500/20 text-violet-300'
-                : 'text-[#565f89] hover:text-[#a9b1d6]'
+                ? 'bg-accent/20 text-accent-light'
+                : 'text-muted hover:text-primary'
             }`}
           >
             Agent
@@ -225,8 +225,8 @@ export const ThreadHeader = memo(function ThreadHeader({
               onClick={() => onSetViewMode('ticket')}
               className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                 viewMode === 'ticket'
-                  ? 'bg-violet-500/20 text-violet-300'
-                  : 'text-[#565f89] hover:text-[#a9b1d6]'
+                  ? 'bg-accent/20 text-accent-light'
+                  : 'text-muted hover:text-primary'
               }`}
             >
               Ticket
@@ -237,8 +237,8 @@ export const ThreadHeader = memo(function ThreadHeader({
             onClick={() => onSetViewMode('files')}
             className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
               viewMode === 'files'
-                ? 'bg-violet-500/20 text-violet-300'
-                : 'text-[#565f89] hover:text-[#a9b1d6]'
+                ? 'bg-accent/20 text-accent-light'
+                : 'text-muted hover:text-primary'
             }`}
           >
             Files
@@ -249,10 +249,10 @@ export const ThreadHeader = memo(function ThreadHeader({
             onClick={() => onSetViewMode('terminal')}
             className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
               hasWorktree !== true
-                ? 'opacity-40 cursor-not-allowed text-[#565f89]'
+                ? 'opacity-40 cursor-not-allowed text-muted'
                 : viewMode === 'terminal'
-                  ? 'cursor-pointer bg-violet-500/20 text-violet-300'
-                  : 'cursor-pointer text-[#565f89] hover:text-[#a9b1d6]'
+                  ? 'cursor-pointer bg-accent/20 text-accent-light'
+                  : 'cursor-pointer text-muted hover:text-primary'
             }`}
           >
             Terminal
@@ -277,7 +277,7 @@ export const ThreadHeader = memo(function ThreadHeader({
           workspaceStatus !== 'handed_off' &&
           workspaceStatus !== 'creation' &&
           selectedWorkspaceId && (
-            <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[11px] text-[#565f89]">
+            <span className="rounded bg-surface-elevated px-1.5 py-0.5 text-[11px] text-muted">
               Worktree deleted
             </span>
           )}
@@ -330,18 +330,18 @@ export const ThreadHeader = memo(function ThreadHeader({
               <button
                 type="button"
                 onClick={() => setHistoryOpen((prev) => !prev)}
-                className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
+                className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-edge text-xs transition-colors ${
                   historyOpen
-                    ? 'border-violet-400/50 text-violet-300'
-                    : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
+                    ? 'border-accent-light/50 text-accent-light'
+                    : 'text-muted hover:border-accent-light/50 hover:text-accent-light'
                 }`}
               >
                 <FiClock className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </Tooltip>
             {historyOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#565f89]">
+              <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-edge bg-surface py-1 shadow-lg">
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
                   Session History
                 </div>
                 {sessions.map((session, index) => {
@@ -360,17 +360,17 @@ export const ThreadHeader = memo(function ThreadHeader({
                       }}
                       className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
                         isActive
-                          ? 'bg-violet-500/10 text-violet-300'
-                          : 'text-[#a9b1d6] hover:bg-[#1f2335]'
+                          ? 'bg-accent/10 text-accent-light'
+                          : 'text-primary hover:bg-surface-elevated'
                       }`}
                     >
                       <span className="font-medium">#{index + 1}</span>
-                      <span className="flex-1 truncate text-[#565f89]">{time}</span>
-                      <span className="text-[#565f89]">
+                      <span className="flex-1 truncate text-muted">{time}</span>
+                      <span className="text-muted">
                         {session.eventCount} {session.eventCount === 1 ? 'event' : 'events'}
                       </span>
                       {isActive && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-accent-light" />
                       )}
                     </button>
                   );
@@ -385,23 +385,23 @@ export const ThreadHeader = memo(function ThreadHeader({
               <button
                 type="button"
                 onClick={() => setOpenInOpen((prev) => !prev)}
-                className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
+                className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-edge text-xs transition-colors ${
                   openInOpen
-                    ? 'border-violet-400/50 text-violet-300'
-                    : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
+                    ? 'border-accent-light/50 text-accent-light'
+                    : 'text-muted hover:border-accent-light/50 hover:text-accent-light'
                 }`}
               >
                 <FiExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </Tooltip>
             {openInOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#565f89]">
+              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-edge bg-surface py-1 shadow-lg">
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
                   Open In
                 </div>
                 {installedApps === null ? (
                   <div className="flex items-center justify-center py-3">
-                    <FiLoader className="h-3.5 w-3.5 animate-spin text-[#565f89]" />
+                    <FiLoader className="h-3.5 w-3.5 animate-spin text-muted" />
                   </div>
                 ) : (
                   <>
@@ -410,16 +410,16 @@ export const ThreadHeader = memo(function ThreadHeader({
                         key={app.id}
                         type="button"
                         onClick={() => void handleOpenInApp(app.id)}
-                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                        className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated"
                       >
                         {app.label}
                       </button>
                     ))}
-                    <div className="my-1 h-px bg-[#292e42]" />
+                    <div className="my-1 h-px bg-surface-elevated" />
                     <button
                       type="button"
                       onClick={() => void handleOpenInApp('copy-path')}
-                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated"
                     >
                       <FiCopy className="h-3 w-3" aria-hidden="true" />
                       Copy path
@@ -443,10 +443,10 @@ export const ThreadHeader = memo(function ThreadHeader({
                 <button
                   type="button"
                   onClick={() => setMenuOpen((prev) => !prev)}
-                  className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-[#292e42] text-xs transition-colors ${
+                  className={`flex items-center justify-center h-7 w-7 cursor-pointer rounded-md border border-edge text-xs transition-colors ${
                     menuOpen
-                      ? 'border-violet-400/50 text-violet-300'
-                      : 'text-[#565f89] hover:border-violet-400/50 hover:text-violet-300'
+                      ? 'border-accent-light/50 text-accent-light'
+                      : 'text-muted hover:border-accent-light/50 hover:text-accent-light'
                   }`}
                 >
                   <FiMoreVertical className="h-3.5 w-3.5" aria-hidden="true" />
@@ -454,12 +454,12 @@ export const ThreadHeader = memo(function ThreadHeader({
               </Tooltip>
             )}
             {menuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-[#292e42] bg-[#1a1b26] py-1 shadow-lg">
+              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-edge bg-surface py-1 shadow-lg">
                 {selectedWorkspaceId && channelId && (
                   <button
                     type="button"
                     onClick={() => { void handleCopyLink(); setMenuOpen(false); }}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated"
                   >
                     <FiLink className="h-3 w-3" aria-hidden="true" />
                     Copy link
@@ -469,7 +469,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                   <button
                     type="button"
                     onClick={() => { onHandoff(); setMenuOpen(false); }}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-amber-400 transition-colors hover:bg-[#1f2335]"
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-amber-400 transition-colors hover:bg-surface-elevated"
                   >
                     <FiShare2 className="h-3 w-3" aria-hidden="true" />
                     Hand off
@@ -479,7 +479,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                   <button
                     type="button"
                     onClick={() => { onEnterFullscreen(); setMenuOpen(false); }}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated"
                   >
                     <FiMaximize2 className="h-3 w-3" aria-hidden="true" />
                     Fullscreen
@@ -489,7 +489,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                   <button
                     type="button"
                     onClick={() => { onExitFullscreen(); setMenuOpen(false); }}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated"
                   >
                     <FiMinimize2 className="h-3 w-3" aria-hidden="true" />
                     Exit fullscreen
@@ -500,7 +500,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                     type="button"
                     disabled={!selectedWorkspaceId}
                     onClick={() => { onMarkMerged(); setMenuOpen(false); }}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <FiCheck className="h-3 w-3" aria-hidden="true" />
                     Mark as merged
@@ -508,12 +508,12 @@ export const ThreadHeader = memo(function ThreadHeader({
                 )}
                 {hasWorktree === true && (
                   <>
-                    <div className="my-1 h-px bg-[#292e42]" />
+                    <div className="my-1 h-px bg-surface-elevated" />
                     <button
                       type="button"
                       disabled={!selectedWorkspaceId || deletingWorktree}
                       onClick={() => { onDeleteWorktree(); setMenuOpen(false); }}
-                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-[#1f2335] disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {deletingWorktree
                         ? <FiLoader className="h-3 w-3 animate-spin" aria-hidden="true" />
@@ -522,12 +522,12 @@ export const ThreadHeader = memo(function ThreadHeader({
                     </button>
                   </>
                 )}
-                <div className="my-1 h-px bg-[#292e42]" />
+                <div className="my-1 h-px bg-surface-elevated" />
                 <button
                   type="button"
                   disabled={!selectedWorkspaceId}
                   onClick={() => { onDeleteWorkspace(); setMenuOpen(false); }}
-                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-[#1f2335] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <FiTrash2 className="h-3 w-3" aria-hidden="true" />
                   Delete workspace
@@ -541,7 +541,7 @@ export const ThreadHeader = memo(function ThreadHeader({
             id="thread-close"
             type="button"
             onClick={onClose}
-            className="cursor-pointer text-[#565f89] hover:text-[#c0caf5]"
+            className="cursor-pointer text-muted hover:text-primary"
           >
             <FiX className="h-4 w-4" aria-hidden="true" />
           </button>

@@ -33,7 +33,7 @@ export const KanbanCard = memo(function KanbanCard({
         onDragStart(ticket.id);
       }}
       onClick={() => onClickTicket(ticket.workspaceId)}
-      className="group relative cursor-pointer rounded-md border border-[#292e42] bg-[#1f2335] p-3 transition-all hover:border-[#3b4261] hover:bg-[#24283b] active:scale-[0.98]"
+      className="group relative cursor-pointer rounded-md border border-edge bg-surface-elevated p-3 transition-all hover:border-edge-hover hover:bg-surface-elevated active:scale-[0.98]"
     >
       {onDeleteWorkspace && (
         <button
@@ -42,12 +42,12 @@ export const KanbanCard = memo(function KanbanCard({
             e.stopPropagation();
             onDeleteWorkspace(ticket.workspaceId);
           }}
-          className="absolute top-2 right-2 hidden rounded p-1 text-[#565f89] transition-colors hover:bg-red-500/20 hover:text-red-400 group-hover:block"
+          className="absolute top-2 right-2 hidden rounded p-1 text-muted transition-colors hover:bg-red-500/20 hover:text-red-400 group-hover:block"
         >
           <FiTrash2 className="h-3.5 w-3.5" />
         </button>
       )}
-      <h4 className="line-clamp-2 text-sm font-medium text-[#c0caf5]"><ScrambleText text={ticket.title} /></h4>
+      <h4 className="line-clamp-2 text-sm font-medium text-primary"><ScrambleText text={ticket.title} /></h4>
 
       {ticket.workspace.status === 'queued' && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-cyan-400">
@@ -57,13 +57,13 @@ export const KanbanCard = memo(function KanbanCard({
       )}
 
       {ticket.description && (
-        <div className="markdown-body mt-1 line-clamp-2 text-xs text-[#565f89]">
+        <div className="markdown-body mt-1 line-clamp-2 text-xs text-muted">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.description}</ReactMarkdown>
         </div>
       )}
 
       {ticket.solutionApproach && (
-        <div className="mt-1.5 line-clamp-1 text-xs text-[#7aa2f7]/70">
+        <div className="mt-1.5 line-clamp-1 text-xs text-accent/70">
           <span className="mr-1">&#9672;</span>
           <span className="markdown-body inline"><ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.solutionApproach}</ReactMarkdown></span>
         </div>
@@ -79,7 +79,7 @@ export const KanbanCard = memo(function KanbanCard({
             {(meta.tags as string[]).map((tag) => (
               <span
                 key={tag}
-                className="rounded px-1.5 py-0.5 text-[10px] text-[#565f89]"
+                className="rounded px-1.5 py-0.5 text-[10px] text-muted"
               >
                 {tag}
               </span>
@@ -120,13 +120,13 @@ export const KanbanCard = memo(function KanbanCard({
               e.stopPropagation();
               onCreatePR(ticket.workspaceId);
             }}
-            className="inline-flex items-center gap-1 shrink-0 rounded border border-[#565f89]/50 px-1.5 py-0.5 text-[10px] font-medium text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300 hover:bg-white/5"
+            className="inline-flex items-center gap-1 shrink-0 rounded border border-faint/50 px-1.5 py-0.5 text-[10px] font-medium text-faint transition-colors hover:border-accent/50 hover:text-accent-light hover:bg-white/5"
           >
             <FiGitPullRequest className="h-2.5 w-2.5" />
             PR
           </button>
         )}
-        <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] text-[#565f89]">
+        <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] text-muted">
           {formatTime(ticket.createdAt)}
         </span>
       </div>

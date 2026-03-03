@@ -27,11 +27,11 @@ interface SubagentResponse {
 const TYPE_COLORS: Record<string, { text: string; bg: string }> = {
   Explore: { text: 'text-cyan-300', bg: 'bg-cyan-400/10' },
   Plan: { text: 'text-amber-300', bg: 'bg-amber-400/10' },
-  'general-purpose': { text: 'text-violet-300', bg: 'bg-violet-400/10' },
+  'general-purpose': { text: 'text-accent-light', bg: 'bg-accent-light/10' },
 };
 
 function getTypeStyle(subagentType: string) {
-  return TYPE_COLORS[subagentType] ?? { text: 'text-[#a9b1d6]', bg: 'bg-[#a9b1d6]/10' };
+  return TYPE_COLORS[subagentType] ?? { text: 'text-primary', bg: 'bg-[#a1a1aa]/10' };
 }
 
 export function SubagentRow({ event }: { event: ServerEvent }) {
@@ -71,22 +71,22 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
         className={`flex w-full items-center gap-2 text-left${isLoading ? ' cursor-default' : ' cursor-pointer'}`}
         onClick={isLoading ? undefined : () => setExpanded(!expanded)}
       >
-        <FiCpu className="h-3.5 w-3.5 flex-shrink-0 text-[#565f89]" />
+        <FiCpu className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
 
         <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${style.text} ${style.bg}`}>
           {subagentType}
         </span>
 
-        <span className="flex-1 truncate text-xs text-[#a9b1d6]">{description}</span>
+        <span className="flex-1 truncate text-xs text-primary">{description}</span>
 
         {isLoading ? (
-          <FiLoader className="h-3 w-3 flex-shrink-0 animate-spin text-violet-400" />
+          <FiLoader className="h-3 w-3 flex-shrink-0 animate-spin text-accent-light" />
         ) : isCompleted ? (
           <FiCheck className="h-3 w-3 flex-shrink-0 text-green-400" />
         ) : null}
 
         {!isLoading && usage && (
-          <span className="text-[10px] text-[#565f89]">
+          <span className="text-[10px] text-muted">
             {formatTokens((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0))} tokens
           </span>
         )}
@@ -94,12 +94,12 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
         {isLoading ? (
           <ElapsedTimer startTime={event.timestamp} />
         ) : (
-          <span className="text-[10px] text-[#565f89]">{time}</span>
+          <span className="text-[10px] text-muted">{time}</span>
         )}
 
         {!isLoading && (
           <FiChevronRight
-            className="h-3 w-3 flex-shrink-0 text-[#565f89] transition-transform duration-150"
+            className="h-3 w-3 flex-shrink-0 text-muted transition-transform duration-150"
             style={{ transform: expanded ? 'rotate(90deg)' : undefined }}
           />
         )}
@@ -112,11 +112,11 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
         >
           <div ref={bodyRef}>
             {resultText ? (
-              <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-[#292e42] bg-[#1a1b26] p-2 text-[11px] leading-relaxed text-[#9aa5ce]">
+              <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-edge bg-surface p-2 text-[11px] leading-relaxed text-primary">
                 {resultText.length > 3000 ? `${resultText.slice(0, 3000)}...` : resultText}
               </pre>
             ) : (
-              <pre className="mt-1.5 rounded border border-[#292e42] bg-[#1a1b26] p-2 text-[11px] text-[#565f89]">
+              <pre className="mt-1.5 rounded border border-edge bg-surface p-2 text-[11px] text-muted">
                 {serializeUnknown(event.toolResponse, 2000)}
               </pre>
             )}

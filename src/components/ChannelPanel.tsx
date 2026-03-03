@@ -67,17 +67,17 @@ export function ChannelPanel({
             type="button"
             onClick={() => onSwitchChannel(channel.id)}
             className={`channel-item flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-              isActive ? 'active font-semibold' : 'text-[#a9b1d6]'
+              isActive ? 'active font-semibold' : 'text-primary'
             }`}
           >
-            <span className="text-xs text-[#565f89]">#</span>
-            <span className={`truncate ${needsJoin && !isActive ? 'text-[#565f89]' : ''}`}>{channel.name}</span>
+            <span className="text-xs text-muted">#</span>
+            <span className={`truncate ${needsJoin && !isActive ? 'text-muted' : ''}`}>{channel.name}</span>
             {needsJoin ? (
-              <span className="ml-auto shrink-0 rounded border border-[#7aa2f7]/30 px-1.5 py-0.5 text-[10px] font-medium leading-none text-[#7aa2f7]">
+              <span className="ml-auto shrink-0 rounded border border-accent/30 px-1.5 py-0.5 text-[10px] font-medium leading-none text-accent">
                 Join
               </span>
             ) : !isActive && count > 0 ? (
-              <span className="ml-auto shrink-0 rounded-full bg-[#7aa2f7] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+              <span className="ml-auto shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold leading-none text-on-accent">
                 {count > 99 ? '99+' : count}
               </span>
             ) : null}
@@ -94,7 +94,7 @@ export function ChannelPanel({
             <button
               type="button"
               onClick={onCreateTeam}
-              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
             </button>
@@ -106,7 +106,7 @@ export function ChannelPanel({
             <button
               type="button"
               onClick={onCreateProject}
-              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
             </button>
@@ -118,7 +118,7 @@ export function ChannelPanel({
             <button
               type="button"
               onClick={onCreateChannel}
-              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
             </button>
@@ -129,7 +129,7 @@ export function ChannelPanel({
           <Tooltip text="New DM" position="bottom">
             <button
               type="button"
-              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#7aa2f7]"
+              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
             </button>
@@ -141,7 +141,7 @@ export function ChannelPanel({
             <button
               type="button"
               onClick={onCreateAiChat}
-              className="rounded p-0.5 text-[#565f89] hover:bg-[#292e42] hover:text-[#bb9af7]"
+              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent-light"
             >
               <FiPlus className="h-3 w-3" aria-hidden="true" />
             </button>
@@ -155,7 +155,7 @@ export function ChannelPanel({
       case 'channels':
         return chatChannels.length === 0 ? (
           <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">No channels yet</span>
+            <span className="text-xs italic text-muted">No channels yet</span>
           </div>
         ) : (
           renderChannelItems(chatChannels)
@@ -163,7 +163,7 @@ export function ChannelPanel({
       case 'teams':
         return teamChannels.length === 0 ? (
           <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">No teams yet</span>
+            <span className="text-xs italic text-muted">No teams yet</span>
           </div>
         ) : (
           renderChannelItems(teamChannels)
@@ -171,7 +171,7 @@ export function ChannelPanel({
       case 'projects':
         return projectChannels.length === 0 ? (
           <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">No projects yet</span>
+            <span className="text-xs italic text-muted">No projects yet</span>
           </div>
         ) : (
           renderChannelItems(projectChannels)
@@ -179,7 +179,7 @@ export function ChannelPanel({
       case 'dms':
         return (
           <div className="px-3 py-1.5">
-            <span className="text-xs italic text-[#565f89]">Coming soon...</span>
+            <span className="text-xs italic text-muted">Coming soon...</span>
           </div>
         );
       case 'ai-chats':
@@ -191,10 +191,10 @@ export function ChannelPanel({
                 type="button"
                 onClick={() => onSwitchAiChat(chat.id)}
                 className={`channel-item flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-                  isActive ? 'bg-[#292e42] font-semibold text-[#bb9af7]' : 'text-[#a9b1d6]'
+                  isActive ? 'bg-surface-elevated font-semibold text-accent-light' : 'text-primary'
                 }`}
               >
-                <FiMessageCircle className="h-3 w-3 shrink-0 text-[#565f89]" />
+                <FiMessageCircle className="h-3 w-3 shrink-0 text-muted" />
                 <span className="truncate">{chat.title}</span>
               </button>
               <button
@@ -203,7 +203,7 @@ export function ChannelPanel({
                   e.stopPropagation();
                   onDeleteAiChat(chat.id);
                 }}
-                className="mr-1 rounded p-0.5 text-[#565f89] opacity-0 hover:bg-[#292e42] hover:text-[#f7768e] group-hover:opacity-100"
+                className="mr-1 rounded p-0.5 text-muted opacity-0 hover:bg-surface-elevated hover:text-red-400 group-hover:opacity-100"
               >
                 <FiTrash2 className="h-3 w-3" />
               </button>
@@ -217,12 +217,12 @@ export function ChannelPanel({
     <>
       <div
         id="channel-panel"
-        className={`flex min-w-0 flex-col border-r border-[#292e42] bg-[#16161e] ${dragging ? '' : 'panel-animate'}`}
+        className={`flex min-w-0 flex-col border-r border-edge bg-surface-deep ${dragging ? '' : 'panel-animate'}`}
         style={{ width: `${channelWidth}px`, overflow: channelWidth === 0 ? 'hidden' : undefined }}
       >
         {serverName && (
-          <div className="flex h-[52px] items-center border-b border-[#292e42] px-4">
-            <h1 className="truncate text-sm font-bold text-[#c0caf5]">{serverName}</h1>
+          <div className="flex h-[52px] items-center border-b border-edge px-4">
+            <h1 className="truncate text-sm font-bold text-primary">{serverName}</h1>
           </div>
         )}
 
@@ -244,13 +244,13 @@ export function ChannelPanel({
                 key={id}
                 value={id}
                 as="div"
-                className="relative border-b border-[#292e42] bg-[#16161e] py-2 last:border-b-0"
+                className="relative border-b border-edge bg-surface-deep py-2 last:border-b-0"
                 whileDrag={{ zIndex: 50 }}
               >
                 <div className="mb-1 flex w-full items-center justify-between px-2">
                   <div className="flex items-center gap-1.5">
-                    <Icon className="h-3 w-3 text-[#565f89]" />
-                    <h2 className="text-xs font-semibold tracking-wide text-[#565f89] uppercase">
+                    <Icon className="h-3 w-3 text-muted" />
+                    <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">
                       {config.label}
                     </h2>
                   </div>
@@ -261,7 +261,7 @@ export function ChannelPanel({
                       aria-expanded={!isCollapsed}
                       aria-label={`Toggle ${config.label}`}
                       onClick={() => toggleCollapsed(id)}
-                      className="cursor-pointer rounded p-0.5 text-[#565f89] hover:bg-[#292e42]"
+                      className="cursor-pointer rounded p-0.5 text-muted hover:bg-surface-elevated"
                     >
                       <FiChevronRight
                         className={`h-3 w-3 transition-transform duration-150 ${!isCollapsed ? 'rotate-90' : ''}`}

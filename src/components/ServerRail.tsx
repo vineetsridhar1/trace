@@ -15,14 +15,14 @@ export function ServerRail({
   onCreateServer,
 }: ServerRailProps) {
   return (
-    <div className="flex w-[60px] shrink-0 flex-col items-center border-r border-[#292e42] bg-[#13141e] py-3 gap-2 overflow-y-auto">
+    <div className="flex w-[60px] shrink-0 flex-col items-center border-r border-edge bg-surface-deep py-3 gap-2 overflow-y-auto">
       {servers.map((server) => {
         const isActive = server.id === activeServerId;
         return (
           <div key={server.id} className="group relative flex items-center justify-center">
             {/* Active/hover pill indicator on left edge */}
             <div
-              className={`absolute left-0 w-[3px] rounded-r-full bg-[#c0caf5] transition-all ${
+              className={`absolute left-0 w-[3px] rounded-r-full bg-[#a1a1aa] transition-all ${
                 isActive ? 'h-[20px]' : 'h-0 group-hover:h-[8px]'
               }`}
             />
@@ -32,8 +32,8 @@ export function ServerRail({
               title={server.name}
               className={`flex h-[40px] w-[40px] items-center justify-center text-sm font-semibold transition-all ${
                 isActive
-                  ? 'rounded-[12px] bg-[#7aa2f7] text-[#1a1b26]'
-                  : 'rounded-[20px] bg-[#292e42] text-[#a9b1d6] hover:rounded-[12px] hover:bg-[#7aa2f7] hover:text-[#1a1b26]'
+                  ? 'rounded-[12px] bg-accent text-on-accent'
+                  : 'rounded-[20px] bg-surface-elevated text-primary hover:rounded-[12px] hover:bg-accent hover:text-on-accent'
               }`}
             >
               {server.avatarUrl ? (
@@ -51,17 +51,18 @@ export function ServerRail({
       })}
 
       {servers.length > 0 && (
-        <div className="mx-auto h-px w-8 bg-[#292e42]" />
+        <div className="mx-auto h-px w-8 bg-surface-elevated" />
       )}
 
       <button
         type="button"
         onClick={onCreateServer}
         title="Create server"
-        className="flex h-[40px] w-[40px] items-center justify-center rounded-[20px] bg-[#292e42] text-[#565f89] transition-all hover:rounded-[12px] hover:bg-[#9ece6a] hover:text-[#1a1b26]"
+        className="flex h-[40px] w-[40px] items-center justify-center rounded-[20px] bg-surface-elevated text-muted transition-all hover:rounded-[12px] hover:bg-[#9ece6a] hover:text-on-accent"
       >
         <FiPlus className="h-5 w-5" />
       </button>
+
     </div>
   );
 }

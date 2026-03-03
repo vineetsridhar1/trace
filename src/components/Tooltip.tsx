@@ -5,7 +5,7 @@ const GAP = 8;
 export function Tooltip({ text, children, position = 'top' }: {
   text: React.ReactNode;
   children: React.ReactNode;
-  position?: 'top' | 'bottom';
+  position?: 'top' | 'bottom' | 'right';
 }) {
   const [hovered, setHovered] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -20,6 +20,14 @@ export function Tooltip({ text, children, position = 'top' }: {
 
     const tr = trigger.getBoundingClientRect();
     const tt = tip.getBoundingClientRect();
+
+    if (position === 'right') {
+      const top = tr.top + tr.height / 2 - tt.height / 2;
+      const left = tr.right + GAP;
+      setCoords({ top, left });
+      return;
+    }
+
     const preferTop = position === 'top';
     const aboveTop = tr.top - tt.height - GAP;
     const belowTop = tr.bottom + GAP;
@@ -46,7 +54,7 @@ export function Tooltip({ text, children, position = 'top' }: {
         <div
           ref={tipRef}
           role="tooltip"
-          className="pointer-events-none fixed z-[9999] whitespace-nowrap rounded-md border border-[#292e42] bg-[#1f2335] px-2 py-1 text-[11px] text-[#c0caf5] shadow-lg"
+          className="pointer-events-none fixed z-[9999] whitespace-nowrap rounded-md border border-edge bg-surface-elevated px-2 py-1 text-[11px] text-primary shadow-lg"
           style={coords
             ? { top: coords.top, left: coords.left }
             : { top: 0, left: -9999 }

@@ -1,28 +1,54 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import type { ThemeName } from '../stores/themeStore';
+import { useThemeStore } from '../stores/themeStore';
 
-const TOKYO_NIGHT_THEME = {
-  background: '#1a1b26',
-  foreground: '#c0caf5',
-  cursor: '#c0caf5',
-  selectionBackground: '#33467c',
-  black: '#15161e',
-  red: '#f7768e',
-  green: '#9ece6a',
-  yellow: '#e0af68',
-  blue: '#7aa2f7',
-  magenta: '#bb9af7',
-  cyan: '#7dcfff',
-  white: '#a9b1d6',
-  brightBlack: '#414868',
-  brightRed: '#f7768e',
-  brightGreen: '#9ece6a',
-  brightYellow: '#e0af68',
-  brightBlue: '#7aa2f7',
-  brightMagenta: '#bb9af7',
-  brightCyan: '#7dcfff',
-  brightWhite: '#c0caf5',
+const TERMINAL_THEMES: Record<ThemeName, Record<string, string>> = {
+  neutral: {
+    background: '#171717',
+    foreground: '#a1a1aa',
+    cursor: '#a1a1aa',
+    selectionBackground: '#3f3f46',
+    black: '#0a0a0a',
+    red: '#ef4444',
+    green: '#22c55e',
+    yellow: '#eab308',
+    blue: '#3b82f6',
+    magenta: '#a855f7',
+    cyan: '#06b6d4',
+    white: '#a1a1aa',
+    brightBlack: '#52525b',
+    brightRed: '#f87171',
+    brightGreen: '#4ade80',
+    brightYellow: '#facc15',
+    brightBlue: '#60a5fa',
+    brightMagenta: '#c084fc',
+    brightCyan: '#22d3ee',
+    brightWhite: '#d4d4d8',
+  },
+  tokyonight: {
+    background: '#1a1b26',
+    foreground: '#c0caf5',
+    cursor: '#c0caf5',
+    selectionBackground: '#33467c',
+    black: '#16161e',
+    red: '#f7768e',
+    green: '#9ece6a',
+    yellow: '#e0af68',
+    blue: '#7aa2f7',
+    magenta: '#bb9af7',
+    cyan: '#7dcfff',
+    white: '#a9b1d6',
+    brightBlack: '#565f89',
+    brightRed: '#f7768e',
+    brightGreen: '#9ece6a',
+    brightYellow: '#e0af68',
+    brightBlue: '#7aa2f7',
+    brightMagenta: '#bb9af7',
+    brightCyan: '#7dcfff',
+    brightWhite: '#c0caf5',
+  },
 };
 
 interface UseTerminalOptions {
@@ -94,12 +120,19 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
     const focusTimers: ReturnType<typeof setTimeout>[] = [];
     const miscTimers: ReturnType<typeof setTimeout>[] = [];
 
+    // Subscribe to theme changes and update terminal colors live
+    const unsubTheme = useThemeStore.subscribe((state) => {
+      if (terminal) {
+        terminal.options.theme = TERMINAL_THEMES[state.theme];
+      }
+    });
+
     const init = async () => {
       if (terminal || initializing) return;
       initializing = true;
 
       terminal = new Terminal({
-        theme: TOKYO_NIGHT_THEME,
+        theme: TERMINAL_THEMES[useThemeStore.getState().theme],
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         fontSize: 13,
         cursorBlink: !currentReadOnly,
@@ -227,6 +260,7 @@ export function useTerminal({ terminalId, cwd, env, command, readOnly }: UseTerm
       disposed = true;
       observer.disconnect();
       window.removeEventListener('focus', handleWindowFocus);
+      unsubTheme();
       for (const timer of focusTimers) clearTimeout(timer);
       for (const timer of miscTimers) clearTimeout(timer);
       inputDisposable?.dispose();

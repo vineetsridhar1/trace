@@ -63,7 +63,7 @@ export function ScrambleText({ text, className, speed = 20 }: ScrambleTextProps)
   return (
     <span className={className}>
       {text.slice(0, revealed)}
-      <span className="text-[#565f89]">{scrambled}</span>
+      <span className="text-muted">{scrambled}</span>
     </span>
   );
 }

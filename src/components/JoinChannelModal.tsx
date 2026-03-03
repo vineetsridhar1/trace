@@ -73,19 +73,19 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
     });
   }, [localRepoPath, setupScript, runScript, systemInstructions, onJoined]);
 
-  const textareaClass = 'w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono';
+  const textareaClass = 'w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none font-mono';
 
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
     >
-      <div className="w-[520px] max-h-[80vh] overflow-y-auto rounded-lg border border-[#292e42] bg-[#1a1b26] shadow-xl">
+      <div className="w-[520px] max-h-[80vh] overflow-y-auto rounded-lg border border-edge bg-surface shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#292e42] px-5 py-3">
-          <h2 className="text-sm font-semibold text-[#c0caf5]">Join #{channel.name}</h2>
+        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+          <h2 className="text-sm font-semibold text-primary">Join #{channel.name}</h2>
           <Tooltip text="Close" position="bottom">
-            <button type="button" onClick={onCancel} className="text-[#565f89] hover:text-[#c0caf5]">
+            <button type="button" onClick={onCancel} className="text-muted hover:text-primary">
               <FiX className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
@@ -95,8 +95,8 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
           {/* Expected repo URL */}
           {channel.githubUrl && (
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Expected Repository</label>
-              <div className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#565f89] truncate">
+              <label className="mb-1.5 block text-xs font-medium text-primary">Expected Repository</label>
+              <div className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-muted truncate">
                 {channel.githubUrl}
               </div>
             </div>
@@ -104,10 +104,10 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
 
           {/* Folder picker */}
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Local Repository</label>
+            <label className="mb-1.5 block text-xs font-medium text-primary">Local Repository</label>
             {localRepoPath && urlMatch ? (
               <div className="flex items-center gap-2">
-                <div className="flex-1 rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#565f89] truncate">
+                <div className="flex-1 rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-muted truncate">
                   {localRepoPath}
                 </div>
                 <button
@@ -118,7 +118,7 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
                     setDetectedOriginUrl(null);
                     setRepoError(null);
                   }}
-                  className="shrink-0 rounded px-2 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+                  className="shrink-0 rounded px-2 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
                 >
                   Change
                 </button>
@@ -128,34 +128,34 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
                 type="button"
                 onClick={() => void handleSelectFolder()}
                 disabled={validating}
-                className="w-full rounded border border-dashed border-[#292e42] bg-[#16161e] px-3 py-3 text-sm text-[#565f89] hover:border-[#7aa2f7] hover:text-[#c0caf5] disabled:opacity-50"
+                className="w-full rounded border border-dashed border-edge bg-surface-deep px-3 py-3 text-sm text-muted hover:border-accent hover:text-primary disabled:opacity-50"
               >
                 {validating ? 'Validating...' : 'Select Folder'}
               </button>
             )}
             {urlMatch === true && detectedOriginUrl && (
-              <p className="mt-1 flex items-center gap-1 text-xs text-[#9ece6a]">
+              <p className="mt-1 flex items-center gap-1 text-xs text-green-400">
                 <FiCheck className="h-3 w-3" aria-hidden="true" />
-                Origin matches: <span className="text-[#565f89]">{detectedOriginUrl}</span>
+                Origin matches: <span className="text-muted">{detectedOriginUrl}</span>
               </p>
             )}
             {repoError && (
-              <p className="mt-1 text-xs text-[#f7768e]">{repoError}</p>
+              <p className="mt-1 text-xs text-red-400">{repoError}</p>
             )}
           </div>
 
           {/* My Settings section (only after successful folder selection) */}
           {localRepoPath && urlMatch && (
             <>
-              <div className="border-t border-[#292e42]" />
+              <div className="border-t border-edge" />
               <div>
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7aa2f7]">My Settings</h3>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-accent">My Settings</h3>
 
                 {/* Setup Script Override */}
                 <div className="mb-4">
                   <div className="mb-2">
-                    <label className="text-xs font-medium text-[#a9b1d6]">Setup Script Override</label>
-                    <p className="text-xs text-[#565f89]">Overrides the channel default setup script</p>
+                    <label className="text-xs font-medium text-primary">Setup Script Override</label>
+                    <p className="text-xs text-muted">Overrides the channel default setup script</p>
                   </div>
                   <textarea
                     value={setupScript}
@@ -170,8 +170,8 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
                 {/* Run Script Override */}
                 <div className="mb-4">
                   <div className="mb-2">
-                    <label className="text-xs font-medium text-[#a9b1d6]">Run Script Override</label>
-                    <p className="text-xs text-[#565f89]">Overrides the channel default run script</p>
+                    <label className="text-xs font-medium text-primary">Run Script Override</label>
+                    <p className="text-xs text-muted">Overrides the channel default run script</p>
                   </div>
                   <textarea
                     value={runScript}
@@ -186,8 +186,8 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
                 {/* System Instructions */}
                 <div>
                   <div className="mb-2">
-                    <label className="text-xs font-medium text-[#a9b1d6]">System Instructions</label>
-                    <p className="text-xs text-[#565f89]">Injected as hidden context into every new task</p>
+                    <label className="text-xs font-medium text-primary">System Instructions</label>
+                    <p className="text-xs text-muted">Injected as hidden context into every new task</p>
                   </div>
                   <textarea
                     value={systemInstructions}
@@ -195,7 +195,7 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
                     placeholder="e.g. This is a TypeScript monorepo. Always run tests with `npm test` from the root."
                     rows={3}
                     style={{ fieldSizing: 'content' } as React.CSSProperties}
-                    className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none"
+                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none"
                   />
                 </div>
               </div>
@@ -204,11 +204,11 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 border-t border-[#292e42] px-5 py-3">
+        <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded px-3 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+            className="rounded px-3 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
           >
             Cancel
           </button>
@@ -216,7 +216,7 @@ export function JoinChannelModal({ channel, onJoined, onCancel }: JoinChannelMod
             type="button"
             onClick={handleJoin}
             disabled={!localRepoPath || !urlMatch}
-            className="rounded bg-[#7aa2f7] px-3 py-1.5 text-xs font-medium text-[#1a1b26] hover:bg-[#89b4fa] disabled:opacity-50"
+            className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-light disabled:opacity-50"
           >
             Join Channel
           </button>

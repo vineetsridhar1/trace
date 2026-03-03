@@ -18,7 +18,7 @@ function TerminalTabContent({ terminalId, cwd, command, visible, env, readOnly }
 
   return (
     <div
-      className="absolute inset-0 pl-2 bg-[#1a1b26]"
+      className="absolute inset-0 pl-2 bg-surface"
       style={{ visibility: visible ? 'visible' : 'hidden' }}
       onClick={focus}
       onMouseDown={focus}
@@ -55,7 +55,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Tab bar — current message only */}
-      <div className="flex items-center border-b border-[#292e42] bg-[#16161e] px-1">
+      <div className="flex items-center border-b border-edge bg-surface-deep px-1">
         <div className="flex flex-1 items-center gap-0.5 overflow-x-auto py-1">
           {terminals.map((t) => {
             const isActive = t.terminalId === activeTabId;
@@ -65,7 +65,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
               <div
                 key={t.terminalId}
                 className={`group flex items-center gap-1.5 rounded px-2.5 py-1 text-xs cursor-pointer ${
-                  isActive ? 'bg-[#292e42] text-[#c0caf5]' : 'text-[#565f89] hover:bg-[#1f2335] hover:text-[#a9b1d6]'
+                  isActive ? 'bg-surface-elevated text-primary' : 'text-muted hover:bg-surface-elevated hover:text-primary'
                 }`}
                 onClick={() => onSelectTab(t.terminalId)}
               >
@@ -80,7 +80,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
                   <Tooltip text="Close tab">
                     <button
                       type="button"
-                      className="ml-0.5 shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-[#3b4261]"
+                      className="ml-0.5 shrink-0 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-surface-hover"
                       onClick={(e) => {
                         e.stopPropagation();
                         onCloseTab(t.terminalId);
@@ -97,7 +97,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
             <button
               type="button"
               onClick={onAddTab}
-              className="shrink-0 rounded px-1.5 py-1 text-xs text-[#565f89] hover:bg-[#1f2335] hover:text-[#a9b1d6]"
+              className="shrink-0 rounded px-1.5 py-1 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
             >
               +
             </button>
@@ -107,7 +107,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
           <button
             type="button"
             onClick={onCloseAll}
-            className="shrink-0 rounded px-2 py-1 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
+            className="shrink-0 rounded px-2 py-1 text-xs text-muted hover:bg-surface-elevated hover:text-red-400"
           >
             Close All
           </button>
@@ -116,12 +116,12 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
 
       {/* Setup action bar — only when setup has been run (command exists) */}
       {hasSetupScript && setupTab?.command && activeTabId === setupTab?.terminalId && (
-        <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
+        <div className="flex items-center bg-surface px-2 pb-1 pt-2">
           <Tooltip text="Re-run setup">
             <button
               type="button"
               onClick={onRerunSetup}
-              className="flex items-center gap-1.5 rounded border border-[#292e42] px-2 py-1 text-xs text-[#565f89] transition-colors hover:bg-[#292e42] hover:text-[#c0caf5]"
+              className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
             >
               <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Re-run Setup</span>
@@ -132,13 +132,13 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
 
       {/* Run script action bar — only when script has been executed (has command) */}
       {hasRunScript && runTab?.command && activeTabId === runTab?.terminalId && (
-        <div className="flex items-center bg-[#1a1b26] px-2 pb-1 pt-2">
+        <div className="flex items-center bg-surface px-2 pb-1 pt-2">
           {runScriptRunning ? (
             <Tooltip text="Stop script">
               <button
                 type="button"
                 onClick={onStopScript}
-                className="flex items-center gap-1.5 rounded border border-[#292e42] px-2 py-1 text-xs text-[#f7768e] transition-colors hover:bg-[#292e42] hover:text-red-300"
+                className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-red-400 transition-colors hover:bg-surface-elevated hover:text-red-300"
               >
                 <FiSquare className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Stop</span>
@@ -149,7 +149,7 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
               <button
                 type="button"
                 onClick={onRunScript}
-                className="flex items-center gap-1.5 rounded border border-[#292e42] px-2 py-1 text-xs text-green-400 transition-colors hover:bg-[#292e42] hover:text-green-300"
+                className="flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-green-400 transition-colors hover:bg-surface-elevated hover:text-green-300"
               >
                 <FiRefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                 <span>Re-run</span>
@@ -163,55 +163,55 @@ export function TerminalTabs({ terminals, allTerminalEntries, currentWorkspaceId
       <div className="relative min-h-0 flex-1">
         {/* Configure placeholders for unconfigured script tabs — current message only */}
         {hasSetupScript && !setupTab?.command && activeTabId === setupTab?.terminalId && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
             <button
               type="button"
               onClick={onRerunSetup}
-              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
             >
               <FiPlay className="h-5 w-5" aria-hidden="true" />
               <span>Run Setup</span>
             </button>
-            <p className="mt-3 text-xs text-[#3b4261]">Setup has already run during workspace creation</p>
+            <p className="mt-3 text-xs text-[#404040]">Setup has already run during workspace creation</p>
           </div>
         )}
         {!hasSetupScript && activeTabId === setupTab?.terminalId && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
             <button
               type="button"
               onClick={onOpenSettings}
-              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
             >
               <FiSettings className="h-5 w-5" aria-hidden="true" />
               <span>Configure Setup Script</span>
             </button>
-            <p className="mt-3 text-xs text-[#3b4261]">Runs automatically when a workspace is created</p>
+            <p className="mt-3 text-xs text-[#404040]">Runs automatically when a workspace is created</p>
           </div>
         )}
         {!hasRunScript && activeTabId === runTab?.terminalId && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
             <button
               type="button"
               onClick={onOpenSettings}
-              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
             >
               <FiSettings className="h-5 w-5" aria-hidden="true" />
               <span>Configure Run Script</span>
             </button>
-            <p className="mt-3 text-xs text-[#3b4261]">Runs when you click the play button</p>
+            <p className="mt-3 text-xs text-[#404040]">Runs when you click the play button</p>
           </div>
         )}
         {hasRunScript && !runTab?.command && activeTabId === runTab?.terminalId && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#1a1b26]">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface">
             <button
               type="button"
               onClick={onRunScript}
-              className="flex items-center gap-2.5 rounded-lg border border-[#292e42] px-5 py-3 text-sm text-[#565f89] transition-colors hover:bg-[#1f2335] hover:text-[#c0caf5] hover:border-[#3b4261]"
+              className="flex items-center gap-2.5 rounded-lg border border-edge px-5 py-3 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-primary hover:border-edge-hover"
             >
               <FiPlay className="h-5 w-5" aria-hidden="true" />
               <span>Run</span>
             </button>
-            <p className="mt-3 text-xs text-[#3b4261]">Runs when you click the play button</p>
+            <p className="mt-3 text-xs text-[#404040]">Runs when you click the play button</p>
           </div>
         )}
 

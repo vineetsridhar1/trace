@@ -23,7 +23,7 @@ function EffortDots({ effort }: { effort: EffortLevel }) {
         <span
           key={i}
           className={`block h-[3px] w-[3px] rounded-full transition-opacity duration-150 ${
-            i < opaque ? 'bg-violet-400 opacity-100' : 'bg-violet-400 opacity-30'
+            i < opaque ? 'bg-accent-light opacity-100' : 'bg-accent-light opacity-30'
           }`}
         />
       ))}
@@ -69,7 +69,7 @@ function EffortToggle({ effort, onCycle }: { effort: EffortLevel; onCycle: () =>
       <button
         type="button"
         onClick={onCycle}
-        className="flex items-center gap-1.5 rounded-lg border border-[#292e42] bg-[#1a1b26] px-2.5 py-1 text-xs font-medium text-[#a9b1d6] transition-colors hover:border-[#3b3f5c] hover:bg-[#1f2335]"
+        className="flex items-center gap-1.5 rounded-lg border border-edge bg-surface px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:border-edge-hover hover:bg-surface-elevated"
       >
         <EffortDots effort={effort} />
         {/* Hidden measurement spans */}
@@ -147,18 +147,18 @@ export function ModelEffortSelector({
           onClick={() => setModelOpen(!modelOpen)}
           className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
             modelOpen
-              ? 'border-violet-500 bg-violet-500/20 text-violet-200'
-              : 'border-[#292e42] bg-[#1a1b26] text-[#a9b1d6] hover:border-[#3b3f5c] hover:bg-[#1f2335]'
+              ? 'border-accent bg-accent/20 text-accent-light'
+              : 'border-edge bg-surface text-primary hover:border-edge-hover hover:bg-surface-elevated'
           }`}
         >
-          <FiCpu className="h-3 w-3 flex-shrink-0 text-violet-400" aria-hidden="true" />
+          <FiCpu className="h-3 w-3 flex-shrink-0 text-accent-light" aria-hidden="true" />
           {MODEL_LABELS[model]}
           <FiChevronDown className="h-3 w-3 opacity-50" aria-hidden="true" />
         </button>
 
         {modelOpen && (
-          <div className="absolute bottom-full left-0 mb-1 w-44 rounded-md border border-[#292e42] bg-[#1f2335] py-1 shadow-lg z-50">
-            <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#565f89]">
+          <div className="absolute bottom-full left-0 mb-1 w-44 rounded-md border border-edge bg-surface-elevated py-1 shadow-lg z-50">
+            <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
               Claude Code
             </div>
             {MODEL_OPTIONS.map((opt) => (
@@ -168,12 +168,12 @@ export function ModelEffortSelector({
                 onMouseDown={(e) => { e.preventDefault(); handleModelSelect(opt.value); }}
                 className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
                   model === opt.value
-                    ? 'bg-violet-500/20 text-violet-200'
-                    : 'text-[#a9b1d6] hover:bg-[#292e42]'
+                    ? 'bg-accent/20 text-accent-light'
+                    : 'text-primary hover:bg-surface-elevated'
                 }`}
               >
                 {model === opt.value ? (
-                  <FiCheck className="h-3 w-3 text-violet-400" aria-hidden="true" />
+                  <FiCheck className="h-3 w-3 text-accent-light" aria-hidden="true" />
                 ) : (
                   <span className="w-3" />
                 )}

@@ -83,7 +83,7 @@ export function shikiRenderToken(
   return defaultRender(token, index);
 }
 
-/** Convert a CSS style string like "color:#c0caf5" to a React style object */
+/** Convert a CSS style string like "color:#a1a1aa" to a React style object */
 function cssStringToObject(css: string): Record<string, string> {
   const style: Record<string, string> = {};
   for (const part of css.split(';')) {

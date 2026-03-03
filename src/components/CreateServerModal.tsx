@@ -51,12 +51,12 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="w-[420px] rounded-lg border border-[#292e42] bg-[#1a1b26] shadow-xl"
+        className="w-[420px] rounded-lg border border-edge bg-surface shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#292e42] px-5 py-3">
-          <h2 className="text-sm font-semibold text-[#c0caf5]">Create Server</h2>
-          <button type="button" onClick={onClose} className="text-[#565f89] hover:text-[#c0caf5]">
+        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+          <h2 className="text-sm font-semibold text-primary">Create Server</h2>
+          <button type="button" onClick={onClose} className="text-muted hover:text-primary">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
@@ -65,7 +65,7 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
 
         <div className="space-y-4 px-5 py-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#565f89]">Server Name</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted">Server Name</label>
             <input
               type="text"
               value={name}
@@ -75,20 +75,20 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
               }}
               placeholder="My Server"
               autoFocus
-              className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
+              className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
             />
           </div>
 
           {error && (
-            <p className="text-xs text-[#f7768e]">{error}</p>
+            <p className="text-xs text-red-400">{error}</p>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-[#292e42] px-5 py-3">
+        <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded px-3 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+            className="rounded px-3 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
           >
             Cancel
           </button>
@@ -96,7 +96,7 @@ export function CreateServerModal({ onClose, onCreated }: CreateServerModalProps
             type="button"
             onClick={() => void handleCreate()}
             disabled={creating || !name.trim()}
-            className="rounded bg-[#7aa2f7] px-3 py-1.5 text-xs font-medium text-[#1a1b26] hover:bg-[#89b4fa] disabled:opacity-50"
+            className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-light disabled:opacity-50"
           >
             {creating ? 'Creating...' : 'Create'}
           </button>

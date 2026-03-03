@@ -14,18 +14,18 @@ function formatNumber(n: number): string {
 function TokenUsageTooltip({ tokenUsage }: { tokenUsage: TokenUsageInfo }) {
   return (
     <div className="w-48 whitespace-normal">
-      <div className="border-b border-[#292e42] pb-1.5 mb-1.5">
+      <div className="border-b border-edge pb-1.5 mb-1.5">
         <div className="flex justify-between">
-          <span className="text-[#565f89]">Input</span>
+          <span className="text-muted">Input</span>
           <span>{formatNumber(tokenUsage.inputTokens)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-[#565f89]">Output</span>
+          <span className="text-muted">Output</span>
           <span>{formatNumber(tokenUsage.outputTokens)}</span>
         </div>
       </div>
       <div className="flex justify-between">
-        <span className="text-[#565f89]">Cost</span>
+        <span className="text-muted">Cost</span>
         <span>{tokenUsage.cliCostUsd != null ? `$${tokenUsage.cliCostUsd.toFixed(2)}` : '—'}</span>
       </div>
     </div>
@@ -63,7 +63,7 @@ function CopyMessageButton({ text }: { text: string }) {
       type="button"
       onClick={handleCopy}
       title="Copy message"
-      className="flex cursor-pointer items-center gap-1 text-[11px] text-[#565f89] transition-colors hover:text-[#c0caf5]"
+      className="flex cursor-pointer items-center gap-1 text-[11px] text-muted transition-colors hover:text-primary"
     >
       <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
         <rect x="9" y="9" width="13" height="13" rx="2" />
@@ -92,8 +92,8 @@ export const StopBubble = memo(function StopBubble({
   if (isUserStop) {
     return (
       <div className="flex items-center gap-1.5 py-0.5 px-1 pl-0.5 opacity-45">
-        <span className="text-[#b07070] text-[8px] leading-none">&#9632;</span>
-        <span className="text-[#9a8a9e] text-[11px] font-normal">Stopped by user</span>
+        <span className="text-red-400 text-[8px] leading-none">&#9632;</span>
+        <span className="text-muted text-[11px] font-normal">Stopped by user</span>
         <span className="activity-row-time">{time}</span>
       </div>
     );
@@ -107,7 +107,7 @@ export const StopBubble = memo(function StopBubble({
         <span className="activity-row-time">{time}</span>
       </div>
       <div className="activity-row-note">
-        <div className="markdown-body break-words text-sm text-[#c0caf5]">
+        <div className="markdown-body break-words text-sm text-primary">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayMessage}</ReactMarkdown>
         </div>
       </div>
@@ -118,7 +118,7 @@ export const StopBubble = memo(function StopBubble({
               ? <TokenUsageTooltip tokenUsage={tokenUsage} />
               : null}
           >
-            <span className="text-[11px] text-[#565f89]">{formatDuration(duration)}</span>
+            <span className="text-[11px] text-muted">{formatDuration(duration)}</span>
           </Tooltip>
         )}
         {message && <CopyMessageButton text={message} />}

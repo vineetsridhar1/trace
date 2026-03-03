@@ -22,7 +22,7 @@ export function ImageThumbnails({ images, onRemove }: ImageThumbnailsProps) {
             <button
               type="button"
               onClick={() => setLightboxSrc(img.previewUrl)}
-              className="h-12 w-12 overflow-hidden rounded-md border border-[#292e42] transition-colors hover:border-violet-500/60"
+              className="h-12 w-12 overflow-hidden rounded-md border border-edge transition-colors hover:border-accent/60"
             >
               <img
                 src={img.previewUrl}
@@ -34,7 +34,7 @@ export function ImageThumbnails({ images, onRemove }: ImageThumbnailsProps) {
               <button
                 type="button"
                 onClick={() => onRemove(img.id)}
-                className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#292e42] text-[#565f89] opacity-0 transition-opacity hover:bg-red-500/80 hover:text-white group-hover:opacity-100"
+                className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-surface-elevated text-muted opacity-0 transition-opacity hover:bg-red-500/80 hover:text-white group-hover:opacity-100"
               >
                 <FiX className="h-2.5 w-2.5" aria-hidden="true" />
               </button>

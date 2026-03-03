@@ -5,6 +5,7 @@ import { GraphQLProvider } from './graphql/provider';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginScreen } from './components/LoginScreen';
+import './stores/themeStore'; // eagerly apply saved theme before React renders
 import './index.css';
 
 function AuthGate() {
@@ -12,7 +13,7 @@ function AuthGate() {
 
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1a2e', color: '#888' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--th-surface)', color: 'var(--th-muted)' }}>
         Loading...
       </div>
     );
@@ -20,7 +21,7 @@ function AuthGate() {
 
   if (isRetrying) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1a2e', color: '#888' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--th-surface)', color: 'var(--th-muted)' }}>
         Reconnecting to server...
       </div>
     );

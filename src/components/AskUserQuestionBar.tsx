@@ -49,21 +49,21 @@ export function AskUserQuestionBar({
   };
 
   return (
-    <div className="border-t border-violet-500/30 bg-[#1a1b26] px-3 py-3">
+    <div className="border-t border-accent/30 bg-surface px-3 py-3">
       {/* Header row: label, question text, X button */}
       <div className="mb-2 flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-violet-400">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-accent-light">
               {question.header}
             </span>
             {total > 1 && (
-              <span className="text-[11px] text-[#565f89]">
+              <span className="text-[11px] text-muted">
                 {page + 1}/{total}
               </span>
             )}
           </div>
-          <div className="mt-0.5 max-h-24 overflow-y-auto text-sm text-[#c0caf5]">
+          <div className="mt-0.5 max-h-24 overflow-y-auto text-sm text-primary">
             {question.question}
           </div>
         </div>
@@ -71,7 +71,7 @@ export function AskUserQuestionBar({
           <button
             type="button"
             onClick={onDismiss}
-            className="flex-shrink-0 cursor-pointer text-[#565f89] transition-colors hover:text-red-400"
+            className="flex-shrink-0 cursor-pointer text-muted transition-colors hover:text-red-400"
           >
             <FiX className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -100,7 +100,7 @@ export function AskUserQuestionBar({
           onChange={(e) => setCustomText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Other..."
-          className="min-w-0 flex-1 rounded-md border border-[#292e42] bg-[#16161e] px-2.5 py-1.5 text-sm text-[#c0caf5] outline-none placeholder:text-[#565f89] focus:border-violet-500"
+          className="min-w-0 flex-1 rounded-md border border-edge bg-surface-deep px-2.5 py-1.5 text-sm text-primary outline-none placeholder:text-muted focus:border-accent"
         />
 
         {total > 1 && (
@@ -110,7 +110,7 @@ export function AskUserQuestionBar({
                 type="button"
                 onClick={goPrev}
                 disabled={isFirstPage}
-                className="cursor-pointer rounded-md border border-[#292e42] px-2 py-1.5 text-xs text-[#a9b1d6] transition-colors hover:border-[#3b3f5c] disabled:cursor-not-allowed disabled:opacity-30"
+                className="cursor-pointer rounded-md border border-edge px-2 py-1.5 text-xs text-primary transition-colors hover:border-edge-hover disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <FiChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
@@ -120,7 +120,7 @@ export function AskUserQuestionBar({
                 type="button"
                 onClick={goNext}
                 disabled={isLastPage}
-                className="cursor-pointer rounded-md border border-[#292e42] px-2 py-1.5 text-xs text-[#a9b1d6] transition-colors hover:border-[#3b3f5c] disabled:cursor-not-allowed disabled:opacity-30"
+                className="cursor-pointer rounded-md border border-edge px-2 py-1.5 text-xs text-primary transition-colors hover:border-edge-hover disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <FiChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
@@ -133,7 +133,7 @@ export function AskUserQuestionBar({
             type="button"
             disabled={!hasAllAnswers}
             onClick={handleSubmit}
-            className="cursor-pointer rounded-md bg-violet-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-40"
           >
             <FiSend className="h-4 w-4" aria-hidden="true" />
           </button>

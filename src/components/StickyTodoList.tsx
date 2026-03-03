@@ -9,8 +9,8 @@ export function StickyTodoList({
   if (!hasActive) return null;
 
   return (
-    <div className="sticky-todo-list border-t border-[#292e42] bg-[#1a1b26] px-4 py-2.5">
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#565f89]">
+    <div className="sticky-todo-list border-t border-edge bg-surface px-4 py-2.5">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
         Tasks
       </div>
       <ul className="space-y-1">
@@ -18,7 +18,7 @@ export function StickyTodoList({
           <li key={i} className="flex items-center gap-2 text-xs">
             {t.status === "in_progress" ? (
               <svg
-                className="h-3 w-3 flex-shrink-0 animate-spin text-violet-400"
+                className="h-3 w-3 flex-shrink-0 animate-spin text-accent-light"
                 viewBox="0 0 24 24"
                 fill="none"
                 aria-hidden="true"
@@ -40,15 +40,15 @@ export function StickyTodoList({
             ) : t.status === "completed" ? (
               <FiCheck className="h-3 w-3 flex-shrink-0 text-green-400" aria-hidden="true" />
             ) : (
-              <span className="flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-[#565f89]" />
+              <span className="flex h-3 w-3 flex-shrink-0 items-center justify-center rounded-full border border-muted" />
             )}
             <span
               className={
                 t.status === "completed"
-                  ? "text-[#565f89] line-through"
+                  ? "text-muted line-through"
                   : t.status === "in_progress"
-                    ? "text-violet-300"
-                    : "text-[#a9b1d6]"
+                    ? "text-accent-light"
+                    : "text-primary"
               }
             >
               {t.status === "in_progress" && t.activeForm

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { FiExternalLink, FiTrash2, FiX, FiZap } from 'react-icons/fi';
 import { Tooltip } from './Tooltip';
 import { gitUrlsMatch } from '../utils/gitUrl';
+import { useThemeStore, type ThemeName } from '../stores/themeStore';
 import type { Channel, LocalChannelConfig } from '../types';
 
 interface ChannelSettingsModalProps {
@@ -156,7 +157,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
     }
   }, [channel.id, onDelete]);
 
-  const textareaClass = 'w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none font-mono';
+  const textareaClass = 'w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none font-mono';
 
   const typeLabel = channel.type === 'team' ? 'Team' : channel.type === 'project' ? 'Project' : 'Channel';
 
@@ -166,45 +167,50 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="w-[520px] max-h-[80vh] overflow-y-auto rounded-lg border border-[#292e42] bg-[#1a1b26] shadow-xl"
+        className="w-[520px] max-h-[80vh] overflow-y-auto rounded-lg border border-edge bg-surface shadow-xl"
       >
-        <div className="flex items-center justify-between border-b border-[#292e42] px-5 py-3">
-          <h2 className="text-sm font-semibold text-[#c0caf5]">{typeLabel} Settings — #{channel.name}</h2>
+        <div className="flex items-center justify-between border-b border-edge px-5 py-3">
+          <h2 className="text-sm font-semibold text-primary">{typeLabel} Settings — #{channel.name}</h2>
           <Tooltip text="Close" position="bottom">
-            <button type="button" onClick={onClose} className="text-[#565f89] hover:text-[#c0caf5]">
+            <button type="button" onClick={onClose} className="text-muted hover:text-primary">
               <FiX className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
         </div>
 
         <div className="space-y-5 px-5 py-4">
+          {/* ═══ Appearance ═══ */}
+          <ThemeSelector />
+
+          <div className="border-t border-edge" />
+
           {/* ═══ General Settings ═══ */}
           <div>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7aa2f7]">{typeLabel} Settings</h3>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-accent">{typeLabel} Settings</h3>
 
             {/* Name */}
             <div className="mb-4">
-              <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Name</label>
+              <label className="mb-1.5 block text-xs font-medium text-primary">Name</label>
               <input
                 type="text"
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
-                className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7]"
+                className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-accent"
               />
             </div>
 
             {/* Associated Teams (projects only) */}
             {channel.type === 'project' && (
               <div className="relative mb-4">
-                <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Teams</label>
+                <label className="mb-1.5 block text-xs font-medium text-primary">Teams</label>
                 {teams.length > 0 ? (
                   <>
                     <button
                       type="button"
                       onClick={() => setTeamsDropdownOpen((o) => !o)}
-                      className="flex w-full items-center justify-between rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#c0caf5] outline-none focus:border-[#7aa2f7]"
+                      className="flex w-full items-center justify-between rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary outline-none focus:border-accent"
                     >
-                      <span className={draftTeamIds.length === 0 ? 'text-[#3b4261]' : ''}>
+                      <span className={draftTeamIds.length === 0 ? 'text-[#404040]' : ''}>
                         {draftTeamIds.length === 0
                           ? 'Select teams...'
                           : teams
@@ -212,10 +218,10 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                               .map((t) => `# ${t.name}`)
                               .join(', ')}
                       </span>
-                      <svg className={`h-3 w-3 text-[#565f89] transition-transform ${teamsDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 4.5L6 7.5L9 4.5" /></svg>
+                      <svg className={`h-3 w-3 text-muted transition-transform ${teamsDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 4.5L6 7.5L9 4.5" /></svg>
                     </button>
                     {teamsDropdownOpen && (
-                      <div className="absolute left-0 right-0 z-10 mt-1 max-h-40 overflow-y-auto rounded border border-[#292e42] bg-[#16161e] py-1 shadow-lg">
+                      <div className="absolute left-0 right-0 z-10 mt-1 max-h-40 overflow-y-auto rounded border border-edge bg-surface-deep py-1 shadow-lg">
                         {teams.map((team) => {
                           const selected = draftTeamIds.includes(team.id);
                           return (
@@ -227,13 +233,13 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                                   selected ? prev.filter((tid) => tid !== team.id) : [...prev, team.id],
                                 )
                               }
-                              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[#a9b1d6] hover:bg-[#292e42]"
+                              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-primary hover:bg-surface-elevated"
                             >
                               <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                                selected ? 'border-[#7aa2f7] bg-[#7aa2f7]' : 'border-[#565f89]'
+                                selected ? 'border-accent bg-accent' : 'border-muted'
                               }`}>
                                 {selected && (
-                                  <svg className="h-2.5 w-2.5 text-[#1a1b26]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 6L5 8.5L9.5 3.5" /></svg>
+                                  <svg className="h-2.5 w-2.5 text-on-accent" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 6L5 8.5L9.5 3.5" /></svg>
                                 )}
                               </span>
                               <span># {team.name}</span>
@@ -244,9 +250,9 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                     )}
                   </>
                 ) : (
-                  <p className="text-xs italic text-[#565f89]">No teams yet — create a team first to associate it</p>
+                  <p className="text-xs italic text-muted">No teams yet — create a team first to associate it</p>
                 )}
-                <p className="mt-1.5 text-xs text-[#565f89]">Optional — associate this project with one or more teams</p>
+                <p className="mt-1.5 text-xs text-muted">Optional — associate this project with one or more teams</p>
               </div>
             )}
 
@@ -254,14 +260,14 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
             {channel.type !== 'channel' && (<>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <label className="text-xs font-medium text-[#a9b1d6]">Enable Workspaces</label>
-                <p className="text-xs text-[#565f89]">Link a repo to run code in isolated worktrees</p>
+                <label className="text-xs font-medium text-primary">Enable Workspaces</label>
+                <p className="text-xs text-muted">Link a repo to run code in isolated worktrees</p>
               </div>
               <button
                 type="button"
                 onClick={() => setDraftWorkspacesEnabled(!draftWorkspacesEnabled)}
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                  draftWorkspacesEnabled ? 'bg-[#7aa2f7]' : 'bg-[#292e42]'
+                  draftWorkspacesEnabled ? 'bg-accent' : 'bg-surface-elevated'
                 }`}
               >
                 <span
@@ -277,10 +283,10 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
               <>
                 {/* Repository path */}
                 <div className="mb-4">
-                  <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Repository</label>
+                  <label className="mb-1.5 block text-xs font-medium text-primary">Repository</label>
                   {repoPath ? (
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#565f89] truncate">
+                      <div className="flex-1 rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-muted truncate">
                         {repoPath}
                       </div>
                       <button
@@ -289,7 +295,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                           setDraftLocalRepoPath('');
                           setRepoError(null);
                         }}
-                        className="shrink-0 rounded px-2 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+                        className="shrink-0 rounded px-2 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
                       >
                         Change
                       </button>
@@ -299,25 +305,25 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                       type="button"
                       onClick={() => void handleSelectFolder()}
                       disabled={validating}
-                      className="w-full rounded border border-dashed border-[#292e42] bg-[#16161e] px-3 py-3 text-sm text-[#565f89] hover:border-[#7aa2f7] hover:text-[#c0caf5] disabled:opacity-50"
+                      className="w-full rounded border border-dashed border-edge bg-surface-deep px-3 py-3 text-sm text-muted hover:border-accent hover:text-primary disabled:opacity-50"
                     >
                       {validating ? 'Validating...' : 'Select Folder'}
                     </button>
                   )}
                   {repoError && (
-                    <p className="mt-1 text-xs text-[#f7768e]">{repoError}</p>
+                    <p className="mt-1 text-xs text-red-400">{repoError}</p>
                   )}
                 </div>
 
                 {/* GitHub link (read-only) */}
                 {channel.githubUrl && (
                   <div className="mb-4">
-                    <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">GitHub</label>
+                    <label className="mb-1.5 block text-xs font-medium text-primary">GitHub</label>
                     <a
                       href={channel.githubUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-[#7aa2f7] hover:underline"
+                      className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
                     >
                       {channel.githubUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '')}
                       <FiExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -330,19 +336,19 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                   <>
                     {/* Base Branch (read-only) */}
                     <div className="mb-4">
-                      <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Base Branch</label>
-                      <div className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#565f89]">
+                      <label className="mb-1.5 block text-xs font-medium text-primary">Base Branch</label>
+                      <div className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-muted">
                         {channel.baseBranch || 'main'}
                       </div>
                     </div>
 
                     {/* Environment Variables (read-only reference) */}
                     <div className="mb-4">
-                      <p className="mb-1.5 text-xs font-medium text-[#a9b1d6]">Available environment variables</p>
-                      <div className="rounded border border-[#292e42] bg-[#16161e] px-3 py-2 space-y-0.5 text-xs text-[#565f89]">
-                        <p><code className="text-[#9ece6a]">$PORT</code> — primary port (same as $TRACE_PORT_0)</p>
-                        <p><code className="text-[#9ece6a]">$TRACE_PORT_0</code> – <code className="text-[#9ece6a]">$TRACE_PORT_9</code> — 10 allocated ports</p>
-                        <p><code className="text-[#9ece6a]">$REPO_FOLDER</code> — worktree directory path</p>
+                      <p className="mb-1.5 text-xs font-medium text-primary">Available environment variables</p>
+                      <div className="rounded border border-edge bg-surface-deep px-3 py-2 space-y-0.5 text-xs text-muted">
+                        <p><code className="text-green-400">$PORT</code> — primary port (same as $TRACE_PORT_0)</p>
+                        <p><code className="text-green-400">$TRACE_PORT_0</code> – <code className="text-green-400">$TRACE_PORT_9</code> — 10 allocated ports</p>
+                        <p><code className="text-green-400">$REPO_FOLDER</code> — worktree directory path</p>
                       </div>
                     </div>
 
@@ -350,14 +356,14 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                     <div className="mb-4">
                       <div className="mb-2 flex items-center justify-between">
                         <div>
-                          <label className="text-xs font-medium text-[#a9b1d6]">Default Setup Script</label>
-                          <p className="text-xs text-[#565f89]">Runs when a new workspace is created</p>
+                          <label className="text-xs font-medium text-primary">Default Setup Script</label>
+                          <p className="text-xs text-muted">Runs when a new workspace is created</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => void handleSuggestScripts()}
                           disabled={suggesting}
-                          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-[#7aa2f7] hover:bg-[#292e42] disabled:opacity-50"
+                          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-accent hover:bg-surface-elevated disabled:opacity-50"
                         >
                           <FiZap className="h-3 w-3" aria-hidden="true" />
                           {suggesting ? 'Detecting...' : 'Suggest Scripts'}
@@ -376,8 +382,8 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                     {/* Default Run Script */}
                     <div>
                       <div className="mb-2">
-                        <label className="text-xs font-medium text-[#a9b1d6]">Default Run Script</label>
-                        <p className="text-xs text-[#565f89]">Runs when you click the play button</p>
+                        <label className="text-xs font-medium text-primary">Default Run Script</label>
+                        <p className="text-xs text-muted">Runs when you click the play button</p>
                       </div>
                       <textarea
                         value={draftDefaultRunScript}
@@ -398,15 +404,15 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
           {/* ═══ My Settings ═══ (only when repo linked) */}
           {channel.type !== 'channel' && draftWorkspacesEnabled && repoPath && (
             <>
-              <div className="border-t border-[#292e42]" />
+              <div className="border-t border-edge" />
               <div>
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#7aa2f7]">My Settings</h3>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-accent">My Settings</h3>
 
                 {/* Local Repo Path (read-only) */}
                 {localConfig?.localRepoPath && (
                   <div className="mb-4">
-                    <label className="mb-1.5 block text-xs font-medium text-[#a9b1d6]">Local Repo Path</label>
-                    <div className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-sm text-[#565f89]">
+                    <label className="mb-1.5 block text-xs font-medium text-primary">Local Repo Path</label>
+                    <div className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-muted">
                       {localConfig.localRepoPath}
                     </div>
                   </div>
@@ -415,8 +421,8 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                 {/* Setup Script Override */}
                 <div className="mb-4">
                   <div className="mb-2">
-                    <label className="text-xs font-medium text-[#a9b1d6]">Setup Script Override</label>
-                    <p className="text-xs text-[#565f89]">Runs when a new workspace is created and will override the default setup script</p>
+                    <label className="text-xs font-medium text-primary">Setup Script Override</label>
+                    <p className="text-xs text-muted">Runs when a new workspace is created and will override the default setup script</p>
                   </div>
                   <textarea
                     value={draftSetupScript}
@@ -431,8 +437,8 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                 {/* Run Script Override */}
                 <div className="mb-4">
                   <div className="mb-2">
-                    <label className="text-xs font-medium text-[#a9b1d6]">Run Script Override</label>
-                    <p className="text-xs text-[#565f89]">Runs when you click the play button and will override the default run script</p>
+                    <label className="text-xs font-medium text-primary">Run Script Override</label>
+                    <p className="text-xs text-muted">Runs when you click the play button and will override the default run script</p>
                   </div>
                   <textarea
                     value={draftRunScript}
@@ -447,8 +453,8 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                 {/* System Instructions */}
                 <div>
                   <div className="mb-2">
-                    <label className="text-xs font-medium text-[#a9b1d6]">System Instructions</label>
-                    <p className="text-xs text-[#565f89]">Injected as hidden context into every new task</p>
+                    <label className="text-xs font-medium text-primary">System Instructions</label>
+                    <p className="text-xs text-muted">Injected as hidden context into every new task</p>
                   </div>
                   <textarea
                     value={draftSystemInstructions}
@@ -456,7 +462,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                     placeholder={"e.g. This is a TypeScript monorepo. Always run tests with `npm test` from the root."}
                     rows={3}
                     style={{ fieldSizing: 'content' } as React.CSSProperties}
-                    className="w-full rounded border border-[#292e42] bg-[#16161e] px-3 py-1.5 text-xs text-[#c0caf5] placeholder-[#3b4261] outline-none focus:border-[#7aa2f7] resize-none"
+                    className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-xs text-primary placeholder-faint outline-none focus:border-accent resize-none"
                   />
                 </div>
               </div>
@@ -465,17 +471,17 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
         </div>
 
         {/* Footer */}
-        <div className="flex items-center border-t border-[#292e42] px-5 py-3">
+        <div className="flex items-center border-t border-edge px-5 py-3">
           {onDelete && (
             <div className="flex items-center gap-2">
               {confirmDelete ? (
                 <>
-                  <span className="text-xs text-[#f7768e]">Delete this {typeLabel.toLowerCase()}?</span>
+                  <span className="text-xs text-red-400">Delete this {typeLabel.toLowerCase()}?</span>
                   <button
                     type="button"
                     onClick={() => void handleDelete()}
                     disabled={deleting}
-                    className="rounded bg-[#f7768e] px-2.5 py-1 text-xs font-medium text-[#1a1b26] hover:bg-[#ff9e9e] disabled:opacity-50"
+                    className="rounded bg-[#f7768e] px-2.5 py-1 text-xs font-medium text-on-accent hover:bg-[#ff9e9e] disabled:opacity-50"
                   >
                     {deleting ? 'Deleting...' : 'Confirm'}
                   </button>
@@ -483,7 +489,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(false)}
-                      className="rounded px-2 py-1 text-xs text-[#565f89] hover:text-[#c0caf5]"
+                      className="rounded px-2 py-1 text-xs text-muted hover:text-primary"
                     >
                       Cancel
                     </button>
@@ -493,7 +499,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(true)}
-                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#f7768e]"
+                  className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted hover:bg-surface-elevated hover:text-red-400"
                 >
                   <FiTrash2 className="h-3 w-3" />
                   Delete
@@ -505,7 +511,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
             <button
               type="button"
               onClick={onClose}
-              className="rounded px-3 py-1.5 text-xs text-[#565f89] hover:bg-[#292e42] hover:text-[#c0caf5]"
+              className="rounded px-3 py-1.5 text-xs text-muted hover:bg-surface-elevated hover:text-primary"
             >
               Cancel
             </button>
@@ -513,7 +519,7 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
               type="button"
               onClick={() => void handleSave()}
               disabled={saving}
-              className="rounded bg-[#7aa2f7] px-3 py-1.5 text-xs font-medium text-[#1a1b26] hover:bg-[#89b4fa] disabled:opacity-50"
+              className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-light disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save'}
             </button>
@@ -522,5 +528,37 @@ export function ChannelSettingsModal({ channel, teams, localConfig, onClose, onS
       </div>
     </div>,
     document.body,
+  );
+}
+
+const THEMES: { value: ThemeName; label: string }[] = [
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'tokyonight', label: 'Tokyo Night' },
+];
+
+function ThemeSelector() {
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+
+  return (
+    <div>
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-accent">Appearance</h3>
+      <div className="flex gap-2">
+        {THEMES.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setTheme(t.value)}
+            className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+              theme === t.value
+                ? 'border-accent bg-accent/20 text-accent-light'
+                : 'border-edge bg-surface-deep text-muted hover:border-edge-hover hover:text-primary'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

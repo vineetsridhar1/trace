@@ -91,8 +91,8 @@ export function Terminal({ terminalId, cwd }: TerminalProps) {
       onKeyDown={handleFallbackKeyDown}
       onPaste={handleFallbackPaste}
     >
-      <div className="flex items-center border-b border-[#292e42] px-3 py-1.5">
-        <h4 className="text-xs font-semibold text-[#565f89]">Terminal</h4>
+      <div className="flex items-center border-b border-edge px-3 py-1.5">
+        <h4 className="text-xs font-semibold text-muted">Terminal</h4>
       </div>
       <div ref={containerRef} className="min-h-0 flex-1 p-1" tabIndex={-1} />
     </div>

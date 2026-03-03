@@ -134,7 +134,7 @@ export function SyntaxHighlightedCode({
   }
 
   return (
-    <pre className="max-h-[340px] overflow-auto p-2 font-mono text-xs leading-relaxed text-[#c0caf5]">
+    <pre className="max-h-[340px] overflow-auto p-2 font-mono text-xs leading-relaxed text-primary">
       {code}
     </pre>
   );

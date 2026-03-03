@@ -3,7 +3,7 @@ import type { ChannelTicketInfo } from './RunButtons';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'text-yellow-400 bg-yellow-400/10',
-  in_progress: 'text-blue-400 bg-blue-400/10',
+  in_progress: 'text-accent-light bg-accent-light/10',
   creation: 'text-orange-400 bg-orange-400/10',
   completed: 'text-green-400 bg-green-400/10',
   queued: 'text-cyan-400 bg-cyan-400/10',
@@ -41,29 +41,29 @@ export function TicketDependencySelector({
   };
 
   return (
-    <div className="mt-2 rounded-md border border-[#292e42] bg-[#1a1b26] p-2">
-      <p className="mb-2 text-xs font-medium text-[#565f89]">
+    <div className="mt-2 rounded-md border border-edge bg-surface p-2">
+      <p className="mb-2 text-xs font-medium text-muted">
         Select tickets to wait on:
       </p>
       {eligibleTickets.length === 0 ? (
-        <p className="text-xs text-[#565f89]">No eligible tickets to depend on.</p>
+        <p className="text-xs text-muted">No eligible tickets to depend on.</p>
       ) : (
         <div className="max-h-48 space-y-1 overflow-y-auto">
           {eligibleTickets.map((ticket) => (
             <label
               key={ticket.workspaceId}
-              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[#1f2335]"
+              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-elevated"
             >
               <input
                 type="checkbox"
                 checked={selected.has(ticket.workspaceId)}
                 onChange={() => toggle(ticket.workspaceId)}
-                className="accent-violet-500"
+                className="accent-accent"
               />
-              <span className="min-w-0 flex-1 truncate text-sm text-[#c0caf5]">
+              <span className="min-w-0 flex-1 truncate text-sm text-primary">
                 {ticket.title}
               </span>
-              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_COLORS[ticket.status] ?? 'text-[#565f89] bg-[#1f2335]'}`}>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_COLORS[ticket.status] ?? 'text-muted bg-surface-elevated'}`}>
                 {STATUS_LABELS[ticket.status] ?? ticket.status}
               </span>
             </label>
@@ -82,7 +82,7 @@ export function TicketDependencySelector({
         <button
           type="button"
           onClick={onCancel}
-          className="cursor-pointer rounded border border-[#292e42] px-3 py-1.5 text-xs text-[#a9b1d6] transition-colors hover:bg-[#1f2335]"
+          className="cursor-pointer rounded border border-edge px-3 py-1.5 text-xs text-primary transition-colors hover:bg-surface-elevated"
         >
           Cancel
         </button>

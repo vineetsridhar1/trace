@@ -49,14 +49,14 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
   return (
     <div className="edit-diff-view flex h-full w-full flex-col overflow-hidden">
       <ChangesHeader loading={loading} onRefresh={refresh} statusText={diffData?.status} />
-      <div className="flex items-center gap-1 border-b border-[#292e42] px-3 py-1">
+      <div className="flex items-center gap-1 border-b border-edge px-3 py-1">
         <button
           type="button"
           onClick={() => setActiveTab('working')}
           className={`cursor-pointer rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
             activeTab === 'working'
-              ? 'bg-[#292e42] text-[#c0caf5]'
-              : 'text-[#565f89] hover:text-[#a9b1d6]'
+              ? 'bg-surface-elevated text-primary'
+              : 'text-muted hover:text-primary'
           }`}
         >
           Working / Staged
@@ -66,8 +66,8 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
           onClick={() => setActiveTab('branch')}
           className={`cursor-pointer rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
             activeTab === 'branch'
-              ? 'bg-[#292e42] text-[#c0caf5]'
-              : 'text-[#565f89] hover:text-[#a9b1d6]'
+              ? 'bg-surface-elevated text-primary'
+              : 'text-muted hover:text-primary'
           }`}
         >
           vs {baseBranch}
@@ -75,7 +75,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {!diffData && !loading && (
-          <p className="text-xs text-[#565f89]">No diff data available.</p>
+          <p className="text-xs text-muted">No diff data available.</p>
         )}
 
         {activeTab === 'branch' && (
@@ -84,7 +84,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
               <DiffSection title={`Changes vs ${baseBranch}`} diffText={diffData!.branchDiff!} runtime={runtime} />
             ) : (
               diffData && !loading && (
-                <p className="text-xs text-[#565f89]">No changes vs {baseBranch}.</p>
+                <p className="text-xs text-muted">No changes vs {baseBranch}.</p>
               )
             )}
           </>
@@ -103,7 +103,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
               </>
             ) : (
               diffData && !loading && (
-                <p className="text-xs text-[#565f89]">No working or staged changes.</p>
+                <p className="text-xs text-muted">No working or staged changes.</p>
               )
             )}
           </>
@@ -127,11 +127,11 @@ function ChangesHeader({
     : 0;
 
   return (
-    <div className="flex items-center justify-between border-b border-[#292e42] px-3 py-1.5">
+    <div className="flex items-center justify-between border-b border-edge px-3 py-1.5">
       <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold text-[#565f89]">File Changes</h4>
+        <h4 className="text-xs font-semibold text-muted">File Changes</h4>
         {fileCount > 0 && (
-          <span className="rounded bg-[#1f2335] px-1.5 py-0.5 text-[10px] text-[#565f89]">
+          <span className="rounded bg-surface-elevated px-1.5 py-0.5 text-[10px] text-muted">
             {fileCount} file{fileCount !== 1 ? 's' : ''}
           </span>
         )}
@@ -140,7 +140,7 @@ function ChangesHeader({
         type="button"
         onClick={() => void onRefresh()}
         disabled={loading}
-        className="cursor-pointer text-[10px] text-[#565f89] transition-colors hover:text-[#c0caf5] disabled:opacity-40"
+        className="cursor-pointer text-[10px] text-muted transition-colors hover:text-primary disabled:opacity-40"
       >
         {loading ? 'Loading...' : 'Refresh'}
       </button>
@@ -160,8 +160,8 @@ function DiffSection({
   if (!runtime) {
     return (
       <div className="mb-3">
-        <h5 className="mb-1 text-[11px] font-semibold text-[#a9b1d6]">{title}</h5>
-        <pre className="overflow-x-auto rounded bg-[#1a1b26] p-2 text-[11px] text-[#c0caf5]">
+        <h5 className="mb-1 text-[11px] font-semibold text-primary">{title}</h5>
+        <pre className="overflow-x-auto rounded bg-surface p-2 text-[11px] text-primary">
           {diffText.slice(0, 5000)}
         </pre>
       </div>
@@ -174,8 +174,8 @@ function DiffSection({
   } catch {
     return (
       <div className="mb-3">
-        <h5 className="mb-1 text-[11px] font-semibold text-[#a9b1d6]">{title}</h5>
-        <pre className="overflow-x-auto rounded bg-[#1a1b26] p-2 text-[11px] text-[#c0caf5]">
+        <h5 className="mb-1 text-[11px] font-semibold text-primary">{title}</h5>
+        <pre className="overflow-x-auto rounded bg-surface p-2 text-[11px] text-primary">
           {diffText.slice(0, 5000)}
         </pre>
       </div>
@@ -187,8 +187,8 @@ function DiffSection({
 
   return (
     <div className="mb-3">
-      <h5 className="mb-1 text-[11px] font-semibold text-[#a9b1d6]">{title}</h5>
-      <div className="rounded-md border border-[#3b3f5c] overflow-hidden">
+      <h5 className="mb-1 text-[11px] font-semibold text-primary">{title}</h5>
+      <div className="rounded-md border border-edge-hover overflow-hidden">
         {visibleFiles.map((file, i) => {
           const hunks = Array.isArray(file?.hunks) ? file.hunks : [];
           if (hunks.length === 0) return null;
@@ -203,7 +203,7 @@ function DiffSection({
         })}
       </div>
       {totalFiles > MAX_FILES_SHOWN && (
-        <p className="mt-1 text-[10px] text-[#565f89]">
+        <p className="mt-1 text-[10px] text-muted">
           Showing {MAX_FILES_SHOWN} of {totalFiles} files
         </p>
       )}
@@ -239,32 +239,32 @@ function DiffFileAccordion({
   }, [expanded, hunks, tokens]);
 
   return (
-    <div className={!isLast ? 'border-b border-[#3b3f5c]' : ''}>
+    <div className={!isLast ? 'border-b border-edge-hover' : ''}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-[#1a1b26]"
+        className="flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-surface"
       >
         <span
-          className="text-[10px] text-[#565f89] transition-transform duration-200"
+          className="text-[10px] text-muted transition-transform duration-200"
           style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block' }}
         >
           ▶
         </span>
         <span className="min-w-0 flex-1 truncate text-[11px]">
-          <span className="text-[#565f89]">{dirPath}</span>
-          <span className="text-[#a9b1d6]">{fileName}</span>
+          <span className="text-muted">{dirPath}</span>
+          <span className="text-primary">{fileName}</span>
         </span>
         <span className="flex shrink-0 items-center gap-1.5 text-[10px]">
-          {additions > 0 && <span className="text-[#9ece6a]">+{additions}</span>}
-          {deletions > 0 && <span className="text-[#f7768e]">-{deletions}</span>}
+          {additions > 0 && <span className="text-green-400">+{additions}</span>}
+          {deletions > 0 && <span className="text-red-400">-{deletions}</span>}
         </span>
       </button>
       <div
         className="overflow-hidden transition-[max-height] duration-200 ease-in-out"
         style={{ maxHeight: expanded ? contentHeight : 0 }}
       >
-        <div ref={contentRef} className="edit-diff-body-fullscreen bg-[#16161e]">
+        <div ref={contentRef} className="edit-diff-body-fullscreen bg-surface-deep">
           <Diff viewType="unified" diffType={file?.type ?? 'modify'} hunks={hunks} tokens={tokens} renderToken={renderToken}>
             {(renderedHunks: ParsedHunk[]) =>
               renderedHunks.map((hunk, idx) => (

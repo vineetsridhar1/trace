@@ -506,7 +506,7 @@ export function ThreadPanel() {
 
       <div
         id="thread-panel"
-        className={`flex shrink-0 min-h-0 flex-col overflow-hidden ${isOpen ? "border-l border-[#292e42]" : ""} bg-[#16161e] ${dragging ? "" : "panel-animate"}`}
+        className={`flex shrink-0 min-h-0 flex-col overflow-hidden ${isOpen ? "border-l border-edge" : ""} bg-surface-deep ${dragging ? "" : "panel-animate"}`}
         style={
           isFullscreen
             ? { flex: "1 1 0%" }
@@ -565,7 +565,7 @@ export function ThreadPanel() {
               >
                 <div className="thread-events-list">
                   {loadingOlderEvents && (
-                    <div className="py-2 text-center text-xs text-[#565f89]">
+                    <div className="py-2 text-center text-xs text-muted">
                       Loading older events...
                     </div>
                   )}
@@ -583,11 +583,11 @@ export function ThreadPanel() {
                             key={node.id}
                             className="my-3 flex items-center gap-3 px-2"
                           >
-                            <div className="h-px flex-1 bg-violet-500/20" />
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-violet-400/60">
+                            <div className="h-px flex-1 bg-accent/20" />
+                            <span className="text-[10px] font-medium uppercase tracking-wider text-accent-light/60">
                               New Context
                             </span>
-                            <div className="h-px flex-1 bg-violet-500/20" />
+                            <div className="h-px flex-1 bg-accent/20" />
                           </div>
                         );
                       }
@@ -678,7 +678,7 @@ export function ThreadPanel() {
             style={{ display: viewMode === "terminal" ? "flex" : "none" }}
           >
             {hasWorktree === false ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+              <div className="flex flex-1 items-center justify-center text-sm text-muted">
                 No worktree available
               </div>
             ) : allTerminalEntries.length > 0 ? (
@@ -706,7 +706,7 @@ export function ThreadPanel() {
                 onOpenSettings={() => { if (activeChannelId) useAppUIStore.getState().setSettingsChannelId(activeChannelId); }}
               />
             ) : (
-              <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+              <div className="flex flex-1 items-center justify-center text-sm text-muted">
                 Initializing terminals...
               </div>
             )}
@@ -727,8 +727,8 @@ export function ThreadPanel() {
 
         {viewMode === "agent" &&
           (isLockedByOther && workspaceStatus !== 'pending' && workspaceStatus !== 'handed_off' ? (
-            <div className="flex items-center justify-center border-t border-[#292e42] px-4 py-3">
-              <span className="text-xs text-[#565f89]">
+            <div className="flex items-center justify-center border-t border-edge px-4 py-3">
+              <span className="text-xs text-muted">
                 Workspace locked by another user (read-only)
               </span>
             </div>
@@ -802,8 +802,8 @@ export function ThreadPanel() {
               }}
             />
           ) : isViewingOlderSession ? (
-            <div className="flex items-center justify-center border-t border-[#292e42] px-4 py-3">
-              <span className="text-xs text-[#565f89]">
+            <div className="flex items-center justify-center border-t border-edge px-4 py-3">
+              <span className="text-xs text-muted">
                 Viewing older session (read-only)
               </span>
             </div>
@@ -854,27 +854,27 @@ function ThreadStatusMessage({
       <div className="flex flex-col gap-4 w-full px-2">
         {/* User prompt skeleton */}
         <div className="flex justify-end">
-          <div className="h-8 w-2/5 rounded-lg bg-[#292e42] animate-pulse" />
+          <div className="h-8 w-2/5 rounded-lg bg-surface-elevated animate-pulse" />
         </div>
         {/* Assistant text skeleton */}
         <div className="flex flex-col gap-2">
-          <div className="h-4 w-4/5 rounded bg-[#292e42] animate-pulse" />
-          <div className="h-4 w-3/5 rounded bg-[#292e42] animate-pulse" />
-          <div className="h-4 w-2/3 rounded bg-[#292e42] animate-pulse" />
+          <div className="h-4 w-4/5 rounded bg-surface-elevated animate-pulse" />
+          <div className="h-4 w-3/5 rounded bg-surface-elevated animate-pulse" />
+          <div className="h-4 w-2/3 rounded bg-surface-elevated animate-pulse" />
         </div>
         {/* Tool use row skeleton */}
-        <div className="h-6 w-1/3 rounded bg-[#292e42] animate-pulse" />
+        <div className="h-6 w-1/3 rounded bg-surface-elevated animate-pulse" />
         {/* More assistant text skeleton */}
         <div className="flex flex-col gap-2">
-          <div className="h-4 w-3/4 rounded bg-[#292e42] animate-pulse" />
-          <div className="h-4 w-1/2 rounded bg-[#292e42] animate-pulse" />
+          <div className="h-4 w-3/4 rounded bg-surface-elevated animate-pulse" />
+          <div className="h-4 w-1/2 rounded bg-surface-elevated animate-pulse" />
         </div>
       </div>
     );
   }
   if (status === "empty") {
     return (
-      <div className="text-sm text-[#565f89]">
+      <div className="text-sm text-muted">
         {activeSessionId
           ? "No events yet"
           : "No sessions yet. Create a workspace to start."}

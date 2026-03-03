@@ -37,7 +37,7 @@ export const ExpandableText = memo(function ExpandableText({
           transition: expanded ? undefined : 'max-height 0.3s ease',
         }}
       >
-        <div ref={innerRef} className="markdown-body break-words text-sm text-[#c0caf5]">
+        <div ref={innerRef} className="markdown-body break-words text-sm text-primary">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
         </div>
       </div>
@@ -45,7 +45,7 @@ export const ExpandableText = memo(function ExpandableText({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="mt-1 cursor-pointer text-xs font-medium text-violet-400 hover:text-violet-300"
+          className="mt-1 cursor-pointer text-xs font-medium text-accent-light hover:text-accent-light"
         >
           {expanded ? 'See less' : 'See more'}
         </button>

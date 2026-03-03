@@ -28,6 +28,6 @@ export function ElapsedTimer({ startTime }: { startTime: string }) {
       : `${m}:${String(s).padStart(2, "0")}`;
 
   return (
-    <span className="tabular-nums text-xs text-violet-400/70">{display}</span>
+    <span className="tabular-nums text-xs text-accent-light/70">{display}</span>
   );
 }

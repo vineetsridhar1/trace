@@ -5,7 +5,7 @@ export function CreationStatusBar() {
   const setupScript = enrichedActiveChannel?.setupScript;
 
   return (
-    <div className="border-t border-[#292e42] px-3 py-3">
+    <div className="border-t border-edge px-3 py-3">
       <div className="flex items-center gap-2 px-1">
         <svg
           className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-orange-400"
@@ -32,7 +32,7 @@ export function CreationStatusBar() {
       {setupScript && (
         <div className="mt-2 px-1">
           {setupScript.split("\n").filter(Boolean).map((cmd, i) => (
-            <div key={i} className="font-mono text-[11px] text-[#565f89]">
+            <div key={i} className="font-mono text-[11px] text-muted">
               $ {cmd}
             </div>
           ))}

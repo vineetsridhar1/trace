@@ -20,14 +20,14 @@ export function FileMentionMenu({ isOpen, files, selectedIndex, onSelect }: File
 
   if (files.length === 0) {
     return (
-      <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-[#292e42] bg-[#1f2335] py-1 shadow-lg">
-        <div className="px-3 py-2 text-sm text-[#565f89]">No files found</div>
+      <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-edge bg-surface-elevated py-1 shadow-lg">
+        <div className="px-3 py-2 text-sm text-muted">No files found</div>
       </div>
     );
   }
 
   return (
-    <div className="absolute bottom-full left-0 right-0 mb-1 max-h-56 overflow-y-auto rounded-lg border border-[#292e42] bg-[#1f2335] py-1 shadow-lg">
+    <div className="absolute bottom-full left-0 right-0 mb-1 max-h-56 overflow-y-auto rounded-lg border border-edge bg-surface-elevated py-1 shadow-lg">
       {files.map((file, i) => (
         <button
           key={file.path}
@@ -38,11 +38,11 @@ export function FileMentionMenu({ isOpen, files, selectedIndex, onSelect }: File
             onSelect(file);
           }}
           className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-            i === selectedIndex ? 'bg-violet-500/20 text-[#c0caf5]' : 'text-[#a9b1d6] hover:bg-[#292e42]'
+            i === selectedIndex ? 'bg-accent/20 text-primary' : 'text-primary hover:bg-surface-elevated'
           }`}
         >
-          <FiFile className="h-3.5 w-3.5 flex-shrink-0 text-[#565f89]" />
-          <span className={`truncate ${i === selectedIndex ? 'text-[#c0caf5]' : 'text-[#565f89]'}`}>{file.path}</span>
+          <FiFile className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
+          <span className={`truncate ${i === selectedIndex ? 'text-primary' : 'text-muted'}`}>{file.path}</span>
         </button>
       ))}
     </div>
