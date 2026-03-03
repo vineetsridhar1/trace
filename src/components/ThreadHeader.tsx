@@ -288,7 +288,7 @@ export const ThreadHeader = memo(function ThreadHeader({
               Files
             </button>
           </Tooltip>
-          <Tooltip text="⌘4">
+          <Tooltip text={hasWorktree !== true ? "Worktree deleted" : "⌘4"}>
             <button
               type="button"
               disabled={hasWorktree !== true}
@@ -304,7 +304,7 @@ export const ThreadHeader = memo(function ThreadHeader({
               Terminal
             </button>
           </Tooltip>
-          <Tooltip text="⌘5">
+          <Tooltip text={hasWorktree !== true ? "Worktree deleted" : "⌘5"}>
             <button
               type="button"
               disabled={hasWorktree !== true}
@@ -321,15 +321,6 @@ export const ThreadHeader = memo(function ThreadHeader({
             </button>
           </Tooltip>
         </div>
-        {hasWorktree === false &&
-          workspaceStatus !== "pending" &&
-          workspaceStatus !== "handed_off" &&
-          workspaceStatus !== "creation" &&
-          selectedWorkspaceId && (
-            <span className="rounded bg-surface-elevated px-1.5 py-0.5 text-[11px] text-muted">
-              Worktree deleted
-            </span>
-          )}
       </div>
       <div className="flex items-center gap-2">
         {tokenUsage && tokenUsage.totalTokens > 0 && (
