@@ -7,7 +7,7 @@ import { normalizeToolName } from '../utils';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useKanbanStore } from '../stores/kanbanStore';
-import { useClaudeRunStore } from '../stores/claudeRunStore';
+import { useAgentRunStore } from '../stores/agentRunStore';
 
 const WORKSPACE_UPSERTED_SUBSCRIPTION = gql`
   subscription WorkspaceUpserted($channelId: ID!) {
@@ -92,7 +92,7 @@ const TICKET_UPSERTED_SUBSCRIPTION = gql`
 
 interface UseChannelSubscriptionsOptions {
   activeChannelId: string | null;
-  reportClaudeActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
+  reportAgentActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
   onNeedsAttention: (workspaceId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   onTicketReadyToRun?: (workspaceId: string, runConfig: unknown) => void;
   onWorkspaceCompleted?: () => void;
@@ -101,7 +101,7 @@ interface UseChannelSubscriptionsOptions {
 
 export function useChannelSubscriptions({
   activeChannelId,
-  reportClaudeActivity,
+  reportAgentActivity,
   onNeedsAttention,
   onTicketReadyToRun,
   onWorkspaceCompleted,
@@ -163,9 +163,9 @@ export function useChannelSubscriptions({
     useWorkspaceStore.getState().upsertWorkspace(workspace);
     useThreadStore.getState().syncSelectedWorkspace(workspace);
 
-    const pendingId = useClaudeRunStore.getState().pendingRunWorkspaceId;
+    const pendingId = useAgentRunStore.getState().pendingRunWorkspaceId;
     if (pendingId === workspace.id && workspace.status !== 'pending') {
-      useClaudeRunStore.getState().clearPendingRun();
+      useAgentRunStore.getState().clearPendingRun();
     }
 
     if (transitionedToCompleted && onWorkspaceCompleted) {
@@ -182,9 +182,9 @@ export function useChannelSubscriptions({
     const deletedWorkspaceId = workspaceDeletedData.workspaceDeleted.workspaceId;
     useWorkspaceStore.getState().removeWorkspace(deletedWorkspaceId);
     useKanbanStore.getState().removeTicketByWorkspaceId(deletedWorkspaceId);
-    const pendingId = useClaudeRunStore.getState().pendingRunWorkspaceId;
+    const pendingId = useAgentRunStore.getState().pendingRunWorkspaceId;
     if (pendingId === deletedWorkspaceId) {
-      useClaudeRunStore.getState().clearPendingRun();
+      useAgentRunStore.getState().clearPendingRun();
     }
   }, [workspaceDeletedData, activeChannelId]);
 
@@ -196,10 +196,10 @@ export function useChannelSubscriptions({
     const payload = sessionEventData.sessionEventCreated;
     if (payload.channelId !== channelIdRef.current) return;
 
-    void reportClaudeActivity(payload.workspaceId, payload.event.hookEventName, payload.event.cliSessionId);
+    void reportAgentActivity(payload.workspaceId, payload.event.hookEventName, payload.event.cliSessionId);
 
     if (payload.event.hookEventName === 'Stop') {
-      useClaudeRunStore.getState().clearActiveRun(payload.workspaceId);
+      useAgentRunStore.getState().clearActiveRun(payload.workspaceId);
       const existing = useWorkspaceStore.getState().workspaces.find((item) => item.id === payload.workspaceId);
       if (existing && existing.cliSession.status !== 'stopped') {
         useWorkspaceStore.getState().upsertWorkspace({
@@ -265,7 +265,7 @@ export function useChannelSubscriptions({
     }
 
     useThreadStore.getState().appendSessionEvent(payload.event as ServerEvent);
-  }, [sessionEventData, activeChannelId, reportClaudeActivity, onNeedsAttention, refreshWorkspaces]);
+  }, [sessionEventData, activeChannelId, reportAgentActivity, onNeedsAttention, refreshWorkspaces]);
 
   // --- Session event updated ---
   const { data: sessionEventUpdatedData } = useSubscription(SESSION_EVENT_UPDATED_SUBSCRIPTION, { variables, skip });

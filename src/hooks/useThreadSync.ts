@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef } from 'react';
-import type { Workspace, ServerEvent } from '../types';
-import type { SessionInfo } from './useThread';
+import { useCallback, useEffect, useRef } from "react";
+import type { Workspace, ServerEvent } from "../types";
+import type { SessionInfo } from "./useThread";
 import {
   useCreateSessionMutation,
   useSessionsLazyQuery,
   useSessionEventsLazyQuery,
-} from './__generated__/useThread.generated';
-import { useThreadStore } from '../stores/threadStore';
+} from "./__generated__/useThread.generated";
+import { useThreadStore } from "../stores/threadStore";
 
 const SESSION_PAGE_SIZE = 100;
 
@@ -19,16 +19,30 @@ export function useThreadSync(
   const [executeSessionEvents] = useSessionEventsLazyQuery();
   const [executeCreateSession] = useCreateSessionMutation();
 
-  const lastReportedSessionEventIdByWorkspaceRef = useRef<Map<string, string>>(new Map());
+  const lastReportedSessionEventIdByWorkspaceRef = useRef<Map<string, string>>(
+    new Map(),
+  );
   const loadingOlderRef = useRef(false);
-  const sessionQueryRef = useRef<{ channelId: string; workspaceId: string; sessionId: string } | null>(null);
+  const sessionQueryRef = useRef<{
+    channelId: string;
+    workspaceId: string;
+    sessionId: string;
+  } | null>(null);
   const asyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const reportClaudeActivity = useCallback(
+  const reportAgentActivity = useCallback(
     async (workspaceId: string, eventType: string, sessionId?: string) => {
-      if (!window.traceAPI || typeof window.traceAPI.reportClaudeActivity !== 'function') return;
+      if (
+        !window.traceAPI ||
+        typeof window.traceAPI.reportAgentActivity !== "function"
+      )
+        return;
       try {
-        await window.traceAPI.reportClaudeActivity(workspaceId, eventType, sessionId);
+        await window.traceAPI.reportAgentActivity(
+          workspaceId,
+          eventType,
+          sessionId,
+        );
       } catch {
         // best-effort
       }
@@ -37,7 +51,23 @@ export function useThreadSync(
   );
 
   const applyEventsResult = useCallback(
-    (channelId: string, workspaceId: string, sessionId: string, result: { events?: unknown[]; total?: number; tokenUsage?: { inputTokens: number; outputTokens: number; totalTokens: number } | null; cliCostUsd?: number | null } | undefined) => {
+    (
+      channelId: string,
+      workspaceId: string,
+      sessionId: string,
+      result:
+        | {
+            events?: unknown[];
+            total?: number;
+            tokenUsage?: {
+              inputTokens: number;
+              outputTokens: number;
+              totalTokens: number;
+            } | null;
+            cliCostUsd?: number | null;
+          }
+        | undefined,
+    ) => {
       const events: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
       const total = result?.total ?? events.length;
       const store = useThreadStore.getState();
@@ -52,7 +82,7 @@ export function useThreadSync(
         });
       }
       sessionQueryRef.current = { channelId, workspaceId, sessionId };
-      store.setSessionStatus(events.length === 0 ? 'empty' : 'ready');
+      store.setSessionStatus(events.length === 0 ? "empty" : "ready");
     },
     [],
   );
@@ -63,14 +93,24 @@ export function useThreadSync(
       store.resetSessionViewState();
 
       const { data: eventsData } = await executeSessionEvents({
-        variables: { channelId, workspaceId, sessionId, limit: SESSION_PAGE_SIZE },
-        fetchPolicy: 'network-only',
+        variables: {
+          channelId,
+          workspaceId,
+          sessionId,
+          limit: SESSION_PAGE_SIZE,
+        },
+        fetchPolicy: "network-only",
       });
 
       // Bail if workspace changed during the network request
       if (useThreadStore.getState().selectedWorkspaceId !== workspaceId) return;
 
-      applyEventsResult(channelId, workspaceId, sessionId, eventsData?.sessionEvents);
+      applyEventsResult(
+        channelId,
+        workspaceId,
+        sessionId,
+        eventsData?.sessionEvents,
+      );
     },
     [executeSessionEvents, applyEventsResult],
   );
@@ -79,12 +119,16 @@ export function useThreadSync(
     async (workspace: Workspace) => {
       try {
         const { data: sessionsData } = await executeSessions({
-          variables: { channelId: workspace.channelId, workspaceId: workspace.id },
-          fetchPolicy: 'network-only',
+          variables: {
+            channelId: workspace.channelId,
+            workspaceId: workspace.id,
+          },
+          fetchPolicy: "network-only",
         });
 
         // Bail if workspace changed during the network request
-        if (useThreadStore.getState().selectedWorkspaceId !== workspace.id) return;
+        if (useThreadStore.getState().selectedWorkspaceId !== workspace.id)
+          return;
 
         const sessionList = (sessionsData?.sessions ?? []) as SessionInfo[];
         useThreadStore.getState().setSessions(sessionList);
@@ -92,28 +136,40 @@ export function useThreadSync(
         if (sessionList.length === 0) {
           useThreadStore.getState().setActiveSessionId(null);
           useThreadStore.getState().setSessionEvents([]);
-          useThreadStore.getState().setSessionStatus('empty');
+          useThreadStore.getState().setSessionStatus("empty");
           return;
         }
 
         const latestSession = sessionList[sessionList.length - 1];
         useThreadStore.getState().setActiveSessionId(latestSession.id);
-        await loadEventsForSession(workspace.channelId, workspace.id, latestSession.id);
+        await loadEventsForSession(
+          workspace.channelId,
+          workspace.id,
+          latestSession.id,
+        );
 
         const currentEvents = useThreadStore.getState().sessionEvents;
         const latestEvent = currentEvents[currentEvents.length - 1];
         if (latestEvent) {
-          const lastReportedId = lastReportedSessionEventIdByWorkspaceRef.current.get(workspace.id);
+          const lastReportedId =
+            lastReportedSessionEventIdByWorkspaceRef.current.get(workspace.id);
           if (lastReportedId !== latestEvent.id) {
-            lastReportedSessionEventIdByWorkspaceRef.current.set(workspace.id, latestEvent.id);
-            void reportClaudeActivity(workspace.id, latestEvent.hookEventName, latestEvent.cliSessionId);
+            lastReportedSessionEventIdByWorkspaceRef.current.set(
+              workspace.id,
+              latestEvent.id,
+            );
+            void reportAgentActivity(
+              workspace.id,
+              latestEvent.hookEventName,
+              latestEvent.cliSessionId,
+            );
           }
         }
       } catch {
-        useThreadStore.getState().setSessionStatus('error');
+        useThreadStore.getState().setSessionStatus("error");
       }
     },
-    [executeSessions, loadEventsForSession, reportClaudeActivity],
+    [executeSessions, loadEventsForSession, reportAgentActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
@@ -134,7 +190,8 @@ export function useThreadSync(
       });
 
       const result = data?.sessionEvents;
-      const olderEvents: ServerEvent[] = (result?.events ?? []) as ServerEvent[];
+      const olderEvents: ServerEvent[] = (result?.events ??
+        []) as ServerEvent[];
       const total = result?.total;
       if (total != null) useThreadStore.getState().setSessionTotal(total);
       if (olderEvents.length > 0) {
@@ -153,12 +210,16 @@ export function useThreadSync(
       if (!workspace) return;
 
       useThreadStore.getState().setActiveSessionId(sessionId);
-      useThreadStore.getState().setSessionStatus('loading');
+      useThreadStore.getState().setSessionStatus("loading");
 
       try {
-        await loadEventsForSession(workspace.channelId, workspace.id, sessionId);
+        await loadEventsForSession(
+          workspace.channelId,
+          workspace.id,
+          sessionId,
+        );
       } catch {
-        useThreadStore.getState().setSessionStatus('error');
+        useThreadStore.getState().setSessionStatus("error");
       }
     },
     [loadEventsForSession],
@@ -182,29 +243,43 @@ export function useThreadSync(
       store.setActiveSessionId(newSession.id);
       store.setSessionEvents([]);
       store.setSessionTotal(0);
-      store.setSessionStatus('empty');
+      store.setSessionStatus("empty");
       store.resetSessionViewState();
-      sessionQueryRef.current = { channelId, workspaceId: workspace.id, sessionId: newSession.id };
+      sessionQueryRef.current = {
+        channelId,
+        workspaceId: workspace.id,
+        sessionId: newSession.id,
+      };
       return newSession.id;
     } catch (err) {
-      console.error('Failed to clear session:', err);
+      console.error("Failed to clear session:", err);
       return null;
     }
   }, [executeCreateSession, getActiveChannelId]);
 
   const checkWorktree = useCallback(
     async (workspaceId: string) => {
-      if (!window.traceAPI || typeof window.traceAPI.checkWorktreeExists !== 'function') {
+      if (
+        !window.traceAPI ||
+        typeof window.traceAPI.checkWorktreeExists !== "function"
+      ) {
         useThreadStore.getState().setHasWorktree(false);
         useThreadStore.getState().setWorktreePath(null);
         return;
       }
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.checkWorktreeExists(workspaceId, repoPath);
+        const result = await window.traceAPI.checkWorktreeExists(
+          workspaceId,
+          repoPath,
+        );
         const exists = result.success && result.exists === true;
         useThreadStore.getState().setHasWorktree(exists);
-        useThreadStore.getState().setWorktreePath(exists && result.worktreePath ? result.worktreePath : null);
+        useThreadStore
+          .getState()
+          .setWorktreePath(
+            exists && result.worktreePath ? result.worktreePath : null,
+          );
       } catch {
         useThreadStore.getState().setHasWorktree(false);
         useThreadStore.getState().setWorktreePath(null);
@@ -218,15 +293,20 @@ export function useThreadSync(
       const workspace = useThreadStore.getState().selectedWorkspace;
       if (!workspace) return;
 
-      const confirmed = window.confirm('Delete this worktree? This removes local files for this workspace.');
+      const confirmed = window.confirm(
+        "Delete this worktree? This removes local files for this workspace.",
+      );
       if (!confirmed) return;
 
       useThreadStore.getState().setDeletingWorktree(true);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.deleteWorktree(workspace.id, repoPath);
+        const result = await window.traceAPI.deleteWorktree(
+          workspace.id,
+          repoPath,
+        );
         if (!result.success) {
-          console.error('Failed to delete worktree:', result.error);
+          console.error("Failed to delete worktree:", result.error);
           return;
         }
         useThreadStore.getState().setHasWorktree(false);
@@ -244,15 +324,21 @@ export function useThreadSync(
     if (!workspace) return;
 
     const baseBranch = getChannelBaseBranch();
-    const confirmed = window.confirm(`Merge this worktree branch into ${baseBranch}?`);
+    const confirmed = window.confirm(
+      `Merge this worktree branch into ${baseBranch}?`,
+    );
     if (!confirmed) return;
 
     useThreadStore.getState().setMergingWorktree(true);
     try {
       const repoPath = getChannelRepoPath();
-      const result = await window.traceAPI.mergeWorktree(workspace.id, repoPath, baseBranch);
+      const result = await window.traceAPI.mergeWorktree(
+        workspace.id,
+        repoPath,
+        baseBranch,
+      );
       if (!result.success) {
-        console.error('Failed to merge worktree:', result.error);
+        console.error("Failed to merge worktree:", result.error);
       }
     } finally {
       useThreadStore.getState().setMergingWorktree(false);
@@ -268,7 +354,8 @@ export function useThreadSync(
       if (asyncDebounceRef.current) clearTimeout(asyncDebounceRef.current);
       asyncDebounceRef.current = setTimeout(() => {
         // Staleness guard: skip if user already navigated away
-        if (useThreadStore.getState().selectedWorkspaceId !== workspace.id) return;
+        if (useThreadStore.getState().selectedWorkspaceId !== workspace.id)
+          return;
         void loadSessionEvents(workspace);
         void checkWorktree(workspace.id);
       }, 150);
@@ -292,10 +379,18 @@ export function useThreadSync(
       clearSession,
       deleteWorktree,
       openThreadPanel,
-      reportClaudeActivity,
+      reportAgentActivity,
     });
     return () => useThreadStore.getState().clearSyncActions();
-  }, [loadSessionEvents, loadOlderEvents, switchSession, clearSession, deleteWorktree, openThreadPanel, reportClaudeActivity]);
+  }, [
+    loadSessionEvents,
+    loadOlderEvents,
+    switchSession,
+    clearSession,
+    deleteWorktree,
+    openThreadPanel,
+    reportAgentActivity,
+  ]);
 
   return {
     loadSessionEvents,
@@ -306,6 +401,6 @@ export function useThreadSync(
     deleteWorktree,
     mergeWorktree,
     openThreadPanel,
-    reportClaudeActivity,
+    reportAgentActivity,
   };
 }

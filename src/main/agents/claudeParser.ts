@@ -6,27 +6,12 @@
  * .claude/settings.json, we read structured events directly from stdout.
  */
 
-interface StreamParserCallbacks {
-  onSessionId: (id: string) => void;
-  onActivity: () => void;
-  /** Called when Claude requests user input (AskUserQuestion / ExitPlanMode).
-   *  The host should kill the process so execution stops immediately. */
-  onInputRequired: () => void;
-}
+import type { ParsedEnrichment, StreamParserOpts } from "./types";
 
 interface PendingToolUse {
   name: string;
   input: unknown;
   assistantText?: string;
-}
-
-export interface ParsedEnrichment {
-  sessionId?: string;
-  lastAssistantText: string;
-  usage?: { input_tokens: number; output_tokens: number };
-  costUsd?: number;
-  detectedToolName?: "AskUserQuestion" | "ExitPlanMode";
-  detectedToolInput?: unknown;
 }
 
 export class ClaudeStreamParser {
@@ -43,17 +28,11 @@ export class ClaudeStreamParser {
   private readonly serverUrl: string;
   private readonly workspaceId: string;
   private readonly cwd: string;
-  private readonly callbacks: StreamParserCallbacks;
+  private readonly callbacks: StreamParserOpts["callbacks"];
   private readonly log: (line: string) => void;
   private pendingPosts: Promise<void>[] = [];
 
-  constructor(opts: {
-    serverUrl: string;
-    workspaceId: string;
-    cwd: string;
-    callbacks: StreamParserCallbacks;
-    log: (line: string) => void;
-  }) {
+  constructor(opts: StreamParserOpts) {
     this.serverUrl = opts.serverUrl;
     this.workspaceId = opts.workspaceId;
     this.cwd = opts.cwd;

@@ -1,18 +1,60 @@
 import { create } from "zustand";
-import type { ClaudeModel, EffortLevel, KanbanTicket } from "../types";
+import type {
+  AgentType,
+  DetectedAgent,
+  EffortOption,
+  KanbanTicket,
+} from "../types";
 
 export type PlanResponseMode = "clear-context" | "keep-context" | "revise";
 
-// Registerable action slots provided by useClaudeWorkspaceActions
-interface ClaudeWorkspaceActions {
+// Fallback capabilities used before IPC detection completes
+const CLAUDE_EFFORT_OPTIONS: EffortOption[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+const DEFAULT_DETECTED_AGENTS: DetectedAgent[] = [
+  {
+    type: "claude",
+    capabilities: {
+      displayName: "Claude Code",
+      supportsResume: true,
+      supportsPlanMode: true,
+      models: [
+        {
+          value: "opus",
+          label: "Opus 4.6",
+          effortOptions: CLAUDE_EFFORT_OPTIONS,
+        },
+        {
+          value: "sonnet",
+          label: "Sonnet 4.6",
+          effortOptions: CLAUDE_EFFORT_OPTIONS,
+        },
+        { value: "haiku", label: "Haiku 4.5" },
+      ],
+      defaultModel: "opus",
+      effortLabel: "Effort",
+    },
+    detectResult: { available: true },
+  },
+];
+
+// Registerable action slots provided by useWorkspaceActions
+interface WorkspaceActions {
   sendMessage: (
     text: string,
     attachmentIds?: string[],
     filePaths?: string[],
   ) => Promise<boolean>;
-  createWorkspace: () => Promise<boolean>;
-  createWorkspaceForTicket: (ticket: KanbanTicket) => Promise<boolean>;
-  runPendingWorkspace: (planMode: boolean, prompt: string, attachmentIds?: string[], filePaths?: string[]) => Promise<void>;
+  runPendingWorkspace: (
+    planMode: boolean,
+    prompt: string,
+    attachmentIds?: string[],
+    filePaths?: string[],
+  ) => Promise<void>;
   autoRunQueuedTicket: (
     workspaceId: string,
     runConfig: {
@@ -22,7 +64,7 @@ interface ClaudeWorkspaceActions {
       planMode: boolean;
     },
   ) => Promise<void>;
-  stopClaude: () => Promise<void>;
+  stopAgent: () => Promise<void>;
   sendThreadMessage: (
     text: string,
     attachmentIds?: string[],
@@ -36,51 +78,54 @@ interface ClaudeWorkspaceActions {
   ) => Promise<void>;
   mergeToMain: () => Promise<void>;
   markMerged: () => Promise<void>;
+  createWorkspace: () => Promise<void>;
+  createWorkspaceForTicket: (ticket: KanbanTicket) => Promise<void>;
 }
 
 const noopWarn =
   (_name: string) =>
   (..._args: unknown[]) => {};
 
-const defaultWorkspaceActions: ClaudeWorkspaceActions = {
-  sendMessage: noopWarn("sendMessage") as ClaudeWorkspaceActions["sendMessage"],
-  createWorkspace: noopWarn(
-    "createWorkspace",
-  ) as ClaudeWorkspaceActions["createWorkspace"],
-  createWorkspaceForTicket: noopWarn(
-    "createWorkspaceForTicket",
-  ) as ClaudeWorkspaceActions["createWorkspaceForTicket"],
+const defaultWorkspaceActions: WorkspaceActions = {
+  sendMessage: noopWarn("sendMessage") as WorkspaceActions["sendMessage"],
   runPendingWorkspace: noopWarn(
     "runPendingWorkspace",
-  ) as ClaudeWorkspaceActions["runPendingWorkspace"],
+  ) as WorkspaceActions["runPendingWorkspace"],
   autoRunQueuedTicket: noopWarn(
     "autoRunQueuedTicket",
-  ) as ClaudeWorkspaceActions["autoRunQueuedTicket"],
-  stopClaude: noopWarn("stopClaude") as ClaudeWorkspaceActions["stopClaude"],
+  ) as WorkspaceActions["autoRunQueuedTicket"],
+  stopAgent: noopWarn("stopAgent") as WorkspaceActions["stopAgent"],
   sendThreadMessage: noopWarn(
     "sendThreadMessage",
-  ) as ClaudeWorkspaceActions["sendThreadMessage"],
+  ) as WorkspaceActions["sendThreadMessage"],
   sendPlanResponse: noopWarn(
     "sendPlanResponse",
-  ) as ClaudeWorkspaceActions["sendPlanResponse"],
-  mergeToMain: noopWarn("mergeToMain") as ClaudeWorkspaceActions["mergeToMain"],
-  markMerged: noopWarn("markMerged") as ClaudeWorkspaceActions["markMerged"],
+  ) as WorkspaceActions["sendPlanResponse"],
+  mergeToMain: noopWarn("mergeToMain") as WorkspaceActions["mergeToMain"],
+  markMerged: noopWarn("markMerged") as WorkspaceActions["markMerged"],
+  createWorkspace: noopWarn(
+    "createWorkspace",
+  ) as WorkspaceActions["createWorkspace"],
+  createWorkspaceForTicket: noopWarn(
+    "createWorkspaceForTicket",
+  ) as WorkspaceActions["createWorkspaceForTicket"],
 };
 
-interface ClaudeRunState {
+interface AgentRunState {
   pendingRunWorkspaceId: string | null;
   pendingRunInitialPrompt: string;
   pendingRunFilePaths: string[];
-  pendingRunAttachmentIds: string[];
-  selectedModel: ClaudeModel;
-  selectedEffort: EffortLevel;
+  selectedAgent: AgentType;
+  selectedModel: string;
+  selectedEffort: string;
   activeRunWorkspaceIds: Set<string>;
   spawnedWorkspaceIds: Set<string>;
   handoffPickedUpIds: Set<string>;
+  detectedAgents: DetectedAgent[];
 
   // Registered workspace actions
-  workspaceActions: ClaudeWorkspaceActions;
-  registerWorkspaceActions: (actions: ClaudeWorkspaceActions) => void;
+  workspaceActions: WorkspaceActions;
+  registerWorkspaceActions: (actions: WorkspaceActions) => void;
   clearWorkspaceActions: () => void;
 
   setPendingRun: (
@@ -90,8 +135,10 @@ interface ClaudeRunState {
     attachmentIds?: string[],
   ) => void;
   clearPendingRun: () => void;
-  setSelectedModel: (model: ClaudeModel) => void;
-  setSelectedEffort: (effort: EffortLevel) => void;
+  setDetectedAgents: (agents: DetectedAgent[]) => void;
+  setSelectedAgent: (agent: AgentType) => void;
+  setSelectedModel: (model: string) => void;
+  setSelectedEffort: (effort: string) => void;
   addActiveRun: (workspaceId: string) => void;
   clearActiveRun: (workspaceId: string) => void;
   clearAllActiveRuns: () => void;
@@ -103,16 +150,17 @@ interface ClaudeRunState {
   isHandoffPickedUp: (workspaceId: string) => boolean;
 }
 
-export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
+export const useAgentRunStore = create<AgentRunState>((set, get) => ({
   pendingRunWorkspaceId: null,
   pendingRunInitialPrompt: "",
   pendingRunFilePaths: [],
-  pendingRunAttachmentIds: [],
+  selectedAgent: "claude",
   selectedModel: "opus",
   selectedEffort: "high",
   activeRunWorkspaceIds: new Set(),
   spawnedWorkspaceIds: new Set(),
   handoffPickedUpIds: new Set(),
+  detectedAgents: DEFAULT_DETECTED_AGENTS,
 
   // Registered workspace actions
   workspaceActions: { ...defaultWorkspaceActions },
@@ -120,12 +168,11 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
   clearWorkspaceActions: () =>
     set({ workspaceActions: { ...defaultWorkspaceActions } }),
 
-  setPendingRun: (workspaceId, prompt, filePaths, attachmentIds) =>
+  setPendingRun: (workspaceId, prompt, filePaths, _attachmentIds) =>
     set({
       pendingRunWorkspaceId: workspaceId,
       pendingRunInitialPrompt: prompt,
       pendingRunFilePaths: filePaths,
-      pendingRunAttachmentIds: attachmentIds ?? [],
     }),
 
   clearPendingRun: () =>
@@ -133,9 +180,10 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
       pendingRunWorkspaceId: null,
       pendingRunInitialPrompt: "",
       pendingRunFilePaths: [],
-      pendingRunAttachmentIds: [],
     }),
 
+  setDetectedAgents: (agents) => set({ detectedAgents: agents }),
+  setSelectedAgent: (agent) => set({ selectedAgent: agent }),
   setSelectedModel: (model) => set({ selectedModel: model }),
   setSelectedEffort: (effort) => set({ selectedEffort: effort }),
 
@@ -196,3 +244,24 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
 
   isHandoffPickedUp: (workspaceId) => get().handoffPickedUpIds.has(workspaceId),
 }));
+
+export function getEffortOptions(
+  agentType: AgentType,
+  model: string,
+): EffortOption[] {
+  const agent = useAgentRunStore
+    .getState()
+    .detectedAgents.find((a) => a.type === agentType);
+  if (!agent) return [];
+  return (
+    agent.capabilities.models.find((m) => m.value === model)?.effortOptions ??
+    []
+  );
+}
+
+export function getEffortLabel(agentType: AgentType): string {
+  const agent = useAgentRunStore
+    .getState()
+    .detectedAgents.find((a) => a.type === agentType);
+  return agent?.capabilities.effortLabel ?? "Effort";
+}

@@ -2,7 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ipcMain, dialog, BrowserWindow } from "electron";
-import { spawnClaude } from "./claude";
+import { spawnAgent } from "./agents/spawnAgent";
+import { getAllAgents } from "./agents/registry";
+import type { AgentType } from "./agents/types";
 import {
   checkWorktreeExists,
   commitWorktreeChanges,
@@ -10,7 +12,7 @@ import {
   ensureWorktreeForBranch,
   mergeWorktree,
   getWorktreePath,
-  stopClaudeProcess,
+  stopAgentProcess,
   pushWorktreeBranch,
   ensureWorktreeFromRemote,
   runningProcesses,
@@ -39,16 +41,17 @@ import {
 import type { LocalChannelConfig, GlobalAppConfig } from "./localConfig";
 import { runProcess } from "./process";
 
-const SPAWN_CLAUDE_CHANNEL = "spawn-claude";
+const SPAWN_AGENT_CHANNEL = "spawn-agent";
 const DELETE_WORKTREE_CHANNEL = "delete-worktree";
 const CHECK_WORKTREE_CHANNEL = "check-worktree";
 const MERGE_WORKTREE_CHANNEL = "merge-worktree";
-const CLAUDE_ACTIVITY_PING_CHANNEL = "claude-activity-ping";
+const AGENT_ACTIVITY_PING_CHANNEL = "agent-activity-ping";
 const PTY_CREATE_CHANNEL = "pty-create";
 const PTY_WRITE_CHANNEL = "pty-write";
 const PTY_RESIZE_CHANNEL = "pty-resize";
 const PTY_KILL_CHANNEL = "pty-kill";
-const STOP_CLAUDE_CHANNEL = "stop-claude";
+const STOP_AGENT_CHANNEL = "stop-agent";
+const DETECT_AGENTS_CHANNEL = "detect-agents";
 const GET_WORKTREE_DIFF_CHANNEL = "get-worktree-diff";
 const FOCUS_WINDOW_CHANNEL = "focus-window";
 const ALLOCATE_PORTS_CHANNEL = "allocate-ports";
@@ -161,16 +164,17 @@ export function registerIpcHandlers() {
   ipcMain.on("get-server-url", (event) => {
     event.returnValue = resolveServerUrl();
   });
-  ipcMain.removeHandler(SPAWN_CLAUDE_CHANNEL);
+  ipcMain.removeHandler(SPAWN_AGENT_CHANNEL);
   ipcMain.removeHandler(DELETE_WORKTREE_CHANNEL);
   ipcMain.removeHandler(CHECK_WORKTREE_CHANNEL);
   ipcMain.removeHandler(MERGE_WORKTREE_CHANNEL);
-  ipcMain.removeHandler(CLAUDE_ACTIVITY_PING_CHANNEL);
+  ipcMain.removeHandler(AGENT_ACTIVITY_PING_CHANNEL);
   ipcMain.removeHandler(PTY_CREATE_CHANNEL);
   ipcMain.removeHandler(PTY_WRITE_CHANNEL);
   ipcMain.removeHandler(PTY_RESIZE_CHANNEL);
   ipcMain.removeHandler(PTY_KILL_CHANNEL);
-  ipcMain.removeHandler(STOP_CLAUDE_CHANNEL);
+  ipcMain.removeHandler(STOP_AGENT_CHANNEL);
+  ipcMain.removeHandler(DETECT_AGENTS_CHANNEL);
   ipcMain.removeHandler(GET_WORKTREE_DIFF_CHANNEL);
   ipcMain.removeHandler(FOCUS_WINDOW_CHANNEL);
   ipcMain.removeHandler(ALLOCATE_PORTS_CHANNEL);
@@ -208,9 +212,10 @@ export function registerIpcHandlers() {
   ipcMain.removeHandler(CHECK_RUNNING_PROCESSES_CHANNEL);
 
   ipcMain.handle(
-    SPAWN_CLAUDE_CHANNEL,
+    SPAWN_AGENT_CHANNEL,
     async (
       _event,
+      agentType: AgentType,
       workspaceId: string,
       prompt: string,
       repoPath: string,
@@ -224,7 +229,8 @@ export function registerIpcHandlers() {
       baseBranch?: string,
     ) => {
       try {
-        const { worktreePath, setupOutput } = await spawnClaude(
+        const worktreePath = await spawnAgent(
+          agentType,
           workspaceId,
           prompt,
           repoPath,
@@ -237,9 +243,9 @@ export function registerIpcHandlers() {
           permissionMode,
           baseBranch,
         );
-        return { success: true, worktreePath, setupOutput };
+        return { success: true, worktreePath };
       } catch (err) {
-        console.error("Failed to spawn claude:", err);
+        console.error("Failed to spawn agent:", err);
         return { success: false, error: String(err) };
       }
     },
@@ -300,17 +306,33 @@ export function registerIpcHandlers() {
     },
   );
 
-  ipcMain.handle(STOP_CLAUDE_CHANNEL, (_event, workspaceId: string) => {
+  ipcMain.handle(STOP_AGENT_CHANNEL, (_event, workspaceId: string) => {
     try {
-      const result = stopClaudeProcess(workspaceId);
+      const result = stopAgentProcess(workspaceId);
       return { success: true, ...result };
     } catch (err) {
       return { success: false, error: String(err) };
     }
   });
 
+  ipcMain.handle(DETECT_AGENTS_CHANNEL, async () => {
+    try {
+      const agents = getAllAgents();
+      const results = await Promise.all(
+        agents.map(async (adapter) => ({
+          type: adapter.type,
+          capabilities: adapter.capabilities,
+          detectResult: await adapter.detect(),
+        })),
+      );
+      return { success: true, agents: results };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
   ipcMain.handle(
-    CLAUDE_ACTIVITY_PING_CHANNEL,
+    AGENT_ACTIVITY_PING_CHANNEL,
     async (_event, workspaceId: string, eventType: string) => {
       try {
         if ((eventType ?? "").toLowerCase() === "stop") {
@@ -757,7 +779,12 @@ export function registerIpcHandlers() {
 
         // Count how many commits behind and get their details
         let commitsBehind = 0;
-        let commits: { hash: string; author: string; message: string; date: string }[] = [];
+        let commits: {
+          hash: string;
+          author: string;
+          message: string;
+          date: string;
+        }[] = [];
         if (!isUpToDate) {
           const countResult = await runProcess(
             "git",

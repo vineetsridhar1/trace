@@ -166,15 +166,15 @@ export function useThread({
 
   const threadOpen = threadWidth > 0;
 
-  const reportClaudeActivity = useCallback(
+  const reportAgentActivity = useCallback(
     async (workspaceId: string, eventType: string, sessionId?: string) => {
       if (
         !window.traceAPI ||
-        typeof window.traceAPI.reportClaudeActivity !== "function"
+        typeof window.traceAPI.reportAgentActivity !== "function"
       )
         return;
       try {
-        await window.traceAPI.reportClaudeActivity(workspaceId, eventType, sessionId);
+        await window.traceAPI.reportAgentActivity(workspaceId, eventType, sessionId);
       } catch {
         // best-effort
       }
@@ -265,14 +265,14 @@ export function useThread({
               workspace.id,
               latestEvent.id,
             );
-            void reportClaudeActivity(workspace.id, latestEvent.hookEventName, latestEvent.cliSessionId);
+            void reportAgentActivity(workspace.id, latestEvent.hookEventName, latestEvent.cliSessionId);
           }
         }
       } catch {
         setSessionStatus("error");
       }
     },
-    [executeSessions, loadEventsForSession, reportClaudeActivity],
+    [executeSessions, loadEventsForSession, reportAgentActivity],
   );
 
   const loadOlderEvents = useCallback(async (): Promise<number> => {
@@ -464,7 +464,7 @@ export function useThread({
     setShowJumpToLatest,
     expandedReadGroupIds,
     expandedTurnGroupIds,
-    reportClaudeActivity,
+    reportAgentActivity,
     closeThreadPanel,
     loadSessionEvents,
     loadOlderEvents,

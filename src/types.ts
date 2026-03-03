@@ -33,9 +33,41 @@ export interface GlobalAppConfig {
   terminalFontFamily?: string;
 }
 
+export type AgentType = "claude" | "codex";
+
+export interface EffortOption {
+  value: string;
+  label: string;
+}
+
+export interface AgentCapabilities {
+  displayName: string;
+  supportsResume: boolean;
+  supportsPlanMode: boolean;
+  models: { value: string; label: string; effortOptions?: EffortOption[] }[];
+  defaultModel: string;
+  effortLabel?: string;
+}
+
+export interface AgentDetectResult {
+  available: boolean;
+  version?: string;
+  error?: string;
+  authStatus?: "ok" | "missing";
+  authHint?: string;
+  installHint?: string;
+}
+
+export interface DetectedAgent {
+  type: AgentType;
+  capabilities: AgentCapabilities;
+  detectResult: AgentDetectResult;
+}
+
 export interface TraceAPI {
   getServerUrl: () => string;
-  spawnClaude: (
+  spawnAgent: (
+    agentType: AgentType,
     workspaceId: string,
     prompt: string,
     repoPath: string,
@@ -47,10 +79,20 @@ export interface TraceAPI {
     systemInstructions?: string,
     permissionMode?: string,
     baseBranch?: string,
-  ) => Promise<{ success: boolean; worktreePath?: string; setupOutput?: string; error?: string }>;
-  stopClaude: (
+  ) => Promise<{
+    success: boolean;
+    worktreePath?: string;
+    setupOutput?: string;
+    error?: string;
+  }>;
+  stopAgent: (
     workspaceId: string,
   ) => Promise<{ success: boolean; stopped?: boolean; error?: string }>;
+  detectAgents: () => Promise<{
+    success: boolean;
+    agents?: DetectedAgent[];
+    error?: string;
+  }>;
   deleteWorktree: (
     workspaceId: string,
     repoPath: string,
@@ -77,7 +119,7 @@ export interface TraceAPI {
   commitWorktreeChanges: (
     workspaceId: string,
   ) => Promise<{ success: boolean; committed?: boolean; error?: string }>;
-  reportClaudeActivity: (
+  reportAgentActivity: (
     workspaceId: string,
     eventType: string,
     sessionId?: string,
@@ -357,8 +399,6 @@ export type TicketStatus =
   | "queued"
   | "review"
   | "handed_off";
-export type ClaudeModel = "opus" | "sonnet" | "haiku";
-export type EffortLevel = "low" | "medium" | "high";
 export type SessionStatus = "idle" | "loading" | "ready" | "empty" | "error";
 export type DragTarget = "left" | "right" | null;
 export type MiddlePanelView =
@@ -398,7 +438,7 @@ export interface SemanticContext {
 
 export interface TicketMetadata {
   tags?: string[];
-  complexity?: 'low' | 'medium' | 'high';
+  complexity?: "low" | "medium" | "high";
   semanticContext?: SemanticContext;
 }
 
@@ -427,7 +467,7 @@ export interface KanbanTicket {
 
 /** Type-safe accessor for ticket metadata */
 export function getTicketMetadata(ticket: KanbanTicket): TicketMetadata {
-  if (!ticket.metadata || typeof ticket.metadata !== 'object') return {};
+  if (!ticket.metadata || typeof ticket.metadata !== "object") return {};
   return ticket.metadata as TicketMetadata;
 }
 

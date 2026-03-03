@@ -15,14 +15,14 @@ import {
   useDeleteWorkspaceMutation,
   useSetWorkspacePrUrlMutation,
 } from "./__generated__/App.generated";
-import { useCreateWorkspaceMutation } from "./hooks/__generated__/useClaudeMessageActions.generated";
+import { useCreateWorkspaceMutation } from "./hooks/__generated__/useAgentMessageActions.generated";
 import { useWorkspaceSync } from "./hooks/useWorkspaceSync";
 import { useThreadSync } from "./hooks/useThreadSync";
 import { usePanelResize } from "./hooks/usePanelResize";
 import { useChannelSubscriptions } from "./hooks/useChannelSubscriptionsV2";
 import { useChannelMessageNotifications } from "./hooks/useChannelMessageNotifications";
 import { useTerminalInit } from "./hooks/useTerminalInit";
-import { useClaudeWorkspaceActions } from "./hooks/useClaudeWorkspaceActions";
+import { useWorkspaceActions } from "./hooks/useAgentWorkspaceActions";
 import { useStuckWorkspaceReconciliation } from "./hooks/useStuckWorkspaceReconciliation";
 import { useSyncPolling } from "./hooks/useSyncPolling";
 import { useKanbanSync } from "./hooks/useKanbanSync";
@@ -50,13 +50,16 @@ import {
   isViewValidForChannel,
   getDefaultViewForChannel,
 } from "./stores/appUIStore";
-import { useClaudeRunStore } from "./stores/claudeRunStore";
+import { useAgentRunStore } from "./stores/agentRunStore";
 import { usePanelLayoutStore } from "./stores/panelLayoutStore";
 import { useSyncStore } from "./stores/syncStore";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useShortcutContextSync } from "./hooks/useShortcutContextSync";
 import { useDefaultShortcuts } from "./hooks/useDefaultShortcuts";
-import { usePresenceReporter, usePresenceSubscription } from "./hooks/usePresence";
+import {
+  usePresenceReporter,
+  usePresenceSubscription,
+} from "./hooks/usePresence";
 import { usePresenceStore } from "./stores/presenceStore";
 
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
@@ -153,7 +156,7 @@ function AppContent() {
   const aiChats = useAppUIStore((s) => s.aiChats);
   const dragging = useAppUIStore((s) => s.dragging);
 
-  const activeRunWorkspaceIds = useClaudeRunStore(
+  const activeRunWorkspaceIds = useAgentRunStore(
     (s) => s.activeRunWorkspaceIds,
   );
 
@@ -210,6 +213,20 @@ function AppContent() {
     if ("Notification" in window && Notification.permission === "default") {
       void Notification.requestPermission();
     }
+  }, []);
+
+  // ─── Detect available agents on mount ──────────────────────────────
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await window.traceAPI.detectAgents();
+        if (result.success && result.agents) {
+          useAgentRunStore.getState().setDetectedAgents(result.agents);
+        }
+      } catch {
+        // Detection failed — keep default fallback agents
+      }
+    })();
   }, []);
 
   // ─── Upsert + sync helper ─────────────────────────────────────────
@@ -358,8 +375,8 @@ function AppContent() {
     useWorkspaceStore.getState().clearAttention(workspace.id);
   }, []);
 
-  // ─── Claude workspace actions (registers on claudeRunStore) ───────
-  useClaudeWorkspaceActions({
+  // ─── Workspace actions (registers on agentRunStore) ────────────────
+  useWorkspaceActions({
     updateWorkspaceStatus,
     onWorkspaceCreated: handleOpenWorkspace,
   });
@@ -372,11 +389,11 @@ function AppContent() {
   });
 
   // ─── Subscriptions ───────────────────────────────────────────────
-  const reportClaudeActivity = useCallback(
+  const reportAgentActivity = useCallback(
     (workspaceId: string, eventType: string, sessionId?: string) =>
       useThreadStore
         .getState()
-        .syncActions.reportClaudeActivity(workspaceId, eventType, sessionId),
+        .syncActions.reportAgentActivity(workspaceId, eventType, sessionId),
     [],
   );
 
@@ -391,7 +408,7 @@ function AppContent() {
         effort: string;
         planMode: boolean;
       };
-      void useClaudeRunStore
+      void useAgentRunStore
         .getState()
         .workspaceActions.autoRunQueuedTicket(workspaceId, config);
     };
@@ -399,7 +416,7 @@ function AppContent() {
 
   const { subscriptionsActive } = useChannelSubscriptions({
     activeChannelId,
-    reportClaudeActivity,
+    reportAgentActivity,
     onNeedsAttention: handleNeedsAttention,
     onTicketReadyToRun: useCallback(
       (workspaceId: string, runConfig: unknown) => {

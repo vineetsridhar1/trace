@@ -1,19 +1,30 @@
-import { useCallback, useMemo, useState } from 'react';
-import { FiClock, FiX } from 'react-icons/fi';
-import { gql } from '@apollo/client';
-import { useTicketDependenciesQuery } from './__generated__/TicketView.generated';
-import { useRemoveTicketDependencyMutation, useUpdateQueuedRunConfigMutation } from './__generated__/QueuedStatusBar.generated';
-import { ModelEffortSelector } from './ModelEffortSelector';
-import { InteractionModeToggle } from './RunButtons';
-import type { InteractionMode } from './RunButtons';
-import type { ClaudeModel, EffortLevel } from '../types';
-import { useWorkspaceStore } from '../stores/workspaceStore';
-import { useChannelContext } from '../context/ChannelContext';
+import { useCallback, useMemo, useState } from "react";
+import { FiClock, FiX } from "react-icons/fi";
+import { gql } from "@apollo/client";
+import { useTicketDependenciesQuery } from "./__generated__/TicketView.generated";
+import {
+  useRemoveTicketDependencyMutation,
+  useUpdateQueuedRunConfigMutation,
+} from "./__generated__/QueuedStatusBar.generated";
+import { ModelEffortSelector } from "./ModelEffortSelector";
+import { InteractionModeToggle } from "./RunButtons";
+import type { InteractionMode } from "./RunButtons";
+import { useAgentRunStore } from "../stores/agentRunStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import { useChannelContext } from "../context/ChannelContext";
 
 // These GQL definitions are already in App.generated but we need the reference for codegen
 const _GQL_REMOVE_TICKET_DEPENDENCY = gql`
-  mutation RemoveTicketDependency($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceId: ID!) {
-    removeTicketDependency(channelId: $channelId, workspaceId: $workspaceId, dependsOnWorkspaceId: $dependsOnWorkspaceId)
+  mutation RemoveTicketDependency(
+    $channelId: ID!
+    $workspaceId: ID!
+    $dependsOnWorkspaceId: ID!
+  ) {
+    removeTicketDependency(
+      channelId: $channelId
+      workspaceId: $workspaceId
+      dependsOnWorkspaceId: $dependsOnWorkspaceId
+    )
   }
 `;
 
@@ -23,11 +34,13 @@ const _GQL_UPDATE_QUEUED_RUN_CONFIG = gql`
   }
 `;
 
-const MODE_CYCLE: InteractionMode[] = ['code', 'plan', 'ask'];
+const MODE_CYCLE: InteractionMode[] = ["code", "plan", "ask"];
 
 export function QueuedStatusBar({ workspaceId }: { workspaceId: string }) {
   const { activeChannelId } = useChannelContext();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const selectedAgent = useAgentRunStore((s) => s.selectedAgent);
+  const setSelectedAgent = useAgentRunStore((s) => s.setSelectedAgent);
 
   const queuedRunConfig = useMemo(() => {
     const ws = workspaces.find((w) => w.id === workspaceId);
@@ -41,20 +54,36 @@ export function QueuedStatusBar({ workspaceId }: { workspaceId: string }) {
     async (wsId: string, dependsOnWorkspaceId: string) => {
       if (!activeChannelId) return;
       try {
-        await executeRemoveTicketDependency({ variables: { channelId: activeChannelId, workspaceId: wsId, dependsOnWorkspaceId } });
+        await executeRemoveTicketDependency({
+          variables: {
+            channelId: activeChannelId,
+            workspaceId: wsId,
+            dependsOnWorkspaceId,
+          },
+        });
       } catch {
-        console.error('Failed to remove ticket dependency');
+        console.error("Failed to remove ticket dependency");
       }
     },
     [activeChannelId, executeRemoveTicketDependency],
   );
 
   const updateQueuedRunConfig = useCallback(
-    async (wsId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+    async (
+      wsId: string,
+      runConfig: {
+        prompt: string;
+        model: string;
+        effort: string;
+        planMode: boolean;
+      },
+    ) => {
       try {
-        await executeUpdateQueuedRunConfig({ variables: { workspaceId: wsId, runConfig } });
+        await executeUpdateQueuedRunConfig({
+          variables: { workspaceId: wsId, runConfig },
+        });
       } catch {
-        console.error('Failed to update queued run config');
+        console.error("Failed to update queued run config");
       }
     },
     [executeUpdateQueuedRunConfig],
@@ -63,32 +92,36 @@ export function QueuedStatusBar({ workspaceId }: { workspaceId: string }) {
   const { data } = useTicketDependenciesQuery({ variables: { workspaceId } });
   const deps = data?.ticketDependencies ?? [];
 
-  const [model, setModel] = useState<ClaudeModel>(
-    (queuedRunConfig?.model as ClaudeModel) ?? 'sonnet',
+  const [model, setModel] = useState<string>(
+    (queuedRunConfig?.model as string) ?? "sonnet",
   );
-  const [effort, setEffort] = useState<EffortLevel>(
-    (queuedRunConfig?.effort as EffortLevel) ?? 'high',
+  const [effort, setEffort] = useState<string>(
+    (queuedRunConfig?.effort as string) ?? "high",
   );
   const [mode, setMode] = useState<InteractionMode>(
-    queuedRunConfig?.planMode ? 'plan' : 'code',
+    queuedRunConfig?.planMode ? "plan" : "code",
   );
 
-  const saveConfig = (newModel: ClaudeModel, newEffort: EffortLevel, newMode: InteractionMode) => {
+  const saveConfig = (
+    newModel: string,
+    newEffort: string,
+    newMode: InteractionMode,
+  ) => {
     if (!queuedRunConfig) return;
     void updateQueuedRunConfig(workspaceId, {
       ...queuedRunConfig,
       model: newModel,
       effort: newEffort,
-      planMode: newMode === 'plan',
+      planMode: newMode === "plan",
     });
   };
 
-  const handleModelChange = (m: ClaudeModel) => {
+  const handleModelChange = (m: string) => {
     setModel(m);
     saveConfig(m, effort, mode);
   };
 
-  const handleEffortChange = (e: EffortLevel) => {
+  const handleEffortChange = (e: string) => {
     setEffort(e);
     saveConfig(model, e, mode);
   };
@@ -118,7 +151,12 @@ export function QueuedStatusBar({ workspaceId }: { workspaceId: string }) {
               {dep.dependsOnTicketTitle ?? dep.dependsOnWorkspaceId}
               <button
                 type="button"
-                onClick={() => void removeTicketDependency(workspaceId, dep.dependsOnWorkspaceId)}
+                onClick={() =>
+                  void removeTicketDependency(
+                    workspaceId,
+                    dep.dependsOnWorkspaceId,
+                  )
+                }
                 className="ml-0.5 rounded p-0.5 text-cyan-400/60 transition-colors hover:bg-cyan-500/20 hover:text-cyan-300"
               >
                 <FiX className="h-3 w-3" />
@@ -130,8 +168,10 @@ export function QueuedStatusBar({ workspaceId }: { workspaceId: string }) {
 
       <div className="flex items-center gap-1.5">
         <ModelEffortSelector
+          agent={selectedAgent}
           model={model}
           effort={effort}
+          onAgentChange={setSelectedAgent}
           onModelChange={handleModelChange}
           onEffortChange={handleEffortChange}
         />

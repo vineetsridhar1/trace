@@ -13,7 +13,7 @@ interface ThreadSyncActions {
   clearSession: () => Promise<string | null>;
   deleteWorktree: (onDeleted?: (workspaceId: string) => void) => Promise<void>;
   openThreadPanel: (workspace: Workspace) => void;
-  reportClaudeActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
+  reportAgentActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
 }
 
 const noopWarn = (_name: string) => (..._args: unknown[]) => {};
@@ -25,7 +25,7 @@ const defaultSyncActions: ThreadSyncActions = {
   clearSession: noopWarn('clearSession') as ThreadSyncActions['clearSession'],
   deleteWorktree: noopWarn('deleteWorktree') as ThreadSyncActions['deleteWorktree'],
   openThreadPanel: noopWarn('openThreadPanel') as ThreadSyncActions['openThreadPanel'],
-  reportClaudeActivity: noopWarn('reportClaudeActivity') as ThreadSyncActions['reportClaudeActivity'],
+  reportAgentActivity: noopWarn('reportAgentActivity') as ThreadSyncActions['reportAgentActivity'],
 };
 
 interface ThreadState {

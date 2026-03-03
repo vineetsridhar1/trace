@@ -1,5 +1,5 @@
-import type { BrowserWindow } from 'electron';
-import * as pty from 'node-pty';
+import type { BrowserWindow } from "electron";
+import * as pty from "node-pty";
 
 interface PtySession {
   process: pty.IPty;
@@ -35,12 +35,11 @@ export function createPty(
     lastEnvByTerminalId.set(terminalId, extraEnv);
   }
 
-  const shell = process.platform === 'darwin' ? 'zsh' : process.env.SHELL || 'bash';
-  const baseEnv = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => k !== 'CLAUDECODE'),
-  ) as Record<string, string>;
-  const proc = pty.spawn(shell, ['-l'], {
-    name: 'xterm-256color',
+  const shell =
+    process.platform === "darwin" ? "zsh" : process.env.SHELL || "bash";
+  const baseEnv = { ...process.env } as Record<string, string>;
+  const proc = pty.spawn(shell, ["-l"], {
+    name: "xterm-256color",
     cols: 80,
     rows: 24,
     cwd,
@@ -49,7 +48,7 @@ export function createPty(
 
   proc.onData((data) => {
     if (!window.isDestroyed()) {
-      window.webContents.send('pty-data', terminalId, data);
+      window.webContents.send("pty-data", terminalId, data);
     }
   });
 
@@ -65,7 +64,7 @@ export function createPty(
       return;
     }
     if (!window.isDestroyed()) {
-      window.webContents.send('pty-exit', terminalId, exitCode);
+      window.webContents.send("pty-exit", terminalId, exitCode);
     }
   });
 
@@ -79,7 +78,11 @@ export function writePty(terminalId: string, data: string): boolean {
   return true;
 }
 
-export function resizePty(terminalId: string, cols: number, rows: number): boolean {
+export function resizePty(
+  terminalId: string,
+  cols: number,
+  rows: number,
+): boolean {
   const session = sessions.get(terminalId);
   if (!session) return false;
   session.process.resize(cols, rows);
@@ -98,7 +101,9 @@ export function getPtyCwd(terminalId: string): string | undefined {
   return lastCwdByTerminalId.get(terminalId);
 }
 
-export function getPtyEnv(terminalId: string): Record<string, string> | undefined {
+export function getPtyEnv(
+  terminalId: string,
+): Record<string, string> | undefined {
   return lastEnvByTerminalId.get(terminalId);
 }
 
@@ -115,15 +120,18 @@ export function killAllPtys(): void {
   suppressExitIds.clear();
 }
 
-export function getPtyProcesses(terminalIds: string[]): Record<string, PtyProcessInfo> {
+export function getPtyProcesses(
+  terminalIds: string[],
+): Record<string, PtyProcessInfo> {
   const result: Record<string, PtyProcessInfo> = {};
   for (const terminalId of terminalIds) {
     const session = sessions.get(terminalId);
     if (!session) continue;
     const rawName = session.process.process;
     // Handle login shell prefix (e.g. "-zsh" → "zsh") and full paths
-    const processName = rawName.replace(/^-/, '').split('/').pop() ?? rawName;
-    const shellName = session.shell.replace(/^-/, '').split('/').pop() ?? session.shell;
+    const processName = rawName.replace(/^-/, "").split("/").pop() ?? rawName;
+    const shellName =
+      session.shell.replace(/^-/, "").split("/").pop() ?? session.shell;
     result[terminalId] = {
       processName,
       isShellOnly: processName === shellName,

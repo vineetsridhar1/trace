@@ -32,7 +32,7 @@ import { PullRequestListView } from "./PullRequestListView";
 import { TicketDetailModal } from "./TicketDetailModal";
 import { useChannelMessages } from "../hooks/useChannelMessages";
 import { useAuth } from "../context/AuthContext";
-import { useClaudeRunStore } from "../stores/claudeRunStore";
+import { useAgentRunStore } from "../stores/agentRunStore";
 import { usePresenceStore } from "../stores/presenceStore";
 
 const THREAD_LINK_RE =
@@ -303,7 +303,7 @@ export function MessagePanel({
       // Send after a microtask so the workspace is selected
       queueMicrotask(() => {
         const { sendThreadMessage } =
-          useClaudeRunStore.getState().workspaceActions;
+          useAgentRunStore.getState().workspaceActions;
         void sendThreadMessage("/create-pr", [], []);
       });
     },
@@ -717,7 +717,7 @@ export function MessagePanel({
               ? () => {
                   const ticket = selectedTicket;
                   setSelectedTicket(null);
-                  void useClaudeRunStore
+                  void useAgentRunStore
                     .getState()
                     .workspaceActions.createWorkspaceForTicket(ticket);
                 }

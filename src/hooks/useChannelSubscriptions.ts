@@ -91,7 +91,7 @@ interface UseChannelSubscriptionsOptions {
   removeWorkspace: (workspaceId: string) => void;
   appendSessionEvent: (event: ServerEvent) => void;
   updateSessionEvent: (event: ServerEvent) => void;
-  reportClaudeActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
+  reportAgentActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
   selectedWorkspaceIdRef: React.RefObject<string | null>;
   activeSessionIdRef: React.RefObject<string | null>;
   workspacesRef: React.RefObject<Workspace[]>;
@@ -109,7 +109,7 @@ export function useChannelSubscriptions({
   removeWorkspace,
   appendSessionEvent,
   updateSessionEvent,
-  reportClaudeActivity,
+  reportAgentActivity,
   selectedWorkspaceIdRef,
   activeSessionIdRef,
   workspacesRef,
@@ -180,7 +180,7 @@ export function useChannelSubscriptions({
     if (!sessionEventData?.sessionEventCreated || !activeChannelId) return;
     const payload = sessionEventData.sessionEventCreated;
 
-    void reportClaudeActivity(payload.workspaceId, payload.event.hookEventName, payload.event.cliSessionId);
+    void reportAgentActivity(payload.workspaceId, payload.event.hookEventName, payload.event.cliSessionId);
 
     if (payload.event.hookEventName === 'Stop') {
       onActiveRunStopped?.(payload.workspaceId);
@@ -208,7 +208,7 @@ export function useChannelSubscriptions({
       // arrives. After PR #45 linked cliSessionId to the real CLI session,
       // the status stays 'stopped' from the previous run until the server's
       // workspaceUpserted subscription arrives with the new session — causing
-      // isClaudeRunning to briefly (or permanently) return false.
+      // isAgentRunning to briefly (or permanently) return false.
       const existing = workspacesRef.current.find((item) => item.id === payload.workspaceId);
       if (existing && existing.cliSession.status === 'stopped') {
         upsertWorkspace({
@@ -231,7 +231,7 @@ export function useChannelSubscriptions({
     if (currentSessionId && payload.event.sessionId !== currentSessionId) return;
 
     appendSessionEvent(payload.event as ServerEvent);
-  }, [sessionEventData, activeChannelId, reportClaudeActivity, workspacesRef, upsertWorkspace, selectedWorkspaceIdRef, activeSessionIdRef, onNeedsAttention, appendSessionEvent, refreshWorkspaces, onActiveRunStopped]);
+  }, [sessionEventData, activeChannelId, reportAgentActivity, workspacesRef, upsertWorkspace, selectedWorkspaceIdRef, activeSessionIdRef, onNeedsAttention, appendSessionEvent, refreshWorkspaces, onActiveRunStopped]);
 
   // --- Session event updated ---
   const { data: sessionEventUpdatedData } = useSubscription(SESSION_EVENT_UPDATED_SUBSCRIPTION, {

@@ -6,8 +6,14 @@ import type {
 } from "../types";
 import { gql } from "@apollo/client";
 import { WORKSPACE_FIELDS } from "../graphql/fragments";
-import { useUpdateWorkspaceStatusMutation, useDeleteWorkspaceMutation } from "../__generated__/App.generated";
-import { useSetTicketDependenciesMutation, useHandoffWorkspaceMutation } from "./__generated__/ThreadPanel.generated";
+import {
+  useUpdateWorkspaceStatusMutation,
+  useDeleteWorkspaceMutation,
+} from "../__generated__/App.generated";
+import {
+  useSetTicketDependenciesMutation,
+  useHandoffWorkspaceMutation,
+} from "./__generated__/ThreadPanel.generated";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { ThreadHeader } from "./ThreadHeader";
@@ -16,7 +22,7 @@ import { RunButtons } from "./RunButtons";
 import { CreationStatusBar } from "./CreationStatusBar";
 import { QueuedStatusBar } from "./QueuedStatusBar";
 import { StickyTodoList } from "./StickyTodoList";
-import { useClaudeRunStore } from "../stores/claudeRunStore";
+import { useAgentRunStore } from "../stores/agentRunStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useTerminalStore } from "../stores/terminalStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
@@ -27,15 +33,29 @@ import { useChannelContext } from "../context/ChannelContext";
 import { useThreadScroll } from "../hooks/useThreadScroll";
 import { useAuth } from "../context/AuthContext";
 import { buildSessionNodes, normalizeToolName } from "../utils";
-import { AgentContent, TicketContent, FilesContent } from "./tiling/PaneContent";
+import {
+  AgentContent,
+  TicketContent,
+  FilesContent,
+} from "./tiling/PaneContent";
 import { SplitTreeRenderer } from "./tiling/SplitTreeRenderer";
 import { SingletonLayer } from "./tiling/SingletonLayer";
 import type { RefObject } from "react";
 
 // GQL used by setTicketDependencies (already defined in App.generated, just need the hook)
 const _GQL_SET_TICKET_DEPENDENCIES = gql`
-  mutation SetTicketDependencies($channelId: ID!, $workspaceId: ID!, $dependsOnWorkspaceIds: [ID!]!, $runConfig: JSON!) {
-    setTicketDependencies(channelId: $channelId, workspaceId: $workspaceId, dependsOnWorkspaceIds: $dependsOnWorkspaceIds, runConfig: $runConfig) {
+  mutation SetTicketDependencies(
+    $channelId: ID!
+    $workspaceId: ID!
+    $dependsOnWorkspaceIds: [ID!]!
+    $runConfig: JSON!
+  ) {
+    setTicketDependencies(
+      channelId: $channelId
+      workspaceId: $workspaceId
+      dependsOnWorkspaceIds: $dependsOnWorkspaceIds
+      runConfig: $runConfig
+    ) {
       ...WorkspaceFields
     }
   }
@@ -51,10 +71,16 @@ const _GQL_HANDOFF_WORKSPACE = gql`
   ${WORKSPACE_FIELDS}
 `;
 
-const HANDOFF_ALLOWED_STATUSES = new Set(['in_progress', 'needs_input', 'completed', 'creation']);
+const HANDOFF_ALLOWED_STATUSES = new Set([
+  "in_progress",
+  "needs_input",
+  "completed",
+  "creation",
+]);
 
 export function ThreadPanel() {
-  const { activeChannelId, enrichedActiveChannel, enrichedChannels } = useChannelContext();
+  const { activeChannelId, enrichedActiveChannel, enrichedChannels } =
+    useChannelContext();
 
   // ─── Thread store state ─────────────────────────────────────────
   const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
@@ -79,27 +105,43 @@ export function ThreadPanel() {
   const terminalCwd = useTerminalStore((s) => s.cwd);
   const runningPtyIds = useTerminalStore((s) => s.runningPtyIds);
   const ptyProcesses = useTerminalStore((s) => s.ptyProcesses);
-  const setupOutput = useTerminalStore((s) => selectedWorkspaceId ? s.setupOutputs[selectedWorkspaceId] : undefined);
+  const setupOutput = useTerminalStore((s) =>
+    selectedWorkspaceId ? s.setupOutputs[selectedWorkspaceId] : undefined,
+  );
 
   // ─── UI store state ─────────────────────────────────────────────
   const isFullscreen = useAppUIStore((s) => s.isFullscreen);
   const dragging = useAppUIStore((s) => s.dragging);
 
-  // ─── Claude run store state ────────────────────────────────────
-  const pendingRunWorkspaceId = useClaudeRunStore((s) => s.pendingRunWorkspaceId);
-  const pendingRunInitialPrompt = useClaudeRunStore((s) => s.pendingRunInitialPrompt);
-  const clearPendingRun = useClaudeRunStore((s) => s.clearPendingRun);
-  const activeRunWorkspaceIds = useClaudeRunStore((s) => s.activeRunWorkspaceIds);
-  const spawnedWorkspaceIds = useClaudeRunStore((s) => s.spawnedWorkspaceIds);
-  const runPendingWorkspace = useClaudeRunStore((s) => s.workspaceActions.runPendingWorkspace);
-  const stopClaude = useClaudeRunStore((s) => s.workspaceActions.stopClaude);
-  const sendThreadMessage = useClaudeRunStore((s) => s.workspaceActions.sendThreadMessage);
-  const sendPlanResponse = useClaudeRunStore((s) => s.workspaceActions.sendPlanResponse);
-  const markMerged = useClaudeRunStore((s) => s.workspaceActions.markMerged);
+  // ─── Agent run store state ─────────────────────────────────────
+  const pendingRunWorkspaceId = useAgentRunStore(
+    (s) => s.pendingRunWorkspaceId,
+  );
+  const pendingRunInitialPrompt = useAgentRunStore(
+    (s) => s.pendingRunInitialPrompt,
+  );
+  const clearPendingRun = useAgentRunStore((s) => s.clearPendingRun);
+  const activeRunWorkspaceIds = useAgentRunStore(
+    (s) => s.activeRunWorkspaceIds,
+  );
+  const spawnedWorkspaceIds = useAgentRunStore((s) => s.spawnedWorkspaceIds);
+  const runPendingWorkspace = useAgentRunStore(
+    (s) => s.workspaceActions.runPendingWorkspace,
+  );
+  const stopAgent = useAgentRunStore((s) => s.workspaceActions.stopAgent);
+  const sendThreadMessage = useAgentRunStore(
+    (s) => s.workspaceActions.sendThreadMessage,
+  );
+  const sendPlanResponse = useAgentRunStore(
+    (s) => s.workspaceActions.sendPlanResponse,
+  );
+  const markMerged = useAgentRunStore((s) => s.workspaceActions.markMerged);
 
   // ─── Derived state ──────────────────────────────────────────────
   const workspaces = useWorkspaceStore((s) => s.workspaces);
-  const ciStatus = useWorkspaceStore((s) => selectedWorkspaceId ? s.ciStatuses[selectedWorkspaceId] ?? null : null);
+  const ciStatus = useWorkspaceStore((s) =>
+    selectedWorkspaceId ? (s.ciStatuses[selectedWorkspaceId] ?? null) : null,
+  );
   const kanbanColumns = useKanbanStore((s) => s.columns);
 
   const workspaceStatus: TicketStatus = useMemo(() => {
@@ -115,22 +157,28 @@ export function ThreadPanel() {
   const ticket = useMemo(() => {
     if (!selectedWorkspaceId) return null;
     for (const col of kanbanColumns) {
-      const found = col.tickets.find((t) => t.workspaceId === selectedWorkspaceId);
+      const found = col.tickets.find(
+        (t) => t.workspaceId === selectedWorkspaceId,
+      );
       if (found) return found;
     }
     return null;
   }, [kanbanColumns, selectedWorkspaceId]);
 
   const channelTickets = useMemo(
-    () => kanbanColumns.flatMap((col) =>
-      col.tickets
-        .filter((t): t is typeof t & { workspaceId: string } => t.workspaceId != null)
-        .map((t) => ({
-          workspaceId: t.workspaceId,
-          title: t.title,
-          status: t.workspace?.status ?? "pending",
-        })),
-    ),
+    () =>
+      kanbanColumns.flatMap((col) =>
+        col.tickets
+          .filter(
+            (t): t is typeof t & { workspaceId: string } =>
+              t.workspaceId != null,
+          )
+          .map((t) => ({
+            workspaceId: t.workspaceId,
+            title: t.title,
+            status: t.workspace?.status ?? "pending",
+          })),
+      ),
     [kanbanColumns],
   );
 
@@ -140,7 +188,7 @@ export function ThreadPanel() {
     return latestSession.id !== activeSessionId;
   }, [activeSessionId, sessions]);
 
-  const isClaudeRunning = useMemo(() => {
+  const isAgentRunning = useMemo(() => {
     if (!selectedWorkspaceId) return false;
     if (activeRunWorkspaceIds.has(selectedWorkspaceId)) return true;
     if (!spawnedWorkspaceIds.has(selectedWorkspaceId)) return false;
@@ -148,12 +196,24 @@ export function ThreadPanel() {
     const lastEvent = sessionEvents[sessionEvents.length - 1];
     if (lastEvent?.hookEventName === "Stop") return false;
     return true;
-  }, [selectedWorkspaceId, activeRunWorkspaceIds, spawnedWorkspaceIds, sessionEvents, sessionStatus]);
+  }, [
+    selectedWorkspaceId,
+    activeRunWorkspaceIds,
+    spawnedWorkspaceIds,
+    sessionEvents,
+    sessionStatus,
+  ]);
 
   const pendingPromptForDisplay = useMemo(() => {
-    if (pendingRunWorkspaceId === selectedWorkspaceId) return pendingRunInitialPrompt;
-    return workspaces.find((w) => w.id === selectedWorkspaceId)?.preview ?? '';
-  }, [pendingRunWorkspaceId, selectedWorkspaceId, pendingRunInitialPrompt, workspaces]);
+    if (pendingRunWorkspaceId === selectedWorkspaceId)
+      return pendingRunInitialPrompt;
+    return workspaces.find((w) => w.id === selectedWorkspaceId)?.preview ?? "";
+  }, [
+    pendingRunWorkspaceId,
+    selectedWorkspaceId,
+    pendingRunInitialPrompt,
+    workspaces,
+  ]);
 
   // ─── Channel-derived values ─────────────────────────────────────
   const repoPath = enrichedActiveChannel?.localRepoPath ?? "";
@@ -162,10 +222,15 @@ export function ThreadPanel() {
   const hasSetupScript = Boolean(enrichedActiveChannel?.setupScript?.trim());
   const hasRunScript = Boolean(enrichedActiveChannel?.runScript?.trim());
   const effectiveTerminalCwd = terminalCwd || repoPath;
-  const runScriptRunning = terminals.some((t) => t.name === "Run" && runningPtyIds.has(t.terminalId));
+  const runScriptRunning = terminals.some(
+    (t) => t.name === "Run" && runningPtyIds.has(t.terminalId),
+  );
 
   // ─── Session nodes (derived from events) ────────────────────────
-  const sessionNodes = useMemo(() => buildSessionNodes(sessionEvents), [sessionEvents]);
+  const sessionNodes = useMemo(
+    () => buildSessionNodes(sessionEvents),
+    [sessionEvents],
+  );
 
   // ─── Scroll ─────────────────────────────────────────────────────
   const {
@@ -174,7 +239,10 @@ export function ThreadPanel() {
     scrollThreadToBottom,
     onThreadScroll,
   } = useThreadScroll();
-  const scrollToLatest = useMemo(() => () => scrollThreadToBottom("smooth"), [scrollThreadToBottom]);
+  const scrollToLatest = useMemo(
+    () => () => scrollThreadToBottom("smooth"),
+    [scrollThreadToBottom],
+  );
 
   // ─── Mutations ──────────────────────────────────────────────────
   const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
@@ -201,7 +269,10 @@ export function ThreadPanel() {
     if (!result.success || !result.exists || !result.worktreePath) return;
 
     const ui = useAppUIStore.getState();
-    savedWidthsRef.current = { channel: ui.channelWidth, thread: useThreadStore.getState().threadWidth };
+    savedWidthsRef.current = {
+      channel: ui.channelWidth,
+      thread: useThreadStore.getState().threadWidth,
+    };
     useAppUIStore.getState().setChannelWidth(0);
     useAppUIStore.getState().setIsFullscreen(true);
   }, [repoPath]);
@@ -216,8 +287,8 @@ export function ThreadPanel() {
   useEffect(() => {
     if (hasWorktree === false) {
       if (isFullscreen) handleExitFullscreen();
-      usePanelLayoutStore.getState().switchSingletonPanes('terminal', 'agent');
-      usePanelLayoutStore.getState().switchSingletonPanes('browser', 'agent');
+      usePanelLayoutStore.getState().switchSingletonPanes("terminal", "agent");
+      usePanelLayoutStore.getState().switchSingletonPanes("browser", "agent");
     }
   }, [handleExitFullscreen, hasWorktree, isFullscreen]);
 
@@ -226,23 +297,37 @@ export function ThreadPanel() {
     const wsId = useThreadStore.getState().selectedWorkspaceId;
     if (!wsId || !activeChannelId || !repoPath) return;
     if (useTerminalStore.getState().isInitialized(wsId)) return;
-    const worktreeResult = await window.traceAPI.checkWorktreeExists(wsId, repoPath);
-    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
+    const worktreeResult = await window.traceAPI.checkWorktreeExists(
+      wsId,
+      repoPath,
+    );
+    if (
+      !worktreeResult.success ||
+      !worktreeResult.exists ||
+      !worktreeResult.worktreePath
+    )
+      return;
 
-    const env: Record<string, string> = { REPO_FOLDER: worktreeResult.worktreePath };
+    const env: Record<string, string> = {
+      REPO_FOLDER: worktreeResult.worktreePath,
+    };
     const portResult = await window.traceAPI.allocatePorts(wsId, 10);
     if (portResult.success && portResult.ports) {
       const ports = portResult.ports;
       env.PORT = String(ports[0]);
       env.TRACE_BASE_PORT = String(ports[0]);
-      for (let i = 0; i < ports.length; i += 1) env[`TRACE_PORT_${i}`] = String(ports[i]);
+      for (let i = 0; i < ports.length; i += 1)
+        env[`TRACE_PORT_${i}`] = String(ports[i]);
     }
 
-    useTerminalStore.getState().initializeDefaults(wsId, worktreeResult.worktreePath, env);
+    useTerminalStore
+      .getState()
+      .initializeDefaults(wsId, worktreeResult.worktreePath, env);
   }, [activeChannelId, repoPath]);
 
   useEffect(() => {
-    if (hasWorktree === true && selectedWorkspaceId) void handleInitializeTerminals();
+    if (hasWorktree === true && selectedWorkspaceId)
+      void handleInitializeTerminals();
   }, [hasWorktree, selectedWorkspaceId, handleInitializeTerminals]);
 
   const handleDeleteWorktree = useCallback(() => {
@@ -251,66 +336,97 @@ export function ThreadPanel() {
       useTerminalStore.getState().killAllForWorkspace(wsId);
       void window.traceAPI.releasePorts(wsId);
     }
-    void useThreadStore.getState().syncActions.deleteWorktree(async (workspaceId) => {
-      const chId = activeChannelId;
-      if (!chId) return;
-      try {
-        const { data } = await executeUpdateWorkspaceStatus({
-          variables: { channelId: chId, workspaceId, status: 'completed' },
-        });
-        if (data?.updateWorkspaceStatus) {
-          useWorkspaceStore.getState().upsertWorkspace(data.updateWorkspaceStatus as import("../types").Workspace);
-          useThreadStore.getState().syncSelectedWorkspace(data.updateWorkspaceStatus as import("../types").Workspace);
+    void useThreadStore
+      .getState()
+      .syncActions.deleteWorktree(async (workspaceId) => {
+        const chId = activeChannelId;
+        if (!chId) return;
+        try {
+          const { data } = await executeUpdateWorkspaceStatus({
+            variables: { channelId: chId, workspaceId, status: "completed" },
+          });
+          if (data?.updateWorkspaceStatus) {
+            useWorkspaceStore
+              .getState()
+              .upsertWorkspace(
+                data.updateWorkspaceStatus as import("../types").Workspace,
+              );
+            useThreadStore
+              .getState()
+              .syncSelectedWorkspace(
+                data.updateWorkspaceStatus as import("../types").Workspace,
+              );
+          }
+        } catch {
+          console.error(
+            "Failed to update workspace status after worktree deletion",
+          );
         }
-      } catch {
-        console.error('Failed to update workspace status after worktree deletion');
-      }
-    });
+      });
   }, [activeChannelId, executeUpdateWorkspaceStatus]);
 
   const handleDeleteWorkspace = useCallback(async () => {
     const wsId = useThreadStore.getState().selectedWorkspaceId;
     if (!wsId || !activeChannelId) return;
-    if (!window.confirm('Delete this workspace?')) return;
+    if (!window.confirm("Delete this workspace?")) return;
 
     useThreadStore.getState().closeThreadPanel();
 
     try {
-      await executeDeleteWorkspace({ variables: { channelId: activeChannelId, workspaceId: wsId } });
+      await executeDeleteWorkspace({
+        variables: { channelId: activeChannelId, workspaceId: wsId },
+      });
       useWorkspaceStore.getState().removeWorkspace(wsId);
       useKanbanStore.getState().removeTicketByWorkspaceId(wsId);
       useTerminalStore.getState().killAllForWorkspace(wsId);
       void window.traceAPI.releasePorts(wsId);
       if (repoPath) void window.traceAPI.deleteWorktree(wsId, repoPath);
     } catch {
-      console.error('Failed to delete workspace');
+      console.error("Failed to delete workspace");
     }
   }, [activeChannelId, repoPath, executeDeleteWorkspace]);
 
-  const handleRerunScript = useCallback(async (tabName: string) => {
-    const wsId = useThreadStore.getState().selectedWorkspaceId;
-    if (!wsId || !activeChannelId || !repoPath) return;
-    const worktreeResult = await window.traceAPI.checkWorktreeExists(wsId, repoPath);
-    if (!worktreeResult.success || !worktreeResult.exists || !worktreeResult.worktreePath) return;
+  const handleRerunScript = useCallback(
+    async (tabName: string) => {
+      const wsId = useThreadStore.getState().selectedWorkspaceId;
+      if (!wsId || !activeChannelId || !repoPath) return;
+      const worktreeResult = await window.traceAPI.checkWorktreeExists(
+        wsId,
+        repoPath,
+      );
+      if (
+        !worktreeResult.success ||
+        !worktreeResult.exists ||
+        !worktreeResult.worktreePath
+      )
+        return;
 
-    const channel = enrichedChannels.find((item) => item.id === activeChannelId);
-    const script = tabName === "Setup" ? channel?.setupScript : channel?.runScript;
-    if (!script?.trim()) return;
+      const channel = enrichedChannels.find(
+        (item) => item.id === activeChannelId,
+      );
+      const script =
+        tabName === "Setup" ? channel?.setupScript : channel?.runScript;
+      if (!script?.trim()) return;
 
-    const env: Record<string, string> = { REPO_FOLDER: worktreeResult.worktreePath };
-    if (tabName === "Run") {
-      await window.traceAPI.releasePorts(wsId);
-      const portResult = await window.traceAPI.allocatePorts(wsId, 10);
-      if (portResult.success && portResult.ports) {
-        const ports = portResult.ports;
-        env.PORT = String(ports[0]);
-        env.TRACE_BASE_PORT = String(ports[0]);
-        for (let i = 0; i < ports.length; i += 1) env[`TRACE_PORT_${i}`] = String(ports[i]);
+      const env: Record<string, string> = {
+        REPO_FOLDER: worktreeResult.worktreePath,
+      };
+      if (tabName === "Run") {
+        await window.traceAPI.releasePorts(wsId);
+        const portResult = await window.traceAPI.allocatePorts(wsId, 10);
+        if (portResult.success && portResult.ports) {
+          const ports = portResult.ports;
+          env.PORT = String(ports[0]);
+          env.TRACE_BASE_PORT = String(ports[0]);
+          for (let i = 0; i < ports.length; i += 1)
+            env[`TRACE_PORT_${i}`] = String(ports[i]);
+        }
       }
-    }
 
-    useTerminalStore.getState().rerunTab(tabName, script, env);
-  }, [activeChannelId, enrichedChannels, repoPath]);
+      useTerminalStore.getState().rerunTab(tabName, script, env);
+    },
+    [activeChannelId, enrichedChannels, repoPath],
+  );
 
   const handleStopScript = useCallback((tabName: string) => {
     useTerminalStore.getState().stopTab(tabName);
@@ -326,15 +442,37 @@ export function ThreadPanel() {
   // ─── Ticket dependencies mutation ───────────────────────────────
   const [executeSetTicketDependencies] = useSetTicketDependenciesMutation();
   const handleSetTicketDependencies = useCallback(
-    async (workspaceId: string, depIds: string[], runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+    async (
+      workspaceId: string,
+      depIds: string[],
+      runConfig: {
+        prompt: string;
+        model: string;
+        effort: string;
+        planMode: boolean;
+      },
+    ) => {
       if (!activeChannelId) return;
       try {
         const { data } = await executeSetTicketDependencies({
-          variables: { channelId: activeChannelId, workspaceId, dependsOnWorkspaceIds: depIds, runConfig },
+          variables: {
+            channelId: activeChannelId,
+            workspaceId,
+            dependsOnWorkspaceIds: depIds,
+            runConfig,
+          },
         });
         if (data?.setTicketDependencies) {
-          useWorkspaceStore.getState().upsertWorkspace(data.setTicketDependencies as import("../types").Workspace);
-          useThreadStore.getState().syncSelectedWorkspace(data.setTicketDependencies as import("../types").Workspace);
+          useWorkspaceStore
+            .getState()
+            .upsertWorkspace(
+              data.setTicketDependencies as import("../types").Workspace,
+            );
+          useThreadStore
+            .getState()
+            .syncSelectedWorkspace(
+              data.setTicketDependencies as import("../types").Workspace,
+            );
         }
       } catch {
         console.error("Failed to set ticket dependencies");
@@ -366,9 +504,9 @@ export function ThreadPanel() {
 
     setHandingOff(true);
     try {
-      // Stop Claude if running
-      if (isClaudeRunning) {
-        await window.traceAPI.stopClaude(wsId);
+      // Stop agent if running
+      if (isAgentRunning) {
+        await window.traceAPI.stopAgent(wsId);
       }
 
       // Kill terminals and release ports
@@ -391,26 +529,31 @@ export function ThreadPanel() {
         const workspace = data.handoffWorkspace as import("../types").Workspace;
         useWorkspaceStore.getState().upsertWorkspace(workspace);
         useThreadStore.getState().syncSelectedWorkspace(workspace);
-        useClaudeRunStore.getState().removeSpawnedWorkspace(wsId);
-        useClaudeRunStore.getState().clearActiveRun(wsId);
+        useAgentRunStore.getState().removeSpawnedWorkspace(wsId);
+        useAgentRunStore.getState().clearActiveRun(wsId);
       }
     } catch {
-      console.error('Failed to hand off workspace');
+      console.error("Failed to hand off workspace");
     } finally {
       setHandingOff(false);
     }
-  }, [activeChannelId, isClaudeRunning, executeHandoffWorkspace, enrichedActiveChannel]);
+  }, [
+    activeChannelId,
+    isAgentRunning,
+    executeHandoffWorkspace,
+    enrichedActiveChannel,
+  ]);
 
   // ─── Create PR ─────────────────────────────────────────────────
   const canCreatePR = Boolean(
     selectedWorkspaceId &&
     !ticket?.workspace?.prUrl &&
     ticket?.workspace?.branch &&
-    !isClaudeRunning,
+    !isAgentRunning,
   );
 
   const handleCreatePR = useCallback(() => {
-    void sendThreadMessage('/create-pr', [], []);
+    void sendThreadMessage("/create-pr", [], []);
   }, [sendThreadMessage]);
 
   // ─── Memos ──────────────────────────────────────────────────────
@@ -446,7 +589,7 @@ export function ThreadPanel() {
   }, [sessionNodes]);
 
   const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
-    if (isClaudeRunning) return null;
+    if (isAgentRunning) return null;
     for (let i = sessionNodes.length - 1; i >= 0; i--) {
       const node = sessionNodes[i];
       if (node.kind === "ask-user-question") return node;
@@ -458,7 +601,7 @@ export function ThreadPanel() {
       }
     }
     return null;
-  }, [sessionNodes, isClaudeRunning]);
+  }, [sessionNodes, isAgentRunning]);
 
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(
     null,
@@ -469,11 +612,11 @@ export function ThreadPanel() {
       : null;
 
   const activePlanNode = useMemo((): PlanReviewNode | null => {
-    if (isClaudeRunning) return null;
+    if (isAgentRunning) return null;
     const last = sessionNodes[sessionNodes.length - 1];
     if (last?.kind === "plan-review") return last;
     return null;
-  }, [sessionNodes, isClaudeRunning]);
+  }, [sessionNodes, isAgentRunning]);
 
   const [dismissedPlanId, setDismissedPlanId] = useState<string | null>(null);
   const showPlan =
@@ -496,11 +639,13 @@ export function ThreadPanel() {
 
     // Restore or reset layout for the workspace we're entering
     if (selectedWorkspaceId) {
-      usePanelLayoutStore.getState().restoreOrResetForWorkspace(
-        selectedWorkspaceId,
-        workspaceStatus === "merged",
-        ticket !== null,
-      );
+      usePanelLayoutStore
+        .getState()
+        .restoreOrResetForWorkspace(
+          selectedWorkspaceId,
+          workspaceStatus === "merged",
+          ticket !== null,
+        );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspaceId]);
@@ -543,12 +688,18 @@ export function ThreadPanel() {
           worktreePath={worktreePath}
           isFullscreen={isFullscreen}
           onClose={handleClose}
-          onDeleteWorkspace={() => { void handleDeleteWorkspace(); }}
+          onDeleteWorkspace={() => {
+            void handleDeleteWorkspace();
+          }}
           onDeleteWorktree={handleDeleteWorktree}
           canHandoff={canHandoff}
           handingOff={handingOff}
-          onHandoff={() => { void handleHandoff(); }}
-          onEnterFullscreen={() => { void handleEnterFullscreen(); }}
+          onHandoff={() => {
+            void handleHandoff();
+          }}
+          onEnterFullscreen={() => {
+            void handleEnterFullscreen();
+          }}
           onExitFullscreen={handleExitFullscreen}
           onMarkMerged={() => void markMerged()}
           prUrl={ticket?.workspace?.prUrl ?? null}
@@ -560,11 +711,14 @@ export function ThreadPanel() {
           onSwitchSession={switchSession}
         />
 
-        <div ref={containerRef} className="thread-panel-shell relative flex min-h-0 flex-1">
+        <div
+          ref={containerRef}
+          className="thread-panel-shell relative flex min-h-0 flex-1"
+        >
           <SplitTreeRenderer
             node={layoutRoot}
             renderPaneContent={(mode) => {
-              if (mode === 'agent') {
+              if (mode === "agent") {
                 return (
                   <>
                     <AgentContent
@@ -582,35 +736,57 @@ export function ThreadPanel() {
                       scrollToLatest={scrollToLatest}
                     />
 
-                    {isClaudeRunning && latestTodos && (
+                    {isAgentRunning && latestTodos && (
                       <StickyTodoList todos={latestTodos} />
                     )}
 
-                    {isLockedByOther && workspaceStatus !== 'pending' && workspaceStatus !== 'handed_off' ? (
+                    {isLockedByOther &&
+                    workspaceStatus !== "pending" &&
+                    workspaceStatus !== "handed_off" ? (
                       <div className="flex items-center justify-center border-t border-edge px-4 py-3">
                         <span className="text-xs text-muted">
                           Workspace locked by another user (read-only)
                         </span>
                       </div>
                     ) : (pendingRunWorkspaceId === selectedWorkspaceId ||
-                      workspaceStatus === 'pending' ||
-                      workspaceStatus === 'handed_off') &&
-                      !isClaudeRunning ? (
+                        workspaceStatus === "pending" ||
+                        workspaceStatus === "handed_off") &&
+                      !isAgentRunning ? (
                       <RunButtons
                         initialPrompt={pendingPromptForDisplay}
                         onRun={(planMode, prompt, attachmentIds, filePaths) => {
-                          if (pendingRunWorkspaceId !== selectedWorkspaceId && selectedWorkspaceId) {
-                            useClaudeRunStore.getState().setPendingRun(selectedWorkspaceId, prompt, filePaths ?? [], attachmentIds);
+                          if (
+                            pendingRunWorkspaceId !== selectedWorkspaceId &&
+                            selectedWorkspaceId
+                          ) {
+                            useAgentRunStore
+                              .getState()
+                              .setPendingRun(
+                                selectedWorkspaceId,
+                                prompt,
+                                filePaths ?? [],
+                                attachmentIds,
+                              );
                           }
-                          void runPendingWorkspace(planMode, prompt, attachmentIds, filePaths);
+                          void runPendingWorkspace(
+                            planMode,
+                            prompt,
+                            attachmentIds,
+                            filePaths,
+                          );
                         }}
                         channelTickets={channelTickets}
-                        currentWorkspaceId={selectedWorkspaceId ?? pendingRunWorkspaceId}
+                        currentWorkspaceId={
+                          selectedWorkspaceId ?? pendingRunWorkspaceId
+                        }
                         onRunAfter={(depIds, runConfig) => {
-                          const wsId = pendingRunWorkspaceId ?? selectedWorkspaceId;
+                          const wsId =
+                            pendingRunWorkspaceId ?? selectedWorkspaceId;
                           if (wsId) {
                             if (pendingRunWorkspaceId !== wsId) {
-                              useClaudeRunStore.getState().setPendingRun(wsId, runConfig.prompt, []);
+                              useAgentRunStore
+                                .getState()
+                                .setPendingRun(wsId, runConfig.prompt, []);
                             }
                             void handleSetTicketDependencies(
                               wsId,
@@ -634,7 +810,8 @@ export function ThreadPanel() {
                         questionNode={activeQuestionNode}
                         onPlanResponse={(text, mode) => {
                           setDismissedPlanId(showPlan.id);
-                          if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
+                          if (activeQuestionNode)
+                            setDismissedQuestionId(activeQuestionNode.id);
                           void sendPlanResponse(
                             text,
                             mode,
@@ -644,21 +821,24 @@ export function ThreadPanel() {
                         }}
                         onDismiss={() => {
                           setDismissedPlanId(showPlan.id);
-                          if (activeQuestionNode) setDismissedQuestionId(activeQuestionNode.id);
-                          void stopClaude();
+                          if (activeQuestionNode)
+                            setDismissedQuestionId(activeQuestionNode.id);
+                          void stopAgent();
                         }}
                       />
                     ) : showQuestion ? (
                       <AskUserQuestionBar
                         node={showQuestion}
                         onResponse={(text) => {
-                          if (activePlanNode) setDismissedPlanId(activePlanNode.id);
+                          if (activePlanNode)
+                            setDismissedPlanId(activePlanNode.id);
                           void sendPlanResponse(text, "keep-context");
                         }}
                         onDismiss={() => {
                           setDismissedQuestionId(showQuestion.id);
-                          if (activePlanNode) setDismissedPlanId(activePlanNode.id);
-                          void stopClaude();
+                          if (activePlanNode)
+                            setDismissedPlanId(activePlanNode.id);
+                          void stopAgent();
                         }}
                       />
                     ) : isViewingOlderSession ? (
@@ -669,21 +849,26 @@ export function ThreadPanel() {
                       </div>
                     ) : (
                       <ThreadInput
-                        isClaudeRunning={isClaudeRunning}
+                        isAgentRunning={isAgentRunning}
                         lastUserMessageTime={lastUserMessageTime}
                         onSendThreadMessage={sendThreadMessage}
-                        onStopClaude={() => void stopClaude()}
+                        onStopAgent={() => void stopAgent()}
                         onClearThread={clearSession}
                       />
                     )}
                   </>
                 );
               }
-              if (mode === 'ticket') {
+              if (mode === "ticket") {
                 return <TicketContent ticket={ticket} />;
               }
-              if (mode === 'files') {
-                return <FilesContent workspaceId={selectedWorkspaceId} baseBranch={baseBranch} />;
+              if (mode === "files") {
+                return (
+                  <FilesContent
+                    workspaceId={selectedWorkspaceId}
+                    baseBranch={baseBranch}
+                  />
+                );
               }
               // terminal/browser are singletons — rendered in SingletonLayer
               return null;
@@ -712,10 +897,17 @@ export function ThreadPanel() {
               if (wsId) useTerminalStore.getState().killAllForWorkspace(wsId);
             }}
             onAddTab={useTerminalStore.getState().addTerminal}
-            onRunScript={() => { void handleRerunScript("Run"); }}
+            onRunScript={() => {
+              void handleRerunScript("Run");
+            }}
             onStopScript={() => handleStopScript("Run")}
-            onRerunSetup={() => { void handleRerunScript("Setup"); }}
-            onOpenSettings={() => { if (activeChannelId) useAppUIStore.getState().setSettingsChannelId(activeChannelId); }}
+            onRerunSetup={() => {
+              void handleRerunScript("Setup");
+            }}
+            onOpenSettings={() => {
+              if (activeChannelId)
+                useAppUIStore.getState().setSettingsChannelId(activeChannelId);
+            }}
             browserWorkspaceId={selectedWorkspaceId}
           />
         </div>
@@ -723,4 +915,3 @@ export function ThreadPanel() {
     </>
   );
 }
-

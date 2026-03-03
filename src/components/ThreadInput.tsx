@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FiSend, FiX, FiClock } from "react-icons/fi";
 import { Tooltip } from "./Tooltip";
 import { ModelEffortSelector } from "./ModelEffortSelector";
-import { useClaudeRunStore } from "../stores/claudeRunStore";
+import { useAgentRunStore } from "../stores/agentRunStore";
 import { useChannelContext } from "../context/ChannelContext";
 import { useSlashCommands } from "../hooks/useSlashCommands";
 import { useFileMention } from "../hooks/useFileMention";
@@ -16,28 +16,30 @@ import { useThreadStore } from "../stores/threadStore";
 import { formatTokenCount } from "../utils";
 
 export function ThreadInput({
-  isClaudeRunning,
+  isAgentRunning,
   lastUserMessageTime,
   onSendThreadMessage,
-  onStopClaude,
+  onStopAgent,
   onClearThread,
 }: {
-  isClaudeRunning: boolean;
+  isAgentRunning: boolean;
   lastUserMessageTime: string | null;
   onSendThreadMessage: (
     text: string,
     attachmentIds?: string[],
     filePaths?: string[],
   ) => Promise<boolean>;
-  onStopClaude: () => void;
+  onStopAgent: () => void;
   onClearThread: () => Promise<string | null>;
 }) {
   const { enrichedActiveChannel } = useChannelContext();
   const repoPath = enrichedActiveChannel?.localRepoPath ?? "";
-  const selectedModel = useClaudeRunStore((s) => s.selectedModel);
-  const selectedEffort = useClaudeRunStore((s) => s.selectedEffort);
-  const setSelectedModel = useClaudeRunStore((s) => s.setSelectedModel);
-  const setSelectedEffort = useClaudeRunStore((s) => s.setSelectedEffort);
+  const selectedAgent = useAgentRunStore((s) => s.selectedAgent);
+  const selectedModel = useAgentRunStore((s) => s.selectedModel);
+  const selectedEffort = useAgentRunStore((s) => s.selectedEffort);
+  const setSelectedAgent = useAgentRunStore((s) => s.setSelectedAgent);
+  const setSelectedModel = useAgentRunStore((s) => s.setSelectedModel);
+  const setSelectedEffort = useAgentRunStore((s) => s.setSelectedEffort);
   const [threadInput, setThreadInput] = useState("");
   const [isQueued, setIsQueued] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
@@ -115,28 +117,28 @@ export function ThreadInput({
     const text = threadInput.trim();
     if (!text) return;
 
-    if (isClaudeRunning) {
+    if (isAgentRunning) {
       // Queue the message for when Claude finishes
       setIsQueued(true);
     } else {
       void sendNow();
     }
-  }, [threadInput, isClaudeRunning, sendNow]);
+  }, [threadInput, isAgentRunning, sendNow]);
 
   // Auto-send queued message when Claude finishes
-  const wasRunningRef = useRef(isClaudeRunning);
+  const wasRunningRef = useRef(isAgentRunning);
   useEffect(() => {
     const wasRunning = wasRunningRef.current;
-    wasRunningRef.current = isClaudeRunning;
+    wasRunningRef.current = isAgentRunning;
 
-    if (wasRunning && !isClaudeRunning && isQueued) {
+    if (wasRunning && !isAgentRunning && isQueued) {
       void sendNow();
     }
-  }, [isClaudeRunning, isQueued, sendNow]);
+  }, [isAgentRunning, isQueued, sendNow]);
 
   return (
     <div className="border-t border-edge px-3 py-3">
-      {isClaudeRunning && (
+      {isAgentRunning && (
         <div className="mb-2 flex items-center gap-2 px-1">
           <svg
             className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-accent-light"
@@ -250,7 +252,7 @@ export function ThreadInput({
               }
             }}
             placeholder={
-              isClaudeRunning
+              isAgentRunning
                 ? isQueued
                   ? "Edit your queued message..."
                   : "Type a message to queue..."
@@ -266,7 +268,7 @@ export function ThreadInput({
             className={`w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-edge-hover ${isQueued ? "border-amber-500/50" : "border-edge"}`}
           />
         </div>
-        {isClaudeRunning ? (
+        {isAgentRunning ? (
           <div className="flex gap-1.5">
             {!isQueued && threadInput.trim() && (
               <Tooltip text="Queue message">
@@ -284,7 +286,7 @@ export function ThreadInput({
               <button
                 id="thread-stop"
                 type="button"
-                onClick={onStopClaude}
+                onClick={onStopAgent}
                 className="btn-primary h-[38px] cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-on-accent"
               >
                 <svg
@@ -311,13 +313,15 @@ export function ThreadInput({
           </Tooltip>
         )}
       </div>
-      {(!isClaudeRunning || (tokenUsage && tokenUsage.totalTokens > 0)) && (
+      {(!isAgentRunning || (tokenUsage && tokenUsage.totalTokens > 0)) && (
         <div className="mt-2 flex items-center gap-1.5">
-          {!isClaudeRunning && (
+          {!isAgentRunning && (
             <>
               <ModelEffortSelector
+                agent={selectedAgent}
                 model={selectedModel}
                 effort={selectedEffort}
+                onAgentChange={setSelectedAgent}
                 onModelChange={setSelectedModel}
                 onEffortChange={setSelectedEffort}
               />

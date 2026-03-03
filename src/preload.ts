@@ -2,7 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("traceAPI", {
   getServerUrl: () => ipcRenderer.sendSync("get-server-url") as string,
-  spawnClaude: async (
+  spawnAgent: async (
+    agentType: string,
     workspaceId: string,
     prompt: string,
     repoPath: string,
@@ -14,10 +15,16 @@ contextBridge.exposeInMainWorld("traceAPI", {
     systemInstructions?: string,
     permissionMode?: string,
     baseBranch?: string,
-  ): Promise<{ success: boolean; worktreePath?: string; setupOutput?: string; error?: string }> => {
+  ): Promise<{
+    success: boolean;
+    worktreePath?: string;
+    setupOutput?: string;
+    error?: string;
+  }> => {
     try {
       return await ipcRenderer.invoke(
-        "spawn-claude",
+        "spawn-agent",
+        agentType,
         workspaceId,
         prompt,
         repoPath,
@@ -34,11 +41,18 @@ contextBridge.exposeInMainWorld("traceAPI", {
       return { success: false, error: String(err) };
     }
   },
-  stopClaude: async (
+  stopAgent: async (
     workspaceId: string,
   ): Promise<{ success: boolean; stopped?: boolean; error?: string }> => {
     try {
-      return await ipcRenderer.invoke("stop-claude", workspaceId);
+      return await ipcRenderer.invoke("stop-agent", workspaceId);
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+  detectAgents: async () => {
+    try {
+      return await ipcRenderer.invoke("detect-agents");
     } catch (err) {
       return { success: false, error: String(err) };
     }
@@ -98,14 +112,14 @@ contextBridge.exposeInMainWorld("traceAPI", {
       return { success: false, committed: false, error: String(err) };
     }
   },
-  reportClaudeActivity: async (
+  reportAgentActivity: async (
     workspaceId: string,
     eventType: string,
     sessionId?: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       return await ipcRenderer.invoke(
-        "claude-activity-ping",
+        "agent-activity-ping",
         workspaceId,
         eventType,
         sessionId,
@@ -282,7 +296,12 @@ contextBridge.exposeInMainWorld("traceAPI", {
       success: boolean;
       isUpToDate?: boolean;
       commitsBehind?: number;
-      commits?: { hash: string; author: string; message: string; date: string }[];
+      commits?: {
+        hash: string;
+        author: string;
+        message: string;
+        date: string;
+      }[];
       localSha?: string;
       remoteSha?: string;
       error?: string;
@@ -399,8 +418,8 @@ contextBridge.exposeInMainWorld("traceAPI", {
     ) as Promise<{ success: boolean; worktreePath?: string; error?: string }>,
 
   checkRunningProcesses: (workspaceIds: string[]) =>
-    ipcRenderer.invoke(
-      "check-running-processes",
-      workspaceIds,
-    ) as Promise<{ success: boolean; running: string[] }>,
+    ipcRenderer.invoke("check-running-processes", workspaceIds) as Promise<{
+      success: boolean;
+      running: string[];
+    }>,
 });
