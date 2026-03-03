@@ -131,10 +131,16 @@ export function RunButtons({
   const [showRunAfter, setShowRunAfter] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setPrompt(initialPrompt);
   }, [initialPrompt]);
+
+  // Auto-focus textarea when workspace changes
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [currentWorkspaceId]);
 
   useEffect(() => {
     if (!showDropdown) return;
@@ -177,6 +183,7 @@ export function RunButtons({
   return (
     <div className="border-t border-edge px-3 py-3">
       <textarea
+        ref={textareaRef}
         rows={1}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}

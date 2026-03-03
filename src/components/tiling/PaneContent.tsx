@@ -216,7 +216,7 @@ function ThreadStatusMessage({
       <div className="text-sm text-muted">
         {activeSessionId
           ? 'No events yet'
-          : 'No sessions yet. Create a workspace to start.'}
+          : 'No sessions yet.'}
       </div>
     );
   }

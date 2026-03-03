@@ -59,7 +59,7 @@
 
 /* ── Button utility classes (unlayered for highest specificity) ── */
 .btn-primary {
-  color: var(--th-on-accent) !important;
+  color: white !important;
   background: linear-gradient(
     to bottom,
     color-mix(in srgb, var(--th-accent-light) 40%, var(--th-accent)),

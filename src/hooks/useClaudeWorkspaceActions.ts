@@ -287,6 +287,25 @@ export function useClaudeWorkspaceActions({
     [executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
   );
 
+  // Create an empty workspace (no pending run) and open the thread view
+  const createWorkspace = useCallback(async () => {
+    const chId = activeChannelIdRef.current;
+    if (!chId) return false;
+    try {
+      const { data } = await executeCreateWorkspace({
+        variables: { channelId: chId, text: "New workspace" },
+      });
+      if (!data?.createWorkspace) return false;
+      const workspace = data.createWorkspace.workspace as Workspace;
+      upsertWorkspace(workspace);
+      onWorkspaceCreated(workspace);
+      return true;
+    } catch {
+      console.error("Failed to create workspace");
+      return false;
+    }
+  }, [executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace]);
+
   const createWorkspaceForTicket = useCallback(
     async (ticket: KanbanTicket) => {
       const chId = activeChannelIdRef.current;
@@ -740,6 +759,7 @@ export function useClaudeWorkspaceActions({
   useEffect(() => {
     useClaudeRunStore.getState().registerWorkspaceActions({
       sendMessage,
+      createWorkspace,
       createWorkspaceForTicket,
       runPendingWorkspace,
       autoRunQueuedTicket,
@@ -752,6 +772,7 @@ export function useClaudeWorkspaceActions({
     return () => useClaudeRunStore.getState().clearWorkspaceActions();
   }, [
     sendMessage,
+    createWorkspace,
     createWorkspaceForTicket,
     runPendingWorkspace,
     autoRunQueuedTicket,

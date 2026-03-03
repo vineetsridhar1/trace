@@ -4,6 +4,7 @@ import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server } from '..
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
 import { ServerSwitcher } from './ServerSwitcher';
+import { SyncStatus } from './SyncStatus';
 
 const SECTION_CONFIG: Record<SidebarSectionId, { icon: typeof FiHash; label: string }> = {
   channels: { icon: FiHash, label: 'Channels' },
@@ -303,6 +304,7 @@ export function ChannelPanel({
             );
           })}
         </Reorder.Group>
+        <SyncStatus />
       </div>
 
       {channelWidth > 0 && (

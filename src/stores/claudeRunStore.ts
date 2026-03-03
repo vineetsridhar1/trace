@@ -10,6 +10,7 @@ interface ClaudeWorkspaceActions {
     attachmentIds?: string[],
     filePaths?: string[],
   ) => Promise<boolean>;
+  createWorkspace: () => Promise<boolean>;
   createWorkspaceForTicket: (ticket: KanbanTicket) => Promise<boolean>;
   runPendingWorkspace: (planMode: boolean, prompt: string) => Promise<void>;
   autoRunQueuedTicket: (
@@ -43,6 +44,9 @@ const noopWarn =
 
 const defaultWorkspaceActions: ClaudeWorkspaceActions = {
   sendMessage: noopWarn("sendMessage") as ClaudeWorkspaceActions["sendMessage"],
+  createWorkspace: noopWarn(
+    "createWorkspace",
+  ) as ClaudeWorkspaceActions["createWorkspace"],
   createWorkspaceForTicket: noopWarn(
     "createWorkspaceForTicket",
   ) as ClaudeWorkspaceActions["createWorkspaceForTicket"],

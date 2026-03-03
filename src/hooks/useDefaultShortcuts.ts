@@ -252,7 +252,7 @@ export function useDefaultShortcuts({
     'creation.new-workspace',
     'mod+n',
     () => {
-      void useClaudeRunStore.getState().workspaceActions.sendMessage('');
+      void useClaudeRunStore.getState().workspaceActions.createWorkspace();
     },
     { label: 'New workspace', category: 'creation', context: 'global' },
   );

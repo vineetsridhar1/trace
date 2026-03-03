@@ -56,6 +56,12 @@ export function ThreadInput({
   const imageAttachments = useImageAttachments();
   const tokenUsage = useThreadStore((s) => s.tokenUsage);
 
+  // Auto-focus the textarea when the workspace changes
+  const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [selectedWorkspaceId]);
+
   const sendNow = useCallback(async () => {
     const text = threadInput.trim();
     if (!text) return;
