@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { FiSend, FiX, FiClock } from 'react-icons/fi';
-import { Tooltip } from './Tooltip';
-import { ModelEffortSelector } from './ModelEffortSelector';
-import { useClaudeRunStore } from '../stores/claudeRunStore';
-import { useChannelContext } from '../context/ChannelContext';
-import { useSlashCommands } from '../hooks/useSlashCommands';
-import { useFileMention } from '../hooks/useFileMention';
-import { useImageAttachments } from '../hooks/useImageAttachments';
-import { SlashCommandMenu } from './SlashCommandMenu';
-import { FileMentionMenu } from './FileMentionMenu';
-import { ImageThumbnails } from './ImageThumbnails';
-import { ElapsedTimer } from './ElapsedTimer';
-import { InteractionModeToggle, type InteractionMode } from './RunButtons';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FiSend, FiX, FiClock } from "react-icons/fi";
+import { Tooltip } from "./Tooltip";
+import { ModelEffortSelector } from "./ModelEffortSelector";
+import { useClaudeRunStore } from "../stores/claudeRunStore";
+import { useChannelContext } from "../context/ChannelContext";
+import { useSlashCommands } from "../hooks/useSlashCommands";
+import { useFileMention } from "../hooks/useFileMention";
+import { useImageAttachments } from "../hooks/useImageAttachments";
+import { SlashCommandMenu } from "./SlashCommandMenu";
+import { FileMentionMenu } from "./FileMentionMenu";
+import { ImageThumbnails } from "./ImageThumbnails";
+import { ElapsedTimer } from "./ElapsedTimer";
+import { InteractionModeToggle, type InteractionMode } from "./RunButtons";
+import { useThreadStore } from "../stores/threadStore";
+import { formatTokenCount } from "../utils";
 
 export function ThreadInput({
   isClaudeRunning,
@@ -31,39 +33,45 @@ export function ThreadInput({
   onClearThread: () => Promise<string | null>;
 }) {
   const { enrichedActiveChannel } = useChannelContext();
-  const repoPath = enrichedActiveChannel?.localRepoPath ?? '';
+  const repoPath = enrichedActiveChannel?.localRepoPath ?? "";
   const selectedModel = useClaudeRunStore((s) => s.selectedModel);
   const selectedEffort = useClaudeRunStore((s) => s.selectedEffort);
   const setSelectedModel = useClaudeRunStore((s) => s.setSelectedModel);
   const setSelectedEffort = useClaudeRunStore((s) => s.setSelectedEffort);
-  const [threadInput, setThreadInput] = useState('');
+  const [threadInput, setThreadInput] = useState("");
   const [isQueued, setIsQueued] = useState(false);
-  const [mode, setMode] = useState<InteractionMode>('code');
+  const [mode, setMode] = useState<InteractionMode>("code");
   const cycleMode = () => {
-    const modes: InteractionMode[] = ['code', 'plan', 'ask'];
+    const modes: InteractionMode[] = ["code", "plan", "ask"];
     setMode((m) => modes[(modes.indexOf(m) + 1) % 3]);
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashCommands = useSlashCommands(threadInput, setThreadInput, repoPath);
-  const fileMention = useFileMention(threadInput, setThreadInput, repoPath, textareaRef);
+  const fileMention = useFileMention(
+    threadInput,
+    setThreadInput,
+    repoPath,
+    textareaRef,
+  );
   const imageAttachments = useImageAttachments();
+  const tokenUsage = useThreadStore((s) => s.tokenUsage);
 
   const sendNow = useCallback(async () => {
     const text = threadInput.trim();
     if (!text) return;
 
     // Intercept /clear command
-    if (text === '/clear' || text.startsWith('/clear ')) {
-      setThreadInput('');
+    if (text === "/clear" || text.startsWith("/clear ")) {
+      setThreadInput("");
       setIsQueued(false);
       await onClearThread();
       return;
     }
 
     let finalText = text;
-    if (mode === 'plan') {
+    if (mode === "plan") {
       finalText = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${text}`;
-    } else if (mode === 'ask') {
+    } else if (mode === "ask") {
       finalText = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${text}`;
     }
 
@@ -74,7 +82,7 @@ export function ThreadInput({
 
     // Clear input optimistically to prevent queue button flash
     const previousInput = threadInput;
-    setThreadInput('');
+    setThreadInput("");
     setIsQueued(false);
     imageAttachments.clearAttachments();
     fileMention.clearMentions();
@@ -88,7 +96,14 @@ export function ThreadInput({
       // Restore input on failure
       setThreadInput(previousInput);
     }
-  }, [threadInput, mode, onSendThreadMessage, onClearThread, imageAttachments, fileMention]);
+  }, [
+    threadInput,
+    mode,
+    onSendThreadMessage,
+    onClearThread,
+    imageAttachments,
+    fileMention,
+  ]);
 
   const handleSendOrQueue = useCallback(() => {
     const text = threadInput.trim();
@@ -137,7 +152,9 @@ export function ThreadInput({
               d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"
             />
           </svg>
-          <span className="text-xs text-accent-light">Claude is working...</span>
+          <span className="text-xs text-accent-light">
+            Claude is working...
+          </span>
           {lastUserMessageTime && (
             <ElapsedTimer startTime={lastUserMessageTime} />
           )}
@@ -146,7 +163,9 @@ export function ThreadInput({
       {isQueued && (
         <div className="mb-2 flex items-center gap-2 px-1">
           <FiClock className="h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
-          <span className="text-xs text-amber-400">Message queued — will send when Claude finishes</span>
+          <span className="text-xs text-amber-400">
+            Message queued — will send when Claude finishes
+          </span>
           <button
             type="button"
             onClick={() => setIsQueued(false)}
@@ -212,14 +231,14 @@ export function ThreadInput({
             onSelect={fileMention.handleSelect}
             onPaste={(e) => void imageAttachments.handlePaste(e)}
             onKeyDown={(e) => {
-              if (e.key === 'Tab' && e.shiftKey) {
+              if (e.key === "Tab" && e.shiftKey) {
                 e.preventDefault();
                 cycleMode();
                 return;
               }
               if (fileMention.handleKeyDown(e)) return;
               if (slashCommands.handleKeyDown(e)) return;
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSendOrQueue();
               }
@@ -227,12 +246,18 @@ export function ThreadInput({
             placeholder={
               isClaudeRunning
                 ? isQueued
-                  ? 'Edit your queued message...'
-                  : 'Type a message to queue...'
-                : 'Send to Claude...'
+                  ? "Edit your queued message..."
+                  : "Type a message to queue..."
+                : "Send to Claude..."
             }
-            style={{ fieldSizing: 'content', minHeight: 38, maxHeight: 300 } as React.CSSProperties}
-            className={`w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-accent ${isQueued ? 'border-amber-500/50' : 'border-edge'}`}
+            style={
+              {
+                fieldSizing: "content",
+                minHeight: 38,
+                maxHeight: 300,
+              } as React.CSSProperties
+            }
+            className={`w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-accent ${isQueued ? "border-amber-500/50" : "border-edge"}`}
           />
         </div>
         {isClaudeRunning ? (
@@ -280,15 +305,55 @@ export function ThreadInput({
           </Tooltip>
         )}
       </div>
-      {!isClaudeRunning && (
+      {(!isClaudeRunning || (tokenUsage && tokenUsage.totalTokens > 0)) && (
         <div className="mt-2 flex items-center gap-1.5">
-          <ModelEffortSelector
-            model={selectedModel}
-            effort={selectedEffort}
-            onModelChange={setSelectedModel}
-            onEffortChange={setSelectedEffort}
-          />
-          <InteractionModeToggle mode={mode} onCycle={cycleMode} />
+          {!isClaudeRunning && (
+            <>
+              <ModelEffortSelector
+                model={selectedModel}
+                effort={selectedEffort}
+                onModelChange={setSelectedModel}
+                onEffortChange={setSelectedEffort}
+              />
+              <InteractionModeToggle mode={mode} onCycle={cycleMode} />
+            </>
+          )}
+          {tokenUsage && tokenUsage.totalTokens > 0 && (
+            <Tooltip
+              text={
+                <div className="w-48 whitespace-normal">
+                  <div className="border-b border-edge pb-1.5 mb-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-muted">Input</span>
+                      <span>{tokenUsage.inputTokens.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Output</span>
+                      <span>{tokenUsage.outputTokens.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Cost</span>
+                    <span>
+                      {tokenUsage.cliCostUsd != null
+                        ? `$${tokenUsage.cliCostUsd.toFixed(2)}`
+                        : "\u2014"}
+                    </span>
+                  </div>
+                </div>
+              }
+              position="top"
+            >
+              <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-medium text-muted">
+                {formatTokenCount(tokenUsage.totalTokens)} tokens
+                {tokenUsage.cliCostUsd != null && (
+                  <span className="text-muted/70">
+                    &middot; ${tokenUsage.cliCostUsd.toFixed(2)}
+                  </span>
+                )}
+              </span>
+            </Tooltip>
+          )}
         </div>
       )}
     </div>

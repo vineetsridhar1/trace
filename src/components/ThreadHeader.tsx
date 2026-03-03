@@ -19,8 +19,7 @@ import type { TicketStatus } from "../types";
 import { getServerUrl } from "../types";
 import type { SessionInfo } from "../hooks/useThread";
 import type { CIStatus } from "../stores/workspaceStore";
-import { useThreadStore, type ThreadViewMode } from "../stores/threadStore";
-import { formatTokenCount } from "../utils";
+import type { ThreadViewMode } from "../stores/threadStore";
 
 type ViewMode = ThreadViewMode;
 
@@ -81,8 +80,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   activeSessionId,
   onSwitchSession,
 }: ThreadHeaderProps) {
-  const tokenUsage = useThreadStore((s) => s.tokenUsage);
-
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
 
@@ -264,42 +261,6 @@ export const ThreadHeader = memo(function ThreadHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {tokenUsage && tokenUsage.totalTokens > 0 && (
-          <Tooltip
-            text={
-              <div className="w-48 whitespace-normal">
-                <div className="border-b border-edge pb-1.5 mb-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-muted">Input</span>
-                    <span>{tokenUsage.inputTokens.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Output</span>
-                    <span>{tokenUsage.outputTokens.toLocaleString()}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Cost</span>
-                  <span>
-                    {tokenUsage.cliCostUsd != null
-                      ? `$${tokenUsage.cliCostUsd.toFixed(2)}`
-                      : "\u2014"}
-                  </span>
-                </div>
-              </div>
-            }
-            position="bottom"
-          >
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-edge px-2 py-1 text-[11px] font-medium text-muted">
-              {formatTokenCount(tokenUsage.totalTokens)} tokens
-              {tokenUsage.cliCostUsd != null && (
-                <span className="text-muted/70">
-                  &middot; ${tokenUsage.cliCostUsd.toFixed(2)}
-                </span>
-              )}
-            </span>
-          </Tooltip>
-        )}
         {prUrl
           ? (() => {
               const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
