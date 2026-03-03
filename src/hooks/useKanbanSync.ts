@@ -67,7 +67,7 @@ export function useKanbanSync() {
         variables: { channelId },
       });
       if (!data) return;
-      useKanbanStore.getState().setColumns(data.board as KanbanColumn[]);
+      useKanbanStore.getState().setColumns(data.board as KanbanColumn[], channelId);
     } catch {
       console.error('Failed to fetch kanban board');
     } finally {

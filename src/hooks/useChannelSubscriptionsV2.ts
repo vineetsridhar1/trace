@@ -291,7 +291,7 @@ export function useChannelSubscriptions({
     if (!ticketData?.ticketUpserted || !activeChannelId) return;
     const payload = ticketData.ticketUpserted;
     if (payload.channelId !== channelIdRef.current) return;
-    useKanbanStore.getState().upsertTicket({ ...payload.ticket, columnSlug: payload.columnSlug } as KanbanTicket);
+    useKanbanStore.getState().upsertTicket({ ...payload.ticket, columnSlug: payload.columnSlug } as KanbanTicket, payload.channelId);
   }, [ticketData, activeChannelId]);
 
   // --- Ticket ready to run ---

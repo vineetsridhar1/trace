@@ -3,11 +3,12 @@ import type { KanbanColumn, KanbanTicket } from '../types';
 
 interface KanbanState {
   columns: KanbanColumn[];
+  channelId: string | null;
   loading: boolean;
 
-  setColumns: (columns: KanbanColumn[]) => void;
+  setColumns: (columns: KanbanColumn[], channelId: string) => void;
   setLoading: (loading: boolean) => void;
-  upsertTicket: (ticket: KanbanTicket) => void;
+  upsertTicket: (ticket: KanbanTicket, channelId: string) => void;
   moveTicketOptimistic: (ticketId: string, columnId: string, sortOrder: number) => void;
   removeTicketByWorkspaceId: (workspaceId: string) => void;
   clearBoard: () => void;
@@ -15,13 +16,15 @@ interface KanbanState {
 
 export const useKanbanStore = create<KanbanState>((set) => ({
   columns: [],
+  channelId: null,
   loading: false,
 
-  setColumns: (columns) => set({ columns }),
+  setColumns: (columns, channelId) => set({ columns, channelId }),
   setLoading: (loading) => set({ loading }),
 
-  upsertTicket: (ticket) =>
+  upsertTicket: (ticket, channelId) =>
     set((state) => {
+      if (state.channelId && channelId !== state.channelId) return state;
       const cleaned = state.columns.map((col) => ({
         ...col,
         tickets: col.tickets.filter((t) => t.id !== ticket.id),
@@ -68,5 +71,5 @@ export const useKanbanStore = create<KanbanState>((set) => ({
       })),
     })),
 
-  clearBoard: () => set({ columns: [] }),
+  clearBoard: () => set({ columns: [], channelId: null }),
 }));

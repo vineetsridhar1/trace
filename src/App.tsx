@@ -354,6 +354,7 @@ function AppContent() {
 
       useAppUIStore.getState().setActiveAiChatId(null);
       switchChannel(channelId);
+      useKanbanStore.getState().clearBoard();
       useSyncStore.getState().reset();
 
       // Restore saved view for target channel (validated)
