@@ -8,12 +8,15 @@ function shouldSuppress(e: KeyboardEvent): boolean {
   const target = e.target as HTMLElement | null;
   if (!target) return false;
 
-  // Always allow modifier combos through
-  if (hasModifierKey(e)) return false;
-
   const tag = target.tagName;
   const isTextInput = tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
   const isXterm = target.classList?.contains('xterm-helper-textarea') ?? false;
+
+  // In text inputs, let native editing shortcuts (Cmd/Alt+Backspace/Delete) through
+  if (isTextInput && (e.key === 'Backspace' || e.key === 'Delete')) return true;
+
+  // Allow other modifier combos through
+  if (hasModifierKey(e)) return false;
 
   // Escape in any text input blurs it
   if (e.key === 'Escape' && (isTextInput || isXterm)) {
