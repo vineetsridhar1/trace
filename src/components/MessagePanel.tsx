@@ -10,6 +10,7 @@ import { ThreadLinkPreview } from './ThreadLinkPreview';
 import { PullRequestListView } from './PullRequestListView';
 import { useChannelMessages } from '../hooks/useChannelMessages';
 import { useAuth } from '../context/AuthContext';
+import { useClaudeRunStore } from '../stores/claudeRunStore';
 
 const THREAD_LINK_RE = /https?:\/\/[^\s/]+\/thread\/([a-f0-9-]+)\/([a-f0-9-]+)/g;
 
@@ -243,6 +244,20 @@ export function MessagePanel({
     (workspaceId: string) => {
       const workspace = workspaces.find((m) => m.id === workspaceId);
       if (workspace) onOpenWorkspace(workspace);
+    },
+    [workspaces, onOpenWorkspace],
+  );
+
+  const handleBoardCreatePR = useCallback(
+    (workspaceId: string) => {
+      // Open the workspace first, then send the /create-pr command
+      const workspace = workspaces.find((m) => m.id === workspaceId);
+      if (workspace) onOpenWorkspace(workspace);
+      // Send after a microtask so the workspace is selected
+      queueMicrotask(() => {
+        const { sendThreadMessage } = useClaudeRunStore.getState().workspaceActions;
+        void sendThreadMessage('/create-pr', [], []);
+      });
     },
     [workspaces, onOpenWorkspace],
   );
@@ -503,6 +518,7 @@ export function MessagePanel({
               onClickTicket={handleBoardClickTicket}
               onMoveTicket={onMoveTicket}
               onDeleteWorkspace={onDeleteWorkspace}
+              onCreatePR={handleBoardCreatePR}
             />
           ) : projectSubView === 'list' ? (
             <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-[#565f89]">

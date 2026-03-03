@@ -70,6 +70,8 @@ interface ThreadHeaderProps {
   onHandoff: () => void;
   prUrl: string | null;
   ciStatus: CIStatus | null;
+  canCreatePR: boolean;
+  onCreatePR: () => void;
   sessions: SessionInfo[];
   activeSessionId: string | null;
   onSwitchSession: (sessionId: string) => Promise<void>;
@@ -98,6 +100,8 @@ export const ThreadHeader = memo(function ThreadHeader({
   onHandoff,
   prUrl,
   ciStatus,
+  canCreatePR,
+  onCreatePR,
   sessions,
   activeSessionId,
   onSwitchSession,
@@ -279,7 +283,7 @@ export const ThreadHeader = memo(function ThreadHeader({
           )}
       </div>
       <div className="flex items-center gap-2">
-        {prUrl && (() => {
+        {prUrl ? (() => {
           const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
           let colorClass = 'text-green-400 border-green-400/50';
           let tooltip = 'Open pull request';
@@ -308,7 +312,18 @@ export const ThreadHeader = memo(function ThreadHeader({
               </button>
             </Tooltip>
           );
-        })()}
+        })() : canCreatePR && (
+          <Tooltip text="Create pull request" position="bottom">
+            <button
+              type="button"
+              onClick={onCreatePR}
+              className="inline-flex items-center gap-1.5 cursor-pointer rounded-md border border-[#565f89]/50 px-2 py-1 text-[11px] font-medium text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300 hover:bg-white/5"
+            >
+              <FiGitPullRequest className="h-3 w-3" aria-hidden="true" />
+              Create PR
+            </button>
+          </Tooltip>
+        )}
         {sessions.length > 1 && (
           <div className="relative" ref={historyRef}>
             <Tooltip text="Session history" position="bottom">

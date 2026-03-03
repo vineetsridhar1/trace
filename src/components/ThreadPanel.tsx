@@ -403,6 +403,18 @@ export function ThreadPanel() {
     }
   }, [activeChannelId, isClaudeRunning, executeHandoffWorkspace, enrichedActiveChannel]);
 
+  // ─── Create PR ─────────────────────────────────────────────────
+  const canCreatePR = Boolean(
+    selectedWorkspaceId &&
+    !ticket?.workspace?.prUrl &&
+    ticket?.workspace?.branch &&
+    !isClaudeRunning,
+  );
+
+  const handleCreatePR = useCallback(() => {
+    void sendThreadMessage('/create-pr', [], []);
+  }, [sendThreadMessage]);
+
   // ─── Memos ──────────────────────────────────────────────────────
   const lastUserMessageTime = useMemo(() => {
     for (let i = sessionNodes.length - 1; i >= 0; i--) {
@@ -524,6 +536,8 @@ export function ThreadPanel() {
           onMarkMerged={() => void markMerged()}
           prUrl={ticket?.workspace?.prUrl ?? null}
           ciStatus={ciStatus}
+          canCreatePR={canCreatePR}
+          onCreatePR={handleCreatePR}
           sessions={sessions}
           activeSessionId={activeSessionId}
           onSwitchSession={switchSession}

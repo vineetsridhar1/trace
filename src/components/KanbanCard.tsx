@@ -13,6 +13,7 @@ interface KanbanCardProps {
   onClickTicket: (workspaceId: string) => void;
   onDragStart: (ticketId: string) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
+  onCreatePR?: (workspaceId: string) => void;
 }
 
 export const KanbanCard = memo(function KanbanCard({
@@ -20,6 +21,7 @@ export const KanbanCard = memo(function KanbanCard({
   onClickTicket,
   onDragStart,
   onDeleteWorkspace,
+  onCreatePR,
 }: KanbanCardProps) {
   const ciStatus = useWorkspaceStore((s) => s.ciStatuses[ticket.workspaceId] ?? null);
   const prUrl = ticket.workspace?.prUrl ?? null;
@@ -90,7 +92,7 @@ export const KanbanCard = memo(function KanbanCard({
         {ticket.workspace.branch && (
           <CopyableBranch branch={ticket.workspace.branch} />
         )}
-        {prUrl && (() => {
+        {prUrl ? (() => {
           const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
           let colorClass = 'text-green-400 border-green-400/50';
           if (ciStatus) {
@@ -111,7 +113,19 @@ export const KanbanCard = memo(function KanbanCard({
               {prNumber ? `#${prNumber}` : 'PR'}
             </button>
           );
-        })()}
+        })() : onCreatePR && ticket.workspace.branch && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreatePR(ticket.workspaceId);
+            }}
+            className="inline-flex items-center gap-1 shrink-0 rounded border border-[#565f89]/50 px-1.5 py-0.5 text-[10px] font-medium text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300 hover:bg-white/5"
+          >
+            <FiGitPullRequest className="h-2.5 w-2.5" />
+            PR
+          </button>
+        )}
         <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] text-[#565f89]">
           {formatTime(ticket.createdAt)}
         </span>
