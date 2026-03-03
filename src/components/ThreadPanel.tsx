@@ -529,8 +529,12 @@ export function ThreadPanel() {
         />
 
         <div className="thread-panel-shell relative flex min-h-0 flex-1">
-          {viewMode === "ticket" && ticket ? (
-            <TicketView ticket={ticket} />
+          {viewMode === "ticket" ? (
+            ticket ? (
+              <TicketView ticket={ticket} />
+            ) : (
+              <TicketViewSkeleton />
+            )
           ) : viewMode === "files" ? (
             <WorktreeChanges
               workspaceId={selectedWorkspaceId}
@@ -791,6 +795,27 @@ export function ThreadPanel() {
           ))}
       </div>
     </>
+  );
+}
+
+function TicketViewSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
+      {/* Title */}
+      <div className="h-6 w-3/4 rounded bg-[#292e42] animate-pulse" />
+      {/* Status badges */}
+      <div className="mt-3 flex gap-2">
+        <div className="h-5 w-16 rounded-full bg-[#292e42] animate-pulse" />
+        <div className="h-5 w-20 rounded-full bg-[#292e42] animate-pulse" />
+      </div>
+      {/* Description lines */}
+      <div className="mt-5 flex flex-col gap-2">
+        <div className="h-4 w-full rounded bg-[#292e42] animate-pulse" />
+        <div className="h-4 w-5/6 rounded bg-[#292e42] animate-pulse" />
+        <div className="h-4 w-4/6 rounded bg-[#292e42] animate-pulse" />
+        <div className="h-4 w-3/4 rounded bg-[#292e42] animate-pulse" />
+      </div>
+    </div>
   );
 }
 

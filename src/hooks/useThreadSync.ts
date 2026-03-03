@@ -101,6 +101,8 @@ export function useThreadSync(
         });
         const cachedList = (cachedSessions?.sessions ?? []) as SessionInfo[];
         if (cachedList.length > 0) {
+          // Bail if workspace changed while reading cache
+          if (useThreadStore.getState().selectedWorkspaceId !== workspace.id) return;
           useThreadStore.getState().setSessions(cachedList);
           const latestCached = cachedList[cachedList.length - 1];
           useThreadStore.getState().setActiveSessionId(latestCached.id);

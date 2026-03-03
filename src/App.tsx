@@ -85,6 +85,7 @@ function AppContent() {
 
   // ─── Zustand store state ───────────────────────────────────────────
   const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const workspacesLoading = useWorkspaceStore((s) => s.loading);
   const attentionWorkspaceIds = useWorkspaceStore((s) => s.attentionWorkspaceIds);
   const worktreeWorkspaceIds = useWorkspaceStore((s) => s.worktreeWorkspaceIds);
   const deletingWorktreeIds = useWorkspaceStore((s) => s.deletingWorktreeIds);
@@ -355,6 +356,8 @@ function AppContent() {
       useAppUIStore.getState().setActiveAiChatId(null);
       switchChannel(channelId);
       useKanbanStore.getState().clearBoard();
+      useWorkspaceStore.getState().clearWorkspaces();
+      useKanbanStore.getState().setLoading(true);
       useSyncStore.getState().reset();
 
       // Restore saved view for target channel (validated)
@@ -779,6 +782,7 @@ function AppContent() {
                 repoPath={enrichedActiveChannel?.localRepoPath}
                 onPullPR={handlePullPR}
                 pullingPRNumbers={pullingPRNumbers}
+                workspacesLoading={workspacesLoading}
               />
             )}
           </div>

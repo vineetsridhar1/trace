@@ -99,6 +99,23 @@ function CollapsibleStatusGroup({
   );
 }
 
+function WorkspaceListSkeleton() {
+  return (
+    <div className="flex flex-col gap-1 px-1 py-2">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2.5">
+          <div className="h-8 w-8 flex-shrink-0 rounded-full bg-[#292e42] animate-pulse" />
+          <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+            <div className="h-3.5 w-3/5 rounded bg-[#292e42] animate-pulse" />
+            <div className="h-3 w-4/5 rounded bg-[#292e42] animate-pulse" />
+          </div>
+          <div className="h-4 w-4 flex-shrink-0 rounded bg-[#292e42] animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function formatMessageTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -131,6 +148,7 @@ interface MessagePanelProps {
   repoPath?: string | null;
   onPullPR?: (pr: PullRequest) => void;
   pullingPRNumbers?: Set<number>;
+  workspacesLoading?: boolean;
 }
 
 export function MessagePanel({
@@ -160,6 +178,7 @@ export function MessagePanel({
   repoPath,
   onPullPR,
   pullingPRNumbers,
+  workspacesLoading,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<'list' | 'board' | 'graph'>('board');
   const feedListRef = useRef<HTMLDivElement | null>(null);
@@ -538,7 +557,11 @@ export function MessagePanel({
                 onScroll={handleFeedScroll}
                 className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
               >
-                {renderGroupedWorkspaces(false)}
+                {workspacesLoading && workspaces.length === 0 ? (
+                  <WorkspaceListSkeleton />
+                ) : (
+                  renderGroupedWorkspaces(false)
+                )}
               </div>
               <WorkspaceInput />
             </div>

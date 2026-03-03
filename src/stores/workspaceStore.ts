@@ -10,6 +10,7 @@ export interface CIStatus {
 
 interface WorkspaceState {
   workspaces: Workspace[];
+  loading: boolean;
   attentionWorkspaceIds: Set<string>;
   worktreeWorkspaceIds: Set<string>;
   deletingWorktreeIds: Set<string>;
@@ -31,6 +32,7 @@ interface WorkspaceState {
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   workspaces: [],
+  loading: false,
   attentionWorkspaceIds: new Set(),
   worktreeWorkspaceIds: new Set(),
   deletingWorktreeIds: new Set(),
@@ -46,7 +48,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         next.push(workspace);
       }
       next.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      return { workspaces: next };
+      return { workspaces: next, loading: false };
     }),
 
   removeWorkspace: (workspaceId) =>
@@ -54,9 +56,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       workspaces: state.workspaces.filter((item) => item.id !== workspaceId),
     })),
 
-  setWorkspaces: (workspaces) => set({ workspaces }),
+  setWorkspaces: (workspaces) => set({ workspaces, loading: false }),
 
-  clearWorkspaces: () => set({ workspaces: [] }),
+  clearWorkspaces: () => set({ workspaces: [], loading: true }),
 
   addAttention: (workspaceId) =>
     set((state) => {
