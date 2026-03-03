@@ -1,31 +1,66 @@
-import { create } from 'zustand';
-import type { ClaudeModel, EffortLevel } from '../types';
+import { create } from "zustand";
+import type { ClaudeModel, EffortLevel, KanbanTicket } from "../types";
 
-export type PlanResponseMode = 'clear-context' | 'keep-context' | 'revise';
+export type PlanResponseMode = "clear-context" | "keep-context" | "revise";
 
 // Registerable action slots provided by useClaudeWorkspaceActions
 interface ClaudeWorkspaceActions {
-  sendMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
+  sendMessage: (
+    text: string,
+    attachmentIds?: string[],
+    filePaths?: string[],
+  ) => Promise<boolean>;
+  createWorkspaceForTicket: (ticket: KanbanTicket) => Promise<boolean>;
   runPendingWorkspace: (planMode: boolean, prompt: string) => Promise<void>;
-  autoRunQueuedTicket: (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => Promise<void>;
+  autoRunQueuedTicket: (
+    workspaceId: string,
+    runConfig: {
+      prompt: string;
+      model: string;
+      effort: string;
+      planMode: boolean;
+    },
+  ) => Promise<void>;
   stopClaude: () => Promise<void>;
-  sendThreadMessage: (text: string, attachmentIds?: string[], filePaths?: string[]) => Promise<boolean>;
-  sendPlanResponse: (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => Promise<void>;
+  sendThreadMessage: (
+    text: string,
+    attachmentIds?: string[],
+    filePaths?: string[],
+  ) => Promise<boolean>;
+  sendPlanResponse: (
+    text: string,
+    mode: PlanResponseMode,
+    planContent?: string,
+    planFilePath?: string,
+  ) => Promise<void>;
   mergeToMain: () => Promise<void>;
   markMerged: () => Promise<void>;
 }
 
-const noopWarn = (_name: string) => (..._args: unknown[]) => {};
+const noopWarn =
+  (_name: string) =>
+  (..._args: unknown[]) => {};
 
 const defaultWorkspaceActions: ClaudeWorkspaceActions = {
-  sendMessage: noopWarn('sendMessage') as ClaudeWorkspaceActions['sendMessage'],
-  runPendingWorkspace: noopWarn('runPendingWorkspace') as ClaudeWorkspaceActions['runPendingWorkspace'],
-  autoRunQueuedTicket: noopWarn('autoRunQueuedTicket') as ClaudeWorkspaceActions['autoRunQueuedTicket'],
-  stopClaude: noopWarn('stopClaude') as ClaudeWorkspaceActions['stopClaude'],
-  sendThreadMessage: noopWarn('sendThreadMessage') as ClaudeWorkspaceActions['sendThreadMessage'],
-  sendPlanResponse: noopWarn('sendPlanResponse') as ClaudeWorkspaceActions['sendPlanResponse'],
-  mergeToMain: noopWarn('mergeToMain') as ClaudeWorkspaceActions['mergeToMain'],
-  markMerged: noopWarn('markMerged') as ClaudeWorkspaceActions['markMerged'],
+  sendMessage: noopWarn("sendMessage") as ClaudeWorkspaceActions["sendMessage"],
+  createWorkspaceForTicket: noopWarn(
+    "createWorkspaceForTicket",
+  ) as ClaudeWorkspaceActions["createWorkspaceForTicket"],
+  runPendingWorkspace: noopWarn(
+    "runPendingWorkspace",
+  ) as ClaudeWorkspaceActions["runPendingWorkspace"],
+  autoRunQueuedTicket: noopWarn(
+    "autoRunQueuedTicket",
+  ) as ClaudeWorkspaceActions["autoRunQueuedTicket"],
+  stopClaude: noopWarn("stopClaude") as ClaudeWorkspaceActions["stopClaude"],
+  sendThreadMessage: noopWarn(
+    "sendThreadMessage",
+  ) as ClaudeWorkspaceActions["sendThreadMessage"],
+  sendPlanResponse: noopWarn(
+    "sendPlanResponse",
+  ) as ClaudeWorkspaceActions["sendPlanResponse"],
+  mergeToMain: noopWarn("mergeToMain") as ClaudeWorkspaceActions["mergeToMain"],
+  markMerged: noopWarn("markMerged") as ClaudeWorkspaceActions["markMerged"],
 };
 
 interface ClaudeRunState {
@@ -43,7 +78,11 @@ interface ClaudeRunState {
   registerWorkspaceActions: (actions: ClaudeWorkspaceActions) => void;
   clearWorkspaceActions: () => void;
 
-  setPendingRun: (workspaceId: string, prompt: string, filePaths: string[]) => void;
+  setPendingRun: (
+    workspaceId: string,
+    prompt: string,
+    filePaths: string[],
+  ) => void;
   clearPendingRun: () => void;
   setSelectedModel: (model: ClaudeModel) => void;
   setSelectedEffort: (effort: EffortLevel) => void;
@@ -60,10 +99,10 @@ interface ClaudeRunState {
 
 export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
   pendingRunWorkspaceId: null,
-  pendingRunInitialPrompt: '',
+  pendingRunInitialPrompt: "",
   pendingRunFilePaths: [],
-  selectedModel: 'opus',
-  selectedEffort: 'high',
+  selectedModel: "opus",
+  selectedEffort: "high",
   activeRunWorkspaceIds: new Set(),
   spawnedWorkspaceIds: new Set(),
   handoffPickedUpIds: new Set(),
@@ -71,7 +110,8 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
   // Registered workspace actions
   workspaceActions: { ...defaultWorkspaceActions },
   registerWorkspaceActions: (actions) => set({ workspaceActions: actions }),
-  clearWorkspaceActions: () => set({ workspaceActions: { ...defaultWorkspaceActions } }),
+  clearWorkspaceActions: () =>
+    set({ workspaceActions: { ...defaultWorkspaceActions } }),
 
   setPendingRun: (workspaceId, prompt, filePaths) =>
     set({
@@ -83,7 +123,7 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
   clearPendingRun: () =>
     set({
       pendingRunWorkspaceId: null,
-      pendingRunInitialPrompt: '',
+      pendingRunInitialPrompt: "",
       pendingRunFilePaths: [],
     }),
 
@@ -108,7 +148,9 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
 
   clearAllActiveRuns: () =>
     set((state) =>
-      state.activeRunWorkspaceIds.size === 0 ? state : { activeRunWorkspaceIds: new Set() },
+      state.activeRunWorkspaceIds.size === 0
+        ? state
+        : { activeRunWorkspaceIds: new Set() },
     ),
 
   addSpawnedWorkspace: (workspaceId) =>
@@ -125,7 +167,8 @@ export const useClaudeRunStore = create<ClaudeRunState>((set, get) => ({
       return { spawnedWorkspaceIds: next };
     }),
 
-  isWorkspaceSpawned: (workspaceId) => get().spawnedWorkspaceIds.has(workspaceId),
+  isWorkspaceSpawned: (workspaceId) =>
+    get().spawnedWorkspaceIds.has(workspaceId),
 
   addHandoffPickedUp: (workspaceId) =>
     set((state) => {

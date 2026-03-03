@@ -698,13 +698,25 @@ export function MessagePanel({
           ticket={selectedTicket}
           onClose={() => setSelectedTicket(null)}
           onOpenWorkspace={
-            selectedTicket.workspaceId
+            selectedTicket.workspaceId &&
+            workspaces.some((w) => w.id === selectedTicket.workspaceId)
               ? () => {
                   const workspace = workspaces.find(
                     (w) => w.id === selectedTicket.workspaceId,
                   );
                   setSelectedTicket(null);
                   if (workspace) onOpenWorkspace(workspace);
+                }
+              : undefined
+          }
+          onCreateWorkspace={
+            !selectedTicket.workspaceId
+              ? () => {
+                  const ticket = selectedTicket;
+                  setSelectedTicket(null);
+                  void useClaudeRunStore
+                    .getState()
+                    .workspaceActions.createWorkspaceForTicket(ticket);
                 }
               : undefined
           }

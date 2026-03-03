@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { gql } from "@apollo/client";
-import type { Workspace, TicketStatus } from "../types";
+import type { Workspace, KanbanTicket, TicketStatus } from "../types";
 import type { PlanResponseMode } from "../stores/claudeRunStore";
 import { WORKSPACE_FIELDS } from "../graphql/fragments";
 import {
@@ -16,98 +16,17 @@ import { useChannelContext } from "../context/ChannelContext";
 import { useAppUIStore } from "../stores/appUIStore";
 import { useTerminalStore } from "../stores/terminalStore";
 
-const GQL_CREATE_WORKSPACE = gql`
-  mutation CreateWorkspace(
-    $channelId: ID!
-    $text: String!
-    $attachmentIds: [String!]
-  ) {
-    createWorkspace(
-      channelId: $channelId
-      text: $text
-      attachmentIds: $attachmentIds
-    ) {
-      workspace {
-        ...WorkspaceFields
-      }
-      session {
-        id
-        workspaceId
-        createdAt
-        eventCount
-      }
-      event {
-        id
-        cliSessionId
-        hookEventName
-        timestamp
-        sessionId
-        importance
-      }
-    }
-  }
-  ${WORKSPACE_FIELDS}
-`;
-
-const GQL_APPEND_PROMPT = gql`
-  mutation AppendPrompt(
-    $channelId: ID!
-    $workspaceId: ID!
-    $text: String!
-    $attachmentIds: [String!]
-    $createNewSession: Boolean
-    $sessionId: ID
-  ) {
-    appendPrompt(
-      channelId: $channelId
-      workspaceId: $workspaceId
-      text: $text
-      attachmentIds: $attachmentIds
-      createNewSession: $createNewSession
-      sessionId: $sessionId
-    ) {
-      workspace {
-        ...WorkspaceFields
-      }
-      session {
-        id
-        workspaceId
-        createdAt
-        eventCount
-      }
-      event {
-        id
-        cliSessionId
-        hookEventName
-        timestamp
-        sessionId
-        importance
-      }
-    }
-  }
-  ${WORKSPACE_FIELDS}
-`;
-
-const GQL_UPDATE_PREVIEW = gql`
-  mutation UpdateWorkspacePreview(
-    $channelId: ID!
-    $workspaceId: ID!
-    $preview: String!
-  ) {
-    updateWorkspacePreview(
-      channelId: $channelId
-      workspaceId: $workspaceId
-      preview: $preview
-    ) {
-      ...WorkspaceFields
-    }
-  }
-  ${WORKSPACE_FIELDS}
-`;
-
 const GQL_UPDATE_INITIAL_PROMPT = gql`
-  mutation UpdateInitialPrompt($channelId: ID!, $workspaceId: ID!, $text: String!) {
-    updateInitialPrompt(channelId: $channelId, workspaceId: $workspaceId, text: $text) {
+  mutation UpdateInitialPrompt(
+    $channelId: ID!
+    $workspaceId: ID!
+    $text: String!
+  ) {
+    updateInitialPrompt(
+      channelId: $channelId
+      workspaceId: $workspaceId
+      text: $text
+    ) {
       workspace {
         ...WorkspaceFields
       }
@@ -243,7 +162,9 @@ export function useClaudeWorkspaceActions({
         }
 
         if (result.setupOutput) {
-          useTerminalStore.getState().setSetupOutput(workspaceId, result.setupOutput);
+          useTerminalStore
+            .getState()
+            .setSetupOutput(workspaceId, result.setupOutput);
         }
 
         if (options.setHasWorktreeOnSuccess !== false) {
@@ -360,6 +281,34 @@ export function useClaudeWorkspaceActions({
         return true;
       } catch {
         console.error("Failed to create workspace");
+        return false;
+      }
+    },
+    [executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
+  );
+
+  const createWorkspaceForTicket = useCallback(
+    async (ticket: KanbanTicket) => {
+      const chId = activeChannelIdRef.current;
+      if (!chId) return false;
+
+      const parts = [ticket.title];
+      if (ticket.description) parts.push(ticket.description);
+      if (ticket.solutionApproach) parts.push(ticket.solutionApproach);
+      const text = parts.join("\n\n");
+
+      try {
+        const { data } = await executeCreateWorkspace({
+          variables: { channelId: chId, text, ticketId: ticket.id },
+        });
+        if (!data?.createWorkspace) return false;
+        const workspace = data.createWorkspace.workspace as Workspace;
+        upsertWorkspace(workspace);
+        onWorkspaceCreated(workspace);
+        useClaudeRunStore.getState().setPendingRun(workspace.id, text, []);
+        return true;
+      } catch {
+        console.error("Failed to create workspace for ticket");
         return false;
       }
     },
@@ -779,7 +728,11 @@ export function useClaudeWorkspaceActions({
     const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
     const chId = activeChannelIdRef.current;
     if (!selectedWorkspace || !chId) return;
-    if (selectedWorkspace.status !== "completed" && selectedWorkspace.status !== "in_progress") return;
+    if (
+      selectedWorkspace.status !== "completed" &&
+      selectedWorkspace.status !== "in_progress"
+    )
+      return;
     await updateWorkspaceStatus(selectedWorkspace.id, "merged");
   }, [updateWorkspaceStatus]);
 
@@ -787,6 +740,7 @@ export function useClaudeWorkspaceActions({
   useEffect(() => {
     useClaudeRunStore.getState().registerWorkspaceActions({
       sendMessage,
+      createWorkspaceForTicket,
       runPendingWorkspace,
       autoRunQueuedTicket,
       stopClaude,
@@ -798,6 +752,7 @@ export function useClaudeWorkspaceActions({
     return () => useClaudeRunStore.getState().clearWorkspaceActions();
   }, [
     sendMessage,
+    createWorkspaceForTicket,
     runPendingWorkspace,
     autoRunQueuedTicket,
     stopClaude,
@@ -809,6 +764,7 @@ export function useClaudeWorkspaceActions({
 
   return {
     sendMessage,
+    createWorkspaceForTicket,
     runPendingWorkspace,
     autoRunQueuedTicket,
     stopClaude,

@@ -1,11 +1,18 @@
-import type { MutationResolvers } from './../../../types.generated';
-import { createUserWorkspace } from '../../../../services/workspaceService';
-import { getChannel } from '../../../../services/channelService';
-import { pubsub, TOPICS } from '../../../../services/pubsub';
-import { createTicketForWorkspace } from '../../../../services/ticketService';
+import type { MutationResolvers } from "./../../../types.generated";
+import { createUserWorkspace } from "../../../../services/workspaceService";
+import { getChannel } from "../../../../services/channelService";
+import { pubsub, TOPICS } from "../../../../services/pubsub";
+import {
+  createTicketForWorkspace,
+  linkTicketToWorkspace,
+} from "../../../../services/ticketService";
 
-export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> = async (_parent, { channelId, text, attachmentIds }, _ctx) => {
-  const created = await createUserWorkspace(channelId, text.trim(), attachmentIds ?? undefined);
+export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> = async (_parent, { channelId, text, attachmentIds, ticketId }, _ctx) => {
+  const created = await createUserWorkspace(
+    channelId,
+    text.trim(),
+    attachmentIds ?? undefined,
+  );
 
   pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
     workspaceUpserted: created.workspace,
@@ -19,14 +26,19 @@ export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> 
     },
   });
 
-  // Fire-and-forget: create a kanban ticket
-  const channel = await getChannel(channelId);
-  void createTicketForWorkspace(
-    created.workspace.id,
-    channelId,
-    text.trim(),
-    channel?.name ?? 'general',
-  );
+  if (ticketId) {
+    // Link existing ticket to the new workspace
+    void linkTicketToWorkspace(ticketId, created.workspace.id, channelId);
+  } else {
+    // Fire-and-forget: create a kanban ticket
+    const channel = await getChannel(channelId);
+    void createTicketForWorkspace(
+      created.workspace.id,
+      channelId,
+      text.trim(),
+      channel?.name ?? "general",
+    );
+  }
 
   return created;
 };

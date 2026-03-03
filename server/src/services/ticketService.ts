@@ -1,16 +1,33 @@
-import prisma from '../lib/prisma';
-import { pubsub, TOPICS } from './pubsub';
-import { generateTicketFromMessage, updateTicketFromContext } from './ticketAiService';
-import { getStorage } from './storageService';
+import prisma from "../lib/prisma";
+import { pubsub, TOPICS } from "./pubsub";
+import {
+  generateTicketFromMessage,
+  updateTicketFromContext,
+} from "./ticketAiService";
+import { getStorage } from "./storageService";
 
-function resolveTicketAttachmentUrls<T extends { workspace: { attachments: { id: string; key: string; filename: string; contentType: string }[] } | null }>(ticket: T) {
+function resolveTicketAttachmentUrls<
+  T extends {
+    workspace: {
+      attachments: {
+        id: string;
+        key: string;
+        filename: string;
+        contentType: string;
+      }[];
+    } | null;
+  },
+>(ticket: T) {
   if (!ticket.workspace) return ticket;
   const storage = getStorage();
   return {
     ...ticket,
     workspace: {
       ...ticket.workspace,
-      attachments: ticket.workspace.attachments.map((a) => ({ ...a, url: storage.url(a.key) })),
+      attachments: ticket.workspace.attachments.map((a) => ({
+        ...a,
+        url: storage.url(a.key),
+      })),
     },
   };
 }
@@ -21,38 +38,42 @@ const TICKET_WORKSPACE_SELECT = {
   prUrl: true,
   status: true,
   createdAt: true,
-  attachments: { select: { id: true, key: true, filename: true, contentType: true } },
+  attachments: {
+    select: { id: true, key: true, filename: true, contentType: true },
+  },
 } as const;
 
 const DEFAULT_COLUMNS = [
-  { name: 'TODO', slug: 'todo', color: '#f7768e', sortOrder: 0 },
-  { name: 'In Progress', slug: 'in_progress', color: '#7aa2f7', sortOrder: 1 },
-  { name: 'In Review', slug: 'in_review', color: '#e0af68', sortOrder: 2 },
-  { name: 'Completed', slug: 'completed', color: '#9ece6a', sortOrder: 3 },
-  { name: 'Merged', slug: 'merged', color: '#bb9af7', sortOrder: 4 },
+  { name: "TODO", slug: "todo", color: "#f7768e", sortOrder: 0 },
+  { name: "In Progress", slug: "in_progress", color: "#7aa2f7", sortOrder: 1 },
+  { name: "In Review", slug: "in_review", color: "#e0af68", sortOrder: 2 },
+  { name: "Completed", slug: "completed", color: "#9ece6a", sortOrder: 3 },
+  { name: "Merged", slug: "merged", color: "#bb9af7", sortOrder: 4 },
 ];
 
 const STATUS_TO_SLUG: Record<string, string> = {
-  pending: 'todo',
-  queued: 'todo',
-  handed_off: 'todo',
-  creation: 'in_progress',
-  in_progress: 'in_progress',
-  needs_input: 'in_review',
-  review: 'in_review',
-  completed: 'completed',
-  merged: 'merged',
+  pending: "todo",
+  queued: "todo",
+  handed_off: "todo",
+  creation: "in_progress",
+  in_progress: "in_progress",
+  needs_input: "in_review",
+  review: "in_review",
+  completed: "completed",
+  merged: "merged",
 };
 
 export async function ensureKanbanColumns(channelId: string) {
   const existing = await prisma.kanbanColumn.findMany({
     where: { channelId },
-    orderBy: { sortOrder: 'asc' },
+    orderBy: { sortOrder: "asc" },
   });
 
   if (existing.length === 0) {
     // Verify the channel exists before creating columns
-    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+    });
     if (!channel) return [];
 
     const columns = await prisma.$transaction(
@@ -79,7 +100,7 @@ export async function ensureKanbanColumns(channelId: string) {
     );
     return prisma.kanbanColumn.findMany({
       where: { channelId },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: { sortOrder: "asc" },
     });
   }
 
@@ -91,10 +112,10 @@ export async function getBoard(channelId: string) {
 
   const columnsWithTickets = await prisma.kanbanColumn.findMany({
     where: { channelId },
-    orderBy: { sortOrder: 'asc' },
+    orderBy: { sortOrder: "asc" },
     include: {
       tickets: {
-        orderBy: { sortOrder: 'asc' },
+        orderBy: { sortOrder: "asc" },
         include: {
           workspace: {
             select: TICKET_WORKSPACE_SELECT,
@@ -114,7 +135,7 @@ export async function createTicketForWorkspace(
   channelName: string,
 ) {
   const columns = await ensureKanbanColumns(channelId);
-  const todoColumn = columns.find((col) => col.slug === 'todo');
+  const todoColumn = columns.find((col) => col.slug === "todo");
   if (!todoColumn) return null;
 
   // Check if ticket already exists for this workspace
@@ -162,6 +183,31 @@ export async function createTicketForWorkspace(
   return ticket;
 }
 
+export async function linkTicketToWorkspace(
+  ticketId: string,
+  workspaceId: string,
+  channelId: string,
+) {
+  const ticket = await prisma.ticket.update({
+    where: { id: ticketId },
+    data: { workspaceId },
+    include: {
+      column: true,
+      workspace: { select: TICKET_WORKSPACE_SELECT },
+    },
+  });
+
+  pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+    ticketUpserted: {
+      channelId,
+      ticket: resolveTicketAttachmentUrls(ticket),
+      columnSlug: ticket.column.slug,
+    },
+  });
+
+  return ticket;
+}
+
 export async function updateTicketFromEvent(
   workspaceId: string,
   channelId: string,
@@ -175,7 +221,11 @@ export async function updateTicketFromEvent(
   if (!ticket) return null;
 
   const update = await updateTicketFromContext(
-    { title: ticket.title, description: ticket.description, solutionApproach: ticket.solutionApproach },
+    {
+      title: ticket.title,
+      description: ticket.description,
+      solutionApproach: ticket.solutionApproach,
+    },
     eventsContext,
     summary,
   );
@@ -186,7 +236,8 @@ export async function updateTicketFromEvent(
   if (update.description) data.description = update.description;
   if (update.solutionApproach) data.solutionApproach = update.solutionApproach;
   if (update.status) data.status = update.status;
-  if (update.metadata) data.metadata = JSON.parse(JSON.stringify(update.metadata));
+  if (update.metadata)
+    data.metadata = JSON.parse(JSON.stringify(update.metadata));
 
   if (Object.keys(data).length === 0) return ticket;
 
@@ -212,7 +263,11 @@ export async function updateTicketFromEvent(
   return updated;
 }
 
-export async function moveTicket(ticketId: string, columnId: string, sortOrder: number) {
+export async function moveTicket(
+  ticketId: string,
+  columnId: string,
+  sortOrder: number,
+) {
   const ticket = await prisma.ticket.update({
     where: { id: ticketId },
     data: { columnId, sortOrder },
@@ -252,7 +307,7 @@ export async function syncTicketWithWorkspaceStatus(
   if (!ticket) return null;
 
   // Don't move backwards (e.g., don't move from "merged" to "completed")
-  if (ticket.column.slug === 'merged') {
+  if (ticket.column.slug === "merged") {
     await refreshTicketBroadcast(workspaceId, channelId);
     return null;
   }
@@ -297,7 +352,10 @@ export async function syncTicketWithWorkspaceStatus(
   return updated;
 }
 
-export async function refreshTicketBroadcast(workspaceId: string, channelId: string) {
+export async function refreshTicketBroadcast(
+  workspaceId: string,
+  channelId: string,
+) {
   const ticket = await prisma.ticket.findUnique({
     where: { workspaceId },
     include: {
@@ -316,7 +374,10 @@ export async function refreshTicketBroadcast(workspaceId: string, channelId: str
   });
 }
 
-export async function checkAndTriggerDependents(completedWorkspaceId: string, channelId: string) {
+export async function checkAndTriggerDependents(
+  completedWorkspaceId: string,
+  channelId: string,
+) {
   try {
     // Find all dependencies where the completed workspace is a dependency target
     const waitingDeps = await prisma.ticketDependency.findMany({
@@ -324,7 +385,9 @@ export async function checkAndTriggerDependents(completedWorkspaceId: string, ch
       select: { ticketWorkspaceId: true },
     });
 
-    const uniqueTicketIds = [...new Set(waitingDeps.map((d) => d.ticketWorkspaceId))];
+    const uniqueTicketIds = [
+      ...new Set(waitingDeps.map((d) => d.ticketWorkspaceId)),
+    ];
 
     for (const ticketWorkspaceId of uniqueTicketIds) {
       // Get all deps for this waiting ticket
@@ -336,14 +399,14 @@ export async function checkAndTriggerDependents(completedWorkspaceId: string, ch
       });
 
       // Check if ALL dependencies are merged
-      const allMet = allDeps.every((dep) => dep.dependsOn.status === 'merged');
+      const allMet = allDeps.every((dep) => dep.dependsOn.status === "merged");
       if (!allMet) continue;
 
       // Atomically claim the ticket: only proceed if status is still 'queued'.
       // This prevents double-fire when two deps complete near-simultaneously.
       const { count } = await prisma.workspace.updateMany({
-        where: { id: ticketWorkspaceId, status: 'queued' },
-        data: { status: 'creation' },
+        where: { id: ticketWorkspaceId, status: "queued" },
+        data: { status: "creation" },
       });
       if (count === 0) continue;
 
@@ -364,11 +427,16 @@ export async function checkAndTriggerDependents(completedWorkspaceId: string, ch
       });
     }
   } catch (err) {
-    console.error('[ticketService] checkAndTriggerDependents failed:', err);
+    console.error("[ticketService] checkAndTriggerDependents failed:", err);
   }
 }
 
-export async function createColumn(channelId: string, name: string, slug: string, color?: string) {
+export async function createColumn(
+  channelId: string,
+  name: string,
+  slug: string,
+  color?: string,
+) {
   const maxSort = await prisma.kanbanColumn.aggregate({
     where: { channelId },
     _max: { sortOrder: true },
@@ -385,7 +453,10 @@ export async function createColumn(channelId: string, name: string, slug: string
   });
 }
 
-export async function updateColumn(columnId: string, data: { name?: string; color?: string; sortOrder?: number }) {
+export async function updateColumn(
+  columnId: string,
+  data: { name?: string; color?: string; sortOrder?: number },
+) {
   return prisma.kanbanColumn.update({
     where: { id: columnId },
     data,

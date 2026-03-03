@@ -7,12 +7,14 @@ interface TicketDetailModalProps {
   ticket: KanbanTicket;
   onClose: () => void;
   onOpenWorkspace?: () => void;
+  onCreateWorkspace?: () => void;
 }
 
 export function TicketDetailModal({
   ticket,
   onClose,
   onOpenWorkspace,
+  onCreateWorkspace,
 }: TicketDetailModalProps) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -47,15 +49,25 @@ export function TicketDetailModal({
           <TicketView ticket={ticket} />
         </div>
 
-        {onOpenWorkspace && (
+        {(onOpenWorkspace || onCreateWorkspace) && (
           <div className="flex justify-end border-t border-edge px-5 py-3">
-            <button
-              type="button"
-              onClick={onOpenWorkspace}
-              className="btn-primary rounded px-3 py-1.5 text-xs font-medium text-on-accent"
-            >
-              Open Workspace
-            </button>
+            {onOpenWorkspace ? (
+              <button
+                type="button"
+                onClick={onOpenWorkspace}
+                className="btn-primary rounded px-3 py-1.5 text-xs font-medium text-on-accent"
+              >
+                Open Workspace
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onCreateWorkspace}
+                className="btn-primary rounded px-3 py-1.5 text-xs font-medium text-on-accent"
+              >
+                Create Workspace
+              </button>
+            )}
           </div>
         )}
       </div>

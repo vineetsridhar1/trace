@@ -15,7 +15,7 @@ import {
   useDeleteWorkspaceMutation,
   useSetWorkspacePrUrlMutation,
 } from "./__generated__/App.generated";
-import { useCreateWorkspaceMutation } from "./hooks/__generated__/useClaudeWorkspaceActions.generated";
+import { useCreateWorkspaceMutation } from "./hooks/__generated__/useClaudeMessageActions.generated";
 import { useWorkspaceSync } from "./hooks/useWorkspaceSync";
 import { useThreadSync } from "./hooks/useThreadSync";
 import { usePanelResize } from "./hooks/usePanelResize";

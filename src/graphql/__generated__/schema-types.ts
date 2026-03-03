@@ -273,6 +273,7 @@ export type MutationCreateWorkspaceArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
+  ticketId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 

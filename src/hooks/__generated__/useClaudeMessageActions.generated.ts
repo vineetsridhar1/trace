@@ -8,6 +8,7 @@ export type CreateWorkspaceMutationVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
   text: Types.Scalars['String']['input'];
   attachmentIds?: Types.InputMaybe<Array<Types.Scalars['String']['input']> | Types.Scalars['String']['input']>;
+  ticketId?: Types.InputMaybe<Types.Scalars['ID']['input']>;
 }>;
 
 
@@ -36,11 +37,12 @@ export type UpdateWorkspacePreviewMutation = { __typename?: 'Mutation', updateWo
 
 
 export const CreateWorkspaceDocument = gql`
-    mutation CreateWorkspace($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
+    mutation CreateWorkspace($channelId: ID!, $text: String!, $attachmentIds: [String!], $ticketId: ID) {
   createWorkspace(
     channelId: $channelId
     text: $text
     attachmentIds: $attachmentIds
+    ticketId: $ticketId
   ) {
     workspace {
       ...WorkspaceFields
@@ -80,6 +82,7 @@ export type CreateWorkspaceMutationFn = Apollo.MutationFunction<CreateWorkspaceM
  *      channelId: // value for 'channelId'
  *      text: // value for 'text'
  *      attachmentIds: // value for 'attachmentIds'
+ *      ticketId: // value for 'ticketId'
  *   },
  * });
  */

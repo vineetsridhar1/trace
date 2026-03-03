@@ -1,19 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { gql } from '@apollo/client';
-import type { Dispatch, RefObject, SetStateAction } from 'react';
-import type { Workspace, ServerEvent, TicketStatus, ClaudeModel, EffortLevel } from '../types';
-import type { PlanResponseMode } from '../stores/claudeRunStore';
-import { WORKSPACE_FIELDS } from '../graphql/fragments';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { gql } from "@apollo/client";
+import type { Dispatch, RefObject, SetStateAction } from "react";
+import type {
+  Workspace,
+  ServerEvent,
+  TicketStatus,
+  ClaudeModel,
+  EffortLevel,
+} from "../types";
+import type { PlanResponseMode } from "../stores/claudeRunStore";
+import { WORKSPACE_FIELDS } from "../graphql/fragments";
 import {
   useCreateWorkspaceMutation,
   useAppendPromptMutation,
   useUpdateWorkspacePreviewMutation,
-} from './__generated__/useClaudeMessageActions.generated';
-import { useTerminalStore } from '../stores/terminalStore';
+} from "./__generated__/useClaudeMessageActions.generated";
+import { useTerminalStore } from "../stores/terminalStore";
 
 const GQL_CREATE_WORKSPACE = gql`
-  mutation CreateWorkspace($channelId: ID!, $text: String!, $attachmentIds: [String!]) {
-    createWorkspace(channelId: $channelId, text: $text, attachmentIds: $attachmentIds) {
+  mutation CreateWorkspace(
+    $channelId: ID!
+    $text: String!
+    $attachmentIds: [String!]
+    $ticketId: ID
+  ) {
+    createWorkspace(
+      channelId: $channelId
+      text: $text
+      attachmentIds: $attachmentIds
+      ticketId: $ticketId
+    ) {
       workspace {
         ...WorkspaceFields
       }
@@ -37,8 +53,22 @@ const GQL_CREATE_WORKSPACE = gql`
 `;
 
 const GQL_APPEND_PROMPT = gql`
-  mutation AppendPrompt($channelId: ID!, $workspaceId: ID!, $text: String!, $attachmentIds: [String!], $createNewSession: Boolean, $sessionId: ID) {
-    appendPrompt(channelId: $channelId, workspaceId: $workspaceId, text: $text, attachmentIds: $attachmentIds, createNewSession: $createNewSession, sessionId: $sessionId) {
+  mutation AppendPrompt(
+    $channelId: ID!
+    $workspaceId: ID!
+    $text: String!
+    $attachmentIds: [String!]
+    $createNewSession: Boolean
+    $sessionId: ID
+  ) {
+    appendPrompt(
+      channelId: $channelId
+      workspaceId: $workspaceId
+      text: $text
+      attachmentIds: $attachmentIds
+      createNewSession: $createNewSession
+      sessionId: $sessionId
+    ) {
       workspace {
         ...WorkspaceFields
       }
@@ -62,8 +92,16 @@ const GQL_APPEND_PROMPT = gql`
 `;
 
 const GQL_UPDATE_PREVIEW = gql`
-  mutation UpdateWorkspacePreview($channelId: ID!, $workspaceId: ID!, $preview: String!) {
-    updateWorkspacePreview(channelId: $channelId, workspaceId: $workspaceId, preview: $preview) {
+  mutation UpdateWorkspacePreview(
+    $channelId: ID!
+    $workspaceId: ID!
+    $preview: String!
+  ) {
+    updateWorkspacePreview(
+      channelId: $channelId
+      workspaceId: $workspaceId
+      preview: $preview
+    ) {
       ...WorkspaceFields
     }
   }
@@ -82,7 +120,10 @@ interface UseClaudeWorkspaceActionsOptions {
   loadSessionEvents: (workspace: Workspace) => Promise<void>;
   upsertWorkspace: (workspace: Workspace) => void;
   setHasWorktree: Dispatch<SetStateAction<boolean | null>>;
-  updateWorkspaceStatus: (workspaceId: string, status: TicketStatus) => Promise<void>;
+  updateWorkspaceStatus: (
+    workspaceId: string,
+    status: TicketStatus,
+  ) => Promise<void>;
   getSetupCommands: () => string[];
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
@@ -126,10 +167,12 @@ export function useClaudeWorkspaceActions({
   const [executeUpdatePreview] = useUpdateWorkspacePreviewMutation();
 
   const spawnedWorkspaceIdsRef = useRef(new Set<string>());
-  const [activeRunWorkspaceIds, setActiveRunWorkspaceIds] = useState(() => new Set<string>());
+  const [activeRunWorkspaceIds, setActiveRunWorkspaceIds] = useState(
+    () => new Set<string>(),
+  );
 
   const addActiveRun = useCallback((workspaceId: string) => {
-    setActiveRunWorkspaceIds(prev => {
+    setActiveRunWorkspaceIds((prev) => {
       if (prev.has(workspaceId)) return prev;
       const next = new Set(prev);
       next.add(workspaceId);
@@ -138,7 +181,7 @@ export function useClaudeWorkspaceActions({
   }, []);
 
   const clearActiveRun = useCallback((workspaceId: string) => {
-    setActiveRunWorkspaceIds(prev => {
+    setActiveRunWorkspaceIds((prev) => {
       if (!prev.has(workspaceId)) return prev;
       const next = new Set(prev);
       next.delete(workspaceId);
@@ -149,16 +192,16 @@ export function useClaudeWorkspaceActions({
   // Clear active runs when switching channels — Stop events from the old
   // channel's subscription are lost, so stale entries would never be cleared.
   useEffect(() => {
-    setActiveRunWorkspaceIds(prev => prev.size === 0 ? prev : new Set());
+    setActiveRunWorkspaceIds((prev) => (prev.size === 0 ? prev : new Set()));
   }, [activeChannelId]);
 
-  const [pendingRunWorkspaceId, setPendingRunWorkspaceId] = useState<string | null>(
-    null,
-  );
-  const [pendingRunInitialPrompt, setPendingRunInitialPrompt] = useState('');
+  const [pendingRunWorkspaceId, setPendingRunWorkspaceId] = useState<
+    string | null
+  >(null);
+  const [pendingRunInitialPrompt, setPendingRunInitialPrompt] = useState("");
   const [pendingRunFilePaths, setPendingRunFilePaths] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<ClaudeModel>('opus');
-  const [selectedEffort, setSelectedEffort] = useState<EffortLevel>('high');
+  const [selectedModel, setSelectedModel] = useState<ClaudeModel>("opus");
+  const [selectedEffort, setSelectedEffort] = useState<EffortLevel>("high");
 
   const spawnClaudeForWorkspace = useCallback(
     async (workspaceId: string, prompt: string, options: SpawnOptions) => {
@@ -167,7 +210,19 @@ export function useClaudeWorkspaceActions({
       try {
         const repoPath = getChannelRepoPath();
         const baseBranch = options.baseBranch ?? getChannelBaseBranch();
-        const result = await window.traceAPI.spawnClaude(workspaceId, prompt, repoPath, options.creationCommands, options.resumeSessionId, options.filePaths, options.model, options.effort, options.systemInstructions, options.permissionMode, baseBranch);
+        const result = await window.traceAPI.spawnClaude(
+          workspaceId,
+          prompt,
+          repoPath,
+          options.creationCommands,
+          options.resumeSessionId,
+          options.filePaths,
+          options.model,
+          options.effort,
+          options.systemInstructions,
+          options.permissionMode,
+          baseBranch,
+        );
 
         if (!result.success) {
           spawnedWorkspaceIdsRef.current.delete(workspaceId);
@@ -177,7 +232,9 @@ export function useClaudeWorkspaceActions({
         }
 
         if (result.setupOutput) {
-          useTerminalStore.getState().setSetupOutput(workspaceId, result.setupOutput);
+          useTerminalStore
+            .getState()
+            .setSetupOutput(workspaceId, result.setupOutput);
         }
 
         if (options.setHasWorktreeOnSuccess !== false) {
@@ -196,7 +253,14 @@ export function useClaudeWorkspaceActions({
         return false;
       }
     },
-    [addActiveRun, clearActiveRun, getChannelBaseBranch, getChannelRepoPath, setHasWorktree, updateWorkspaceStatus],
+    [
+      addActiveRun,
+      clearActiveRun,
+      getChannelBaseBranch,
+      getChannelRepoPath,
+      setHasWorktree,
+      updateWorkspaceStatus,
+    ],
   );
 
   const updatePreviewForPendingRun = useCallback(
@@ -222,7 +286,14 @@ export function useClaudeWorkspaceActions({
   );
 
   const persistPrompt = useCallback(
-    async (workspaceId: string, text: string, errorLabel: string, attachmentIds?: string[], createNewSession?: boolean, sessionId?: string) => {
+    async (
+      workspaceId: string,
+      text: string,
+      errorLabel: string,
+      attachmentIds?: string[],
+      createNewSession?: boolean,
+      sessionId?: string,
+    ) => {
       if (!activeChannelId) return null;
 
       try {
@@ -253,7 +324,13 @@ export function useClaudeWorkspaceActions({
         return null;
       }
     },
-    [activeChannelId, executeAppendPrompt, loadSessionEvents, selectedWorkspaceIdRef, upsertWorkspace],
+    [
+      activeChannelId,
+      executeAppendPrompt,
+      loadSessionEvents,
+      selectedWorkspaceIdRef,
+      upsertWorkspace,
+    ],
   );
 
   const sendMessage = useCallback(
@@ -280,11 +357,16 @@ export function useClaudeWorkspaceActions({
         setPendingRunFilePaths(filePaths ?? []);
         return true;
       } catch {
-        console.error('Failed to create workspace');
+        console.error("Failed to create workspace");
         return false;
       }
     },
-    [activeChannelId, executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
+    [
+      activeChannelId,
+      executeCreateWorkspace,
+      onWorkspaceCreated,
+      upsertWorkspace,
+    ],
   );
 
   const runPendingWorkspace = useCallback(
@@ -297,20 +379,21 @@ export function useClaudeWorkspaceActions({
       const workspaceId = pendingRunWorkspaceId;
       const filePaths = pendingRunFilePaths;
       setPendingRunWorkspaceId(null);
-      setPendingRunInitialPrompt('');
+      setPendingRunInitialPrompt("");
       setPendingRunFilePaths([]);
 
       const setupCommands = getSetupCommands();
 
       if (setupCommands.length > 0) {
-        await updateWorkspaceStatus(workspaceId, 'creation');
+        await updateWorkspaceStatus(workspaceId, "creation");
       }
 
       await updatePreviewForPendingRun(workspaceId, editedPrompt);
 
       // Allocate 10 ports for this workspace
       const portResult = await window.traceAPI.allocatePorts(workspaceId, 10);
-      const ports = portResult.success && portResult.ports ? portResult.ports : [];
+      const ports =
+        portResult.success && portResult.ports ? portResult.ports : [];
 
       const baseBranch = getChannelBaseBranch();
       const userInstructions = getSystemInstructions();
@@ -318,31 +401,52 @@ export function useClaudeWorkspaceActions({
         `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
       ];
       if (ports.length > 0) {
-        const portLines = ports.map((p, i) => `TRACE_PORT_${i}=${p}`).join(', ');
+        const portLines = ports
+          .map((p, i) => `TRACE_PORT_${i}=${p}`)
+          .join(", ");
         instructionParts.push(`Available ports: ${portLines}`);
       }
       if (userInstructions) instructionParts.push(userInstructions);
 
       const success = await spawnClaudeForWorkspace(workspaceId, prompt, {
-        statusOnSuccess: 'in_progress',
-        errorPrefix: 'Failed to spawn claude',
+        statusOnSuccess: "in_progress",
+        errorPrefix: "Failed to spawn claude",
         creationCommands: setupCommands,
         filePaths: filePaths.length > 0 ? filePaths : undefined,
         model: selectedModel,
-        effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
-        systemInstructions: instructionParts.join('\n\n'),
-        permissionMode: planMode ? 'plan' : undefined,
+        effort: selectedModel !== "haiku" ? selectedEffort : undefined,
+        systemInstructions: instructionParts.join("\n\n"),
+        permissionMode: planMode ? "plan" : undefined,
       });
 
       if (!success && setupCommands.length > 0) {
-        await updateWorkspaceStatus(workspaceId, 'pending');
+        await updateWorkspaceStatus(workspaceId, "pending");
       }
     },
-    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, pendingRunWorkspaceId, pendingRunFilePaths, selectedModel, selectedEffort, spawnClaudeForWorkspace, updateWorkspaceStatus, updatePreviewForPendingRun],
+    [
+      getChannelBaseBranch,
+      getSetupCommands,
+      getSystemInstructions,
+      pendingRunWorkspaceId,
+      pendingRunFilePaths,
+      selectedModel,
+      selectedEffort,
+      spawnClaudeForWorkspace,
+      updateWorkspaceStatus,
+      updatePreviewForPendingRun,
+    ],
   );
 
   const autoRunQueuedTicket = useCallback(
-    async (workspaceId: string, runConfig: { prompt: string; model: string; effort: string; planMode: boolean }) => {
+    async (
+      workspaceId: string,
+      runConfig: {
+        prompt: string;
+        model: string;
+        effort: string;
+        planMode: boolean;
+      },
+    ) => {
       const prompt = runConfig.prompt;
 
       const creationCommands = getSetupCommands();
@@ -350,7 +454,7 @@ export function useClaudeWorkspaceActions({
       await updatePreviewForPendingRun(workspaceId, runConfig.prompt);
 
       if (creationCommands.length > 0) {
-        await updateWorkspaceStatus(workspaceId, 'creation');
+        await updateWorkspaceStatus(workspaceId, "creation");
       }
 
       const baseBranch = getChannelBaseBranch();
@@ -361,27 +465,34 @@ export function useClaudeWorkspaceActions({
       if (userInstructions) instructionParts.push(userInstructions);
 
       const success = await spawnClaudeForWorkspace(workspaceId, prompt, {
-        statusOnSuccess: 'in_progress',
-        errorPrefix: 'Failed to auto-run queued ticket',
+        statusOnSuccess: "in_progress",
+        errorPrefix: "Failed to auto-run queued ticket",
         creationCommands,
         model: runConfig.model,
-        effort: runConfig.model !== 'haiku' ? runConfig.effort : undefined,
-        systemInstructions: instructionParts.join('\n\n'),
-        permissionMode: runConfig.planMode ? 'plan' : undefined,
+        effort: runConfig.model !== "haiku" ? runConfig.effort : undefined,
+        systemInstructions: instructionParts.join("\n\n"),
+        permissionMode: runConfig.planMode ? "plan" : undefined,
       });
 
       if (!success && creationCommands.length > 0) {
-        await updateWorkspaceStatus(workspaceId, 'pending');
+        await updateWorkspaceStatus(workspaceId, "pending");
       }
     },
-    [getChannelBaseBranch, getSetupCommands, getSystemInstructions, spawnClaudeForWorkspace, updateWorkspaceStatus, updatePreviewForPendingRun],
+    [
+      getChannelBaseBranch,
+      getSetupCommands,
+      getSystemInstructions,
+      spawnClaudeForWorkspace,
+      updateWorkspaceStatus,
+      updatePreviewForPendingRun,
+    ],
   );
 
   const stopClaude = useCallback(async () => {
     if (!selectedWorkspaceId) return;
     await window.traceAPI.stopClaude(selectedWorkspaceId);
-    if (selectedWorkspaceRef.current?.status === 'needs_input') {
-      await updateWorkspaceStatus(selectedWorkspaceId, 'completed');
+    if (selectedWorkspaceRef.current?.status === "needs_input") {
+      await updateWorkspaceStatus(selectedWorkspaceId, "completed");
     }
   }, [selectedWorkspaceId, selectedWorkspaceRef, updateWorkspaceStatus]);
 
@@ -406,7 +517,7 @@ export function useClaudeWorkspaceActions({
       const persisted = await persistPrompt(
         workspaceId,
         text,
-        'Failed to persist session prompt',
+        "Failed to persist session prompt",
         attachmentIds,
         undefined,
         currentSessionId,
@@ -421,17 +532,19 @@ export function useClaudeWorkspaceActions({
       const hasEvents = (sessionEventsRef.current?.length ?? 0) > 0;
       // Keep "review" status when sending follow-ups — show a spinner instead of switching states
       const spawnOptions: SpawnOptions = {
-        statusOnSuccess: selectedWorkspace.status === 'review' ? undefined : 'in_progress',
-        errorPrefix: 'Failed to spawn claude',
+        statusOnSuccess:
+          selectedWorkspace.status === "review" ? undefined : "in_progress",
+        errorPrefix: "Failed to spawn claude",
         creationCommands: getSetupCommands(),
         filePaths: filePaths && filePaths.length > 0 ? filePaths : undefined,
         model: selectedModel,
-        effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+        effort: selectedModel !== "haiku" ? selectedEffort : undefined,
       };
 
       if (hasEvents) {
         // Resume existing session
-        spawnOptions.resumeSessionId = selectedWorkspace.claudeSessionId ?? undefined;
+        spawnOptions.resumeSessionId =
+          selectedWorkspace.claudeSessionId ?? undefined;
       } else {
         // Fresh spawn — include system instructions
         const baseBranch = getChannelBaseBranch();
@@ -440,24 +553,44 @@ export function useClaudeWorkspaceActions({
           `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
         ];
         if (userInstructions) instructionParts.push(userInstructions);
-        spawnOptions.systemInstructions = instructionParts.join('\n\n');
+        spawnOptions.systemInstructions = instructionParts.join("\n\n");
       }
 
       await spawnClaudeForWorkspace(workspaceId, text, spawnOptions);
       return true;
     },
-    [activeChannelId, activeSessionIdRef, addActiveRun, clearActiveRun, sessionEventsRef, getChannelBaseBranch, getSetupCommands, getSystemInstructions, persistPrompt, selectedWorkspaceRef, selectedModel, selectedEffort, spawnClaudeForWorkspace],
+    [
+      activeChannelId,
+      activeSessionIdRef,
+      addActiveRun,
+      clearActiveRun,
+      sessionEventsRef,
+      getChannelBaseBranch,
+      getSetupCommands,
+      getSystemInstructions,
+      persistPrompt,
+      selectedWorkspaceRef,
+      selectedModel,
+      selectedEffort,
+      spawnClaudeForWorkspace,
+    ],
   );
 
   const sendPlanResponse = useCallback(
-    async (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => {
+    async (
+      text: string,
+      mode: PlanResponseMode,
+      planContent?: string,
+      planFilePath?: string,
+    ) => {
       const selectedWorkspace = selectedWorkspaceRef.current;
       if (!selectedWorkspace || !activeChannelId) return;
 
       // Keep "review" status — don't transition to in_progress
-      const statusOnSuccess = selectedWorkspace.status === 'review' ? undefined : 'in_progress';
+      const statusOnSuccess =
+        selectedWorkspace.status === "review" ? undefined : "in_progress";
 
-      if (mode === 'clear-context') {
+      if (mode === "clear-context") {
         // Build prompt with the plan content for a fresh Claude process
         const implementPrompt = planFilePath
           ? `Implement the following approved plan. The plan file is at ${planFilePath}.\n\n${planContent ?? text}`
@@ -469,7 +602,7 @@ export function useClaudeWorkspaceActions({
         const persisted = await persistPrompt(
           selectedWorkspace.id,
           implementPrompt,
-          'Failed to persist plan approval prompt',
+          "Failed to persist plan approval prompt",
           undefined,
           undefined,
           newSessionId,
@@ -485,34 +618,32 @@ export function useClaudeWorkspaceActions({
         if (userInstructions) instructionParts.push(userInstructions);
 
         await spawnClaudeForWorkspace(selectedWorkspace.id, implementPrompt, {
-          errorPrefix: 'Failed to spawn claude for plan implementation',
+          errorPrefix: "Failed to spawn claude for plan implementation",
           statusOnSuccess,
           model: selectedModel,
-          effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
-          systemInstructions: instructionParts.join('\n\n'),
+          effort: selectedModel !== "haiku" ? selectedEffort : undefined,
+          systemInstructions: instructionParts.join("\n\n"),
           // No resumeSessionId — fresh process with clear context
         });
-
-      } else if (mode === 'keep-context') {
+      } else if (mode === "keep-context") {
         const trimmed = text.trim();
         if (!trimmed) return;
 
         const persisted = await persistPrompt(
           selectedWorkspace.id,
           trimmed,
-          'Failed to persist plan response prompt',
+          "Failed to persist plan response prompt",
         );
         if (!persisted) return;
 
         await spawnClaudeForWorkspace(selectedWorkspace.id, trimmed, {
-          errorPrefix: 'Failed to spawn claude for plan response',
+          errorPrefix: "Failed to spawn claude for plan response",
           statusOnSuccess,
           resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
           model: selectedModel,
-          effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
+          effort: selectedModel !== "haiku" ? selectedEffort : undefined,
         });
-
-      } else if (mode === 'revise') {
+      } else if (mode === "revise") {
         const trimmed = text.trim();
         if (!trimmed) return;
 
@@ -520,20 +651,30 @@ export function useClaudeWorkspaceActions({
         const persisted = await persistPrompt(
           selectedWorkspace.id,
           trimmed,
-          'Failed to persist plan revision prompt',
+          "Failed to persist plan revision prompt",
         );
         if (!persisted) return;
 
         await spawnClaudeForWorkspace(selectedWorkspace.id, trimmed, {
-          errorPrefix: 'Failed to spawn claude for plan revision',
+          errorPrefix: "Failed to spawn claude for plan revision",
           resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
           model: selectedModel,
-          effort: selectedModel !== 'haiku' ? selectedEffort : undefined,
-          permissionMode: 'plan',
+          effort: selectedModel !== "haiku" ? selectedEffort : undefined,
+          permissionMode: "plan",
         });
       }
     },
-    [activeChannelId, clearSession, getChannelBaseBranch, getSystemInstructions, persistPrompt, selectedWorkspaceRef, selectedModel, selectedEffort, spawnClaudeForWorkspace],
+    [
+      activeChannelId,
+      clearSession,
+      getChannelBaseBranch,
+      getSystemInstructions,
+      persistPrompt,
+      selectedWorkspaceRef,
+      selectedModel,
+      selectedEffort,
+      spawnClaudeForWorkspace,
+    ],
   );
 
   const mergeToMain = useCallback(async () => {
@@ -545,26 +686,32 @@ export function useClaudeWorkspaceActions({
     const persisted = await persistPrompt(
       selectedWorkspace.id,
       prompt,
-      'Failed to persist merge-to-main prompt',
+      "Failed to persist merge-to-main prompt",
     );
     if (!persisted) return;
 
     await spawnClaudeForWorkspace(selectedWorkspace.id, prompt, {
-      errorPrefix: 'Failed to spawn claude for merge-to-main',
+      errorPrefix: "Failed to spawn claude for merge-to-main",
       setHasWorktreeOnSuccess: false,
     });
-  }, [activeChannelId, getChannelBaseBranch, persistPrompt, selectedWorkspaceRef, spawnClaudeForWorkspace]);
+  }, [
+    activeChannelId,
+    getChannelBaseBranch,
+    persistPrompt,
+    selectedWorkspaceRef,
+    spawnClaudeForWorkspace,
+  ]);
 
   const markMerged = useCallback(async () => {
     const selectedWorkspace = selectedWorkspaceRef.current;
     if (!selectedWorkspace || !activeChannelId) return;
-    if (selectedWorkspace.status !== 'completed') return;
-    await updateWorkspaceStatus(selectedWorkspace.id, 'merged');
+    if (selectedWorkspace.status !== "completed") return;
+    await updateWorkspaceStatus(selectedWorkspace.id, "merged");
   }, [activeChannelId, selectedWorkspaceRef, updateWorkspaceStatus]);
 
   const clearPendingRun = useCallback(() => {
     setPendingRunWorkspaceId(null);
-    setPendingRunInitialPrompt('');
+    setPendingRunInitialPrompt("");
     setPendingRunFilePaths([]);
   }, []);
 
