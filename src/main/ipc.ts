@@ -137,12 +137,18 @@ export function sendToRenderer(channel: string, ...args: unknown[]): void {
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
-  if (!raw)
-    return process.env.TRACE_PROD
+  let url: string;
+  if (!raw) {
+    url = process.env.TRACE_PROD
       ? "https://trace-6kt7.onrender.com"
       : "http://localhost:3100";
-  if (raw.startsWith("http")) return raw;
-  return `http://localhost:${raw}`;
+  } else if (raw.startsWith("http")) {
+    url = raw;
+  } else {
+    url = `http://localhost:${raw}`;
+  }
+  console.log(`[ipc] resolveServerUrl: TRACE_SERVER_URL=${raw ?? "(unset)"} → ${url}`);
+  return url;
 }
 
 export function registerIpcHandlers() {
@@ -833,14 +839,16 @@ export function registerIpcHandlers() {
       //   - will-navigate: client-side navigations (link clicks, window.location)
       //   - will-redirect: server-side HTTP 302 redirects (GitHub's OAuth redirect)
       const rewriteCallback = (event: Electron.Event, url: string) => {
-        if (
-          url.includes("/auth/github/callback") &&
-          !url.startsWith(serverUrl)
-        ) {
-          event.preventDefault();
-          const callbackUrl = new URL(url);
-          const rewritten = `${serverUrl}${callbackUrl.pathname}${callbackUrl.search}`;
-          authWindow.loadURL(rewritten);
+        if (url.includes("/auth/github/callback")) {
+          if (!url.startsWith(serverUrl)) {
+            event.preventDefault();
+            const callbackUrl = new URL(url);
+            const rewritten = `${serverUrl}${callbackUrl.pathname}${callbackUrl.search}`;
+            console.log(`[auth] Rewriting OAuth callback: ${url} → ${rewritten}`);
+            authWindow.loadURL(rewritten);
+          } else {
+            console.log(`[auth] OAuth callback already targets correct server: ${url}`);
+          }
         }
       };
       authWindow.webContents.on("will-navigate", rewriteCallback);
