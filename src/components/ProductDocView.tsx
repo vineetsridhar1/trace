@@ -28,6 +28,7 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets 
   const [docContent, setDocContent] = useState('');
   const [ticketView, setTicketView] = useState<'code' | 'graph'>('code');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [productDocBranch, setProductDocBranch] = useState<string | null>(null);
 
   const {
     enrichedActiveChannel,
@@ -178,6 +179,20 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets 
     const interval = setInterval(() => void poll(), 2000);
     return () => clearInterval(interval);
   }, [filePath]);
+
+  // ─── Resolve product doc worktree branch ──────────────────────
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      setProductDocBranch(null);
+      return;
+    }
+    window.traceAPI
+      .getWorktreeBranch(selectedWorkspaceId)
+      .then((result) => {
+        setProductDocBranch(result.success && result.branch ? result.branch : null);
+      })
+      .catch(() => setProductDocBranch(null));
+  }, [selectedWorkspaceId]);
 
   return (
     <div className="flex h-full flex-col">
@@ -359,6 +374,7 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets 
           serverId={activeServerId}
           localConfig={getLocalConfig(enrichedActiveChannel.id)}
           scopingDocsPath={worktreePath ? `${worktreePath}/.trace` : null}
+          productDocBranch={productDocBranch}
           onClose={() => setShowImportModal(false)}
           onImported={(channelId) => {
             setShowImportModal(false);

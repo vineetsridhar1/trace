@@ -75,6 +75,7 @@ interface ImportToProjectModalProps {
   serverId: string;
   localConfig: LocalChannelConfig | null;
   scopingDocsPath: string | null;
+  productDocBranch?: string | null;
   onClose: () => void;
   onImported: (channelId: string) => void;
   onLocalConfigSave: (channelId: string, data: LocalChannelConfig) => Promise<void>;
@@ -93,6 +94,7 @@ export function ImportToProjectModal({
   serverId,
   localConfig,
   scopingDocsPath,
+  productDocBranch,
   onClose,
   onImported,
   onLocalConfigSave,
@@ -140,6 +142,7 @@ export function ImportToProjectModal({
           trimmedBranch,
           baseBranch,
           scopingDocsPath ?? undefined,
+          productDocBranch ?? undefined,
         );
         if (!branchResult.success) {
           setError(`Failed to create branch: ${branchResult.error}`);
@@ -224,9 +227,12 @@ export function ImportToProjectModal({
     sourceChannel,
     serverId,
     localConfig,
+    productDocBranch,
+    scopingDocsPath,
     tickets,
     executeCreateChannel,
     executeImportTickets,
+    executeDeleteChannel,
     onLocalConfigSave,
     onImported,
   ]);

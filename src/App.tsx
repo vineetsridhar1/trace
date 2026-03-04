@@ -1037,7 +1037,14 @@ function AppContent() {
 
         // 4. Build prompt & spawn agent with fixed path
         const agentPrompt = buildProductDocPrompt(prompt);
-        const setupCommands = ['mkdir -p .trace && touch .trace/product-scoping.md'];
+        const setupCommands = [
+          // Ensure .trace/ is gitignored and untracked, then create the scoping file
+          'grep -qxF ".trace/" .gitignore 2>/dev/null || echo ".trace/" >> .gitignore && ' +
+          'git rm -r --cached .trace/ 2>/dev/null; ' +
+          'git add .gitignore && ' +
+          'git diff --cached --quiet || git commit -m "chore: gitignore .trace/" && ' +
+          'mkdir -p .trace && touch .trace/product-scoping.md',
+        ];
 
         window.traceAPI
           .spawnAgent(
@@ -1111,7 +1118,7 @@ function AppContent() {
           workspaceId,
           agentPrompt,
           repoPath,
-          ['touch .trace/technical-scoping.md'],
+          ['mkdir -p .trace && touch .trace/technical-scoping.md'],
           undefined, // no resumeSessionId — fresh agent
           undefined,
           "sonnet",
@@ -1167,7 +1174,7 @@ function AppContent() {
           workspaceId,
           agentPrompt,
           repoPath,
-          ['touch .trace/tickets.json'],
+          ['mkdir -p .trace && touch .trace/tickets.json'],
           undefined, // no resumeSessionId — fresh agent
           undefined,
           "sonnet",

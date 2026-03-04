@@ -281,7 +281,7 @@ export function registerGitHandlers(): void {
   ipcMain.removeHandler(CREATE_GIT_BRANCH_CHANNEL);
   ipcMain.handle(
     CREATE_GIT_BRANCH_CHANNEL,
-    async (_event, repoPath: string, branchName: string, baseBranch: string, scopingDocsPath?: string) => {
+    async (_event, repoPath: string, branchName: string, baseBranch: string, scopingDocsPath?: string, sourceBranch?: string) => {
       try {
         // Validate branch names to prevent injection
         const branchRe = /^[a-zA-Z0-9._\-/]+$/;
@@ -291,9 +291,18 @@ export function registerGitHandlers(): void {
         if (!branchRe.test(baseBranch)) {
           return { success: false, error: `Invalid base branch: ${baseBranch}` };
         }
+        if (sourceBranch && !branchRe.test(sourceBranch)) {
+          return { success: false, error: `Invalid source branch: ${sourceBranch}` };
+        }
 
-        execFileSync("git", ["fetch", "origin", baseBranch], { cwd: repoPath, stdio: "pipe" });
-        execFileSync("git", ["branch", branchName, `origin/${baseBranch}`], { cwd: repoPath, stdio: "pipe" });
+        if (sourceBranch) {
+          // Branch off a local branch (e.g. product doc worktree branch)
+          execFileSync("git", ["branch", branchName, sourceBranch], { cwd: repoPath, stdio: "pipe" });
+        } else {
+          // Default: fetch and branch off remote
+          execFileSync("git", ["fetch", "origin", baseBranch], { cwd: repoPath, stdio: "pipe" });
+          execFileSync("git", ["branch", branchName, `origin/${baseBranch}`], { cwd: repoPath, stdio: "pipe" });
+        }
 
         // If scoping docs exist, commit them to the new branch
         if (scopingDocsPath && fs.existsSync(scopingDocsPath)) {

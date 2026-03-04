@@ -440,6 +440,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
     branchName: string,
     baseBranch: string,
     scopingDocsPath?: string,
+    sourceBranch?: string,
   ) =>
     ipcRenderer.invoke(
       "create-git-branch",
@@ -447,8 +448,16 @@ contextBridge.exposeInMainWorld("traceAPI", {
       branchName,
       baseBranch,
       scopingDocsPath,
+      sourceBranch,
     ) as Promise<{
       success: boolean;
+      error?: string;
+    }>,
+
+  getWorktreeBranch: (workspaceId: string) =>
+    ipcRenderer.invoke("get-worktree-branch", workspaceId) as Promise<{
+      success: boolean;
+      branch?: string;
       error?: string;
     }>,
 });

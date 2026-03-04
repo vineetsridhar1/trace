@@ -5,6 +5,7 @@ import {
   deleteWorktree,
   mergeWorktree,
   getWorktreePath,
+  getWorktreeBranch,
 } from "../worktree";
 import { getWorktreeDiff } from "../diff";
 
@@ -13,6 +14,7 @@ const CHECK_WORKTREE_CHANNEL = "check-worktree";
 const MERGE_WORKTREE_CHANNEL = "merge-worktree";
 const COMMIT_WORKTREE_CHANGES_CHANNEL = "commit-worktree-changes";
 const GET_WORKTREE_DIFF_CHANNEL = "get-worktree-diff";
+const GET_WORKTREE_BRANCH_CHANNEL = "get-worktree-branch";
 
 export function registerWorktreeHandlers(): void {
   ipcMain.removeHandler(DELETE_WORKTREE_CHANNEL);
@@ -85,6 +87,19 @@ export function registerWorktreeHandlers(): void {
           baseBranch || "main",
         );
         return { success: true, ...result };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    },
+  );
+
+  ipcMain.removeHandler(GET_WORKTREE_BRANCH_CHANNEL);
+  ipcMain.handle(
+    GET_WORKTREE_BRANCH_CHANNEL,
+    async (_event, workspaceId: string) => {
+      try {
+        const branch = await getWorktreeBranch(workspaceId);
+        return { success: true, branch };
       } catch (err) {
         return { success: false, error: String(err) };
       }

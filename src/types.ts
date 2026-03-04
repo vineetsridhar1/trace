@@ -323,7 +323,12 @@ export interface TraceAPI {
     branchName: string,
     baseBranch: string,
     scopingDocsPath?: string,
+    sourceBranch?: string,
   ) => Promise<{ success: boolean; error?: string }>;
+
+  getWorktreeBranch: (
+    workspaceId: string,
+  ) => Promise<{ success: boolean; branch?: string; error?: string }>;
 }
 
 declare global {
