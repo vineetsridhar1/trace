@@ -30,6 +30,7 @@ import    { deleteChannel as Mutation_deleteChannel } from './channel/resolvers/
 import    { deleteColumn as Mutation_deleteColumn } from './kanban/resolvers/Mutation/deleteColumn';
 import    { deleteWorkspace as Mutation_deleteWorkspace } from './workspace/resolvers/Mutation/deleteWorkspace';
 import    { handoffWorkspace as Mutation_handoffWorkspace } from './workspace/resolvers/Mutation/handoffWorkspace';
+import    { importTicketsToProject as Mutation_importTicketsToProject } from './kanban/resolvers/Mutation/importTicketsToProject';
 import    { moveTicket as Mutation_moveTicket } from './kanban/resolvers/Mutation/moveTicket';
 import    { removeTicketDependency as Mutation_removeTicketDependency } from './kanban/resolvers/Mutation/removeTicketDependency';
 import    { renameAiChat as Mutation_renameAiChat } from './aiChat/resolvers/Mutation/renameAiChat';
@@ -72,6 +73,7 @@ import    { CliSessionConnection } from './cli-session/resolvers/CliSessionConne
 import    { CreateWorkspacePayload } from './workspace/resolvers/CreateWorkspacePayload';
 import    { Event } from './event/resolvers/Event';
 import    { EventConnection } from './event/resolvers/EventConnection';
+import    { ImportedTicketResult } from './kanban/resolvers/ImportedTicketResult';
 import    { KanbanColumn } from './kanban/resolvers/KanbanColumn';
 import    { PRStatus } from './workspace/resolvers/PRStatus';
 import    { PresencePayload } from './workspace/resolvers/PresencePayload';
@@ -96,7 +98,7 @@ import    { DateTime } from './base/resolvers/DateTime';
 import    { JSON } from './base/resolvers/JSON';
     export const resolvers: Resolvers = {
       Query: { aiChatMessages: Query_aiChatMessages,aiChats: Query_aiChats,board: Query_board,channel: Query_channel,channelMessages: Query_channelMessages,channelPresence: Query_channelPresence,channels: Query_channels,checkPRStatuses: Query_checkPRStatuses,event: Query_event,generateBranchName: Query_generateBranchName,me: Query_me,servers: Query_servers,sessionEvents: Query_sessionEvents,sessions: Query_sessions,ticketDependencies: Query_ticketDependencies,workspace: Query_workspace,workspaceEvents: Query_workspaceEvents,workspaces: Query_workspaces },
-      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,handoffWorkspace: Mutation_handoffWorkspace,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,reportPresence: Mutation_reportPresence,sendAiChatMessage: Mutation_sendAiChatMessage,sendChannelMessage: Mutation_sendChannelMessage,setTicketDependencies: Mutation_setTicketDependencies,setWorkspacePrUrl: Mutation_setWorkspacePrUrl,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateInitialPrompt: Mutation_updateInitialPrompt,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
+      Mutation: { appendPrompt: Mutation_appendPrompt,createAiChat: Mutation_createAiChat,createChannel: Mutation_createChannel,createColumn: Mutation_createColumn,createServer: Mutation_createServer,createSession: Mutation_createSession,createWorkspace: Mutation_createWorkspace,deleteAiChat: Mutation_deleteAiChat,deleteChannel: Mutation_deleteChannel,deleteColumn: Mutation_deleteColumn,deleteWorkspace: Mutation_deleteWorkspace,handoffWorkspace: Mutation_handoffWorkspace,importTicketsToProject: Mutation_importTicketsToProject,moveTicket: Mutation_moveTicket,removeTicketDependency: Mutation_removeTicketDependency,renameAiChat: Mutation_renameAiChat,reportPresence: Mutation_reportPresence,sendAiChatMessage: Mutation_sendAiChatMessage,sendChannelMessage: Mutation_sendChannelMessage,setTicketDependencies: Mutation_setTicketDependencies,setWorkspacePrUrl: Mutation_setWorkspacePrUrl,updateChannel: Mutation_updateChannel,updateColumn: Mutation_updateColumn,updateInitialPrompt: Mutation_updateInitialPrompt,updateQueuedRunConfig: Mutation_updateQueuedRunConfig,updateWorkspacePreview: Mutation_updateWorkspacePreview,updateWorkspaceStatus: Mutation_updateWorkspaceStatus,uploadAttachment: Mutation_uploadAttachment },
       Subscription: { aiChatStream: Subscription_aiChatStream,channelChangedInServer: Subscription_channelChangedInServer,channelMessageCreated: Subscription_channelMessageCreated,channelMessageCreatedInServer: Subscription_channelMessageCreatedInServer,presenceUpdated: Subscription_presenceUpdated,sessionEventCreated: Subscription_sessionEventCreated,sessionEventUpdated: Subscription_sessionEventUpdated,ticketReadyToRun: Subscription_ticketReadyToRun,ticketUpserted: Subscription_ticketUpserted,workspaceDeleted: Subscription_workspaceDeleted,workspaceUpserted: Subscription_workspaceUpserted },
       AiChat: AiChat,
 AiChatMessage: AiChatMessage,
@@ -114,6 +116,7 @@ CliSessionConnection: CliSessionConnection,
 CreateWorkspacePayload: CreateWorkspacePayload,
 Event: Event,
 EventConnection: EventConnection,
+ImportedTicketResult: ImportedTicketResult,
 KanbanColumn: KanbanColumn,
 PRStatus: PRStatus,
 PresencePayload: PresencePayload,

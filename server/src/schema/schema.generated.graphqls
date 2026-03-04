@@ -145,6 +145,19 @@ type EventConnection {
   total: Int!
 }
 
+input ImportTicketInput {
+  body: String!
+  dependencies: [String!]!
+  ticketJsonId: String!
+  title: String!
+}
+
+type ImportedTicketResult {
+  ticketId: ID!
+  ticketJsonId: String!
+  workspaceId: ID!
+}
+
 scalar JSON
 
 type KanbanColumn {
@@ -164,12 +177,13 @@ type Mutation {
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createServer(avatarUrl: String, name: String!): Server!
   createSession(channelId: ID!, workspaceId: ID!): Session!
-  createWorkspace(attachmentIds: [String!], channelId: ID!, text: String!, ticketId: ID): CreateWorkspacePayload!
+  createWorkspace(attachmentIds: [String!], channelId: ID!, isProductDoc: Boolean, text: String!, ticketId: ID): CreateWorkspacePayload!
   deleteAiChat(id: ID!): Boolean!
   deleteChannel(id: ID!): Boolean!
   deleteColumn(columnId: ID!): Boolean!
   deleteWorkspace(channelId: ID!, workspaceId: ID!): Boolean!
   handoffWorkspace(channelId: ID!, workspaceId: ID!): Workspace!
+  importTicketsToProject(channelId: ID!, runConfig: JSON!, tickets: [ImportTicketInput!]!): [ImportedTicketResult!]!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
   removeTicketDependency(channelId: ID!, dependsOnWorkspaceId: ID!, workspaceId: ID!): Boolean!
   renameAiChat(id: ID!, title: String!): AiChat!
@@ -330,6 +344,7 @@ type Workspace {
   createdAt: DateTime!
   id: ID!
   importance: String!
+  isProductDoc: Boolean!
   preview: String
   queuedRunConfig: JSON
   sessionCount: Int!

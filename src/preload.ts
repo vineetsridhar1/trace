@@ -428,4 +428,23 @@ contextBridge.exposeInMainWorld("traceAPI", {
       success: boolean;
       running: string[];
     }>,
+
+  readProductDocFile: (filePath: string) =>
+    ipcRenderer.invoke("read-product-doc-file", filePath) as Promise<{
+      success: boolean;
+      content?: string;
+      error?: string;
+    }>,
+
+  writeProductDocFile: (filePath: string, content: string) =>
+    ipcRenderer.invoke("write-product-doc-file", filePath, content) as Promise<{
+      success: boolean;
+      error?: string;
+    }>,
+
+  createGitBranch: (repoPath: string, branchName: string, baseBranch: string, scopingDocsPath?: string) =>
+    ipcRenderer.invoke("create-git-branch", repoPath, branchName, baseBranch, scopingDocsPath) as Promise<{
+      success: boolean;
+      error?: string;
+    }>,
 });

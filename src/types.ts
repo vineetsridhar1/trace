@@ -309,6 +309,24 @@ export interface TraceAPI {
   checkRunningProcesses: (
     workspaceIds: string[],
   ) => Promise<{ success: boolean; running: string[] }>;
+
+  readProductDocFile: (filePath: string) => Promise<{
+    success: boolean;
+    content?: string;
+    error?: string;
+  }>;
+
+  writeProductDocFile: (
+    filePath: string,
+    content: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+
+  createGitBranch: (
+    repoPath: string,
+    branchName: string,
+    baseBranch: string,
+    scopingDocsPath?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {
@@ -387,6 +405,7 @@ export interface Workspace {
     effort: string;
     planMode: boolean;
   } | null;
+  isProductDoc: boolean;
 }
 
 export type ChannelType = "channel" | "team" | "project";

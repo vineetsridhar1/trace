@@ -12,18 +12,19 @@ import { useAgentRunStore, getEffortOptions } from "../stores/agentRunStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useChannelContext } from "../context/ChannelContext";
-import { useAppUIStore } from "../stores/appUIStore";
 
 const GQL_CREATE_WORKSPACE = gql`
   mutation CreateWorkspace(
     $channelId: ID!
     $text: String!
     $attachmentIds: [String!]
+    $isProductDoc: Boolean
   ) {
     createWorkspace(
       channelId: $channelId
       text: $text
       attachmentIds: $attachmentIds
+      isProductDoc: $isProductDoc
     ) {
       workspace {
         ...WorkspaceFields
@@ -533,7 +534,11 @@ export function useWorkspaceActions({
         return;
       }
 
-      const setupCommands = getSetupCommands();
+      // Document workspaces (PRD / tech-scope) don't need channel setup scripts
+      const isDocWs = useWorkspaceStore
+        .getState()
+        .workspaces.find((w) => w.id === workspaceId)?.isProductDoc ?? false;
+      const setupCommands = isDocWs ? [] : getSetupCommands();
       if (setupCommands.length > 0) {
         await updateWorkspaceStatus(workspaceId, "creation");
       }
@@ -688,11 +693,14 @@ export function useWorkspaceActions({
       const { selectedAgent, selectedModel, selectedEffort } =
         useAgentRunStore.getState();
 
+      // Document workspaces (PRD / tech-scope) don't need channel setup scripts
+      const isDocWorkspace = selectedWorkspace.isProductDoc;
+
       const spawnOptions: SpawnOptions = {
         statusOnSuccess:
           selectedWorkspace.status === "review" ? undefined : "in_progress",
         errorPrefix: "Failed to spawn claude",
-        creationCommands: getSetupCommands(),
+        creationCommands: isDocWorkspace ? [] : getSetupCommands(),
         filePaths: filePaths && filePaths.length > 0 ? filePaths : undefined,
         model: selectedModel,
         effort:

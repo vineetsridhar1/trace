@@ -141,6 +141,7 @@ model Workspace {
   createdAt       DateTime @default(now()) @map("created_at")
 
   queuedRunConfig Json?    @map("queued_run_config")
+  isProductDoc    Boolean  @default(false) @map("is_product_doc")
 
   channel      Channel            @relation(fields: [channelId], references: [id])
   cliSession   CliSession         @relation(fields: [cliSessionId], references: [sessionId])

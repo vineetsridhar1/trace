@@ -50,7 +50,7 @@ function buildUserPromptPayload(text: string, attachments?: AttachmentMeta[]) {
   };
 }
 
-async function ensureManualInputCliSession() {
+export async function ensureManualInputCliSession() {
   const cliSession = await prisma.cliSession.findUnique({ where: { sessionId: USER_CLI_SESSION_ID } });
   if (cliSession) {
     return cliSession;
@@ -187,7 +187,7 @@ export async function updateWorkspaceSummaryAndBranch(
   });
 }
 
-export async function createUserWorkspace(channelId: string, text: string, attachmentIds?: string[]) {
+export async function createUserWorkspace(channelId: string, text: string, attachmentIds?: string[], isProductDoc = false) {
   await ensureManualInputCliSession();
 
   const attachmentMetas = await resolveAttachmentMetas(attachmentIds ?? []);
@@ -199,6 +199,7 @@ export async function createUserWorkspace(channelId: string, text: string, attac
         cliSessionId: USER_CLI_SESSION_ID,
         preview: text,
         importance: 'important',
+        isProductDoc,
         ...(attachmentIds && attachmentIds.length > 0
           ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
           : {}),

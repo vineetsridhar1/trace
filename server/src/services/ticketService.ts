@@ -7,6 +7,7 @@ import {
   type TicketMetadata,
 } from "./ticketAiService";
 import { getStorage } from "./storageService";
+import { ensureManualInputCliSession, getWorkspaceByIdForFeed } from "./workspaceService";
 
 function resolveTicketAttachmentUrls<
   T extends {
@@ -490,4 +491,162 @@ export async function updateColumn(
 
 export async function deleteColumn(columnId: string) {
   return prisma.kanbanColumn.delete({ where: { id: columnId } });
+}
+
+interface ImportTicketInput {
+  ticketJsonId: string;
+  title: string;
+  body: string;
+  dependencies: string[];
+}
+
+export async function importTicketsToProject(
+  channelId: string,
+  tickets: ImportTicketInput[],
+  runConfig: object,
+) {
+  const USER_CLI_SESSION_ID = "user-manual-input";
+
+  // Validate inputs
+  if (tickets.length === 0) throw new Error("No tickets to import");
+  const ids = tickets.map((t) => t.ticketJsonId);
+  if (new Set(ids).size !== ids.length) throw new Error("Duplicate ticket IDs found");
+
+  // 1. Ensure kanban columns exist and find TODO column
+  const columns = await ensureKanbanColumns(channelId);
+  const todoColumn = columns.find((col) => col.slug === "todo");
+  if (!todoColumn) throw new Error("Could not create TODO column for channel");
+
+  // 2. Ensure the manual-input CLI session exists
+  await ensureManualInputCliSession();
+
+  // 3. All DB writes in a single transaction
+  const results = await prisma.$transaction(async (tx) => {
+    const maxSort = await tx.ticket.aggregate({
+      where: { columnId: todoColumn.id },
+      _max: { sortOrder: true },
+    });
+    let sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+
+    const ticketJsonIdToWorkspaceId = new Map<string, string>();
+    const txResults: { ticketJsonId: string; workspaceId: string; ticketId: string }[] = [];
+
+    // Create workspaces, sessions, events, and tickets
+    for (const t of tickets) {
+      const isRoot = t.dependencies.length === 0;
+
+      const workspace = await tx.workspace.create({
+        data: {
+          channelId,
+          cliSessionId: USER_CLI_SESSION_ID,
+          preview: t.title,
+          status: isRoot ? "pending" : "queued",
+          importance: "important",
+        },
+      });
+
+      const session = await tx.session.create({
+        data: { workspaceId: workspace.id },
+      });
+
+      const prompt = `<trace-internal>\nThis ticket is part of a project. Before starting, read the scoping documents for full context:\n- .trace/product-scoping.md\n- .trace/technical-scoping.md\n- .trace/tickets.json\n</trace-internal>\n\n${t.body}`;
+
+      await tx.event.create({
+        data: {
+          cliSessionId: USER_CLI_SESSION_ID,
+          hookEventName: "UserPromptSubmit",
+          rawPayload: JSON.parse(JSON.stringify({
+            hook_event_name: "UserPromptSubmit",
+            prompt,
+            source: "ui",
+          })),
+          sessionId: session.id,
+          importance: "important",
+        },
+      });
+
+      await tx.ticket.create({
+        data: {
+          workspaceId: workspace.id,
+          columnId: todoColumn.id,
+          title: t.title,
+          description: t.body,
+          sortOrder: sortOrder++,
+        },
+      });
+
+      ticketJsonIdToWorkspaceId.set(t.ticketJsonId, workspace.id);
+      txResults.push({
+        ticketJsonId: t.ticketJsonId,
+        workspaceId: workspace.id,
+        ticketId: workspace.id, // ticket is 1:1 with workspace
+      });
+    }
+
+    // Create dependency rows and save runConfig for queued tickets
+    for (const t of tickets) {
+      if (t.dependencies.length === 0) continue;
+
+      const workspaceId = ticketJsonIdToWorkspaceId.get(t.ticketJsonId)!;
+      const depWorkspaceIds = t.dependencies
+        .map((depId) => ticketJsonIdToWorkspaceId.get(depId))
+        .filter((id): id is string => !!id);
+
+      if (depWorkspaceIds.length > 0) {
+        await tx.ticketDependency.createMany({
+          data: depWorkspaceIds.map((depId) => ({
+            ticketWorkspaceId: workspaceId,
+            dependsOnWorkspaceId: depId,
+          })),
+        });
+
+        await tx.workspace.update({
+          where: { id: workspaceId },
+          data: {
+            queuedRunConfig: { ...runConfig, prompt: t.body } as object,
+          },
+        });
+      }
+    }
+
+    return txResults;
+  });
+
+  // 4. Publish events outside the transaction (batched reads)
+  const workspaceIds = results.map((r) => r.workspaceId);
+
+  const [hydratedWorkspaces, allTickets] = await Promise.all([
+    prisma.workspace.findMany({
+      where: { id: { in: workspaceIds } },
+      include: {
+        cliSession: { select: { sessionId: true, cwd: true, status: true } },
+        user: { select: { id: true, name: true, avatarUrl: true } },
+        _count: { select: { sessions: true } },
+      },
+    }),
+    prisma.ticket.findMany({
+      where: { workspaceId: { in: workspaceIds } },
+      include: {
+        workspace: { select: TICKET_WORKSPACE_SELECT },
+      },
+    }),
+  ]);
+
+  for (const ws of hydratedWorkspaces) {
+    pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
+      workspaceUpserted: ws,
+    });
+  }
+
+  for (const ticket of allTickets) {
+    pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+      ticketUpserted: {
+        channelId,
+        ticket: resolveTicketAttachmentUrls(ticket),
+        columnSlug: todoColumn.slug,
+      },
+    });
+  }
+
+  return results;
 }

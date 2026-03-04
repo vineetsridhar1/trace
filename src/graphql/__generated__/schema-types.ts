@@ -177,6 +177,20 @@ export type EventConnection = {
   total: Scalars['Int']['output'];
 };
 
+export type ImportTicketInput = {
+  body: Scalars['String']['input'];
+  dependencies: Array<Scalars['String']['input']>;
+  ticketJsonId: Scalars['String']['input'];
+  title: Scalars['String']['input'];
+};
+
+export type ImportedTicketResult = {
+  __typename?: 'ImportedTicketResult';
+  ticketId: Scalars['ID']['output'];
+  ticketJsonId: Scalars['String']['output'];
+  workspaceId: Scalars['ID']['output'];
+};
+
 export type KanbanColumn = {
   __typename?: 'KanbanColumn';
   channelId: Scalars['String']['output'];
@@ -202,6 +216,7 @@ export type Mutation = {
   deleteColumn: Scalars['Boolean']['output'];
   deleteWorkspace: Scalars['Boolean']['output'];
   handoffWorkspace: Workspace;
+  importTicketsToProject: Array<ImportedTicketResult>;
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
@@ -273,6 +288,7 @@ export type MutationCreateSessionArgs = {
 export type MutationCreateWorkspaceArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
+  isProductDoc?: InputMaybe<Scalars['Boolean']['input']>;
   text: Scalars['String']['input'];
   ticketId?: InputMaybe<Scalars['ID']['input']>;
 };
@@ -302,6 +318,13 @@ export type MutationDeleteWorkspaceArgs = {
 export type MutationHandoffWorkspaceArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationImportTicketsToProjectArgs = {
+  channelId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
+  tickets: Array<ImportTicketInput>;
 };
 
 
@@ -720,6 +743,7 @@ export type Workspace = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
+  isProductDoc: Scalars['Boolean']['output'];
   preview?: Maybe<Scalars['String']['output']>;
   queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
   sessionCount: Scalars['Int']['output'];

@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   FiCheck,
+  FiFileText,
   FiGitMerge,
   FiGitPullRequest,
   FiLink,
@@ -321,7 +322,11 @@ export const MessageItem = memo(function MessageItem({
         )}
 
         {/* Avatar */}
-        {workspace.user?.avatarUrl ? (
+        {workspace.isProductDoc ? (
+          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent-light">
+            <FiFileText className="h-3.5 w-3.5" />
+          </div>
+        ) : workspace.user?.avatarUrl ? (
           <img
             src={workspace.user.avatarUrl}
             alt={workspace.user.name}

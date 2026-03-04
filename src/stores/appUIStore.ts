@@ -65,6 +65,9 @@ interface AppUIState {
   joinChannelId: string | null;
   createChannelType: ChannelType | null;
   showCreateServer: boolean;
+  showProductDocModal: boolean;
+  activeProductDocId: string | null;
+  productDocMode: 'prd' | 'tech-scope' | 'tickets';
   activeAiChatId: string | null;
   aiChats: AiChat[];
   channelViewMap: Record<string, MiddlePanelView>;
@@ -80,6 +83,9 @@ interface AppUIState {
   setJoinChannelId: (id: string | null) => void;
   setCreateChannelType: (type: ChannelType | null) => void;
   setShowCreateServer: (show: boolean) => void;
+  setShowProductDocModal: (show: boolean) => void;
+  setActiveProductDocId: (id: string | null) => void;
+  setProductDocMode: (mode: 'prd' | 'tech-scope' | 'tickets') => void;
   setActiveAiChatId: (id: string | null) => void;
   setAiChats: (chats: AiChat[]) => void;
   upsertAiChat: (chat: Partial<AiChat> & { id: string }) => void;
@@ -103,6 +109,9 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   joinChannelId: null,
   createChannelType: null,
   showCreateServer: false,
+  showProductDocModal: false,
+  activeProductDocId: null,
+  productDocMode: 'prd',
   activeAiChatId: null,
   aiChats: [],
   channelViewMap: initialChannelViewMap,
@@ -129,6 +138,9 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   setJoinChannelId: (id) => set({ joinChannelId: id }),
   setCreateChannelType: (type) => set({ createChannelType: type }),
   setShowCreateServer: (show) => set({ showCreateServer: show }),
+  setShowProductDocModal: (show) => set({ showProductDocModal: show }),
+  setActiveProductDocId: (id) => set({ activeProductDocId: id }),
+  setProductDocMode: (mode) => set({ productDocMode: mode }),
   setActiveAiChatId: (id) => set({ activeAiChatId: id }),
   setAiChats: (chats) => set({ aiChats: chats }),
 

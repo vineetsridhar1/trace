@@ -10,6 +10,20 @@ extend type Mutation {
   setTicketDependencies(channelId: ID!, workspaceId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!): Workspace!
   removeTicketDependency(channelId: ID!, workspaceId: ID!, dependsOnWorkspaceId: ID!): Boolean!
   updateQueuedRunConfig(workspaceId: ID!, runConfig: JSON!): Boolean!
+  importTicketsToProject(channelId: ID!, tickets: [ImportTicketInput!]!, runConfig: JSON!): [ImportedTicketResult!]!
+}
+
+input ImportTicketInput {
+  ticketJsonId: String!
+  title: String!
+  body: String!
+  dependencies: [String!]!
+}
+
+type ImportedTicketResult {
+  ticketJsonId: String!
+  workspaceId: ID!
+  ticketId: ID!
 }
 
 extend type Query {

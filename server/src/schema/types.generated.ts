@@ -7,7 +7,7 @@ import { ChannelMessageMapper, ChannelMessageAuthorMapper, ChannelMessageConnect
 import { CliSessionMapper, CliSessionConnectionMapper } from './cli-session/schema.mappers';
 import { CreateWorkspacePayloadMapper, PRStatusMapper, PresencePayloadMapper, PresenceUserMapper, WorkspaceMapper, WorkspaceCliSessionMapper, WorkspaceConnectionMapper, WorkspaceDeletedPayloadMapper, WorkspacePresenceMapper, WorkspaceUserMapper } from './workspace/schema.mappers';
 import { EventMapper, EventConnectionMapper, SessionEventPayloadMapper } from './event/schema.mappers';
-import { KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketUpsertPayloadMapper, TicketWorkspaceMapper } from './kanban/schema.mappers';
+import { ImportedTicketResultMapper, KanbanColumnMapper, TicketMapper, TicketAttachmentMapper, TicketUpsertPayloadMapper, TicketWorkspaceMapper } from './kanban/schema.mappers';
 import { ServerMapper } from './server/schema.mappers';
 import { SessionMapper } from './session/schema.mappers';
 export type Maybe<T> = T | null | undefined;
@@ -190,6 +190,20 @@ export type EventConnection = {
   total: Scalars['Int']['output'];
 };
 
+export type ImportTicketInput = {
+  body: Scalars['String']['input'];
+  dependencies: Array<Scalars['String']['input']>;
+  ticketJsonId: Scalars['String']['input'];
+  title: Scalars['String']['input'];
+};
+
+export type ImportedTicketResult = {
+  __typename?: 'ImportedTicketResult';
+  ticketId: Scalars['ID']['output'];
+  ticketJsonId: Scalars['String']['output'];
+  workspaceId: Scalars['ID']['output'];
+};
+
 export type KanbanColumn = {
   __typename?: 'KanbanColumn';
   channelId: Scalars['String']['output'];
@@ -215,6 +229,7 @@ export type Mutation = {
   deleteColumn: Scalars['Boolean']['output'];
   deleteWorkspace: Scalars['Boolean']['output'];
   handoffWorkspace: Workspace;
+  importTicketsToProject: Array<ImportedTicketResult>;
   moveTicket: Ticket;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
@@ -286,6 +301,7 @@ export type MutationcreateSessionArgs = {
 export type MutationcreateWorkspaceArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
+  isProductDoc?: InputMaybe<Scalars['Boolean']['input']>;
   text: Scalars['String']['input'];
   ticketId?: InputMaybe<Scalars['ID']['input']>;
 };
@@ -315,6 +331,13 @@ export type MutationdeleteWorkspaceArgs = {
 export type MutationhandoffWorkspaceArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationimportTicketsToProjectArgs = {
+  channelId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
+  tickets: Array<ImportTicketInput>;
 };
 
 
@@ -733,6 +756,7 @@ export type Workspace = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
+  isProductDoc: Scalars['Boolean']['output'];
   preview?: Maybe<Scalars['String']['output']>;
   queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
   sessionCount: Scalars['Int']['output'];
@@ -872,6 +896,8 @@ export type ResolversTypes = {
   Event: ResolverTypeWrapper<EventMapper>;
   EventConnection: ResolverTypeWrapper<EventConnectionMapper>;
   Float: ResolverTypeWrapper<Scalars['Float']['output']>;
+  ImportTicketInput: ImportTicketInput;
+  ImportedTicketResult: ResolverTypeWrapper<ImportedTicketResultMapper>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
@@ -922,6 +948,8 @@ export type ResolversParentTypes = {
   Event: EventMapper;
   EventConnection: EventConnectionMapper;
   Float: Scalars['Float']['output'];
+  ImportTicketInput: ImportTicketInput;
+  ImportedTicketResult: ImportedTicketResultMapper;
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
   Mutation: Record<PropertyKey, never>;
@@ -1097,6 +1125,12 @@ export type EventConnectionResolvers<ContextType = any, ParentType extends Resol
   total?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 };
 
+export type ImportedTicketResultResolvers<ContextType = any, ParentType extends ResolversParentTypes['ImportedTicketResult'] = ResolversParentTypes['ImportedTicketResult']> = {
+  ticketId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  ticketJsonId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+};
+
 export interface JSONScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['JSON'], any> {
   name: 'JSON';
 }
@@ -1124,6 +1158,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   deleteColumn?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteColumnArgs, 'columnId'>>;
   deleteWorkspace?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteWorkspaceArgs, 'channelId' | 'workspaceId'>>;
   handoffWorkspace?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationhandoffWorkspaceArgs, 'channelId' | 'workspaceId'>>;
+  importTicketsToProject?: Resolver<Array<ResolversTypes['ImportedTicketResult']>, ParentType, ContextType, RequireFields<MutationimportTicketsToProjectArgs, 'channelId' | 'runConfig' | 'tickets'>>;
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
   removeTicketDependency?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationremoveTicketDependencyArgs, 'channelId' | 'dependsOnWorkspaceId' | 'workspaceId'>>;
   renameAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationrenameAiChatArgs, 'id' | 'title'>>;
@@ -1284,6 +1319,7 @@ export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversPa
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   importance?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isProductDoc?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   preview?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   queuedRunConfig?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
   sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
@@ -1341,6 +1377,7 @@ export type Resolvers<ContextType = any> = {
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;
   EventConnection?: EventConnectionResolvers<ContextType>;
+  ImportedTicketResult?: ImportedTicketResultResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   KanbanColumn?: KanbanColumnResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;

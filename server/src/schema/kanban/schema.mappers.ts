@@ -45,3 +45,9 @@ export interface TicketUpsertPayloadMapper {
   ticket: TicketMapper;
   columnSlug: string;
 }
+
+export interface ImportedTicketResultMapper {
+  ticketJsonId: string;
+  workspaceId: string;
+  ticketId: string;
+}

@@ -1,5 +1,5 @@
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight } from 'react-icons/fi';
+import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiFileText } from 'react-icons/fi';
 import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server } from '../types';
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
@@ -36,6 +36,7 @@ interface ChannelPanelProps {
   onCreateAiChat: () => void;
   onDeleteAiChat: (id: string) => void;
   onStartDrag: () => void;
+  onNewProductDoc: () => void;
 }
 
 export function ChannelPanel({
@@ -58,6 +59,7 @@ export function ChannelPanel({
   onCreateAiChat,
   onDeleteAiChat,
   onStartDrag,
+  onNewProductDoc,
   unreadCounts = {},
   localConfigs = {},
 }: ChannelPanelProps) {
@@ -248,6 +250,17 @@ export function ChannelPanel({
           onSwitchServer={onSwitchServer}
           onCreateServer={onCreateServer}
         />
+
+        <div className="px-2 py-1.5">
+          <button
+            type="button"
+            onClick={onNewProductDoc}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-surface-elevated transition-colors"
+          >
+            <FiFileText className="h-3.5 w-3.5 text-accent" />
+            <span>New Product Doc</span>
+          </button>
+        </div>
 
         <Reorder.Group
           id="channel-items"

@@ -17,6 +17,7 @@ export interface WorkspaceMapper {
   cliSession: { sessionId: string; cwd: string | null; status: string } | null;
   user: { id: string; name: string; avatarUrl: string | null } | null;
   _count: { sessions: number };
+  isProductDoc: boolean;
 }
 
 export interface WorkspaceUserMapper {
