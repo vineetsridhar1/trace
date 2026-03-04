@@ -9,6 +9,18 @@ export function useTerminalInit() {
     return cleanup;
   }, []);
 
+  useEffect(() => {
+    const cleanup = window.traceAPI.onCloseTerminalTab(() => {
+      const { activeTabId, terminals } = useTerminalStore.getState();
+      if (!activeTabId) return;
+      const tab = terminals.find(t => t.terminalId === activeTabId);
+      if (tab && !tab.readOnly) {
+        useTerminalStore.getState().killTerminal(activeTabId);
+      }
+    });
+    return cleanup;
+  }, []);
+
   // Poll foreground process info for all active terminals
   useEffect(() => {
     const poll = async () => {

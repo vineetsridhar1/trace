@@ -171,6 +171,12 @@ contextBridge.exposeInMainWorld("traceAPI", {
     return () => ipcRenderer.removeListener("pty-exit", handler);
   },
 
+  onCloseTerminalTab: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on("close-terminal-tab", handler);
+    return () => ipcRenderer.removeListener("close-terminal-tab", handler);
+  },
+
   onClaudeProcessExited: (callback: (workspaceId: string) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, workspaceId: string) =>
       callback(workspaceId);

@@ -149,6 +149,7 @@ export interface TraceAPI {
   onPtyExit: (
     callback: (terminalId: string, exitCode: number) => void,
   ) => () => void;
+  onCloseTerminalTab: (callback: () => void) => () => void;
   onClaudeProcessExited: (
     callback: (workspaceId: string) => void,
   ) => () => void;

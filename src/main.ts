@@ -54,6 +54,13 @@ const createWindow = () => {
       shell.openExternal(url);
     }
   });
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key.toLowerCase() === 'w' && input.meta && !input.shift && !input.alt) {
+      event.preventDefault();
+      mainWindow.webContents.send('close-terminal-tab');
+    }
+  });
 };
 
 app.on('ready', () => {
