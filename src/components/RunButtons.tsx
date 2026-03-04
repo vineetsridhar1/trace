@@ -44,10 +44,12 @@ function InteractionModeToggle({
     if (!el) return;
     const w: number[] = [];
     for (let i = 0; i < el.children.length; i++) {
+      // +2px compensates for sub-pixel width differences between the
+      // off-screen measurement span and the visible overflow-hidden roller
       w.push(
         Math.ceil(
           (el.children[i] as HTMLElement).getBoundingClientRect().width,
-        ),
+        ) + 2,
       );
     }
     setWidths(w);

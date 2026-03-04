@@ -298,7 +298,7 @@ export class CodexAdapter implements AgentAdapter {
   readonly capabilities: AgentCapabilities = {
     displayName: "Codex",
     supportsResume: false,
-    supportsPlanMode: false,
+    supportsPlanMode: true,
     models: [
       {
         value: "gpt-5.3-codex",
@@ -375,6 +375,7 @@ export class CodexAdapter implements AgentAdapter {
   }
 
   async buildCommand(ctx: AgentSpawnContext): Promise<AgentCommand> {
+    const isPlan = ctx.permissionMode === "plan";
     const args = [
       "exec",
       "--full-auto",
@@ -382,7 +383,7 @@ export class CodexAdapter implements AgentAdapter {
       "--model",
       ctx.model ?? this.capabilities.defaultModel,
       "--sandbox",
-      "workspace-write",
+      isPlan ? "read-only" : "workspace-write",
     ];
 
     if (ctx.effort) {
