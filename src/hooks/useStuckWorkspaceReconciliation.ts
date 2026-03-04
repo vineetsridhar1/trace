@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Workspace, TicketStatus } from "../types";
 
-const ACTIVE_STATUSES: TicketStatus[] = ["in_progress", "creation", "needs_input"];
+const ACTIVE_STATUSES: TicketStatus[] = ["in_progress", "creation"];
 const STARTUP_GRACE_MS = 5_000;
 const POLL_INTERVAL_MS = 60_000;
 

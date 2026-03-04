@@ -110,7 +110,7 @@ export async function ensureKanbanColumns(channelId: string) {
   return existing;
 }
 
-const ACTIVE_WORKSPACE_STATUSES = ["creation", "in_progress", "needs_input"];
+const ACTIVE_WORKSPACE_STATUSES = ["creation", "in_progress"];
 
 // Time after the last event before we consider a workspace "stale". Any Claude
 // event (PostToolUse, PreToolUse, UserPromptSubmit, Stop, etc.) resets the
