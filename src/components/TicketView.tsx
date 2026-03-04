@@ -72,6 +72,18 @@ function CollapsibleSection({
   );
 }
 
+/** Coerce an AI-returned value to a display string (it may be an object like {summary: "..."}) */
+function toText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const v = value as Record<string, unknown>;
+    if (typeof v.summary === 'string') return v.summary;
+    if (typeof v.text === 'string') return v.text;
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
 function SemanticSections({ semantic }: { semantic: SemanticContext }) {
   const hasChanges = semantic.keyChanges && semantic.keyChanges.length > 0;
   const hasDecisions = semantic.decisions && semantic.decisions.length > 0;
@@ -95,8 +107,8 @@ function SemanticSections({ semantic }: { semantic: SemanticContext }) {
           <div className="space-y-1.5">
             {semantic.keyChanges!.map((change, i) => (
               <div key={i} className="text-sm text-[#a9b1d6]">
-                <span className="font-mono text-xs text-[#7aa2f7]">{change.file}</span>
-                <p className="mt-0.5 text-xs text-[#787c99] leading-relaxed">{change.summary}</p>
+                <span className="font-mono text-xs text-[#7aa2f7]">{toText(change.file)}</span>
+                <p className="mt-0.5 text-xs text-[#787c99] leading-relaxed">{toText(change.summary)}</p>
               </div>
             ))}
           </div>
@@ -113,7 +125,7 @@ function SemanticSections({ semantic }: { semantic: SemanticContext }) {
           <ul className="space-y-1">
             {semantic.decisions!.map((d, i) => (
               <li key={i} className="text-xs leading-relaxed text-[#a9b1d6]">
-                <span className="mr-1.5 text-[#565f89]">&bull;</span>{d}
+                <span className="mr-1.5 text-[#565f89]">&bull;</span>{toText(d)}
               </li>
             ))}
           </ul>
@@ -129,7 +141,7 @@ function SemanticSections({ semantic }: { semantic: SemanticContext }) {
           <ul className="space-y-1">
             {semantic.tradeoffs!.map((t, i) => (
               <li key={i} className="text-xs leading-relaxed text-[#a9b1d6]">
-                <span className="mr-1.5 text-[#565f89]">&bull;</span>{t}
+                <span className="mr-1.5 text-[#565f89]">&bull;</span>{toText(t)}
               </li>
             ))}
           </ul>
@@ -145,7 +157,7 @@ function SemanticSections({ semantic }: { semantic: SemanticContext }) {
           <ul className="space-y-1">
             {semantic.technicalContext!.map((t, i) => (
               <li key={i} className="text-xs leading-relaxed text-[#a9b1d6]">
-                <span className="mr-1.5 text-[#565f89]">&bull;</span>{t}
+                <span className="mr-1.5 text-[#565f89]">&bull;</span>{toText(t)}
               </li>
             ))}
           </ul>
@@ -163,7 +175,7 @@ function SemanticSections({ semantic }: { semantic: SemanticContext }) {
           <ul className="space-y-1">
             {semantic.blockers!.map((b, i) => (
               <li key={i} className="text-xs leading-relaxed text-red-300/80">
-                <span className="mr-1.5 text-red-400/50">&bull;</span>{b}
+                <span className="mr-1.5 text-red-400/50">&bull;</span>{toText(b)}
               </li>
             ))}
           </ul>
