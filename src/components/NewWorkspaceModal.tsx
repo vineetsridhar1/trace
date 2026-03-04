@@ -2,25 +2,37 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { FiX } from 'react-icons/fi';
 import { useAgentRunStore } from '../stores/agentRunStore';
 import { useAppUIStore } from '../stores/appUIStore';
+import { useImageAttachments } from '../hooks/useImageAttachments';
+import { ImageThumbnails } from './ImageThumbnails';
 
 export function NewWorkspaceModal() {
   const [prompt, setPrompt] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { attachments, uploading, handlePaste, removeAttachment, clearAttachments, getAttachmentIds, getFilePaths } =
+    useImageAttachments();
 
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
   const handleClose = useCallback(() => {
+    clearAttachments();
     useAppUIStore.getState().setShowNewWorkspaceModal(false);
-  }, []);
+  }, [clearAttachments]);
 
   const handleSubmit = useCallback(() => {
     const trimmed = prompt.trim();
     if (!trimmed) return;
-    void useAgentRunStore.getState().workspaceActions.sendMessage(trimmed);
+    const attachmentIds = getAttachmentIds();
+    const filePaths = getFilePaths();
+    void useAgentRunStore.getState().workspaceActions.sendMessage(
+      trimmed,
+      attachmentIds.length > 0 ? attachmentIds : undefined,
+      filePaths.length > 0 ? filePaths : undefined,
+    );
+    clearAttachments();
     useAppUIStore.getState().setShowNewWorkspaceModal(false);
-  }, [prompt]);
+  }, [prompt, getAttachmentIds, getFilePaths, clearAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -57,11 +69,20 @@ export function NewWorkspaceModal() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder="What would you like to build?"
             rows={4}
             style={{ fieldSizing: 'content' } as React.CSSProperties}
             className="w-full rounded border border-edge bg-surface-deep px-3 py-2 text-sm text-primary placeholder-faint outline-none focus:border-edge-hover resize-none"
           />
+          {uploading && (
+            <p className="mt-1 text-xs text-muted">Uploading image…</p>
+          )}
+          {attachments.length > 0 && (
+            <div className="mt-2">
+              <ImageThumbnails images={attachments} onRemove={removeAttachment} />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
