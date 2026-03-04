@@ -715,9 +715,14 @@ export function useWorkspaceActions({
       const wasHandedOff = useAgentRunStore
         .getState()
         .isHandoffPickedUp(workspaceId);
-      if (hasEvents && !wasHandedOff) {
-        spawnOptions.resumeSessionId =
-          selectedWorkspace.claudeSessionId ?? undefined;
+      const wsSessionId = selectedWorkspace.claudeSessionId;
+      const canResume =
+        hasEvents &&
+        !wasHandedOff &&
+        !!wsSessionId &&
+        !wsSessionId.startsWith("trace-local-");
+      if (canResume) {
+        spawnOptions.resumeSessionId = wsSessionId;
       } else {
         const baseBranch = getChannelBaseBranch();
         const userInstructions = getSystemInstructions();
@@ -809,10 +814,14 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
+        const planSessionId = selectedWorkspace.claudeSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan response",
           statusOnSuccess,
-          resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
+          resumeSessionId:
+            planSessionId && !planSessionId.startsWith("trace-local-")
+              ? planSessionId
+              : undefined,
           model: selectedModel,
           effort:
             getEffortOptions(selectedAgent, selectedModel).length > 0
@@ -830,9 +839,13 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
+        const reviseSessionId = selectedWorkspace.claudeSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan revision",
-          resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
+          resumeSessionId:
+            reviseSessionId && !reviseSessionId.startsWith("trace-local-")
+              ? reviseSessionId
+              : undefined,
           model: selectedModel,
           effort:
             getEffortOptions(selectedAgent, selectedModel).length > 0

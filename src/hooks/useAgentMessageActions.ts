@@ -548,10 +548,16 @@ export function useWorkspaceActions({
             : undefined,
       };
 
-      if (hasEvents) {
-        // Resume existing session
-        spawnOptions.resumeSessionId =
-          selectedWorkspace.claudeSessionId ?? undefined;
+      // Resume if the session has events and the session ID is a real Claude
+      // session (not a trace-local-* fallback from a failed/crashed run).
+      const sessionId = selectedWorkspace.claudeSessionId;
+      const canResume =
+        hasEvents &&
+        !!sessionId &&
+        !sessionId.startsWith("trace-local-");
+
+      if (canResume) {
+        spawnOptions.resumeSessionId = sessionId;
       } else {
         // Fresh spawn — include system instructions
         const baseBranch = getChannelBaseBranch();
@@ -649,10 +655,14 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
+        const planSessionId = selectedWorkspace.claudeSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan response",
           statusOnSuccess,
-          resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
+          resumeSessionId:
+            planSessionId && !planSessionId.startsWith("trace-local-")
+              ? planSessionId
+              : undefined,
           model: selectedModel,
           effort:
             getEffortOptions(
@@ -674,9 +684,13 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
+        const reviseSessionId = selectedWorkspace.claudeSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan revision",
-          resumeSessionId: selectedWorkspace.claudeSessionId ?? undefined,
+          resumeSessionId:
+            reviseSessionId && !reviseSessionId.startsWith("trace-local-")
+              ? reviseSessionId
+              : undefined,
           model: selectedModel,
           effort:
             getEffortOptions(

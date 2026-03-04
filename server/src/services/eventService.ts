@@ -163,15 +163,18 @@ export async function ingestEvent(payload: HookEvent) {
       ...(payload.permission_mode ? { permissionMode: payload.permission_mode } : {}),
     },
   });
-  // Save Claude session ID on the message for conversation continuity.
-  // Skip manual input (UI-created events) but allow trace-local-* IDs so
-  // the inline auto-complete check can match them when Claude exits before
-  // producing a real session ID (e.g. immediate crash or early exit).
+  // Save Claude session ID on the workspace for conversation continuity.
+  // Only update claudeSessionId (used for --resume) with real Claude session
+  // IDs. trace-local-* fallbacks are synthetic IDs generated when Claude exits
+  // before streaming a session ID — saving them would cause --resume to fail
+  // on the next message, creating an infinite error loop.
+  // cliSessionId is always updated for session matching / auto-complete checks.
   if (payload.session_id !== 'user-manual-input') {
+    const isRealClaudeSession = !payload.session_id.startsWith('trace-local-');
     await prisma.workspace.update({
       where: { id: workspace.id },
       data: {
-        claudeSessionId: payload.session_id,
+        ...(isRealClaudeSession ? { claudeSessionId: payload.session_id } : {}),
         cliSessionId: payload.session_id,
       },
     });
