@@ -486,6 +486,7 @@ export type Query = {
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
+  ticketByWorkspaceId?: Maybe<Ticket>;
   ticketDependencies: Array<TicketDependency>;
   workspace?: Maybe<Workspace>;
   workspaceEvents: EventConnection;
@@ -555,6 +556,11 @@ export type QuerysessionEventsArgs = {
 
 export type QuerysessionsArgs = {
   channelId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QueryticketByWorkspaceIdArgs = {
   workspaceId: Scalars['ID']['input'];
 };
 
@@ -1210,6 +1216,7 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionsArgs, 'channelId' | 'workspaceId'>>;
+  ticketByWorkspaceId?: Resolver<Maybe<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryticketByWorkspaceIdArgs, 'workspaceId'>>;
   ticketDependencies?: Resolver<Array<ResolversTypes['TicketDependency']>, ParentType, ContextType, RequireFields<QueryticketDependenciesArgs, 'workspaceId'>>;
   workspace?: Resolver<Maybe<ResolversTypes['Workspace']>, ParentType, ContextType, RequireFields<QueryworkspaceArgs, 'id'>>;
   workspaceEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QueryworkspaceEventsArgs, 'channelId' | 'workspaceId'>>;

@@ -234,6 +234,7 @@ type Query {
   servers: [Server!]!
   sessionEvents(after: String, channelId: ID!, limit: Int, offset: Int, sessionId: ID!, workspaceId: ID!): EventConnection!
   sessions(channelId: ID!, workspaceId: ID!): [Session!]!
+  ticketByWorkspaceId(workspaceId: ID!): Ticket
   ticketDependencies(workspaceId: ID!): [TicketDependency!]!
   workspace(id: ID!): Workspace
   workspaceEvents(after: String, channelId: ID!, limit: Int, offset: Int, workspaceId: ID!): EventConnection!

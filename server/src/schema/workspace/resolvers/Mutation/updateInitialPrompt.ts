@@ -46,13 +46,17 @@ export const updateInitialPrompt: NonNullable<MutationResolvers['updateInitialPr
   // Fire-and-forget: create kanban ticket now that the user has written a real prompt
   if (trimmedText) {
     void (async () => {
-      const channel = await getChannel(channelId);
-      void createTicketForWorkspace(
-        workspaceId,
-        channelId,
-        trimmedText,
-        channel?.name ?? 'general',
-      );
+      try {
+        const channel = await getChannel(channelId);
+        await createTicketForWorkspace(
+          workspaceId,
+          channelId,
+          trimmedText,
+          channel?.name ?? 'general',
+        );
+      } catch (err) {
+        console.error('[updateInitialPrompt] Failed to create ticket:', err);
+      }
     })();
   }
 

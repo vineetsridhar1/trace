@@ -157,18 +157,7 @@ export function ThreadPanel() {
     return selectedWorkspace?.userId ?? null;
   }, [selectedWorkspace]);
 
-  const ticket = useMemo(() => {
-    if (!selectedWorkspaceId) return null;
-    for (const col of kanbanColumns) {
-      const found = col.tickets.find(
-        (t) => t.workspaceId === selectedWorkspaceId,
-      );
-      if (found) return found;
-    }
-    return null;
-  }, [kanbanColumns, selectedWorkspaceId]);
-
-  const { retriesExhausted, resetRetries } = useTicketFallback(selectedWorkspaceId, activeChannelId, ticket);
+  const { ticket, retriesExhausted, resetRetries } = useTicketFallback(selectedWorkspaceId, activeChannelId);
 
   const channelTickets = useMemo(
     () =>

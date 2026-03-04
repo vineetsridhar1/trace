@@ -27,6 +27,7 @@ type ImportedTicketResult {
 }
 
 extend type Query {
+  ticketByWorkspaceId(workspaceId: ID!): Ticket
   ticketDependencies(workspaceId: ID!): [TicketDependency!]!
 }
 

@@ -71,8 +71,10 @@ interface AppUIState {
   activeAiChatId: string | null;
   aiChats: AiChat[];
   channelViewMap: Record<string, MiddlePanelView>;
+  showNewWorkspaceModal: boolean;
   pendingThreadOpen: { channelId: string; workspaceId: string } | null;
 
+  setShowNewWorkspaceModal: (show: boolean) => void;
   setMiddlePanelView: (view: MiddlePanelView) => void;
   setChannelView: (channelId: string, view: MiddlePanelView) => void;
   setChannelWidth: (width: number | ((prev: number) => number)) => void;
@@ -115,8 +117,10 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   activeAiChatId: null,
   aiChats: [],
   channelViewMap: initialChannelViewMap,
+  showNewWorkspaceModal: false,
   pendingThreadOpen: null,
 
+  setShowNewWorkspaceModal: (show) => set({ showNewWorkspaceModal: show }),
   setMiddlePanelView: (view) => set({ middlePanelView: view }),
 
   setChannelView: (channelId, view) =>

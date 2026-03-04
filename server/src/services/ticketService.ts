@@ -246,6 +246,18 @@ async function reconcileTicketColumns(channelId: string): Promise<void> {
   }
 }
 
+export async function getTicketByWorkspaceId(workspaceId: string) {
+  const ticket = await prisma.ticket.findUnique({
+    where: { workspaceId },
+    include: {
+      column: true,
+      workspace: { select: TICKET_WORKSPACE_SELECT },
+    },
+  });
+  if (!ticket) return null;
+  return resolveTicketAttachmentUrls(ticket);
+}
+
 export async function getBoard(channelId: string) {
   const columns = await ensureKanbanColumns(channelId);
 

@@ -473,6 +473,7 @@ export type Query = {
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
+  ticketByWorkspaceId?: Maybe<Ticket>;
   ticketDependencies: Array<TicketDependency>;
   workspace?: Maybe<Workspace>;
   workspaceEvents: EventConnection;
@@ -542,6 +543,11 @@ export type QuerySessionEventsArgs = {
 
 export type QuerySessionsArgs = {
   channelId: Scalars['ID']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QueryTicketByWorkspaceIdArgs = {
   workspaceId: Scalars['ID']['input'];
 };
 

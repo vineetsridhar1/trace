@@ -78,7 +78,6 @@ interface WorkspaceActions {
   ) => Promise<void>;
   mergeToMain: () => Promise<void>;
   markMerged: () => Promise<void>;
-  createWorkspace: () => Promise<void>;
   createWorkspaceForTicket: (ticket: KanbanTicket) => Promise<void>;
 }
 
@@ -103,9 +102,6 @@ const defaultWorkspaceActions: WorkspaceActions = {
   ) as WorkspaceActions["sendPlanResponse"],
   mergeToMain: noopWarn("mergeToMain") as WorkspaceActions["mergeToMain"],
   markMerged: noopWarn("markMerged") as WorkspaceActions["markMerged"],
-  createWorkspace: noopWarn(
-    "createWorkspace",
-  ) as WorkspaceActions["createWorkspace"],
   createWorkspaceForTicket: noopWarn(
     "createWorkspaceForTicket",
   ) as WorkspaceActions["createWorkspaceForTicket"],

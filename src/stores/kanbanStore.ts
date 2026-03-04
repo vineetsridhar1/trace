@@ -6,11 +6,22 @@ interface PendingTicket {
   channelId: string;
 }
 
+function buildWorkspaceTickets(columns: KanbanColumn[]): Record<string, KanbanTicket> {
+  const map: Record<string, KanbanTicket> = {};
+  for (const col of columns) {
+    for (const t of col.tickets) {
+      if (t.workspaceId) map[t.workspaceId] = t;
+    }
+  }
+  return map;
+}
+
 interface KanbanState {
   columns: KanbanColumn[];
   channelId: string | null;
   loading: boolean;
   pendingTickets: PendingTicket[];
+  workspaceTickets: Record<string, KanbanTicket>;
 
   setColumns: (columns: KanbanColumn[], channelId: string) => void;
   setLoading: (loading: boolean) => void;
@@ -30,6 +41,7 @@ export const useKanbanStore = create<KanbanState>((set) => ({
   channelId: null,
   loading: false,
   pendingTickets: [],
+  workspaceTickets: {},
 
   setColumns: (columns, channelId) =>
     set((state) => {
@@ -56,7 +68,12 @@ export const useKanbanStore = create<KanbanState>((set) => ({
           return { ...col, tickets };
         });
       }
-      return { columns: updatedColumns, channelId, pendingTickets: [] };
+      return {
+        columns: updatedColumns,
+        channelId,
+        pendingTickets: [],
+        workspaceTickets: buildWorkspaceTickets(updatedColumns),
+      };
     }),
   setLoading: (loading) => set({ loading }),
 
@@ -66,8 +83,11 @@ export const useKanbanStore = create<KanbanState>((set) => ({
 
       // If columns haven't loaded yet, queue the ticket
       if (state.columns.length === 0) {
+        const wsUpdate: Record<string, KanbanTicket> = {};
+        if (ticket.workspaceId) wsUpdate[ticket.workspaceId] = ticket;
         return {
           pendingTickets: [...state.pendingTickets.filter((p) => p.ticket.id !== ticket.id), { ticket, channelId }],
+          workspaceTickets: { ...state.workspaceTickets, ...wsUpdate },
         };
       }
 
@@ -90,7 +110,14 @@ export const useKanbanStore = create<KanbanState>((set) => ({
         (a, b) => a.sortOrder - b.sortOrder,
       );
       updated[targetColIndex] = targetCol;
-      return { columns: updated };
+
+      const wsUpdate: Record<string, KanbanTicket> = {};
+      if (ticket.workspaceId) wsUpdate[ticket.workspaceId] = ticket;
+
+      return {
+        columns: updated,
+        workspaceTickets: { ...state.workspaceTickets, ...wsUpdate },
+      };
     }),
 
   moveTicketOptimistic: (ticketId, columnId, sortOrder) =>
@@ -119,23 +146,35 @@ export const useKanbanStore = create<KanbanState>((set) => ({
     }),
 
   removeTicketByWorkspaceId: (workspaceId) =>
-    set((state) => ({
-      columns: state.columns.map((col) => ({
-        ...col,
-        tickets: col.tickets.filter((t) => t.workspaceId !== workspaceId),
-      })),
-    })),
+    set((state) => {
+      const { [workspaceId]: _, ...remainingWs } = state.workspaceTickets;
+      return {
+        columns: state.columns.map((col) => ({
+          ...col,
+          tickets: col.tickets.filter((t) => t.workspaceId !== workspaceId),
+        })),
+        workspaceTickets: remainingWs,
+      };
+    }),
 
   setTicketWorkspacePrUrl: (workspaceId, prUrl) =>
-    set((state) => ({
-      columns: state.columns.map((col) => ({
-        ...col,
-        tickets: col.tickets.map((t) => {
-          if (t.workspaceId !== workspaceId || !t.workspace) return t;
-          return { ...t, workspace: { ...t.workspace, prUrl } };
-        }),
-      })),
-    })),
+    set((state) => {
+      const existing = state.workspaceTickets[workspaceId];
+      const wsUpdate: Record<string, KanbanTicket> =
+        existing?.workspace
+          ? { [workspaceId]: { ...existing, workspace: { ...existing.workspace, prUrl } } }
+          : {};
+      return {
+        columns: state.columns.map((col) => ({
+          ...col,
+          tickets: col.tickets.map((t) => {
+            if (t.workspaceId !== workspaceId || !t.workspace) return t;
+            return { ...t, workspace: { ...t.workspace, prUrl } };
+          }),
+        })),
+        workspaceTickets: { ...state.workspaceTickets, ...wsUpdate },
+      };
+    }),
 
-  clearBoard: () => set({ columns: [], channelId: null, pendingTickets: [] }),
+  clearBoard: () => set({ columns: [], channelId: null, pendingTickets: [], workspaceTickets: {} }),
 }));

@@ -280,7 +280,7 @@ export function useDefaultShortcuts({
     "creation.new-workspace",
     "mod+n",
     () => {
-      void useAgentRunStore.getState().workspaceActions.createWorkspace();
+      useAppUIStore.getState().setShowNewWorkspaceModal(true);
     },
     { label: "New workspace", category: "creation", context: "global" },
   );

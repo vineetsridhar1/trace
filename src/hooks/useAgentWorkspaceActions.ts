@@ -349,22 +349,6 @@ export function useWorkspaceActions({
     [executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
   );
 
-  const createWorkspace = useCallback(async () => {
-    const chId = activeChannelIdRef.current;
-    if (!chId) return;
-    try {
-      const { data } = await executeCreateWorkspace({
-        variables: { channelId: chId, text: "" },
-      });
-      if (!data?.createWorkspace) return;
-      const workspace = data.createWorkspace.workspace as Workspace;
-      upsertWorkspace(workspace);
-      onWorkspaceCreated(workspace);
-    } catch {
-      console.error("Failed to create workspace");
-    }
-  }, [executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace]);
-
   const createWorkspaceForTicket = useCallback(
     async (ticket: KanbanTicket) => {
       const chId = activeChannelIdRef.current;
@@ -903,7 +887,6 @@ export function useWorkspaceActions({
       sendPlanResponse,
       mergeToMain,
       markMerged,
-      createWorkspace,
       createWorkspaceForTicket,
     });
     return () => useAgentRunStore.getState().clearWorkspaceActions();
@@ -916,7 +899,6 @@ export function useWorkspaceActions({
     sendPlanResponse,
     mergeToMain,
     markMerged,
-    createWorkspace,
     createWorkspaceForTicket,
   ]);
 
@@ -929,7 +911,6 @@ export function useWorkspaceActions({
     sendPlanResponse,
     mergeToMain,
     markMerged,
-    createWorkspace,
     createWorkspaceForTicket,
   };
 }
