@@ -7,7 +7,7 @@ import {
   type TicketMetadata,
 } from "./ticketAiService";
 import { getStorage } from "./storageService";
-import { ensureManualInputCliSession, getWorkspaceByIdForFeed } from "./workspaceService";
+import { ensureManualInputCliSession, getWorkspaceByIdForFeed, updateWorkspaceStatus } from "./workspaceService";
 
 function resolveTicketAttachmentUrls<
   T extends {
@@ -110,8 +110,150 @@ export async function ensureKanbanColumns(channelId: string) {
   return existing;
 }
 
+const ACTIVE_WORKSPACE_STATUSES = ["creation", "in_progress", "needs_input"];
+
+// Time after the last event before we consider a workspace "stale". Any Claude
+// event (PostToolUse, PreToolUse, UserPromptSubmit, Stop, etc.) resets the
+// cliSession.lastSeenAt timestamp, so this threshold means "no activity of any
+// kind for 8 minutes". The client-side reconciliation checks every 60 seconds,
+// so this server-side safety net only fires if the client missed it too.
+const STALE_THRESHOLD_MS = 8 * 60 * 1000;
+
+// Grace period after a session stops before we reconcile it. This prevents
+// racing with the normal auto-complete path in ingestEvent which also
+// transitions the workspace on Stop events.
+const STOPPED_GRACE_MS = 30 * 1000;
+
+/**
+ * Detect workspaces in active statuses that are actually done.
+ *
+ * Two heuristics:
+ * 1. The CLI session is marked "stopped" (Stop event was received by the
+ *    server, but auto-complete didn't transition the workspace).
+ * 2. No events have arrived in STALE_THRESHOLD_MS and the workspace is still
+ *    in an active state. This covers the case where the Stop event was lost
+ *    entirely (e.g. server was down when Claude exited).
+ */
+async function reconcileStaleWorkspaces(channelId: string): Promise<void> {
+  try {
+    const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+    const stoppedGrace = new Date(Date.now() - STOPPED_GRACE_MS);
+
+    // Find workspaces in active states whose CLI session is stopped, OR
+    // whose CLI session hasn't reported in since the stale threshold.
+    const stuckWorkspaces = await prisma.workspace.findMany({
+      where: {
+        channelId,
+        status: { in: ACTIVE_WORKSPACE_STATUSES },
+        OR: [
+          // Case 1: CLI session explicitly stopped AND grace period elapsed
+          // (avoids racing with the normal auto-complete in ingestEvent)
+          { cliSession: { status: "stopped", lastSeenAt: { lt: stoppedGrace } } },
+          // Case 2: CLI session hasn't sent events in a while
+          { cliSession: { lastSeenAt: { lt: staleThreshold } } },
+        ],
+      },
+      select: { id: true, status: true },
+    });
+
+    for (const ws of stuckWorkspaces) {
+      // "creation" means the workspace was being set up — revert to "pending"
+      // so it can be restarted. For everything else, transition to "completed".
+      const newStatus = ws.status === "creation" ? "pending" : "completed";
+
+      console.warn(
+        `[reconcileStaleWorkspaces] Workspace ${ws.id} stuck in "${ws.status}" — transitioning to "${newStatus}"`,
+      );
+
+      await updateWorkspaceStatus(ws.id, newStatus);
+
+      // Sync the ticket column too (belt-and-suspenders — reconcileTicketColumns
+      // will also catch it, but broadcasting now means the live UI updates faster).
+      void syncTicketWithWorkspaceStatus(ws.id, channelId, newStatus);
+
+      // If any dependents were waiting on this workspace, check them now.
+      void checkAndTriggerDependents(ws.id, channelId);
+    }
+  } catch (err) {
+    console.error("[reconcileStaleWorkspaces] failed:", err);
+  }
+}
+
+/**
+ * Fix tickets whose kanban column doesn't match their workspace's status.
+ *
+ * This catches drift caused by missed pubsub events, partial failures in
+ * syncTicketWithWorkspaceStatus, or any other reason the ticket column fell
+ * out of sync with the workspace status.
+ */
+async function reconcileTicketColumns(channelId: string): Promise<void> {
+  try {
+    const tickets = await prisma.ticket.findMany({
+      where: { column: { channelId } },
+      include: {
+        column: true,
+        workspace: { select: { id: true, status: true } },
+      },
+    });
+
+    for (const ticket of tickets) {
+      if (!ticket.workspace) continue;
+
+      const expectedSlug = STATUS_TO_SLUG[ticket.workspace.status];
+      if (!expectedSlug) continue;
+
+      // Already correct, or merged tickets never move backward
+      if (ticket.column.slug === expectedSlug || ticket.column.slug === "merged") {
+        continue;
+      }
+
+      const targetColumn = await prisma.kanbanColumn.findUnique({
+        where: { channelId_slug: { channelId, slug: expectedSlug } },
+      });
+      if (!targetColumn) continue;
+
+      const maxSort = await prisma.ticket.aggregate({
+        where: { columnId: targetColumn.id },
+        _max: { sortOrder: true },
+      });
+
+      console.warn(
+        `[reconcileTicketColumns] Ticket ${ticket.id} (workspace ${ticket.workspace.id}) in column "${ticket.column.slug}" but workspace is "${ticket.workspace.status}" — moving to "${expectedSlug}"`,
+      );
+
+      const updated = await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          columnId: targetColumn.id,
+          sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+        },
+        include: {
+          column: true,
+          workspace: { select: TICKET_WORKSPACE_SELECT },
+        },
+      });
+
+      pubsub.publish(TOPICS.TICKET_UPSERTED(channelId), {
+        ticketUpserted: {
+          channelId,
+          ticket: resolveTicketAttachmentUrls(updated),
+          columnSlug: updated.column.slug,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[reconcileTicketColumns] failed:", err);
+  }
+}
+
 export async function getBoard(channelId: string) {
   const columns = await ensureKanbanColumns(channelId);
+
+  // Reconcile stale workspaces and mismatched ticket columns before returning
+  // the board. This catches stuck states caused by missed events, server
+  // restarts, or client-side reconciliation failures.
+  await reconcileStaleWorkspaces(channelId);
+  await reconcileTicketColumns(channelId);
 
   const columnsWithTickets = await prisma.kanbanColumn.findMany({
     where: { channelId },

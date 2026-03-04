@@ -24,7 +24,9 @@ export function useStuckWorkspaceReconciliation({
   const updateRef = useRef(updateWorkspaceStatus);
   updateRef.current = updateWorkspaceStatus;
 
-  const reconciledRef = useRef(false);
+  // Track whether we've done the initial startup reconciliation so we can
+  // apply the grace period only on the very first check.
+  const startupDoneRef = useRef(false);
 
   useEffect(() => {
     if (workspacesLoading || !window.traceAPI?.checkRunningProcesses) return;
@@ -53,16 +55,18 @@ export function useStuckWorkspaceReconciliation({
       }
     }
 
-    // On first load, wait for the grace period before reconciling
-    if (!reconciledRef.current) {
-      reconciledRef.current = true;
-      const startupTimer = setTimeout(reconcile, STARTUP_GRACE_MS);
-      // Also start the periodic check
-      const interval = setInterval(reconcile, POLL_INTERVAL_MS);
-      return () => {
-        clearTimeout(startupTimer);
-        clearInterval(interval);
-      };
-    }
+    // On first mount, wait a grace period for processes to spin up before
+    // checking. On subsequent activations (channel switch, WS reconnection)
+    // run immediately — processes should already be registered by then.
+    const initialDelay = startupDoneRef.current ? 0 : STARTUP_GRACE_MS;
+    startupDoneRef.current = true;
+
+    const startupTimer = setTimeout(reconcile, initialDelay);
+    const interval = setInterval(reconcile, POLL_INTERVAL_MS);
+
+    return () => {
+      clearTimeout(startupTimer);
+      clearInterval(interval);
+    };
   }, [workspacesLoading]);
 }
