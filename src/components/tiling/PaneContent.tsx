@@ -11,7 +11,7 @@ import { CollapsedTurnGroup } from '../CollapsedTurnGroup';
 import { AssistantTextRow } from '../thread-events/AssistantTextRow';
 import { TicketView } from '../TicketView';
 import { WorktreeChanges } from '../WorktreeChanges';
-import { FiEdit3 } from 'react-icons/fi';
+import { FiEdit3, FiAlertCircle, FiRefreshCw } from 'react-icons/fi';
 
 // ─── Agent content (the thread scroll) ──────────────────────────
 
@@ -166,10 +166,13 @@ export function AgentContent({
 
 interface TicketContentProps {
   ticket: KanbanTicket | null;
+  retriesExhausted: boolean;
+  onRetry: () => void;
 }
 
-export function TicketContent({ ticket }: TicketContentProps) {
+export function TicketContent({ ticket, retriesExhausted, onRetry }: TicketContentProps) {
   if (ticket) return <TicketView ticket={ticket} />;
+  if (retriesExhausted) return <TicketNotFound onRetry={onRetry} />;
   return <TicketViewSkeleton />;
 }
 
@@ -229,6 +232,30 @@ function ThreadStatusMessage({
     return <div className="text-sm text-red-400">Failed to load events</div>;
   }
   return null;
+}
+
+function TicketNotFound({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-4">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-elevated">
+        <FiAlertCircle className="h-6 w-6 text-muted" />
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-medium text-primary">Ticket not found</p>
+        <p className="mt-1 text-xs text-muted">
+          The ticket for this workspace could not be loaded.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-surface-elevated px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-edge"
+      >
+        <FiRefreshCw className="h-3 w-3" />
+        Retry
+      </button>
+    </div>
+  );
 }
 
 function TicketViewSkeleton() {

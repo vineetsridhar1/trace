@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBoardLazyQuery } from './__generated__/useKanban.generated';
 import { useKanbanStore } from '../stores/kanbanStore';
 import type { KanbanColumn, KanbanTicket } from '../types';
@@ -9,20 +9,23 @@ const RETRY_DELAYS = [1000, 2000, 4000, 8000];
  * Retries fetching the board when a ticket is expected but not found in the
  * kanban store. Handles the race condition where ticket creation (AI-generated)
  * hasn't completed when the user opens the Ticket tab.
+ *
+ * Returns { retriesExhausted, resetRetries } so callers can show a "not found"
+ * state instead of loading forever.
  */
 export function useTicketFallback(
   selectedWorkspaceId: string | null,
   activeChannelId: string | null,
   ticket: KanbanTicket | null,
-) {
+): { retriesExhausted: boolean; resetRetries: () => void } {
   const [executeBoard] = useBoardLazyQuery();
-  const retryCountRef = useRef(0);
+  const [retryCount, setRetryCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasTicket = ticket !== null;
 
+  // Reset retries when workspace changes or ticket is found
   useEffect(() => {
-    // Reset retries when workspace changes or ticket is found
-    retryCountRef.current = 0;
+    setRetryCount(0);
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -31,12 +34,11 @@ export function useTicketFallback(
 
   useEffect(() => {
     if (!selectedWorkspaceId || !activeChannelId || ticket) return;
-    if (retryCountRef.current >= RETRY_DELAYS.length) return;
+    if (retryCount >= RETRY_DELAYS.length) return;
 
-    const delay = RETRY_DELAYS[retryCountRef.current];
+    const delay = RETRY_DELAYS[retryCount];
     timerRef.current = setTimeout(async () => {
       timerRef.current = null;
-      retryCountRef.current += 1;
       try {
         const { data } = await executeBoard({
           variables: { channelId: activeChannelId },
@@ -48,6 +50,7 @@ export function useTicketFallback(
       } catch {
         // Silently retry on next interval
       }
+      setRetryCount((prev) => prev + 1);
     }, delay);
 
     return () => {
@@ -56,5 +59,17 @@ export function useTicketFallback(
         timerRef.current = null;
       }
     };
-  }, [selectedWorkspaceId, activeChannelId, ticket, executeBoard]);
+  }, [selectedWorkspaceId, activeChannelId, ticket, retryCount, executeBoard]);
+
+  const resetRetries = useCallback(() => {
+    setRetryCount(0);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const retriesExhausted = !ticket && retryCount >= RETRY_DELAYS.length;
+
+  return { retriesExhausted, resetRetries };
 }

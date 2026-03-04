@@ -168,7 +168,7 @@ export function ThreadPanel() {
     return null;
   }, [kanbanColumns, selectedWorkspaceId]);
 
-  useTicketFallback(selectedWorkspaceId, activeChannelId, ticket);
+  const { retriesExhausted, resetRetries } = useTicketFallback(selectedWorkspaceId, activeChannelId, ticket);
 
   const channelTickets = useMemo(
     () =>
@@ -880,7 +880,7 @@ export function ThreadPanel() {
                 );
               }
               if (mode === "ticket") {
-                return <TicketContent ticket={ticket} />;
+                return <TicketContent ticket={ticket} retriesExhausted={retriesExhausted} onRetry={resetRetries} />;
               }
               if (mode === "files") {
                 return (
