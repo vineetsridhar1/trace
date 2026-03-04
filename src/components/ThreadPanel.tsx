@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FiFileText } from "react-icons/fi";
 import type {
   AskUserQuestionNode,
   PlanReviewNode,
-  ProductDocMode,
   TicketStatus,
 } from "../types";
 import { gql } from "@apollo/client";
@@ -40,6 +38,7 @@ import {
 } from "./tiling/PaneContent";
 import { SplitTreeRenderer } from "./tiling/SplitTreeRenderer";
 import { SingletonLayer } from "./tiling/SingletonLayer";
+import { ProductDocInlineViewer } from "./ProductDocInlineViewer";
 import type { RefObject } from "react";
 
 // GQL used by setTicketDependencies (already defined in App.generated, just need the hook)
@@ -673,56 +672,23 @@ export function ThreadPanel() {
           className="thread-panel-shell relative flex min-h-0 flex-1"
         >
           {isProductDoc ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="shrink-0 border-b border-edge px-4 py-2.5">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!selectedWorkspaceId) return;
-                    // Auto-detect latest step using worktree path
-                    let mode: ProductDocMode = 'prd';
-                    const wp = useThreadStore.getState().worktreePath;
-                    if (wp) {
-                      try {
-                        const tickets = await window.traceAPI.readProductDocFile(`${wp}/.trace/tickets.json`);
-                        if (tickets.success && tickets.content) {
-                          mode = 'tickets';
-                        } else {
-                          const techScope = await window.traceAPI.readProductDocFile(`${wp}/.trace/technical-scoping.md`);
-                          if (techScope.success && techScope.content) {
-                            mode = 'tech-scope';
-                          }
-                        }
-                      } catch {
-                        // Fall back to prd mode
-                      }
-                    }
-                    const s = useAppUIStore.getState();
-                    s.setActiveProductDocId(selectedWorkspaceId);
-                    s.setActiveAiChatId(null);
-                    s.setProductDocMode(mode);
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:opacity-90 transition-opacity"
-                >
-                  <FiFileText className="h-4 w-4" />
-                  Open Product Scoping
-                </button>
-              </div>
-              <AgentContent
-                threadContentRef={threadContentRef}
-                onThreadScroll={onThreadScroll}
-                sessionNodes={sessionNodes}
-                sessionStatus={sessionStatus}
-                activeSessionId={activeSessionId}
-                loadingOlderEvents={loadingOlderEvents}
-                expandedReadGroupIds={expandedReadGroupIds}
-                expandedTurnGroupIds={expandedTurnGroupIds}
-                toggleReadGroup={toggleReadGroup}
-                toggleTurnGroup={toggleTurnGroup}
-                showJumpToLatest={showJumpToLatest}
-                scrollToLatest={scrollToLatest}
-              />
-            </div>
+            <ProductDocInlineViewer
+              key={selectedWorkspaceId}
+              worktreePath={worktreePath}
+              selectedWorkspaceId={selectedWorkspaceId}
+              threadContentRef={threadContentRef}
+              onThreadScroll={onThreadScroll}
+              sessionNodes={sessionNodes}
+              sessionStatus={sessionStatus}
+              activeSessionId={activeSessionId}
+              loadingOlderEvents={loadingOlderEvents}
+              expandedReadGroupIds={expandedReadGroupIds}
+              expandedTurnGroupIds={expandedTurnGroupIds}
+              toggleReadGroup={toggleReadGroup}
+              toggleTurnGroup={toggleTurnGroup}
+              showJumpToLatest={showJumpToLatest}
+              scrollToLatest={scrollToLatest}
+            />
           ) : (
           <>
           <SplitTreeRenderer
