@@ -13,17 +13,19 @@ import { useAgentRunStore } from '../stores/agentRunStore';
 import { useAppUIStore } from '../stores/appUIStore';
 import { useThreadScroll } from '../hooks/useThreadScroll';
 import { buildSessionNodes } from '../utils';
-import type { AskUserQuestionNode } from '../types';
+import type { AskUserQuestionNode, ProductDocMode } from '../types';
 import { TicketGraph } from './TicketGraph';
 
 interface ProductDocViewProps {
   onBack: () => void;
   onGenerateTechScope?: () => void;
   onGenerateTickets?: () => void;
+  onSwitchTab?: (mode: ProductDocMode) => void;
 }
 
-export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets }: ProductDocViewProps) {
+export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets, onSwitchTab }: ProductDocViewProps) {
   const productDocMode = useAppUIStore((s) => s.productDocMode);
+  const productDocSessionMap = useAppUIStore((s) => s.productDocSessionMap);
   const worktreePath = useThreadStore((s) => s.worktreePath);
   const [docContent, setDocContent] = useState('');
   const [ticketView, setTicketView] = useState<'code' | 'graph'>('code');
@@ -194,9 +196,16 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets 
       .catch(() => setProductDocBranch(null));
   }, [selectedWorkspaceId]);
 
+  // Record activeSessionId → current mode mapping
+  useEffect(() => {
+    if (activeSessionId) {
+      useAppUIStore.getState().setProductDocSessionForMode(productDocMode, activeSessionId);
+    }
+  }, [activeSessionId, productDocMode]);
+
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
+      {/* Header with tab bar */}
       <div className="flex items-center gap-3 border-b border-edge px-4 py-2.5">
         <button
           type="button"
@@ -206,9 +215,38 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets 
           <FiArrowLeft className="h-4 w-4" />
         </button>
         <FiFileText className="h-4 w-4 text-accent" />
-        <h2 className="text-sm font-semibold text-primary">
-          {isTickets ? 'Tickets' : isTechScope ? 'Technical Scoping' : 'Product Document'}
-        </h2>
+        <div className="flex items-center rounded-full bg-surface-elevated p-0.5">
+          {([
+            { mode: 'prd' as const, label: 'Product Scoping' },
+            { mode: 'tech-scope' as const, label: 'Tech Scoping' },
+            { mode: 'tickets' as const, label: 'Tickets' },
+          ]).map(({ mode, label }) => {
+            const isActive = productDocMode === mode;
+            const hasSession = !!productDocSessionMap[mode];
+            const isDisabled = !isActive && !hasSession && mode !== 'prd';
+            return (
+              <button
+                key={mode}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => {
+                  if (!isActive && !isDisabled && onSwitchTab) {
+                    onSwitchTab(mode);
+                  }
+                }}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  isActive
+                    ? 'bg-accent/20 text-accent-light'
+                    : isDisabled
+                      ? 'text-faint cursor-not-allowed'
+                      : 'text-muted hover:text-primary'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         {filePath && (
           <span className="text-xs text-muted truncate">{filePath.split('/').pop()}</span>
         )}

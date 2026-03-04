@@ -424,6 +424,7 @@ export type TicketStatus =
   | "handed_off";
 export type SessionStatus = "idle" | "loading" | "ready" | "empty" | "error";
 export type DragTarget = "left" | "right" | null;
+export type ProductDocMode = "prd" | "tech-scope" | "tickets";
 export type MiddlePanelView =
   | "chat"
   | "board"

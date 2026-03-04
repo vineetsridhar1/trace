@@ -3,6 +3,7 @@ import { FiFileText } from "react-icons/fi";
 import type {
   AskUserQuestionNode,
   PlanReviewNode,
+  ProductDocMode,
   TicketStatus,
 } from "../types";
 import { gql } from "@apollo/client";
@@ -679,7 +680,7 @@ export function ThreadPanel() {
                   onClick={async () => {
                     if (!selectedWorkspaceId) return;
                     // Auto-detect latest step using worktree path
-                    let mode: 'prd' | 'tech-scope' | 'tickets' = 'prd';
+                    let mode: ProductDocMode = 'prd';
                     const wp = useThreadStore.getState().worktreePath;
                     if (wp) {
                       try {

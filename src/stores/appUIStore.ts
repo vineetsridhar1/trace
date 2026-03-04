@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { MiddlePanelView, DragTarget, ChannelType, AiChat } from '../types';
+import type { MiddlePanelView, DragTarget, ChannelType, AiChat, ProductDocMode } from '../types';
 
 const CHANNEL_VIEW_MAP_KEY = 'trace:channelViewMap';
 const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'board', 'projects'];
@@ -67,7 +67,8 @@ interface AppUIState {
   showCreateServer: boolean;
   showProductDocModal: boolean;
   activeProductDocId: string | null;
-  productDocMode: 'prd' | 'tech-scope' | 'tickets';
+  productDocMode: ProductDocMode;
+  productDocSessionMap: Record<ProductDocMode, string | null>;
   activeAiChatId: string | null;
   aiChats: AiChat[];
   channelViewMap: Record<string, MiddlePanelView>;
@@ -87,7 +88,9 @@ interface AppUIState {
   setShowCreateServer: (show: boolean) => void;
   setShowProductDocModal: (show: boolean) => void;
   setActiveProductDocId: (id: string | null) => void;
-  setProductDocMode: (mode: 'prd' | 'tech-scope' | 'tickets') => void;
+  setProductDocMode: (mode: ProductDocMode) => void;
+  setProductDocSessionForMode: (mode: ProductDocMode, sessionId: string | null) => void;
+  resetProductDocSessions: () => void;
   setActiveAiChatId: (id: string | null) => void;
   setAiChats: (chats: AiChat[]) => void;
   upsertAiChat: (chat: Partial<AiChat> & { id: string }) => void;
@@ -114,6 +117,7 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   showProductDocModal: false,
   activeProductDocId: null,
   productDocMode: 'prd',
+  productDocSessionMap: { prd: null, 'tech-scope': null, tickets: null },
   activeAiChatId: null,
   aiChats: [],
   channelViewMap: initialChannelViewMap,
@@ -145,6 +149,12 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   setShowProductDocModal: (show) => set({ showProductDocModal: show }),
   setActiveProductDocId: (id) => set({ activeProductDocId: id }),
   setProductDocMode: (mode) => set({ productDocMode: mode }),
+  setProductDocSessionForMode: (mode, sessionId) =>
+    set((state) => ({
+      productDocSessionMap: { ...state.productDocSessionMap, [mode]: sessionId },
+    })),
+  resetProductDocSessions: () =>
+    set({ productDocSessionMap: { prd: null, 'tech-scope': null, tickets: null } }),
   setActiveAiChatId: (id) => set({ activeAiChatId: id }),
   setAiChats: (chats) => set({ aiChats: chats }),
 
