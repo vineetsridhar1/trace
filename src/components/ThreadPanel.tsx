@@ -6,10 +6,7 @@ import type {
 } from "../types";
 import { gql } from "@apollo/client";
 import { WORKSPACE_FIELDS } from "../graphql/fragments";
-import {
-  useUpdateWorkspaceStatusMutation,
-  useDeleteWorkspaceMutation,
-} from "../__generated__/App.generated";
+import { useDeleteWorkspaceMutation } from "../__generated__/App.generated";
 import {
   useSetTicketDependenciesMutation,
   useHandoffWorkspaceMutation,
@@ -95,7 +92,6 @@ export function ThreadPanel() {
   const expandedTurnGroupIds = useThreadStore((s) => s.expandedTurnGroupIds);
   const hasWorktree = useThreadStore((s) => s.hasWorktree);
   const worktreePath = useThreadStore((s) => s.worktreePath);
-  const deletingWorktree = useThreadStore((s) => s.deletingWorktree);
   const toggleReadGroup = useThreadStore((s) => s.toggleReadGroup);
   const toggleTurnGroup = useThreadStore((s) => s.toggleTurnGroup);
 
@@ -248,7 +244,6 @@ export function ThreadPanel() {
   );
 
   // ─── Mutations ──────────────────────────────────────────────────
-  const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
   const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
   const [executeHandoffWorkspace] = useHandoffWorkspaceMutation();
 
@@ -332,41 +327,6 @@ export function ThreadPanel() {
     if (hasWorktree === true && selectedWorkspaceId)
       void handleInitializeTerminals();
   }, [hasWorktree, selectedWorkspaceId, handleInitializeTerminals]);
-
-  const handleDeleteWorktree = useCallback(() => {
-    const wsId = useThreadStore.getState().selectedWorkspaceId;
-    if (wsId) {
-      useTerminalStore.getState().killAllForWorkspace(wsId);
-      void window.traceAPI.releasePorts(wsId);
-    }
-    void useThreadStore
-      .getState()
-      .syncActions.deleteWorktree(async (workspaceId) => {
-        const chId = activeChannelId;
-        if (!chId) return;
-        try {
-          const { data } = await executeUpdateWorkspaceStatus({
-            variables: { channelId: chId, workspaceId, status: "completed" },
-          });
-          if (data?.updateWorkspaceStatus) {
-            useWorkspaceStore
-              .getState()
-              .upsertWorkspace(
-                data.updateWorkspaceStatus as import("../types").Workspace,
-              );
-            useThreadStore
-              .getState()
-              .syncSelectedWorkspace(
-                data.updateWorkspaceStatus as import("../types").Workspace,
-              );
-          }
-        } catch {
-          console.error(
-            "Failed to update workspace status after worktree deletion",
-          );
-        }
-      });
-  }, [activeChannelId, executeUpdateWorkspaceStatus]);
 
   const handleDeleteWorkspace = useCallback(async () => {
     const wsId = useThreadStore.getState().selectedWorkspaceId;
@@ -686,7 +646,6 @@ export function ThreadPanel() {
           selectedWorkspaceId={selectedWorkspaceId}
           channelId={activeChannelId}
           workspaceStatus={workspaceStatus}
-          deletingWorktree={deletingWorktree}
           hasWorktree={hasWorktree}
           worktreePath={worktreePath}
           isFullscreen={isFullscreen}
@@ -694,7 +653,6 @@ export function ThreadPanel() {
           onDeleteWorkspace={() => {
             void handleDeleteWorkspace();
           }}
-          onDeleteWorktree={handleDeleteWorktree}
           canHandoff={canHandoff}
           handingOff={handingOff}
           onHandoff={() => {

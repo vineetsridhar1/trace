@@ -140,15 +140,21 @@ function CollapsibleStatusGroup({
         <div className="overflow-hidden">
           {loading ? (
             <div className="flex flex-col gap-1 px-1 py-2">
-              {Array.from({ length: Math.min(displayCount ?? 3, 3) }, (_, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-                  <div className="h-8 w-8 flex-shrink-0 rounded-full bg-[#292e42] animate-pulse" />
-                  <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-                    <div className="h-3.5 w-3/5 rounded bg-[#292e42] animate-pulse" />
-                    <div className="h-3 w-4/5 rounded bg-[#292e42] animate-pulse" />
+              {Array.from(
+                { length: Math.min(displayCount ?? 3, 3) },
+                (_, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+                  >
+                    <div className="h-8 w-8 flex-shrink-0 rounded-full bg-[#292e42] animate-pulse" />
+                    <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                      <div className="h-3.5 w-3/5 rounded bg-[#292e42] animate-pulse" />
+                      <div className="h-3 w-4/5 rounded bg-[#292e42] animate-pulse" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ),
+              )}
             </div>
           ) : (
             children
@@ -194,10 +200,7 @@ interface MessagePanelProps {
   kanbanLoading: boolean;
   onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
-  onDeleteWorktree?: (workspaceId: string) => void;
   onMarkMerged?: (workspaceId: string) => void;
-  worktreeWorkspaceIds?: Set<string>;
-  deletingWorktreeIds?: Set<string>;
   isFullscreen?: boolean;
   teamProjects?: Channel[];
   onSwitchChannel?: (channelId: string) => void;
@@ -228,10 +231,7 @@ export function MessagePanel({
   kanbanColumns,
   kanbanLoading,
   onDeleteWorkspace,
-  onDeleteWorktree,
   onMarkMerged,
-  worktreeWorkspaceIds,
-  deletingWorktreeIds,
   onMoveTicket,
   isFullscreen,
   teamProjects = [],
@@ -366,8 +366,16 @@ export function MessagePanel({
         key={group.status}
         status={group.status}
         count={group.workspaces.length}
-        displayCount={group.status === "merged" && !mergedWorkspacesLoaded ? mergedCount : undefined}
-        onExpand={group.status === "merged" && !mergedWorkspacesLoaded ? onExpandMerged : undefined}
+        displayCount={
+          group.status === "merged" && !mergedWorkspacesLoaded
+            ? mergedCount
+            : undefined
+        }
+        onExpand={
+          group.status === "merged" && !mergedWorkspacesLoaded
+            ? onExpandMerged
+            : undefined
+        }
         loading={group.status === "merged" && mergedWorkspacesLoading}
       >
         {group.workspaces.map((workspace) => (
@@ -379,16 +387,11 @@ export function MessagePanel({
             needsAttention={attentionWorkspaceIds.has(workspace.id)}
             onOpenWorkspace={onOpenWorkspace}
             onDeleteWorkspace={showDelete ? onDeleteWorkspace : undefined}
-            onDeleteWorktree={
-              workspace.status === "merged" ? onDeleteWorktree : undefined
-            }
             onMarkMerged={onMarkMerged}
             channelId={channelId}
-            hasActiveWorktree={worktreeWorkspaceIds?.has(workspace.id)}
             hasRunningProcess={workspacesWithRunningProcesses?.has(
               workspace.id,
             )}
-            isDeletingWorktree={deletingWorktreeIds?.has(workspace.id)}
             dimmed={workspace.status === "merged"}
             activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
             shortcutIndex={workspaceShortcutMap.get(workspace.id)}

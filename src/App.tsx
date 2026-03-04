@@ -136,11 +136,13 @@ function AppContent() {
   const attentionWorkspaceIds = useWorkspaceStore(
     (s) => s.attentionWorkspaceIds,
   );
-  const worktreeWorkspaceIds = useWorkspaceStore((s) => s.worktreeWorkspaceIds);
-  const deletingWorktreeIds = useWorkspaceStore((s) => s.deletingWorktreeIds);
   const mergedCount = useWorkspaceStore((s) => s.mergedCount);
-  const mergedWorkspacesLoaded = useWorkspaceStore((s) => s.mergedWorkspacesLoaded);
-  const mergedWorkspacesLoading = useWorkspaceStore((s) => s.mergedWorkspacesLoading);
+  const mergedWorkspacesLoaded = useWorkspaceStore(
+    (s) => s.mergedWorkspacesLoaded,
+  );
+  const mergedWorkspacesLoading = useWorkspaceStore(
+    (s) => s.mergedWorkspacesLoading,
+  );
 
   const selectedWorkspaceId = useThreadStore((s) => s.selectedWorkspaceId);
 
@@ -307,14 +309,34 @@ function AppContent() {
         const lastToast = recentToastsRef.current[workspaceId] ?? 0;
         if (now - lastToast >= 3000) {
           recentToastsRef.current[workspaceId] = now;
-          const TOAST_CONFIG: Record<string, { title: string; icon: React.ReactNode }> = {
-            completed: { title: "Chat completed", icon: <FiCheckCircle className="text-green-400" /> },
-            merged: { title: "Branch merged", icon: <FiGitMerge className="text-purple-400" /> },
-            needs_input: { title: "Input needed", icon: <FiAlertCircle className="text-yellow-400" /> },
-            "ask-user-question": { title: "Input needed", icon: <FiAlertCircle className="text-yellow-400" /> },
+          const TOAST_CONFIG: Record<
+            string,
+            { title: string; icon: React.ReactNode }
+          > = {
+            completed: {
+              title: "Chat completed",
+              icon: <FiCheckCircle className="text-green-400" />,
+            },
+            merged: {
+              title: "Branch merged",
+              icon: <FiGitMerge className="text-purple-400" />,
+            },
+            needs_input: {
+              title: "Input needed",
+              icon: <FiAlertCircle className="text-yellow-400" />,
+            },
+            "ask-user-question": {
+              title: "Input needed",
+              icon: <FiAlertCircle className="text-yellow-400" />,
+            },
           };
-          const config = TOAST_CONFIG[reason] ?? { title: "Chat completed", icon: <FiCheckCircle className="text-green-400" /> };
-          const ws = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
+          const config = TOAST_CONFIG[reason] ?? {
+            title: "Chat completed",
+            icon: <FiCheckCircle className="text-green-400" />,
+          };
+          const ws = useWorkspaceStore
+            .getState()
+            .workspaces.find((item) => item.id === workspaceId);
           const description = ws?.preview || ws?.cliSession.cwd || workspaceId;
           toast(config.title, {
             description: <ExpandableText text={description} lineClamp={2} />,
@@ -323,7 +345,9 @@ function AppContent() {
             action: {
               label: "View",
               onClick: () => {
-                const freshWs = useWorkspaceStore.getState().workspaces.find((item) => item.id === workspaceId);
+                const freshWs = useWorkspaceStore
+                  .getState()
+                  .workspaces.find((item) => item.id === workspaceId);
                 if (freshWs) openWorkspaceRef.current(freshWs);
               },
             },
@@ -477,7 +501,10 @@ function AppContent() {
     activeChannelId,
     activeAiChatId,
     serverChannels,
-    onNavigateToChannel: useCallback((channelId: string) => switchChannelRef.current(channelId), []),
+    onNavigateToChannel: useCallback(
+      (channelId: string) => switchChannelRef.current(channelId),
+      [],
+    ),
   });
 
   // ─── Channel/view switching ──────────────────────────────────────
@@ -665,42 +692,6 @@ function AppContent() {
     [deleteAiChatMutation],
   );
 
-  const handleDeleteWorktreeById = useCallback(
-    async (workspaceId: string) => {
-      const repoPath = getChannelRepoPath();
-      if (!repoPath) return;
-
-      const confirmed = window.confirm(
-        "Delete this worktree? This removes local files for this workspace.",
-      );
-      if (!confirmed) return;
-
-      useTerminalStore.getState().killAllForWorkspace(workspaceId);
-      void window.traceAPI.releasePorts(workspaceId);
-      useWorkspaceStore.getState().addDeletingWorktreeId(workspaceId);
-
-      try {
-        const result = await window.traceAPI.deleteWorktree(
-          workspaceId,
-          repoPath,
-        );
-        if (!result.success) {
-          console.error("Failed to delete worktree:", result.error);
-          return;
-        }
-        useWorkspaceStore.getState().removeWorktreeWorkspaceId(workspaceId);
-        if (workspaceId === useThreadStore.getState().selectedWorkspaceId) {
-          useThreadStore.getState().setHasWorktree(false);
-        }
-      } catch (err) {
-        console.error("Failed to delete worktree:", err);
-      } finally {
-        useWorkspaceStore.getState().removeDeletingWorktreeId(workspaceId);
-      }
-    },
-    [getChannelRepoPath],
-  );
-
   // ─── Pull PR into workspace ─────────────────────────────────────
   const handlePullPR = useCallback(
     async (pr: PullRequest) => {
@@ -822,7 +813,12 @@ function AppContent() {
           .syncActions.loadSessionEvents(selectedWs);
     }, 3000);
     return () => clearInterval(interval);
-  }, [activeChannelId, refreshWorkspaces, loadMergedWorkspaces, subscriptionsActive]);
+  }, [
+    activeChannelId,
+    refreshWorkspaces,
+    loadMergedWorkspaces,
+    subscriptionsActive,
+  ]);
 
   // On WS reconnection (false → true), catch up on any missed updates
   const prevSubscriptionsActive = useRef(subscriptionsActive);
@@ -840,7 +836,13 @@ function AppContent() {
       void fetchBoard(activeChannelId);
     }
     prevSubscriptionsActive.current = subscriptionsActive;
-  }, [subscriptionsActive, activeChannelId, refreshWorkspaces, loadMergedWorkspaces, fetchBoard]);
+  }, [
+    subscriptionsActive,
+    activeChannelId,
+    refreshWorkspaces,
+    loadMergedWorkspaces,
+    fetchBoard,
+  ]);
 
   // One-time initial view correction after channel data loads
   const initialViewCorrectedRef = useRef(false);
@@ -1077,10 +1079,7 @@ function AppContent() {
                 attentionWorkspaceIds={attentionWorkspaceIds}
                 onOpenWorkspace={handleOpenWorkspace}
                 onDeleteWorkspace={handleDeleteWorkspace}
-                onDeleteWorktree={handleDeleteWorktreeById}
                 onMarkMerged={handleMarkMerged}
-                worktreeWorkspaceIds={worktreeWorkspaceIds}
-                deletingWorktreeIds={deletingWorktreeIds}
                 middlePanelView={middlePanelView}
                 kanbanColumns={kanbanColumns}
                 kanbanLoading={kanbanLoading}
@@ -1160,7 +1159,12 @@ function AppContent() {
         onSwitchChannel={handleSwitchChannel}
         onOpenThreadLink={handleOpenThreadLink}
       />
-      <Toaster position="bottom-right" theme="dark" closeButton toastOptions={{ duration: 5000 }} />
+      <Toaster
+        position="bottom-right"
+        theme="dark"
+        closeButton
+        toastOptions={{ duration: 5000 }}
+      />
     </div>
   );
 }

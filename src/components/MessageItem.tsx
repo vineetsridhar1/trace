@@ -1,59 +1,143 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { FiCheck, FiGitMerge, FiGitPullRequest, FiLink, FiLoader, FiTerminal, FiTrash2 } from 'react-icons/fi';
-import type { Workspace, KanbanTicket, TicketStatus } from '../types';
-import { getServerUrl } from '../types';
-import type { PresenceUser } from '../stores/presenceStore';
-import { avatarInitial } from '../utils';
-import { ScrambleText } from './ScrambleText';
-import { TaskPopover } from './TaskPopover';
-import { useWorkspaceStore } from '../stores/workspaceStore';
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FiCheck,
+  FiGitMerge,
+  FiGitPullRequest,
+  FiLink,
+  FiLoader,
+  FiTerminal,
+  FiTrash2,
+} from "react-icons/fi";
+import type { Workspace, KanbanTicket, TicketStatus } from "../types";
+import { getServerUrl } from "../types";
+import type { PresenceUser } from "../stores/presenceStore";
+import { avatarInitial } from "../utils";
+import { ScrambleText } from "./ScrambleText";
+import { TaskPopover } from "./TaskPopover";
+import { useWorkspaceStore } from "../stores/workspaceStore";
 
-export const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; avatarBg: string; avatarText: string }> = {
-  pending: { label: 'Pending', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', avatarBg: 'bg-yellow-500/20', avatarText: 'text-yellow-400' },
-  creation: { label: 'Creating', color: 'text-orange-400', bgColor: 'bg-orange-400/10', avatarBg: 'bg-orange-500/20', avatarText: 'text-orange-400' },
-  in_progress: { label: 'In Progress', color: 'text-accent-light', bgColor: 'bg-accent-light/10', avatarBg: 'bg-accent', avatarText: 'text-on-accent' },
-  completed: { label: 'Done', color: 'text-green-400', bgColor: 'bg-green-400/10', avatarBg: 'bg-green-500/20', avatarText: 'text-green-400' },
-  merged: { label: 'Merged', color: 'text-purple-400', bgColor: 'bg-purple-400/10', avatarBg: 'bg-purple-500/20', avatarText: 'text-purple-400' },
-  needs_input: { label: 'Needs Input', color: 'text-amber-400', bgColor: 'bg-amber-400/10', avatarBg: 'bg-amber-500/20', avatarText: 'text-amber-400' },
-  queued: { label: 'Queued', color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', avatarBg: 'bg-cyan-500/20', avatarText: 'text-cyan-400' },
-  review: { label: 'In Review', color: 'text-teal-400', bgColor: 'bg-teal-400/10', avatarBg: 'bg-teal-500/20', avatarText: 'text-teal-400' },
-  handed_off: { label: 'Handed Off', color: 'text-orange-300', bgColor: 'bg-orange-300/10', avatarBg: 'bg-orange-400/20', avatarText: 'text-orange-300' },
+export const STATUS_CONFIG: Record<
+  TicketStatus,
+  {
+    label: string;
+    color: string;
+    bgColor: string;
+    avatarBg: string;
+    avatarText: string;
+  }
+> = {
+  pending: {
+    label: "Pending",
+    color: "text-yellow-400",
+    bgColor: "bg-yellow-400/10",
+    avatarBg: "bg-yellow-500/20",
+    avatarText: "text-yellow-400",
+  },
+  creation: {
+    label: "Creating",
+    color: "text-orange-400",
+    bgColor: "bg-orange-400/10",
+    avatarBg: "bg-orange-500/20",
+    avatarText: "text-orange-400",
+  },
+  in_progress: {
+    label: "In Progress",
+    color: "text-accent-light",
+    bgColor: "bg-accent-light/10",
+    avatarBg: "bg-accent",
+    avatarText: "text-on-accent",
+  },
+  completed: {
+    label: "Done",
+    color: "text-green-400",
+    bgColor: "bg-green-400/10",
+    avatarBg: "bg-green-500/20",
+    avatarText: "text-green-400",
+  },
+  merged: {
+    label: "Merged",
+    color: "text-purple-400",
+    bgColor: "bg-purple-400/10",
+    avatarBg: "bg-purple-500/20",
+    avatarText: "text-purple-400",
+  },
+  needs_input: {
+    label: "Needs Input",
+    color: "text-amber-400",
+    bgColor: "bg-amber-400/10",
+    avatarBg: "bg-amber-500/20",
+    avatarText: "text-amber-400",
+  },
+  queued: {
+    label: "Queued",
+    color: "text-cyan-400",
+    bgColor: "bg-cyan-400/10",
+    avatarBg: "bg-cyan-500/20",
+    avatarText: "text-cyan-400",
+  },
+  review: {
+    label: "In Review",
+    color: "text-teal-400",
+    bgColor: "bg-teal-400/10",
+    avatarBg: "bg-teal-500/20",
+    avatarText: "text-teal-400",
+  },
+  handed_off: {
+    label: "Handed Off",
+    color: "text-orange-300",
+    bgColor: "bg-orange-300/10",
+    avatarBg: "bg-orange-400/20",
+    avatarText: "text-orange-300",
+  },
 };
 
 export const STATUS_GROUP_ORDER: TicketStatus[] = [
-  'needs_input',
-  'queued',
-  'handed_off',
-  'pending',
-  'creation',
-  'in_progress',
-  'review',
-  'merged',
+  "needs_input",
+  "queued",
+  "handed_off",
+  "pending",
+  "creation",
+  "in_progress",
+  "review",
+  "merged",
 ];
 
-const ACTIVE_STATUSES = new Set<TicketStatus>(['in_progress', 'creation']);
-const DONE_STATUSES = new Set<TicketStatus>(['completed']);
-const MARK_MERGED_STATUSES = new Set<TicketStatus>(['completed', 'in_progress']);
+const ACTIVE_STATUSES = new Set<TicketStatus>(["in_progress", "creation"]);
+const DONE_STATUSES = new Set<TicketStatus>(["completed"]);
+const MARK_MERGED_STATUSES = new Set<TicketStatus>([
+  "completed",
+  "in_progress",
+]);
 
 function shortcutLabel(index: number): string | null {
   if (index >= 1 && index <= 9) return String(index);
   return null;
 }
 
-function StatusIcon({ status, isRunning }: { status: TicketStatus; isRunning: boolean }) {
+function StatusIcon({
+  status,
+  isRunning,
+}: {
+  status: TicketStatus;
+  isRunning: boolean;
+}) {
   if (ACTIVE_STATUSES.has(status)) {
-    return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-accent-light" />;
+    return (
+      <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-accent-light" />
+    );
   }
   if (DONE_STATUSES.has(status)) {
     return <FiCheck className="h-4 w-4 flex-shrink-0 text-green-400" />;
   }
-  if (status === 'review') {
+  if (status === "review") {
     if (isRunning) {
-      return <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-teal-400" />;
+      return (
+        <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-teal-400" />
+      );
     }
     return <FiGitPullRequest className="h-4 w-4 flex-shrink-0 text-teal-400" />;
   }
-  if (status === 'merged') {
+  if (status === "merged") {
     return <FiGitMerge className="h-4 w-4 flex-shrink-0 text-purple-400" />;
   }
   return null;
@@ -68,7 +152,7 @@ function PresenceAvatars({ viewers }: { viewers: PresenceUser[] }) {
 
   return (
     <div className="flex flex-shrink-0 -space-x-1.5">
-      {visible.map((v) => (
+      {visible.map((v) =>
         v.avatarUrl ? (
           <img
             key={v.userId}
@@ -85,8 +169,8 @@ function PresenceAvatars({ viewers }: { viewers: PresenceUser[] }) {
           >
             {v.name.charAt(0).toUpperCase()}
           </div>
-        )
-      ))}
+        ),
+      )}
       {overflow > 0 && (
         <div className="flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-elevated text-[8px] font-medium text-muted ring-1 ring-surface">
           +{overflow}
@@ -103,12 +187,9 @@ interface MessageItemProps {
   needsAttention?: boolean;
   onOpenWorkspace: (workspace: Workspace) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
-  onDeleteWorktree?: (workspaceId: string) => void;
   onMarkMerged?: (workspaceId: string) => void;
   channelId?: string | null;
-  hasActiveWorktree?: boolean;
   hasRunningProcess?: boolean;
-  isDeletingWorktree?: boolean;
   dimmed?: boolean;
   activelyRunning?: boolean;
   shortcutIndex?: number;
@@ -122,21 +203,18 @@ export const MessageItem = memo(function MessageItem({
   needsAttention,
   onOpenWorkspace,
   onDeleteWorkspace,
-  onDeleteWorktree,
   onMarkMerged,
   channelId,
-  hasActiveWorktree,
   hasRunningProcess,
-  isDeletingWorktree,
   dimmed,
   activelyRunning,
   shortcutIndex,
   viewers,
 }: MessageItemProps) {
-  const status = (workspace.status ?? 'pending') as TicketStatus;
+  const status = (workspace.status ?? "pending") as TicketStatus;
   const avatarConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  const title = ticket?.title || workspace.preview || 'New Workspace';
-  const branch = workspace.branch?.replace(/^trace\//, '');
+  const title = ticket?.title || workspace.preview || "New Workspace";
+  const branch = workspace.branch?.replace(/^trace\//, "");
   const todos = useWorkspaceStore((s) => s.latestTodos[workspace.id]);
 
   // ─── Task popover on hover ───────────────────────────────────
@@ -191,16 +269,16 @@ export const MessageItem = memo(function MessageItem({
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.stopPropagation();
         setCtxMenu(null);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, [ctxMenu]);
 
@@ -216,11 +294,6 @@ export const MessageItem = memo(function MessageItem({
     closeMenu();
   }, [onMarkMerged, workspace.id, closeMenu]);
 
-  const handleDeleteWorktree = useCallback(() => {
-    onDeleteWorktree?.(workspace.id);
-    closeMenu();
-  }, [onDeleteWorktree, workspace.id, closeMenu]);
-
   const handleDeleteWorkspace = useCallback(() => {
     onDeleteWorkspace?.(workspace.id);
     closeMenu();
@@ -232,8 +305,8 @@ export const MessageItem = memo(function MessageItem({
         ref={buttonRef}
         type="button"
         className={`message-item group flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left outline-none transition-colors ${
-          isSelected ? 'selected' : ''
-        } ${!isSelected && needsAttention ? 'needs-attention' : ''} ${dimmed ? 'opacity-50' : ''}`}
+          isSelected ? "selected" : ""
+        } ${!isSelected && needsAttention ? "needs-attention" : ""} ${dimmed ? "opacity-50" : ""}`}
         onClick={() => onOpenWorkspace(workspace)}
         onContextMenu={handleContextMenu}
         onMouseEnter={handleMouseEnter}
@@ -243,7 +316,7 @@ export const MessageItem = memo(function MessageItem({
         {/* Shortcut index badge */}
         {shortcutIndex != null && (
           <kbd className="flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded border border-edge bg-surface-deep text-[10px] font-medium leading-none text-muted">
-            {shortcutLabel(shortcutIndex) ?? '\u00A0'}
+            {shortcutLabel(shortcutIndex) ?? "\u00A0"}
           </kbd>
         )}
 
@@ -258,56 +331,42 @@ export const MessageItem = memo(function MessageItem({
           <div
             className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarConfig.avatarBg} ${avatarConfig.avatarText}`}
           >
-            {workspace.user ? workspace.user.name.charAt(0).toUpperCase() : avatarInitial(workspace.cliSessionId)}
+            {workspace.user
+              ? workspace.user.name.charAt(0).toUpperCase()
+              : avatarInitial(workspace.cliSessionId)}
           </div>
         )}
 
         {/* Title + branch stacked */}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm text-primary"><ScrambleText text={title} /></div>
+          <div className="truncate text-sm text-primary">
+            <ScrambleText text={title} />
+          </div>
           {branch && (
-            <div className="truncate font-mono text-[10px] text-muted">{branch}</div>
+            <div className="truncate font-mono text-[10px] text-muted">
+              {branch}
+            </div>
           )}
         </div>
 
         {/* Running process indicator */}
         {hasRunningProcess && (
-          <FiTerminal className="h-3 w-3 flex-shrink-0 text-green-400" title="Running process" />
+          <FiTerminal
+            className="h-3 w-3 flex-shrink-0 text-green-400"
+            title="Running process"
+          />
         )}
 
         {/* Presence avatars */}
         {viewers && viewers.length > 0 && <PresenceAvatars viewers={viewers} />}
 
         {/* Status icon */}
-        <StatusIcon status={status} isRunning={activelyRunning || workspace.cliSession.status !== 'stopped'} />
-
-        {/* Delete worktree button for merged items with active worktrees */}
-        {hasActiveWorktree && onDeleteWorktree && (
-          isDeletingWorktree ? (
-            <div title="Deleting worktree" className="flex-shrink-0 p-0.5 text-muted">
-              <FiLoader className="h-3 w-3 animate-spin" />
-            </div>
-          ) : (
-            <div
-              role="button"
-              tabIndex={-1}
-              title="Delete worktree"
-              className="flex-shrink-0 cursor-pointer rounded p-0.5 text-muted hover:bg-red-500/20 hover:text-red-400 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteWorktree(workspace.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.stopPropagation();
-                  onDeleteWorktree(workspace.id);
-                }
-              }}
-            >
-              <FiTrash2 className="h-3 w-3" />
-            </div>
-          )
-        )}
+        <StatusIcon
+          status={status}
+          isRunning={
+            activelyRunning || workspace.cliSession.status !== "stopped"
+          }
+        />
 
         {/* Delete button (hover only) */}
         {onDeleteWorkspace && (
@@ -320,7 +379,7 @@ export const MessageItem = memo(function MessageItem({
               onDeleteWorkspace(workspace.id);
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
                 onDeleteWorkspace(workspace.id);
               }
@@ -358,24 +417,6 @@ export const MessageItem = memo(function MessageItem({
               Mark as merged
             </button>
           )}
-          {hasActiveWorktree && onDeleteWorktree && (
-            <>
-              <div className="my-1 h-px bg-surface-elevated" />
-              <button
-                type="button"
-                disabled={isDeletingWorktree}
-                onClick={handleDeleteWorktree}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {isDeletingWorktree ? (
-                  <FiLoader className="h-3 w-3 animate-spin" aria-hidden="true" />
-                ) : (
-                  <FiTrash2 className="h-3 w-3" aria-hidden="true" />
-                )}
-                {isDeletingWorktree ? 'Deleting worktree...' : 'Delete worktree'}
-              </button>
-            </>
-          )}
           <div className="my-1 h-px bg-surface-elevated" />
           <button
             type="button"
@@ -390,25 +431,30 @@ export const MessageItem = memo(function MessageItem({
 
       {/* Task popover on hover */}
       {showPopover && ticket && triggerRect && !ctxMenu && (
-        <TaskPopover ticket={ticket} triggerRect={triggerRect} summary={workspace.summary} todos={todos} />
+        <TaskPopover
+          ticket={ticket}
+          triggerRect={triggerRect}
+          summary={workspace.summary}
+          todos={todos}
+        />
       )}
     </>
   );
 }, areMessageItemPropsEqual);
 
-function areMessageItemPropsEqual(prev: MessageItemProps, next: MessageItemProps) {
+function areMessageItemPropsEqual(
+  prev: MessageItemProps,
+  next: MessageItemProps,
+) {
   return (
     prev.workspace === next.workspace &&
     prev.ticket === next.ticket &&
     prev.isSelected === next.isSelected &&
     prev.needsAttention === next.needsAttention &&
     prev.dimmed === next.dimmed &&
-    prev.hasActiveWorktree === next.hasActiveWorktree &&
     prev.hasRunningProcess === next.hasRunningProcess &&
-    prev.isDeletingWorktree === next.isDeletingWorktree &&
     prev.onOpenWorkspace === next.onOpenWorkspace &&
     prev.onDeleteWorkspace === next.onDeleteWorkspace &&
-    prev.onDeleteWorktree === next.onDeleteWorktree &&
     prev.onMarkMerged === next.onMarkMerged &&
     prev.channelId === next.channelId &&
     prev.shortcutIndex === next.shortcutIndex &&

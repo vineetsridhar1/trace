@@ -24,13 +24,11 @@ interface ThreadHeaderProps {
   selectedWorkspaceId: string | null;
   channelId: string | null;
   workspaceStatus: TicketStatus;
-  deletingWorktree: boolean;
   hasWorktree: boolean | null;
   worktreePath: string | null;
   isFullscreen: boolean;
   onClose: () => void;
   onDeleteWorkspace: () => void;
-  onDeleteWorktree: () => void;
   onMarkMerged: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
@@ -50,13 +48,11 @@ export const ThreadHeader = memo(function ThreadHeader({
   selectedWorkspaceId,
   channelId,
   workspaceStatus,
-  deletingWorktree,
   hasWorktree,
   worktreePath,
   isFullscreen,
   onClose,
   onDeleteWorkspace,
-  onDeleteWorktree,
   onMarkMerged,
   onEnterFullscreen,
   onExitFullscreen,
@@ -425,7 +421,8 @@ export const ThreadHeader = memo(function ThreadHeader({
                     Exit fullscreen
                   </button>
                 )}
-                {(workspaceStatus === "completed" || workspaceStatus === "in_progress") && (
+                {(workspaceStatus === "completed" ||
+                  workspaceStatus === "in_progress") && (
                   <button
                     type="button"
                     disabled={!selectedWorkspaceId}
@@ -438,32 +435,6 @@ export const ThreadHeader = memo(function ThreadHeader({
                     <FiCheck className="h-3 w-3" aria-hidden="true" />
                     Mark as merged
                   </button>
-                )}
-                {hasWorktree === true && (
-                  <>
-                    <div className="my-1 h-px bg-surface-elevated" />
-                    <button
-                      type="button"
-                      disabled={!selectedWorkspaceId || deletingWorktree}
-                      onClick={() => {
-                        onDeleteWorktree();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {deletingWorktree ? (
-                        <FiLoader
-                          className="h-3 w-3 animate-spin"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <FiTrash2 className="h-3 w-3" aria-hidden="true" />
-                      )}
-                      {deletingWorktree
-                        ? "Deleting worktree..."
-                        : "Delete worktree"}
-                    </button>
-                  </>
                 )}
                 <div className="my-1 h-px bg-surface-elevated" />
                 <button
