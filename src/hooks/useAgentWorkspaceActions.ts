@@ -299,6 +299,43 @@ export function useWorkspaceActions({
         const workspace = data.createWorkspace.workspace as Workspace;
         upsertWorkspace(workspace);
         onWorkspaceCreated(workspace);
+
+        // Optimistically populate thread with the initial message so it appears
+        // immediately instead of waiting for the debounced loadSessionEvents
+        const { session: s, event: e } = data.createWorkspace;
+        if (s && e) {
+          const store = useThreadStore.getState();
+          if (store.selectedWorkspaceId === workspace.id) {
+            store.setSessions([
+              {
+                id: s.id,
+                workspaceId: s.workspaceId,
+                createdAt: s.createdAt,
+                eventCount: s.eventCount,
+              },
+            ]);
+            store.setActiveSessionId(s.id);
+            store.setSessionEvents([
+              {
+                id: e.id,
+                cliSessionId: e.cliSessionId,
+                hookEventName: "UserPromptSubmit",
+                timestamp: e.timestamp,
+                sessionId: e.sessionId,
+                importance: e.importance,
+                toolName: null,
+                toolInput: null,
+                toolResponse: null,
+                toolUseId: null,
+                stopHookActive: null,
+                lastAssistantMessage: null,
+                rawPayload: { prompt: text, source: "ui" },
+              },
+            ]);
+            store.setSessionStatus("ready");
+          }
+        }
+
         useAgentRunStore
           .getState()
           .setPendingRun(workspace.id, text, filePaths ?? []);
@@ -339,6 +376,42 @@ export function useWorkspaceActions({
         const workspace = data.createWorkspace.workspace as Workspace;
         upsertWorkspace(workspace);
         onWorkspaceCreated(workspace);
+
+        // Optimistically populate thread with the ticket title message
+        const { session: s, event: e } = data.createWorkspace;
+        if (s && e) {
+          const store = useThreadStore.getState();
+          if (store.selectedWorkspaceId === workspace.id) {
+            store.setSessions([
+              {
+                id: s.id,
+                workspaceId: s.workspaceId,
+                createdAt: s.createdAt,
+                eventCount: s.eventCount,
+              },
+            ]);
+            store.setActiveSessionId(s.id);
+            store.setSessionEvents([
+              {
+                id: e.id,
+                cliSessionId: e.cliSessionId,
+                hookEventName: "UserPromptSubmit",
+                timestamp: e.timestamp,
+                sessionId: e.sessionId,
+                importance: e.importance,
+                toolName: null,
+                toolInput: null,
+                toolResponse: null,
+                toolUseId: null,
+                stopHookActive: null,
+                lastAssistantMessage: null,
+                rawPayload: { prompt: ticket.title, source: "ui" },
+              },
+            ]);
+            store.setSessionStatus("ready");
+          }
+        }
+
         useAgentRunStore
           .getState()
           .setPendingRun(workspace.id, ticket.description ?? ticket.title, []);
