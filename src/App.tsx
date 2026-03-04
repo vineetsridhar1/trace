@@ -695,6 +695,7 @@ function AppContent() {
     handleRunTickets,
     handleSwitchProductDocTab,
   } = useProductDocActions({
+    activeChannelId,
     getChannelRepoPath,
     getChannelBaseBranch,
     onOpenWorkspace: handleOpenWorkspace,

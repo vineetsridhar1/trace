@@ -320,6 +320,7 @@ A PRD and Technical Scoping document have been written. Read both from ./.trace/
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
 interface UseProductDocActionsOptions {
+  activeChannelId: string | null;
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
   onOpenWorkspace: (workspace: Workspace) => void;
@@ -327,13 +328,13 @@ interface UseProductDocActionsOptions {
 }
 
 export function useProductDocActions({
+  activeChannelId,
   getChannelRepoPath,
   getChannelBaseBranch,
   onOpenWorkspace,
   upsertAndSyncWorkspace,
 }: UseProductDocActionsOptions) {
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
-  const activeChannelId = useAppUIStore((s) => s.activeChannelId);
 
   const handleRunProductDoc = useCallback(
     async (prompt: string) => {
@@ -443,6 +444,8 @@ export function useProductDocActions({
       store.setSessionStatus('empty');
 
       // Switch to tech-scope mode and mark agent as running
+      // Set a placeholder session so the tab stays enabled if user switches away
+      useAppUIStore.getState().setProductDocSessionForMode('tech-scope', 'pending');
       useAppUIStore.getState().setProductDocMode('tech-scope');
       useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
       useAgentRunStore.getState().addActiveRun(workspaceId);
@@ -499,6 +502,8 @@ export function useProductDocActions({
       store.setSessionStatus('empty');
 
       // Switch to tickets mode and mark agent as running
+      // Set a placeholder session so the tab stays enabled if user switches away
+      useAppUIStore.getState().setProductDocSessionForMode('tickets', 'pending');
       useAppUIStore.getState().setProductDocMode('tickets');
       useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
       useAgentRunStore.getState().addActiveRun(workspaceId);
@@ -541,10 +546,10 @@ export function useProductDocActions({
     (mode: ProductDocMode) => {
       useAppUIStore.getState().setProductDocMode(mode);
       const targetSessionId = useAppUIStore.getState().productDocSessionMap[mode];
-      if (targetSessionId) {
+      if (targetSessionId && targetSessionId !== 'pending') {
         void useThreadStore.getState().syncActions.switchSession(targetSessionId);
       } else {
-        // No agent for this tab yet — show empty state
+        // No agent for this tab yet (or still spawning) — show empty state
         useThreadStore.getState().setActiveSessionId(null);
         useThreadStore.getState().setSessionEvents([]);
         useThreadStore.getState().setSessionStatus('empty');
