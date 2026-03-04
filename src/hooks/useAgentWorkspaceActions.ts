@@ -535,9 +535,10 @@ export function useWorkspaceActions({
       }
 
       // Document workspaces (PRD / tech-scope) don't need channel setup scripts
-      const isDocWs = useWorkspaceStore
-        .getState()
-        .workspaces.find((w) => w.id === workspaceId)?.isProductDoc ?? false;
+      const isDocWs =
+        useWorkspaceStore
+          .getState()
+          .workspaces.find((w) => w.id === workspaceId)?.isProductDoc ?? false;
       const setupCommands = isDocWs ? [] : getSetupCommands();
       if (setupCommands.length > 0) {
         await updateWorkspaceStatus(workspaceId, "creation");
@@ -715,7 +716,7 @@ export function useWorkspaceActions({
       const wasHandedOff = useAgentRunStore
         .getState()
         .isHandoffPickedUp(workspaceId);
-      const wsSessionId = selectedWorkspace.claudeSessionId;
+      const wsSessionId = selectedWorkspace.agentSessionId;
       const canResume =
         hasEvents &&
         !wasHandedOff &&
@@ -735,7 +736,7 @@ export function useWorkspaceActions({
 
       await spawnAgentForWorkspace(workspaceId, text, spawnOptions);
 
-      // After successful fresh spawn, clear the handoff flag — claudeSessionId
+      // After successful fresh spawn, clear the handoff flag — agentSessionId
       // will be updated by the server when events arrive from this new CLI process
       if (wasHandedOff) {
         useAgentRunStore.getState().clearHandoffPickedUp(workspaceId);
@@ -814,7 +815,7 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
-        const planSessionId = selectedWorkspace.claudeSessionId;
+        const planSessionId = selectedWorkspace.agentSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan response",
           statusOnSuccess,
@@ -839,7 +840,7 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
-        const reviseSessionId = selectedWorkspace.claudeSessionId;
+        const reviseSessionId = selectedWorkspace.agentSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan revision",
           resumeSessionId:

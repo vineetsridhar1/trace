@@ -405,6 +405,7 @@ export async function spawnAgent(
           extracted_tool_input: enrichment.detectedToolInput,
         }),
         ...(branchName && { branch_name: branchName }),
+        agent_type: agentType,
       };
 
       appendAgentDebugLog(

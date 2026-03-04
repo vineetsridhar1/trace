@@ -137,7 +137,8 @@ model Workspace {
   summary         String?
   branch          String?
   prUrl           String?  @map("pr_url")
-  claudeSessionId String?  @map("claude_session_id")
+  agentSessionId  String?  @map("agent_session_id")
+  agentType       String?  @map("agent_type")
   createdAt       DateTime @default(now()) @map("created_at")
 
   queuedRunConfig Json?    @map("queued_run_config")
@@ -182,6 +183,7 @@ model Event {
   rawPayload           Json     @map("raw_payload")
   sessionId            String   @map("thread_id")
   importance           String   @default("non-important")
+  agentType            String?  @map("agent_type")
 
   cliSession CliSession @relation(fields: [cliSessionId], references: [sessionId])
   session    Session    @relation(fields: [sessionId], references: [id])
@@ -191,6 +193,7 @@ model Event {
   @@index([toolName])
   @@index([cliSessionId, hookEventName])
   @@index([sessionId, timestamp])
+  @@index([agentType])
   @@map("events")
 }
 

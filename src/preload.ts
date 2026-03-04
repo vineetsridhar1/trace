@@ -177,13 +177,6 @@ contextBridge.exposeInMainWorld("traceAPI", {
     return () => ipcRenderer.removeListener("close-terminal-tab", handler);
   },
 
-  onClaudeProcessExited: (callback: (workspaceId: string) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, workspaceId: string) =>
-      callback(workspaceId);
-    ipcRenderer.on("claude-process-exited", handler);
-    return () => ipcRenderer.removeListener("claude-process-exited", handler);
-  },
-
   getWorktreeDiff: (workspaceId: string, baseBranch: string) =>
     ipcRenderer.invoke("get-worktree-diff", workspaceId, baseBranch),
 
@@ -442,8 +435,19 @@ contextBridge.exposeInMainWorld("traceAPI", {
       error?: string;
     }>,
 
-  createGitBranch: (repoPath: string, branchName: string, baseBranch: string, scopingDocsPath?: string) =>
-    ipcRenderer.invoke("create-git-branch", repoPath, branchName, baseBranch, scopingDocsPath) as Promise<{
+  createGitBranch: (
+    repoPath: string,
+    branchName: string,
+    baseBranch: string,
+    scopingDocsPath?: string,
+  ) =>
+    ipcRenderer.invoke(
+      "create-git-branch",
+      repoPath,
+      branchName,
+      baseBranch,
+      scopingDocsPath,
+    ) as Promise<{
       success: boolean;
       error?: string;
     }>,

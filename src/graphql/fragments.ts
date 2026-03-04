@@ -1,4 +1,4 @@
-import { gql } from '@apollo/client';
+import { gql } from "@apollo/client";
 
 export const WORKSPACE_FIELDS = gql`
   fragment WorkspaceFields on Workspace {
@@ -11,7 +11,8 @@ export const WORKSPACE_FIELDS = gql`
     status
     summary
     branch
-    claudeSessionId
+    agentSessionId
+    agentType
     createdAt
     cliSession {
       sessionId

@@ -150,9 +150,6 @@ export interface TraceAPI {
     callback: (terminalId: string, exitCode: number) => void,
   ) => () => void;
   onCloseTerminalTab: (callback: () => void) => () => void;
-  onClaudeProcessExited: (
-    callback: (workspaceId: string) => void,
-  ) => () => void;
   getWorktreeDiff: (
     workspaceId: string,
     baseBranch: string,
@@ -394,7 +391,8 @@ export interface Workspace {
   status: TicketStatus;
   summary: string | null;
   branch: string | null;
-  claudeSessionId: string | null;
+  agentSessionId: string | null;
+  agentType: string | null;
   createdAt: string;
   cliSession: WorkspaceCliSession;
   user: { id: string; name: string; avatarUrl: string | null } | null;

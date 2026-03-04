@@ -748,9 +748,10 @@ export type TokenUsage = {
 
 export type Workspace = {
   __typename?: 'Workspace';
+  agentSessionId?: Maybe<Scalars['String']['output']>;
+  agentType?: Maybe<Scalars['String']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
   cliSession?: Maybe<WorkspaceCliSession>;
   cliSessionId: Scalars['String']['output'];
   createdAt: Scalars['DateTime']['output'];
@@ -1311,9 +1312,10 @@ export type TokenUsageResolvers<ContextType = any, ParentType extends ResolversP
 };
 
 export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversParentTypes['Workspace'] = ResolversParentTypes['Workspace']> = {
+  agentSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  agentType?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  claudeSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   cliSession?: Resolver<Maybe<ResolversTypes['WorkspaceCliSession']>, ParentType, ContextType>;
   cliSessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;

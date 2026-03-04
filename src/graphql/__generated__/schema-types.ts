@@ -735,9 +735,10 @@ export type TokenUsage = {
 
 export type Workspace = {
   __typename?: 'Workspace';
+  agentSessionId?: Maybe<Scalars['String']['output']>;
+  agentType?: Maybe<Scalars['String']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channelId: Scalars['String']['output'];
-  claudeSessionId?: Maybe<Scalars['String']['output']>;
   cliSession?: Maybe<WorkspaceCliSession>;
   cliSessionId: Scalars['String']['output'];
   createdAt: Scalars['DateTime']['output'];

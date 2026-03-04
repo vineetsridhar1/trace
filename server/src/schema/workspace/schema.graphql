@@ -35,7 +35,8 @@ type Workspace {
   status: String!
   summary: String
   branch: String
-  claudeSessionId: String
+  agentSessionId: String
+  agentType: String
   createdAt: DateTime!
   cliSession: WorkspaceCliSession
   user: WorkspaceUser

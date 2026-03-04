@@ -336,9 +336,10 @@ type TokenUsage {
 }
 
 type Workspace {
+  agentSessionId: String
+  agentType: String
   branch: String
   channelId: String!
-  claudeSessionId: String
   cliSession: WorkspaceCliSession
   cliSessionId: String!
   createdAt: DateTime!

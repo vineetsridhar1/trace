@@ -1,5 +1,5 @@
-import type { EventMapper } from '../event/schema.mappers';
-import type { SessionMapper } from '../session/schema.mappers';
+import type { EventMapper } from "../event/schema.mappers";
+import type { SessionMapper } from "../session/schema.mappers";
 
 // _count.sessions → sessionCount via Workspace type resolver
 export interface WorkspaceMapper {
@@ -12,7 +12,8 @@ export interface WorkspaceMapper {
   status: string;
   summary: string | null;
   branch: string | null;
-  claudeSessionId: string | null;
+  agentSessionId: string | null;
+  agentType: string | null;
   createdAt: Date;
   cliSession: { sessionId: string; cwd: string | null; status: string } | null;
   user: { id: string; name: string; avatarUrl: string | null } | null;

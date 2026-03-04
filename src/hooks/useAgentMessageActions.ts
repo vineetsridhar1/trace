@@ -548,13 +548,11 @@ export function useWorkspaceActions({
             : undefined,
       };
 
-      // Resume if the session has events and the session ID is a real Claude
+      // Resume if the session has events and the session ID is a real agent
       // session (not a trace-local-* fallback from a failed/crashed run).
-      const sessionId = selectedWorkspace.claudeSessionId;
+      const sessionId = selectedWorkspace.agentSessionId;
       const canResume =
-        hasEvents &&
-        !!sessionId &&
-        !sessionId.startsWith("trace-local-");
+        hasEvents && !!sessionId && !sessionId.startsWith("trace-local-");
 
       if (canResume) {
         spawnOptions.resumeSessionId = sessionId;
@@ -655,7 +653,7 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
-        const planSessionId = selectedWorkspace.claudeSessionId;
+        const planSessionId = selectedWorkspace.agentSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan response",
           statusOnSuccess,
@@ -684,7 +682,7 @@ export function useWorkspaceActions({
         );
         if (!persisted) return;
 
-        const reviseSessionId = selectedWorkspace.claudeSessionId;
+        const reviseSessionId = selectedWorkspace.agentSessionId;
         await spawnAgentForWorkspace(selectedWorkspace.id, trimmed, {
           errorPrefix: "Failed to spawn claude for plan revision",
           resumeSessionId:
