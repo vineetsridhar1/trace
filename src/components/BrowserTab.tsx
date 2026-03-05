@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { FiArrowLeft, FiArrowRight, FiRefreshCw, FiAlertTriangle, FiSmartphone } from 'react-icons/fi';
 import { useTerminalStore } from '../stores/terminalStore';
 
@@ -23,7 +23,14 @@ interface BrowserTabProps {
   workspaceId: string | null;
 }
 
-export function BrowserTab({ workspaceId }: BrowserTabProps) {
+// ─── Single-workspace browser instance (kept alive via show/hide) ───
+
+interface BrowserInstanceProps {
+  workspaceId: string;
+  isActive: boolean;
+}
+
+const BrowserInstance = memo(function BrowserInstance({ workspaceId, isActive }: BrowserInstanceProps) {
   const webviewRef = useRef<HTMLElement & {
     goBack: () => void;
     goForward: () => void;
@@ -44,8 +51,6 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
 
   // Subscribe to terminal store for port
   useEffect(() => {
-    if (!workspaceId) return;
-
     const update = () => {
       const env = useTerminalStore.getState().getEnvForWorkspace(workspaceId);
       setPort(env?.PORT);
@@ -91,16 +96,18 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
       setLoadError(desc);
     };
 
+    const onLoad = () => setLoadError(null);
+
     wv.addEventListener('did-navigate', onNavigate);
     wv.addEventListener('did-navigate-in-page', onNavigate);
     wv.addEventListener('did-fail-load', onError);
-    wv.addEventListener('did-finish-load', () => setLoadError(null));
+    wv.addEventListener('did-finish-load', onLoad);
 
     return () => {
       wv.removeEventListener('did-navigate', onNavigate);
       wv.removeEventListener('did-navigate-in-page', onNavigate);
       wv.removeEventListener('did-fail-load', onError);
-      wv.removeEventListener('did-finish-load', () => setLoadError(null));
+      wv.removeEventListener('did-finish-load', onLoad);
     };
   }, [url]); // re-attach when url is first set (webview mounts)
 
@@ -121,24 +128,22 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
     }
   }, [inputUrl, navigate]);
 
-  if (!workspaceId) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
-        No workspace selected
-      </div>
-    );
-  }
-
   if (!port) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
-        Waiting for port allocation...
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-hidden items-center justify-center"
+        style={{ display: isActive ? 'flex' : 'none' }}
+      >
+        <span className="text-sm text-[#565f89]">Waiting for port allocation...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      style={{ display: isActive ? 'flex' : 'none' }}
+    >
       {/* Navigation bar */}
       <div className="flex items-center gap-1.5 border-b border-[#292e42] px-2 py-1.5">
         <button
@@ -215,13 +220,45 @@ export function BrowserTab({ workspaceId }: BrowserTabProps) {
             <webview
               ref={webviewRef as React.RefObject<HTMLElement>}
               src={url}
-              partition="persist:browser-tab"
+              partition={`persist:browser-${workspaceId}`}
               allowpopups="true"
               style={{ width: '100%', height: '100%' }}
             />
           </div>
         )}
       </div>
+    </div>
+  );
+});
+
+// ─── Container: manages per-workspace browser instances ───
+
+export function BrowserTab({ workspaceId }: BrowserTabProps) {
+  const [visitedIds, setVisitedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (workspaceId && !visitedIds.includes(workspaceId)) {
+      setVisitedIds((prev) => [...prev, workspaceId]);
+    }
+  }, [workspaceId, visitedIds]);
+
+  if (!workspaceId) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-sm text-[#565f89]">
+        No workspace selected
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {visitedIds.map((wsId) => (
+        <BrowserInstance
+          key={wsId}
+          workspaceId={wsId}
+          isActive={wsId === workspaceId}
+        />
+      ))}
     </div>
   );
 }
