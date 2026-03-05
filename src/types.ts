@@ -35,6 +35,22 @@ export interface GlobalAppConfig {
 
 export type AgentType = "claude" | "codex";
 
+export interface SpawnConfig {
+  agentType: AgentType;
+  workspaceId: string;
+  prompt: string;
+  repoPath: string;
+  creationCommands?: string[];
+  resumeSessionId?: string;
+  filePaths?: string[];
+  model?: string;
+  effort?: string;
+  systemInstructions?: string;
+  permissionMode?: string;
+  baseBranch?: string;
+  branchPrefix?: string;
+}
+
 export interface EffortOption {
   value: string;
   label: string;
@@ -66,21 +82,7 @@ export interface DetectedAgent {
 
 export interface TraceAPI {
   getServerUrl: () => string;
-  spawnAgent: (
-    agentType: AgentType,
-    workspaceId: string,
-    prompt: string,
-    repoPath: string,
-    creationCommands?: string[],
-    resumeSessionId?: string,
-    filePaths?: string[],
-    model?: string,
-    effort?: string,
-    systemInstructions?: string,
-    permissionMode?: string,
-    baseBranch?: string,
-    branchPrefix?: string,
-  ) => Promise<{
+  spawnAgent: (config: SpawnConfig) => Promise<{
     success: boolean;
     worktreePath?: string;
     setupOutput?: string;

@@ -1,9 +1,9 @@
 import { ipcMain } from "electron";
 import { spawnAgent } from "../agents/spawnAgent";
 import { getAllAgents } from "../agents/registry";
-import type { AgentType } from "../agents/types";
 import { stopAgentProcess } from "../worktree";
 import { resetWatchdog, stopWatchdog } from "../watchdog";
+import type { SpawnConfig } from "../../types";
 
 const SPAWN_AGENT_CHANNEL = "spawn-agent";
 const STOP_AGENT_CHANNEL = "stop-agent";
@@ -12,47 +12,15 @@ const AGENT_ACTIVITY_PING_CHANNEL = "agent-activity-ping";
 
 export function registerAgentHandlers(): void {
   ipcMain.removeHandler(SPAWN_AGENT_CHANNEL);
-  ipcMain.handle(
-    SPAWN_AGENT_CHANNEL,
-    async (
-      _event,
-      agentType: AgentType,
-      workspaceId: string,
-      prompt: string,
-      repoPath: string,
-      creationCommands?: string[],
-      resumeSessionId?: string,
-      filePaths?: string[],
-      model?: string,
-      effort?: string,
-      systemInstructions?: string,
-      permissionMode?: string,
-      baseBranch?: string,
-      branchPrefix?: string,
-    ) => {
-      try {
-        const worktreePath = await spawnAgent(
-          agentType,
-          workspaceId,
-          prompt,
-          repoPath,
-          creationCommands,
-          resumeSessionId,
-          filePaths,
-          model,
-          effort,
-          systemInstructions,
-          permissionMode,
-          baseBranch,
-          branchPrefix,
-        );
-        return { success: true, worktreePath };
-      } catch (err) {
-        console.error("Failed to spawn agent:", err);
-        return { success: false, error: String(err) };
-      }
-    },
-  );
+  ipcMain.handle(SPAWN_AGENT_CHANNEL, async (_event, config: SpawnConfig) => {
+    try {
+      const worktreePath = await spawnAgent(config);
+      return { success: true, worktreePath };
+    } catch (err) {
+      console.error("Failed to spawn agent:", err);
+      return { success: false, error: String(err) };
+    }
+  });
 
   ipcMain.removeHandler(STOP_AGENT_CHANNEL);
   ipcMain.handle(STOP_AGENT_CHANNEL, (_event, workspaceId: string) => {

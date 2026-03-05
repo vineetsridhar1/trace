@@ -206,21 +206,21 @@ export function useWorkspaceActions({
       try {
         const repoPath = getChannelRepoPath();
         const baseBranch = options.baseBranch ?? getChannelBaseBranch();
-        const result = await window.traceAPI.spawnAgent(
-          useAgentRunStore.getState().selectedAgent,
+        const result = await window.traceAPI.spawnAgent({
+          agentType: useAgentRunStore.getState().selectedAgent,
           workspaceId,
           prompt,
           repoPath,
-          options.creationCommands,
-          options.resumeSessionId,
-          options.filePaths,
-          options.model,
-          options.effort,
-          options.systemInstructions,
-          options.permissionMode,
+          creationCommands: options.creationCommands,
+          resumeSessionId: options.resumeSessionId,
+          filePaths: options.filePaths,
+          model: options.model,
+          effort: options.effort,
+          systemInstructions: options.systemInstructions,
+          permissionMode: options.permissionMode,
           baseBranch,
           branchPrefix,
-        );
+        });
 
         if (!result.success) {
           spawnedWorkspaceIdsRef.current.delete(workspaceId);

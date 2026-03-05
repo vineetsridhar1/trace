@@ -367,7 +367,7 @@ export function useProductDocActions({
         const uiState = useAppUIStore.getState();
         uiState.setActiveProductDocId(workspace.id);
         uiState.setActiveAiChatId(null);
-        uiState.setProductDocMode('prd');
+        uiState.setProductDocMode("prd");
         onOpenWorkspace(workspace);
 
         // 3. Mark agent as running immediately so UI shows spinner
@@ -379,27 +379,22 @@ export function useProductDocActions({
         const setupCommands = [
           // Ensure .trace/ is gitignored and untracked, then create the scoping file
           'grep -qxF ".trace/" .gitignore 2>/dev/null || echo ".trace/" >> .gitignore && ' +
-          'git rm -r --cached .trace/ 2>/dev/null; ' +
-          'git add .gitignore && ' +
-          'git diff --cached --quiet || git commit -m "chore: gitignore .trace/" && ' +
-          'mkdir -p .trace && touch .trace/product-scoping.md',
+            "git rm -r --cached .trace/ 2>/dev/null; " +
+            "git add .gitignore && " +
+            'git diff --cached --quiet || git commit -m "chore: gitignore .trace/" && ' +
+            "mkdir -p .trace && touch .trace/product-scoping.md",
         ];
 
         window.traceAPI
-          .spawnAgent(
-            "claude",
-            workspace.id,
-            agentPrompt,
+          .spawnAgent({
+            agentType: "claude",
+            workspaceId: workspace.id,
+            prompt: agentPrompt,
             repoPath,
-            setupCommands,
-            undefined, // resumeSessionId
-            undefined, // filePaths
-            "sonnet", // model
-            undefined, // effort
-            undefined, // systemInstructions (included in prompt)
-            undefined, // permissionMode
+            creationCommands: setupCommands,
+            model: "sonnet",
             baseBranch,
-          )
+          })
           .then((spawnResult) => {
             if (!spawnResult.success) {
               console.error("[ProductDoc] Spawn failed:", spawnResult.error);
@@ -426,137 +421,122 @@ export function useProductDocActions({
     ],
   );
 
-  const handleRunTechScope = useCallback(
-    () => {
-      const workspaceId = useAppUIStore.getState().activeProductDocId;
-      if (!workspaceId) return;
+  const handleRunTechScope = useCallback(() => {
+    const workspaceId = useAppUIStore.getState().activeProductDocId;
+    if (!workspaceId) return;
 
-      const repoPath = getChannelRepoPath();
-      if (!repoPath) {
-        console.error("[TechScope] No repo configured for this channel");
-        return;
-      }
+    const repoPath = getChannelRepoPath();
+    if (!repoPath) {
+      console.error("[TechScope] No repo configured for this channel");
+      return;
+    }
 
-      // Reset session state for a fresh Claude agent
-      const store = useThreadStore.getState();
-      store.setActiveSessionId(null);
-      store.setSessionEvents([]);
-      store.setSessionStatus('empty');
+    // Reset session state for a fresh Claude agent
+    const store = useThreadStore.getState();
+    store.setActiveSessionId(null);
+    store.setSessionEvents([]);
+    store.setSessionStatus("empty");
 
-      // Switch to tech-scope mode and mark agent as running
-      // Set a placeholder session so the tab stays enabled if user switches away
-      useAppUIStore.getState().setProductDocSessionForMode('tech-scope', 'pending');
-      useAppUIStore.getState().setProductDocMode('tech-scope');
-      useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
-      useAgentRunStore.getState().addActiveRun(workspaceId);
+    // Switch to tech-scope mode and mark agent as running
+    // Set a placeholder session so the tab stays enabled if user switches away
+    useAppUIStore
+      .getState()
+      .setProductDocSessionForMode("tech-scope", "pending");
+    useAppUIStore.getState().setProductDocMode("tech-scope");
+    useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
+    useAgentRunStore.getState().addActiveRun(workspaceId);
 
-      // Spawn a fresh agent in the same workspace (reuses worktree)
-      const agentPrompt = buildTechScopePrompt();
+    // Spawn a fresh agent in the same workspace (reuses worktree)
+    const agentPrompt = buildTechScopePrompt();
 
-      window.traceAPI
-        .spawnAgent(
-          "claude",
-          workspaceId,
-          agentPrompt,
-          repoPath,
-          ['mkdir -p .trace && touch .trace/technical-scoping.md'],
-          undefined, // no resumeSessionId — fresh agent
-          undefined,
-          "sonnet",
-          undefined,
-          undefined,
-          undefined,
-          getChannelBaseBranch(),
-        )
-        .then((spawnResult) => {
-          if (!spawnResult.success) {
-            console.error("[TechScope] Spawn failed:", spawnResult.error);
-            useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
-            useAgentRunStore.getState().clearActiveRun(workspaceId);
-          }
-        })
-        .catch((err) => {
-          console.error("[TechScope] Spawn error:", err);
+    window.traceAPI
+      .spawnAgent({
+        agentType: "claude",
+        workspaceId,
+        prompt: agentPrompt,
+        repoPath,
+        creationCommands: [
+          "mkdir -p .trace && touch .trace/technical-scoping.md",
+        ],
+        model: "sonnet",
+        baseBranch: getChannelBaseBranch(),
+      })
+      .then((spawnResult) => {
+        if (!spawnResult.success) {
+          console.error("[TechScope] Spawn failed:", spawnResult.error);
           useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
           useAgentRunStore.getState().clearActiveRun(workspaceId);
-        });
-    },
-    [getChannelRepoPath, getChannelBaseBranch],
-  );
+        }
+      })
+      .catch((err) => {
+        console.error("[TechScope] Spawn error:", err);
+        useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
+        useAgentRunStore.getState().clearActiveRun(workspaceId);
+      });
+  }, [getChannelRepoPath, getChannelBaseBranch]);
 
-  const handleRunTickets = useCallback(
-    () => {
-      const workspaceId = useAppUIStore.getState().activeProductDocId;
-      if (!workspaceId) return;
+  const handleRunTickets = useCallback(() => {
+    const workspaceId = useAppUIStore.getState().activeProductDocId;
+    if (!workspaceId) return;
 
-      const repoPath = getChannelRepoPath();
-      if (!repoPath) {
-        console.error("[Tickets] No repo configured for this channel");
-        return;
-      }
+    const repoPath = getChannelRepoPath();
+    if (!repoPath) {
+      console.error("[Tickets] No repo configured for this channel");
+      return;
+    }
 
-      // Reset session state for a fresh Claude agent
-      const store = useThreadStore.getState();
-      store.setActiveSessionId(null);
-      store.setSessionEvents([]);
-      store.setSessionStatus('empty');
+    // Reset session state for a fresh Claude agent
+    const store = useThreadStore.getState();
+    store.setActiveSessionId(null);
+    store.setSessionEvents([]);
+    store.setSessionStatus("empty");
 
-      // Switch to tickets mode and mark agent as running
-      // Set a placeholder session so the tab stays enabled if user switches away
-      useAppUIStore.getState().setProductDocSessionForMode('tickets', 'pending');
-      useAppUIStore.getState().setProductDocMode('tickets');
-      useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
-      useAgentRunStore.getState().addActiveRun(workspaceId);
+    // Switch to tickets mode and mark agent as running
+    // Set a placeholder session so the tab stays enabled if user switches away
+    useAppUIStore.getState().setProductDocSessionForMode("tickets", "pending");
+    useAppUIStore.getState().setProductDocMode("tickets");
+    useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
+    useAgentRunStore.getState().addActiveRun(workspaceId);
 
-      // Spawn a fresh agent in the same workspace (reuses worktree)
-      const agentPrompt = buildTicketsPrompt();
+    // Spawn a fresh agent in the same workspace (reuses worktree)
+    const agentPrompt = buildTicketsPrompt();
 
-      window.traceAPI
-        .spawnAgent(
-          "claude",
-          workspaceId,
-          agentPrompt,
-          repoPath,
-          ['mkdir -p .trace && touch .trace/tickets.json'],
-          undefined, // no resumeSessionId — fresh agent
-          undefined,
-          "sonnet",
-          undefined,
-          undefined,
-          undefined,
-          getChannelBaseBranch(),
-        )
-        .then((spawnResult) => {
-          if (!spawnResult.success) {
-            console.error("[Tickets] Spawn failed:", spawnResult.error);
-            useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
-            useAgentRunStore.getState().clearActiveRun(workspaceId);
-          }
-        })
-        .catch((err) => {
-          console.error("[Tickets] Spawn error:", err);
+    window.traceAPI
+      .spawnAgent({
+        agentType: "claude",
+        workspaceId,
+        prompt: agentPrompt,
+        repoPath,
+        creationCommands: ["mkdir -p .trace && touch .trace/tickets.json"],
+        model: "sonnet",
+        baseBranch: getChannelBaseBranch(),
+      })
+      .then((spawnResult) => {
+        if (!spawnResult.success) {
+          console.error("[Tickets] Spawn failed:", spawnResult.error);
           useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
           useAgentRunStore.getState().clearActiveRun(workspaceId);
-        });
-    },
-    [getChannelRepoPath, getChannelBaseBranch],
-  );
+        }
+      })
+      .catch((err) => {
+        console.error("[Tickets] Spawn error:", err);
+        useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
+        useAgentRunStore.getState().clearActiveRun(workspaceId);
+      });
+  }, [getChannelRepoPath, getChannelBaseBranch]);
 
-  const handleSwitchProductDocTab = useCallback(
-    (mode: ProductDocMode) => {
-      useAppUIStore.getState().setProductDocMode(mode);
-      const targetSessionId = useAppUIStore.getState().productDocSessionMap[mode];
-      if (targetSessionId && targetSessionId !== 'pending') {
-        void useThreadStore.getState().syncActions.switchSession(targetSessionId);
-      } else {
-        // No agent for this tab yet (or still spawning) — show empty state
-        useThreadStore.getState().setActiveSessionId(null);
-        useThreadStore.getState().setSessionEvents([]);
-        useThreadStore.getState().setSessionStatus('empty');
-      }
-    },
-    [],
-  );
+  const handleSwitchProductDocTab = useCallback((mode: ProductDocMode) => {
+    useAppUIStore.getState().setProductDocMode(mode);
+    const targetSessionId = useAppUIStore.getState().productDocSessionMap[mode];
+    if (targetSessionId && targetSessionId !== "pending") {
+      void useThreadStore.getState().syncActions.switchSession(targetSessionId);
+    } else {
+      // No agent for this tab yet (or still spawning) — show empty state
+      useThreadStore.getState().setActiveSessionId(null);
+      useThreadStore.getState().setSessionEvents([]);
+      useThreadStore.getState().setSessionStatus("empty");
+    }
+  }, []);
 
   return {
     handleRunProductDoc,

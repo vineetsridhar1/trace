@@ -17,7 +17,7 @@ import {
 } from "../worktree";
 import { runProcess } from "../process";
 import { getAgent } from "./registry";
-import type { AgentType } from "./types";
+import type { SpawnConfig } from "../../types";
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
@@ -77,21 +77,22 @@ async function runSetupScripts(
   }
 }
 
-export async function spawnAgent(
-  agentType: AgentType,
-  workspaceId: string,
-  prompt: string,
-  repoPath: string,
-  creationCommands?: string[],
-  resumeSessionId?: string,
-  filePaths?: string[],
-  model?: string,
-  effort?: string,
-  systemInstructions?: string,
-  permissionMode?: string,
-  baseBranch?: string,
-  branchPrefix?: string,
-): Promise<string> {
+export async function spawnAgent(config: SpawnConfig): Promise<string> {
+  let {
+    agentType,
+    workspaceId,
+    prompt,
+    repoPath,
+    creationCommands,
+    resumeSessionId,
+    filePaths,
+    model,
+    effort,
+    systemInstructions,
+    permissionMode,
+    baseBranch,
+    branchPrefix,
+  } = config;
   const adapter = getAgent(agentType);
   const { worktreePath, created } = await ensureWorktree(
     workspaceId,

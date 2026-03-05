@@ -277,21 +277,21 @@ export function useWorkspaceActions({
         const repoPath = getChannelRepoPath();
         const baseBranch = options.baseBranch ?? getChannelBaseBranch();
         const agentType = runStore.selectedAgent;
-        const result = await window.traceAPI.spawnAgent(
+        const result = await window.traceAPI.spawnAgent({
           agentType,
           workspaceId,
           prompt,
           repoPath,
-          options.creationCommands,
-          options.resumeSessionId,
-          options.filePaths,
-          options.model,
-          options.effort,
-          options.systemInstructions,
-          options.permissionMode,
+          creationCommands: options.creationCommands,
+          resumeSessionId: options.resumeSessionId,
+          filePaths: options.filePaths,
+          model: options.model,
+          effort: options.effort,
+          systemInstructions: options.systemInstructions,
+          permissionMode: options.permissionMode,
           baseBranch,
-          user?.githubUsername ?? undefined,
-        );
+          branchPrefix: user?.githubUsername ?? undefined,
+        });
 
         if (!result.success) {
           useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
@@ -316,7 +316,12 @@ export function useWorkspaceActions({
         return false;
       }
     },
-    [getChannelBaseBranch, getChannelRepoPath, updateWorkspaceStatus, user?.githubUsername],
+    [
+      getChannelBaseBranch,
+      getChannelRepoPath,
+      updateWorkspaceStatus,
+      user?.githubUsername,
+    ],
   );
 
   const updatePreviewForPendingRun = useCallback(
@@ -738,7 +743,8 @@ export function useWorkspaceActions({
     ) => {
       const baseBranch = getChannelBaseBranch();
       const userInstructions = getSystemInstructions();
-      const reviewPrompt = buildReviewTicketPrompt(baseBranch) + runConfig.prompt;
+      const reviewPrompt =
+        buildReviewTicketPrompt(baseBranch) + runConfig.prompt;
 
       const instructionParts = [
         `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,

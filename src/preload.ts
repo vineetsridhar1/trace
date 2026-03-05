@@ -1,21 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { SpawnConfig } from "./types";
 
 contextBridge.exposeInMainWorld("traceAPI", {
   getServerUrl: () => ipcRenderer.sendSync("get-server-url") as string,
   spawnAgent: async (
-    agentType: string,
-    workspaceId: string,
-    prompt: string,
-    repoPath: string,
-    creationCommands?: string[],
-    resumeSessionId?: string,
-    filePaths?: string[],
-    model?: string,
-    effort?: string,
-    systemInstructions?: string,
-    permissionMode?: string,
-    baseBranch?: string,
-    branchPrefix?: string,
+    config: SpawnConfig,
   ): Promise<{
     success: boolean;
     worktreePath?: string;
@@ -23,22 +12,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
     error?: string;
   }> => {
     try {
-      return await ipcRenderer.invoke(
-        "spawn-agent",
-        agentType,
-        workspaceId,
-        prompt,
-        repoPath,
-        creationCommands,
-        resumeSessionId,
-        filePaths,
-        model,
-        effort,
-        systemInstructions,
-        permissionMode,
-        baseBranch,
-        branchPrefix,
-      );
+      return await ipcRenderer.invoke("spawn-agent", config);
     } catch (err) {
       return { success: false, error: String(err) };
     }
