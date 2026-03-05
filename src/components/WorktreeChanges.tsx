@@ -240,7 +240,9 @@ function DiffFileAccordion({
   const [contentHeight, setContentHeight] = useState(0);
 
   const hunks = Array.isArray(file?.hunks) ? file.hunks : [];
-  const displayPath = file?.newPath || file?.oldPath || 'file.txt';
+  const displayPath = (file?.newPath && file.newPath !== '/dev/null' ? file.newPath : null)
+    || (file?.oldPath && file.oldPath !== '/dev/null' ? file.oldPath : null)
+    || 'file.txt';
   const fileName = displayPath.split('/').pop() ?? displayPath;
   const dirPath = displayPath.includes('/') ? displayPath.slice(0, displayPath.lastIndexOf('/') + 1) : '';
   const { additions, deletions } = countChanges(hunks);

@@ -30,9 +30,30 @@ export async function getWorktreeDiff(worktreePath: string, baseBranch: string =
     runGit(['status', '--porcelain'], worktreePath),
   ]);
 
+  // Generate diffs for untracked files (git diff doesn't include them)
+  const untrackedFiles = status
+    .split('\n')
+    .filter((line) => line.startsWith('??'))
+    .map((line) => {
+      const raw = line.slice(3);
+      // git status --porcelain quotes filenames with spaces/special chars
+      return raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+    })
+    .slice(0, 50);
+
+  let untrackedDiff = '';
+  if (untrackedFiles.length > 0) {
+    const diffs = await Promise.all(
+      untrackedFiles.map((file) => runGit(['diff', '--no-index', '/dev/null', file], worktreePath)),
+    );
+    untrackedDiff = diffs.join('');
+  }
+
+  const fullUncommittedDiff = uncommittedDiff + untrackedDiff;
+
   return {
     branchDiff: branchDiff.slice(0, MAX_DIFF_SIZE),
-    uncommittedDiff: uncommittedDiff.slice(0, MAX_DIFF_SIZE),
+    uncommittedDiff: fullUncommittedDiff.slice(0, MAX_DIFF_SIZE),
     stagedDiff: stagedDiff.slice(0, MAX_DIFF_SIZE),
     status,
   };

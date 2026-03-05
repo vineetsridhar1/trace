@@ -26,8 +26,8 @@ function DiffFileView({
 }) {
   const hunks = Array.isArray(file?.hunks) ? file.hunks : [];
   const displayPath =
-    (typeof file?.newPath === 'string' && file.newPath) ||
-    (typeof file?.oldPath === 'string' && file.oldPath) ||
+    (typeof file?.newPath === 'string' && file.newPath && file.newPath !== '/dev/null' ? file.newPath : null) ||
+    (typeof file?.oldPath === 'string' && file.oldPath && file.oldPath !== '/dev/null' ? file.oldPath : null) ||
     fallbackPath ||
     'file.txt';
 
@@ -115,8 +115,8 @@ export function EditDiffPreview({ event }: { event: ServerEvent }) {
         if (hunks.length === 0) return null;
 
         const displayPath =
-          (typeof file?.newPath === 'string' && file.newPath) ||
-          (typeof file?.oldPath === 'string' && file.oldPath) ||
+          (typeof file?.newPath === 'string' && file.newPath && file.newPath !== '/dev/null' ? file.newPath : null) ||
+          (typeof file?.oldPath === 'string' && file.oldPath && file.oldPath !== '/dev/null' ? file.oldPath : null) ||
           diffContent.filePath ||
           'file.txt';
 
