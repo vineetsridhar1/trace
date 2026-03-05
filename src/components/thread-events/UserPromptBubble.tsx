@@ -1,9 +1,14 @@
-import { memo, useState } from 'react';
-import type { ServerEvent } from '../../types';
-import { getServerUrl } from '../../types';
-import { extractPromptText, extractAttachments, stripTraceInternal } from '../../utils';
-import { ImageLightbox } from '../ImageLightbox';
-import { ExpandableText } from './ExpandableText';
+import { memo, useState } from "react";
+import type { ServerEvent } from "../../types";
+import { getServerUrl } from "../../types";
+import {
+  extractPromptText,
+  extractAttachments,
+  stripTraceInternal,
+} from "../../utils";
+import { ImageLightbox } from "../ImageLightbox";
+import { ExpandableText } from "./ExpandableText";
+import { CopyMessageButton } from "./CopyMessageButton";
 
 export const UserPromptBubble = memo(function UserPromptBubble({
   event,
@@ -13,7 +18,7 @@ export const UserPromptBubble = memo(function UserPromptBubble({
   time: string;
 }) {
   const rawPrompt =
-    extractPromptText(event.rawPayload) ?? event.lastAssistantMessage ?? '';
+    extractPromptText(event.rawPayload) ?? event.lastAssistantMessage ?? "";
   const prompt = stripTraceInternal(rawPrompt);
   const attachments = extractAttachments(event.rawPayload);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -35,7 +40,11 @@ export const UserPromptBubble = memo(function UserPromptBubble({
                 <button
                   key={a.key}
                   type="button"
-                  onClick={() => setLightboxSrc(`${getServerUrl()}/attachments/file/${a.key}`)}
+                  onClick={() =>
+                    setLightboxSrc(
+                      `${getServerUrl()}/attachments/file/${a.key}`,
+                    )
+                  }
                   className="h-16 w-16 overflow-hidden rounded-md border border-accent/30 transition-colors hover:border-accent/60"
                 >
                   <img
@@ -49,8 +58,17 @@ export const UserPromptBubble = memo(function UserPromptBubble({
           )}
         </div>
       </div>
+      {prompt && (
+        <div className="flex justify-end pr-1 mt-1">
+          <CopyMessageButton text={prompt} />
+        </div>
+      )}
       {lightboxSrc && (
-        <ImageLightbox src={lightboxSrc} alt="Attached image" onClose={() => setLightboxSrc(null)} />
+        <ImageLightbox
+          src={lightboxSrc}
+          alt="Attached image"
+          onClose={() => setLightboxSrc(null)}
+        />
       )}
     </>
   );
