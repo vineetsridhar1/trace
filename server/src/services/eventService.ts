@@ -114,39 +114,6 @@ async function runAutoCompleteIfNeeded(
       select: { timestamp: true },
     });
 
-    // Check if the current turn made any repo file changes (excluding .claude/ internal files)
-    const writeEvents = await prisma.event.findMany({
-      where: {
-        session: { workspaceId },
-        cliSessionId,
-        hookEventName: "PostToolUse",
-        toolName: {
-          in: [
-            "Write",
-            "Edit",
-            "MultiEdit",
-            "NotebookEdit",
-            "write",
-            "edit",
-            "multiedit",
-            "notebookedit",
-          ],
-        },
-        ...(lastPrompt ? { timestamp: { gte: lastPrompt.timestamp } } : {}),
-      },
-      select: { toolInput: true },
-    });
-
-    const repoWriteCount = writeEvents.filter((e: { toolInput: unknown }) => {
-      if (!e.toolInput || typeof e.toolInput !== "object") return true;
-      const input = e.toolInput as Record<string, unknown>;
-      const filePath = (input.file_path ??
-        input.path ??
-        input.filepath ??
-        "") as string;
-      return !filePath.includes("/.claude/");
-    }).length;
-
     await updateWorkspaceStatus(workspaceId, "completed");
     void syncTicketWithWorkspaceStatus(workspaceId, channelId, "completed");
     void checkAndTriggerDependents(workspaceId, channelId);

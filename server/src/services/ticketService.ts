@@ -7,7 +7,11 @@ import {
   type TicketMetadata,
 } from "./ticketAiService";
 import { getStorage } from "./storageService";
-import { ensureManualInputCliSession, getWorkspaceByIdForFeed, updateWorkspaceStatus } from "./workspaceService";
+import {
+  ensureManualInputCliSession,
+  getWorkspaceByIdForFeed,
+  updateWorkspaceStatus,
+} from "./workspaceService";
 
 function resolveTicketAttachmentUrls<
   T extends {
@@ -148,7 +152,9 @@ async function reconcileStaleWorkspaces(channelId: string): Promise<void> {
         OR: [
           // Case 1: CLI session explicitly stopped AND grace period elapsed
           // (avoids racing with the normal auto-complete in ingestEvent)
-          { cliSession: { status: "stopped", lastSeenAt: { lt: stoppedGrace } } },
+          {
+            cliSession: { status: "stopped", lastSeenAt: { lt: stoppedGrace } },
+          },
           // Case 2: CLI session hasn't sent events in a while
           { cliSession: { lastSeenAt: { lt: staleThreshold } } },
         ],
@@ -203,7 +209,10 @@ async function reconcileTicketColumns(channelId: string): Promise<void> {
       if (!expectedSlug) continue;
 
       // Already correct, or merged tickets never move backward
-      if (ticket.column.slug === expectedSlug || ticket.column.slug === "merged") {
+      if (
+        ticket.column.slug === expectedSlug ||
+        ticket.column.slug === "merged"
+      ) {
         continue;
       }
 
@@ -408,8 +417,11 @@ export async function updateTicketFromEvent(
   };
 
   // Only include metadata in the update if it has new semantic content
-  const hasNewSemantic = incomingMeta?.semanticContext &&
-    Object.values(incomingMeta.semanticContext).some((v) => Array.isArray(v) ? v.length > 0 : !!v);
+  const hasNewSemantic =
+    incomingMeta?.semanticContext &&
+    Object.values(incomingMeta.semanticContext).some((v) =>
+      Array.isArray(v) ? v.length > 0 : !!v,
+    );
 
   const data: Record<string, unknown> = {};
   if (update.description) data.description = update.description;
@@ -635,8 +647,25 @@ export async function triggerReviewIfAutonomous(
       select: { queuedRunConfig: true },
     });
 
-    const runConfig = workspace?.queuedRunConfig as Record<string, unknown> | null;
+    const runConfig = workspace?.queuedRunConfig as Record<
+      string,
+      unknown
+    > | null;
     if (!runConfig?.autonomous) return;
+
+    // If a review was already attempted, skip the review cycle and auto-merge.
+    // This prevents an infinite loop when the review agent finds no changes to merge.
+    if (runConfig.reviewTriggered) {
+      const { count } = await prisma.workspace.updateMany({
+        where: { id: workspaceId, status: "completed" },
+        data: { status: "merged" },
+      });
+      if (count === 0) return;
+
+      void syncTicketWithWorkspaceStatus(workspaceId, channelId, "merged");
+      void checkAndTriggerDependents(workspaceId, channelId);
+      return;
+    }
 
     // Atomically claim: only proceed if status is still 'completed'.
     // Prevents double-fire when runAutoCompleteIfNeeded runs multiple times.
@@ -645,6 +674,15 @@ export async function triggerReviewIfAutonomous(
       data: { status: "review" },
     });
     if (count === 0) return;
+
+    // Mark that we've triggered a review so we don't loop if the review agent
+    // finishes without merging (e.g. no diff to push).
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        queuedRunConfig: { ...runConfig, reviewTriggered: true },
+      },
+    });
 
     void syncTicketWithWorkspaceStatus(workspaceId, channelId, "review");
 
@@ -713,7 +751,8 @@ export async function importTicketsToProject(
   // Validate inputs
   if (tickets.length === 0) throw new Error("No tickets to import");
   const ids = tickets.map((t) => t.ticketJsonId);
-  if (new Set(ids).size !== ids.length) throw new Error("Duplicate ticket IDs found");
+  if (new Set(ids).size !== ids.length)
+    throw new Error("Duplicate ticket IDs found");
 
   // 1. Ensure kanban columns exist and find TODO column
   const columns = await ensureKanbanColumns(channelId);
@@ -734,7 +773,11 @@ export async function importTicketsToProject(
     let sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
 
     const ticketJsonIdToWorkspaceId = new Map<string, string>();
-    const txResults: { ticketJsonId: string; workspaceId: string; ticketId: string }[] = [];
+    const txResults: {
+      ticketJsonId: string;
+      workspaceId: string;
+      ticketId: string;
+    }[] = [];
 
     // Create workspaces, sessions, events, and tickets
     for (const t of tickets) {
@@ -763,11 +806,13 @@ export async function importTicketsToProject(
         data: {
           cliSessionId: USER_CLI_SESSION_ID,
           hookEventName: "UserPromptSubmit",
-          rawPayload: JSON.parse(JSON.stringify({
-            hook_event_name: "UserPromptSubmit",
-            prompt,
-            source: "ui",
-          })),
+          rawPayload: JSON.parse(
+            JSON.stringify({
+              hook_event_name: "UserPromptSubmit",
+              prompt,
+              source: "ui",
+            }),
+          ),
           sessionId: session.id,
           importance: "important",
         },

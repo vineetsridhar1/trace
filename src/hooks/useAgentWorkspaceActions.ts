@@ -182,8 +182,9 @@ This will create a GitHub PR, merge it, and clean up the branch.
 - You MUST check every Completion Goal individually. Do not batch them as "all passed" without verification.
 - Be pragmatic, not pedantic. Minor style differences or alternative-but-correct approaches are fine.
 - The bar is: "Does this implementation correctly and safely achieve what the ticket asked for?"
-- If the diff is empty (no changes), the ticket was not implemented — fix the implementation yourself based on the ticket description, then merge.
-- If the diff only contains changes to \`.trace/\` or \`.claude/\` directories with no actual implementation, implement the ticket yourself based on the description, then merge.
+- If the diff is empty (no changes), check whether the Completion Goals are ALREADY satisfied by the existing code on the base branch. If the goals are met (e.g., changes were merged via another ticket or already exist), then no implementation is needed — simply state that the goals are already satisfied and finish WITHOUT calling /merge-to-main. The server will handle the status transition automatically.
+- If the diff is empty and the Completion Goals are NOT met, the ticket was not implemented — fix the implementation yourself based on the ticket description, then merge.
+- If the diff only contains changes to \`.trace/\` or \`.claude/\` directories with no actual implementation, check whether the Completion Goals are already satisfied by existing code. If yes, finish without merging. If not, implement the ticket yourself based on the description, then merge.
 - When fixing issues, make minimal targeted fixes. Do not refactor or reorganize working code.
 - Always call /merge-to-main when done. The goal is to get this ticket merged into the project branch.
 </trace-internal>
