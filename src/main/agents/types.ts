@@ -1,13 +1,17 @@
+export type AgentType = "claude" | "codex";
+
+export type InteractionMode = "code" | "plan" | "ask";
+
 export interface ParsedEnrichment {
   sessionId?: string;
   lastAssistantText: string;
   usage?: { input_tokens: number; output_tokens: number };
   costUsd?: number;
-  detectedToolName?: "AskUserQuestion" | "ExitPlanMode";
+  detectedToolName?: string;
   detectedToolInput?: unknown;
+  inputRequired: boolean;
+  inputRequiredReason?: string;
 }
-
-export type AgentType = "claude" | "codex";
 
 export interface EffortOption {
   value: string;
@@ -61,14 +65,21 @@ export interface AgentCommand {
   envFilter?: (key: string) => boolean;
 }
 
+export interface SystemPromptParts {
+  traceContext: string;
+  systemInstructions?: string;
+  interactionMode: InteractionMode;
+  filePaths?: string[];
+}
+
 export interface AgentSpawnContext {
   workspaceId: string;
   prompt: string;
   worktreePath: string;
+  interactionMode: InteractionMode;
   model?: string;
   effort?: string;
   resumeSessionId?: string;
-  permissionMode?: string;
   filePaths?: string[];
 }
 
@@ -78,4 +89,5 @@ export interface AgentAdapter {
   detect(): Promise<AgentDetectResult>;
   buildCommand(ctx: AgentSpawnContext): Promise<AgentCommand>;
   createParser(opts: StreamParserOpts): AgentStreamParser;
+  wrapSystemPrompt?(parts: SystemPromptParts): string;
 }

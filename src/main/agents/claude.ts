@@ -8,6 +8,7 @@ import type {
   AgentSpawnContext,
   AgentStreamParser,
   StreamParserOpts,
+  SystemPromptParts,
 } from "./types";
 
 let effortSupportedPromise: Promise<boolean> | null = null;
@@ -105,7 +106,7 @@ export class ClaudeAdapter implements AgentAdapter {
 
   async buildCommand(ctx: AgentSpawnContext): Promise<AgentCommand> {
     const args =
-      ctx.permissionMode === "plan"
+      ctx.interactionMode === "plan"
         ? ["--permission-mode", "plan"]
         : ["--dangerously-skip-permissions"];
 
@@ -133,6 +134,37 @@ export class ClaudeAdapter implements AgentAdapter {
       stdinMode: "ignore",
       envFilter: (key: string) => key !== "CLAUDECODE",
     };
+  }
+
+  wrapSystemPrompt(parts: SystemPromptParts): string {
+    const sections: string[] = [];
+
+    sections.push(parts.traceContext);
+
+    if (parts.systemInstructions) {
+      sections.push(parts.systemInstructions);
+    }
+
+    if (parts.filePaths && parts.filePaths.length > 0) {
+      const fileList = parts.filePaths.map((p) => `- ${p}`).join("\n");
+      sections.push(
+        `The user has referenced the following files. Read them to understand the context:\n${fileList}`,
+      );
+    }
+
+    if (parts.interactionMode === "ask") {
+      sections.push(
+        "Do NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.",
+      );
+    }
+
+    if (parts.interactionMode === "plan") {
+      sections.push(
+        "Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.",
+      );
+    }
+
+    return `<trace-internal>\n${sections.join("\n\n")}\n</trace-internal>`;
   }
 
   createParser(opts: StreamParserOpts): AgentStreamParser {
