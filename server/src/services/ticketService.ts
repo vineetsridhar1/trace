@@ -41,6 +41,7 @@ function resolveTicketAttachmentUrls<
 
 const TICKET_WORKSPACE_SELECT = {
   id: true,
+  userId: true,
   branch: true,
   prUrl: true,
   status: true,

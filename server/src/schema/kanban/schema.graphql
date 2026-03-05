@@ -58,6 +58,7 @@ type Ticket {
 
 type TicketWorkspace {
   id: ID!
+  userId: String
   branch: String
   prUrl: String
   status: String!

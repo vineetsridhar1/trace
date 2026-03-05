@@ -84,6 +84,7 @@ const TICKET_UPSERTED_SUBSCRIPTION = gql`
         updatedAt
         workspace {
           id
+          userId
           branch
           prUrl
           status

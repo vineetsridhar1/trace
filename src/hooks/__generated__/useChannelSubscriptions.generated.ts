@@ -51,7 +51,7 @@ export type TicketUpsertedSubscriptionVariables = Types.Exact<{
 }>;
 
 
-export type TicketUpsertedSubscription = { __typename?: 'Subscription', ticketUpserted: { __typename?: 'TicketUpsertPayload', channelId: string, columnSlug: string, ticket: { __typename?: 'Ticket', id: string, workspaceId?: string | null, columnId: string, title: string, description?: string | null, solutionApproach?: string | null, status: string, metadata?: unknown | null, sortOrder: number, createdAt: string, updatedAt: string, workspace?: { __typename?: 'TicketWorkspace', id: string, branch?: string | null, prUrl?: string | null, status: string, createdAt: string, attachments: Array<{ __typename?: 'TicketAttachment', id: string, key: string, filename: string, contentType: string, url: string }> } | null } } };
+export type TicketUpsertedSubscription = { __typename?: 'Subscription', ticketUpserted: { __typename?: 'TicketUpsertPayload', channelId: string, columnSlug: string, ticket: { __typename?: 'Ticket', id: string, workspaceId?: string | null, columnId: string, title: string, description?: string | null, solutionApproach?: string | null, status: string, metadata?: unknown | null, sortOrder: number, createdAt: string, updatedAt: string, workspace?: { __typename?: 'TicketWorkspace', id: string, userId?: string | null, branch?: string | null, prUrl?: string | null, status: string, createdAt: string, attachments: Array<{ __typename?: 'TicketAttachment', id: string, key: string, filename: string, contentType: string, url: string }> } | null } } };
 
 
 export const WorkspaceUpsertedDocument = gql`
@@ -258,6 +258,7 @@ export const TicketUpsertedDocument = gql`
       updatedAt
       workspace {
         id
+        userId
         branch
         prUrl
         status

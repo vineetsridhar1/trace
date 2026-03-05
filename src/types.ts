@@ -486,6 +486,7 @@ export interface KanbanTicket {
   updatedAt: string;
   workspace: {
     id: string;
+    userId: string | null;
     branch: string | null;
     prUrl: string | null;
     status: string;

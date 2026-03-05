@@ -343,6 +343,7 @@ type TicketWorkspace {
   id: ID!
   prUrl: String
   status: String!
+  userId: String
 }
 
 type TokenUsage {

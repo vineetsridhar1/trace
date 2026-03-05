@@ -757,6 +757,7 @@ export type TicketWorkspace = {
   id: Scalars['ID']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
+  userId?: Maybe<Scalars['String']['output']>;
 };
 
 export type TokenUsage = {

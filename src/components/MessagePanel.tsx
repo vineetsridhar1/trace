@@ -12,6 +12,7 @@ import {
   FiList,
   FiSend,
   FiShare2,
+  FiUser,
 } from "react-icons/fi";
 import type {
   Channel,
@@ -256,9 +257,20 @@ export function MessagePanel({
   const [selectedTicket, setSelectedTicket] = useState<KanbanTicket | null>(
     null,
   );
+  const [showMyTicketsOnly, setShowMyTicketsOnly] = useState(false);
   const feedListRef = useRef<HTMLDivElement | null>(null);
   const { user: authUser } = useAuth();
   const presenceByWorkspace = usePresenceStore((s) => s.presenceByWorkspace);
+
+  const filteredKanbanColumns = useMemo(() => {
+    if (!showMyTicketsOnly || !authUser?.id) return kanbanColumns;
+    return kanbanColumns.map((col) => ({
+      ...col,
+      tickets: col.tickets.filter(
+        (t) => t.workspace?.userId === authUser.id,
+      ),
+    }));
+  }, [kanbanColumns, showMyTicketsOnly, authUser?.id]);
 
   const ticketByWorkspaceId = useMemo(() => {
     const map = new Map<string, KanbanTicket>();
@@ -659,10 +671,22 @@ export function MessagePanel({
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setShowMyTicketsOnly((v) => !v)}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                showMyTicketsOnly
+                  ? "bg-accent/20 text-accent-light"
+                  : "text-muted hover:text-primary"
+              }`}
+            >
+              <FiUser className="h-3.5 w-3.5" />
+              My Tickets
+            </button>
           </div>
           {projectSubView === "board" ? (
             <KanbanBoard
-              columns={kanbanColumns}
+              columns={filteredKanbanColumns}
               loading={kanbanLoading}
               onClickTicket={handleBoardClickTicket}
               onMoveTicket={onMoveTicket}

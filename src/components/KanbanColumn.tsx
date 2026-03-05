@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { KanbanColumn as KanbanColumnType, KanbanTicket } from "../types";
 import { KanbanCard } from "./KanbanCard";
 
@@ -69,16 +70,26 @@ export function KanbanColumn({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {column.tickets.map((ticket) => (
-          <KanbanCard
-            key={ticket.id}
-            ticket={ticket}
-            onClickTicket={onClickTicket}
-            onDragStart={noop}
-            onDeleteWorkspace={onDeleteWorkspace}
-            onCreatePR={onCreatePR}
-          />
-        ))}
+        <AnimatePresence mode="popLayout" initial={false}>
+          {column.tickets.map((ticket) => (
+            <motion.div
+              key={ticket.id}
+              layout
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <KanbanCard
+                ticket={ticket}
+                onClickTicket={onClickTicket}
+                onDragStart={noop}
+                onDeleteWorkspace={onDeleteWorkspace}
+                onCreatePR={onCreatePR}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
         {column.tickets.length === 0 && (
           <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-edge py-8 text-xs text-muted">
             No tickets

@@ -26,6 +26,7 @@ const GQL_BOARD = gql`
         updatedAt
         workspace {
           id
+          userId
           branch
           prUrl
           status
