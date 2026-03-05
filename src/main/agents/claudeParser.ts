@@ -21,7 +21,9 @@ export class ClaudeStreamParser {
   private pendingAssistantText: string | undefined;
   private usage: { input_tokens: number; output_tokens: number } | undefined;
   private costUsd: number | undefined;
-  private detectedToolName: "AskUserQuestion" | "ExitPlanMode" | undefined;
+  private detectedToolName: string | undefined;
+  private inputRequired = false;
+  private inputRequiredReason: string | undefined;
   private detectedToolInput: unknown;
   private pendingToolUses = new Map<string, PendingToolUse>();
 
@@ -72,6 +74,8 @@ export class ClaudeStreamParser {
       costUsd: this.costUsd,
       detectedToolName: this.detectedToolName,
       detectedToolInput: this.detectedToolInput,
+      inputRequired: this.inputRequired,
+      inputRequiredReason: this.inputRequiredReason,
     };
   }
 
@@ -180,10 +184,14 @@ export class ClaudeStreamParser {
         if (toolName === "AskUserQuestion") {
           this.detectedToolName = "AskUserQuestion";
           this.detectedToolInput = toolInput;
+          this.inputRequired = true;
+          this.inputRequiredReason = "AskUserQuestion";
           this.callbacks.onInputRequired();
         } else if (toolName === "ExitPlanMode") {
           this.detectedToolName = "ExitPlanMode";
           this.detectedToolInput = toolInput;
+          this.inputRequired = true;
+          this.inputRequiredReason = "ExitPlanMode";
           this.callbacks.onInputRequired();
         }
 

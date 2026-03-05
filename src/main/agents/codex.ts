@@ -61,6 +61,7 @@ export class CodexStreamParser implements AgentStreamParser {
       sessionId: this.sessionId,
       lastAssistantText: this.lastAssistantText,
       usage: this.usage,
+      inputRequired: false,
     };
   }
 
