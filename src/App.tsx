@@ -470,6 +470,9 @@ function AppContent() {
   const autoRunRef = useRef<
     ((workspaceId: string, runConfig: unknown) => void) | null
   >(null);
+  const autoReviewRef = useRef<
+    ((workspaceId: string, runConfig: unknown) => void) | null
+  >(null);
   useEffect(() => {
     autoRunRef.current = (workspaceId: string, runConfig: unknown) => {
       const config = runConfig as {
@@ -482,6 +485,17 @@ function AppContent() {
         .getState()
         .workspaceActions.autoRunQueuedTicket(workspaceId, config);
     };
+    autoReviewRef.current = (workspaceId: string, runConfig: unknown) => {
+      const config = runConfig as {
+        prompt: string;
+        model: string;
+        effort: string;
+        planMode: boolean;
+      };
+      void useAgentRunStore
+        .getState()
+        .workspaceActions.reviewCompletedTicket(workspaceId, config);
+    };
   }, []);
 
   const { subscriptionsActive } = useChannelSubscriptions({
@@ -491,6 +505,12 @@ function AppContent() {
     onTicketReadyToRun: useCallback(
       (workspaceId: string, runConfig: unknown) => {
         autoRunRef.current?.(workspaceId, runConfig);
+      },
+      [],
+    ),
+    onTicketReadyForReview: useCallback(
+      (workspaceId: string, runConfig: unknown) => {
+        autoReviewRef.current?.(workspaceId, runConfig);
       },
       [],
     ),

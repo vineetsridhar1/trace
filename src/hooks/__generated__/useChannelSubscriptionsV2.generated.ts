@@ -39,6 +39,13 @@ export type TicketReadyToRunSubscriptionVariables = Types.Exact<{
 
 export type TicketReadyToRunSubscription = { __typename?: 'Subscription', ticketReadyToRun: { __typename?: 'TicketReadyToRunPayload', channelId: string, workspaceId: string, runConfig: unknown } };
 
+export type TicketReadyForReviewSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type TicketReadyForReviewSubscription = { __typename?: 'Subscription', ticketReadyForReview: { __typename?: 'TicketReadyForReviewPayload', channelId: string, workspaceId: string, runConfig: unknown } };
+
 export type TicketUpsertedSubscriptionVariables = Types.Exact<{
   channelId: Types.Scalars['ID']['input'];
 }>;
@@ -200,6 +207,38 @@ export function useTicketReadyToRunSubscription(baseOptions: Apollo.Subscription
       }
 export type TicketReadyToRunSubscriptionHookResult = ReturnType<typeof useTicketReadyToRunSubscription>;
 export type TicketReadyToRunSubscriptionResult = Apollo.SubscriptionResult<TicketReadyToRunSubscription>;
+export const TicketReadyForReviewDocument = gql`
+    subscription TicketReadyForReview($channelId: ID!) {
+  ticketReadyForReview(channelId: $channelId) {
+    channelId
+    workspaceId
+    runConfig
+  }
+}
+    `;
+
+/**
+ * __useTicketReadyForReviewSubscription__
+ *
+ * To run a query within a React component, call `useTicketReadyForReviewSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useTicketReadyForReviewSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useTicketReadyForReviewSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useTicketReadyForReviewSubscription(baseOptions: Apollo.SubscriptionHookOptions<TicketReadyForReviewSubscription, TicketReadyForReviewSubscriptionVariables> & ({ variables: TicketReadyForReviewSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<TicketReadyForReviewSubscription, TicketReadyForReviewSubscriptionVariables>(TicketReadyForReviewDocument, options);
+      }
+export type TicketReadyForReviewSubscriptionHookResult = ReturnType<typeof useTicketReadyForReviewSubscription>;
+export type TicketReadyForReviewSubscriptionResult = Apollo.SubscriptionResult<TicketReadyForReviewSubscription>;
 export const TicketUpsertedDocument = gql`
     subscription TicketUpserted($channelId: ID!) {
   ticketUpserted(channelId: $channelId) {

@@ -76,6 +76,7 @@ type TicketAttachment {
 extend type Subscription {
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
   ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
+  ticketReadyForReview(channelId: ID!): TicketReadyForReviewPayload!
 }
 
 type TicketUpsertPayload {
@@ -93,6 +94,12 @@ type TicketDependency {
 }
 
 type TicketReadyToRunPayload {
+  channelId: String!
+  workspaceId: String!
+  runConfig: JSON!
+}
+
+type TicketReadyForReviewPayload {
   channelId: String!
   workspaceId: String!
   runConfig: JSON!

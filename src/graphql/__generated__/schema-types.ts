@@ -613,6 +613,7 @@ export type Subscription = {
   presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
+  ticketReadyForReview: TicketReadyForReviewPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
   workspaceDeleted: WorkspaceDeletedPayload;
@@ -651,6 +652,11 @@ export type SubscriptionSessionEventCreatedArgs = {
 
 
 export type SubscriptionSessionEventUpdatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionTicketReadyForReviewArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -706,6 +712,13 @@ export type TicketDependency = {
   dependsOnWorkspaceId: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   ticketWorkspaceId: Scalars['String']['output'];
+};
+
+export type TicketReadyForReviewPayload = {
+  __typename?: 'TicketReadyForReviewPayload';
+  channelId: Scalars['String']['output'];
+  runConfig: Scalars['JSON']['output'];
+  workspaceId: Scalars['String']['output'];
 };
 
 export type TicketReadyToRunPayload = {

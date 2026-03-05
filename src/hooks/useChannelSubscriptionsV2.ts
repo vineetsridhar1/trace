@@ -55,6 +55,16 @@ const TICKET_READY_TO_RUN_SUBSCRIPTION = gql`
   }
 `;
 
+const TICKET_READY_FOR_REVIEW_SUBSCRIPTION = gql`
+  subscription TicketReadyForReview($channelId: ID!) {
+    ticketReadyForReview(channelId: $channelId) {
+      channelId
+      workspaceId
+      runConfig
+    }
+  }
+`;
+
 const TICKET_UPSERTED_SUBSCRIPTION = gql`
   subscription TicketUpserted($channelId: ID!) {
     ticketUpserted(channelId: $channelId) {
@@ -96,6 +106,7 @@ interface UseChannelSubscriptionsOptions {
   reportAgentActivity: (workspaceId: string, eventType: string, sessionId?: string) => Promise<void>;
   onNeedsAttention: (workspaceId: string, reason: 'stopped' | 'ask-user-question' | 'completed' | 'merged' | 'needs_input') => void;
   onTicketReadyToRun?: (workspaceId: string, runConfig: unknown) => void;
+  onTicketReadyForReview?: (workspaceId: string, runConfig: unknown) => void;
   onWorkspaceCompleted?: () => void;
   refreshWorkspaces?: (channelId: string) => Promise<void>;
 }
@@ -105,6 +116,7 @@ export function useChannelSubscriptions({
   reportAgentActivity,
   onNeedsAttention,
   onTicketReadyToRun,
+  onTicketReadyForReview,
   onWorkspaceCompleted,
   refreshWorkspaces,
 }: UseChannelSubscriptionsOptions) {
@@ -325,6 +337,16 @@ export function useChannelSubscriptions({
     const { workspaceId, runConfig } = ticketReadyData.ticketReadyToRun;
     onTicketReadyToRun(workspaceId, runConfig);
   }, [ticketReadyData, activeChannelId, onTicketReadyToRun]);
+
+  // --- Ticket ready for review ---
+  const { data: ticketReviewData } = useSubscription(TICKET_READY_FOR_REVIEW_SUBSCRIPTION, { variables, skip });
+
+  useEffect(() => {
+    if (!ticketReviewData?.ticketReadyForReview || !activeChannelId || !onTicketReadyForReview) return;
+    if (ticketReviewData.ticketReadyForReview.channelId !== channelIdRef.current) return;
+    const { workspaceId, runConfig } = ticketReviewData.ticketReadyForReview;
+    onTicketReadyForReview(workspaceId, runConfig);
+  }, [ticketReviewData, activeChannelId, onTicketReadyForReview]);
 
   return { subscriptionsActive };
 }

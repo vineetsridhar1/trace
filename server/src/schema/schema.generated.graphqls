@@ -272,6 +272,7 @@ type Subscription {
   presenceUpdated(channelId: ID!): PresencePayload!
   sessionEventCreated(channelId: ID!): SessionEventPayload!
   sessionEventUpdated(channelId: ID!): SessionEventPayload!
+  ticketReadyForReview(channelId: ID!): TicketReadyForReviewPayload!
   ticketReadyToRun(channelId: ID!): TicketReadyToRunPayload!
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
   workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
@@ -307,6 +308,12 @@ type TicketDependency {
   dependsOnWorkspaceId: String!
   id: ID!
   ticketWorkspaceId: String!
+}
+
+type TicketReadyForReviewPayload {
+  channelId: String!
+  runConfig: JSON!
+  workspaceId: String!
 }
 
 type TicketReadyToRunPayload {

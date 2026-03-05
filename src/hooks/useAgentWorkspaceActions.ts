@@ -104,6 +104,94 @@ const GQL_UPDATE_PREVIEW = gql`
   ${WORKSPACE_FIELDS}
 `;
 
+function buildReviewTicketPrompt(baseBranch: string): string {
+  return `<trace-internal>
+You are a senior software engineer performing a code review on a completed ticket. Your job is to verify the implementation, fix any issues you find, and then merge the work into the project base branch.
+
+## Context
+
+This workspace contains a completed ticket from an autonomous project. The implementation was done in an isolated git worktree branched from: ${baseBranch}
+
+The ticket description (including its Completion Goals) is provided after this trace-internal block.
+
+## Your workflow
+
+### Step 1: Gather context
+
+Run ALL of the following before making any judgments:
+
+1. \`git diff ${baseBranch}...HEAD --stat\` — summary of files changed
+2. \`git diff ${baseBranch}...HEAD\` — full diff of all changes
+3. \`git log ${baseBranch}..HEAD --oneline\` — commit history
+4. Read \`.trace/tickets.json\` — understand this ticket's place in the broader project
+5. Read \`.trace/technical-scoping.md\` — understand the planned implementation approach
+6. Read \`.trace/product-scoping.md\` if needed for additional product context
+
+### Step 2: Validate against ticket requirements
+
+Compare the diff against the ticket description. Check:
+
+1. **Completion Goals**: The ticket ends with a "## Completion Goals" section. Go through EACH goal individually and verify it is satisfied by the diff. List each goal and mark it PASS or FAIL with a brief explanation.
+
+2. **Missing functionality**: Anything described in the ticket that was NOT implemented? Files that should have been created or modified but weren't?
+
+3. **Extraneous changes**: Changes in the diff NOT related to the ticket? Unrelated refactors, debug artifacts, or modifications to files outside the ticket's scope?
+
+4. **File coverage**: Cross-reference files mentioned in the ticket body and technical scoping with files actually changed.
+
+### Step 3: Quality review
+
+Review the code changes for:
+
+1. **Bugs and logic errors**: Off-by-one, null/undefined handling, race conditions, missing error handling, incorrect conditionals
+2. **Security issues**: Exposed secrets, injection vulnerabilities, improper input validation
+3. **Code quality**: Naming, duplication, complexity, type safety, consistency with codebase patterns
+4. **Edge cases**: Empty states, error states, boundary conditions
+
+### Step 4: Evaluate technical scoping alignment
+
+Compare the implementation against \`.trace/technical-scoping.md\`:
+
+- If the implementation MATCHES the plan: note this and move on.
+- If the implementation DIVERGES but the end result correctly achieves the ticket's goals: this is acceptable. Update \`.trace/technical-scoping.md\` to reflect the actual approach, adding a note explaining what changed and why. Commit this update.
+- If the implementation diverges AND the result is wrong or incomplete: treat as a failure to fix.
+
+### Step 5: Fix any issues
+
+If you find problems (failed completion goals, bugs, security issues, missing functionality):
+
+1. Fix the issues directly in the code. You have full access to the codebase.
+2. Run any available test commands if applicable.
+3. Commit your fixes with a clear message describing what was fixed and why.
+4. Re-verify the completion goals after your fixes.
+
+If you updated \`.trace/technical-scoping.md\`, commit that change as well.
+
+### Step 6: Merge
+
+Once all completion goals pass and any issues are fixed:
+
+1. Call \`/merge-to-main ${baseBranch}\` to create a PR against the project base branch and merge it.
+
+This will create a GitHub PR, merge it, and clean up the branch.
+
+## Important rules
+
+- You MUST read the full diff before making any judgments. Do not skip this step.
+- You MUST check every Completion Goal individually. Do not batch them as "all passed" without verification.
+- Be pragmatic, not pedantic. Minor style differences or alternative-but-correct approaches are fine.
+- The bar is: "Does this implementation correctly and safely achieve what the ticket asked for?"
+- If the diff is empty (no changes), the ticket was not implemented — fix the implementation yourself based on the ticket description, then merge.
+- If the diff only contains changes to \`.trace/\` or \`.claude/\` directories with no actual implementation, implement the ticket yourself based on the description, then merge.
+- When fixing issues, make minimal targeted fixes. Do not refactor or reorganize working code.
+- Always call /merge-to-main when done. The goal is to get this ticket merged into the project branch.
+</trace-internal>
+
+Review the following completed ticket, fix any issues, and merge it:
+
+`;
+}
+
 interface SpawnOptions {
   statusOnSuccess?: TicketStatus;
   errorPrefix: string;
@@ -635,6 +723,66 @@ export function useWorkspaceActions({
     ],
   );
 
+  const reviewCompletedTicket = useCallback(
+    async (
+      workspaceId: string,
+      runConfig: {
+        prompt: string;
+        model: string;
+        effort: string;
+        planMode: boolean;
+      },
+    ) => {
+      const baseBranch = getChannelBaseBranch();
+      const userInstructions = getSystemInstructions();
+      const reviewPrompt = buildReviewTicketPrompt(baseBranch) + runConfig.prompt;
+
+      const instructionParts = [
+        `The target branch for this workspace is ${baseBranch}. Use this for actions like creating PRs, merging, bisecting, etc.`,
+      ];
+      if (userInstructions) instructionParts.push(userInstructions);
+
+      // Persist the review prompt so it appears in the workspace thread
+      const persisted = await persistPrompt(
+        workspaceId,
+        reviewPrompt,
+        "Failed to persist review prompt",
+        undefined,
+        true, // createNewSession — review runs as a separate session
+      );
+      if (!persisted) return;
+
+      // Server already transitioned status to "review" atomically before
+      // publishing the event, so no need to call updateWorkspaceStatus here.
+
+      const success = await spawnAgentForWorkspace(workspaceId, reviewPrompt, {
+        statusOnSuccess: "in_progress",
+        errorPrefix: "Failed to spawn review agent",
+        model: runConfig.model,
+        effort:
+          getEffortOptions(
+            useAgentRunStore.getState().selectedAgent,
+            runConfig.model,
+          ).length > 0
+            ? runConfig.effort
+            : undefined,
+        systemInstructions: instructionParts.join("\n\n"),
+      });
+
+      // If spawn failed, revert to completed so it can be retried
+      if (!success) {
+        await updateWorkspaceStatus(workspaceId, "completed");
+      }
+    },
+    [
+      getChannelBaseBranch,
+      getSystemInstructions,
+      persistPrompt,
+      spawnAgentForWorkspace,
+      updateWorkspaceStatus,
+    ],
+  );
+
   const stopAgent = useCallback(async () => {
     const selectedWorkspaceId = useThreadStore.getState().selectedWorkspaceId;
     if (!selectedWorkspaceId) return;
@@ -888,6 +1036,7 @@ export function useWorkspaceActions({
       mergeToMain,
       markMerged,
       createWorkspaceForTicket,
+      reviewCompletedTicket,
     });
     return () => useAgentRunStore.getState().clearWorkspaceActions();
   }, [
@@ -900,6 +1049,7 @@ export function useWorkspaceActions({
     mergeToMain,
     markMerged,
     createWorkspaceForTicket,
+    reviewCompletedTicket,
   ]);
 
   return {
@@ -912,5 +1062,6 @@ export function useWorkspaceActions({
     mergeToMain,
     markMerged,
     createWorkspaceForTicket,
+    reviewCompletedTicket,
   };
 }

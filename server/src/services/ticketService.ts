@@ -611,6 +611,55 @@ export async function checkAndTriggerDependents(
   }
 }
 
+/**
+ * If the workspace is an autonomous ticket (has queuedRunConfig with autonomous flag),
+ * publish TICKET_READY_FOR_REVIEW so the client spawns a review agent.
+ *
+ * Uses an atomic status transition (completed → review) to prevent double-fire
+ * when runAutoCompleteIfNeeded is called multiple times.
+ */
+export async function triggerReviewIfAutonomous(
+  workspaceId: string,
+  channelId: string,
+) {
+  try {
+    // Only trigger for workspaces that are actual tickets
+    const ticket = await prisma.ticket.findUnique({
+      where: { workspaceId },
+      select: { id: true },
+    });
+    if (!ticket) return;
+
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { queuedRunConfig: true },
+    });
+
+    const runConfig = workspace?.queuedRunConfig as Record<string, unknown> | null;
+    if (!runConfig?.autonomous) return;
+
+    // Atomically claim: only proceed if status is still 'completed'.
+    // Prevents double-fire when runAutoCompleteIfNeeded runs multiple times.
+    const { count } = await prisma.workspace.updateMany({
+      where: { id: workspaceId, status: "completed" },
+      data: { status: "review" },
+    });
+    if (count === 0) return;
+
+    void syncTicketWithWorkspaceStatus(workspaceId, channelId, "review");
+
+    pubsub.publish(TOPICS.TICKET_READY_FOR_REVIEW(channelId), {
+      ticketReadyForReview: {
+        channelId,
+        workspaceId,
+        runConfig,
+      },
+    });
+  } catch (err) {
+    console.error("[ticketService] triggerReviewIfAutonomous failed:", err);
+  }
+}
+
 export async function createColumn(
   channelId: string,
   name: string,

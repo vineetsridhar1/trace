@@ -626,6 +626,7 @@ export type Subscription = {
   presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
+  ticketReadyForReview: TicketReadyForReviewPayload;
   ticketReadyToRun: TicketReadyToRunPayload;
   ticketUpserted: TicketUpsertPayload;
   workspaceDeleted: WorkspaceDeletedPayload;
@@ -664,6 +665,11 @@ export type SubscriptionsessionEventCreatedArgs = {
 
 
 export type SubscriptionsessionEventUpdatedArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionticketReadyForReviewArgs = {
   channelId: Scalars['ID']['input'];
 };
 
@@ -719,6 +725,13 @@ export type TicketDependency = {
   dependsOnWorkspaceId: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   ticketWorkspaceId: Scalars['String']['output'];
+};
+
+export type TicketReadyForReviewPayload = {
+  __typename?: 'TicketReadyForReviewPayload';
+  channelId: Scalars['String']['output'];
+  runConfig: Scalars['JSON']['output'];
+  workspaceId: Scalars['String']['output'];
 };
 
 export type TicketReadyToRunPayload = {
@@ -919,6 +932,7 @@ export type ResolversTypes = {
   Ticket: ResolverTypeWrapper<TicketMapper>;
   TicketAttachment: ResolverTypeWrapper<TicketAttachmentMapper>;
   TicketDependency: ResolverTypeWrapper<TicketDependency>;
+  TicketReadyForReviewPayload: ResolverTypeWrapper<TicketReadyForReviewPayload>;
   TicketReadyToRunPayload: ResolverTypeWrapper<TicketReadyToRunPayload>;
   TicketUpsertPayload: ResolverTypeWrapper<TicketUpsertPayloadMapper>;
   TicketWorkspace: ResolverTypeWrapper<TicketWorkspaceMapper>;
@@ -971,6 +985,7 @@ export type ResolversParentTypes = {
   Ticket: TicketMapper;
   TicketAttachment: TicketAttachmentMapper;
   TicketDependency: TicketDependency;
+  TicketReadyForReviewPayload: TicketReadyForReviewPayload;
   TicketReadyToRunPayload: TicketReadyToRunPayload;
   TicketUpsertPayload: TicketUpsertPayloadMapper;
   TicketWorkspace: TicketWorkspaceMapper;
@@ -1254,6 +1269,7 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   presenceUpdated?: SubscriptionResolver<ResolversTypes['PresencePayload'], "presenceUpdated", ParentType, ContextType, RequireFields<SubscriptionpresenceUpdatedArgs, 'channelId'>>;
   sessionEventCreated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventCreated", ParentType, ContextType, RequireFields<SubscriptionsessionEventCreatedArgs, 'channelId'>>;
   sessionEventUpdated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventUpdated", ParentType, ContextType, RequireFields<SubscriptionsessionEventUpdatedArgs, 'channelId'>>;
+  ticketReadyForReview?: SubscriptionResolver<ResolversTypes['TicketReadyForReviewPayload'], "ticketReadyForReview", ParentType, ContextType, RequireFields<SubscriptionticketReadyForReviewArgs, 'channelId'>>;
   ticketReadyToRun?: SubscriptionResolver<ResolversTypes['TicketReadyToRunPayload'], "ticketReadyToRun", ParentType, ContextType, RequireFields<SubscriptionticketReadyToRunArgs, 'channelId'>>;
   ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
   workspaceDeleted?: SubscriptionResolver<ResolversTypes['WorkspaceDeletedPayload'], "workspaceDeleted", ParentType, ContextType, RequireFields<SubscriptionworkspaceDeletedArgs, 'channelId'>>;
@@ -1289,6 +1305,12 @@ export type TicketDependencyResolvers<ContextType = any, ParentType extends Reso
   dependsOnWorkspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   ticketWorkspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
+export type TicketReadyForReviewPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketReadyForReviewPayload'] = ResolversParentTypes['TicketReadyForReviewPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  runConfig?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };
 
 export type TicketReadyToRunPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['TicketReadyToRunPayload'] = ResolversParentTypes['TicketReadyToRunPayload']> = {
@@ -1401,6 +1423,7 @@ export type Resolvers<ContextType = any> = {
   Ticket?: TicketResolvers<ContextType>;
   TicketAttachment?: TicketAttachmentResolvers<ContextType>;
   TicketDependency?: TicketDependencyResolvers<ContextType>;
+  TicketReadyForReviewPayload?: TicketReadyForReviewPayloadResolvers<ContextType>;
   TicketReadyToRunPayload?: TicketReadyToRunPayloadResolvers<ContextType>;
   TicketUpsertPayload?: TicketUpsertPayloadResolvers<ContextType>;
   TicketWorkspace?: TicketWorkspaceResolvers<ContextType>;

@@ -9,6 +9,7 @@ export const TOPICS = {
   SESSION_EVENT_UPDATED: (channelId: string) => `THREAD_EVENT_UPDATED.${channelId}`,
   TICKET_UPSERTED: (channelId: string) => `TICKET_UPSERTED.${channelId}`,
   TICKET_READY_TO_RUN: (channelId: string) => `TICKET_READY_TO_RUN.${channelId}`,
+  TICKET_READY_FOR_REVIEW: (channelId: string) => `TICKET_READY_FOR_REVIEW.${channelId}`,
   AI_CHAT_STREAM: (chatId: string) => `AI_CHAT_STREAM.${chatId}`,
   CHANNEL_MESSAGE_CREATED: (channelId: string) => `CHANNEL_MESSAGE_CREATED.${channelId}`,
   CHANNEL_MESSAGE_CREATED_SERVER: (serverId: string) => `CHANNEL_MESSAGE_CREATED_SERVER.${serverId}`,

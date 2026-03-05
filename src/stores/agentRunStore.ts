@@ -79,6 +79,15 @@ interface WorkspaceActions {
   mergeToMain: () => Promise<void>;
   markMerged: () => Promise<void>;
   createWorkspaceForTicket: (ticket: KanbanTicket) => Promise<void>;
+  reviewCompletedTicket: (
+    workspaceId: string,
+    runConfig: {
+      prompt: string;
+      model: string;
+      effort: string;
+      planMode: boolean;
+    },
+  ) => Promise<void>;
 }
 
 const noopWarn =
@@ -105,6 +114,9 @@ const defaultWorkspaceActions: WorkspaceActions = {
   createWorkspaceForTicket: noopWarn(
     "createWorkspaceForTicket",
   ) as WorkspaceActions["createWorkspaceForTicket"],
+  reviewCompletedTicket: noopWarn(
+    "reviewCompletedTicket",
+  ) as WorkspaceActions["reviewCompletedTicket"],
 };
 
 interface AgentRunState {

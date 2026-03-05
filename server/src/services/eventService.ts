@@ -13,6 +13,7 @@ import {
   syncTicketWithWorkspaceStatus,
   refreshTicketBroadcast,
   checkAndTriggerDependents,
+  triggerReviewIfAutonomous,
 } from "./ticketService";
 
 function extractWorkspaceIdFromWorktreePath(
@@ -149,6 +150,7 @@ async function runAutoCompleteIfNeeded(
     await updateWorkspaceStatus(workspaceId, "completed");
     void syncTicketWithWorkspaceStatus(workspaceId, channelId, "completed");
     void checkAndTriggerDependents(workspaceId, channelId);
+    void triggerReviewIfAutonomous(workspaceId, channelId);
   }
 }
 
