@@ -18,6 +18,7 @@ import {
 import { runProcess } from "../process";
 import { getAgent } from "./registry";
 import type { SpawnConfig } from "../../types";
+import type { InteractionMode, SystemPromptParts } from "./types";
 
 function resolveServerUrl(): string {
   const raw = process.env.TRACE_SERVER_URL;
@@ -77,6 +78,13 @@ async function runSetupScripts(
   }
 }
 
+function buildTraceContext(worktreePath: string, config: SpawnConfig): string {
+  return (
+    `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
+    `Your work takes place in ${worktreePath} which is an isolated git worktree created for this task.`
+  );
+}
+
 export async function spawnAgent(config: SpawnConfig): Promise<string> {
   let {
     agentType,
@@ -93,6 +101,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     baseBranch,
     branchPrefix,
   } = config;
+
   const adapter = getAgent(agentType);
   const { worktreePath, created } = await ensureWorktree(
     workspaceId,
@@ -146,23 +155,6 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     }
   }
 
-  // Build effective prompt with trace-internal wrapper
-  let effectivePrompt = prompt;
-  if (!resumeSessionId) {
-    const hiddenParts: string[] = [];
-
-    hiddenParts.push(
-      `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
-        `Your work takes place in ${worktreePath} which is an isolated git worktree created for this task.`,
-    );
-
-    if (systemInstructions) {
-      hiddenParts.push(systemInstructions);
-    }
-
-    effectivePrompt = `<trace-internal>\n${hiddenParts.join("\n\n")}\n</trace-internal>\n\n${prompt}`;
-  }
-
   // Kill existing process for this workspace
   const existing = runningProcesses.get(workspaceId);
   if (existing && !existing.killed) {
@@ -211,10 +203,23 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     filePaths = resolvedPaths;
   }
 
-  let finalPrompt = effectivePrompt;
-  if (filePaths && filePaths.length > 0) {
-    const fileList = filePaths.map((p) => `- ${p}`).join("\n");
-    finalPrompt += `\n\n<trace-internal>\nThe user has referenced the following files. Read them to understand the context:\n${fileList}\n</trace-internal>`;
+  // Map permissionMode to interactionMode for adapter consumption
+  const interactionMode =
+    (permissionMode as InteractionMode | undefined) ?? "code";
+  let finalPrompt = prompt;
+  if (!resumeSessionId) {
+    const parts: SystemPromptParts = {
+      traceContext: buildTraceContext(worktreePath, config),
+      systemInstructions,
+      interactionMode: interactionMode,
+      filePaths,
+    };
+    const wrappedSystemPrompt = adapter.wrapSystemPrompt
+      ? adapter.wrapSystemPrompt(parts)
+      : [parts.traceContext, parts.systemInstructions]
+          .filter(Boolean)
+          .join("\n\n");
+    finalPrompt = wrappedSystemPrompt + "\n\n" + prompt;
   }
 
   // Build the agent-specific command
@@ -222,10 +227,10 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     workspaceId,
     prompt: finalPrompt,
     worktreePath,
+    interactionMode: interactionMode,
     model,
     effort,
     resumeSessionId,
-    permissionMode,
     filePaths,
   });
 
@@ -412,6 +417,14 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
         }),
         ...(branchName && { branch_name: branchName }),
         agent_type: agentType,
+        input_required: enrichment.inputRequired,
+        input_required_reason: enrichment.inputRequiredReason,
+        run_metadata: {
+          model,
+          effort,
+          agentType,
+          interactionMode: interactionMode,
+        },
       };
 
       appendAgentDebugLog(
