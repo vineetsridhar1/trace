@@ -7,7 +7,7 @@ export const AGENT_INACTIVITY_TIMEOUT_MS = Number(
     process.env.AGENT_TIMEOUT_MS ??
     process.env.CLAUDE_INACTIVITY_TIMEOUT_MS ??
     process.env.CLAUDE_TIMEOUT_MS ??
-    300_000,
+    720_000,
 );
 
 export interface AgentRunState {
