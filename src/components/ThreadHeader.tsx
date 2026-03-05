@@ -17,6 +17,7 @@ import {
 import { Tooltip } from "./Tooltip";
 import type { TicketStatus } from "../types";
 import { getServerUrl } from "../types";
+import { STATUS_CONFIG } from "./MessageItem";
 import type { SessionInfo } from "../hooks/useThread";
 import type { CIStatus } from "../stores/workspaceStore";
 
@@ -171,6 +172,11 @@ export const ThreadHeader = memo(function ThreadHeader({
       className="flex items-center justify-between border-b border-edge px-4 py-3"
     >
       <div className="flex items-center gap-2">
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CONFIG[workspaceStatus].bgColor} ${STATUS_CONFIG[workspaceStatus].color}`}
+        >
+          {STATUS_CONFIG[workspaceStatus].label}
+        </span>
         {hasWorktree === false &&
           workspaceStatus !== "pending" &&
           workspaceStatus !== "handed_off" &&
