@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePanelLayoutStore, type PaneGroup, type ViewMode } from '../../stores/panelLayoutStore';
 
 const TAB_LABELS: Record<ViewMode, string> = {
@@ -53,21 +53,25 @@ export function PaneTabBar({ pane }: PaneTabBarProps) {
       setDropIndex(null);
 
       const raw = e.dataTransfer.getData('application/pane-tab');
-      if (!raw) return;
-      const data: DragPayload = JSON.parse(raw);
+      if (raw) {
+        const data: DragPayload = JSON.parse(raw);
 
-      if (data.sourcePaneId === pane.id) {
-        // Reorder within same group
-        const newTabs = [...pane.tabs];
-        const fromIndex = newTabs.indexOf(data.tab);
-        if (fromIndex === -1 || fromIndex === toIndex) return;
-        newTabs.splice(fromIndex, 1);
-        newTabs.splice(toIndex, 0, data.tab);
-        usePanelLayoutStore.getState().reorderTabs(pane.id, newTabs);
-      } else {
-        // Move from another group
-        usePanelLayoutStore.getState().moveTab(data.sourcePaneId, data.tab, pane.id);
+        if (data.sourcePaneId === pane.id) {
+          // Reorder within same group
+          const newTabs = [...pane.tabs];
+          const fromIndex = newTabs.indexOf(data.tab);
+          if (fromIndex !== -1 && fromIndex !== toIndex) {
+            newTabs.splice(fromIndex, 1);
+            newTabs.splice(toIndex, 0, data.tab);
+            usePanelLayoutStore.getState().reorderTabs(pane.id, newTabs);
+          }
+        } else {
+          // Move from another group
+          usePanelLayoutStore.getState().moveTab(data.sourcePaneId, data.tab, pane.id);
+        }
       }
+
+      usePanelLayoutStore.getState().endDrag();
     },
     [pane.id, pane.tabs],
   );
@@ -111,8 +115,17 @@ interface DropZoneOverlayProps {
 
 export function DropZoneOverlay({ paneId }: DropZoneOverlayProps) {
   const isDragActive = usePanelLayoutStore((s) => s.draggedTab !== null);
-  const dragSourcePaneId = usePanelLayoutStore((s) => s.dragSourcePaneId);
   const [activeEdge, setActiveEdge] = useState<DropEdge | null>(null);
+
+  // Safety net: if the drag source element is removed from the DOM mid-drag,
+  // the browser never fires dragend on it. Listen at the document level to
+  // catch Escape, drops outside the window, or any other missed cleanup.
+  useEffect(() => {
+    if (!isDragActive) return;
+    const cleanup = () => usePanelLayoutStore.getState().endDrag();
+    document.addEventListener('dragend', cleanup);
+    return () => document.removeEventListener('dragend', cleanup);
+  }, [isDragActive]);
 
   // Don't show drop zones on the source pane (if it's a single-pane layout)
   if (!isDragActive) return null;
@@ -134,20 +147,22 @@ export function DropZoneOverlay({ paneId }: DropZoneOverlayProps) {
     setActiveEdge(null);
 
     const raw = e.dataTransfer.getData('application/pane-tab');
-    if (!raw) return;
-    const data: DragPayload = JSON.parse(raw);
+    if (raw) {
+      const data: DragPayload = JSON.parse(raw);
 
-    if (edge === 'center') {
-      // Merge into this pane group
-      if (data.sourcePaneId !== paneId) {
-        usePanelLayoutStore.getState().moveTab(data.sourcePaneId, data.tab, paneId);
+      if (edge === 'center') {
+        // Merge into this pane group
+        if (data.sourcePaneId !== paneId) {
+          usePanelLayoutStore.getState().moveTab(data.sourcePaneId, data.tab, paneId);
+        }
+      } else {
+        const direction = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical';
+        const side = edge === 'left' || edge === 'top' ? 'first' : 'second';
+        usePanelLayoutStore.getState().splitPane(paneId, direction, side, data.tab);
       }
-      return;
     }
 
-    const direction = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical';
-    const side = edge === 'left' || edge === 'top' ? 'first' : 'second';
-    usePanelLayoutStore.getState().splitPane(paneId, direction, side, data.tab);
+    usePanelLayoutStore.getState().endDrag();
   };
 
   // Hit zones are small regions at the edges for detection
