@@ -645,7 +645,7 @@ export async function triggerReviewIfAutonomous(
 
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      select: { queuedRunConfig: true },
+      select: { queuedRunConfig: true, sessions: { select: { id: true } } },
     });
 
     const runConfig = workspace?.queuedRunConfig as Record<

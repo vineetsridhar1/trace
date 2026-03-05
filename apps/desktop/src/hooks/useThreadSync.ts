@@ -132,12 +132,34 @@ export function useThreadSync(
           return;
 
         const sessionList = (sessionsData?.sessions ?? []) as SessionInfo[];
+
+        // Snapshot previous session IDs before overwriting so we can detect
+        // genuinely new sessions below.
+        const prevSessionIds = new Set(
+          useThreadStore.getState().sessions.map((s) => s.id),
+        );
+
         useThreadStore.getState().setSessions(sessionList);
 
         if (sessionList.length === 0) {
           useThreadStore.getState().setActiveSessionId(null);
           useThreadStore.getState().setSessionEvents([]);
           useThreadStore.getState().setSessionStatus("empty");
+          return;
+        }
+
+        // When the UI is deliberately in the "empty" state (e.g. waiting for a
+        // newly-spawned agent to create its session), don't snap back to an old
+        // session.  Only auto-select once a session appears that wasn't in the
+        // previous list.
+        const { activeSessionId: currentActiveId, sessionStatus } =
+          useThreadStore.getState();
+        if (
+          currentActiveId === null &&
+          sessionStatus === "empty" &&
+          prevSessionIds.size > 0 &&
+          sessionList.every((s) => prevSessionIds.has(s.id))
+        ) {
           return;
         }
 

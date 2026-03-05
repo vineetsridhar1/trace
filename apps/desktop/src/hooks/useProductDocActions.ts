@@ -601,8 +601,9 @@ export function useProductDocActions({
     store.setSessionEvents([]);
     store.setSessionStatus("empty");
 
-    // Overwrite the tickets session and mark agent as running
+    // Switch to tickets mode and mark agent as running
     useAppUIStore.getState().setProductDocSessionForMode("tickets", "pending");
+    useAppUIStore.getState().setProductDocMode("tickets");
     useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
     useAgentRunStore.getState().addActiveRun(workspaceId);
 
