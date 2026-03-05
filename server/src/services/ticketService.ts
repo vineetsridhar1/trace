@@ -674,6 +674,8 @@ export async function importTicketsToProject(
   // 2. Ensure the manual-input CLI session exists
   await ensureManualInputCliSession();
 
+  const isAutonomous = !!(runConfig as Record<string, unknown>).autonomous;
+
   // 3. All DB writes in a single transaction
   const results = await prisma.$transaction(async (tx) => {
     const maxSort = await tx.ticket.aggregate({
@@ -694,8 +696,11 @@ export async function importTicketsToProject(
           channelId,
           cliSessionId: USER_CLI_SESSION_ID,
           preview: t.title,
-          status: isRoot ? "pending" : "queued",
+          status: isRoot && !isAutonomous ? "pending" : "queued",
           importance: "important",
+          ...(isRoot && isAutonomous
+            ? { queuedRunConfig: { ...runConfig, prompt: t.body } as object }
+            : {}),
         },
       });
 

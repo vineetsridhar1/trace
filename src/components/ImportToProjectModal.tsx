@@ -1,7 +1,11 @@
 import { useState, useCallback, useMemo } from 'react';
 import { gql } from '@apollo/client';
-import { FiX } from 'react-icons/fi';
+import { FiX, FiZap } from 'react-icons/fi';
 import { Spinner } from './Spinner';
+import { ModelEffortSelector } from './ModelEffortSelector';
+import { InteractionModeToggle } from './RunButtons';
+import type { InteractionMode } from './RunButtons';
+import { useAgentRunStore } from '../stores/agentRunStore';
 import type { Channel, LocalChannelConfig } from '../types';
 import {
   useCreateChannelForImportMutation,
@@ -104,6 +108,13 @@ export function ImportToProjectModal({
   const [branchEdited, setBranchEdited] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autonomous, setAutonomous] = useState(false);
+
+  // Local copies so we don't mutate the global defaults when tweaking inside this modal
+  const [agent, setAgent] = useState(() => useAgentRunStore.getState().selectedAgent);
+  const [model, setModel] = useState(() => useAgentRunStore.getState().selectedModel);
+  const [effort, setEffort] = useState(() => useAgentRunStore.getState().selectedEffort);
+  const [mode, setMode] = useState<InteractionMode>('code');
 
   const [executeCreateChannel] = useCreateChannelForImportMutation();
   const [executeImportTickets] = useImportTicketsToProjectMutation();
@@ -190,9 +201,15 @@ export function ImportToProjectModal({
         const runConfig = {
           setupScript: sourceChannel.defaultSetupScript ?? localConfig?.setupScript ?? null,
           runScript: sourceChannel.defaultRunScript ?? localConfig?.runScript ?? null,
+          ...(autonomous && {
+            autonomous: true,
+            model,
+            effort,
+            planMode: mode === 'plan',
+          }),
         };
 
-        const { errors: importErrors } = await executeImportTickets({
+        const { data: importData, errors: importErrors } = await executeImportTickets({
           variables: {
             channelId: newChannel.id,
             tickets: ticketInputs,
@@ -210,6 +227,30 @@ export function ImportToProjectModal({
 
         // Step 5: Navigate to new channel
         onImported(newChannel.id);
+
+        // Step 6: If autonomous, trigger auto-runs for root tickets from the client.
+        //         We use a short delay so the channel subscription is established first.
+        if (autonomous && importData?.importTicketsToProject) {
+          const rootTicketIds = new Set(
+            tickets.filter((t) => t.dependencies.length === 0).map((t) => t.id),
+          );
+          const rootResults = importData.importTicketsToProject.filter((r) =>
+            rootTicketIds.has(r.ticketJsonId),
+          );
+          const autoRunConfig = { model, effort, planMode: mode === 'plan' };
+
+          setTimeout(() => {
+            const { workspaceActions } = useAgentRunStore.getState();
+            for (const r of rootResults) {
+              const ticket = tickets.find((t) => t.id === r.ticketJsonId);
+              if (!ticket) continue;
+              void workspaceActions.autoRunQueuedTicket(r.workspaceId, {
+                prompt: ticket.body,
+                ...autoRunConfig,
+              });
+            }
+          }, 2000);
+        }
       } catch (innerErr) {
         // Clean up the channel on unexpected failure
         await executeDeleteChannel({ variables: { id: newChannel.id } }).catch(() => {});
@@ -230,6 +271,10 @@ export function ImportToProjectModal({
     productDocBranch,
     scopingDocsPath,
     tickets,
+    autonomous,
+    model,
+    effort,
+    mode,
     executeCreateChannel,
     executeImportTickets,
     executeDeleteChannel,
@@ -288,6 +333,53 @@ export function ImportToProjectModal({
               placeholder="project/my-project"
               className="w-full rounded border border-edge bg-surface-deep px-3 py-1.5 text-sm text-primary placeholder-faint outline-none focus:border-edge-hover font-mono"
             />
+          </div>
+
+          {/* Autonomous mode toggle */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setAutonomous((v) => !v)}
+              className={`flex w-full items-center gap-2.5 rounded border px-3 py-2 text-left transition-colors ${
+                autonomous
+                  ? 'border-accent/40 bg-accent/10'
+                  : 'border-edge bg-surface-deep hover:border-edge-hover'
+              }`}
+            >
+              <FiZap className={`h-3.5 w-3.5 flex-shrink-0 ${autonomous ? 'text-accent-light' : 'text-muted'}`} />
+              <div className="min-w-0 flex-1">
+                <span className={`text-xs font-medium ${autonomous ? 'text-accent-light' : 'text-primary'}`}>
+                  Autonomous mode
+                </span>
+                <p className="text-[11px] text-muted">
+                  Auto-run tickets when dependencies are met
+                </p>
+              </div>
+              <div
+                className={`h-4 w-7 rounded-full transition-colors ${autonomous ? 'bg-accent' : 'bg-surface'} flex items-center border border-edge`}
+              >
+                <div
+                  className={`h-3 w-3 rounded-full bg-primary shadow-sm transition-transform ${autonomous ? 'translate-x-3' : 'translate-x-0.5'}`}
+                />
+              </div>
+            </button>
+
+            {autonomous && (
+              <div className="flex items-center gap-1.5 pl-1">
+                <ModelEffortSelector
+                  agent={agent}
+                  model={model}
+                  effort={effort}
+                  onAgentChange={setAgent}
+                  onModelChange={setModel}
+                  onEffortChange={setEffort}
+                />
+                <InteractionModeToggle mode={mode} onCycle={() => {
+                  const modes: InteractionMode[] = ['code', 'plan', 'ask'];
+                  setMode(modes[(modes.indexOf(mode) + 1) % 3]);
+                }} />
+              </div>
+            )}
           </div>
 
           {/* Info line */}
