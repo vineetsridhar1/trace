@@ -28,6 +28,7 @@ export function registerAgentHandlers(): void {
       systemInstructions?: string,
       permissionMode?: string,
       baseBranch?: string,
+      branchPrefix?: string,
     ) => {
       try {
         const worktreePath = await spawnAgent(
@@ -43,6 +44,7 @@ export function registerAgentHandlers(): void {
           systemInstructions,
           permissionMode,
           baseBranch,
+          branchPrefix,
         );
         return { success: true, worktreePath };
       } catch (err) {

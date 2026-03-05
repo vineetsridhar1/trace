@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
     systemInstructions?: string,
     permissionMode?: string,
     baseBranch?: string,
+    branchPrefix?: string,
   ): Promise<{
     success: boolean;
     worktreePath?: string;
@@ -36,6 +37,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
         systemInstructions,
         permissionMode,
         baseBranch,
+        branchPrefix,
       );
     } catch (err) {
       return { success: false, error: String(err) };
@@ -286,6 +288,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
         email: string;
         name: string;
         avatarUrl: string | null;
+        githubUsername: string | null;
       };
       error?: string;
     }>,

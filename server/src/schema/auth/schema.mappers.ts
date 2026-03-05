@@ -4,4 +4,5 @@ export interface AuthUserMapper {
   name: string;
   avatarUrl: string | null;
   role: string;
+  githubUsername: string | null;
 }

@@ -38,7 +38,7 @@ router.get('/github/callback', async (req, res) => {
 <html>
 <head>
   <meta name="trace-token" content="${token}">
-  <meta name="trace-user" content='${JSON.stringify({ id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl })}'>
+  <meta name="trace-user" content='${JSON.stringify({ id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl, githubUsername: user.githubUsername })}'>
   <title>Login Successful</title>
 </head>
 <body>

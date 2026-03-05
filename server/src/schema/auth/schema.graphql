@@ -8,4 +8,5 @@ type AuthUser {
   name: String!
   avatarUrl: String
   role: String!
+  githubUsername: String
 }

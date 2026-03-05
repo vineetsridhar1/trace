@@ -79,6 +79,7 @@ export interface TraceAPI {
     systemInstructions?: string,
     permissionMode?: string,
     baseBranch?: string,
+    branchPrefix?: string,
   ) => Promise<{
     success: boolean;
     worktreePath?: string;
@@ -215,6 +216,7 @@ export interface TraceAPI {
       email: string;
       name: string;
       avatarUrl: string | null;
+      githubUsername: string | null;
     };
     error?: string;
   }>;

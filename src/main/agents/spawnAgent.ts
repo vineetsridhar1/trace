@@ -34,8 +34,10 @@ const MAX_CAPTURE_CHARS = 20_000;
 async function generateBranchName(
   prompt: string,
   workspaceId: string,
+  branchPrefix?: string,
 ): Promise<string> {
-  const fallback = `trace/${workspaceId.slice(0, 8)}`;
+  const prefix = branchPrefix || "trace";
+  const fallback = `${prefix}/${workspaceId.slice(0, 8)}`;
   try {
     const res = await fetch(`${SERVER_URL}/graphql`, {
       method: "POST",
@@ -51,7 +53,7 @@ async function generateBranchName(
       data?: { generateBranchName: string | null };
     };
     if (!data?.generateBranchName) return fallback;
-    return `trace/${data.generateBranchName}`.slice(0, 50);
+    return `${prefix}/${data.generateBranchName}`.slice(0, 50);
   } catch {
     return fallback;
   }
@@ -88,12 +90,14 @@ export async function spawnAgent(
   systemInstructions?: string,
   permissionMode?: string,
   baseBranch?: string,
+  branchPrefix?: string,
 ): Promise<string> {
   const adapter = getAgent(agentType);
   const { worktreePath, created } = await ensureWorktree(
     workspaceId,
     repoPath,
     baseBranch,
+    branchPrefix,
   );
 
   if (created && creationCommands && creationCommands.length > 0) {
@@ -111,10 +115,11 @@ export async function spawnAgent(
   );
 
   // Rename branch on first spawn (not resume)
-  const defaultBranch = `trace/${workspaceId.slice(0, 8)}`;
+  const prefix = branchPrefix || "trace";
+  const defaultBranch = `${prefix}/${workspaceId.slice(0, 8)}`;
   const currentBranch = await getWorktreeBranch(workspaceId);
   if (!resumeSessionId && currentBranch === defaultBranch) {
-    let newBranch = await generateBranchName(prompt, workspaceId);
+    let newBranch = await generateBranchName(prompt, workspaceId, branchPrefix);
     if (newBranch !== defaultBranch) {
       let renameResult = await runProcess(
         "git",

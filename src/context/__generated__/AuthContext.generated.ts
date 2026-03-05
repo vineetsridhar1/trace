@@ -6,7 +6,7 @@ const defaultOptions = {} as const;
 export type MeQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type MeQuery = { __typename?: 'Query', me?: { __typename?: 'AuthUser', id: string, email: string, name: string, avatarUrl?: string | null, role: string } | null };
+export type MeQuery = { __typename?: 'Query', me?: { __typename?: 'AuthUser', id: string, email: string, name: string, avatarUrl?: string | null, role: string, githubUsername?: string | null } | null };
 
 
 export const MeDocument = gql`
@@ -17,6 +17,7 @@ export const MeDocument = gql`
     name
     avatarUrl
     role
+    githubUsername
   }
 }
     `;

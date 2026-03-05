@@ -12,6 +12,7 @@ import { useAgentRunStore, getEffortOptions } from "../stores/agentRunStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useChannelContext } from "../context/ChannelContext";
+import { useAuth } from "../context/AuthContext";
 
 const GQL_CREATE_WORKSPACE = gql`
   mutation CreateWorkspace(
@@ -220,6 +221,7 @@ export function useWorkspaceActions({
 }: UseWorkspaceActionsOptions) {
   const { activeChannelId, enrichedActiveChannel, localConfigs } =
     useChannelContext();
+  const { user } = useAuth();
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
   const [executeAppendPrompt] = useAppendPromptMutation();
   const [executeUpdatePreview] = useUpdateWorkspacePreviewMutation();
@@ -288,6 +290,7 @@ export function useWorkspaceActions({
           options.systemInstructions,
           options.permissionMode,
           baseBranch,
+          user?.githubUsername ?? undefined,
         );
 
         if (!result.success) {
@@ -313,7 +316,7 @@ export function useWorkspaceActions({
         return false;
       }
     },
-    [getChannelBaseBranch, getChannelRepoPath, updateWorkspaceStatus],
+    [getChannelBaseBranch, getChannelRepoPath, updateWorkspaceStatus, user?.githubUsername],
   );
 
   const updatePreviewForPendingRun = useCallback(

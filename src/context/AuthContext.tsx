@@ -9,6 +9,7 @@ interface AuthUser {
   email: string;
   name: string;
   avatarUrl: string | null;
+  githubUsername: string | null;
 }
 
 interface AuthContextValue {
@@ -37,6 +38,7 @@ export const GQL_ME = gql`
       name
       avatarUrl
       role
+      githubUsername
     }
   }
 `;
@@ -88,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               email: data.me.email,
               name: data.me.name,
               avatarUrl: data.me.avatarUrl ?? null,
+              githubUsername: data.me.githubUsername ?? null,
             });
           } else {
             // Token is genuinely invalid — clear it, no retries

@@ -122,6 +122,7 @@ interface UseWorkspaceActionsOptions {
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
   getSystemInstructions: () => string | undefined;
+  branchPrefix?: string;
 }
 
 interface SpawnOptions {
@@ -155,6 +156,7 @@ export function useWorkspaceActions({
   getChannelRepoPath,
   getChannelBaseBranch,
   getSystemInstructions,
+  branchPrefix,
 }: UseWorkspaceActionsOptions) {
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
   const [executeAppendPrompt] = useAppendPromptMutation();
@@ -217,6 +219,7 @@ export function useWorkspaceActions({
           options.systemInstructions,
           options.permissionMode,
           baseBranch,
+          branchPrefix,
         );
 
         if (!result.success) {
@@ -244,6 +247,7 @@ export function useWorkspaceActions({
     },
     [
       addActiveRun,
+      branchPrefix,
       clearActiveRun,
       getChannelBaseBranch,
       getChannelRepoPath,

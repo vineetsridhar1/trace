@@ -41,6 +41,7 @@ export async function ensureWorktree(
   workspaceId: string,
   repoPath: string,
   baseBranch?: string,
+  branchPrefix?: string,
 ): Promise<EnsureWorktreeResult> {
   const worktreePath = getWorktreePath(workspaceId);
 
@@ -53,7 +54,7 @@ export async function ensureWorktree(
     fs.mkdirSync(base, { recursive: true });
   }
 
-  const branchName = `trace/${workspaceId.slice(0, 8)}`;
+  const branchName = `${branchPrefix || "trace"}/${workspaceId.slice(0, 8)}`;
   const startPoint = baseBranch || "HEAD";
 
   const result = await new Promise<EnsureWorktreeResult>((resolve, reject) => {

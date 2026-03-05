@@ -68,6 +68,7 @@ export type AuthUser = {
   __typename?: 'AuthUser';
   avatarUrl?: Maybe<Scalars['String']['output']>;
   email: Scalars['String']['output'];
+  githubUsername?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   role: Scalars['String']['output'];

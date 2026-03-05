@@ -81,6 +81,7 @@ export type AuthUser = {
   __typename?: 'AuthUser';
   avatarUrl?: Maybe<Scalars['String']['output']>;
   email: Scalars['String']['output'];
+  githubUsername?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   role: Scalars['String']['output'];
@@ -1044,6 +1045,7 @@ export type AttachmentResolvers<ContextType = any, ParentType extends ResolversP
 export type AuthUserResolvers<ContextType = any, ParentType extends ResolversParentTypes['AuthUser'] = ResolversParentTypes['AuthUser']> = {
   avatarUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  githubUsername?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   role?: Resolver<ResolversTypes['String'], ParentType, ContextType>;

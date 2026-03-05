@@ -93,6 +93,7 @@ export async function upsertGitHubUser(githubUser: GitHubUser, accessToken: stri
       email,
       avatarUrl: githubUser.avatar_url,
       githubAccessToken: accessToken,
+      githubUsername: githubUser.login,
     },
     create: {
       githubId,
@@ -100,6 +101,7 @@ export async function upsertGitHubUser(githubUser: GitHubUser, accessToken: stri
       name,
       avatarUrl: githubUser.avatar_url,
       githubAccessToken: accessToken,
+      githubUsername: githubUser.login,
       role: 'member',
     },
   });

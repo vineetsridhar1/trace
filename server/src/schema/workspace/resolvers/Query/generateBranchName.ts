@@ -7,7 +7,7 @@ export const generateBranchName: NonNullable<QueryResolvers['generateBranchName'
       'Generate a short git branch name from the user\'s task description. ' +
       'Return ONLY the branch slug — lowercase, kebab-case, 2-5 words, no prefix. ' +
       'Examples: "fix-login-bug", "add-dark-mode", "refactor-auth-system", "update-sidebar-styles". ' +
-      'Do NOT include any prefix like "trace/" or "feat/". Just the slug.',
+      'Do NOT include any prefix like "username/" or "feat/". Just the slug.',
     prompt,
     maxTokens: 30,
   });
