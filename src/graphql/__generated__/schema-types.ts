@@ -471,6 +471,7 @@ export type Query = {
   event?: Maybe<Event>;
   generateBranchName?: Maybe<Scalars['String']['output']>;
   me?: Maybe<AuthUser>;
+  myWorkspaces: Array<Workspace>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
@@ -530,6 +531,12 @@ export type QueryEventArgs = {
 
 export type QueryGenerateBranchNameArgs = {
   prompt: Scalars['String']['input'];
+};
+
+
+export type QueryMyWorkspacesArgs = {
+  excludeStatuses?: InputMaybe<Array<Scalars['String']['input']>>;
+  serverId: Scalars['ID']['input'];
 };
 
 
@@ -773,6 +780,7 @@ export type Workspace = {
   agentType?: Maybe<Scalars['String']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channelId: Scalars['String']['output'];
+  channelName?: Maybe<Scalars['String']['output']>;
   cliSession?: Maybe<WorkspaceCliSession>;
   cliSessionId: Scalars['String']['output'];
   createdAt: Scalars['DateTime']['output'];

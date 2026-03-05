@@ -19,6 +19,7 @@ export interface WorkspaceMapper {
   user: { id: string; name: string; avatarUrl: string | null } | null;
   _count: { sessions: number };
   isProductDoc: boolean;
+  channel?: { id: string; name: string } | null;
 }
 
 export interface WorkspaceUserMapper {

@@ -7,5 +7,8 @@ export const Workspace: WorkspaceResolvers = {
   user: (parent, _arg, _ctx) => {
     return parent.user ?? null;
   },
+  channelName: (parent, _arg, _ctx) => {
+    return parent.channel?.name ?? null;
+  },
   queuedRunConfig: async (_parent, _arg, _ctx) => { /* Workspace.queuedRunConfig resolver is required because Workspace.queuedRunConfig exists but WorkspaceMapper.queuedRunConfig does not */ }
 };

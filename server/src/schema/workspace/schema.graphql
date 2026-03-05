@@ -1,6 +1,7 @@
 extend type Query {
   workspace(id: ID!): Workspace
   workspaces(channelId: ID!, limit: Int, offset: Int, excludeStatus: String): WorkspaceConnection!
+  myWorkspaces(serverId: ID!, excludeStatuses: [String!]): [Workspace!]!
   checkPRStatuses(channelId: ID!, branches: [String!]!): [PRStatus!]!
   generateBranchName(prompt: String!): String
   suggestScripts(fileContents: JSON!): SuggestScriptsResult
@@ -35,6 +36,7 @@ extend type Mutation {
 type Workspace {
   id: ID!
   channelId: String!
+  channelName: String
   cliSessionId: String!
   userId: String
   preview: String

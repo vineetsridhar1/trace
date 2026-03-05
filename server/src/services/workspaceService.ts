@@ -123,6 +123,29 @@ export async function getWorkspacesByChannel(
   return { workspaces, total, mergedCount, limit, offset };
 }
 
+export async function getWorkspacesByUser(
+  userId: string,
+  serverId: string,
+  options: { excludeStatuses?: string[] } = {},
+) {
+  const { excludeStatuses = [] } = options;
+  return prisma.workspace.findMany({
+    where: {
+      userId,
+      status: { notIn: ['deleted', ...excludeStatuses] },
+      channel: { serverId },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    include: {
+      cliSession: { select: { sessionId: true, cwd: true, status: true } },
+      user: { select: { id: true, name: true, avatarUrl: true } },
+      _count: { select: { sessions: true } },
+      channel: { select: { id: true, name: true } },
+    },
+  });
+}
+
 export async function getOrCreateWorkspaceForCliSession(channelId: string, cliSessionId: string) {
   let workspace = await prisma.workspace.findFirst({
     where: { channelId, cliSessionId },

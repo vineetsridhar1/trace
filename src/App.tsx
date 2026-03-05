@@ -1082,6 +1082,7 @@ function AppContent() {
           onNewProductDoc={() =>
             useAppUIStore.getState().setShowProductDocModal(true)
           }
+          onOpenWorkspaceLink={handleOpenThreadLink}
         />
 
         <div

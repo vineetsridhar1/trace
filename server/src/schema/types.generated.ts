@@ -484,6 +484,7 @@ export type Query = {
   event?: Maybe<Event>;
   generateBranchName?: Maybe<Scalars['String']['output']>;
   me?: Maybe<AuthUser>;
+  myWorkspaces: Array<Workspace>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
@@ -543,6 +544,12 @@ export type QueryeventArgs = {
 
 export type QuerygenerateBranchNameArgs = {
   prompt: Scalars['String']['input'];
+};
+
+
+export type QuerymyWorkspacesArgs = {
+  excludeStatuses?: InputMaybe<Array<Scalars['String']['input']>>;
+  serverId: Scalars['ID']['input'];
 };
 
 
@@ -786,6 +793,7 @@ export type Workspace = {
   agentType?: Maybe<Scalars['String']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channelId: Scalars['String']['output'];
+  channelName?: Maybe<Scalars['String']['output']>;
   cliSession?: Maybe<WorkspaceCliSession>;
   cliSessionId: Scalars['String']['output'];
   createdAt: Scalars['DateTime']['output'];
@@ -1246,6 +1254,7 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   event?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryeventArgs, 'id'>>;
   generateBranchName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QuerygenerateBranchNameArgs, 'prompt'>>;
   me?: Resolver<Maybe<ResolversTypes['AuthUser']>, ParentType, ContextType>;
+  myWorkspaces?: Resolver<Array<ResolversTypes['Workspace']>, ParentType, ContextType, RequireFields<QuerymyWorkspacesArgs, 'serverId'>>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionsArgs, 'channelId' | 'workspaceId'>>;
@@ -1371,6 +1380,7 @@ export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversPa
   agentType?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  channelName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   cliSession?: Resolver<Maybe<ResolversTypes['WorkspaceCliSession']>, ParentType, ContextType>;
   cliSessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;

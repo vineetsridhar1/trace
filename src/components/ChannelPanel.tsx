@@ -1,18 +1,65 @@
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiUsers, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiFileText } from 'react-icons/fi';
-import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server } from '../types';
+import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiFileText } from 'react-icons/fi';
+import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
 import { ServerSwitcher } from './ServerSwitcher';
 import { SyncStatus } from './SyncStatus';
+import { useMyWorkspaces } from '../hooks/useMyWorkspaces';
+import { STATUS_CONFIG } from './MessageItem';
 
 const SECTION_CONFIG: Record<SidebarSectionId, { icon: typeof FiHash; label: string }> = {
   channels: { icon: FiHash, label: 'Channels' },
   teams: { icon: FiLayers, label: 'Teams' },
   projects: { icon: FiFolder, label: 'Projects' },
-  dms: { icon: FiUsers, label: 'Direct Messages' },
+  'my-workspaces': { icon: FiBriefcase, label: 'My Workspaces' },
   'ai-chats': { icon: FiMessageCircle, label: 'AI Chats' },
 };
+
+function MyWorkspacesContent({ activeServerId, onOpenWorkspaceLink }: { activeServerId: string | null; onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void }) {
+  const { workspaces, loading } = useMyWorkspaces(activeServerId);
+
+  if (loading && workspaces.length === 0) {
+    return (
+      <div className="px-3 py-1.5">
+        <span className="text-xs italic text-muted">Loading...</span>
+      </div>
+    );
+  }
+
+  if (workspaces.length === 0) {
+    return (
+      <div className="px-3 py-1.5">
+        <span className="text-xs italic text-muted">No active workspaces</span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {workspaces.map((ws) => {
+        const statusKey = (ws.status ?? 'pending') as TicketStatus;
+        const statusCfg = STATUS_CONFIG[statusKey];
+        const dotColor = statusCfg?.color ?? 'text-muted';
+        return (
+          <div key={ws.id} className="my-0.5 flex items-center">
+            <button
+              type="button"
+              onClick={() => onOpenWorkspaceLink(ws.channelId, ws.id)}
+              className="channel-item flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors text-primary"
+            >
+              <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dotColor.replace('text-', 'bg-')}`} />
+              <span className="truncate">{ws.preview || 'New Workspace'}</span>
+              {ws.channelName && (
+                <span className="ml-auto shrink-0 text-[10px] text-muted">#{ws.channelName}</span>
+              )}
+            </button>
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 interface ChannelPanelProps {
   channels: Channel[];
@@ -37,6 +84,7 @@ interface ChannelPanelProps {
   onDeleteAiChat: (id: string) => void;
   onStartDrag: () => void;
   onNewProductDoc: () => void;
+  onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void;
 }
 
 export function ChannelPanel({
@@ -60,6 +108,7 @@ export function ChannelPanel({
   onDeleteAiChat,
   onStartDrag,
   onNewProductDoc,
+  onOpenWorkspaceLink,
   unreadCounts = {},
   localConfigs = {},
 }: ChannelPanelProps) {
@@ -147,17 +196,8 @@ export function ChannelPanel({
             </button>
           </Tooltip>
         );
-      case 'dms':
-        return (
-          <Tooltip text="New DM" position="bottom">
-            <button
-              type="button"
-              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent"
-            >
-              <FiPlus className="h-3 w-3" aria-hidden="true" />
-            </button>
-          </Tooltip>
-        );
+      case 'my-workspaces':
+        return null;
       case 'ai-chats':
         return (
           <Tooltip text="New AI chat" position="bottom">
@@ -199,12 +239,8 @@ export function ChannelPanel({
         ) : (
           renderChannelItems(projectChannels)
         );
-      case 'dms':
-        return (
-          <div className="px-3 py-1.5">
-            <span className="text-xs italic text-muted">Coming soon...</span>
-          </div>
-        );
+      case 'my-workspaces':
+        return <MyWorkspacesContent activeServerId={activeServerId} onOpenWorkspaceLink={onOpenWorkspaceLink} />;
       case 'ai-chats':
         return aiChats.map((chat) => {
           const isActive = chat.id === activeAiChatId;
