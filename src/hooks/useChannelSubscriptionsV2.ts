@@ -184,6 +184,13 @@ export function useChannelSubscriptions({
     storeState.upsertWorkspace(workspace);
     useThreadStore.getState().syncSelectedWorkspace(workspace);
 
+    // Sync workspace fields (branch, status) into the kanban ticket's embedded
+    // workspace data so the PR button and other ticket-level UI stays current.
+    useKanbanStore.getState().syncWorkspaceFields(workspace.id, {
+      branch: workspace.branch,
+      status: workspace.status,
+    });
+
     const pendingId = useAgentRunStore.getState().pendingRunWorkspaceId;
     if (pendingId === workspace.id && workspace.status !== 'pending') {
       useAgentRunStore.getState().clearPendingRun();

@@ -33,6 +33,7 @@ interface KanbanState {
   ) => void;
   removeTicketByWorkspaceId: (workspaceId: string) => void;
   setTicketWorkspacePrUrl: (workspaceId: string, prUrl: string) => void;
+  syncWorkspaceFields: (workspaceId: string, fields: { branch?: string | null; status?: string | null }) => void;
   clearBoard: () => void;
 }
 
@@ -173,6 +174,34 @@ export const useKanbanStore = create<KanbanState>((set) => ({
           }),
         })),
         workspaceTickets: { ...state.workspaceTickets, ...wsUpdate },
+      };
+    }),
+
+  syncWorkspaceFields: (workspaceId, fields) =>
+    set((state) => {
+      const existing = state.workspaceTickets[workspaceId];
+      if (!existing?.workspace) return state;
+
+      const updated = { ...existing.workspace, ...fields };
+      // Skip update if nothing changed
+      if (
+        updated.branch === existing.workspace.branch &&
+        updated.status === existing.workspace.status
+      ) {
+        return state;
+      }
+
+      const updatedTicket = { ...existing, workspace: updated };
+      return {
+        columns: state.columns.map((col) => ({
+          ...col,
+          tickets: col.tickets.map((t) =>
+            t.workspaceId === workspaceId && t.workspace
+              ? { ...t, workspace: { ...t.workspace, ...fields } }
+              : t,
+          ),
+        })),
+        workspaceTickets: { ...state.workspaceTickets, [workspaceId]: updatedTicket },
       };
     }),
 
