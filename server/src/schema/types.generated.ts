@@ -487,6 +487,7 @@ export type Query = {
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
+  suggestScripts?: Maybe<SuggestScriptsResult>;
   ticketByWorkspaceId?: Maybe<Ticket>;
   ticketDependencies: Array<TicketDependency>;
   workspace?: Maybe<Workspace>;
@@ -558,6 +559,11 @@ export type QuerysessionEventsArgs = {
 export type QuerysessionsArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QuerysuggestScriptsArgs = {
+  fileContents: Scalars['JSON']['input'];
 };
 
 
@@ -692,6 +698,13 @@ export type SubscriptionworkspaceDeletedArgs = {
 
 export type SubscriptionworkspaceUpsertedArgs = {
   channelId: Scalars['ID']['input'];
+};
+
+export type SuggestScriptsResult = {
+  __typename?: 'SuggestScriptsResult';
+  reasoning?: Maybe<Scalars['String']['output']>;
+  runScript?: Maybe<Scalars['String']['output']>;
+  setupScript?: Maybe<Scalars['String']['output']>;
 };
 
 export type Ticket = {
@@ -930,6 +943,7 @@ export type ResolversTypes = {
   Session: ResolverTypeWrapper<SessionMapper>;
   SessionEventPayload: ResolverTypeWrapper<SessionEventPayloadMapper>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  SuggestScriptsResult: ResolverTypeWrapper<SuggestScriptsResult>;
   Ticket: ResolverTypeWrapper<TicketMapper>;
   TicketAttachment: ResolverTypeWrapper<TicketAttachmentMapper>;
   TicketDependency: ResolverTypeWrapper<TicketDependency>;
@@ -983,6 +997,7 @@ export type ResolversParentTypes = {
   Session: SessionMapper;
   SessionEventPayload: SessionEventPayloadMapper;
   Subscription: Record<PropertyKey, never>;
+  SuggestScriptsResult: SuggestScriptsResult;
   Ticket: TicketMapper;
   TicketAttachment: TicketAttachmentMapper;
   TicketDependency: TicketDependency;
@@ -1233,6 +1248,7 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionsArgs, 'channelId' | 'workspaceId'>>;
+  suggestScripts?: Resolver<Maybe<ResolversTypes['SuggestScriptsResult']>, ParentType, ContextType, RequireFields<QuerysuggestScriptsArgs, 'fileContents'>>;
   ticketByWorkspaceId?: Resolver<Maybe<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryticketByWorkspaceIdArgs, 'workspaceId'>>;
   ticketDependencies?: Resolver<Array<ResolversTypes['TicketDependency']>, ParentType, ContextType, RequireFields<QueryticketDependenciesArgs, 'workspaceId'>>;
   workspace?: Resolver<Maybe<ResolversTypes['Workspace']>, ParentType, ContextType, RequireFields<QueryworkspaceArgs, 'id'>>;
@@ -1276,6 +1292,12 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
   workspaceDeleted?: SubscriptionResolver<ResolversTypes['WorkspaceDeletedPayload'], "workspaceDeleted", ParentType, ContextType, RequireFields<SubscriptionworkspaceDeletedArgs, 'channelId'>>;
   workspaceUpserted?: SubscriptionResolver<ResolversTypes['Workspace'], "workspaceUpserted", ParentType, ContextType, RequireFields<SubscriptionworkspaceUpsertedArgs, 'channelId'>>;
+};
+
+export type SuggestScriptsResultResolvers<ContextType = any, ParentType extends ResolversParentTypes['SuggestScriptsResult'] = ResolversParentTypes['SuggestScriptsResult']> = {
+  reasoning?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  runScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  setupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };
 
 export type TicketResolvers<ContextType = any, ParentType extends ResolversParentTypes['Ticket'] = ResolversParentTypes['Ticket']> = {
@@ -1422,6 +1444,7 @@ export type Resolvers<ContextType = any> = {
   Session?: SessionResolvers<ContextType>;
   SessionEventPayload?: SessionEventPayloadResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
+  SuggestScriptsResult?: SuggestScriptsResultResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
   TicketAttachment?: TicketAttachmentResolvers<ContextType>;
   TicketDependency?: TicketDependencyResolvers<ContextType>;

@@ -513,7 +513,7 @@ export function ChannelSettingsModal({
                               className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-accent hover:bg-surface-elevated disabled:opacity-50"
                             >
                               <FiZap className="h-3 w-3" aria-hidden="true" />
-                              {suggesting ? "Detecting..." : "Suggest Scripts"}
+                              {suggesting ? "Analyzing..." : "Suggest Scripts"}
                             </button>
                           </div>
                           <textarea

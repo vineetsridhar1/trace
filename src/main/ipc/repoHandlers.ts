@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { ipcMain } from "electron";
 import { runProcess } from "../process";
+import { resolveServerUrl } from "./shared";
 
 const LIST_REPO_FILES_CHANNEL = "list-repo-files";
 const SUGGEST_SCRIPTS_CHANNEL = "suggest-scripts";
@@ -10,6 +11,181 @@ const VALIDATE_REPO_CHANNEL = "validate-repo";
 const LIST_SLASH_COMMANDS_CHANNEL = "list-slash-commands";
 const READ_PRODUCT_DOC_FILE_CHANNEL = "read-product-doc-file";
 const WRITE_PRODUCT_DOC_FILE_CHANNEL = "write-product-doc-file";
+
+const FILE_SPECS: Array<{ patterns: string[]; maxChars: number }> = [
+  { patterns: ["README.md"], maxChars: 5000 },
+  { patterns: ["CONTRIBUTING.md"], maxChars: 3000 },
+  { patterns: ["package.json"], maxChars: 4000 },
+  { patterns: ["Makefile"], maxChars: 3000 },
+  { patterns: ["docker-compose.yml", "docker-compose.yaml"], maxChars: 3000 },
+  {
+    patterns: [".env.example", ".env.template", ".env.sample"],
+    maxChars: 2000,
+  },
+  { patterns: ["requirements.txt"], maxChars: 2000 },
+  { patterns: ["pyproject.toml"], maxChars: 3000 },
+  { patterns: ["go.mod"], maxChars: 2000 },
+  { patterns: ["Gemfile"], maxChars: 2000 },
+  { patterns: ["Cargo.toml"], maxChars: 2000 },
+  { patterns: ["Procfile"], maxChars: 1000 },
+];
+
+function readProjectFiles(repoPath: string): Record<string, string> {
+  const contents: Record<string, string> = {};
+
+  contents["_repoName"] = path.basename(repoPath);
+
+  for (const spec of FILE_SPECS) {
+    for (const pattern of spec.patterns) {
+      const filePath = path.join(repoPath, pattern);
+      try {
+        if (fs.existsSync(filePath)) {
+          const raw = fs.readFileSync(filePath, "utf-8");
+          contents[pattern] = raw.slice(0, spec.maxChars);
+        }
+      } catch {
+        /* ignore read errors */
+      }
+    }
+  }
+
+  return contents;
+}
+
+async function readDirectoryListing(repoPath: string): Promise<string | null> {
+  try {
+    const result = await runProcess("git", ["ls-files"], repoPath);
+    if (result.code !== 0) return null;
+    const lines = result.stdout.split("\n").slice(0, 100).join("\n");
+    return lines.slice(0, 3000);
+  } catch {
+    return null;
+  }
+}
+
+async function aiSuggestScripts(repoPath: string): Promise<{
+  success: boolean;
+  setupScript?: string;
+  runScript?: string;
+  reasoning?: string;
+} | null> {
+  const fileContents = readProjectFiles(repoPath);
+
+  const dirListing = await readDirectoryListing(repoPath);
+  if (dirListing) {
+    fileContents["_directoryListing"] = dirListing;
+  }
+
+  const serverUrl = resolveServerUrl();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const res = await fetch(`${serverUrl}/graphql`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `query SuggestScripts($fileContents: JSON!) {
+          suggestScripts(fileContents: $fileContents) {
+            setupScript
+            runScript
+            reasoning
+          }
+        }`,
+        variables: { fileContents },
+      }),
+      signal: controller.signal,
+    });
+
+    const json = (await res.json()) as {
+      data?: {
+        suggestScripts?: {
+          setupScript?: string;
+          runScript?: string;
+          reasoning?: string;
+        };
+      };
+    };
+    const data = json.data?.suggestScripts;
+    if (!data) return null;
+
+    return {
+      success: true,
+      setupScript: data.setupScript || undefined,
+      runScript: data.runScript || undefined,
+      reasoning: data.reasoning || undefined,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function heuristicSuggestScripts(repoPath: string): {
+  success: boolean;
+  setupScript?: string;
+  runScript?: string;
+  error?: string;
+} {
+  const setupParts: string[] = [];
+  let runScript: string | undefined;
+
+  const pkgPath = path.join(repoPath, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      const scripts = pkg.scripts ?? {};
+      setupParts.push("npm install");
+      if (scripts.dev) {
+        runScript = "PORT=$PORT npm run dev";
+      } else if (scripts.start) {
+        runScript = "PORT=$PORT npm start";
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+  }
+
+  if (
+    fs.existsSync(path.join(repoPath, "docker-compose.yml")) ||
+    fs.existsSync(path.join(repoPath, "docker-compose.yaml"))
+  ) {
+    if (!runScript) runScript = "docker compose up";
+  }
+
+  if (fs.existsSync(path.join(repoPath, "requirements.txt"))) {
+    setupParts.push("pip install -r requirements.txt");
+  }
+
+  if (fs.existsSync(path.join(repoPath, "go.mod"))) {
+    setupParts.push("go mod download");
+    if (!runScript) runScript = "PORT=$PORT go run .";
+  }
+
+  const makefilePath = path.join(repoPath, "Makefile");
+  if (fs.existsSync(makefilePath)) {
+    try {
+      const makefile = fs.readFileSync(makefilePath, "utf-8");
+      const targets =
+        makefile
+          .match(/^([a-zA-Z_-]+)\s*:/gm)
+          ?.map((t) => t.replace(":", "").trim()) ?? [];
+      if (!runScript) {
+        if (targets.includes("dev")) runScript = "make dev";
+        else if (targets.includes("start")) runScript = "make start";
+      }
+    } catch {
+      /* ignore read errors */
+    }
+  }
+
+  return {
+    success: true,
+    setupScript: setupParts.length > 0 ? setupParts.join("\n") : undefined,
+    runScript,
+  };
+}
 
 export function registerRepoHandlers(): void {
   ipcMain.removeHandler(LIST_REPO_FILES_CHANNEL);
@@ -32,70 +208,17 @@ export function registerRepoHandlers(): void {
   ipcMain.removeHandler(SUGGEST_SCRIPTS_CHANNEL);
   ipcMain.handle(SUGGEST_SCRIPTS_CHANNEL, async (_event, repoPath: string) => {
     try {
-      const setupParts: string[] = [];
-      let runScript: string | undefined;
-
-      // Check package.json
-      const pkgPath = path.join(repoPath, "package.json");
-      if (fs.existsSync(pkgPath)) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-          const scripts = pkg.scripts ?? {};
-          setupParts.push("npm install");
-          if (scripts.dev) {
-            runScript = "PORT=$PORT npm run dev";
-          } else if (scripts.start) {
-            runScript = "PORT=$PORT npm start";
-          }
-        } catch {
-          /* ignore parse errors */
-        }
-      }
-
-      // Check docker-compose
-      if (
-        fs.existsSync(path.join(repoPath, "docker-compose.yml")) ||
-        fs.existsSync(path.join(repoPath, "docker-compose.yaml"))
-      ) {
-        if (!runScript) runScript = "docker compose up";
-      }
-
-      // Check Python requirements.txt
-      if (fs.existsSync(path.join(repoPath, "requirements.txt"))) {
-        setupParts.push("pip install -r requirements.txt");
-      }
-
-      // Check Go go.mod
-      if (fs.existsSync(path.join(repoPath, "go.mod"))) {
-        setupParts.push("go mod download");
-        if (!runScript) runScript = "PORT=$PORT go run .";
-      }
-
-      // Check Makefile for dev/start targets
-      const makefilePath = path.join(repoPath, "Makefile");
-      if (fs.existsSync(makefilePath)) {
-        try {
-          const makefile = fs.readFileSync(makefilePath, "utf-8");
-          const targets =
-            makefile
-              .match(/^([a-zA-Z_-]+)\s*:/gm)
-              ?.map((t) => t.replace(":", "").trim()) ?? [];
-          if (!runScript) {
-            if (targets.includes("dev")) runScript = "make dev";
-            else if (targets.includes("start")) runScript = "make start";
-          }
-        } catch {
-          /* ignore read errors */
-        }
-      }
-
-      return {
-        success: true,
-        setupScript: setupParts.length > 0 ? setupParts.join("\n") : undefined,
-        runScript,
-      };
+      // Try AI-powered suggestion first, fall back to heuristic
+      const aiResult = await aiSuggestScripts(repoPath);
+      if (aiResult) return aiResult;
+      return heuristicSuggestScripts(repoPath);
     } catch (err) {
-      return { success: false, error: String(err) };
+      // If AI fails entirely, fall back to heuristic
+      try {
+        return heuristicSuggestScripts(repoPath);
+      } catch (heuristicErr) {
+        return { success: false, error: String(heuristicErr) };
+      }
     }
   });
 

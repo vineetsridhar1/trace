@@ -3,7 +3,14 @@ extend type Query {
   workspaces(channelId: ID!, limit: Int, offset: Int, excludeStatus: String): WorkspaceConnection!
   checkPRStatuses(channelId: ID!, branches: [String!]!): [PRStatus!]!
   generateBranchName(prompt: String!): String
+  suggestScripts(fileContents: JSON!): SuggestScriptsResult
   channelPresence(channelId: ID!): [WorkspacePresence!]!
+}
+
+type SuggestScriptsResult {
+  setupScript: String
+  runScript: String
+  reasoning: String
 }
 
 type PRStatus {

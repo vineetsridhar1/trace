@@ -185,6 +185,7 @@ export interface TraceAPI {
     success: boolean;
     setupScript?: string;
     runScript?: string;
+    reasoning?: string;
     error?: string;
   }>;
   validateRepo: (

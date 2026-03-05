@@ -474,6 +474,7 @@ export type Query = {
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
+  suggestScripts?: Maybe<SuggestScriptsResult>;
   ticketByWorkspaceId?: Maybe<Ticket>;
   ticketDependencies: Array<TicketDependency>;
   workspace?: Maybe<Workspace>;
@@ -545,6 +546,11 @@ export type QuerySessionEventsArgs = {
 export type QuerySessionsArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QuerySuggestScriptsArgs = {
+  fileContents: Scalars['JSON']['input'];
 };
 
 
@@ -679,6 +685,13 @@ export type SubscriptionWorkspaceDeletedArgs = {
 
 export type SubscriptionWorkspaceUpsertedArgs = {
   channelId: Scalars['ID']['input'];
+};
+
+export type SuggestScriptsResult = {
+  __typename?: 'SuggestScriptsResult';
+  reasoning?: Maybe<Scalars['String']['output']>;
+  runScript?: Maybe<Scalars['String']['output']>;
+  setupScript?: Maybe<Scalars['String']['output']>;
 };
 
 export type Ticket = {
