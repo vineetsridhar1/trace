@@ -317,6 +317,66 @@ NO additional keys. NO different structure. NO wrapping object. The user may ask
 A PRD and Technical Scoping document have been written. Read both from ./.trace/product-scoping.md and ./.trace/technical-scoping.md, then generate implementation tickets as JSON to ./.trace/tickets.json.`;
 }
 
+function buildReviewTicketsPrompt(): string {
+  return `<trace-internal>
+You are a senior software engineer and QA lead. Your job is to review the existing implementation tickets against the Technical Scoping document to ensure full coverage, then enrich each ticket with concrete completion goals that map back to specific sections of the tech scoping.
+
+## CRITICAL FILE RESTRICTION
+
+You are allowed to WRITE to exactly ONE file: ./.trace/tickets.json
+You MUST NOT create, modify, or delete any other file in this repository. No exceptions.
+You MAY and SHOULD read any file in the codebase to inform your review.
+
+## Input Documents
+
+- Technical Scoping: ./.trace/technical-scoping.md
+- Current Tickets: ./.trace/tickets.json
+
+Read BOTH files FIRST before doing anything else.
+
+## Your workflow
+
+1. **READ BOTH DOCUMENTS**: Start by reading the Technical Scoping document and the current tickets JSON file.
+
+2. **MAP COVERAGE**: For every section and item in the Technical Scoping document, identify which ticket(s) cover it. Create a mental coverage map.
+
+3. **IDENTIFY GAPS**: Find anything in the Technical Scoping document that is NOT adequately covered by any existing ticket. This includes:
+   - Sections with no corresponding ticket
+   - Items only partially covered
+   - Missing integration points, edge cases, or testing requirements mentioned in the tech scoping
+
+4. **ENRICH TICKETS**: For each existing ticket, add a \`## Completion Goals\` section at the end of its \`body\` field (if one doesn't already exist, or replace it if it does). Each completion goal should:
+   - Reference a specific section of the Technical Scoping (e.g., "Implements Section 2.3: API Design — User endpoints")
+   - Be concrete and verifiable (not vague like "works correctly")
+   - Map directly to deliverables described in the tech scoping
+
+5. **CREATE GAP-FILLING TICKETS**: For any uncovered areas, create new tickets following the exact same schema:
+   - \`id\`: short kebab-case identifier
+   - \`title\`: concise human-readable title
+   - \`body\`: detailed markdown description with a \`## Completion Goals\` section
+   - \`dependencies\`: list of ticket IDs this depends on
+   Place new tickets with appropriate dependency ordering.
+
+6. **WRITE THE UPDATED FILE** to ./.trace/tickets.json — the output MUST be a JSON array where every object has EXACTLY these 4 keys: id, title, body, dependencies. NO additional keys. NO wrapping object.
+
+7. **SUMMARIZE**: After writing the file, provide a summary of:
+   - How many tickets were enriched with completion goals
+   - How many new tickets were created to fill gaps
+   - Any sections of the tech scoping that required special attention
+   - Overall coverage assessment
+
+## Important rules
+
+- You MUST only write to ./.trace/tickets.json. Do NOT create, edit, or delete any other file.
+- You MAY and SHOULD read any file in the repo to inform your review.
+- Do NOT ask questions — perform the review directly based on the two input documents.
+- Preserve all existing ticket content — only ADD completion goals and new tickets, never remove existing information.
+- Every ticket (existing and new) MUST have a \`## Completion Goals\` section in its body.
+</trace-internal>
+
+Review the existing tickets against the Technical Scoping document. Read both from ./.trace/technical-scoping.md and ./.trace/tickets.json, then enrich tickets with completion goals and create any missing tickets. Write the updated tickets to ./.trace/tickets.json.`;
+}
+
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
 interface UseProductDocActionsOptions {
@@ -525,6 +585,53 @@ export function useProductDocActions({
       });
   }, [getChannelRepoPath, getChannelBaseBranch]);
 
+  const handleRunReviewTickets = useCallback(() => {
+    const workspaceId = useAppUIStore.getState().activeProductDocId;
+    if (!workspaceId) return;
+
+    const repoPath = getChannelRepoPath();
+    if (!repoPath) {
+      console.error("[ReviewTickets] No repo configured for this channel");
+      return;
+    }
+
+    // Reset session state for a fresh Claude agent
+    const store = useThreadStore.getState();
+    store.setActiveSessionId(null);
+    store.setSessionEvents([]);
+    store.setSessionStatus("empty");
+
+    // Overwrite the tickets session and mark agent as running
+    useAppUIStore.getState().setProductDocSessionForMode("tickets", "pending");
+    useAgentRunStore.getState().addSpawnedWorkspace(workspaceId);
+    useAgentRunStore.getState().addActiveRun(workspaceId);
+
+    // Spawn a fresh agent in the same workspace (reuses worktree)
+    const agentPrompt = buildReviewTicketsPrompt();
+
+    window.traceAPI
+      .spawnAgent({
+        agentType: "claude",
+        workspaceId,
+        prompt: agentPrompt,
+        repoPath,
+        model: "sonnet",
+        baseBranch: getChannelBaseBranch(),
+      })
+      .then((spawnResult) => {
+        if (!spawnResult.success) {
+          console.error("[ReviewTickets] Spawn failed:", spawnResult.error);
+          useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
+          useAgentRunStore.getState().clearActiveRun(workspaceId);
+        }
+      })
+      .catch((err) => {
+        console.error("[ReviewTickets] Spawn error:", err);
+        useAgentRunStore.getState().removeSpawnedWorkspace(workspaceId);
+        useAgentRunStore.getState().clearActiveRun(workspaceId);
+      });
+  }, [getChannelRepoPath, getChannelBaseBranch]);
+
   const handleSwitchProductDocTab = useCallback((mode: ProductDocMode) => {
     useAppUIStore.getState().setProductDocMode(mode);
     const targetSessionId = useAppUIStore.getState().productDocSessionMap[mode];
@@ -542,6 +649,7 @@ export function useProductDocActions({
     handleRunProductDoc,
     handleRunTechScope,
     handleRunTickets,
+    handleRunReviewTickets,
     handleSwitchProductDocTab,
   };
 }

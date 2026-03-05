@@ -20,10 +20,11 @@ interface ProductDocViewProps {
   onBack: () => void;
   onGenerateTechScope?: () => void;
   onGenerateTickets?: () => void;
+  onReviewTickets?: () => void;
   onSwitchTab?: (mode: ProductDocMode) => void;
 }
 
-export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets, onSwitchTab }: ProductDocViewProps) {
+export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets, onReviewTickets, onSwitchTab }: ProductDocViewProps) {
   const productDocMode = useAppUIStore((s) => s.productDocMode);
   const productDocSessionMap = useAppUIStore((s) => s.productDocSessionMap);
   const worktreePath = useThreadStore((s) => s.worktreePath);
@@ -339,11 +340,21 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets,
             </div>
           )}
           {isTickets && ticketView === 'graph' && parsedTickets.length > 0 && (
-            <div className="shrink-0 border-t border-edge bg-surface px-6 py-4">
+            <div className="shrink-0 border-t border-edge bg-surface px-6 py-4 flex gap-3">
+              {onReviewTickets && (
+                <button
+                  type="button"
+                  onClick={onReviewTickets}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-edge px-4 py-2.5 text-sm font-semibold text-primary hover:bg-surface-elevated transition-colors"
+                >
+                  <FiCpu className="h-4 w-4" />
+                  Review Tickets
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowImportModal(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent hover:opacity-90 transition-opacity"
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent hover:opacity-90 transition-opacity"
               >
                 <FiDownload className="h-4 w-4" />
                 Import to Project

@@ -713,6 +713,7 @@ function AppContent() {
     handleRunProductDoc,
     handleRunTechScope,
     handleRunTickets,
+    handleRunReviewTickets,
     handleSwitchProductDocTab,
   } = useProductDocActions({
     activeChannelId,
@@ -1113,6 +1114,7 @@ function AppContent() {
                 }}
                 onGenerateTechScope={handleRunTechScope}
                 onGenerateTickets={handleRunTickets}
+                onReviewTickets={handleRunReviewTickets}
                 onSwitchTab={handleSwitchProductDocTab}
               />
             ) : activeAiChatId ? (
