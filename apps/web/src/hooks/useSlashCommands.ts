@@ -1,0 +1,179 @@
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useRepoRelay } from "./relay/useRepoRelay";
+import type { SlashCommandDef } from "./relay/types";
+
+export interface SlashCommand {
+  name: string;
+  displayName: string;
+  description: string;
+  source: "global" | "project" | "built-in";
+}
+
+const BUILT_IN_COMMANDS: SlashCommand[] = [
+  {
+    name: "clear",
+    displayName: "/clear",
+    description: "Clear thread and start fresh",
+    source: "built-in",
+  },
+  {
+    name: "compact",
+    displayName: "/compact",
+    description: "Compact conversation history",
+    source: "built-in",
+  },
+  {
+    name: "cost",
+    displayName: "/cost",
+    description: "Show token usage and cost",
+    source: "built-in",
+  },
+  {
+    name: "init",
+    displayName: "/init",
+    description: "Initialize project settings",
+    source: "built-in",
+  },
+  {
+    name: "memory",
+    displayName: "/memory",
+    description: "Edit CLAUDE.md memory files",
+    source: "built-in",
+  },
+  {
+    name: "review",
+    displayName: "/review",
+    description: "Review code changes",
+    source: "built-in",
+  },
+  {
+    name: "status",
+    displayName: "/status",
+    description: "Show session status",
+    source: "built-in",
+  },
+];
+
+const CACHE_TTL_MS = 30_000;
+const MAX_CACHE_ENTRIES = 20;
+const commandCache = new Map<string, { commands: SlashCommand[]; ts: number }>();
+
+export function useSlashCommands(
+  inputValue: string,
+  onInputChange: (value: string) => void,
+  repoPath?: string,
+) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
+  const { listSlashCommands } = useRepoRelay();
+
+  useEffect(() => {
+    if (!repoPath) return;
+
+    const cached = commandCache.get(repoPath);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      setProjectCommands(cached.commands);
+      return;
+    }
+
+    let stale = false;
+    listSlashCommands({ repoPath }).then((result) => {
+      if (stale) return;
+      const commands: SlashCommand[] =
+        result.success && result.data?.commands
+          ? result.data.commands.map((cmd: SlashCommandDef) => ({
+              name: cmd.name,
+              displayName: `/${cmd.name}`,
+              description: cmd.description || `Run ${cmd.name} command`,
+              source: cmd.source,
+            }))
+          : [];
+      if (commandCache.size >= MAX_CACHE_ENTRIES) {
+        const oldest = commandCache.keys().next().value!;
+        commandCache.delete(oldest);
+      }
+      commandCache.set(repoPath, { commands, ts: Date.now() });
+      setProjectCommands(commands);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [repoPath, listSlashCommands]);
+
+  const allCommands = useMemo(() => {
+    const byName = new Map<string, SlashCommand>();
+    for (const cmd of BUILT_IN_COMMANDS) byName.set(cmd.name, cmd);
+    for (const cmd of projectCommands) byName.set(cmd.name, cmd);
+    return Array.from(byName.values());
+  }, [projectCommands]);
+
+  const query = inputValue.startsWith("/")
+    ? inputValue.slice(1).toLowerCase()
+    : null;
+
+  const filteredCommands = useMemo(() => {
+    if (query === null) return [];
+    return allCommands.filter(
+      (cmd) =>
+        cmd.name.toLowerCase().includes(query) ||
+        cmd.description.toLowerCase().includes(query),
+    );
+  }, [query, allCommands]);
+
+  const isOpen = query !== null && !dismissed && filteredCommands.length > 0;
+
+  useEffect(() => {
+    setDismissed(false);
+  }, [inputValue]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [filteredCommands.length, inputValue]);
+
+  const selectCommand = useCallback(
+    (cmd: SlashCommand) => {
+      onInputChange(cmd.displayName + " ");
+    },
+    [onInputChange],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!isOpen) return false;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((i) => (i + 1) % filteredCommands.length);
+        return true;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex(
+          (i) => (i - 1 + filteredCommands.length) % filteredCommands.length,
+        );
+        return true;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        selectCommand(filteredCommands[selectedIndex]);
+        return true;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDismissed(true);
+        return true;
+      }
+      return false;
+    },
+    [isOpen, filteredCommands, selectedIndex, selectCommand],
+  );
+
+  return {
+    isOpen,
+    filteredCommands,
+    selectedIndex,
+    handleKeyDown,
+    selectCommand,
+  };
+}

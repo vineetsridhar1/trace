@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { gql } from "@apollo/client";
-import { useAgentRelay } from "./useAgentRelay";
+import { useAgentRelay } from "./relay/useAgentRelay";
 import {
   useCreateWorkspaceMutation,
   useAppendPromptMutation,

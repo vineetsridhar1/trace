@@ -7,6 +7,7 @@ import { WebThreadInput } from '../components/WebThreadInput';
 import { WebRunButtons } from '../components/WebRunButtons';
 import { WebThreadHeader } from '../components/WebThreadHeader';
 import { WebChannelSelector } from '../components/WebChannelSelector';
+import { WebWorktreeChanges } from '../components/WebWorktreeChanges';
 import { useChannelContext } from '../context/ChannelContext';
 import { useInstanceStore } from '../stores/instanceStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
@@ -75,12 +76,21 @@ function WorkspacePageInner({
   isOwnWorkspace,
   onSelectWorkspace,
 }: WorkspacePageInnerProps) {
+  const [activeTab, setActiveTab] = useState<'thread' | 'changes'>('thread');
+
   // Data hooks
   const { refreshWorkspaces } = useWorkspaceSync();
   const { startWorkspace } = useWorkspaceActions();
 
   const getActiveChannelId = useCallback(() => channelId, [channelId]);
   const { openThreadPanel } = useThreadSync(getActiveChannelId);
+
+  // Get channel config for repoPath/baseBranch
+  const channel = useInstanceStore((s) =>
+    s.channels.find((c) => c.id === channelId),
+  );
+  const repoPath = channel?.repoPath ?? undefined;
+  const baseBranch = channel?.baseBranch ?? 'main';
 
   const onNeedsAttention = useCallback((workspaceId: string) => {
     useWorkspaceStore.getState().addAttention(workspaceId);
@@ -98,6 +108,11 @@ function WorkspacePageInner({
     useWorkspaceStore.getState().clearWorkspaces();
     void refreshWorkspaces(channelId);
   }, [channelId, refreshWorkspaces]);
+
+  // Reset tab when workspace changes
+  useEffect(() => {
+    setActiveTab('thread');
+  }, [selectedWorkspaceId]);
 
   const handleBack = useCallback(() => onSelectWorkspace(null), [onSelectWorkspace]);
 
@@ -140,6 +155,7 @@ function WorkspacePageInner({
             channelId={channelId}
             selectedWorkspaceId={selectedWorkspaceId}
             onSelectWorkspace={handleSelectWorkspace}
+            repoPath={repoPath}
           />
         </div>
 
@@ -150,38 +166,76 @@ function WorkspacePageInner({
               <WebThreadHeader
                 title={selectedWorkspace.ticketTitle || selectedWorkspace.preview?.split('\n')[0] || 'New Workspace'}
                 status={selectedWorkspace.status}
+                workspaceId={selectedWorkspaceId}
                 onBack={handleBack}
               />
-              <WebThreadPanel
-                workspaceId={selectedWorkspaceId}
-                channelId={channelId}
-              />
-              {!isOwnWorkspace ? (
-                <div className="border-t border-edge px-3 py-3 text-center text-xs text-muted">
-                  Viewing {selectedWorkspace.user?.name ?? 'another user'}'s workspace — read only
-                </div>
-              ) : selectedWorkspace.status === 'pending' || selectedWorkspace.status === 'handed_off' ? (
-                <WebRunButtons
-                  initialPrompt={selectedWorkspace.preview ?? ''}
-                  workspaceId={selectedWorkspaceId}
-                  channelId={channelId}
-                  disabled={isOffline}
-                  onRun={async ({ prompt, model, effort, planMode }) => {
-                    await startWorkspace({
-                      workspaceId: selectedWorkspaceId,
-                      prompt,
-                      channelId: channelId!,
-                      model,
-                      effort,
-                      planMode,
-                    });
-                  }}
-                />
+
+              {/* Tab bar */}
+              <div className="flex border-b border-edge">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('thread')}
+                  className={`px-4 py-2 text-xs font-medium transition-colors ${
+                    activeTab === 'thread'
+                      ? 'border-b-2 border-accent text-primary'
+                      : 'text-muted hover:text-primary'
+                  }`}
+                >
+                  Thread
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('changes')}
+                  className={`px-4 py-2 text-xs font-medium transition-colors ${
+                    activeTab === 'changes'
+                      ? 'border-b-2 border-accent text-primary'
+                      : 'text-muted hover:text-primary'
+                  }`}
+                >
+                  Changes
+                </button>
+              </div>
+
+              {activeTab === 'thread' ? (
+                <>
+                  <WebThreadPanel
+                    workspaceId={selectedWorkspaceId}
+                    channelId={channelId}
+                  />
+                  {!isOwnWorkspace ? (
+                    <div className="border-t border-edge px-3 py-3 text-center text-xs text-muted">
+                      Viewing {selectedWorkspace.user?.name ?? 'another user'}'s workspace — read only
+                    </div>
+                  ) : selectedWorkspace.status === 'pending' || selectedWorkspace.status === 'handed_off' ? (
+                    <WebRunButtons
+                      initialPrompt={selectedWorkspace.preview ?? ''}
+                      workspaceId={selectedWorkspaceId}
+                      channelId={channelId}
+                      disabled={isOffline}
+                      onRun={async ({ prompt, model, effort, planMode }) => {
+                        await startWorkspace({
+                          workspaceId: selectedWorkspaceId,
+                          prompt,
+                          channelId: channelId!,
+                          model,
+                          effort,
+                          planMode,
+                        });
+                      }}
+                    />
+                  ) : (
+                    <WebThreadInput
+                      workspaceId={selectedWorkspaceId}
+                      channelId={channelId}
+                      disabled={isOffline}
+                      repoPath={repoPath}
+                    />
+                  )}
+                </>
               ) : (
-                <WebThreadInput
+                <WebWorktreeChanges
                   workspaceId={selectedWorkspaceId}
-                  channelId={channelId}
-                  disabled={isOffline}
+                  baseBranch={baseBranch}
                 />
               )}
             </>

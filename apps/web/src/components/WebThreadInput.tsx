@@ -11,6 +11,10 @@ import {
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useThreadStore } from "../stores/threadStore";
+import { useSlashCommands } from "../hooks/useSlashCommands";
+import { useFileMention } from "../hooks/useFileMention";
+import { WebSlashCommandMenu } from "./WebSlashCommandMenu";
+import { WebFileMentionMenu } from "./WebFileMentionMenu";
 
 // ─── Interaction mode ──────────────────────────────────────────
 
@@ -83,12 +87,14 @@ interface WebThreadInputProps {
   workspaceId: string;
   channelId: string;
   disabled?: boolean;
+  repoPath?: string;
 }
 
 export function WebThreadInput({
   workspaceId,
   channelId,
   disabled,
+  repoPath,
 }: WebThreadInputProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -96,6 +102,9 @@ export function WebThreadInput({
   const [mode, setMode] = useState<InteractionMode>("code");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { sendMessage, stopCurrentAgent, switchMode } = useWorkspaceActions();
+
+  const slashCommands = useSlashCommands(input, setInput, repoPath);
+  const fileMention = useFileMention(input, setInput, repoPath ?? "", textareaRef);
 
   const workspace = useWorkspaceStore((s) =>
     s.workspaces.find((w) => w.id === workspaceId),
@@ -136,6 +145,12 @@ export function WebThreadInput({
       finalText = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${text}`;
     }
 
+    // Append mentioned file paths
+    const mentionedFiles = fileMention.getMentionedFiles();
+    if (mentionedFiles.length > 0) {
+      finalText += `\n\n<trace-internal>Referenced files: ${mentionedFiles.join(", ")}</trace-internal>`;
+    }
+
     setSending(true);
     setIsQueued(false);
     const previousInput = input;
@@ -157,7 +172,7 @@ export function WebThreadInput({
       setSending(false);
       textareaRef.current?.focus();
     }
-  }, [input, disabled, sending, mode, sendMessage, workspaceId, channelId]);
+  }, [input, disabled, sending, mode, sendMessage, workspaceId, channelId, fileMention]);
 
   const handleSendOrQueue = useCallback(() => {
     const text = input.trim();
@@ -188,12 +203,19 @@ export function WebThreadInput({
         cycleMode();
         return;
       }
+
+      // Check slash commands first
+      if (slashCommands.handleKeyDown(e)) return;
+
+      // Then file mentions
+      if (fileMention.handleKeyDown(e)) return;
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSendOrQueue();
       }
     },
-    [cycleMode, handleSendOrQueue],
+    [cycleMode, handleSendOrQueue, slashCommands, fileMention],
   );
 
   const handleStop = useCallback(async () => {
@@ -256,7 +278,21 @@ export function WebThreadInput({
       )}
 
       {/* Textarea + send/stop buttons */}
-      <div className="flex items-end gap-2">
+      <div className="relative flex items-end gap-2">
+        {/* Autocomplete menus */}
+        <WebSlashCommandMenu
+          isOpen={slashCommands.isOpen && !fileMention.isOpen}
+          commands={slashCommands.filteredCommands}
+          selectedIndex={slashCommands.selectedIndex}
+          onSelect={slashCommands.selectCommand}
+        />
+        <WebFileMentionMenu
+          isOpen={fileMention.isOpen && !slashCommands.isOpen}
+          files={fileMention.filteredFiles}
+          selectedIndex={fileMention.selectedIndex}
+          onSelect={fileMention.selectFile}
+        />
+
         <textarea
           ref={textareaRef}
           rows={1}
@@ -266,6 +302,8 @@ export function WebThreadInput({
             if (!e.target.value.trim()) setIsQueued(false);
           }}
           onKeyDown={handleKeyDown}
+          onSelect={fileMention.handleSelect}
+          onClick={fileMention.handleSelect}
           disabled={disabled}
           placeholder={
             disabled
@@ -274,7 +312,7 @@ export function WebThreadInput({
                 ? isQueued
                   ? "Edit your queued message..."
                   : "Type a message to queue..."
-                : "Send to Claude..."
+                : "Send to Claude... (/ for commands, @ for files)"
           }
           style={
             {

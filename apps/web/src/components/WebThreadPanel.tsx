@@ -4,7 +4,7 @@ import type {
   PlanReviewNode,
 } from '../types';
 import { useThreadStore } from '../stores/threadStore';
-import { useAgentRelay } from '../hooks/useAgentRelay';
+import { useAgentRelay } from '../hooks/relay/useAgentRelay';
 import {
   buildSessionNodes,
   stripTraceInternal,

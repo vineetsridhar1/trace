@@ -19,6 +19,7 @@ export type ConnectToInstanceMutation = {
       name: string;
       type: string;
       baseBranch?: string | null;
+      defaultRepoPath?: string | null;
     }>;
   };
 };
@@ -62,6 +63,7 @@ export const ConnectToInstanceDocument = gql`
         name
         type
         baseBranch
+        defaultRepoPath
       }
     }
   }

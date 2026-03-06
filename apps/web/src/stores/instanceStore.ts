@@ -18,6 +18,7 @@ export interface InstanceChannel {
   name: string;
   type: string;
   baseBranch: string | null;
+  repoPath: string | null;
 }
 
 interface InstanceState {

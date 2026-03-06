@@ -29,6 +29,7 @@ const GQL_CONNECT_TO_INSTANCE = gql`
         name
         type
         baseBranch
+        defaultRepoPath
       }
     }
   }
@@ -121,11 +122,12 @@ export function InstanceProvider({
           useInstanceStore.getState().setConnectedInstance(instanceId);
           useInstanceStore.getState().setConnectedServerId(result.serverId);
           useInstanceStore.getState().setChannels(
-            (result.channels ?? []).map(({ id, name, type, baseBranch }) => ({
+            (result.channels ?? []).map(({ id, name, type, baseBranch, defaultRepoPath }) => ({
               id,
               name,
               type,
               baseBranch: baseBranch ?? null,
+              repoPath: defaultRepoPath ?? null,
             })),
           );
           useInstanceStore.getState().setInstanceStatus("connected");

@@ -1,5 +1,6 @@
-import { memo } from 'react';
-import { FiChevronLeft, FiCircle } from 'react-icons/fi';
+import { memo, useEffect, useState } from 'react';
+import { FiChevronLeft, FiCircle, FiGitBranch } from 'react-icons/fi';
+import { useWorktreeRelay } from '../hooks/relay/useWorktreeRelay';
 import type { TicketStatus } from '../types';
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -29,12 +30,46 @@ const STATUS_DOT_COLOR: Record<TicketStatus, string> = {
 interface WebThreadHeaderProps {
   title: string;
   status: TicketStatus;
+  workspaceId?: string;
   onBack?: () => void;
+}
+
+const branchCache = new Map<string, string>();
+
+function BranchBadge({ workspaceId }: { workspaceId: string }) {
+  const [branch, setBranch] = useState<string | null>(() => branchCache.get(workspaceId) ?? null);
+  const { getWorktreeBranch } = useWorktreeRelay();
+
+  useEffect(() => {
+    if (branchCache.has(workspaceId)) {
+      setBranch(branchCache.get(workspaceId)!);
+      return;
+    }
+
+    let stale = false;
+    getWorktreeBranch({ workspaceId }).then((result) => {
+      if (!stale && result.success && result.data?.branch) {
+        branchCache.set(workspaceId, result.data.branch);
+        setBranch(result.data.branch);
+      }
+    });
+    return () => { stale = true; };
+  }, [workspaceId, getWorktreeBranch]);
+
+  if (!branch) return null;
+
+  return (
+    <span className="shrink-0 flex items-center gap-1 rounded-md border border-edge px-2 py-0.5 text-[11px] font-medium text-muted">
+      <FiGitBranch className="h-3 w-3" />
+      <span className="max-w-[120px] truncate">{branch}</span>
+    </span>
+  );
 }
 
 export const WebThreadHeader = memo(function WebThreadHeader({
   title,
   status,
+  workspaceId,
   onBack,
 }: WebThreadHeaderProps) {
   const dotColor = STATUS_DOT_COLOR[status] ?? STATUS_DOT_COLOR.pending;
@@ -54,6 +89,7 @@ export const WebThreadHeader = memo(function WebThreadHeader({
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-heading">
         {title}
       </span>
+      {workspaceId && <BranchBadge workspaceId={workspaceId} />}
       <span className="shrink-0 flex items-center gap-1.5 rounded-md border border-edge px-2 py-0.5 text-[11px] font-medium text-muted">
         <FiCircle className={`h-2 w-2 fill-current ${dotColor}`} />
         {label}

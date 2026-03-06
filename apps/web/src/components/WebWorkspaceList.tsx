@@ -1,7 +1,8 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { FiPlus, FiCircle } from "react-icons/fi";
+import { FiPlus, FiCircle, FiExternalLink } from "react-icons/fi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
+import { usePRStatus } from "../hooks/usePRStatus";
 import type { TicketStatus } from "../types";
 
 const STATUS_DOT_COLOR: Record<TicketStatus, string> = {
@@ -16,10 +17,17 @@ const STATUS_DOT_COLOR: Record<TicketStatus, string> = {
   handed_off: "text-orange-300",
 };
 
+const PR_STATE_CONFIG: Record<string, { label: string; className: string }> = {
+  open: { label: "PR", className: "bg-green-500/20 text-green-400" },
+  merged: { label: "Merged", className: "bg-purple-500/20 text-purple-400" },
+  closed: { label: "Closed", className: "bg-red-500/20 text-red-400" },
+};
+
 interface WebWorkspaceListProps {
   channelId: string;
   selectedWorkspaceId: string | null;
   onSelectWorkspace: (workspaceId: string) => void;
+  repoPath?: string;
 }
 
 interface WorkspaceItemProps {
@@ -28,14 +36,17 @@ interface WorkspaceItemProps {
   preview: string | null;
   ticketTitle: string | null;
   userName: string | null;
+  prState?: string;
+  prUrl?: string | null;
   isSelected: boolean;
   onSelect: (id: string) => void;
 }
 
 const WorkspaceItem = memo(
-  function WorkspaceItem({ id, status, preview, ticketTitle, userName, isSelected, onSelect }: WorkspaceItemProps) {
+  function WorkspaceItem({ id, status, preview, ticketTitle, userName, prState, prUrl, isSelected, onSelect }: WorkspaceItemProps) {
     const dotColor = STATUS_DOT_COLOR[status] ?? STATUS_DOT_COLOR.pending;
     const displayText = ticketTitle || preview?.split("\n")[0] || "New Workspace";
+    const prConfig = prState ? PR_STATE_CONFIG[prState] : null;
 
     return (
       <button
@@ -54,6 +65,20 @@ const WorkspaceItem = memo(
             <span className="block truncate text-xs text-muted">{userName}</span>
           )}
         </div>
+        {prConfig && (
+          <span
+            className={`shrink-0 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${prConfig.className}`}
+            onClick={(e) => {
+              if (prUrl) {
+                e.stopPropagation();
+                window.open(prUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
+          >
+            {prConfig.label}
+            {prUrl && <FiExternalLink className="h-2.5 w-2.5" />}
+          </span>
+        )}
       </button>
     );
   },
@@ -62,6 +87,8 @@ const WorkspaceItem = memo(
     prev.preview === next.preview &&
     prev.ticketTitle === next.ticketTitle &&
     prev.userName === next.userName &&
+    prev.prState === next.prState &&
+    prev.prUrl === next.prUrl &&
     prev.isSelected === next.isSelected,
 );
 
@@ -69,6 +96,7 @@ export function WebWorkspaceList({
   channelId,
   selectedWorkspaceId,
   onSelectWorkspace,
+  repoPath,
 }: WebWorkspaceListProps) {
   const allWorkspaces = useWorkspaceStore((s) => s.workspaces);
   const { createWorkspace } = useWorkspaceActions();
@@ -108,9 +136,27 @@ export function WebWorkspaceList({
           preview: w.preview,
           ticketTitle: w.ticketTitle,
           userName: w.user?.name ?? null,
+          branch: w.branch,
         })),
     [allWorkspaces, channelId],
   );
+
+  const branches = useMemo(
+    () => items.filter((w) => w.branch).map((w) => w.branch!),
+    [items],
+  );
+
+  const { statuses: prStatuses } = usePRStatus(repoPath ?? null, branches);
+
+  const prStatusByBranch = useMemo(() => {
+    const map = new Map<string, { state: string; prUrl: string | null }>();
+    for (const s of prStatuses) {
+      if (s.state !== "none") {
+        map.set(s.branch, { state: s.state, prUrl: s.prUrl });
+      }
+    }
+    return map;
+  }, [prStatuses]);
 
   return (
     <div className="flex h-full flex-col">
@@ -131,18 +177,23 @@ export function WebWorkspaceList({
             No workspaces yet
           </p>
         ) : (
-          items.map((item) => (
-            <WorkspaceItem
-              key={item.id}
-              id={item.id}
-              status={item.status}
-              preview={item.preview}
-              ticketTitle={item.ticketTitle}
-              userName={item.userName}
-              isSelected={item.id === selectedWorkspaceId}
-              onSelect={handleSelect}
-            />
-          ))
+          items.map((item) => {
+            const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
+            return (
+              <WorkspaceItem
+                key={item.id}
+                id={item.id}
+                status={item.status}
+                preview={item.preview}
+                ticketTitle={item.ticketTitle}
+                userName={item.userName}
+                prState={prInfo?.state}
+                prUrl={prInfo?.prUrl}
+                isSelected={item.id === selectedWorkspaceId}
+                onSelect={handleSelect}
+              />
+            );
+          })
         )}
       </div>
 
