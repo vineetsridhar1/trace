@@ -3,6 +3,7 @@ import { gql } from "@apollo/client";
 import { useAgentRelay } from "./useAgentRelay";
 import {
   useCreateWorkspaceMutation,
+  useAppendPromptMutation,
   useUpdateWorkspaceStatusMutation,
 } from "./__generated__/useWorkspaceActions.generated";
 
@@ -193,6 +194,7 @@ export interface WorkspaceActions {
 export function useWorkspaceActions(): WorkspaceActions {
   const { spawnAgent, stopAgent } = useAgentRelay();
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
+  const [executeAppendPrompt] = useAppendPromptMutation();
   const [executeUpdateStatus] = useUpdateWorkspaceStatusMutation();
 
   const createWorkspace = useCallback(
