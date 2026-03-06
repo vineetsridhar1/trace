@@ -267,7 +267,6 @@ export type Mutation = {
   deleteWorkspace: Scalars['Boolean']['output'];
   handoffWorkspace: Workspace;
   importTicketsToProject: Array<ImportedTicketResult>;
-  joinChannel: Scalars['Boolean']['output'];
   moveTicket: Ticket;
   registerInstance: ElectronInstance;
   relayAction: RelayActionResult;
@@ -386,11 +385,6 @@ export type MutationimportTicketsToProjectArgs = {
   channelId: Scalars['ID']['input'];
   runConfig: Scalars['JSON']['input'];
   tickets: Array<ImportTicketInput>;
-};
-
-
-export type MutationjoinChannelArgs = {
-  channelId: Scalars['ID']['input'];
 };
 
 
@@ -1340,7 +1334,6 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   deleteWorkspace?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationdeleteWorkspaceArgs, 'channelId' | 'workspaceId'>>;
   handoffWorkspace?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationhandoffWorkspaceArgs, 'channelId' | 'workspaceId'>>;
   importTicketsToProject?: Resolver<Array<ResolversTypes['ImportedTicketResult']>, ParentType, ContextType, RequireFields<MutationimportTicketsToProjectArgs, 'channelId' | 'runConfig' | 'tickets'>>;
-  joinChannel?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationjoinChannelArgs, 'channelId'>>;
   moveTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationmoveTicketArgs, 'columnId' | 'ticketId'>>;
   registerInstance?: Resolver<ResolversTypes['ElectronInstance'], ParentType, ContextType, RequireFields<MutationregisterInstanceArgs, 'name' | 'serverId'>>;
   relayAction?: Resolver<ResolversTypes['RelayActionResult'], ParentType, ContextType, RequireFields<MutationrelayActionArgs, 'action' | 'instanceId' | 'params'>>;

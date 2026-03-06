@@ -30,13 +30,6 @@ export type SetWorkspacePrUrlMutationVariables = Types.Exact<{
 
 export type SetWorkspacePrUrlMutation = { __typename?: 'Mutation', setWorkspacePrUrl: boolean };
 
-export type JoinChannelMutationVariables = Types.Exact<{
-  channelId: Types.Scalars['ID']['input'];
-}>;
-
-
-export type JoinChannelMutation = { __typename?: 'Mutation', joinChannel: boolean };
-
 
 export const UpdateWorkspaceStatusDocument = gql`
     mutation UpdateWorkspaceStatus($channelId: ID!, $workspaceId: ID!, $status: String!) {
@@ -146,34 +139,3 @@ export function useSetWorkspacePrUrlMutation(baseOptions?: Apollo.MutationHookOp
 export type SetWorkspacePrUrlMutationHookResult = ReturnType<typeof useSetWorkspacePrUrlMutation>;
 export type SetWorkspacePrUrlMutationResult = Apollo.MutationResult<SetWorkspacePrUrlMutation>;
 export type SetWorkspacePrUrlMutationOptions = Apollo.BaseMutationOptions<SetWorkspacePrUrlMutation, SetWorkspacePrUrlMutationVariables>;
-export const JoinChannelDocument = gql`
-    mutation JoinChannel($channelId: ID!) {
-  joinChannel(channelId: $channelId)
-}
-    `;
-export type JoinChannelMutationFn = Apollo.MutationFunction<JoinChannelMutation, JoinChannelMutationVariables>;
-
-/**
- * __useJoinChannelMutation__
- *
- * To run a mutation, you first call `useJoinChannelMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useJoinChannelMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [joinChannelMutation, { data, loading, error }] = useJoinChannelMutation({
- *   variables: {
- *      channelId: // value for 'channelId'
- *   },
- * });
- */
-export function useJoinChannelMutation(baseOptions?: Apollo.MutationHookOptions<JoinChannelMutation, JoinChannelMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<JoinChannelMutation, JoinChannelMutationVariables>(JoinChannelDocument, options);
-      }
-export type JoinChannelMutationHookResult = ReturnType<typeof useJoinChannelMutation>;
-export type JoinChannelMutationResult = Apollo.MutationResult<JoinChannelMutation>;
-export type JoinChannelMutationOptions = Apollo.BaseMutationOptions<JoinChannelMutation, JoinChannelMutationVariables>;

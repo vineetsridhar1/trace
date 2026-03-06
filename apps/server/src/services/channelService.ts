@@ -80,26 +80,6 @@ export async function deleteChannel(id: string) {
   ]);
 }
 
-export async function joinChannel(channelId: string, userId: string) {
-  await prisma.channelMember.upsert({
-    where: { channelId_userId: { channelId, userId } },
-    create: { channelId, userId },
-    update: {},
-  });
-}
-
-export async function listChannelsForUser(serverId: string, userId: string) {
-  const channels = await prisma.channel.findMany({
-    where: {
-      serverId,
-      members: { some: { userId } },
-    },
-    orderBy: { createdAt: 'asc' },
-    include: { teamLinks: { select: { teamId: true } } },
-  });
-  return channels.map(withTeamIds);
-}
-
 export async function updateChannel(id: string, data: {
   name?: string;
   workspacesEnabled?: boolean;

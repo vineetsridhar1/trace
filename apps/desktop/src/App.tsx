@@ -14,7 +14,6 @@ import {
   useUpdateWorkspaceStatusMutation,
   useDeleteWorkspaceMutation,
   useSetWorkspacePrUrlMutation,
-  useJoinChannelMutation,
 } from "./__generated__/App.generated";
 import { useCreateWorkspaceMutation } from "./hooks/__generated__/useAgentMessageActions.generated";
 import { useWorkspaceSync } from "./hooks/useWorkspaceSync";
@@ -105,12 +104,6 @@ const GQL_SET_WORKSPACE_PR_URL = gql`
       workspaceId: $workspaceId
       prUrl: $prUrl
     )
-  }
-`;
-
-const GQL_JOIN_CHANNEL = gql`
-  mutation JoinChannel($channelId: ID!) {
-    joinChannel(channelId: $channelId)
   }
 `;
 
@@ -235,7 +228,6 @@ function AppContent() {
   const [executeUpdateWorkspaceStatus] = useUpdateWorkspaceStatusMutation();
   const [executeDeleteWorkspace] = useDeleteWorkspaceMutation();
   const [executeSetWorkspacePrUrl] = useSetWorkspacePrUrlMutation();
-  const [executeJoinChannel] = useJoinChannelMutation();
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
   const [pullingPRNumbers, setPullingPRNumbers] = useState<Set<number>>(
     new Set(),
@@ -681,13 +673,12 @@ function AppContent() {
       if (!targetId) return;
       try {
         await setLocalConfig(targetId, config);
-        await executeJoinChannel({ variables: { channelId: targetId } });
         useAppUIStore.getState().setJoinChannelId(null);
       } catch (err) {
         console.error("[App] Failed to save local config:", err);
       }
     },
-    [joinChannelId, activeChannelId, setLocalConfig, executeJoinChannel],
+    [joinChannelId, activeChannelId, setLocalConfig],
   );
 
   const handleSwitchServer = useCallback(

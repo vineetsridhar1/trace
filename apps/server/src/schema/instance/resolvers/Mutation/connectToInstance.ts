@@ -27,10 +27,7 @@ export const connectToInstance: NonNullable<MutationResolvers['connectToInstance
   authorizedSessions.add(`${user.id}:${inst.id}`);
 
   const channels = await prisma.channel.findMany({
-    where: {
-      serverId: inst.serverId,
-      members: { some: { userId: user.id } },
-    },
+    where: { serverId: inst.serverId },
     orderBy: { createdAt: 'asc' },
     include: { teamLinks: { select: { teamId: true } } },
   });
