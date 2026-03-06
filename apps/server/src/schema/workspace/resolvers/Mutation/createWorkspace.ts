@@ -7,12 +7,14 @@ import {
   linkTicketToWorkspace,
 } from "../../../../services/ticketService";
 
-export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> = async (_parent, { channelId, text, attachmentIds, ticketId, isProductDoc }, _ctx) => {
+export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> = async (_parent, { channelId, text, attachmentIds, ticketId, isProductDoc }, ctx) => {
+  const user = (ctx as { user?: { id: string } }).user;
   const created = await createUserWorkspace(
     channelId,
     text.trim(),
     attachmentIds ?? undefined,
     isProductDoc ?? false,
+    user?.id,
   );
 
   pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {
