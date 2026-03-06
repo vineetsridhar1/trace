@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { FiPlus, FiCircle, FiExternalLink } from "react-icons/fi";
+import { FiPlus, FiCircle, FiExternalLink, FiChevronRight } from "react-icons/fi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
 import { usePRStatus } from "../hooks/usePRStatus";
@@ -16,6 +16,89 @@ const STATUS_DOT_COLOR: Record<TicketStatus, string> = {
   review: "text-teal-400",
   handed_off: "text-orange-300",
 };
+
+const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string }> = {
+  pending: { label: "Pending", color: "text-yellow-400" },
+  creation: { label: "Creating", color: "text-orange-400" },
+  in_progress: { label: "In Progress", color: "text-accent-light" },
+  completed: { label: "Done", color: "text-green-400" },
+  merged: { label: "Merged", color: "text-purple-400" },
+  needs_input: { label: "Needs Input", color: "text-amber-400" },
+  queued: { label: "Queued", color: "text-cyan-400" },
+  review: { label: "In Review", color: "text-teal-400" },
+  handed_off: { label: "Handed Off", color: "text-orange-300" },
+};
+
+const STATUS_GROUP_ORDER: TicketStatus[] = [
+  "needs_input",
+  "queued",
+  "handed_off",
+  "pending",
+  "creation",
+  "in_progress",
+  "review",
+  "merged",
+];
+
+interface WorkspaceItemData {
+  id: string;
+  status: TicketStatus;
+  preview: string | null;
+  ticketTitle: string | null;
+  userName: string | null;
+  branch: string | null;
+}
+
+interface StatusGroup {
+  status: TicketStatus;
+  items: WorkspaceItemData[];
+}
+
+function CollapsibleStatusGroup({
+  status,
+  children,
+  count,
+}: {
+  status: TicketStatus;
+  children: React.ReactNode;
+  count: number;
+}) {
+  const [open, setOpen] = useState(status !== "merged");
+  const config = STATUS_CONFIG[status];
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="flex w-full cursor-pointer items-center gap-1.5 px-3 py-1.5 hover:bg-surface-elevated/50 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <FiChevronRight
+          className={`h-3 w-3 text-muted transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+        />
+        <div
+          className={`h-2 w-2 flex-shrink-0 rounded-full ${config.color} bg-current`}
+        />
+        <span
+          className={`text-[11px] font-semibold uppercase tracking-wide ${config.color}`}
+        >
+          {config.label}
+        </span>
+        <span className="rounded-full bg-surface-elevated px-1.5 py-0.5 text-[10px] font-medium text-muted">
+          {count}
+        </span>
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const PR_STATE_CONFIG: Record<string, { label: string; className: string }> = {
   open: { label: "PR", className: "bg-green-500/20 text-green-400" },
@@ -141,6 +224,29 @@ export function WebWorkspaceList({
     [allWorkspaces, channelId],
   );
 
+  const groupedItems = useMemo(() => {
+    const buckets = new Map<TicketStatus, WorkspaceItemData[]>();
+    for (const item of items) {
+      let status = (item.status ?? "pending") as TicketStatus;
+      if (status === "completed") status = "in_progress";
+      let bucket = buckets.get(status);
+      if (!bucket) {
+        bucket = [];
+        buckets.set(status, bucket);
+      }
+      bucket.push(item);
+    }
+
+    const groups: StatusGroup[] = [];
+    for (const status of STATUS_GROUP_ORDER) {
+      const groupItems = buckets.get(status);
+      if (groupItems && groupItems.length > 0) {
+        groups.push({ status, items: groupItems });
+      }
+    }
+    return groups;
+  }, [items]);
+
   const branches = useMemo(
     () => items.filter((w) => w.branch).map((w) => w.branch!),
     [items],
@@ -171,29 +277,37 @@ export function WebWorkspaceList({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-1">
+      <div className="flex-1 overflow-y-auto py-1">
         {items.length === 0 ? (
           <p className="px-3 py-4 text-center text-xs text-muted">
             No workspaces yet
           </p>
         ) : (
-          items.map((item) => {
-            const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
-            return (
-              <WorkspaceItem
-                key={item.id}
-                id={item.id}
-                status={item.status}
-                preview={item.preview}
-                ticketTitle={item.ticketTitle}
-                userName={item.userName}
-                prState={prInfo?.state}
-                prUrl={prInfo?.prUrl}
-                isSelected={item.id === selectedWorkspaceId}
-                onSelect={handleSelect}
-              />
-            );
-          })
+          groupedItems.map((group) => (
+            <CollapsibleStatusGroup
+              key={group.status}
+              status={group.status}
+              count={group.items.length}
+            >
+              {group.items.map((item) => {
+                const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
+                return (
+                  <WorkspaceItem
+                    key={item.id}
+                    id={item.id}
+                    status={item.status}
+                    preview={item.preview}
+                    ticketTitle={item.ticketTitle}
+                    userName={item.userName}
+                    prState={prInfo?.state}
+                    prUrl={prInfo?.prUrl}
+                    isSelected={item.id === selectedWorkspaceId}
+                    onSelect={handleSelect}
+                  />
+                );
+              })}
+            </CollapsibleStatusGroup>
+          ))
         )}
       </div>
 
