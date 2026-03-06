@@ -6,6 +6,7 @@ import {
 } from "../worktree";
 import { runProcess } from "../process";
 import { resolveServerUrl } from "./shared";
+import { registerRelayAction } from "../instanceCommandHandler";
 
 const GITHUB_LOGIN_CHANNEL = "github-login";
 const DETECT_INSTALLED_APPS_CHANNEL = "detect-installed-apps";
@@ -56,6 +57,337 @@ let installedAppsCache: Array<{ id: string; label: string }> | null = null;
 // Cache gh CLI auth status with TTL
 let ghAuthCache: { available: boolean; checkedAt: number } | null = null;
 const GH_AUTH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// ─── Shared functions (used by both IPC and relay handlers) ─────────
+
+async function checkGhAuth() {
+  if (ghAuthCache && Date.now() - ghAuthCache.checkedAt < GH_AUTH_CACHE_TTL) {
+    return { success: true, available: ghAuthCache.available };
+  }
+  try {
+    const result = await runProcess(
+      "gh",
+      ["auth", "status", "--hostname", "github.com"],
+      "/",
+    );
+    const available = result.code === 0;
+    ghAuthCache = { available, checkedAt: Date.now() };
+    return { success: true, available };
+  } catch {
+    ghAuthCache = { available: false, checkedAt: Date.now() };
+    return { success: true, available: false };
+  }
+}
+
+async function checkPRStatusesLocal(repoPath: string, branches: string[]) {
+  // Single CLI call to fetch all PRs in the repo
+  const result = await runProcess(
+    "gh",
+    [
+      "pr",
+      "list",
+      "--state",
+      "all",
+      "--json",
+      "state,url,headRefName",
+      "--limit",
+      "100",
+    ],
+    repoPath,
+  );
+
+  if (result.code !== 0) {
+    return {
+      success: true,
+      statuses: branches.map((branch) => ({
+        branch,
+        state: "none" as const,
+        prUrl: null as string | null,
+      })),
+    };
+  }
+
+  const prs = JSON.parse(result.stdout.trim() || "[]") as Array<{
+    state: string;
+    url: string;
+    headRefName: string;
+  }>;
+
+  // Build a map from branch name to its most recent PR (first match,
+  // since results are ordered newest-first)
+  const prByBranch = new Map<string, { state: string; url: string }>();
+  for (const pr of prs) {
+    if (!prByBranch.has(pr.headRefName)) {
+      prByBranch.set(pr.headRefName, pr);
+    }
+  }
+
+  const statuses = branches.map((branch) => {
+    const pr = prByBranch.get(branch);
+    if (!pr) {
+      return {
+        branch,
+        state: "none" as const,
+        prUrl: null as string | null,
+      };
+    }
+    const state =
+      pr.state === "MERGED"
+        ? ("merged" as const)
+        : pr.state === "OPEN"
+          ? ("open" as const)
+          : ("closed" as const);
+    return { branch, state, prUrl: pr.url || null };
+  });
+
+  return { success: true, statuses };
+}
+
+async function checkPRCILocal(repoPath: string, branches: string[]) {
+  const emptyCIStatus = (branch: string) => ({
+    branch,
+    total: 0,
+    passed: 0,
+    failed: 0,
+    pending: 0,
+  });
+
+  if (branches.length === 0) {
+    return { success: true, statuses: [] };
+  }
+
+  // Get owner/repo from git remote (local git call, no API)
+  const remoteResult = await runProcess(
+    "git",
+    ["remote", "get-url", "origin"],
+    repoPath,
+  );
+  if (remoteResult.code !== 0) {
+    return {
+      success: true,
+      statuses: branches.map(emptyCIStatus),
+    };
+  }
+
+  const remoteUrl = remoteResult.stdout.trim();
+  const match = remoteUrl.match(/(?:github\.com)[/:]([^/]+)\/([^/.]+)/);
+  if (!match) {
+    return {
+      success: true,
+      statuses: branches.map(emptyCIStatus),
+    };
+  }
+  const [, owner, repo] = match;
+
+  // Build a single GraphQL query with aliased fields per branch
+  const aliasedFields = branches
+    .map((branch, i) => {
+      const alias = `pr_${i}`;
+      const escapedBranch = branch
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"');
+      return `${alias}: pullRequests(headRefName: "${escapedBranch}", first: 1, states: OPEN) {
+        nodes {
+          commits(last: 1) {
+            nodes {
+              commit {
+                statusCheckRollup {
+                  contexts(first: 100) {
+                    nodes {
+                      ... on CheckRun {
+                        __typename
+                        conclusion
+                        status
+                      }
+                      ... on StatusContext {
+                        __typename
+                        state
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }`;
+    })
+    .join("\n");
+
+  const safeOwner = owner!.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const safeName = repo!.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const query = `query { repository(owner: "${safeOwner}", name: "${safeName}") { ${aliasedFields} } }`;
+
+  const graphqlResult = await runProcess(
+    "gh",
+    ["api", "graphql", "-f", `query=${query}`],
+    repoPath,
+  );
+
+  if (graphqlResult.code !== 0) {
+    return {
+      success: true,
+      statuses: branches.map(emptyCIStatus),
+    };
+  }
+
+  const data = JSON.parse(graphqlResult.stdout.trim());
+  const repoData = data?.data?.repository;
+  if (!repoData) {
+    return {
+      success: true,
+      statuses: branches.map(emptyCIStatus),
+    };
+  }
+
+  const statuses = branches.map((branch, i) => {
+    const alias = `pr_${i}`;
+    const prNodes = repoData[alias]?.nodes;
+    if (!prNodes || prNodes.length === 0) {
+      return emptyCIStatus(branch);
+    }
+
+    const commitNodes = prNodes[0]?.commits?.nodes;
+    if (!commitNodes || commitNodes.length === 0) {
+      return emptyCIStatus(branch);
+    }
+
+    const contexts =
+      commitNodes[0]?.commit?.statusCheckRollup?.contexts?.nodes || [];
+
+    let passed = 0;
+    let failed = 0;
+    let pending = 0;
+
+    for (const ctx of contexts) {
+      if (ctx.__typename === "CheckRun") {
+        if (ctx.status !== "COMPLETED") {
+          pending++;
+        } else if (
+          ctx.conclusion === "SUCCESS" ||
+          ctx.conclusion === "NEUTRAL" ||
+          ctx.conclusion === "SKIPPED"
+        ) {
+          passed++;
+        } else {
+          failed++;
+        }
+      } else if (ctx.__typename === "StatusContext") {
+        if (ctx.state === "SUCCESS") {
+          passed++;
+        } else if (ctx.state === "PENDING" || ctx.state === "EXPECTED") {
+          pending++;
+        } else {
+          failed++;
+        }
+      }
+    }
+
+    return {
+      branch,
+      total: passed + failed + pending,
+      passed,
+      failed,
+      pending,
+    };
+  });
+
+  return { success: true, statuses };
+}
+
+async function listPullRequests(repoPath: string) {
+  const result = await runProcess(
+    "gh",
+    [
+      "pr",
+      "list",
+      "--json",
+      "number,title,headRefName,author,createdAt,updatedAt,isDraft,url,labels",
+      "--state",
+      "open",
+      "--limit",
+      "50",
+    ],
+    repoPath,
+  );
+
+  if (result.code !== 0) {
+    return {
+      success: false,
+      error: result.stderr.trim() || "gh pr list failed",
+    };
+  }
+
+  const pullRequests = JSON.parse(result.stdout.trim() || "[]");
+  return { success: true, pullRequests };
+}
+
+async function detectInstalledApps() {
+  if (installedAppsCache) {
+    return { success: true, apps: installedAppsCache };
+  }
+  const allowedBundleIds = Object.keys(ALLOWED_APPS);
+  // Use NSWorkspace.URLForApplicationWithBundleIdentifier to check each app.
+  // This queries the Launch Services database directly — fast and always up-to-date.
+  const jxaScript = `
+ObjC.import('AppKit');
+var ws = $.NSWorkspace.sharedWorkspace;
+var ids = ${JSON.stringify(allowedBundleIds)};
+var found = [];
+for (var i = 0; i < ids.length; i++) {
+  var url = ws.URLForApplicationWithBundleIdentifier(ids[i]);
+  if (url && url.path) {
+    found.push(ids[i]);
+  }
+}
+JSON.stringify(found);
+`;
+  const result = await runProcess(
+    "osascript",
+    ["-l", "JavaScript", "-"],
+    "/",
+    jxaScript,
+  );
+  if (result.code === 0 && result.stdout.trim()) {
+    const foundBundleIds: string[] = JSON.parse(result.stdout.trim());
+    const apps = allowedBundleIds
+      .filter((bid) => foundBundleIds.includes(bid))
+      .map((bid) => ({
+        id: ALLOWED_APPS[bid].id,
+        label: ALLOWED_APPS[bid].label,
+      }));
+    // Sort by display order
+    apps.sort(
+      (a, b) =>
+        APP_DISPLAY_ORDER.indexOf(a.id) - APP_DISPLAY_ORDER.indexOf(b.id),
+    );
+    installedAppsCache = apps;
+    return { success: true, apps };
+  }
+  // Fallback: assume at least Finder and Terminal (don't cache so it retries next time)
+  const fallback = [
+    { id: "finder", label: "Finder" },
+    { id: "terminal", label: "Terminal" },
+  ];
+  return { success: true, apps: fallback };
+}
+
+async function openInApp(appId: string, targetPath: string) {
+  const appEntry = Object.values(ALLOWED_APPS).find(
+    (a) => a.id === appId,
+  );
+  if (!appEntry) {
+    return { success: false, error: `Unknown app: ${appId}` };
+  }
+  const args = [...appEntry.openArgs, targetPath];
+  const result = await runProcess("open", args, targetPath);
+  return {
+    success: result.code === 0,
+    error: result.code !== 0 ? result.stderr : undefined,
+  };
+}
+
+// ─── IPC handlers ───────────────────────────────────────────────────
 
 export function registerGithubHandlers(): void {
   ipcMain.removeHandler(GITHUB_LOGIN_CHANNEL);
@@ -147,54 +479,8 @@ export function registerGithubHandlers(): void {
 
   ipcMain.removeHandler(DETECT_INSTALLED_APPS_CHANNEL);
   ipcMain.handle(DETECT_INSTALLED_APPS_CHANNEL, async () => {
-    if (installedAppsCache) {
-      return { success: true, apps: installedAppsCache };
-    }
     try {
-      const allowedBundleIds = Object.keys(ALLOWED_APPS);
-      // Use NSWorkspace.URLForApplicationWithBundleIdentifier to check each app.
-      // This queries the Launch Services database directly — fast and always up-to-date.
-      const jxaScript = `
-ObjC.import('AppKit');
-var ws = $.NSWorkspace.sharedWorkspace;
-var ids = ${JSON.stringify(allowedBundleIds)};
-var found = [];
-for (var i = 0; i < ids.length; i++) {
-  var url = ws.URLForApplicationWithBundleIdentifier(ids[i]);
-  if (url && url.path) {
-    found.push(ids[i]);
-  }
-}
-JSON.stringify(found);
-`;
-      const result = await runProcess(
-        "osascript",
-        ["-l", "JavaScript", "-"],
-        "/",
-        jxaScript,
-      );
-      if (result.code === 0 && result.stdout.trim()) {
-        const foundBundleIds: string[] = JSON.parse(result.stdout.trim());
-        const apps = allowedBundleIds
-          .filter((bid) => foundBundleIds.includes(bid))
-          .map((bid) => ({
-            id: ALLOWED_APPS[bid].id,
-            label: ALLOWED_APPS[bid].label,
-          }));
-        // Sort by display order
-        apps.sort(
-          (a, b) =>
-            APP_DISPLAY_ORDER.indexOf(a.id) - APP_DISPLAY_ORDER.indexOf(b.id),
-        );
-        installedAppsCache = apps;
-        return { success: true, apps };
-      }
-      // Fallback: assume at least Finder and Terminal (don't cache so it retries next time)
-      const fallback = [
-        { id: "finder", label: "Finder" },
-        { id: "terminal", label: "Terminal" },
-      ];
-      return { success: true, apps: fallback };
+      return await detectInstalledApps();
     } catch (err) {
       const fallback = [
         { id: "finder", label: "Finder" },
@@ -209,18 +495,7 @@ JSON.stringify(found);
     OPEN_IN_APP_CHANNEL,
     async (_event, appId: string, targetPath: string) => {
       try {
-        const appEntry = Object.values(ALLOWED_APPS).find(
-          (a) => a.id === appId,
-        );
-        if (!appEntry) {
-          return { success: false, error: `Unknown app: ${appId}` };
-        }
-        const args = [...appEntry.openArgs, targetPath];
-        const result = await runProcess("open", args, targetPath);
-        return {
-          success: result.code === 0,
-          error: result.code !== 0 ? result.stderr : undefined,
-        };
+        return await openInApp(appId, targetPath);
       } catch (err) {
         return { success: false, error: String(err) };
       }
@@ -229,24 +504,7 @@ JSON.stringify(found);
 
   ipcMain.removeHandler(CHECK_GH_AUTH_CHANNEL);
   ipcMain.handle(CHECK_GH_AUTH_CHANNEL, async () => {
-    // Return cached result if still fresh
-    if (ghAuthCache && Date.now() - ghAuthCache.checkedAt < GH_AUTH_CACHE_TTL) {
-      return { success: true, available: ghAuthCache.available };
-    }
-    try {
-      const result = await runProcess(
-        "gh",
-        ["auth", "status", "--hostname", "github.com"],
-        "/",
-      );
-      const available = result.code === 0;
-      ghAuthCache = { available, checkedAt: Date.now() };
-      return { success: true, available };
-    } catch {
-      // gh not installed (ENOENT) or other error
-      ghAuthCache = { available: false, checkedAt: Date.now() };
-      return { success: true, available: false };
-    }
+    return await checkGhAuth();
   });
 
   ipcMain.removeHandler(PUSH_WORKTREE_BRANCH_CHANNEL);
@@ -287,67 +545,7 @@ JSON.stringify(found);
     CHECK_PR_STATUSES_LOCAL_CHANNEL,
     async (_event, repoPath: string, branches: string[]) => {
       try {
-        // Single CLI call to fetch all PRs in the repo
-        const result = await runProcess(
-          "gh",
-          [
-            "pr",
-            "list",
-            "--state",
-            "all",
-            "--json",
-            "state,url,headRefName",
-            "--limit",
-            "100",
-          ],
-          repoPath,
-        );
-
-        if (result.code !== 0) {
-          return {
-            success: true,
-            statuses: branches.map((branch) => ({
-              branch,
-              state: "none" as const,
-              prUrl: null as string | null,
-            })),
-          };
-        }
-
-        const prs = JSON.parse(result.stdout.trim() || "[]") as Array<{
-          state: string;
-          url: string;
-          headRefName: string;
-        }>;
-
-        // Build a map from branch name to its most recent PR (first match,
-        // since results are ordered newest-first)
-        const prByBranch = new Map<string, { state: string; url: string }>();
-        for (const pr of prs) {
-          if (!prByBranch.has(pr.headRefName)) {
-            prByBranch.set(pr.headRefName, pr);
-          }
-        }
-
-        const statuses = branches.map((branch) => {
-          const pr = prByBranch.get(branch);
-          if (!pr) {
-            return {
-              branch,
-              state: "none" as const,
-              prUrl: null as string | null,
-            };
-          }
-          const state =
-            pr.state === "MERGED"
-              ? ("merged" as const)
-              : pr.state === "OPEN"
-                ? ("open" as const)
-                : ("closed" as const);
-          return { branch, state, prUrl: pr.url || null };
-        });
-
-        return { success: true, statuses };
+        return await checkPRStatusesLocal(repoPath, branches);
       } catch (err) {
         return { success: false, error: String(err) };
       }
@@ -358,156 +556,8 @@ JSON.stringify(found);
   ipcMain.handle(
     CHECK_PR_CI_LOCAL_CHANNEL,
     async (_event, repoPath: string, branches: string[]) => {
-      const emptyCIStatus = (branch: string) => ({
-        branch,
-        total: 0,
-        passed: 0,
-        failed: 0,
-        pending: 0,
-      });
-
-      if (branches.length === 0) {
-        return { success: true, statuses: [] };
-      }
-
       try {
-        // Get owner/repo from git remote (local git call, no API)
-        const remoteResult = await runProcess(
-          "git",
-          ["remote", "get-url", "origin"],
-          repoPath,
-        );
-        if (remoteResult.code !== 0) {
-          return {
-            success: true,
-            statuses: branches.map(emptyCIStatus),
-          };
-        }
-
-        const remoteUrl = remoteResult.stdout.trim();
-        const match = remoteUrl.match(/(?:github\.com)[/:]([^/]+)\/([^/.]+)/);
-        if (!match) {
-          return {
-            success: true,
-            statuses: branches.map(emptyCIStatus),
-          };
-        }
-        const [, owner, repo] = match;
-
-        // Build a single GraphQL query with aliased fields per branch
-        const aliasedFields = branches
-          .map((branch, i) => {
-            const alias = `pr_${i}`;
-            const escapedBranch = branch
-              .replace(/\\/g, "\\\\")
-              .replace(/"/g, '\\"');
-            return `${alias}: pullRequests(headRefName: "${escapedBranch}", first: 1, states: OPEN) {
-              nodes {
-                commits(last: 1) {
-                  nodes {
-                    commit {
-                      statusCheckRollup {
-                        contexts(first: 100) {
-                          nodes {
-                            ... on CheckRun {
-                              __typename
-                              conclusion
-                              status
-                            }
-                            ... on StatusContext {
-                              __typename
-                              state
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }`;
-          })
-          .join("\n");
-
-        const safeOwner = owner!.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-        const safeName = repo!.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-        const query = `query { repository(owner: "${safeOwner}", name: "${safeName}") { ${aliasedFields} } }`;
-
-        const graphqlResult = await runProcess(
-          "gh",
-          ["api", "graphql", "-f", `query=${query}`],
-          repoPath,
-        );
-
-        if (graphqlResult.code !== 0) {
-          return {
-            success: true,
-            statuses: branches.map(emptyCIStatus),
-          };
-        }
-
-        const data = JSON.parse(graphqlResult.stdout.trim());
-        const repoData = data?.data?.repository;
-        if (!repoData) {
-          return {
-            success: true,
-            statuses: branches.map(emptyCIStatus),
-          };
-        }
-
-        const statuses = branches.map((branch, i) => {
-          const alias = `pr_${i}`;
-          const prNodes = repoData[alias]?.nodes;
-          if (!prNodes || prNodes.length === 0) {
-            return emptyCIStatus(branch);
-          }
-
-          const commitNodes = prNodes[0]?.commits?.nodes;
-          if (!commitNodes || commitNodes.length === 0) {
-            return emptyCIStatus(branch);
-          }
-
-          const contexts =
-            commitNodes[0]?.commit?.statusCheckRollup?.contexts?.nodes || [];
-
-          let passed = 0;
-          let failed = 0;
-          let pending = 0;
-
-          for (const ctx of contexts) {
-            if (ctx.__typename === "CheckRun") {
-              if (ctx.status !== "COMPLETED") {
-                pending++;
-              } else if (
-                ctx.conclusion === "SUCCESS" ||
-                ctx.conclusion === "NEUTRAL" ||
-                ctx.conclusion === "SKIPPED"
-              ) {
-                passed++;
-              } else {
-                failed++;
-              }
-            } else if (ctx.__typename === "StatusContext") {
-              if (ctx.state === "SUCCESS") {
-                passed++;
-              } else if (ctx.state === "PENDING" || ctx.state === "EXPECTED") {
-                pending++;
-              } else {
-                failed++;
-              }
-            }
-          }
-
-          return {
-            branch,
-            total: passed + failed + pending,
-            passed,
-            failed,
-            pending,
-          };
-        });
-
-        return { success: true, statuses };
+        return await checkPRCILocal(repoPath, branches);
       } catch (err) {
         return { success: false, error: String(err) };
       }
@@ -519,30 +569,7 @@ JSON.stringify(found);
     LIST_PULL_REQUESTS_CHANNEL,
     async (_event, repoPath: string) => {
       try {
-        const result = await runProcess(
-          "gh",
-          [
-            "pr",
-            "list",
-            "--json",
-            "number,title,headRefName,author,createdAt,updatedAt,isDraft,url,labels",
-            "--state",
-            "open",
-            "--limit",
-            "50",
-          ],
-          repoPath,
-        );
-
-        if (result.code !== 0) {
-          return {
-            success: false,
-            error: result.stderr.trim() || "gh pr list failed",
-          };
-        }
-
-        const pullRequests = JSON.parse(result.stdout.trim() || "[]");
-        return { success: true, pullRequests };
+        return await listPullRequests(repoPath);
       } catch (err) {
         return { success: false, error: String(err) };
       }
@@ -573,4 +600,75 @@ JSON.stringify(found);
       }
     },
   );
+}
+
+// ─── Relay handlers ─────────────────────────────────────────────────
+
+export function registerGithubRelayActions(): void {
+  registerRelayAction("checkGhAuth", async () => {
+    return await checkGhAuth();
+  });
+
+  registerRelayAction("pushWorktreeBranch", async (params) => {
+    const { workspaceId, repoPath } = params as {
+      workspaceId: string;
+      repoPath: string;
+    };
+    return await pushWorktreeBranch(workspaceId, repoPath);
+  });
+
+  registerRelayAction("ensureWorktreeFromRemote", async (params) => {
+    const { workspaceId, repoPath, branchName } = params as {
+      workspaceId: string;
+      repoPath: string;
+      branchName: string;
+    };
+    return await ensureWorktreeFromRemote(workspaceId, repoPath, branchName);
+  });
+
+  registerRelayAction("checkPRStatusesLocal", async (params) => {
+    const { repoPath, branches } = params as {
+      repoPath: string;
+      branches: string[];
+    };
+    return await checkPRStatusesLocal(repoPath, branches);
+  });
+
+  registerRelayAction("checkPRCILocal", async (params) => {
+    const { repoPath, branches } = params as {
+      repoPath: string;
+      branches: string[];
+    };
+    return await checkPRCILocal(repoPath, branches);
+  });
+
+  registerRelayAction("listPullRequests", async (params) => {
+    const { repoPath } = params as { repoPath: string };
+    return await listPullRequests(repoPath);
+  });
+
+  registerRelayAction("checkoutPullRequest", async (params) => {
+    const { repoPath, branchName, workspaceId, setupCommands } = params as {
+      repoPath: string;
+      branchName: string;
+      workspaceId: string;
+      setupCommands?: string[];
+    };
+    const { worktreePath } = await ensureWorktreeForBranch(
+      workspaceId, repoPath, branchName, setupCommands,
+    );
+    return { success: true, worktreePath };
+  });
+
+  registerRelayAction("detectInstalledApps", async () => {
+    return await detectInstalledApps();
+  });
+
+  registerRelayAction("openInApp", async (params) => {
+    const { appId, targetPath } = params as {
+      appId: string;
+      targetPath: string;
+    };
+    return await openInApp(appId, targetPath);
+  });
 }

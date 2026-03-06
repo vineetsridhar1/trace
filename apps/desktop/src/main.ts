@@ -15,6 +15,12 @@ import {
 } from './main/worktree';
 import { InstanceConnection, getOrCreateInstanceId, setAuthToken } from './main/instanceConnection';
 import { handleRelayCommand } from './main/instanceCommandHandler';
+import { registerAgentRelayActions } from './main/ipc/agentHandlers';
+import { registerWorktreeRelayActions } from './main/ipc/worktreeHandlers';
+import { registerGitRelayActions } from './main/ipc/gitHandlers';
+import { registerGithubRelayActions } from './main/ipc/githubHandlers';
+import { registerRepoRelayActions } from './main/ipc/repoHandlers';
+import { registerMiscRelayActions } from './main/ipc/miscHandlers';
 
 if (started) {
   app.quit();
@@ -22,6 +28,14 @@ if (started) {
 
 setWorktreeBaseFn(getWorktreeBase);
 registerIpcHandlers();
+
+// Register relay actions for webapp → Electron communication
+registerAgentRelayActions();
+registerWorktreeRelayActions();
+registerGitRelayActions();
+registerGithubRelayActions();
+registerRepoRelayActions();
+registerMiscRelayActions();
 
 let instanceConnection: InstanceConnection | null = null;
 

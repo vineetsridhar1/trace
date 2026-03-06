@@ -80,7 +80,7 @@ describe('relayAction', () => {
     const result = await relayAction({}, baseArgs, { user: OWNER } as any, {} as any);
 
     expect(result).toEqual({ success: true, data: { output: 'hello' }, error: undefined });
-    expect(mockedRelay.sendCommand).toHaveBeenCalledWith('inst-1', 'spawnAgent', { cmd: 'ls' });
+    expect(mockedRelay.sendCommand).toHaveBeenCalledWith('inst-1', 'spawnAgent', { cmd: 'ls' }, 120_000);
   });
 
   it('succeeds for an authorized collaborator', async () => {
@@ -103,5 +103,15 @@ describe('relayAction', () => {
     const result = await relayAction({}, baseArgs, { user: OWNER } as any, {} as any);
 
     expect(result).toEqual({ success: false, error: 'RELAY_TIMEOUT' });
+  });
+
+  it('returns INVALID_ACTION for unknown actions', async () => {
+    const invalidArgs = { ...baseArgs, action: 'nonExistentAction' };
+
+    const result = await relayAction({}, invalidArgs, { user: OWNER } as any, {} as any);
+
+    expect(result).toEqual({ success: false, error: 'INVALID_ACTION' });
+    expect(mockedGetInstanceById).not.toHaveBeenCalled();
+    expect(mockedRelay.sendCommand).not.toHaveBeenCalled();
   });
 });

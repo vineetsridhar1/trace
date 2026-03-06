@@ -1,8 +1,3 @@
-import { spawnAgent } from "./agents/spawnAgent";
-import { stopAgentProcess } from "./worktree";
-import { getChannelLocalConfig } from "./localConfig";
-import type { AgentType } from "../types";
-
 export interface RelayCommand {
   id: string;
   action: string;
@@ -17,90 +12,43 @@ export interface RelayResult {
   error?: string;
 }
 
-async function handleSpawnAgent(command: RelayCommand): Promise<RelayResult> {
-  const {
-    workspaceId,
-    prompt,
-    channelId,
-    model,
-    effort,
-    planMode,
-  } = command.params as {
-    workspaceId: string;
-    prompt: string;
-    channelId: string;
-    model?: string;
-    effort?: string;
-    planMode?: boolean;
-  };
+type RelayActionHandler = (
+  params: Record<string, unknown>,
+) => Promise<{ success: boolean; error?: string; [key: string]: unknown }>;
 
-  const localConfig = getChannelLocalConfig(channelId);
-  if (!localConfig) {
-    return {
-      id: command.id,
-      type: "action-result",
-      success: false,
-      error: `No local config found for channel ${channelId}`,
-    };
-  }
+const actionRegistry = new Map<string, RelayActionHandler>();
 
-  const repoPath = localConfig.localRepoPath;
-  const creationCommands = localConfig.setupScript
-    ? [localConfig.setupScript]
-    : undefined;
-  const systemInstructions = localConfig.systemInstructions;
-
-  const agentType: AgentType = "claude";
-
-  const worktreePath = await spawnAgent({
-    agentType,
-    workspaceId,
-    prompt,
-    repoPath,
-    creationCommands,
-    model,
-    effort,
-    systemInstructions,
-    permissionMode: planMode ? "plan" : undefined,
-  });
-
-  return {
-    id: command.id,
-    type: "action-result",
-    success: true,
-    data: { worktreePath },
-  };
-}
-
-function handleStopAgent(command: RelayCommand): RelayResult {
-  const { workspaceId } = command.params as { workspaceId: string };
-
-  stopAgentProcess(workspaceId);
-
-  return {
-    id: command.id,
-    type: "action-result",
-    success: true,
-  };
+export function registerRelayAction(
+  name: string,
+  handler: RelayActionHandler,
+): void {
+  actionRegistry.set(name, handler);
 }
 
 export async function handleRelayCommand(
   command: RelayCommand,
 ): Promise<RelayResult> {
   try {
-    switch (command.action) {
-      case "spawnAgent":
-        return await handleSpawnAgent(command);
-      case "stopAgent":
-        return handleStopAgent(command);
-      default:
-        return {
-          id: command.id,
-          type: "action-result",
-          success: false,
-          error: "UNKNOWN_ACTION",
-        };
+    const handler = actionRegistry.get(command.action);
+    if (!handler) {
+      return {
+        id: command.id,
+        type: "action-result",
+        success: false,
+        error: "UNKNOWN_ACTION",
+      };
     }
+
+    const { success, error, ...data } = await handler(command.params);
+    return {
+      id: command.id,
+      type: "action-result",
+      success,
+      data: Object.keys(data).length > 0
+        ? (data as Record<string, unknown>)
+        : undefined,
+      error,
+    };
   } catch (err) {
     return {
       id: command.id,

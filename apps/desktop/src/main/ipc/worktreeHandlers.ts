@@ -8,6 +8,7 @@ import {
   getWorktreeBranch,
 } from "../worktree";
 import { getWorktreeDiff } from "../diff";
+import { registerRelayAction } from "../instanceCommandHandler";
 
 const DELETE_WORKTREE_CHANNEL = "delete-worktree";
 const CHECK_WORKTREE_CHANNEL = "check-worktree";
@@ -105,4 +106,57 @@ export function registerWorktreeHandlers(): void {
       }
     },
   );
+}
+
+export function registerWorktreeRelayActions(): void {
+  registerRelayAction("deleteWorktree", async (params) => {
+    const { workspaceId, repoPath, teardownCommands } = params as {
+      workspaceId: string;
+      repoPath: string;
+      teardownCommands?: string[];
+    };
+    const result = await deleteWorktree(workspaceId, repoPath, teardownCommands);
+    return { success: true, ...result };
+  });
+
+  registerRelayAction("checkWorktreeExists", async (params) => {
+    const { workspaceId, repoPath } = params as {
+      workspaceId: string;
+      repoPath: string;
+    };
+    const result = await checkWorktreeExists(workspaceId, repoPath);
+    return { success: true, ...result };
+  });
+
+  registerRelayAction("mergeWorktree", async (params) => {
+    const { workspaceId, repoPath, baseBranch } = params as {
+      workspaceId: string;
+      repoPath: string;
+      baseBranch: string;
+    };
+    const result = await mergeWorktree(workspaceId, repoPath, baseBranch);
+    return { success: true, ...result };
+  });
+
+  registerRelayAction("commitWorktreeChanges", async (params) => {
+    const { workspaceId } = params as { workspaceId: string };
+    const result = await commitWorktreeChanges(workspaceId);
+    return { success: true, ...result };
+  });
+
+  registerRelayAction("getWorktreeDiff", async (params) => {
+    const { workspaceId, baseBranch } = params as {
+      workspaceId: string;
+      baseBranch: string;
+    };
+    const worktreePath = getWorktreePath(workspaceId);
+    const result = await getWorktreeDiff(worktreePath, baseBranch || "main");
+    return { success: true, ...result };
+  });
+
+  registerRelayAction("getWorktreeBranch", async (params) => {
+    const { workspaceId } = params as { workspaceId: string };
+    const branch = await getWorktreeBranch(workspaceId);
+    return { success: true, branch };
+  });
 }

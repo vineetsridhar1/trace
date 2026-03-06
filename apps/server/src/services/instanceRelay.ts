@@ -13,7 +13,7 @@ export interface ConnectedInstance {
 export interface RelayCommand {
   id: string;
   type: 'action';
-  action: 'spawnAgent' | 'stopAgent';
+  action: string;
   params: Record<string, unknown>;
 }
 
@@ -26,12 +26,13 @@ export interface RelayResult {
 }
 
 interface PendingCommand {
+  instanceId: string;
   resolve: (result: RelayResult) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
 }
 
-const COMMAND_TIMEOUT_MS = 15_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 class InstanceRelay {
   private instances = new Map<string, ConnectedInstance>();
@@ -48,6 +49,15 @@ class InstanceRelay {
 
   unregister(instanceId: string): void {
     this.instances.delete(instanceId);
+
+    // Reject all pending commands for this instance
+    for (const [id, entry] of this.pending) {
+      if (entry.instanceId === instanceId) {
+        clearTimeout(entry.timeout);
+        this.pending.delete(id);
+        entry.reject(new Error('INSTANCE_DISCONNECTED'));
+      }
+    }
   }
 
   isOnline(instanceId: string): boolean {
@@ -68,6 +78,7 @@ class InstanceRelay {
     instanceId: string,
     action: string,
     params: Record<string, unknown>,
+    timeoutMs?: number,
   ): Promise<RelayResult> {
     const instance = this.instances.get(instanceId);
     if (!instance) {
@@ -75,19 +86,20 @@ class InstanceRelay {
     }
 
     const id = randomUUID();
+    const effectiveTimeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     return new Promise<RelayResult>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error('RELAY_TIMEOUT'));
-      }, COMMAND_TIMEOUT_MS);
+      }, effectiveTimeout);
 
-      this.pending.set(id, { resolve, reject, timeout });
+      this.pending.set(id, { instanceId, resolve, reject, timeout });
 
       const command: RelayCommand = {
         id,
         type: 'action',
-        action: action as RelayCommand['action'],
+        action,
         params,
       };
 

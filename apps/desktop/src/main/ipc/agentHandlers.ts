@@ -3,7 +3,10 @@ import { spawnAgent } from "../agents/spawnAgent";
 import { getAllAgents } from "../agents/registry";
 import { stopAgentProcess } from "../worktree";
 import { resetWatchdog, stopWatchdog } from "../watchdog";
+import { getChannelLocalConfig } from "../localConfig";
+import { registerRelayAction } from "../instanceCommandHandler";
 import type { SpawnConfig } from "../../types";
+import type { AgentType } from "../../types";
 
 const SPAWN_AGENT_CHANNEL = "spawn-agent";
 const STOP_AGENT_CHANNEL = "stop-agent";
@@ -65,4 +68,77 @@ export function registerAgentHandlers(): void {
       }
     },
   );
+}
+
+export function registerAgentRelayActions(): void {
+  registerRelayAction("spawnAgent", async (params) => {
+    const {
+      workspaceId,
+      prompt,
+      channelId,
+      model,
+      effort,
+      planMode,
+    } = params as {
+      workspaceId: string;
+      prompt: string;
+      channelId: string;
+      model?: string;
+      effort?: string;
+      planMode?: boolean;
+    };
+
+    const localConfig = getChannelLocalConfig(channelId);
+    if (!localConfig) {
+      return { success: false, error: `No local config found for channel ${channelId}` };
+    }
+
+    const agentType: AgentType = "claude";
+    const worktreePath = await spawnAgent({
+      agentType,
+      workspaceId,
+      prompt,
+      repoPath: localConfig.localRepoPath,
+      creationCommands: localConfig.setupScript
+        ? [localConfig.setupScript]
+        : undefined,
+      model,
+      effort,
+      systemInstructions: localConfig.systemInstructions,
+      permissionMode: planMode ? "plan" : undefined,
+    });
+
+    return { success: true, worktreePath };
+  });
+
+  registerRelayAction("stopAgent", async (params) => {
+    const { workspaceId } = params as { workspaceId: string };
+    stopAgentProcess(workspaceId);
+    return { success: true };
+  });
+
+  registerRelayAction("detectAgents", async () => {
+    const agents = getAllAgents();
+    const results = await Promise.all(
+      agents.map(async (adapter) => ({
+        type: adapter.type,
+        capabilities: adapter.capabilities,
+        detectResult: await adapter.detect(),
+      })),
+    );
+    return { success: true, agents: results };
+  });
+
+  registerRelayAction("reportAgentActivity", async (params) => {
+    const { workspaceId, eventType } = params as {
+      workspaceId: string;
+      eventType: string;
+    };
+    if ((eventType ?? "").toLowerCase() === "stop") {
+      stopWatchdog(workspaceId, "activity-stop-event");
+    } else {
+      resetWatchdog(workspaceId, `activity-event:${eventType}`);
+    }
+    return { success: true };
+  });
 }

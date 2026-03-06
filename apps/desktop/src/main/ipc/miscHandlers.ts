@@ -11,6 +11,7 @@ import {
 import type { LocalChannelConfig, GlobalAppConfig } from "../localConfig";
 import { runningProcesses } from "../worktree";
 import { getMainWindow } from "./shared";
+import { registerRelayAction } from "../instanceCommandHandler";
 
 const ALLOCATE_PORTS_CHANNEL = "allocate-ports";
 const RELEASE_PORTS_CHANNEL = "release-ports";
@@ -114,4 +115,64 @@ export function registerMiscHandlers(): void {
       return { success: true, running };
     },
   );
+}
+
+export function registerMiscRelayActions(): void {
+  registerRelayAction("getLocalConfig", async (params) => {
+    const { channelId } = params as { channelId: string };
+    const config = getChannelLocalConfig(channelId);
+    return { success: true, config };
+  });
+
+  registerRelayAction("setLocalConfig", async (params) => {
+    const { channelId, data } = params as {
+      channelId: string;
+      data: LocalChannelConfig;
+    };
+    setChannelLocalConfig(channelId, data);
+    return { success: true };
+  });
+
+  registerRelayAction("getAllLocalConfigs", async () => {
+    const configs = getAllChannelLocalConfigs();
+    return { success: true, configs };
+  });
+
+  registerRelayAction("deleteLocalConfig", async (params) => {
+    const { channelId } = params as { channelId: string };
+    deleteChannelLocalConfig(channelId);
+    return { success: true };
+  });
+
+  registerRelayAction("getGlobalConfig", async () => {
+    const config = getGlobalConfig();
+    return { success: true, config };
+  });
+
+  registerRelayAction("setGlobalConfig", async (params) => {
+    const { data } = params as { data: GlobalAppConfig };
+    setGlobalConfig(data);
+    return { success: true };
+  });
+
+  registerRelayAction("allocatePorts", async (params) => {
+    const { workspaceId, count } = params as {
+      workspaceId: string;
+      count: number;
+    };
+    const ports = await allocatePorts(workspaceId, count);
+    return { success: true, ports };
+  });
+
+  registerRelayAction("releasePorts", async (params) => {
+    const { workspaceId } = params as { workspaceId: string };
+    releasePorts(workspaceId);
+    return { success: true };
+  });
+
+  registerRelayAction("checkRunningProcesses", async (params) => {
+    const { workspaceIds } = params as { workspaceIds: string[] };
+    const running = workspaceIds.filter((id) => runningProcesses.has(id));
+    return { success: true, running };
+  });
 }
