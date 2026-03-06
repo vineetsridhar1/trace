@@ -122,6 +122,12 @@ contextBridge.exposeInMainWorld("traceAPI", {
 
   hasPty: (terminalId: string) => ipcRenderer.invoke("pty-has", terminalId),
 
+  getPtyScrollback: (terminalId: string) =>
+    ipcRenderer.invoke("pty-get-scrollback", terminalId) as Promise<{
+      success: boolean;
+      data: string | null;
+    }>,
+
   getPtyProcesses: (terminalIds: string[]) =>
     ipcRenderer.invoke("pty-get-processes", terminalIds) as Promise<{
       success: boolean;

@@ -1,10 +1,13 @@
 import type { BrowserWindow } from "electron";
 import * as pty from "node-pty";
 
+const SCROLLBACK_BUFFER_MAX = 200 * 1024; // ~200KB
+
 interface PtySession {
   process: pty.IPty;
   window: BrowserWindow;
   shell: string;
+  scrollbackBuffer: string;
 }
 
 export interface PtyProcessInfo {
@@ -47,6 +50,16 @@ export function createPty(
   });
 
   proc.onData((data) => {
+    // Append to scrollback buffer for reconnection support
+    const session = sessions.get(terminalId);
+    if (session) {
+      session.scrollbackBuffer += data;
+      if (session.scrollbackBuffer.length > SCROLLBACK_BUFFER_MAX) {
+        session.scrollbackBuffer = session.scrollbackBuffer.slice(
+          session.scrollbackBuffer.length - SCROLLBACK_BUFFER_MAX,
+        );
+      }
+    }
     if (!window.isDestroyed()) {
       window.webContents.send("pty-data", terminalId, data);
     }
@@ -68,7 +81,7 @@ export function createPty(
     }
   });
 
-  sessions.set(terminalId, { process: proc, window, shell });
+  sessions.set(terminalId, { process: proc, window, shell, scrollbackBuffer: "" });
 }
 
 export function writePty(terminalId: string, data: string): boolean {
@@ -109,6 +122,11 @@ export function getPtyEnv(
 
 export function hasPty(terminalId: string): boolean {
   return sessions.has(terminalId);
+}
+
+export function getScrollback(terminalId: string): string | null {
+  const session = sessions.get(terminalId);
+  return session ? session.scrollbackBuffer : null;
 }
 
 export function killAllPtys(): void {

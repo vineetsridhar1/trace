@@ -432,7 +432,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       activeTabId: null,
       cwd: '',
       initialized: false,
-      allTerminalEntries: [],
+      // allTerminalEntries intentionally preserved — keeps xterm instances mounted
     });
   },
 

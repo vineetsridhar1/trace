@@ -201,8 +201,27 @@ export function useTerminal({
       if (disposed) return;
 
       if (ptyExists) {
-        // Reconnect: just set up listeners and trigger a resize
-        terminal.write("\r\n[Reconnected]\r\n");
+        // Reconnect: fetch scrollback from main process and replay it.
+        // Buffer any live PTY data that arrives during the async fetch so
+        // nothing is lost.
+        const pendingData: string[] = [];
+        cleanupData = window.traceAPI.onPtyData((id, data) => {
+          if (id === terminalId) pendingData.push(data);
+        });
+
+        const scrollbackResult = await window.traceAPI.getPtyScrollback(terminalId);
+        if (disposed) return;
+
+        if (scrollbackResult.data) {
+          terminal.write(scrollbackResult.data);
+        }
+        for (const chunk of pendingData) {
+          terminal.write(chunk);
+        }
+
+        // Switch to direct writing for subsequent data
+        cleanupData();
+        cleanupData = null;
       } else {
         // Create a new PTY
         const result = await window.traceAPI.createPty(

@@ -144,6 +144,9 @@ export interface TraceAPI {
   hasPty: (
     terminalId: string,
   ) => Promise<{ success: boolean; exists: boolean }>;
+  getPtyScrollback: (
+    terminalId: string,
+  ) => Promise<{ success: boolean; data: string | null }>;
   getPtyProcesses: (terminalIds: string[]) => Promise<{
     success: boolean;
     processes: Record<string, { processName: string; isShellOnly: boolean }>;
