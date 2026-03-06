@@ -5,10 +5,17 @@ import { getMainDefinition } from "@apollo/client/utilities";
 import { createClient } from "graphql-ws";
 
 function getBaseUrl(): string {
-  return window.location.origin;
+  const serverUrl = import.meta.env.VITE_SERVER_URL;
+  return serverUrl || window.location.origin;
 }
 
 function getWsUrl(): string {
+  const serverUrl = import.meta.env.VITE_SERVER_URL;
+  if (serverUrl) {
+    const url = new URL(serverUrl);
+    const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${url.host}`;
+  }
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}`;
 }
