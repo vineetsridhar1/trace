@@ -1,5 +1,6 @@
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
+import { MARKDOWN_COMPONENTS } from '@trace/shared-ui';
 import remarkGfm from "remark-gfm";
 import type { ServerEvent } from "../../types";
 import type { TokenUsageInfo } from "../../hooks/useThread";
@@ -75,7 +76,7 @@ export const StopBubble = memo(function StopBubble({
       </div>
       <div className="activity-row-note">
         <div className="markdown-body break-words text-sm text-primary">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
             {displayMessage}
           </ReactMarkdown>
         </div>

@@ -1,5 +1,6 @@
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
+import { MARKDOWN_COMPONENTS } from '@trace/shared-ui';
 import remarkGfm from "remark-gfm";
 import { FiGitPullRequest, FiLink, FiTrash2, FiFile, FiAlertTriangle } from "react-icons/fi";
 import type { KanbanTicket } from "../types";
@@ -64,7 +65,7 @@ export const KanbanCard = memo(function KanbanCard({
 
       {ticket.description && (
         <div className="markdown-body mt-1 line-clamp-2 text-xs text-muted">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
             {ticket.description}
           </ReactMarkdown>
         </div>
@@ -74,7 +75,7 @@ export const KanbanCard = memo(function KanbanCard({
         <div className="mt-1.5 line-clamp-1 text-xs text-accent/70">
           <span className="mr-1">&#9672;</span>
           <span className="markdown-body inline">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
               {ticket.solutionApproach}
             </ReactMarkdown>
           </span>

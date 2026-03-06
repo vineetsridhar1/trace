@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { gql } from '@apollo/client';
 import { FiExternalLink, FiLink, FiChevronDown, FiChevronRight, FiFile, FiCheckCircle, FiAlertTriangle, FiCpu, FiHelpCircle } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
+import { MARKDOWN_COMPONENTS } from '@trace/shared-ui';
 import remarkGfm from 'remark-gfm';
 import type { KanbanTicket, SemanticContext } from '../types';
 import { getServerUrl, getTicketMetadata } from '../types';
@@ -247,7 +248,7 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
             Description
           </h4>
           <div className="markdown-body text-sm leading-relaxed text-primary">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.description}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{ticket.description}</ReactMarkdown>
           </div>
         </div>
       )}
@@ -258,7 +259,7 @@ export function TicketView({ ticket }: { ticket: KanbanTicket }) {
             Solution Approach
           </h4>
           <div className="markdown-body text-sm leading-relaxed text-primary">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{ticket.solutionApproach}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{ticket.solutionApproach}</ReactMarkdown>
           </div>
         </div>
       )}

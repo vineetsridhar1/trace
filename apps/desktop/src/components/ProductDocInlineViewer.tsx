@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FiFileText, FiCode, FiGitBranch } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS } from '@trace/shared-ui';
 import type { SessionRenderNode, SessionStatus } from '../types';
 import { AgentContent } from './tiling/PaneContent';
 import { TicketGraph } from './TicketGraph';
@@ -178,7 +179,7 @@ export function ProductDocInlineViewer({
             <div className="flex-1 overflow-y-auto bg-surface-deep px-6 py-4">
               {ticketsContent.trim() ? (
                 <div className="markdown-body text-sm text-primary leading-relaxed max-w-prose break-words overflow-hidden">
-                  <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>
+                  <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>
                     {`\`\`\`json\n${ticketsContent}\n\`\`\``}
                   </ReactMarkdown>
                 </div>
@@ -195,7 +196,7 @@ export function ProductDocInlineViewer({
             const content = activeTab === 'prd' ? prdContent : techContent;
             return content.trim() ? (
               <div className="markdown-body text-sm text-primary leading-relaxed max-w-prose break-words overflow-hidden">
-                <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>
+                <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>
                   {content}
                 </ReactMarkdown>
               </div>

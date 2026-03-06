@@ -19,6 +19,7 @@ import dagre from '@dagrejs/dagre';
 import { FiX } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS } from '@trace/shared-ui';
 
 interface Ticket {
   id: string;
@@ -182,7 +183,7 @@ export function TicketGraph({ tickets }: TicketGraphProps) {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <div className="markdown-body text-sm text-primary leading-relaxed break-words">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
                   {selectedTicket.body}
                 </ReactMarkdown>
               </div>

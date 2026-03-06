@@ -64,6 +64,7 @@ export {
   loadDiffRuntime,
 } from './utils';
 export type { RawPayloadAttachment } from './utils';
+export { MARKDOWN_COMPONENTS } from './utils/markdownComponents';
 
 // Components
 export { ThreadEvent } from './components/ThreadEvent';

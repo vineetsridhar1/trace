@@ -2,6 +2,7 @@ import { memo, useState, useCallback } from 'react';
 import { FiCheck, FiX, FiEdit2 } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS } from '../../utils/markdownComponents';
 import type { PlanReviewNode } from '../../types';
 import { formatTime } from '../../utils';
 
@@ -80,7 +81,7 @@ export const PlanReview = memo(function PlanReview({
 
         {node.planContent ? (
           <div className="markdown-body min-w-0 overflow-hidden text-sm text-primary">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{node.planContent}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{node.planContent}</ReactMarkdown>
           </div>
         ) : (
           <div className="text-sm text-muted">No plan content available.</div>

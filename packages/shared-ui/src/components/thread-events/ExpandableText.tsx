@@ -1,6 +1,7 @@
 import { memo, useRef, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS } from '../../utils/markdownComponents';
 
 export const ExpandableText = memo(function ExpandableText({
   text,
@@ -38,7 +39,7 @@ export const ExpandableText = memo(function ExpandableText({
         }}
       >
         <div ref={innerRef} className="markdown-body break-words text-sm text-primary">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{text}</ReactMarkdown>
         </div>
       </div>
       {needsClamp && (

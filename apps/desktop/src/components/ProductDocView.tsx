@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FiArrowLeft, FiFileText, FiCpu, FiSquare, FiCode, FiGitBranch, FiDownload } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS } from '@trace/shared-ui';
 import { AgentContent } from './tiling/PaneContent';
 import { ThreadInput } from './ThreadInput';
 import { AskUserQuestionBar } from './AskUserQuestionBar';
@@ -304,7 +305,7 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets,
             <div className="flex-1 overflow-y-auto bg-surface-deep px-6 py-4">
               {docContent.trim() ? (
                 <div className="markdown-body text-sm text-primary leading-relaxed max-w-prose break-words overflow-hidden">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
                     {isTickets ? `\`\`\`json\n${docContent}\n\`\`\`` : docContent}
                   </ReactMarkdown>
                 </div>

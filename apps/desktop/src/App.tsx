@@ -239,6 +239,7 @@ function AppContent() {
     }
   }, []);
 
+
   // ─── Detect available agents on mount ──────────────────────────────
   useEffect(() => {
     void (async () => {

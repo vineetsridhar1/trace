@@ -2,6 +2,7 @@ import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { FiCopy, FiCheck, FiSquare } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS } from '../../utils/markdownComponents';
 import type { ServerEvent, TokenUsageInfo } from '../../types';
 import { stripTraceInternal, formatDuration } from '../../utils';
 import { Tooltip } from '../Tooltip';
@@ -103,7 +104,7 @@ export const StopBubble = memo(function StopBubble({
       </div>
       <div className="activity-row-note">
         <div className="markdown-body break-words text-sm text-primary">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayMessage}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{displayMessage}</ReactMarkdown>
         </div>
       </div>
       <div className="mt-1.5 flex items-center gap-3">
