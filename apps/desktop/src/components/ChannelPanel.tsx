@@ -1,5 +1,5 @@
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiFileText, FiSettings } from 'react-icons/fi';
 import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
@@ -356,6 +356,17 @@ export function ChannelPanel({
             );
           })}
         </Reorder.Group>
+        <div className="flex items-center border-t border-edge px-3 py-2">
+          <Tooltip text="Instance settings" position="top">
+            <button
+              type="button"
+              onClick={() => useAppUIStore.getState().setShowInstanceSettings(true)}
+              className="rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary transition-colors"
+            >
+              <FiSettings className="h-3.5 w-3.5" />
+            </button>
+          </Tooltip>
+        </div>
         <SyncStatus />
       </div>
 

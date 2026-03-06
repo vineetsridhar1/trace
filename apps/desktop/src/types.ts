@@ -339,6 +339,14 @@ export interface TraceAPI {
 
   setInstanceAuth: (token: string, serverId: string) => Promise<void>;
   clearInstanceAuth: () => Promise<void>;
+
+  instanceGetId: () => Promise<string>;
+  instanceGetName: () => Promise<string>;
+  instanceSetName: (name: string) => Promise<{ success: boolean }>;
+  instanceSetPassword: (password: string | null) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
 }
 
 declare global {

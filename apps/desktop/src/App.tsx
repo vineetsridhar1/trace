@@ -39,6 +39,7 @@ import { CreateChannelModal } from "./components/CreateChannelModal";
 import { CreateServerModal } from "./components/CreateServerModal";
 import { ProductDocModal } from "./components/ProductDocModal";
 import { NewWorkspaceModal } from "./components/NewWorkspaceModal";
+import { InstanceSettingsModal } from "./components/InstanceSettingsModal";
 import { ProductDocView } from "./components/ProductDocView";
 import { AiChatPanel } from "./components/AiChatPanel";
 import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
@@ -167,6 +168,7 @@ function AppContent() {
   const showCreateServer = useAppUIStore((s) => s.showCreateServer);
   const showProductDocModal = useAppUIStore((s) => s.showProductDocModal);
   const showNewWorkspaceModal = useAppUIStore((s) => s.showNewWorkspaceModal);
+  const showInstanceSettings = useAppUIStore((s) => s.showInstanceSettings);
   const activeProductDocId = useAppUIStore((s) => s.activeProductDocId);
   const activeAiChatId = useAppUIStore((s) => s.activeAiChatId);
   const aiChats = useAppUIStore((s) => s.aiChats);
@@ -1275,6 +1277,12 @@ function AppContent() {
       )}
 
       {showNewWorkspaceModal && <NewWorkspaceModal />}
+
+      {showInstanceSettings && (
+        <InstanceSettingsModal
+          onClose={() => useAppUIStore.getState().setShowInstanceSettings(false)}
+        />
+      )}
 
       <ShortcutHelpDialog />
       <CommandPalette

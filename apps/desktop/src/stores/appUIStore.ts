@@ -75,7 +75,9 @@ interface AppUIState {
   showNewWorkspaceModal: boolean;
   pendingThreadOpen: { channelId: string; workspaceId: string } | null;
   mobileDrawerOpen: boolean;
+  showInstanceSettings: boolean;
 
+  setShowInstanceSettings: (show: boolean) => void;
   setShowNewWorkspaceModal: (show: boolean) => void;
   setMobileDrawerOpen: (open: boolean) => void;
   setMiddlePanelView: (view: MiddlePanelView) => void;
@@ -126,7 +128,9 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   showNewWorkspaceModal: false,
   pendingThreadOpen: null,
   mobileDrawerOpen: false,
+  showInstanceSettings: false,
 
+  setShowInstanceSettings: (show) => set({ showInstanceSettings: show }),
   setShowNewWorkspaceModal: (show) => set({ showNewWorkspaceModal: show }),
   setMobileDrawerOpen: (open) => set({ mobileDrawerOpen: open }),
   setMiddlePanelView: (view) => set({ middlePanelView: view }),
