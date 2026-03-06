@@ -27,12 +27,13 @@ interface WorkspaceItemProps {
   status: TicketStatus;
   preview: string | null;
   ticketTitle: string | null;
+  userName: string | null;
   isSelected: boolean;
   onSelect: (id: string) => void;
 }
 
 const WorkspaceItem = memo(
-  function WorkspaceItem({ id, status, preview, ticketTitle, isSelected, onSelect }: WorkspaceItemProps) {
+  function WorkspaceItem({ id, status, preview, ticketTitle, userName, isSelected, onSelect }: WorkspaceItemProps) {
     const dotColor = STATUS_DOT_COLOR[status] ?? STATUS_DOT_COLOR.pending;
     const displayText = ticketTitle || preview?.split("\n")[0] || "New Workspace";
 
@@ -46,8 +47,13 @@ const WorkspaceItem = memo(
             : "text-muted hover:bg-surface-elevated hover:text-primary"
         }`}
       >
-        <FiCircle className={`h-2.5 w-2.5 shrink-0 fill-current ${dotColor}`} />
-        <span className="truncate">{displayText}</span>
+        <FiCircle className={`mt-0.5 h-2.5 w-2.5 shrink-0 self-start fill-current ${dotColor}`} />
+        <div className="min-w-0 flex-1">
+          <span className="block truncate">{displayText}</span>
+          {userName && (
+            <span className="block truncate text-xs text-muted">{userName}</span>
+          )}
+        </div>
       </button>
     );
   },
@@ -55,6 +61,7 @@ const WorkspaceItem = memo(
     prev.status === next.status &&
     prev.preview === next.preview &&
     prev.ticketTitle === next.ticketTitle &&
+    prev.userName === next.userName &&
     prev.isSelected === next.isSelected,
 );
 
@@ -100,6 +107,7 @@ export function WebWorkspaceList({
           status: w.status,
           preview: w.preview,
           ticketTitle: w.ticketTitle,
+          userName: w.user?.name ?? null,
         })),
     [allWorkspaces, channelId],
   );
@@ -130,6 +138,7 @@ export function WebWorkspaceList({
               status={item.status}
               preview={item.preview}
               ticketTitle={item.ticketTitle}
+              userName={item.userName}
               isSelected={item.id === selectedWorkspaceId}
               onSelect={handleSelect}
             />
