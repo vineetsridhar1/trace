@@ -307,6 +307,7 @@ export async function appendPromptToWorkspaceSession(
       where: { id: workspace.id },
       data: {
         importance: 'important',
+        status: 'pending',
         ...(attachmentIds && attachmentIds.length > 0
           ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }
           : {}),
