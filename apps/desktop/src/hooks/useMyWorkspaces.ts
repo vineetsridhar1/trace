@@ -8,6 +8,7 @@ const GQL_MY_WORKSPACES = gql`
       channelId
       channelName
       preview
+      ticketTitle
       status
       importance
       createdAt

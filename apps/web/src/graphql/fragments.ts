@@ -7,6 +7,7 @@ export const WORKSPACE_FIELDS = gql`
     cliSessionId
     userId
     preview
+    ticketTitle
     importance
     status
     summary

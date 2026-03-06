@@ -71,6 +71,7 @@ export interface Workspace {
   cliSessionId: string;
   userId: string | null;
   preview: string | null;
+  ticketTitle: string | null;
   importance: string;
   status: TicketStatus;
   summary: string | null;

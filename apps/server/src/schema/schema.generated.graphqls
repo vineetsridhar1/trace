@@ -412,6 +412,7 @@ type Workspace {
   sessionCount: Int!
   status: String!
   summary: String
+  ticketTitle: String
   user: WorkspaceUser
   userId: String
 }

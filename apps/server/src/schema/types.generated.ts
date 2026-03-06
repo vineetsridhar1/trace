@@ -891,6 +891,7 @@ export type Workspace = {
   sessionCount: Scalars['Int']['output'];
   status: Scalars['String']['output'];
   summary?: Maybe<Scalars['String']['output']>;
+  ticketTitle?: Maybe<Scalars['String']['output']>;
   user?: Maybe<WorkspaceUser>;
   userId?: Maybe<Scalars['String']['output']>;
 };
@@ -1530,6 +1531,7 @@ export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversPa
   sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   summary?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  ticketTitle?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   user?: Resolver<Maybe<ResolversTypes['WorkspaceUser']>, ParentType, ContextType>;
   userId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };

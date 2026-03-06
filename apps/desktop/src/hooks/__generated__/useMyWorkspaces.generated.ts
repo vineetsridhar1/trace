@@ -9,7 +9,7 @@ export type MyWorkspacesQueryVariables = Types.Exact<{
 }>;
 
 
-export type MyWorkspacesQuery = { __typename?: 'Query', myWorkspaces: Array<{ __typename?: 'Workspace', id: string, channelId: string, channelName?: string | null, preview?: string | null, status: string, importance: string, createdAt: string }> };
+export type MyWorkspacesQuery = { __typename?: 'Query', myWorkspaces: Array<{ __typename?: 'Workspace', id: string, channelId: string, channelName?: string | null, preview?: string | null, ticketTitle?: string | null, status: string, importance: string, createdAt: string }> };
 
 
 export const MyWorkspacesDocument = gql`
@@ -19,6 +19,7 @@ export const MyWorkspacesDocument = gql`
     channelId
     channelName
     preview
+    ticketTitle
     status
     importance
     createdAt

@@ -137,7 +137,7 @@ function WorkspacePageInner({
           {selectedWorkspaceId && selectedWorkspace ? (
             <>
               <WebThreadHeader
-                title={selectedWorkspace.preview?.split('\n')[0] || 'New Workspace'}
+                title={selectedWorkspace.ticketTitle || selectedWorkspace.preview?.split('\n')[0] || 'New Workspace'}
                 status={selectedWorkspace.status}
               />
               <WebThreadPanel

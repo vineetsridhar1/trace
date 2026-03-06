@@ -42,6 +42,7 @@ type Workspace {
   preview: String
   importance: String!
   status: String!
+  ticketTitle: String
   summary: String
   branch: String
   agentSessionId: String

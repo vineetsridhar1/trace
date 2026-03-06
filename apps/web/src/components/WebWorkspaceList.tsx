@@ -26,14 +26,15 @@ interface WorkspaceItemProps {
   id: string;
   status: TicketStatus;
   preview: string | null;
+  ticketTitle: string | null;
   isSelected: boolean;
   onSelect: (id: string) => void;
 }
 
 const WorkspaceItem = memo(
-  function WorkspaceItem({ id, status, preview, isSelected, onSelect }: WorkspaceItemProps) {
+  function WorkspaceItem({ id, status, preview, ticketTitle, isSelected, onSelect }: WorkspaceItemProps) {
     const dotColor = STATUS_DOT_COLOR[status] ?? STATUS_DOT_COLOR.pending;
-    const displayText = preview?.split("\n")[0] || "New Workspace";
+    const displayText = ticketTitle || preview?.split("\n")[0] || "New Workspace";
 
     return (
       <button
@@ -53,6 +54,7 @@ const WorkspaceItem = memo(
   (prev, next) =>
     prev.status === next.status &&
     prev.preview === next.preview &&
+    prev.ticketTitle === next.ticketTitle &&
     prev.isSelected === next.isSelected,
 );
 
@@ -97,6 +99,7 @@ export function WebWorkspaceList({
           id: w.id,
           status: w.status,
           preview: w.preview,
+          ticketTitle: w.ticketTitle,
         })),
     [allWorkspaces, channelId],
   );
@@ -126,6 +129,7 @@ export function WebWorkspaceList({
               id={item.id}
               status={item.status}
               preview={item.preview}
+              ticketTitle={item.ticketTitle}
               isSelected={item.id === selectedWorkspaceId}
               onSelect={handleSelect}
             />

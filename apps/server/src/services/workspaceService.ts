@@ -142,6 +142,7 @@ export async function getWorkspacesByUser(
       user: { select: { id: true, name: true, avatarUrl: true } },
       _count: { select: { sessions: true } },
       channel: { select: { id: true, name: true } },
+      ticket: { select: { title: true } },
     },
   });
 }

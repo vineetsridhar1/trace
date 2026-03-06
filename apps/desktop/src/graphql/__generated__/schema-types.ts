@@ -151,6 +151,18 @@ export type CreateWorkspacePayload = {
   workspace: Workspace;
 };
 
+export type ElectronInstance = {
+  __typename?: 'ElectronInstance';
+  createdAt: Scalars['DateTime']['output'];
+  hasPassword: Scalars['Boolean']['output'];
+  id: Scalars['ID']['output'];
+  isOnline: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  owner: InstanceOwner;
+  serverId: Scalars['String']['output'];
+  userId: Scalars['String']['output'];
+};
+
 export type Event = {
   __typename?: 'Event';
   cliSessionId: Scalars['String']['output'];
@@ -193,6 +205,26 @@ export type ImportedTicketResult = {
   workspaceId: Scalars['ID']['output'];
 };
 
+export type InstanceConnection = {
+  __typename?: 'InstanceConnection';
+  channels: Array<Channel>;
+  instanceId: Scalars['String']['output'];
+  serverId: Scalars['String']['output'];
+};
+
+export type InstanceOwner = {
+  __typename?: 'InstanceOwner';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+};
+
+export type InstanceStatusPayload = {
+  __typename?: 'InstanceStatusPayload';
+  instanceId: Scalars['String']['output'];
+  isOnline: Scalars['Boolean']['output'];
+};
+
 export type KanbanColumn = {
   __typename?: 'KanbanColumn';
   channelId: Scalars['String']['output'];
@@ -207,6 +239,7 @@ export type KanbanColumn = {
 export type Mutation = {
   __typename?: 'Mutation';
   appendPrompt: CreateWorkspacePayload;
+  connectToInstance: InstanceConnection;
   createAiChat: AiChat;
   createChannel: Channel;
   createColumn: KanbanColumn;
@@ -220,11 +253,14 @@ export type Mutation = {
   handoffWorkspace: Workspace;
   importTicketsToProject: Array<ImportedTicketResult>;
   moveTicket: Ticket;
+  registerInstance: ElectronInstance;
+  relayAction: RelayActionResult;
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   reportPresence: Scalars['Boolean']['output'];
   sendAiChatMessage: AiChatMessage;
   sendChannelMessage: ChannelMessage;
+  setInstancePassword: Scalars['Boolean']['output'];
   setTicketDependencies: Workspace;
   setWorkspacePrUrl: Scalars['Boolean']['output'];
   updateChannel: Channel;
@@ -244,6 +280,12 @@ export type MutationAppendPromptArgs = {
   sessionId?: InputMaybe<Scalars['ID']['input']>;
   text: Scalars['String']['input'];
   workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationConnectToInstanceArgs = {
+  instanceId: Scalars['ID']['input'];
+  password?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -338,6 +380,19 @@ export type MutationMoveTicketArgs = {
 };
 
 
+export type MutationRegisterInstanceArgs = {
+  name: Scalars['String']['input'];
+  serverId: Scalars['ID']['input'];
+};
+
+
+export type MutationRelayActionArgs = {
+  action: Scalars['String']['input'];
+  instanceId: Scalars['ID']['input'];
+  params: Scalars['JSON']['input'];
+};
+
+
 export type MutationRemoveTicketDependencyArgs = {
   channelId: Scalars['ID']['input'];
   dependsOnWorkspaceId: Scalars['ID']['input'];
@@ -366,6 +421,12 @@ export type MutationSendAiChatMessageArgs = {
 export type MutationSendChannelMessageArgs = {
   channelId: Scalars['ID']['input'];
   content: Scalars['String']['input'];
+};
+
+
+export type MutationSetInstancePasswordArgs = {
+  instanceId: Scalars['ID']['input'];
+  password?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -473,7 +534,9 @@ export type Query = {
   checkPRStatuses: Array<PrStatus>;
   event?: Maybe<Event>;
   generateBranchName?: Maybe<Scalars['String']['output']>;
+  instance?: Maybe<ElectronInstance>;
   me?: Maybe<AuthUser>;
+  myInstances: Array<ElectronInstance>;
   myWorkspaces: Array<Workspace>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
@@ -537,6 +600,11 @@ export type QueryGenerateBranchNameArgs = {
 };
 
 
+export type QueryInstanceArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type QueryMyWorkspacesArgs = {
   excludeStatuses?: InputMaybe<Array<Scalars['String']['input']>>;
   serverId: Scalars['ID']['input'];
@@ -595,6 +663,13 @@ export type QueryWorkspacesArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type RelayActionResult = {
+  __typename?: 'RelayActionResult';
+  data?: Maybe<Scalars['JSON']['output']>;
+  error?: Maybe<Scalars['String']['output']>;
+  success: Scalars['Boolean']['output'];
+};
+
 export type Server = {
   __typename?: 'Server';
   avatarUrl?: Maybe<Scalars['String']['output']>;
@@ -627,6 +702,7 @@ export type Subscription = {
   channelChangedInServer: ChannelChangeEvent;
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
+  instanceStatusChanged: InstanceStatusPayload;
   presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
@@ -654,6 +730,11 @@ export type SubscriptionChannelMessageCreatedArgs = {
 
 
 export type SubscriptionChannelMessageCreatedInServerArgs = {
+  serverId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionInstanceStatusChangedArgs = {
   serverId: Scalars['ID']['input'];
 };
 
@@ -795,6 +876,7 @@ export type Workspace = {
   sessionCount: Scalars['Int']['output'];
   status: Scalars['String']['output'];
   summary?: Maybe<Scalars['String']['output']>;
+  ticketTitle?: Maybe<Scalars['String']['output']>;
   user?: Maybe<WorkspaceUser>;
   userId?: Maybe<Scalars['String']['output']>;
 };

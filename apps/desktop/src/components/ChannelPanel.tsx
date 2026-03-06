@@ -50,7 +50,7 @@ function MyWorkspacesContent({ activeServerId, onOpenWorkspaceLink }: { activeSe
               className="channel-item flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors text-primary"
             >
               <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dotColor.replace('text-', 'bg-')}`} />
-              <span className="truncate">{ws.preview || 'New Workspace'}</span>
+              <span className="truncate">{ws.ticketTitle || ws.preview || 'New Workspace'}</span>
               {ws.channelName && (
                 <span className="ml-auto shrink-0 text-[10px] text-muted">#{ws.channelName}</span>
               )}
