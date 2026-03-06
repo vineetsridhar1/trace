@@ -7,6 +7,26 @@ import { useDiffSyntaxTokens } from '../utils/shikiDiffTokens';
 
 const MAX_FILES_SHOWN = 20;
 
+function countDiffFiles(diffText: string | undefined): number {
+  if (!diffText?.trim()) return 0;
+  return (diffText.match(/^diff --git /gm) || []).length;
+}
+
+function fileStatusBadge(type: string | undefined) {
+  switch (type) {
+    case 'add':
+      return <span className="rounded px-1 py-0.5 text-[9px] font-medium bg-green-500/15 text-green-400">New</span>;
+    case 'delete':
+      return <span className="rounded px-1 py-0.5 text-[9px] font-medium bg-red-500/15 text-red-400">Deleted</span>;
+    case 'rename':
+      return <span className="rounded px-1 py-0.5 text-[9px] font-medium bg-blue-500/15 text-blue-400">Renamed</span>;
+    case 'modify':
+      return <span className="rounded px-1 py-0.5 text-[9px] font-medium bg-yellow-500/15 text-yellow-400">Modified</span>;
+    default:
+      return null;
+  }
+}
+
 interface WorktreeChangesProps {
   workspaceId: string | null;
   baseBranch?: string;
@@ -55,9 +75,13 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
   const hasBranchDiff = Boolean(diffData?.branchDiff?.trim());
   const hasUncommitted = Boolean(diffData?.uncommittedDiff?.trim() || diffData?.stagedDiff?.trim());
 
+  const activeFileCount = activeTab === 'branch'
+    ? countDiffFiles(diffData?.branchDiff)
+    : countDiffFiles(diffData?.uncommittedDiff) + countDiffFiles(diffData?.stagedDiff);
+
   return (
     <div className="edit-diff-view flex h-full w-full flex-col overflow-hidden">
-      <ChangesHeader loading={loading} onRefresh={refresh} statusText={diffData?.status} />
+      <ChangesHeader loading={loading} onRefresh={refresh} fileCount={activeFileCount} />
       <div className="flex items-center gap-1 border-b border-edge px-3 py-1">
         <button
           type="button"
@@ -93,7 +117,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
               <DiffSection title={`Changes vs ${baseBranch}`} diffText={diffData!.branchDiff!} runtime={runtime} focusedFilePath={focusedFilePath} />
             ) : (
               diffData && !loading && (
-                <p className="text-xs text-muted">No changes vs {baseBranch}.</p>
+                <p className="text-xs text-muted">No changes compared to {baseBranch}.</p>
               )
             )}
           </>
@@ -112,7 +136,7 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
               </>
             ) : (
               diffData && !loading && (
-                <p className="text-xs text-muted">No working or staged changes.</p>
+                <p className="text-xs text-muted">No uncommitted or staged changes.</p>
               )
             )}
           </>
@@ -125,15 +149,12 @@ export function WorktreeChanges({ workspaceId, baseBranch = 'main' }: WorktreeCh
 function ChangesHeader({
   loading,
   onRefresh,
-  statusText,
+  fileCount,
 }: {
   loading: boolean;
   onRefresh: () => void;
-  statusText?: string;
+  fileCount: number;
 }) {
-  const fileCount = statusText
-    ? statusText.trim().split('\n').filter(Boolean).length
-    : 0;
 
   return (
     <div className="flex items-center justify-between border-b border-edge px-3 py-1.5">
@@ -198,12 +219,11 @@ function DiffSection({
 
   return (
     <div className="mb-3">
-      <h5 className="mb-1 text-[11px] font-semibold text-primary">{title}</h5>
+      <h5 className="mb-1 text-[11px] font-semibold text-primary">
+        {title}{totalFiles > 0 && <span className="ml-1 font-normal text-muted">({totalFiles} file{totalFiles !== 1 ? 's' : ''})</span>}
+      </h5>
       <div className="rounded-md border border-edge-hover overflow-hidden">
-        {visibleFiles.map((file, i) => {
-          const hunks = Array.isArray(file?.hunks) ? file.hunks : [];
-          if (hunks.length === 0) return null;
-          return (
+        {visibleFiles.map((file, i) => (
             <DiffFileAccordion
               key={`${file.newPath ?? file.oldPath ?? i}`}
               file={file}
@@ -211,8 +231,7 @@ function DiffSection({
               isLast={i === visibleFiles.length - 1}
               focusedFilePath={focusedFilePath}
             />
-          );
-        })}
+        ))}
       </div>
       {totalFiles > MAX_FILES_SHOWN && (
         <p className="mt-1 text-[10px] text-muted">
@@ -289,6 +308,7 @@ function DiffFileAccordion({
           <span className="text-muted">{dirPath}</span>
           <span className="text-primary">{fileName}</span>
         </span>
+        {fileStatusBadge(file?.type)}
         <span className="flex shrink-0 items-center gap-1.5 text-[10px]">
           {additions > 0 && <span className="text-green-400">+{additions}</span>}
           {deletions > 0 && <span className="text-red-400">-{deletions}</span>}
@@ -299,13 +319,21 @@ function DiffFileAccordion({
         style={{ maxHeight: expanded ? contentHeight : 0 }}
       >
         <div ref={contentRef} className="edit-diff-body-fullscreen bg-surface-deep">
-          <Diff viewType="unified" diffType={file?.type ?? 'modify'} hunks={hunks} tokens={tokens} renderToken={renderToken}>
-            {(renderedHunks: ParsedHunk[]) =>
-              renderedHunks.map((hunk, idx) => (
-                <Hunk key={hunk?.content ?? idx} hunk={hunk} />
-              ))
-            }
-          </Diff>
+          {hunks.length > 0 ? (
+            <Diff viewType="unified" diffType={file?.type ?? 'modify'} hunks={hunks} tokens={tokens} renderToken={renderToken}>
+              {(renderedHunks: ParsedHunk[]) =>
+                renderedHunks.map((hunk, idx) => (
+                  <Hunk key={hunk?.content ?? idx} hunk={hunk} />
+                ))
+              }
+            </Diff>
+          ) : (
+            <p className="px-3 py-2 text-[11px] text-muted">
+              {file?.type === 'rename' ? `Renamed from ${file.oldPath ?? 'unknown'}` :
+               file?.type === 'add' ? 'Empty file' :
+               'No content changes'}
+            </p>
+          )}
         </div>
       </div>
     </div>
