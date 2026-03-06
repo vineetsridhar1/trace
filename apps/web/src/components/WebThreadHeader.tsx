@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { FiCircle } from 'react-icons/fi';
+import { FiChevronLeft, FiCircle } from 'react-icons/fi';
 import type { TicketStatus } from '../types';
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -29,21 +29,32 @@ const STATUS_DOT_COLOR: Record<TicketStatus, string> = {
 interface WebThreadHeaderProps {
   title: string;
   status: TicketStatus;
+  onBack?: () => void;
 }
 
 export const WebThreadHeader = memo(function WebThreadHeader({
   title,
   status,
+  onBack,
 }: WebThreadHeaderProps) {
   const dotColor = STATUS_DOT_COLOR[status] ?? STATUS_DOT_COLOR.pending;
   const label = STATUS_LABEL[status] ?? status;
 
   return (
-    <div className="flex items-center justify-between border-b border-edge px-4 py-3">
-      <span className="truncate text-sm font-medium text-heading">
+    <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="md:hidden -ml-1 p-1.5 rounded-md text-muted hover:bg-surface-elevated hover:text-primary"
+          aria-label="Back to workspaces"
+        >
+          <FiChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-heading">
         {title}
       </span>
-      <span className="flex items-center gap-1.5 rounded-md border border-edge px-2 py-0.5 text-[11px] font-medium text-muted">
+      <span className="shrink-0 flex items-center gap-1.5 rounded-md border border-edge px-2 py-0.5 text-[11px] font-medium text-muted">
         <FiCircle className={`h-2 w-2 fill-current ${dotColor}`} />
         {label}
       </span>

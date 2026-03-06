@@ -139,7 +139,7 @@ export function WebWorkspaceList({
 
       {showNewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-96 rounded-lg border border-edge bg-surface-elevated p-4 shadow-xl">
+          <div className="w-full max-w-96 mx-4 rounded-lg border border-edge bg-surface-elevated p-4 shadow-xl">
             <h3 className="text-sm font-medium text-primary">
               New Workspace
             </h3>

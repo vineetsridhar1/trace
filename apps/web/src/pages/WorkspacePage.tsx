@@ -59,7 +59,7 @@ interface WorkspacePageInnerProps {
   selectedWorkspaceId: string | null;
   selectedWorkspace: ReturnType<typeof useWorkspaceStore.getState>['workspaces'][number] | null;
   isOffline: boolean;
-  onSelectWorkspace: (id: string) => void;
+  onSelectWorkspace: (id: string | null) => void;
 }
 
 function WorkspacePageInner({
@@ -93,6 +93,8 @@ function WorkspacePageInner({
     void refreshWorkspaces(channelId);
   }, [channelId, refreshWorkspaces]);
 
+  const handleBack = useCallback(() => onSelectWorkspace(null), [onSelectWorkspace]);
+
   // Load thread when workspace selected
   const handleSelectWorkspace = useCallback(
     (workspaceId: string) => {
@@ -121,7 +123,7 @@ function WorkspacePageInner({
       <ConnectionStatusBar />
       <div className="flex min-h-0 flex-1">
         {/* Sidebar */}
-        <div className="relative flex w-64 shrink-0 flex-col border-r border-edge">
+        <div className={`relative flex-col border-r border-edge md:flex md:w-64 md:shrink-0 ${selectedWorkspaceId ? 'hidden' : 'flex w-full'}`}>
           {isOffline && (
             <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-3 py-1.5 text-xs text-yellow-400">
               Instance offline — read-only view
@@ -136,12 +138,13 @@ function WorkspacePageInner({
         </div>
 
         {/* Thread panel */}
-        <div className="flex min-w-0 flex-1 flex-col bg-surface-deep">
+        <div className={`min-w-0 flex-1 flex-col bg-surface-deep md:flex ${selectedWorkspaceId ? 'flex' : 'hidden'}`}>
           {selectedWorkspaceId && selectedWorkspace ? (
             <>
               <WebThreadHeader
                 title={selectedWorkspace.ticketTitle || selectedWorkspace.preview?.split('\n')[0] || 'New Workspace'}
                 status={selectedWorkspace.status}
+                onBack={handleBack}
               />
               <WebThreadPanel
                 workspaceId={selectedWorkspaceId}
