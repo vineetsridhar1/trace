@@ -38,6 +38,10 @@ export function setAuthToken(token: string | null, serverId?: string | null): vo
   if (serverId !== undefined) storedServerId = serverId;
 }
 
+export function getAuthToken(): string | null {
+  return storedAuthToken;
+}
+
 interface InstanceConfig {
   instanceId: string;
   instanceName?: string;

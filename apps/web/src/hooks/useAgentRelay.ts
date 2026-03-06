@@ -8,6 +8,7 @@ export interface SpawnAgentParams {
   model?: string;
   effort?: string;
   planMode?: boolean;
+  persistPrompt?: boolean;
 }
 
 export interface AgentRelayActions {
@@ -34,6 +35,7 @@ export function useAgentRelay(): AgentRelayActions {
         model: params.model,
         effort: params.effort,
         planMode: params.planMode,
+        persistPrompt: params.persistPrompt,
       });
       return { success: result.success, error: result.error ?? undefined };
     },

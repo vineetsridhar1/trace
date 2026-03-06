@@ -3,7 +3,6 @@ import { gql } from "@apollo/client";
 import { useAgentRelay } from "./useAgentRelay";
 import {
   useCreateWorkspaceMutation,
-  useAppendPromptMutation,
   useUpdateWorkspaceStatusMutation,
 } from "./__generated__/useWorkspaceActions.generated";
 
@@ -194,7 +193,6 @@ export interface WorkspaceActions {
 export function useWorkspaceActions(): WorkspaceActions {
   const { spawnAgent, stopAgent } = useAgentRelay();
   const [executeCreateWorkspace] = useCreateWorkspaceMutation();
-  const [executeAppendPrompt] = useAppendPromptMutation();
   const [executeUpdateStatus] = useUpdateWorkspaceStatusMutation();
 
   const createWorkspace = useCallback(
@@ -281,18 +279,6 @@ export function useWorkspaceActions(): WorkspaceActions {
       planMode?: boolean,
     ): Promise<{ success: boolean; error?: string }> => {
       try {
-        const { data } = await executeAppendPrompt({
-          variables: {
-            channelId,
-            workspaceId,
-            text: prompt,
-          },
-        });
-
-        if (!data?.appendPrompt) {
-          return { success: false, error: "Failed to append prompt" };
-        }
-
         const result = await spawnAgent({
           workspaceId,
           prompt,
@@ -300,6 +286,7 @@ export function useWorkspaceActions(): WorkspaceActions {
           model,
           effort,
           planMode,
+          persistPrompt: true,
         });
 
         return { success: result.success, error: result.error };
@@ -309,7 +296,7 @@ export function useWorkspaceActions(): WorkspaceActions {
         return { success: false, error: message };
       }
     },
-    [executeAppendPrompt, spawnAgent],
+    [spawnAgent],
   );
 
   const switchMode = useCallback(
