@@ -194,6 +194,10 @@ export const useAgentRunStore = create<AgentRunState>()((set, get) => ({
   isHandoffPickedUp: (workspaceId) => get().handoffPickedUpIds.has(workspaceId),
 }));
 
+export function getModels() {
+  return CLAUDE_AGENT.capabilities.models;
+}
+
 export function getEffortOptions(model: string): EffortOption[] {
   return CLAUDE_AGENT.capabilities.models.find((m) => m.value === model)?.effortOptions ?? [];
 }

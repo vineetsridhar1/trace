@@ -4,6 +4,7 @@ import { ConnectionStatusBar } from '../components/ConnectionStatusBar';
 import { WebWorkspaceList } from '../components/WebWorkspaceList';
 import { WebThreadPanel } from '../components/WebThreadPanel';
 import { WebThreadInput } from '../components/WebThreadInput';
+import { WebRunButtons } from '../components/WebRunButtons';
 import { WebThreadHeader } from '../components/WebThreadHeader';
 import { WebChannelSelector } from '../components/WebChannelSelector';
 import { useChannelContext } from '../context/ChannelContext';
@@ -12,6 +13,7 @@ import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useWorkspaceSync } from '../hooks/useWorkspaceSync';
 import { useChannelSubscriptions } from '../hooks/useChannelSubscriptions';
 import { useThreadSync } from '../hooks/useThreadSync';
+import { useWorkspaceActions } from '../hooks/useWorkspaceActions';
 
 export function WorkspacePage() {
   const { instanceId } = useParams<{ instanceId: string }>();
@@ -69,6 +71,7 @@ function WorkspacePageInner({
 }: WorkspacePageInnerProps) {
   // Data hooks
   const { refreshWorkspaces } = useWorkspaceSync();
+  const { startWorkspace } = useWorkspaceActions();
 
   const getActiveChannelId = useCallback(() => channelId, [channelId]);
   const { openThreadPanel } = useThreadSync(getActiveChannelId);
@@ -144,11 +147,30 @@ function WorkspacePageInner({
                 workspaceId={selectedWorkspaceId}
                 channelId={channelId}
               />
-              <WebThreadInput
-                workspaceId={selectedWorkspaceId}
-                channelId={channelId}
-                disabled={isOffline}
-              />
+              {selectedWorkspace.status === 'pending' || selectedWorkspace.status === 'handed_off' ? (
+                <WebRunButtons
+                  initialPrompt={selectedWorkspace.preview ?? ''}
+                  workspaceId={selectedWorkspaceId}
+                  channelId={channelId}
+                  disabled={isOffline}
+                  onRun={async ({ prompt, model, effort, planMode }) => {
+                    await startWorkspace({
+                      workspaceId: selectedWorkspaceId,
+                      prompt,
+                      channelId: channelId!,
+                      model,
+                      effort,
+                      planMode,
+                    });
+                  }}
+                />
+              ) : (
+                <WebThreadInput
+                  workspaceId={selectedWorkspaceId}
+                  channelId={channelId}
+                  disabled={isOffline}
+                />
+              )}
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center text-muted">
