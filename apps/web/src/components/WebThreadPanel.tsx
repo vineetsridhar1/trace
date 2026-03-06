@@ -2,11 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AskUserQuestionNode,
   PlanReviewNode,
-  SessionRenderNode,
 } from '../types';
 import { useThreadStore } from '../stores/threadStore';
-import { useAgentRunStore } from '../stores/agentRunStore';
-import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useAgentRelay } from '../hooks/useAgentRelay';
 import {
   buildSessionNodes,
   stripTraceInternal,
@@ -18,7 +16,7 @@ import {
   AskUserQuestionInline,
   AssistantTextRow,
 } from '@trace/shared-ui';
-import type { PlanReviewActions, AskUserQuestionActions } from '@trace/shared-ui';
+import type { PlanReviewActions, PlanResponseMode, AskUserQuestionActions } from '@trace/shared-ui';
 import { FiEdit3 } from 'react-icons/fi';
 
 const NEAR_BOTTOM_THRESHOLD_PX = 100;
@@ -28,7 +26,7 @@ interface WebThreadPanelProps {
   channelId: string;
 }
 
-export function WebThreadPanel({ workspaceId }: WebThreadPanelProps) {
+export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) {
   // ─── Thread store state ─────────────────────────────────────────
   const sessions = useThreadStore((s) => s.sessions);
   const sessionEvents = useThreadStore((s) => s.sessionEvents);
@@ -41,22 +39,29 @@ export function WebThreadPanel({ workspaceId }: WebThreadPanelProps) {
   const toggleTurnGroup = useThreadStore((s) => s.toggleTurnGroup);
   const tokenUsage = useThreadStore((s) => s.tokenUsage);
 
-  const workspace = useWorkspaceStore((s) =>
-    s.workspaces.find((w) => w.id === workspaceId),
-  );
-  const isAgentRunning =
-    workspace?.status === 'in_progress' || workspace?.status === 'needs_input';
+  const { spawnAgent } = useAgentRelay();
 
   // ─── Agent run actions for interactive plan/question ────────────
   const planActions = useMemo((): PlanReviewActions => ({
-    sendPlanResponse: (...args) =>
-      useAgentRunStore.getState().workspaceActions.sendPlanResponse(...args),
-  }), []);
+    sendPlanResponse: async (text: string, mode: PlanResponseMode, planContent?: string, planFilePath?: string) => {
+      if (mode === 'clear-context') {
+        const prompt = planFilePath
+          ? `Implement the following approved plan. The plan file is at ${planFilePath}.\n\n${planContent ?? text}`
+          : `Implement the following approved plan:\n\n${planContent ?? text}`;
+        await spawnAgent({ workspaceId, prompt, channelId });
+      } else if (mode === 'keep-context') {
+        await spawnAgent({ workspaceId, prompt: text, channelId });
+      } else if (mode === 'revise') {
+        await spawnAgent({ workspaceId, prompt: text, channelId, planMode: true });
+      }
+    },
+  }), [spawnAgent, workspaceId, channelId]);
 
   const questionActions = useMemo((): AskUserQuestionActions => ({
-    sendThreadMessage: (text: string) =>
-      useAgentRunStore.getState().workspaceActions.sendThreadMessage(text),
-  }), []);
+    sendThreadMessage: async (text: string) => {
+      await spawnAgent({ workspaceId, prompt: text, channelId });
+    },
+  }), [spawnAgent, workspaceId, channelId]);
 
   // ─── Session nodes (memoized on sessions + events) ─────────────
   const sessionNodes = useMemo(
@@ -150,11 +155,10 @@ export function WebThreadPanel({ workspaceId }: WebThreadPanelProps) {
   }, [sessionNodes]);
 
   const activePlanNode = useMemo((): PlanReviewNode | null => {
-    if (isAgentRunning) return null;
     const last = sessionNodes[sessionNodes.length - 1];
     if (last?.kind === 'plan-review') return last;
     return null;
-  }, [sessionNodes, isAgentRunning]);
+  }, [sessionNodes]);
 
   // ─── Loading state ─────────────────────────────────────────────
   if (sessionStatus === 'loading') {
