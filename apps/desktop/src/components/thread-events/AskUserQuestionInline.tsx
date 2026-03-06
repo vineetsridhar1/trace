@@ -11,7 +11,7 @@ export const AskUserQuestionInline = memo(function AskUserQuestionInline({
 
   return (
     <div className="px-4 py-2">
-      <div className="rounded-lg border border-dashed border-accent/30 bg-accent/5 p-4">
+      <div className="accent-dashed-container p-4">
         <div className="mb-2 flex items-center gap-2">
           <span className="text-xs font-semibold text-accent-light">Question</span>
           <span className="text-xs text-muted">{time}</span>

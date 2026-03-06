@@ -350,6 +350,13 @@
   border-bottom-right-radius: 0.125rem;
 }
 
+/* Accent dashed container (questions, plan review) — explicit colors to avoid Tailwind v4 oklch opacity issues */
+.accent-dashed-container {
+  border: 1px dashed color-mix(in srgb, var(--th-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--th-accent) 5%, transparent);
+  border-radius: 0.5rem;
+}
+
 .jump-latest-chip {
   position: absolute;
   right: 14px;
