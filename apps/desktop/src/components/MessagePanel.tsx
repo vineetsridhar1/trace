@@ -282,9 +282,15 @@ export function MessagePanel({
     return map;
   }, [kanbanColumns]);
 
+  const documentWorkspaces = useMemo(
+    () => workspaces.filter((ws) => ws.isProductDoc),
+    [workspaces],
+  );
+
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
     for (const ws of workspaces) {
+      if (ws.isProductDoc) continue; // product docs go in the Documents tab
       let status = (ws.status ?? "pending") as TicketStatus;
       // "completed" is a visual sub-state of "in_progress" — group them together
       if (status === "completed") status = "in_progress";
@@ -738,6 +744,40 @@ export function MessagePanel({
           workspaces={workspaces}
           pullingPRNumbers={pullingPRNumbers ?? new Set()}
         />
+      ) : middlePanelView === "documents" ? (
+        <div className="flex min-h-0 flex-1">
+          {!(isFullscreen && selectedWorkspaceId) && (
+            <div
+              className="flex min-h-0 flex-1 flex-col"
+              style={{ minWidth: 200 }}
+            >
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2">
+                {workspacesLoading && documentWorkspaces.length === 0 ? (
+                  <WorkspaceListSkeleton />
+                ) : documentWorkspaces.length === 0 ? (
+                  <div className="flex flex-1 items-center justify-center text-sm text-muted">
+                    No documents yet
+                  </div>
+                ) : (
+                  documentWorkspaces.map((workspace) => (
+                    <MessageItem
+                      key={workspace.id}
+                      workspace={workspace}
+                      ticket={ticketByWorkspaceId.get(workspace.id) ?? null}
+                      isSelected={workspace.id === selectedWorkspaceId}
+                      needsAttention={attentionWorkspaceIds.has(workspace.id)}
+                      onOpenWorkspace={onOpenWorkspace}
+                      onDeleteWorkspace={onDeleteWorkspace}
+                      hasRunningProcess={workspacesWithRunningProcesses?.has(workspace.id)}
+                      activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+          <ThreadPanel />
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1">
           {!(isFullscreen && selectedWorkspaceId) && (

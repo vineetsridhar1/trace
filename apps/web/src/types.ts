@@ -19,6 +19,7 @@ export type MiddlePanelView =
   | "chat"
   | "board"
   | "workspaces"
+  | "documents"
   | "projects"
   | "pull-requests";
 

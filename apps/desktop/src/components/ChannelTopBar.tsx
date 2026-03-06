@@ -201,6 +201,19 @@ export function ChannelTopBar({
               Workspaces
             </button>
           )}
+          {showWorkspaces && (
+            <button
+              type="button"
+              onClick={() => onSetView('documents')}
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
+                middlePanelView === 'documents'
+                  ? 'bg-accent/20 text-accent-light'
+                  : 'btn-ghost text-muted hover:text-primary'
+              }`}
+            >
+              Docs
+            </button>
+          )}
           {showPRs && (
             <button
               type="button"

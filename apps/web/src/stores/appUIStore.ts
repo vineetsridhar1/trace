@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { MiddlePanelView, DragTarget, ChannelType, AiChat, ProductDocMode } from '../types';
 
 const CHANNEL_VIEW_MAP_KEY = 'trace:channelViewMap';
-const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'board', 'projects'];
+const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'documents', 'board', 'projects'];
 
 function loadChannelViewMap(): Record<string, MiddlePanelView> {
   try {
@@ -40,6 +40,7 @@ export function isViewValidForChannel(
   if (view === 'board') return true;
   if (view === 'projects') return channelType === 'team';
   if (view === 'workspaces') return workspacesEnabled;
+  if (view === 'documents') return workspacesEnabled;
   return false;
 }
 
