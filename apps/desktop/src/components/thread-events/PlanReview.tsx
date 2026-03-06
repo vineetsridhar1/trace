@@ -20,7 +20,7 @@ export const PlanReview = memo(function PlanReview({
         </div>
 
         {node.planContent ? (
-          <div className="markdown-body text-sm text-primary">
+          <div className="markdown-body min-w-0 overflow-hidden text-sm text-primary">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{node.planContent}</ReactMarkdown>
           </div>
         ) : (

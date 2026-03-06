@@ -303,7 +303,7 @@ export function WebThreadPanel({ workspaceId }: WebThreadPanelProps) {
 
       {/* Pinned interactive bars */}
       {activePlanNode && (
-        <div className="border-t border-edge">
+        <div className="border-t border-edge max-h-[50vh] overflow-y-auto">
           <PlanReview node={activePlanNode} actions={planActions} />
         </div>
       )}
