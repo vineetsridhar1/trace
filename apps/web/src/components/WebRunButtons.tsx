@@ -86,7 +86,9 @@ export function WebRunButtons({
         effort: selectedEffort,
         planMode: mode === 'plan',
       });
-    } finally {
+      // Keep running=true — the component will unmount when the workspace
+      // status transitions away from "pending" via subscription.
+    } catch {
       setRunning(false);
     }
   };

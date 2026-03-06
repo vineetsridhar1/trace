@@ -13,6 +13,7 @@ const WorkspaceFieldsFragmentDoc = gql`
     cliSessionId
     userId
     preview
+    ticketTitle
     importance
     status
     summary
@@ -53,6 +54,7 @@ type WorkspaceFieldsType = {
   cliSessionId: string;
   userId?: string | null;
   preview?: string | null;
+  ticketTitle?: string | null;
   importance: string;
   status: string;
   summary?: string | null;

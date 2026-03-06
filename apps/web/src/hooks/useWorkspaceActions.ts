@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { gql } from "@apollo/client";
 import { useAgentRelay } from "./relay/useAgentRelay";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import type { Workspace } from "../types";
 import {
   useCreateWorkspaceMutation,
   useAppendPromptMutation,
@@ -18,6 +20,7 @@ const WORKSPACE_FIELDS = gql`
     cliSessionId
     userId
     preview
+    ticketTitle
     importance
     status
     summary
@@ -216,7 +219,10 @@ export function useWorkspaceActions(): WorkspaceActions {
           return { workspaceId: null, error: "Failed to create workspace" };
         }
 
-        return { workspaceId: data.createWorkspace.workspace.id };
+        const w = data.createWorkspace.workspace as unknown as Workspace;
+        useWorkspaceStore.getState().upsertWorkspace(w);
+
+        return { workspaceId: w.id };
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Unknown error creating workspace";
