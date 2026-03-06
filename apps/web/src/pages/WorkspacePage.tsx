@@ -4,7 +4,7 @@ import { ConnectionStatusBar } from '../components/ConnectionStatusBar';
 import { WebWorkspaceList } from '../components/WebWorkspaceList';
 import { WebThreadPanel } from '../components/WebThreadPanel';
 import { WebThreadInput } from '../components/WebThreadInput';
-import { WebRunButtons } from '../components/WebRunButtons';
+import { WebThreadHeader } from '../components/WebThreadHeader';
 import { WebChannelSelector } from '../components/WebChannelSelector';
 import { useChannelContext } from '../context/ChannelContext';
 import { useInstanceStore } from '../stores/instanceStore';
@@ -133,20 +133,17 @@ function WorkspacePageInner({
         </div>
 
         {/* Thread panel */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          {selectedWorkspaceId ? (
+        <div className="flex min-w-0 flex-1 flex-col bg-surface-deep">
+          {selectedWorkspaceId && selectedWorkspace ? (
             <>
+              <WebThreadHeader
+                title={selectedWorkspace.preview?.split('\n')[0] || 'New Workspace'}
+                status={selectedWorkspace.status}
+              />
               <WebThreadPanel
                 workspaceId={selectedWorkspaceId}
                 channelId={channelId}
               />
-              <div className="flex items-center gap-2 border-t border-edge px-3 py-1">
-                <WebRunButtons
-                  workspaceId={selectedWorkspaceId}
-                  channelId={channelId}
-                  disabled={isOffline}
-                />
-              </div>
               <WebThreadInput
                 workspaceId={selectedWorkspaceId}
                 channelId={channelId}

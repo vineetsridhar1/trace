@@ -140,6 +140,49 @@
   outline-offset: 2px;
 }
 
+/* ── Thread layout ── */
+.thread-scroll {
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.thread-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+
+.jump-latest-chip {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  border: 1px solid var(--th-faint);
+  background: var(--th-surface-elevated);
+  color: var(--th-primary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.jump-latest-chip.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.jump-latest-chip:hover {
+  background: var(--th-surface-hover);
+}
+
 @layer base {
   html,
   body,
