@@ -5,6 +5,7 @@ import type {
 } from '../types';
 import { useThreadStore } from '../stores/threadStore';
 import { useAgentRelay } from '../hooks/relay/useAgentRelay';
+import { useAppendPromptMutation } from '../hooks/__generated__/useWorkspaceActions.generated';
 import {
   buildSessionNodes,
   stripTraceInternal,
@@ -39,6 +40,7 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
   const tokenUsage = useThreadStore((s) => s.tokenUsage);
 
   const { spawnAgent } = useAgentRelay();
+  const [executeAppendPrompt] = useAppendPromptMutation();
 
   // ─── Agent run actions for interactive plan/question ────────────
   const planActions = useMemo((): PlanReviewActions => ({
@@ -47,15 +49,25 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
         const prompt = planFilePath
           ? `Implement the following approved plan. The plan file is at ${planFilePath}.\n\n${planContent ?? text}`
           : `Implement the following approved plan:\n\n${planContent ?? text}`;
-        await useThreadStore.getState().syncActions.clearSession();
+        const newSessionId = await useThreadStore.getState().syncActions.clearSession();
+        if (!newSessionId) return;
+        await executeAppendPrompt({
+          variables: { channelId, workspaceId, text: prompt, sessionId: newSessionId },
+        });
         await spawnAgent({ workspaceId, prompt, channelId });
       } else if (mode === 'keep-context') {
+        await executeAppendPrompt({
+          variables: { channelId, workspaceId, text },
+        });
         await spawnAgent({ workspaceId, prompt: text, channelId });
       } else if (mode === 'revise') {
+        await executeAppendPrompt({
+          variables: { channelId, workspaceId, text },
+        });
         await spawnAgent({ workspaceId, prompt: text, channelId, planMode: true });
       }
     },
-  }), [spawnAgent, workspaceId, channelId]);
+  }), [spawnAgent, executeAppendPrompt, workspaceId, channelId]);
 
   const [answeredQuestionId, setAnsweredQuestionId] = useState<string | null>(null);
   const activeQuestionRef = useRef<AskUserQuestionNode | null>(null);
