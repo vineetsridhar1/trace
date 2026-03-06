@@ -1,5 +1,5 @@
--- AlterTable
-ALTER TABLE "channels" ADD COLUMN     "default_teardown_script" TEXT;
+-- AlterTable (conditional — column may already exist from an earlier deploy)
+ALTER TABLE "channels" ADD COLUMN IF NOT EXISTS "default_teardown_script" TEXT;
 
 -- AlterTable
 ALTER TABLE "events" ALTER COLUMN "agent_type" SET DATA TYPE TEXT;
