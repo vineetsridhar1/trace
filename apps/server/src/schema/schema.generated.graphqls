@@ -44,6 +44,7 @@ type Attachment {
 type AuthUser {
   avatarUrl: String
   email: String!
+  githubUsername: String
   id: ID!
   name: String!
   role: String!
@@ -55,6 +56,7 @@ type Channel {
   defaultRepoPath: String
   defaultRunScript: String
   defaultSetupScript: String
+  defaultTeardownScript: String
   githubUrl: String
   id: ID!
   name: String!
@@ -202,7 +204,7 @@ type Mutation {
   appendPrompt(attachmentIds: [String!], channelId: ID!, createNewSession: Boolean, sessionId: ID, text: String!, workspaceId: ID!): CreateWorkspacePayload!
   connectToInstance(instanceId: ID!, password: String): InstanceConnection!
   createAiChat(channelId: ID, serverId: ID!, title: String): AiChat!
-  createChannel(baseBranch: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, name: String!, serverId: String, teamIds: [String!], type: String, workspacesEnabled: Boolean): Channel!
+  createChannel(baseBranch: String, defaultRunScript: String, defaultSetupScript: String, defaultTeardownScript: String, githubUrl: String, name: String!, serverId: String, teamIds: [String!], type: String, workspacesEnabled: Boolean): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createServer(avatarUrl: String, name: String!): Server!
   createSession(channelId: ID!, workspaceId: ID!): Session!
@@ -224,7 +226,7 @@ type Mutation {
   setInstancePassword(instanceId: ID!, password: String): Boolean!
   setTicketDependencies(channelId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!, workspaceId: ID!): Workspace!
   setWorkspacePrUrl(channelId: ID!, prUrl: String!, workspaceId: ID!): Boolean!
-  updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, githubUrl: String, id: ID!, name: String, teamIds: [String!], workspacesEnabled: Boolean): Channel!
+  updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, defaultTeardownScript: String, githubUrl: String, id: ID!, name: String, teamIds: [String!], workspacesEnabled: Boolean): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateInitialPrompt(attachmentIds: [String!], channelId: ID!, text: String!, workspaceId: ID!): CreateWorkspacePayload!
   updateQueuedRunConfig(runConfig: JSON!, workspaceId: ID!): Boolean!
@@ -265,9 +267,11 @@ type Query {
   instance(id: ID!): ElectronInstance
   me: AuthUser
   myInstances: [ElectronInstance!]!
+  myWorkspaces(excludeStatuses: [String!], serverId: ID!): [Workspace!]!
   servers: [Server!]!
   sessionEvents(after: String, channelId: ID!, limit: Int, offset: Int, sessionId: ID!, workspaceId: ID!): EventConnection!
   sessions(channelId: ID!, workspaceId: ID!): [Session!]!
+  suggestScripts(fileContents: JSON!): SuggestScriptsResult
   ticketByWorkspaceId(workspaceId: ID!): Ticket
   ticketDependencies(workspaceId: ID!): [TicketDependency!]!
   workspace(id: ID!): Workspace
@@ -318,6 +322,12 @@ type Subscription {
   ticketUpserted(channelId: ID!): TicketUpsertPayload!
   workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
   workspaceUpserted(channelId: ID!): Workspace!
+}
+
+type SuggestScriptsResult {
+  reasoning: String
+  runScript: String
+  setupScript: String
 }
 
 type Ticket {
@@ -376,6 +386,7 @@ type TicketWorkspace {
   id: ID!
   prUrl: String
   status: String!
+  userId: String
 }
 
 type TokenUsage {
@@ -389,6 +400,7 @@ type Workspace {
   agentType: String
   branch: String
   channelId: String!
+  channelName: String
   cliSession: WorkspaceCliSession
   cliSessionId: String!
   createdAt: DateTime!

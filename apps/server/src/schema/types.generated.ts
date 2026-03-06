@@ -83,6 +83,7 @@ export type AuthUser = {
   __typename?: 'AuthUser';
   avatarUrl?: Maybe<Scalars['String']['output']>;
   email: Scalars['String']['output'];
+  githubUsername?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   role: Scalars['String']['output'];
@@ -95,6 +96,7 @@ export type Channel = {
   defaultRepoPath?: Maybe<Scalars['String']['output']>;
   defaultRunScript?: Maybe<Scalars['String']['output']>;
   defaultSetupScript?: Maybe<Scalars['String']['output']>;
+  defaultTeardownScript?: Maybe<Scalars['String']['output']>;
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -313,6 +315,7 @@ export type MutationcreateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
   defaultRunScript?: InputMaybe<Scalars['String']['input']>;
   defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
+  defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;
@@ -462,6 +465,7 @@ export type MutationupdateChannelArgs = {
   defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
   defaultRunScript?: InputMaybe<Scalars['String']['input']>;
   defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
+  defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -548,9 +552,11 @@ export type Query = {
   instance?: Maybe<ElectronInstance>;
   me?: Maybe<AuthUser>;
   myInstances: Array<ElectronInstance>;
+  myWorkspaces: Array<Workspace>;
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
+  suggestScripts?: Maybe<SuggestScriptsResult>;
   ticketByWorkspaceId?: Maybe<Ticket>;
   ticketDependencies: Array<TicketDependency>;
   workspace?: Maybe<Workspace>;
@@ -614,6 +620,12 @@ export type QueryinstanceArgs = {
 };
 
 
+export type QuerymyWorkspacesArgs = {
+  excludeStatuses?: InputMaybe<Array<Scalars['String']['input']>>;
+  serverId: Scalars['ID']['input'];
+};
+
+
 export type QuerysessionEventsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   channelId: Scalars['ID']['input'];
@@ -627,6 +639,11 @@ export type QuerysessionEventsArgs = {
 export type QuerysessionsArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId: Scalars['ID']['input'];
+};
+
+
+export type QuerysuggestScriptsArgs = {
+  fileContents: Scalars['JSON']['input'];
 };
 
 
@@ -776,6 +793,13 @@ export type SubscriptionworkspaceUpsertedArgs = {
   channelId: Scalars['ID']['input'];
 };
 
+export type SuggestScriptsResult = {
+  __typename?: 'SuggestScriptsResult';
+  reasoning?: Maybe<Scalars['String']['output']>;
+  runScript?: Maybe<Scalars['String']['output']>;
+  setupScript?: Maybe<Scalars['String']['output']>;
+};
+
 export type Ticket = {
   __typename?: 'Ticket';
   columnId: Scalars['String']['output'];
@@ -839,6 +863,7 @@ export type TicketWorkspace = {
   id: Scalars['ID']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
+  userId?: Maybe<Scalars['String']['output']>;
 };
 
 export type TokenUsage = {
@@ -854,6 +879,7 @@ export type Workspace = {
   agentType?: Maybe<Scalars['String']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channelId: Scalars['String']['output'];
+  channelName?: Maybe<Scalars['String']['output']>;
   cliSession?: Maybe<WorkspaceCliSession>;
   cliSessionId: Scalars['String']['output'];
   createdAt: Scalars['DateTime']['output'];
@@ -1017,6 +1043,7 @@ export type ResolversTypes = {
   Session: ResolverTypeWrapper<SessionMapper>;
   SessionEventPayload: ResolverTypeWrapper<SessionEventPayloadMapper>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  SuggestScriptsResult: ResolverTypeWrapper<SuggestScriptsResult>;
   Ticket: ResolverTypeWrapper<TicketMapper>;
   TicketAttachment: ResolverTypeWrapper<TicketAttachmentMapper>;
   TicketDependency: ResolverTypeWrapper<TicketDependency>;
@@ -1075,6 +1102,7 @@ export type ResolversParentTypes = {
   Session: SessionMapper;
   SessionEventPayload: SessionEventPayloadMapper;
   Subscription: Record<PropertyKey, never>;
+  SuggestScriptsResult: SuggestScriptsResult;
   Ticket: TicketMapper;
   TicketAttachment: TicketAttachmentMapper;
   TicketDependency: TicketDependency;
@@ -1137,6 +1165,7 @@ export type AttachmentResolvers<ContextType = any, ParentType extends ResolversP
 export type AuthUserResolvers<ContextType = any, ParentType extends ResolversParentTypes['AuthUser'] = ResolversParentTypes['AuthUser']> = {
   avatarUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  githubUsername?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   role?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1148,6 +1177,7 @@ export type ChannelResolvers<ContextType = any, ParentType extends ResolversPare
   defaultRepoPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   defaultRunScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   defaultSetupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  defaultTeardownScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   githubUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1355,9 +1385,11 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   instance?: Resolver<Maybe<ResolversTypes['ElectronInstance']>, ParentType, ContextType, RequireFields<QueryinstanceArgs, 'id'>>;
   me?: Resolver<Maybe<ResolversTypes['AuthUser']>, ParentType, ContextType>;
   myInstances?: Resolver<Array<ResolversTypes['ElectronInstance']>, ParentType, ContextType>;
+  myWorkspaces?: Resolver<Array<ResolversTypes['Workspace']>, ParentType, ContextType, RequireFields<QuerymyWorkspacesArgs, 'serverId'>>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionsArgs, 'channelId' | 'workspaceId'>>;
+  suggestScripts?: Resolver<Maybe<ResolversTypes['SuggestScriptsResult']>, ParentType, ContextType, RequireFields<QuerysuggestScriptsArgs, 'fileContents'>>;
   ticketByWorkspaceId?: Resolver<Maybe<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryticketByWorkspaceIdArgs, 'workspaceId'>>;
   ticketDependencies?: Resolver<Array<ResolversTypes['TicketDependency']>, ParentType, ContextType, RequireFields<QueryticketDependenciesArgs, 'workspaceId'>>;
   workspace?: Resolver<Maybe<ResolversTypes['Workspace']>, ParentType, ContextType, RequireFields<QueryworkspaceArgs, 'id'>>;
@@ -1408,6 +1440,12 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   ticketUpserted?: SubscriptionResolver<ResolversTypes['TicketUpsertPayload'], "ticketUpserted", ParentType, ContextType, RequireFields<SubscriptionticketUpsertedArgs, 'channelId'>>;
   workspaceDeleted?: SubscriptionResolver<ResolversTypes['WorkspaceDeletedPayload'], "workspaceDeleted", ParentType, ContextType, RequireFields<SubscriptionworkspaceDeletedArgs, 'channelId'>>;
   workspaceUpserted?: SubscriptionResolver<ResolversTypes['Workspace'], "workspaceUpserted", ParentType, ContextType, RequireFields<SubscriptionworkspaceUpsertedArgs, 'channelId'>>;
+};
+
+export type SuggestScriptsResultResolvers<ContextType = any, ParentType extends ResolversParentTypes['SuggestScriptsResult'] = ResolversParentTypes['SuggestScriptsResult']> = {
+  reasoning?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  runScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  setupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };
 
 export type TicketResolvers<ContextType = any, ParentType extends ResolversParentTypes['Ticket'] = ResolversParentTypes['Ticket']> = {
@@ -1466,6 +1504,7 @@ export type TicketWorkspaceResolvers<ContextType = any, ParentType extends Resol
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  userId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 };
 
 export type TokenUsageResolvers<ContextType = any, ParentType extends ResolversParentTypes['TokenUsage'] = ResolversParentTypes['TokenUsage']> = {
@@ -1479,6 +1518,7 @@ export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversPa
   agentType?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  channelName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   cliSession?: Resolver<Maybe<ResolversTypes['WorkspaceCliSession']>, ParentType, ContextType>;
   cliSessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
@@ -1559,6 +1599,7 @@ export type Resolvers<ContextType = any> = {
   Session?: SessionResolvers<ContextType>;
   SessionEventPayload?: SessionEventPayloadResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
+  SuggestScriptsResult?: SuggestScriptsResultResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
   TicketAttachment?: TicketAttachmentResolvers<ContextType>;
   TicketDependency?: TicketDependencyResolvers<ContextType>;
