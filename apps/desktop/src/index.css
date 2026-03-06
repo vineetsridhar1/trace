@@ -342,6 +342,14 @@
   flex-shrink: 0;
 }
 
+/* User prompt bubble — explicit colors to avoid Tailwind v4 oklch opacity issues */
+.user-prompt-bubble {
+  border: 1px solid color-mix(in srgb, var(--th-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--th-accent) 15%, transparent);
+  border-radius: 0.75rem;
+  border-bottom-right-radius: 0.125rem;
+}
+
 .jump-latest-chip {
   position: absolute;
   right: 14px;
