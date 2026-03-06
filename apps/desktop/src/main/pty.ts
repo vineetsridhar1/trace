@@ -1,5 +1,7 @@
 import type { BrowserWindow } from "electron";
+import * as fs from "fs";
 import * as pty from "node-pty";
+import * as os from "os";
 
 interface PtySession {
   process: pty.IPty;
@@ -36,13 +38,18 @@ export function createPty(
   }
 
   const shell =
-    process.platform === "darwin" ? "zsh" : process.env.SHELL || "bash";
+    process.platform === "darwin" ? "/bin/zsh" : process.env.SHELL || "/bin/bash";
+
+  let effectiveCwd = cwd;
+  if (!fs.existsSync(cwd)) {
+    effectiveCwd = os.homedir();
+  }
   const baseEnv = { ...process.env } as Record<string, string>;
   const proc = pty.spawn(shell, ["-l"], {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
-    cwd,
+    cwd: effectiveCwd,
     env: { ...baseEnv, ...extraEnv },
   });
 
