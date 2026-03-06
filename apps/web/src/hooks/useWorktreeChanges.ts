@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorktreeRelay } from "./relay/useWorktreeRelay";
 import type { GetWorktreeDiffResult } from "./relay/types";
 
-const POLL_INTERVAL = 10000;
+const POLL_INTERVAL = 15000;
 
 export function useWorktreeChanges(
   workspaceId: string | null,
@@ -19,7 +19,16 @@ export function useWorktreeChanges(
     setLoading(true);
     try {
       const result = await getWorktreeDiff({ workspaceId, baseBranch });
-      setDiffData(result.success && result.data ? result.data : null);
+      const newData = result.success && result.data ? result.data : null;
+      setDiffData((prev) => {
+        if (prev && newData &&
+            prev.branchDiff === newData.branchDiff &&
+            prev.uncommittedDiff === newData.uncommittedDiff &&
+            prev.stagedDiff === newData.stagedDiff) {
+          return prev;
+        }
+        return newData;
+      });
     } catch {
       setDiffData(null);
     } finally {
@@ -31,7 +40,10 @@ export function useWorktreeChanges(
     if (!workspaceId || !enabled) return;
 
     void fetchDiff();
-    intervalRef.current = setInterval(() => void fetchDiff(), POLL_INTERVAL);
+    intervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      void fetchDiff();
+    }, POLL_INTERVAL);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

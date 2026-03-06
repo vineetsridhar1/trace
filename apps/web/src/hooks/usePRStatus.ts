@@ -32,7 +32,10 @@ export function usePRStatus(repoPath: string | null, branches: string[]) {
     if (!repoPath || branchesRef.current.length === 0) return;
 
     void fetchStatuses();
-    intervalRef.current = setInterval(() => void fetchStatuses(), POLL_INTERVAL);
+    intervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      void fetchStatuses();
+    }, POLL_INTERVAL);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

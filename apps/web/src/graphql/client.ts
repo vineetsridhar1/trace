@@ -104,10 +104,10 @@ export const apolloClient = new ApolloClient({
     },
   }),
   defaultOptions: {
-    query: { fetchPolicy: "network-only" },
+    query: { fetchPolicy: "cache-first" },
     watchQuery: {
-      fetchPolicy: "network-only",
-      nextFetchPolicy: "network-only",
+      fetchPolicy: "cache-and-network",
+      nextFetchPolicy: "cache-first",
     },
   },
 });

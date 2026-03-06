@@ -8,7 +8,6 @@ import { useAgentRelay } from '../hooks/relay/useAgentRelay';
 import {
   buildSessionNodes,
   stripTraceInternal,
-  formatTime,
   ThreadEvent,
   ReadGlobGroup,
   CollapsedTurnGroup,
@@ -16,7 +15,7 @@ import {
   AskUserQuestionInline,
   AssistantTextRow,
 } from '@trace/shared-ui';
-import type { PlanReviewActions, PlanResponseMode, AskUserQuestionActions } from '@trace/shared-ui';
+import type { PlanReviewActions, PlanResponseMode, AskUserQuestionActions, SessionRenderNode, TokenUsageInfo } from '@trace/shared-ui';
 import { FiEdit3 } from 'react-icons/fi';
 
 const NEAR_BOTTOM_THRESHOLD_PX = 100;
@@ -48,6 +47,7 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
         const prompt = planFilePath
           ? `Implement the following approved plan. The plan file is at ${planFilePath}.\n\n${planContent ?? text}`
           : `Implement the following approved plan:\n\n${planContent ?? text}`;
+        await useThreadStore.getState().syncActions.clearSession();
         await spawnAgent({ workspaceId, prompt, channelId });
       } else if (mode === 'keep-context') {
         await spawnAgent({ workspaceId, prompt: text, channelId });
@@ -133,11 +133,23 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
     setShowJumpToLatest(true);
   }, [sessionEvents, scrollToBottom]);
 
+  const rafRef = useRef<number | null>(null);
+
   const handleScroll = useCallback(() => {
-    const near = isNearBottom();
-    nearBottomRef.current = near;
-    if (near) setShowJumpToLatest(false);
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const near = isNearBottom();
+      nearBottomRef.current = near;
+      if (near) setShowJumpToLatest(false);
+    });
   }, [isNearBottom]);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   // ─── Active question / plan detection ──────────────────────────
   const activeQuestionNode = useMemo((): AskUserQuestionNode | null => {
@@ -221,86 +233,15 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
             activeSessionId={activeSessionId}
           />
 
-          {(() => {
-            let lastUserPromptTime: string | null = null;
-            return sessionNodes.map((node) => {
-              if (node.kind === 'session-divider') {
-                return (
-                  <div
-                    key={node.id}
-                    className="my-3 flex items-center gap-3 px-2"
-                  >
-                    <div className="h-px flex-1 bg-accent/20" />
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-accent-light/60">
-                      New Context
-                    </span>
-                    <div className="h-px flex-1 bg-accent/20" />
-                  </div>
-                );
-              }
-              if (node.kind === 'readglob-group') {
-                const groupAssistantText = node.events[0]?.lastAssistantMessage
-                  ? stripTraceInternal(
-                      node.events[0].lastAssistantMessage,
-                    ).trim()
-                  : '';
-                return (
-                  <React.Fragment key={node.id}>
-                    {groupAssistantText && (
-                      <AssistantTextRow text={groupAssistantText} />
-                    )}
-                    <ReadGlobGroup
-                      node={node}
-                      isExpanded={Boolean(expandedReadGroupIds[node.id])}
-                      onToggle={() => toggleReadGroup(node.id)}
-                    />
-                  </React.Fragment>
-                );
-              }
-              if (node.kind === 'collapsed-turn') {
-                return (
-                  <CollapsedTurnGroup
-                    key={node.id}
-                    node={node}
-                    isExpanded={Boolean(expandedTurnGroupIds[node.id])}
-                    onToggle={() => toggleTurnGroup(node.id)}
-                    expandedReadGroupIds={expandedReadGroupIds}
-                    toggleReadGroup={toggleReadGroup}
-                  />
-                );
-              }
-              if (node.kind === 'plan-review') {
-                return <PlanReview key={node.id} node={node} />;
-              }
-              if (node.kind === 'ask-user-question') {
-                return <AskUserQuestionInline key={node.id} node={node} actions={questionActions} />;
-              }
-              if (node.kind !== 'event') return null;
-
-              if (node.event.hookEventName === 'UserPromptSubmit') {
-                lastUserPromptTime = node.event.timestamp;
-              }
-              let duration: number | undefined;
-              if (
-                node.event.hookEventName === 'Stop' &&
-                lastUserPromptTime
-              ) {
-                duration = Math.floor(
-                  (new Date(node.event.timestamp).getTime() -
-                    new Date(lastUserPromptTime).getTime()) /
-                    1000,
-                );
-              }
-              return (
-                <ThreadEvent
-                  key={node.event.id}
-                  event={node.event}
-                  duration={duration}
-                  tokenUsage={tokenUsage}
-                />
-              );
-            });
-          })()}
+          <SessionNodeList
+            sessionNodes={sessionNodes}
+            expandedReadGroupIds={expandedReadGroupIds}
+            expandedTurnGroupIds={expandedTurnGroupIds}
+            toggleReadGroup={toggleReadGroup}
+            toggleTurnGroup={toggleTurnGroup}
+            questionActions={questionActions}
+            tokenUsage={tokenUsage}
+          />
         </div>
       </div>
 
@@ -327,6 +268,109 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
     </div>
   );
 }
+
+// ─── Memoized session node list ───────────────────────────────────
+
+const SessionNodeList = React.memo(function SessionNodeList({
+  sessionNodes,
+  expandedReadGroupIds,
+  expandedTurnGroupIds,
+  toggleReadGroup,
+  toggleTurnGroup,
+  questionActions,
+  tokenUsage,
+}: {
+  sessionNodes: SessionRenderNode[];
+  expandedReadGroupIds: Record<string, boolean>;
+  expandedTurnGroupIds: Record<string, boolean>;
+  toggleReadGroup: (id: string) => void;
+  toggleTurnGroup: (id: string) => void;
+  questionActions: AskUserQuestionActions;
+  tokenUsage: TokenUsageInfo | null;
+}) {
+  let lastUserPromptTime: string | null = null;
+  return (
+    <>
+      {sessionNodes.map((node) => {
+        if (node.kind === 'session-divider') {
+          return (
+            <div
+              key={node.id}
+              className="my-3 flex items-center gap-3 px-2"
+            >
+              <div className="h-px flex-1 bg-accent/20" />
+              <span className="text-[10px] font-medium uppercase tracking-wider text-accent-light/60">
+                New Context
+              </span>
+              <div className="h-px flex-1 bg-accent/20" />
+            </div>
+          );
+        }
+        if (node.kind === 'readglob-group') {
+          const groupAssistantText = node.events[0]?.lastAssistantMessage
+            ? stripTraceInternal(
+                node.events[0].lastAssistantMessage,
+              ).trim()
+            : '';
+          return (
+            <React.Fragment key={node.id}>
+              {groupAssistantText && (
+                <AssistantTextRow text={groupAssistantText} />
+              )}
+              <ReadGlobGroup
+                node={node}
+                isExpanded={Boolean(expandedReadGroupIds[node.id])}
+                onToggle={() => toggleReadGroup(node.id)}
+              />
+            </React.Fragment>
+          );
+        }
+        if (node.kind === 'collapsed-turn') {
+          return (
+            <CollapsedTurnGroup
+              key={node.id}
+              node={node}
+              isExpanded={Boolean(expandedTurnGroupIds[node.id])}
+              onToggle={() => toggleTurnGroup(node.id)}
+              expandedReadGroupIds={expandedReadGroupIds}
+              toggleReadGroup={toggleReadGroup}
+            />
+          );
+        }
+        if (node.kind === 'plan-review') {
+          return <PlanReview key={node.id} node={node} />;
+        }
+        if (node.kind === 'ask-user-question') {
+          return <AskUserQuestionInline key={node.id} node={node} actions={questionActions} />;
+        }
+        if (node.kind !== 'event') return null;
+
+        if (node.event.hookEventName === 'UserPromptSubmit') {
+          lastUserPromptTime = node.event.timestamp;
+        }
+        let duration: number | undefined;
+        if (
+          node.event.hookEventName === 'Stop' &&
+          lastUserPromptTime
+        ) {
+          duration = Math.floor(
+            (new Date(node.event.timestamp).getTime() -
+              new Date(lastUserPromptTime).getTime()) /
+              1000,
+          );
+        }
+        return (
+          <ThreadEvent
+            key={node.event.id}
+            event={node.event}
+            duration={duration}
+            tokenUsage={tokenUsage}
+          />
+        );
+      })}
+    </>
+  );
+});
 
 // ─── Thread status message (error state) ─────────────────────────
 

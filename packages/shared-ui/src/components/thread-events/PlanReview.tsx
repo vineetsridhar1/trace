@@ -44,6 +44,21 @@ export const PlanReview = memo(function PlanReview({
     }
   }, [actions, node.planContent, node.planFilePath]);
 
+  const handleApproveKeepContext = useCallback(async () => {
+    if (!actions) return;
+    setSubmitting(true);
+    try {
+      await actions.sendPlanResponse(
+        'Approved. Implement this plan.',
+        'keep-context',
+        node.planContent,
+        node.planFilePath,
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, [actions, node.planContent, node.planFilePath]);
+
   const handleReject = useCallback(async () => {
     if (!actions) return;
     setSubmitting(true);
@@ -98,6 +113,15 @@ export const PlanReview = memo(function PlanReview({
               >
                 <FiCheck size={14} />
                 Approve
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveKeepContext}
+                disabled={submitting}
+                className="btn-secondary flex items-center gap-1.5 rounded-md border border-edge bg-surface px-3 py-1.5 text-xs font-medium text-primary disabled:opacity-50"
+              >
+                <FiCheck size={14} />
+                Approve (keep context)
               </button>
               <button
                 type="button"
