@@ -121,9 +121,9 @@ function WorkspacePageInner({
   return (
     <div className="flex h-full flex-col">
       <ConnectionStatusBar />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1" data-has-selection={selectedWorkspaceId ? "true" : "false"}>
         {/* Sidebar */}
-        <div className={`relative flex-col border-r border-edge md:flex md:w-64 md:shrink-0 ${selectedWorkspaceId ? 'hidden' : 'flex w-full'}`}>
+        <div className="workspace-sidebar relative flex w-64 shrink-0 flex-col border-r border-edge">
           {isOffline && (
             <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-3 py-1.5 text-xs text-yellow-400">
               Instance offline — read-only view
@@ -138,7 +138,7 @@ function WorkspacePageInner({
         </div>
 
         {/* Thread panel */}
-        <div className={`min-w-0 flex-1 flex-col bg-surface-deep md:flex ${selectedWorkspaceId ? 'flex' : 'hidden'}`}>
+        <div className="workspace-thread flex min-w-0 flex-1 flex-col bg-surface-deep">
           {selectedWorkspaceId && selectedWorkspace ? (
             <>
               <WebThreadHeader

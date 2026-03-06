@@ -192,6 +192,27 @@
   }
 }
 
+/* ── Mobile responsive layout ── */
+@media (max-width: 767px) {
+  .workspace-sidebar {
+    width: 100% !important;
+    flex-shrink: 1 !important;
+  }
+
+  [data-has-selection="true"] > .workspace-sidebar {
+    display: none !important;
+  }
+
+  [data-has-selection="false"] > .workspace-thread,
+  [data-has-selection=""] > .workspace-thread {
+    display: none !important;
+  }
+
+  .mobile-back-btn {
+    display: block !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }

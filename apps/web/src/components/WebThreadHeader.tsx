@@ -45,7 +45,7 @@ export const WebThreadHeader = memo(function WebThreadHeader({
       {onBack && (
         <button
           onClick={onBack}
-          className="md:hidden -ml-1 p-1.5 rounded-md text-muted hover:bg-surface-elevated hover:text-primary"
+          className="mobile-back-btn -ml-1 hidden rounded-md p-1.5 text-muted hover:bg-surface-elevated hover:text-primary"
           aria-label="Back to workspaces"
         >
           <FiChevronLeft className="h-5 w-5" />
