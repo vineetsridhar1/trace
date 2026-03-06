@@ -8,7 +8,6 @@ import {
   getPtyEnv,
   hasPty,
   getPtyProcesses,
-  getScrollback,
 } from "../pty";
 import { getMainWindow } from "./shared";
 
@@ -17,7 +16,6 @@ const PTY_WRITE_CHANNEL = "pty-write";
 const PTY_RESIZE_CHANNEL = "pty-resize";
 const PTY_KILL_CHANNEL = "pty-kill";
 const PTY_HAS_CHANNEL = "pty-has";
-const PTY_GET_SCROLLBACK_CHANNEL = "pty-get-scrollback";
 const PTY_GET_PROCESSES_CHANNEL = "pty-get-processes";
 
 export function registerPtyHandlers(): void {
@@ -91,11 +89,6 @@ export function registerPtyHandlers(): void {
   ipcMain.removeHandler(PTY_HAS_CHANNEL);
   ipcMain.handle(PTY_HAS_CHANNEL, (_event, terminalId: string) => {
     return { success: true, exists: hasPty(terminalId) };
-  });
-
-  ipcMain.removeHandler(PTY_GET_SCROLLBACK_CHANNEL);
-  ipcMain.handle(PTY_GET_SCROLLBACK_CHANNEL, (_event, terminalId: string) => {
-    return { success: true, data: getScrollback(terminalId) };
   });
 
   ipcMain.removeHandler(PTY_GET_PROCESSES_CHANNEL);
