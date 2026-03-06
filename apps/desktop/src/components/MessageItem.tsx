@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   FiCheck,
+  FiCheckCircle,
   FiFileText,
   FiGitMerge,
   FiGitPullRequest,
@@ -8,6 +9,7 @@ import {
   FiLoader,
   FiTerminal,
   FiTrash2,
+  FiXCircle,
 } from "react-icons/fi";
 import type { Workspace, KanbanTicket, TicketStatus } from "../types";
 import { getServerUrl } from "../types";
@@ -118,10 +120,16 @@ function shortcutLabel(index: number): string | null {
 function StatusIcon({
   status,
   isRunning,
+  workspaceId,
 }: {
   status: TicketStatus;
   isRunning: boolean;
+  workspaceId: string;
 }) {
+  const ciStatus = useWorkspaceStore((s) =>
+    status === "review" ? s.ciStatuses[workspaceId] ?? null : null,
+  );
+
   if (ACTIVE_STATUSES.has(status)) {
     return (
       <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-accent-light" />
@@ -131,6 +139,19 @@ function StatusIcon({
     return <FiCheck className="h-4 w-4 flex-shrink-0 text-green-400" />;
   }
   if (status === "review") {
+    if (ciStatus && ciStatus.total > 0) {
+      if (ciStatus.failed > 0) {
+        return <FiXCircle className="h-4 w-4 flex-shrink-0 text-red-400" />;
+      }
+      if (ciStatus.pending > 0) {
+        return (
+          <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-yellow-400" />
+        );
+      }
+      if (ciStatus.passed === ciStatus.total) {
+        return <FiCheckCircle className="h-4 w-4 flex-shrink-0 text-green-400" />;
+      }
+    }
     if (isRunning) {
       return (
         <FiLoader className="h-4 w-4 flex-shrink-0 animate-spin-slow text-teal-400" />
@@ -371,6 +392,7 @@ export const MessageItem = memo(function MessageItem({
           isRunning={
             activelyRunning || workspace.cliSession.status !== "stopped"
           }
+          workspaceId={workspace.id}
         />
 
         {/* Delete button (hover only) */}
