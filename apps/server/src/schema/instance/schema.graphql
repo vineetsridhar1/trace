@@ -1,0 +1,49 @@
+extend type Query {
+  myInstances: [ElectronInstance!]!
+  instance(id: ID!): ElectronInstance
+}
+
+extend type Mutation {
+  registerInstance(serverId: ID!, name: String!): ElectronInstance!
+  setInstancePassword(instanceId: ID!, password: String): Boolean!
+  connectToInstance(instanceId: ID!, password: String): InstanceConnection!
+  relayAction(instanceId: ID!, action: String!, params: JSON!): RelayActionResult!
+}
+
+extend type Subscription {
+  instanceStatusChanged(serverId: ID!): InstanceStatusPayload!
+}
+
+type ElectronInstance {
+  id: ID!
+  userId: String!
+  name: String!
+  serverId: String!
+  hasPassword: Boolean!
+  isOnline: Boolean!
+  owner: InstanceOwner!
+  createdAt: DateTime!
+}
+
+type InstanceOwner {
+  id: ID!
+  name: String!
+  avatarUrl: String
+}
+
+type InstanceConnection {
+  instanceId: String!
+  serverId: String!
+  channels: [Channel!]!
+}
+
+type RelayActionResult {
+  success: Boolean!
+  data: JSON
+  error: String
+}
+
+type InstanceStatusPayload {
+  instanceId: String!
+  isOnline: Boolean!
+}

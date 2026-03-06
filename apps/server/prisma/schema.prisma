@@ -1,0 +1,330 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Server {
+  id        String   @id @default(uuid())
+  name      String
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channels  Channel[]
+  members   ServerMember[]
+  aiChats   AiChat[]
+  instances ElectronInstance[]
+
+  @@map("servers")
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  name              String
+  avatarUrl         String?  @map("avatar_url")
+  passwordHash      String?  @map("password_hash")
+  githubId          String?  @unique @map("github_id")
+  githubAccessToken String?  @map("github_access_token")
+  githubUsername    String?  @map("github_username")
+  role              String   @default("member")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  serverMembers   ServerMember[]
+  channelMembers  ChannelMember[]
+  workspaces      Workspace[]
+  assignedTickets Ticket[]
+  channelMessages ChannelMessage[]
+  instances       ElectronInstance[]
+
+  @@map("users")
+}
+
+model ServerMember {
+  id       String   @id @default(uuid())
+  serverId String   @map("server_id")
+  userId   String   @map("user_id")
+  role     String   @default("member")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, userId])
+  @@index([userId])
+  @@map("server_members")
+}
+
+model ChannelMember {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  role      String   @default("member")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@map("channel_members")
+}
+
+model CliSession {
+  id             String   @id @default(uuid())
+  sessionId      String   @unique @map("session_id")
+  transcriptPath String?  @map("transcript_path")
+  cwd            String?
+  permissionMode String?  @map("permission_mode")
+  firstSeenAt    DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt     DateTime @default(now()) @map("last_seen_at")
+  status         String   @default("active")
+
+  events     Event[]
+  workspaces Workspace[]
+
+  @@map("sessions")
+}
+
+model Channel {
+  id                 String   @id @default(uuid())
+  serverId           String   @map("server_id")
+  name               String
+  type               String   @default("project")
+  workspacesEnabled  Boolean  @default(true) @map("workspaces_enabled")
+  baseBranch         String?  @map("base_branch")
+  githubUrl          String?  @map("github_url")
+  defaultRepoPath    String?  @map("default_repo_path")
+  defaultSetupScript String?  @map("default_setup_script")
+  defaultRunScript      String?  @map("default_run_script")
+  defaultTeardownScript String?  @map("default_teardown_script")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  server         Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  workspaces     Workspace[]
+  kanbanColumns  KanbanColumn[]
+  members        ChannelMember[]
+  aiChats        AiChat[]
+  teamLinks        ChannelTeam[]    @relation("projectTeams")
+  projectLinks     ChannelTeam[]    @relation("teamProjects")
+  channelMessages  ChannelMessage[]
+
+  @@map("channels")
+}
+
+model ChannelTeam {
+  id        String @id @default(uuid())
+  channelId String @map("channel_id")
+  teamId    String @map("team_id")
+
+  channel Channel @relation("projectTeams", fields: [channelId], references: [id], onDelete: Cascade)
+  team    Channel @relation("teamProjects", fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, teamId])
+  @@map("channel_teams")
+}
+
+model Workspace {
+  id              String   @id @default(uuid())
+  channelId       String   @map("channel_id")
+  cliSessionId    String   @map("session_id")
+  userId          String?  @map("user_id")
+  preview         String?
+  importance      String   @default("non-important")
+  status          String   @default("pending")
+  summary         String?
+  branch          String?
+  prUrl           String?  @map("pr_url")
+  agentSessionId  String?  @map("agent_session_id")
+  agentType       String?  @map("agent_type")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  queuedRunConfig Json?    @map("queued_run_config")
+  isProductDoc    Boolean  @default(false) @map("is_product_doc")
+
+  channel      Channel            @relation(fields: [channelId], references: [id])
+  cliSession   CliSession         @relation(fields: [cliSessionId], references: [sessionId])
+  user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessions     Session[]
+  ticket       Ticket?
+  attachments  Attachment[] @relation("AttachmentToMessage")
+  dependencies TicketDependency[] @relation("ticketDeps")
+  dependedOnBy TicketDependency[] @relation("depTarget")
+
+  @@index([channelId, createdAt])
+  @@index([userId])
+  @@map("messages")
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("message_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  events    Event[]
+
+  @@map("threads")
+}
+
+model Event {
+  id                   String   @id @default(uuid())
+  cliSessionId         String   @map("session_id")
+  hookEventName        String   @map("hook_event_name")
+  timestamp            DateTime @default(now())
+  toolName             String?  @map("tool_name")
+  toolInput            Json?    @map("tool_input")
+  toolResponse         Json?    @map("tool_response")
+  toolUseId            String?  @map("tool_use_id")
+  stopHookActive       Boolean? @map("stop_hook_active")
+  lastAssistantMessage String?  @map("last_assistant_message")
+  rawPayload           Json     @map("raw_payload")
+  sessionId            String   @map("thread_id")
+  importance           String   @default("non-important")
+  agentType            String?  @map("agent_type")
+
+  cliSession CliSession @relation(fields: [cliSessionId], references: [sessionId])
+  session    Session    @relation(fields: [sessionId], references: [id])
+
+  @@index([cliSessionId, timestamp])
+  @@index([hookEventName])
+  @@index([toolName])
+  @@index([cliSessionId, hookEventName])
+  @@index([sessionId, timestamp])
+  @@index([agentType])
+  @@map("events")
+}
+
+model KanbanColumn {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  name      String
+  slug      String
+  color     String?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channel Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+
+  @@unique([channelId, slug])
+  @@index([channelId, sortOrder])
+  @@map("kanban_columns")
+}
+
+model Ticket {
+  id               String   @id @default(uuid())
+  workspaceId      String?  @unique @map("message_id")
+  columnId         String   @map("column_id")
+  assigneeId       String?  @map("assignee_id")
+  title            String
+  description      String?
+  solutionApproach String?  @map("solution_approach")
+  status           String   @default("open")
+  metadata         Json?
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  column    KanbanColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  assignee  User?        @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([columnId, sortOrder])
+  @@index([assigneeId])
+  @@map("tickets")
+}
+
+model Attachment {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  filename    String
+  contentType String   @map("content_type")
+  byteSize    Int      @map("byte_size")
+  checksum    String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspaces Workspace[] @relation("AttachmentToMessage")
+
+  @@map("attachments")
+}
+
+model AiChat {
+  id        String   @id @default(uuid())
+  serverId  String   @map("server_id")
+  channelId String?  @map("channel_id")
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  server   Server          @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  channel  Channel?        @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  messages AiChatMessage[]
+
+  @@index([serverId, createdAt])
+  @@map("ai_chats")
+}
+
+model AiChatMessage {
+  id        String   @id @default(uuid())
+  chatId    String   @map("chat_id")
+  role      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  chat AiChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("ai_chat_messages")
+}
+
+model TicketDependency {
+  id                     String   @id @default(uuid())
+  ticketWorkspaceId      String   @map("ticket_message_id")
+  dependsOnWorkspaceId   String   @map("depends_on_message_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  ticket    Workspace @relation("ticketDeps", fields: [ticketWorkspaceId], references: [id], onDelete: Cascade)
+  dependsOn Workspace @relation("depTarget", fields: [dependsOnWorkspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketWorkspaceId, dependsOnWorkspaceId])
+  @@index([dependsOnWorkspaceId])
+  @@map("ticket_dependencies")
+}
+
+model ElectronInstance {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  name         String
+  passwordHash String?  @map("password_hash")
+  serverId     String   @unique @map("server_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("electron_instances")
+}
+
+model ChannelMessage {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+  @@map("channel_messages")
+}

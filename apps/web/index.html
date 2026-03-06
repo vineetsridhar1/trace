@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" data-theme="neutral">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trace</title>
+    <style>
+      /* ── Neutral theme (default) ── */
+      [data-theme="neutral"] {
+        --th-surface: #171717;
+        --th-surface-deep: #0a0a0a;
+        --th-surface-elevated: #262626;
+        --th-surface-hover: #404040;
+        --th-primary: #a1a1aa;
+        --th-muted: #71717a;
+        --th-heading: #d4d4d8;
+        --th-faint: #52525b;
+        --th-on-accent: #171717;
+        --th-edge: #262626;
+        --th-edge-hover: #404040;
+        --th-accent: #3b82f6;
+        --th-accent-light: #60a5fa;
+        --th-accent-tint: #3b82f622;
+        --th-hover-rgb: 38,38,38;
+        --th-code-bg: #0a0a0a;
+      }
+
+      /* ── Tokyo Night theme ── */
+      [data-theme="tokyonight"] {
+        --th-surface: #1a1b26;
+        --th-surface-deep: #16161e;
+        --th-surface-elevated: #1f2335;
+        --th-surface-hover: #3b4261;
+        --th-primary: #c0caf5;
+        --th-muted: #a9b1d6;
+        --th-heading: #e0e4f0;
+        --th-faint: #565f89;
+        --th-on-accent: #1a1b26;
+        --th-edge: #292e42;
+        --th-edge-hover: #3b4261;
+        --th-accent: #7c3aed;
+        --th-accent-light: #a78bfa;
+        --th-accent-tint: #7c3aed22;
+        --th-hover-rgb: 31,35,53;
+        --th-code-bg: #16161e;
+      }
+
+      html, body, #root {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--th-surface);
+        color: var(--th-primary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

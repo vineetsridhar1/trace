@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+/* ── Semantic color tokens -> Tailwind utility classes ── */
+@theme {
+  --color-surface: var(--th-surface);
+  --color-surface-deep: var(--th-surface-deep);
+  --color-surface-elevated: var(--th-surface-elevated);
+  --color-surface-hover: var(--th-surface-hover);
+  --color-primary: var(--th-primary);
+  --color-muted: var(--th-muted);
+  --color-heading: var(--th-heading);
+  --color-faint: var(--th-faint);
+  --color-on-accent: var(--th-on-accent);
+  --color-edge: var(--th-edge);
+  --color-edge-hover: var(--th-edge-hover);
+  --color-accent: var(--th-accent);
+  --color-accent-light: var(--th-accent-light);
+}
+
+/* ── Neutral theme (default) ── */
+[data-theme="neutral"] {
+  --th-surface: #171717;
+  --th-surface-deep: #0a0a0a;
+  --th-surface-elevated: #262626;
+  --th-surface-hover: #404040;
+  --th-primary: #a1a1aa;
+  --th-muted: #71717a;
+  --th-heading: #d4d4d8;
+  --th-faint: #52525b;
+  --th-on-accent: #171717;
+  --th-edge: #262626;
+  --th-edge-hover: #404040;
+  --th-accent: #3b82f6;
+  --th-accent-light: #60a5fa;
+  --th-accent-tint: #3b82f622;
+  --th-hover-rgb: 38,38,38;
+  --th-code-bg: #0a0a0a;
+}
+
+/* ── Tokyo Night theme ── */
+[data-theme="tokyonight"] {
+  --th-surface: #1a1b26;
+  --th-surface-deep: #16161e;
+  --th-surface-elevated: #1f2335;
+  --th-surface-hover: #3b4261;
+  --th-primary: #c0caf5;
+  --th-muted: #a9b1d6;
+  --th-heading: #e0e4f0;
+  --th-faint: #565f89;
+  --th-on-accent: #1a1b26;
+  --th-edge: #292e42;
+  --th-edge-hover: #3b4261;
+  --th-accent: #7c3aed;
+  --th-accent-light: #a78bfa;
+  --th-accent-tint: #7c3aed22;
+  --th-hover-rgb: 31,35,53;
+  --th-code-bg: #16161e;
+}
+
+/* ── Button utility classes ── */
+.btn-primary {
+  color: white !important;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent-light) 40%, var(--th-accent)),
+    color-mix(in srgb, var(--th-accent) 85%, black)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, white 18%, transparent),
+    0 1px 3px 0 rgb(0 0 0 / 0.4) !important;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.btn-primary:hover {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent-light) 55%, var(--th-accent)),
+    var(--th-accent)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, white 25%, transparent),
+    0 3px 10px 0 rgb(0 0 0 / 0.45) !important;
+}
+.btn-primary:active {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent) 80%, black),
+    var(--th-accent)
+  ) !important;
+  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.4) !important;
+  transform: scale(0.97);
+}
+.btn-primary:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+.btn-primary:disabled {
+  background: var(--th-accent) !important;
+  box-shadow: none !important;
+  opacity: 0.4;
+  transform: none;
+}
+
+.btn-secondary {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.15) !important;
+  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn-secondary:hover {
+  border-color: var(--th-edge-hover);
+  background: var(--th-surface-elevated) !important;
+  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.2) !important;
+}
+.btn-secondary:active {
+  background: var(--th-surface) !important;
+  box-shadow: inset 0 1px 3px 0 rgb(0 0 0 / 0.2) !important;
+  transform: scale(0.98);
+}
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+.btn-secondary:disabled {
+  box-shadow: none !important;
+  opacity: 0.3;
+  transform: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-ghost:hover {
+  background: var(--th-surface-elevated);
+}
+.btn-ghost:active {
+  background: var(--th-surface-hover);
+  transform: scale(0.95);
+}
+.btn-ghost:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--th-edge);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--th-edge-hover);
+}

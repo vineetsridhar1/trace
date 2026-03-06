@@ -1,0 +1,156 @@
+import * as Types from '../../__generated__/schema-types';
+
+import { gql } from '@apollo/client';
+import { WorkspaceFieldsFragmentDoc, SessionEventPayloadFieldsFragmentDoc } from '../../graphql/__generated__/fragments.generated';
+import * as Apollo from '@apollo/client';
+const defaultOptions = {} as const;
+export type WorkspaceUpsertedSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type WorkspaceUpsertedSubscription = { __typename?: 'Subscription', workspaceUpserted: { __typename?: 'Workspace', id: string, channelId: string, cliSessionId: string, userId?: string | null, preview?: string | null, importance: string, status: string, summary?: string | null, branch?: string | null, agentSessionId?: string | null, agentType?: string | null, createdAt: string, sessionCount: number, queuedRunConfig?: unknown | null, isProductDoc: boolean, cliSession?: { __typename?: 'WorkspaceCliSession', sessionId: string, cwd?: string | null, status: string } | null, user?: { __typename?: 'WorkspaceUser', id: string, name: string, avatarUrl?: string | null } | null } };
+
+export type WorkspaceDeletedSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type WorkspaceDeletedSubscription = { __typename?: 'Subscription', workspaceDeleted: { __typename?: 'WorkspaceDeletedPayload', channelId: string, workspaceId: string } };
+
+export type SessionEventCreatedSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type SessionEventCreatedSubscription = { __typename?: 'Subscription', sessionEventCreated: { __typename?: 'SessionEventPayload', channelId: string, workspaceId: string, sessionId: string, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, sessionId: string, importance: string } } };
+
+export type SessionEventUpdatedSubscriptionVariables = Types.Exact<{
+  channelId: Types.Scalars['ID']['input'];
+}>;
+
+
+export type SessionEventUpdatedSubscription = { __typename?: 'Subscription', sessionEventUpdated: { __typename?: 'SessionEventPayload', channelId: string, workspaceId: string, sessionId: string, event: { __typename?: 'Event', id: string, cliSessionId: string, hookEventName: string, timestamp: string, toolName?: string | null, toolInput?: unknown | null, toolResponse?: unknown | null, toolUseId?: string | null, stopHookActive?: boolean | null, lastAssistantMessage?: string | null, rawPayload: unknown, sessionId: string, importance: string } } };
+
+
+export const WorkspaceUpsertedDocument = gql`
+    subscription WorkspaceUpserted($channelId: ID!) {
+  workspaceUpserted(channelId: $channelId) {
+    ...WorkspaceFields
+  }
+}
+    ${WorkspaceFieldsFragmentDoc}`;
+
+/**
+ * __useWorkspaceUpsertedSubscription__
+ *
+ * To run a query within a React component, call `useWorkspaceUpsertedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useWorkspaceUpsertedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useWorkspaceUpsertedSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useWorkspaceUpsertedSubscription(baseOptions: Apollo.SubscriptionHookOptions<WorkspaceUpsertedSubscription, WorkspaceUpsertedSubscriptionVariables> & ({ variables: WorkspaceUpsertedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<WorkspaceUpsertedSubscription, WorkspaceUpsertedSubscriptionVariables>(WorkspaceUpsertedDocument, options);
+      }
+export type WorkspaceUpsertedSubscriptionHookResult = ReturnType<typeof useWorkspaceUpsertedSubscription>;
+export type WorkspaceUpsertedSubscriptionResult = Apollo.SubscriptionResult<WorkspaceUpsertedSubscription>;
+export const WorkspaceDeletedDocument = gql`
+    subscription WorkspaceDeleted($channelId: ID!) {
+  workspaceDeleted(channelId: $channelId) {
+    channelId
+    workspaceId
+  }
+}
+    `;
+
+/**
+ * __useWorkspaceDeletedSubscription__
+ *
+ * To run a query within a React component, call `useWorkspaceDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useWorkspaceDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useWorkspaceDeletedSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useWorkspaceDeletedSubscription(baseOptions: Apollo.SubscriptionHookOptions<WorkspaceDeletedSubscription, WorkspaceDeletedSubscriptionVariables> & ({ variables: WorkspaceDeletedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<WorkspaceDeletedSubscription, WorkspaceDeletedSubscriptionVariables>(WorkspaceDeletedDocument, options);
+      }
+export type WorkspaceDeletedSubscriptionHookResult = ReturnType<typeof useWorkspaceDeletedSubscription>;
+export type WorkspaceDeletedSubscriptionResult = Apollo.SubscriptionResult<WorkspaceDeletedSubscription>;
+export const SessionEventCreatedDocument = gql`
+    subscription SessionEventCreated($channelId: ID!) {
+  sessionEventCreated(channelId: $channelId) {
+    ...SessionEventPayloadFields
+  }
+}
+    ${SessionEventPayloadFieldsFragmentDoc}`;
+
+/**
+ * __useSessionEventCreatedSubscription__
+ *
+ * To run a query within a React component, call `useSessionEventCreatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useSessionEventCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSessionEventCreatedSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useSessionEventCreatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<SessionEventCreatedSubscription, SessionEventCreatedSubscriptionVariables> & ({ variables: SessionEventCreatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<SessionEventCreatedSubscription, SessionEventCreatedSubscriptionVariables>(SessionEventCreatedDocument, options);
+      }
+export type SessionEventCreatedSubscriptionHookResult = ReturnType<typeof useSessionEventCreatedSubscription>;
+export type SessionEventCreatedSubscriptionResult = Apollo.SubscriptionResult<SessionEventCreatedSubscription>;
+export const SessionEventUpdatedDocument = gql`
+    subscription SessionEventUpdated($channelId: ID!) {
+  sessionEventUpdated(channelId: $channelId) {
+    ...SessionEventPayloadFields
+  }
+}
+    ${SessionEventPayloadFieldsFragmentDoc}`;
+
+/**
+ * __useSessionEventUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useSessionEventUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useSessionEventUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSessionEventUpdatedSubscription({
+ *   variables: {
+ *      channelId: // value for 'channelId'
+ *   },
+ * });
+ */
+export function useSessionEventUpdatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<SessionEventUpdatedSubscription, SessionEventUpdatedSubscriptionVariables> & ({ variables: SessionEventUpdatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<SessionEventUpdatedSubscription, SessionEventUpdatedSubscriptionVariables>(SessionEventUpdatedDocument, options);
+      }
+export type SessionEventUpdatedSubscriptionHookResult = ReturnType<typeof useSessionEventUpdatedSubscription>;
+export type SessionEventUpdatedSubscriptionResult = Apollo.SubscriptionResult<SessionEventUpdatedSubscription>;

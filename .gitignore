@@ -92,10 +92,10 @@ typings/
 out/
 
 # Server build output
-server/dist/
+apps/server/dist/
 
 # Prisma generated client
-server/prisma/generated/
+apps/server/prisma/generated/
 
 # Trace worktrees
 .trace-worktrees/
@@ -104,4 +104,4 @@ server/prisma/generated/
 
 dist/
 
-server/data/storage/
+apps/server/data/storage/
