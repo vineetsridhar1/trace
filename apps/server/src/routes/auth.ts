@@ -9,18 +9,30 @@ import {
 
 const router = Router();
 
-// Redirect to GitHub OAuth authorize page
+// Redirect to GitHub OAuth authorize page (desktop app)
 router.get('/github', (_req, res) => {
   const params = new URLSearchParams({
     client_id: config.githubClientId,
     scope: 'user:email,repo',
+    state: 'desktop',
   });
   res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
 });
 
-// GitHub OAuth callback
+// Redirect to GitHub OAuth authorize page (web app)
+router.get('/github/web', (_req, res) => {
+  const params = new URLSearchParams({
+    client_id: config.githubClientId,
+    scope: 'user:email,repo',
+    state: 'web',
+  });
+  res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
+});
+
+// Unified GitHub OAuth callback for both desktop and web
 router.get('/github/callback', async (req, res) => {
   const code = req.query.code as string | undefined;
+  const state = req.query.state as string | undefined;
   if (!code) {
     res.status(400).send('Missing code parameter');
     return;
@@ -32,9 +44,14 @@ router.get('/github/callback', async (req, res) => {
     const user = await upsertGitHubUser(githubUser, accessToken);
     const token = generateJwt(user);
 
-    // Render a simple HTML page with the JWT embedded in a meta tag.
-    // The Electron BrowserWindow will extract this.
-    res.send(`<!DOCTYPE html>
+    if (state === 'web') {
+      const userJson = encodeURIComponent(
+        JSON.stringify({ id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl }),
+      );
+      res.redirect(`${config.webAppUrl}/auth/callback#token=${token}&user=${userJson}`);
+    } else {
+      // Desktop flow — render HTML page for Electron to extract the token
+      res.send(`<!DOCTYPE html>
 <html>
 <head>
   <meta name="trace-token" content="${token}">
@@ -45,43 +62,14 @@ router.get('/github/callback', async (req, res) => {
   <p>Login successful! You can close this window.</p>
 </body>
 </html>`);
+    }
   } catch (err) {
     console.error('GitHub OAuth error:', err);
-    res.status(500).send('Authentication failed');
-  }
-});
-
-// Redirect to GitHub OAuth authorize page (web app flow)
-router.get('/github/web', (_req, res) => {
-  const params = new URLSearchParams({
-    client_id: config.githubClientId,
-    scope: 'user:email,repo',
-    redirect_uri: config.githubWebCallbackUrl,
-  });
-  res.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
-});
-
-// GitHub OAuth callback for web app
-router.get('/github/callback/web', async (req, res) => {
-  const code = req.query.code as string | undefined;
-  if (!code) {
-    res.status(400).send('Missing code parameter');
-    return;
-  }
-
-  try {
-    const accessToken = await exchangeGitHubCode(code, config.githubWebCallbackUrl);
-    const githubUser = await fetchGitHubUser(accessToken);
-    const user = await upsertGitHubUser(githubUser, accessToken);
-    const token = generateJwt(user);
-    const userJson = encodeURIComponent(
-      JSON.stringify({ id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl }),
-    );
-    // Redirect to web app with token in URL fragment (not query string — never hits server logs)
-    res.redirect(`${config.webAppUrl}/auth/callback#token=${token}&user=${userJson}`);
-  } catch (err) {
-    console.error('GitHub OAuth (web) error:', err);
-    res.redirect(`${config.webAppUrl}/login?error=auth_failed`);
+    if (state === 'web') {
+      res.redirect(`${config.webAppUrl}/login?error=auth_failed`);
+    } else {
+      res.status(500).send('Authentication failed');
+    }
   }
 });
 

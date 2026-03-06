@@ -11,7 +11,4 @@ export const config = {
   githubClientId: process.env.GITHUB_CLIENT_ID || "",
   githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "",
   webAppUrl: process.env.WEB_APP_URL || "http://localhost:5180",
-  githubWebCallbackUrl:
-    process.env.GITHUB_WEB_CALLBACK_URL ||
-    "http://localhost:3100/auth/github/callback/web",
 };

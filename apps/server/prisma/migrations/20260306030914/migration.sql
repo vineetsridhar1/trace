@@ -8,4 +8,4 @@ ALTER TABLE "events" ALTER COLUMN "agent_type" SET DATA TYPE TEXT;
 ALTER TABLE "messages" ALTER COLUMN "agent_type" SET DATA TYPE TEXT;
 
 -- AlterTable
-ALTER TABLE "users" ADD COLUMN     "github_username" TEXT;
+ALTER TABLE "users" ADD COLUMN  IF NOT EXISTS "github_username" TEXT;
