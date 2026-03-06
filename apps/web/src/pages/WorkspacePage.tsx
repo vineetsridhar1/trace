@@ -14,6 +14,7 @@ import { useWorkspaceSync } from '../hooks/useWorkspaceSync';
 import { useChannelSubscriptions } from '../hooks/useChannelSubscriptions';
 import { useThreadSync } from '../hooks/useThreadSync';
 import { useWorkspaceActions } from '../hooks/useWorkspaceActions';
+import { useAuth } from '../context/AuthContext';
 
 export function WorkspacePage() {
   const { instanceId } = useParams<{ instanceId: string }>();
@@ -37,6 +38,8 @@ export function WorkspacePage() {
   );
 
   const isOffline = instanceStatus !== 'connected';
+  const { user } = useAuth();
+  const isOwnWorkspace = !selectedWorkspace || !selectedWorkspace.userId || selectedWorkspace.userId === user?.id;
 
   // Redirect if not connected to this instance
   if (instanceId !== connectedInstanceId) {
@@ -49,6 +52,7 @@ export function WorkspacePage() {
       selectedWorkspaceId={selectedWorkspaceId}
       selectedWorkspace={selectedWorkspace}
       isOffline={isOffline}
+      isOwnWorkspace={isOwnWorkspace}
       onSelectWorkspace={setSelectedWorkspaceId}
     />
   );
@@ -59,6 +63,7 @@ interface WorkspacePageInnerProps {
   selectedWorkspaceId: string | null;
   selectedWorkspace: ReturnType<typeof useWorkspaceStore.getState>['workspaces'][number] | null;
   isOffline: boolean;
+  isOwnWorkspace: boolean;
   onSelectWorkspace: (id: string | null) => void;
 }
 
@@ -67,6 +72,7 @@ function WorkspacePageInner({
   selectedWorkspaceId,
   selectedWorkspace,
   isOffline,
+  isOwnWorkspace,
   onSelectWorkspace,
 }: WorkspacePageInnerProps) {
   // Data hooks
@@ -150,7 +156,11 @@ function WorkspacePageInner({
                 workspaceId={selectedWorkspaceId}
                 channelId={channelId}
               />
-              {selectedWorkspace.status === 'pending' || selectedWorkspace.status === 'handed_off' ? (
+              {!isOwnWorkspace ? (
+                <div className="border-t border-edge px-3 py-3 text-center text-xs text-muted">
+                  Viewing {selectedWorkspace.user?.name ?? 'another user'}'s workspace — read only
+                </div>
+              ) : selectedWorkspace.status === 'pending' || selectedWorkspace.status === 'handed_off' ? (
                 <WebRunButtons
                   initialPrompt={selectedWorkspace.preview ?? ''}
                   workspaceId={selectedWorkspaceId}
