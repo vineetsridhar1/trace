@@ -1,4 +1,6 @@
 import type { BrowserWindow } from "electron";
+import fs from "node:fs";
+import os from "node:os";
 import * as pty from "node-pty";
 
 const SCROLLBACK_BUFFER_MAX = 200 * 1024; // ~200KB
@@ -33,19 +35,23 @@ export function createPty(
     suppressExitIds.add(terminalId);
   }
   killPty(terminalId);
-  lastCwdByTerminalId.set(terminalId, cwd);
+  let effectiveCwd = cwd;
+  if (!fs.existsSync(cwd)) {
+    effectiveCwd = os.homedir();
+  }
+  lastCwdByTerminalId.set(terminalId, effectiveCwd);
   if (extraEnv) {
     lastEnvByTerminalId.set(terminalId, extraEnv);
   }
 
   const shell =
-    process.platform === "darwin" ? "zsh" : process.env.SHELL || "bash";
+    process.platform === "darwin" ? "/bin/zsh" : process.env.SHELL || "/bin/bash";
   const baseEnv = { ...process.env } as Record<string, string>;
   const proc = pty.spawn(shell, ["-l"], {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
-    cwd,
+    cwd: effectiveCwd,
     env: { ...baseEnv, ...extraEnv },
   });
 
