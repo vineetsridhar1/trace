@@ -7,6 +7,19 @@ import { StopBubble } from './thread-events/StopBubble';
 import { GenericEventRow } from './thread-events/GenericEventRow';
 import { AssistantTextRow } from './thread-events/AssistantTextRow';
 
+/** Detect raw JSON tool responses that leak into lastAssistantMessage */
+function looksLikeRawJson(text: string): boolean {
+  const t = text.trimStart();
+  return /^\[\s*\{/.test(t) || /^\{\s*"/.test(t);
+}
+
+function extractAssistantText(event: ServerEvent): string {
+  if (!event.lastAssistantMessage) return '';
+  const text = stripTraceInternal(event.lastAssistantMessage).trim();
+  if (!text || looksLikeRawJson(text)) return '';
+  return text;
+}
+
 export const ThreadEvent = memo(function ThreadEvent({
   event,
   duration,
@@ -25,7 +38,7 @@ export const ThreadEvent = memo(function ThreadEvent({
   }
 
   if (event.hookEventName === 'PreToolUse') {
-    const assistantText = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage).trim() : '';
+    const assistantText = extractAssistantText(event);
     return (
       <>
         {assistantText && <AssistantTextRow text={assistantText} />}
@@ -35,7 +48,7 @@ export const ThreadEvent = memo(function ThreadEvent({
   }
 
   if (event.hookEventName === 'PostToolUse') {
-    const assistantText = event.lastAssistantMessage ? stripTraceInternal(event.lastAssistantMessage).trim() : '';
+    const assistantText = extractAssistantText(event);
     return (
       <>
         {assistantText && <AssistantTextRow text={assistantText} />}

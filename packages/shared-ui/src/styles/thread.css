@@ -37,6 +37,7 @@
   flex-direction: column;
   gap: 12px;
   min-height: 100%;
+  min-width: 0;
 }
 
 .sticky-todo-list {
@@ -47,6 +48,38 @@
 
 .thread-bubble {
   flex-shrink: 0;
+}
+
+/* User prompt bubble — explicit colors to avoid Tailwind v4 oklch opacity issues */
+.user-prompt-bubble {
+  border: 1px solid color-mix(in srgb, var(--th-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--th-accent) 15%, transparent);
+  border-radius: 0.75rem;
+  border-bottom-right-radius: 0.125rem;
+}
+
+/* Subagent result pre */
+.subagent-result-pre {
+  margin-top: 6px;
+  max-height: 15rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  border-radius: 6px;
+  border: 1px solid var(--th-edge);
+  background: var(--th-surface);
+  padding: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  font-family: Menlo, Monaco, monospace;
+}
+
+/* Accent dashed container (questions, plan review) */
+.accent-dashed-container {
+  border: 1px dashed color-mix(in srgb, var(--th-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--th-accent) 5%, transparent);
+  border-radius: 0.5rem;
 }
 
 .jump-latest-chip {
@@ -121,6 +154,7 @@
 
 .activity-row {
   padding: 6px 4px 6px 2px;
+  min-width: 0;
 }
 
 .activity-row-header {

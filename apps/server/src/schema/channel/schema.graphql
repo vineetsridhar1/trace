@@ -7,6 +7,7 @@ extend type Mutation {
   createChannel(name: String!, serverId: String, type: String, workspacesEnabled: Boolean, teamIds: [String!], githubUrl: String, baseBranch: String, defaultSetupScript: String, defaultRunScript: String, defaultTeardownScript: String): Channel!
   updateChannel(id: ID!, name: String, workspacesEnabled: Boolean, teamIds: [String!], baseBranch: String, githubUrl: String, defaultRepoPath: String, defaultSetupScript: String, defaultRunScript: String, defaultTeardownScript: String): Channel!
   deleteChannel(id: ID!): Boolean!
+  joinChannel(channelId: ID!): Boolean!
 }
 
 extend type Subscription {

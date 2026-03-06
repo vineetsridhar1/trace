@@ -356,7 +356,7 @@ export function ChannelPanel({
             );
           })}
         </Reorder.Group>
-        <div className="flex items-center border-t border-edge px-3 py-2">
+        <SyncStatus settingsButton={
           <Tooltip text="Instance settings" position="top">
             <button
               type="button"
@@ -366,8 +366,7 @@ export function ChannelPanel({
               <FiSettings className="h-3.5 w-3.5" />
             </button>
           </Tooltip>
-        </div>
-        <SyncStatus />
+        } />
       </div>
 
       {channelWidth > 0 && (

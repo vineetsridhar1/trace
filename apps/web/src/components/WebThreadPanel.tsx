@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { useThreadStore } from '../stores/threadStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 import {
   buildSessionNodes,
   stripTraceInternal,
@@ -39,6 +40,12 @@ export function WebThreadPanel({ workspaceId }: WebThreadPanelProps) {
   const toggleReadGroup = useThreadStore((s) => s.toggleReadGroup);
   const toggleTurnGroup = useThreadStore((s) => s.toggleTurnGroup);
   const tokenUsage = useThreadStore((s) => s.tokenUsage);
+
+  const workspace = useWorkspaceStore((s) =>
+    s.workspaces.find((w) => w.id === workspaceId),
+  );
+  const isAgentRunning =
+    workspace?.status === 'in_progress' || workspace?.status === 'needs_input';
 
   // ─── Agent run actions for interactive plan/question ────────────
   const planActions = useMemo((): PlanReviewActions => ({
@@ -143,10 +150,11 @@ export function WebThreadPanel({ workspaceId }: WebThreadPanelProps) {
   }, [sessionNodes]);
 
   const activePlanNode = useMemo((): PlanReviewNode | null => {
+    if (isAgentRunning) return null;
     const last = sessionNodes[sessionNodes.length - 1];
     if (last?.kind === 'plan-review') return last;
     return null;
-  }, [sessionNodes]);
+  }, [sessionNodes, isAgentRunning]);
 
   // ─── Loading state ─────────────────────────────────────────────
   if (sessionStatus === 'loading') {
@@ -258,7 +266,7 @@ export function WebThreadPanel({ workspaceId }: WebThreadPanelProps) {
                 );
               }
               if (node.kind === 'plan-review') {
-                return <PlanReview key={node.id} node={node} actions={planActions} />;
+                return <PlanReview key={node.id} node={node} />;
               }
               if (node.kind === 'ask-user-question') {
                 return <AskUserQuestionInline key={node.id} node={node} actions={questionActions} />;

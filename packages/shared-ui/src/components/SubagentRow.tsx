@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { FiCpu, FiCheck, FiChevronRight, FiLoader } from 'react-icons/fi';
 import type { ServerEvent } from '../types';
 import { formatTime, formatTokens, serializeUnknown } from '../utils';
@@ -34,8 +34,6 @@ function getTypeStyle(subagentType: string) {
 
 export function SubagentRow({ event }: { event: ServerEvent }) {
   const [expanded, setExpanded] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const [bodyHeight, setBodyHeight] = useState(0);
 
   const isLoading = event.hookEventName === 'PreToolUse';
   const input = (event.toolInput ?? {}) as SubagentInput;
@@ -55,14 +53,8 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
   const time = formatTime(event.timestamp);
   const style = getTypeStyle(subagentType);
 
-  useEffect(() => {
-    if (bodyRef.current) {
-      setBodyHeight(bodyRef.current.scrollHeight);
-    }
-  }, [expanded, resultText]);
-
   return (
-    <div className="activity-row">
+    <div className="activity-row overflow-hidden">
       <button
         type="button"
         disabled={isLoading}
@@ -103,22 +95,17 @@ export function SubagentRow({ event }: { event: ServerEvent }) {
         )}
       </button>
 
-      {!isLoading && (
-        <div
-          className="overflow-hidden transition-[max-height] duration-200 ease-in-out"
-          style={{ maxHeight: expanded ? `${bodyHeight}px` : '0px' }}
-        >
-          <div ref={bodyRef}>
-            {resultText ? (
-              <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded border border-edge bg-surface p-2 text-[11px] leading-relaxed text-primary">
-                {resultText.length > 3000 ? `${resultText.slice(0, 3000)}...` : resultText}
-              </pre>
-            ) : (
-              <pre className="mt-1.5 rounded border border-edge bg-surface p-2 text-[11px] text-muted">
-                {serializeUnknown(event.toolResponse, 2000)}
-              </pre>
-            )}
-          </div>
+      {!isLoading && expanded && (
+        <div>
+          {resultText ? (
+            <pre className="subagent-result-pre text-primary">
+              {resultText.length > 3000 ? `${resultText.slice(0, 3000)}...` : resultText}
+            </pre>
+          ) : (
+            <pre className="subagent-result-pre text-muted">
+              {serializeUnknown(event.toolResponse, 2000)}
+            </pre>
+          )}
         </div>
       )}
     </div>

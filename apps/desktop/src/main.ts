@@ -13,7 +13,7 @@ import {
   runningProcesses,
   suppressSyntheticStopFor,
 } from './main/worktree';
-import { InstanceConnection, getOrCreateInstanceId } from './main/instanceConnection';
+import { InstanceConnection, getOrCreateInstanceId, setAuthToken } from './main/instanceConnection';
 import { handleRelayCommand } from './main/instanceCommandHandler';
 
 if (started) {
@@ -29,6 +29,8 @@ ipcMain.handle('set-instance-auth', (_event, token: string, serverId: string) =>
   if (instanceConnection) {
     instanceConnection.disconnect();
   }
+
+  setAuthToken(token, serverId);
 
   const httpUrl = resolveServerUrl();
   const serverUrl = httpUrl.replace(/^http/, 'ws');
@@ -49,6 +51,7 @@ ipcMain.handle('clear-instance-auth', () => {
     instanceConnection.disconnect();
     instanceConnection = null;
   }
+  setAuthToken(null, null);
 });
 
 const createWindow = () => {

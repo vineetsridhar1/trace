@@ -252,6 +252,7 @@ export type Mutation = {
   deleteWorkspace: Scalars['Boolean']['output'];
   handoffWorkspace: Workspace;
   importTicketsToProject: Array<ImportedTicketResult>;
+  joinChannel: Scalars['Boolean']['output'];
   moveTicket: Ticket;
   registerInstance: ElectronInstance;
   relayAction: RelayActionResult;
@@ -370,6 +371,11 @@ export type MutationImportTicketsToProjectArgs = {
   channelId: Scalars['ID']['input'];
   runConfig: Scalars['JSON']['input'];
   tickets: Array<ImportTicketInput>;
+};
+
+
+export type MutationJoinChannelArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 

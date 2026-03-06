@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../../packages/shared-ui/src";
 
 /* ── Semantic color tokens → Tailwind utility classes ── */
 @theme {

@@ -215,6 +215,7 @@ type Mutation {
   deleteWorkspace(channelId: ID!, workspaceId: ID!): Boolean!
   handoffWorkspace(channelId: ID!, workspaceId: ID!): Workspace!
   importTicketsToProject(channelId: ID!, runConfig: JSON!, tickets: [ImportTicketInput!]!): [ImportedTicketResult!]!
+  joinChannel(channelId: ID!): Boolean!
   moveTicket(columnId: ID!, sortOrder: Int, ticketId: ID!): Ticket!
   registerInstance(name: String!, serverId: ID!): ElectronInstance!
   relayAction(action: String!, instanceId: ID!, params: JSON!): RelayActionResult!

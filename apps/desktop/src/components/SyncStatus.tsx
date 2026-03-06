@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
   FiCheck,
@@ -9,7 +10,7 @@ import { useSyncStore } from "../stores/syncStore";
 import { useChannelContext } from "../context/ChannelContext";
 import { CommitPopover } from "./CommitPopover";
 
-export function SyncStatus() {
+export function SyncStatus({ settingsButton }: { settingsButton?: React.ReactNode }) {
   const { enrichedActiveChannel } = useChannelContext();
   const repoPath = enrichedActiveChannel?.localRepoPath ?? "";
   const baseBranch = enrichedActiveChannel?.baseBranch || "main";
@@ -49,10 +50,17 @@ export function SyncStatus() {
     };
   }, []);
 
-  if (!repoPath || (isUpToDate === null && !syncError)) return null;
+  if (!repoPath || (isUpToDate === null && !syncError)) {
+    return settingsButton ? (
+      <div className="flex items-center border-t border-edge px-3 py-2">
+        {settingsButton}
+      </div>
+    ) : null;
+  }
 
   return (
     <div className="flex items-center gap-2 border-t border-edge px-3 py-2">
+      {settingsButton}
       {isChecking ? (
         <>
           <FiRefreshCw className="h-3 w-3 animate-spin text-muted" />

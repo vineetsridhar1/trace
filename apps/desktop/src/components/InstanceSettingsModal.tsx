@@ -1,11 +1,21 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { FiX, FiLock, FiSettings } from "react-icons/fi";
+import { useChannelContext } from "../context/ChannelContext";
+import { useMyInstancesQuery, useSetInstancePasswordMutation } from "../hooks/__generated__/useInstanceSettings.generated";
 
 export function InstanceSettingsModal({ onClose }: { onClose: () => void }) {
+  const { activeServerId } = useChannelContext();
+  const { data, refetch } = useMyInstancesQuery();
+  const [setInstancePasswordMutation] = useSetInstancePasswordMutation();
+
+  const instance = useMemo(
+    () => data?.myInstances.find((i) => i.serverId === activeServerId) ?? null,
+    [data, activeServerId],
+  );
+
   const [instanceName, setInstanceName] = useState("");
   const [password, setPassword] = useState("");
-  const [hasPassword, setHasPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -30,44 +40,51 @@ export function InstanceSettingsModal({ onClose }: { onClose: () => void }) {
   }, [instanceName]);
 
   const handleSetPassword = useCallback(async () => {
-    if (!password.trim()) return;
+    if (!password.trim() || !instance) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const result = await window.traceAPI.instanceSetPassword(password);
-      if (!result.success) {
-        setError(result.error ?? "Failed to set password.");
+      const { data: result } = await setInstancePasswordMutation({
+        variables: { instanceId: instance.id, password: password.trim() },
+      });
+      if (!result?.setInstancePassword) {
+        setError("Failed to set password.");
       } else {
-        setHasPassword(true);
         setPassword("");
         setSuccess("Password set. Other users will need it to connect.");
+        void refetch();
       }
-    } catch {
-      setError("Failed to set password.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set password.");
     } finally {
       setSaving(false);
     }
-  }, [password]);
+  }, [password, instance, setInstancePasswordMutation, refetch]);
 
   const handleRemovePassword = useCallback(async () => {
+    if (!instance) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const result = await window.traceAPI.instanceSetPassword(null);
-      if (!result.success) {
-        setError(result.error ?? "Failed to remove password.");
+      const { data: result } = await setInstancePasswordMutation({
+        variables: { instanceId: instance.id, password: null },
+      });
+      if (!result?.setInstancePassword) {
+        setError("Failed to remove password.");
       } else {
-        setHasPassword(false);
         setSuccess("Password removed. Anyone can connect now.");
+        void refetch();
       }
-    } catch {
-      setError("Failed to remove password.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove password.");
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [instance, setInstancePasswordMutation, refetch]);
+
+  const hasPassword = instance?.hasPassword ?? false;
 
   return createPortal(
     <div
@@ -143,7 +160,7 @@ export function InstanceSettingsModal({ onClose }: { onClose: () => void }) {
               />
               <button
                 type="button"
-                disabled={saving || !password.trim()}
+                disabled={saving || !password.trim() || !instance}
                 onClick={() => void handleSetPassword()}
                 className="btn-primary rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50"
               >

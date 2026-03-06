@@ -30,6 +30,14 @@ export interface InstanceConnectionOptions {
 const CONFIG_DIR = path.join(os.homedir(), ".trace");
 const INSTANCE_CONFIG_PATH = path.join(CONFIG_DIR, "instance.json");
 
+let storedAuthToken: string | null = null;
+let storedServerId: string | null = null;
+
+export function setAuthToken(token: string | null, serverId?: string | null): void {
+  storedAuthToken = token;
+  if (serverId !== undefined) storedServerId = serverId;
+}
+
 interface InstanceConfig {
   instanceId: string;
   instanceName?: string;
@@ -81,11 +89,15 @@ export async function setPassword(
   password: string | null,
 ): Promise<{ success: boolean; error?: string }> {
   const serverUrl = resolveServerUrl();
-  const instanceId = getInstanceId();
+  const instanceId = storedServerId ?? getInstanceId();
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (storedAuthToken) {
+      headers["Authorization"] = `Bearer ${storedAuthToken}`;
+    }
     const res = await fetch(`${serverUrl}/graphql`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         query: `mutation SetInstancePassword($instanceId: ID!, $password: String) {
           setInstancePassword(instanceId: $instanceId, password: $password)
