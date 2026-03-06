@@ -141,6 +141,7 @@ const _GQL_UPDATE_WORKSPACE_STATUS = gql`
 export interface CreateWorkspaceParams {
   channelId: string;
   prompt: string;
+  attachmentIds?: string[];
 }
 
 export interface CreateWorkspaceAndSpawnParams extends CreateWorkspaceParams {
@@ -178,6 +179,7 @@ export interface WorkspaceActions {
     model?: string,
     effort?: string,
     planMode?: boolean,
+    attachmentIds?: string[],
   ) => Promise<{ success: boolean; error?: string }>;
 
   switchMode: (
@@ -206,6 +208,7 @@ export function useWorkspaceActions(): WorkspaceActions {
           variables: {
             channelId: params.channelId,
             text: params.prompt,
+            attachmentIds: params.attachmentIds,
           },
         });
 
@@ -279,6 +282,7 @@ export function useWorkspaceActions(): WorkspaceActions {
       model?: string,
       effort?: string,
       planMode?: boolean,
+      attachmentIds?: string[],
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         const { data } = await executeAppendPrompt({
@@ -286,6 +290,7 @@ export function useWorkspaceActions(): WorkspaceActions {
             channelId,
             workspaceId,
             text: prompt,
+            attachmentIds,
           },
         });
 

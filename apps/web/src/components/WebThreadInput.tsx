@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiSend,
   FiClock,
@@ -7,14 +7,17 @@ import {
   FiEdit3,
   FiMap,
   FiHelpCircle,
+  FiImage,
 } from "react-icons/fi";
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useSlashCommands } from "../hooks/useSlashCommands";
 import { useFileMention } from "../hooks/useFileMention";
+import { useImageAttachments } from "../hooks/useImageAttachments";
 import { WebSlashCommandMenu } from "./WebSlashCommandMenu";
 import { WebFileMentionMenu } from "./WebFileMentionMenu";
+import { WebImageThumbnails } from "./WebImageThumbnails";
 
 // ─── Interaction mode ──────────────────────────────────────────
 
@@ -101,7 +104,17 @@ export function WebThreadInput({
   const [isQueued, setIsQueued] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, stopCurrentAgent, switchMode } = useWorkspaceActions();
+  const {
+    attachments: imageAttachmentsList,
+    uploading: imageUploading,
+    handlePaste: handleImagePaste,
+    handleFilePick: handleImageFilePick,
+    removeAttachment: removeImageAttachment,
+    clearAttachments: clearImageAttachments,
+    getAttachmentIds: getImageAttachmentIds,
+  } = useImageAttachments();
 
   const slashCommands = useSlashCommands(input, setInput, repoPath);
   const fileMention = useFileMention(input, setInput, repoPath ?? "", textareaRef);
@@ -136,7 +149,8 @@ export function WebThreadInput({
 
   const sendNow = useCallback(async () => {
     const text = input.trim();
-    if (!text || disabled || sending) return;
+    const attachmentIds = getImageAttachmentIds();
+    if ((!text && attachmentIds.length === 0) || disabled || sending) return;
 
     let finalText = text;
     if (mode === "plan") {
@@ -164,26 +178,33 @@ export function WebThreadInput({
         undefined,
         undefined,
         mode === "plan",
+        attachmentIds.length > 0 ? attachmentIds : undefined,
       );
       if (!result.success) {
         setInput(previousInput);
+      } else {
+        clearImageAttachments();
       }
     } finally {
       setSending(false);
       textareaRef.current?.focus();
     }
-  }, [input, disabled, sending, mode, sendMessage, workspaceId, channelId, fileMention]);
+  }, [input, disabled, sending, mode, sendMessage, workspaceId, channelId, fileMention, getImageAttachmentIds, clearImageAttachments]);
+
+  const hasContent = useMemo(
+    () => !!input.trim() || imageAttachmentsList.length > 0,
+    [input, imageAttachmentsList.length],
+  );
 
   const handleSendOrQueue = useCallback(() => {
-    const text = input.trim();
-    if (!text) return;
+    if (!hasContent) return;
 
     if (isRunning) {
       setIsQueued(true);
     } else {
       void sendNow();
     }
-  }, [input, isRunning, sendNow]);
+  }, [hasContent, isRunning, sendNow]);
 
   // Auto-send queued message when agent finishes
   const wasRunningRef = useRef(isRunning);
@@ -277,6 +298,13 @@ export function WebThreadInput({
         </div>
       )}
 
+      {/* Image thumbnails */}
+      <WebImageThumbnails
+        images={imageAttachmentsList}
+        onRemove={removeImageAttachment}
+        uploading={imageUploading}
+      />
+
       {/* Textarea + send/stop buttons */}
       <div className="relative flex items-end gap-2">
         {/* Autocomplete menus */}
@@ -301,6 +329,7 @@ export function WebThreadInput({
             setInput(e.target.value);
             if (!e.target.value.trim()) setIsQueued(false);
           }}
+          onPaste={(e) => void handleImagePaste(e)}
           onKeyDown={handleKeyDown}
           onSelect={fileMention.handleSelect}
           onClick={fileMention.handleSelect}
@@ -331,7 +360,7 @@ export function WebThreadInput({
         />
         {isRunning ? (
           <div className="flex gap-1.5">
-            {!isQueued && input.trim() && (
+            {!isQueued && hasContent && (
               <button
                 type="button"
                 onClick={handleSendOrQueue}
@@ -355,7 +384,7 @@ export function WebThreadInput({
           <button
             type="button"
             onClick={() => void sendNow()}
-            disabled={disabled || !input.trim() || sending}
+            disabled={disabled || !hasContent || sending}
             title="Send message"
             className="btn-primary h-[38px] cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-on-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -364,19 +393,45 @@ export function WebThreadInput({
         )}
       </div>
 
+      {/* Hidden file input for image picker */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) {
+            void handleImageFilePick(e.target.files);
+            e.target.value = "";
+          }
+        }}
+      />
+
       {/* Mode toggle + token usage row */}
       {(!isRunning || (tokenUsage && tokenUsage.totalTokens > 0)) && (
         <div className="mt-2 flex items-center gap-1.5">
           {!isRunning && (
-            <button
-              type="button"
-              onClick={cycleMode}
-              disabled={disabled}
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${config.style}`}
-            >
-              {config.icon}
-              {config.label}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={cycleMode}
+                disabled={disabled}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${config.style}`}
+              >
+                {config.icon}
+                {config.label}
+              </button>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                title="Attach image"
+                className="flex items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-elevated hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FiImage className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+              </button>
+            </>
           )}
           {tokenUsage && tokenUsage.totalTokens > 0 && (
             <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-medium text-muted">
