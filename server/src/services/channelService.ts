@@ -34,6 +34,7 @@ export async function createChannel(data: {
   githubUrl?: string | null;
   defaultSetupScript?: string | null;
   defaultRunScript?: string | null;
+  defaultTeardownScript?: string | null;
 }) {
   const { teamIds, ...channelData } = data;
   const channel = await prisma.channel.create({
@@ -88,6 +89,7 @@ export async function updateChannel(id: string, data: {
   defaultRepoPath?: string | null;
   defaultSetupScript?: string | null;
   defaultRunScript?: string | null;
+  defaultTeardownScript?: string | null;
 }) {
   const { teamIds, ...channelData } = data;
 

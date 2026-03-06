@@ -13,10 +13,11 @@ export type UpdateChannelMutationVariables = Types.Exact<{
   defaultRepoPath?: Types.InputMaybe<Types.Scalars['String']['input']>;
   defaultSetupScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
   defaultRunScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  defaultTeardownScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
 }>;
 
 
-export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
+export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, defaultTeardownScript?: string | null, createdAt: string, updatedAt: string } };
 
 export type DeleteChannelMutationVariables = Types.Exact<{
   id: Types.Scalars['ID']['input'];
@@ -27,7 +28,7 @@ export type DeleteChannelMutation = { __typename?: 'Mutation', deleteChannel: bo
 
 
 export const UpdateChannelDocument = gql`
-    mutation UpdateChannel($id: ID!, $name: String, $workspacesEnabled: Boolean, $teamIds: [String!], $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String) {
+    mutation UpdateChannel($id: ID!, $name: String, $workspacesEnabled: Boolean, $teamIds: [String!], $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String, $defaultTeardownScript: String) {
   updateChannel(
     id: $id
     name: $name
@@ -38,6 +39,7 @@ export const UpdateChannelDocument = gql`
     defaultRepoPath: $defaultRepoPath
     defaultSetupScript: $defaultSetupScript
     defaultRunScript: $defaultRunScript
+    defaultTeardownScript: $defaultTeardownScript
   ) {
     id
     serverId
@@ -50,6 +52,7 @@ export const UpdateChannelDocument = gql`
     defaultRepoPath
     defaultSetupScript
     defaultRunScript
+    defaultTeardownScript
     createdAt
     updatedAt
   }
@@ -79,6 +82,7 @@ export type UpdateChannelMutationFn = Apollo.MutationFunction<UpdateChannelMutat
  *      defaultRepoPath: // value for 'defaultRepoPath'
  *      defaultSetupScript: // value for 'defaultSetupScript'
  *      defaultRunScript: // value for 'defaultRunScript'
+ *      defaultTeardownScript: // value for 'defaultTeardownScript'
  *   },
  * });
  */

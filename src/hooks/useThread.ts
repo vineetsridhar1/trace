@@ -94,6 +94,7 @@ const GQL_CREATE_SESSION = gql`
 interface UseThreadOptions {
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
+  getChannelTeardownCommands?: () => string[] | undefined;
   getActiveChannelId: () => string | null;
 }
 
@@ -102,6 +103,7 @@ const SESSION_PAGE_SIZE = 100;
 export function useThread({
   getChannelRepoPath,
   getChannelBaseBranch,
+  getChannelTeardownCommands,
   getActiveChannelId,
 }: UseThreadOptions) {
   const [executeSessions] = useSessionsLazyQuery();
@@ -129,6 +131,7 @@ export function useThread({
   } = useWorktreeState({
     getChannelRepoPath,
     getChannelBaseBranch,
+    getChannelTeardownCommands,
     selectedWorkspaceRef,
   });
 

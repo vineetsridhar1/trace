@@ -2,7 +2,7 @@ import type { MutationResolvers } from './../../../types.generated';
 import { updateChannel as updateChannelService } from '../../../../services/channelService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
 
-export const updateChannel: NonNullable<MutationResolvers['updateChannel']> = async (_parent, { id, name, workspacesEnabled, teamIds, baseBranch, githubUrl, defaultRepoPath, defaultSetupScript, defaultRunScript }, _ctx) => {
+export const updateChannel: NonNullable<MutationResolvers['updateChannel']> = async (_parent, { id, name, workspacesEnabled, teamIds, baseBranch, githubUrl, defaultRepoPath, defaultSetupScript, defaultRunScript, defaultTeardownScript }, _ctx) => {
   const data: {
     name?: string;
     workspacesEnabled?: boolean;
@@ -12,6 +12,7 @@ export const updateChannel: NonNullable<MutationResolvers['updateChannel']> = as
     defaultRepoPath?: string | null;
     defaultSetupScript?: string | null;
     defaultRunScript?: string | null;
+    defaultTeardownScript?: string | null;
   } = {};
   if (name !== undefined && name !== null) data.name = name;
   if (workspacesEnabled !== undefined && workspacesEnabled !== null) data.workspacesEnabled = workspacesEnabled;
@@ -21,6 +22,7 @@ export const updateChannel: NonNullable<MutationResolvers['updateChannel']> = as
   if (defaultRepoPath !== undefined) data.defaultRepoPath = defaultRepoPath;
   if (defaultSetupScript !== undefined) data.defaultSetupScript = defaultSetupScript;
   if (defaultRunScript !== undefined) data.defaultRunScript = defaultRunScript;
+  if (defaultTeardownScript !== undefined) data.defaultTeardownScript = defaultTeardownScript;
   const channel = await updateChannelService(id, data);
   void pubsub.publish(TOPICS.CHANNEL_CHANGED_SERVER(channel.serverId), {
     channelChangedInServer: { channelId: channel.id, action: 'updated' },

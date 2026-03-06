@@ -17,6 +17,7 @@ const GQL_CHANNELS = gql`
       defaultRepoPath
       defaultSetupScript
       defaultRunScript
+      defaultTeardownScript
       createdAt
       updatedAt
     }

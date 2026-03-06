@@ -6,6 +6,7 @@ export interface LocalChannelConfig {
   localRepoPath: string;
   setupScript?: string;
   runScript?: string;
+  teardownScript?: string;
   systemInstructions?: string;
 }
 
@@ -19,6 +20,7 @@ interface LegacyChannelConfig {
   startupScripts?: { name: string; command: string }[];
   setupScript?: string;
   runScript?: string;
+  teardownScript?: string;
   systemInstructions?: string;
 }
 
@@ -38,6 +40,7 @@ function migrateEntry(cfg: LegacyChannelConfig): LocalChannelConfig {
     runScript:
       cfg.runScript ??
       (cfg.startupScripts?.map((s) => s.command).join("\n") || undefined),
+    teardownScript: cfg.teardownScript,
     systemInstructions: cfg.systemInstructions,
   };
 }

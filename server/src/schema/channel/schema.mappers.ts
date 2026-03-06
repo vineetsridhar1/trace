@@ -15,6 +15,7 @@ export interface ChannelMapper {
   defaultRepoPath: string | null;
   defaultSetupScript: string | null;
   defaultRunScript: string | null;
+  defaultTeardownScript: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

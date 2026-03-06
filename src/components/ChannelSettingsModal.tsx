@@ -18,6 +18,7 @@ interface ChannelSettingsModalProps {
       teamIds?: string[];
       defaultSetupScript?: string | null;
       defaultRunScript?: string | null;
+      defaultTeardownScript?: string | null;
     },
     localConfig: LocalChannelConfig | null,
   ) => Promise<void>;
@@ -47,6 +48,9 @@ export function ChannelSettingsModal({
   const [draftDefaultRunScript, setDraftDefaultRunScript] = useState(
     channel.defaultRunScript ?? "",
   );
+  const [draftDefaultTeardownScript, setDraftDefaultTeardownScript] = useState(
+    channel.defaultTeardownScript ?? "",
+  );
 
   // User settings (local config)
   const [draftLocalRepoPath, setDraftLocalRepoPath] = useState(
@@ -57,6 +61,9 @@ export function ChannelSettingsModal({
   );
   const [draftRunScript, setDraftRunScript] = useState(
     localConfig?.runScript ?? "",
+  );
+  const [draftTeardownScript, setDraftTeardownScript] = useState(
+    localConfig?.teardownScript ?? "",
   );
   const [draftSystemInstructions, setDraftSystemInstructions] = useState(
     localConfig?.systemInstructions ?? "",
@@ -85,9 +92,11 @@ export function ChannelSettingsModal({
     setDraftTeamIds(channel.teamIds ?? []);
     setDraftDefaultSetupScript(channel.defaultSetupScript ?? "");
     setDraftDefaultRunScript(channel.defaultRunScript ?? "");
+    setDraftDefaultTeardownScript(channel.defaultTeardownScript ?? "");
     setDraftLocalRepoPath(localConfig?.localRepoPath ?? "");
     setDraftSetupScript(localConfig?.setupScript ?? "");
     setDraftRunScript(localConfig?.runScript ?? "");
+    setDraftTeardownScript(localConfig?.teardownScript ?? "");
     setDraftSystemInstructions(localConfig?.systemInstructions ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel.id]);
@@ -136,11 +145,13 @@ export function ChannelSettingsModal({
         teamIds?: string[];
         defaultSetupScript?: string | null;
         defaultRunScript?: string | null;
+        defaultTeardownScript?: string | null;
       } = {
         name: draftName.trim() || undefined,
         workspacesEnabled: draftWorkspacesEnabled,
         defaultSetupScript: draftDefaultSetupScript.trim() || null,
         defaultRunScript: draftDefaultRunScript.trim() || null,
+        defaultTeardownScript: draftDefaultTeardownScript.trim() || null,
       };
       if (channel.type === "project") {
         channelData.teamIds = draftTeamIds;
@@ -152,6 +163,7 @@ export function ChannelSettingsModal({
           localRepoPath: draftLocalRepoPath,
           setupScript: draftSetupScript.trim() || undefined,
           runScript: draftRunScript.trim() || undefined,
+          teardownScript: draftTeardownScript.trim() || undefined,
           systemInstructions: draftSystemInstructions.trim() || undefined,
         };
       }
@@ -173,9 +185,11 @@ export function ChannelSettingsModal({
     draftTeamIds,
     draftDefaultSetupScript,
     draftDefaultRunScript,
+    draftDefaultTeardownScript,
     draftLocalRepoPath,
     draftSetupScript,
     draftRunScript,
+    draftTeardownScript,
     draftSystemInstructions,
     draftTerminalFont,
     onSave,
@@ -531,7 +545,7 @@ export function ChannelSettingsModal({
                         </div>
 
                         {/* Default Run Script */}
-                        <div>
+                        <div className="mb-4">
                           <div className="mb-2">
                             <label className="text-xs font-medium text-primary">
                               Default Run Script
@@ -546,6 +560,32 @@ export function ChannelSettingsModal({
                               setDraftDefaultRunScript(e.target.value)
                             }
                             placeholder={"e.g. npm run dev"}
+                            rows={2}
+                            style={
+                              { fieldSizing: "content" } as React.CSSProperties
+                            }
+                            className={textareaClass}
+                          />
+                        </div>
+
+                        {/* Default Teardown Script */}
+                        <div>
+                          <div className="mb-2">
+                            <label className="text-xs font-medium text-primary">
+                              Default Teardown Script
+                            </label>
+                            <p className="text-xs text-muted">
+                              Runs when a workspace worktree is deleted
+                            </p>
+                          </div>
+                          <textarea
+                            value={draftDefaultTeardownScript}
+                            onChange={(e) =>
+                              setDraftDefaultTeardownScript(e.target.value)
+                            }
+                            placeholder={
+                              "e.g. docker compose down\nkill-port $PORT"
+                            }
                             rows={2}
                             style={
                               { fieldSizing: "content" } as React.CSSProperties
@@ -621,6 +661,30 @@ export function ChannelSettingsModal({
                     value={draftRunScript}
                     onChange={(e) => setDraftRunScript(e.target.value)}
                     placeholder={channel.defaultRunScript || "e.g. npm run dev"}
+                    rows={2}
+                    style={{ fieldSizing: "content" } as React.CSSProperties}
+                    className={textareaClass}
+                  />
+                </div>
+
+                {/* Teardown Script Override */}
+                <div className="mb-4">
+                  <div className="mb-2">
+                    <label className="text-xs font-medium text-primary">
+                      Teardown Script Override
+                    </label>
+                    <p className="text-xs text-muted">
+                      Runs when a workspace worktree is deleted and will
+                      override the default teardown script
+                    </p>
+                  </div>
+                  <textarea
+                    value={draftTeardownScript}
+                    onChange={(e) => setDraftTeardownScript(e.target.value)}
+                    placeholder={
+                      channel.defaultTeardownScript ||
+                      "e.g. docker compose down\nkill-port $PORT"
+                    }
                     rows={2}
                     style={{ fieldSizing: "content" } as React.CSSProperties}
                     className={textareaClass}

@@ -192,6 +192,12 @@ function AppContent() {
     () => activeChannelRef.current?.baseBranch ?? "main",
     [],
   );
+  const getChannelTeardownCommands = useCallback((): string[] | undefined => {
+    const script = activeChannelRef.current?.teardownScript;
+    if (!script) return undefined;
+    const cmds = script.split("\n").map((l) => l.trim()).filter(Boolean);
+    return cmds.length > 0 ? cmds : undefined;
+  }, []);
   const getActiveChannelId = useCallback(
     () => activeChannelId,
     [activeChannelId],
@@ -207,7 +213,7 @@ function AppContent() {
   } = useAiChatSync();
 
   // Thread sync — registers sync actions on threadStore
-  useThreadSync(getActiveChannelId, getChannelRepoPath, getChannelBaseBranch);
+  useThreadSync(getActiveChannelId, getChannelRepoPath, getChannelBaseBranch, getChannelTeardownCommands);
 
   // Terminal PTY exit listener
   useTerminalInit();
@@ -573,12 +579,12 @@ function AppContent() {
         useTerminalStore.getState().killAllForWorkspace(workspaceId);
         usePanelLayoutStore.getState().clearSavedLayout(workspaceId);
         void window.traceAPI.releasePorts(workspaceId);
-        void window.traceAPI.deleteWorktree(workspaceId, getChannelRepoPath());
+        void window.traceAPI.deleteWorktree(workspaceId, getChannelRepoPath(), getChannelTeardownCommands());
       } catch {
         console.error("Failed to delete workspace");
       }
     },
-    [activeChannelId, executeDeleteWorkspace, getChannelRepoPath],
+    [activeChannelId, executeDeleteWorkspace, getChannelRepoPath, getChannelTeardownCommands],
   );
 
   const handleMarkMerged = useCallback(
@@ -731,6 +737,43 @@ function AppContent() {
       }
     },
     [deleteAiChatMutation],
+  );
+
+  const handleDeleteWorktreeById = useCallback(
+    async (workspaceId: string) => {
+      const repoPath = getChannelRepoPath();
+      if (!repoPath) return;
+
+      const confirmed = window.confirm(
+        "Delete this worktree? This removes local files for this workspace.",
+      );
+      if (!confirmed) return;
+
+      useTerminalStore.getState().killAllForWorkspace(workspaceId);
+      void window.traceAPI.releasePorts(workspaceId);
+      useWorkspaceStore.getState().addDeletingWorktreeId(workspaceId);
+
+      try {
+        const result = await window.traceAPI.deleteWorktree(
+          workspaceId,
+          repoPath,
+          getChannelTeardownCommands(),
+        );
+        if (!result.success) {
+          console.error("Failed to delete worktree:", result.error);
+          return;
+        }
+        useWorkspaceStore.getState().removeWorktreeWorkspaceId(workspaceId);
+        if (workspaceId === useThreadStore.getState().selectedWorkspaceId) {
+          useThreadStore.getState().setHasWorktree(false);
+        }
+      } catch (err) {
+        console.error("Failed to delete worktree:", err);
+      } finally {
+        useWorkspaceStore.getState().removeDeletingWorktreeId(workspaceId);
+      }
+    },
+    [getChannelRepoPath, getChannelTeardownCommands],
   );
 
   // ─── Pull PR into workspace ─────────────────────────────────────
@@ -983,6 +1026,7 @@ function AppContent() {
         teamIds?: string[];
         defaultSetupScript?: string | null;
         defaultRunScript?: string | null;
+        defaultTeardownScript?: string | null;
       },
       localCfg: LocalChannelConfig | null,
     ) => {

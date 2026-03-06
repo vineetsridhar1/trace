@@ -338,11 +338,15 @@ export function ThreadPanel() {
       useKanbanStore.getState().removeTicketByWorkspaceId(wsId);
       useTerminalStore.getState().killAllForWorkspace(wsId);
       void window.traceAPI.releasePorts(wsId);
-      if (repoPath) void window.traceAPI.deleteWorktree(wsId, repoPath);
+      if (repoPath) {
+        const script = enrichedActiveChannel?.teardownScript;
+        const teardownCommands = script ? script.split("\n").map((l) => l.trim()).filter(Boolean) : undefined;
+        void window.traceAPI.deleteWorktree(wsId, repoPath, teardownCommands);
+      }
     } catch {
       console.error("Failed to delete workspace");
     }
-  }, [activeChannelId, repoPath, executeDeleteWorkspace]);
+  }, [activeChannelId, repoPath, enrichedActiveChannel, executeDeleteWorkspace]);
 
   const handleRerunScript = useCallback(
     async (tabName: string) => {

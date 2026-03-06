@@ -81,6 +81,7 @@ export type Channel = {
   defaultRepoPath?: Maybe<Scalars['String']['output']>;
   defaultRunScript?: Maybe<Scalars['String']['output']>;
   defaultSetupScript?: Maybe<Scalars['String']['output']>;
+  defaultTeardownScript?: Maybe<Scalars['String']['output']>;
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -257,6 +258,7 @@ export type MutationCreateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
   defaultRunScript?: InputMaybe<Scalars['String']['input']>;
   defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
+  defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;
@@ -387,6 +389,7 @@ export type MutationUpdateChannelArgs = {
   defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
   defaultRunScript?: InputMaybe<Scalars['String']['input']>;
   defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
+  defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;

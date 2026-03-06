@@ -508,6 +508,7 @@ export async function mergeWorktree(
 export async function deleteWorktree(
   workspaceId: string,
   repoPath: string,
+  teardownCommands?: string[],
 ): Promise<{ removed: boolean; worktreePath: string }> {
   const worktreePath = getWorktreePath(workspaceId);
   const existing = runningProcesses.get(workspaceId);
@@ -533,6 +534,27 @@ export async function deleteWorktree(
       `delete-worktree skipped (not found): ${worktreePath}`,
     );
     return { removed: false, worktreePath };
+  }
+
+  // Run teardown commands before removing the worktree
+  if (teardownCommands && teardownCommands.length > 0) {
+    const script = teardownCommands.join("\n");
+    if (script.trim()) {
+      appendAgentDebugLog(workspaceId, "delete-worktree running teardown script");
+      const teardownResult = await runProcess(
+        "sh",
+        ["-c", `set -e\n${script}`],
+        worktreePath,
+      );
+      if (teardownResult.code !== 0) {
+        appendAgentDebugLog(
+          workspaceId,
+          `delete-worktree teardown script failed (exit ${teardownResult.code}): ${teardownResult.stderr.trim().slice(0, 500)}`,
+        );
+      } else {
+        appendAgentDebugLog(workspaceId, "delete-worktree teardown script succeeded");
+      }
+    }
   }
 
   // Resolve the actual branch name before removing the worktree directory

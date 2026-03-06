@@ -35,6 +35,7 @@ export interface ChannelContextValue {
     defaultRepoPath?: string | null;
     defaultSetupScript?: string | null;
     defaultRunScript?: string | null;
+    defaultTeardownScript?: string | null;
   }) => Promise<unknown>;
   deleteChannel: (channelId: string) => Promise<boolean>;
 }
@@ -73,6 +74,7 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
           localRepoPath: local.localRepoPath ?? ch.localRepoPath,
           setupScript: local.setupScript ?? ch.defaultSetupScript ?? undefined,
           runScript: local.runScript ?? ch.defaultRunScript ?? undefined,
+          teardownScript: local.teardownScript ?? ch.defaultTeardownScript ?? undefined,
         };
       }),
     [channels, localConfigs],

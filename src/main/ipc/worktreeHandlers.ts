@@ -20,9 +20,9 @@ export function registerWorktreeHandlers(): void {
   ipcMain.removeHandler(DELETE_WORKTREE_CHANNEL);
   ipcMain.handle(
     DELETE_WORKTREE_CHANNEL,
-    async (_event, workspaceId: string, repoPath: string) => {
+    async (_event, workspaceId: string, repoPath: string, teardownCommands?: string[]) => {
       try {
-        const result = await deleteWorktree(workspaceId, repoPath);
+        const result = await deleteWorktree(workspaceId, repoPath, teardownCommands);
         return { success: true, ...result };
       } catch (err) {
         console.error("Failed to delete worktree:", err);

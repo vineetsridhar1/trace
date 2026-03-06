@@ -99,8 +99,9 @@ model Channel {
   githubUrl          String?  @map("github_url")
   defaultRepoPath    String?  @map("default_repo_path")
   defaultSetupScript String?  @map("default_setup_script")
-  defaultRunScript   String?  @map("default_run_script")
-  createdAt          DateTime @default(now()) @map("created_at")
+  defaultRunScript      String?  @map("default_run_script")
+  defaultTeardownScript String?  @map("default_teardown_script")
+  createdAt             DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   server         Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)

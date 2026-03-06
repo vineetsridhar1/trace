@@ -94,6 +94,7 @@ export type Channel = {
   defaultRepoPath?: Maybe<Scalars['String']['output']>;
   defaultRunScript?: Maybe<Scalars['String']['output']>;
   defaultSetupScript?: Maybe<Scalars['String']['output']>;
+  defaultTeardownScript?: Maybe<Scalars['String']['output']>;
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -270,6 +271,7 @@ export type MutationcreateChannelArgs = {
   baseBranch?: InputMaybe<Scalars['String']['input']>;
   defaultRunScript?: InputMaybe<Scalars['String']['input']>;
   defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
+  defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
   serverId?: InputMaybe<Scalars['String']['input']>;
@@ -400,6 +402,7 @@ export type MutationupdateChannelArgs = {
   defaultRepoPath?: InputMaybe<Scalars['String']['input']>;
   defaultRunScript?: InputMaybe<Scalars['String']['input']>;
   defaultSetupScript?: InputMaybe<Scalars['String']['input']>;
+  defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -1081,6 +1084,7 @@ export type ChannelResolvers<ContextType = any, ParentType extends ResolversPare
   defaultRepoPath?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   defaultRunScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   defaultSetupScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  defaultTeardownScript?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   githubUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;

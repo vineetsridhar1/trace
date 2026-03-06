@@ -26,6 +26,7 @@ export interface LocalChannelConfig {
   localRepoPath: string;
   setupScript?: string;
   runScript?: string;
+  teardownScript?: string;
   systemInstructions?: string;
 }
 
@@ -99,6 +100,7 @@ export interface TraceAPI {
   deleteWorktree: (
     workspaceId: string,
     repoPath: string,
+    teardownCommands?: string[],
   ) => Promise<{
     success: boolean;
     removed?: boolean;
@@ -379,8 +381,10 @@ export interface Channel {
   defaultRepoPath?: string | null;
   defaultSetupScript?: string | null;
   defaultRunScript?: string | null;
+  defaultTeardownScript?: string | null;
   setupScript?: string | null;
   runScript?: string | null;
+  teardownScript?: string | null;
   createdAt: string;
   updatedAt: string;
 }

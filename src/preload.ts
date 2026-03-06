@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
   deleteWorktree: async (
     workspaceId: string,
     repoPath: string,
+    teardownCommands?: string[],
   ): Promise<{
     success: boolean;
     removed?: boolean;
@@ -43,7 +44,7 @@ contextBridge.exposeInMainWorld("traceAPI", {
     error?: string;
   }> => {
     try {
-      return await ipcRenderer.invoke("delete-worktree", workspaceId, repoPath);
+      return await ipcRenderer.invoke("delete-worktree", workspaceId, repoPath, teardownCommands);
     } catch (err) {
       return { success: false, error: String(err) };
     }

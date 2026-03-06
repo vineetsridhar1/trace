@@ -14,6 +14,7 @@ export function useThreadSync(
   getActiveChannelId: () => string | null,
   getChannelRepoPath: () => string,
   getChannelBaseBranch: () => string,
+  getChannelTeardownCommands?: () => string[] | undefined,
 ) {
   const [executeSessions] = useSessionsLazyQuery();
   const [executeSessionEvents] = useSessionEventsLazyQuery();
@@ -304,6 +305,7 @@ export function useThreadSync(
         const result = await window.traceAPI.deleteWorktree(
           workspace.id,
           repoPath,
+          getChannelTeardownCommands?.(),
         );
         if (!result.success) {
           console.error("Failed to delete worktree:", result.error);
@@ -316,7 +318,7 @@ export function useThreadSync(
         useThreadStore.getState().setDeletingWorktree(false);
       }
     },
-    [getChannelRepoPath],
+    [getChannelRepoPath, getChannelTeardownCommands],
   );
 
   const mergeWorktree = useCallback(async () => {

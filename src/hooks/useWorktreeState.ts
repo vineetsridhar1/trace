@@ -4,12 +4,14 @@ import type { Workspace } from '../types';
 interface UseWorktreeStateOptions {
   getChannelRepoPath: () => string;
   getChannelBaseBranch: () => string;
+  getChannelTeardownCommands?: () => string[] | undefined;
   selectedWorkspaceRef: React.RefObject<Workspace | null>;
 }
 
 export function useWorktreeState({
   getChannelRepoPath,
   getChannelBaseBranch,
+  getChannelTeardownCommands,
   selectedWorkspaceRef,
 }: UseWorktreeStateOptions) {
   const [hasWorktree, setHasWorktree] = useState<boolean | null>(null);
@@ -49,7 +51,7 @@ export function useWorktreeState({
       setDeletingWorktree(true);
       try {
         const repoPath = getChannelRepoPath();
-        const result = await window.traceAPI.deleteWorktree(workspace.id, repoPath);
+        const result = await window.traceAPI.deleteWorktree(workspace.id, repoPath, getChannelTeardownCommands?.());
         if (!result.success) {
           console.error('Failed to delete worktree:', result.error);
           return;
@@ -60,7 +62,7 @@ export function useWorktreeState({
         setDeletingWorktree(false);
       }
     },
-    [getChannelRepoPath, selectedWorkspaceRef],
+    [getChannelRepoPath, getChannelTeardownCommands, selectedWorkspaceRef],
   );
 
   const mergeWorktree = useCallback(async () => {
