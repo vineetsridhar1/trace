@@ -419,6 +419,7 @@ type Workspace {
 
 type WorkspaceCliSession {
   cwd: String
+  permissionMode: String
   sessionId: String!
   status: String!
 }

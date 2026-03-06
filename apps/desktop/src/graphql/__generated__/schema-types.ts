@@ -884,6 +884,7 @@ export type Workspace = {
 export type WorkspaceCliSession = {
   __typename?: 'WorkspaceCliSession';
   cwd?: Maybe<Scalars['String']['output']>;
+  permissionMode?: Maybe<Scalars['String']['output']>;
   sessionId: Scalars['String']['output'];
   status: Scalars['String']['output'];
 };

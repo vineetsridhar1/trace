@@ -18,6 +18,7 @@ export const WORKSPACE_FIELDS = gql`
       sessionId
       cwd
       status
+      permissionMode
     }
     user {
       id

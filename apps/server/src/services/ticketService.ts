@@ -873,7 +873,7 @@ export async function importTicketsToProject(
     prisma.workspace.findMany({
       where: { id: { in: workspaceIds } },
       include: {
-        cliSession: { select: { sessionId: true, cwd: true, status: true } },
+        cliSession: { select: { sessionId: true, cwd: true, status: true, permissionMode: true } },
         user: { select: { id: true, name: true, avatarUrl: true } },
         _count: { select: { sessions: true } },
       },

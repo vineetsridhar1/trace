@@ -899,6 +899,7 @@ export type Workspace = {
 export type WorkspaceCliSession = {
   __typename?: 'WorkspaceCliSession';
   cwd?: Maybe<Scalars['String']['output']>;
+  permissionMode?: Maybe<Scalars['String']['output']>;
   sessionId: Scalars['String']['output'];
   status: Scalars['String']['output'];
 };
@@ -1538,6 +1539,7 @@ export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversPa
 
 export type WorkspaceCliSessionResolvers<ContextType = any, ParentType extends ResolversParentTypes['WorkspaceCliSession'] = ResolversParentTypes['WorkspaceCliSession']> = {
   cwd?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  permissionMode?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 };

@@ -12,6 +12,7 @@ import { useChannelContext } from '../context/ChannelContext';
 import { useThreadStore } from '../stores/threadStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
 import { useAppUIStore } from '../stores/appUIStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useThreadScroll } from '../hooks/useThreadScroll';
 import { buildSessionNodes } from '../utils';
 import type { AskUserQuestionNode, ProductDocMode } from '../types';
@@ -384,7 +385,9 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets,
             <AskUserQuestionBar
               node={showQuestion}
               onResponse={(text) => {
-                void sendPlanResponse(text, 'keep-context');
+                const ws = useWorkspaceStore.getState().workspaces.find(w => w.id === selectedWorkspaceId);
+                const inPlanMode = ws?.cliSession?.permissionMode === "plan";
+                void sendPlanResponse(text, inPlanMode ? 'revise' : 'keep-context');
               }}
               onDismiss={() => {
                 setDismissedQuestionId(showQuestion.id);

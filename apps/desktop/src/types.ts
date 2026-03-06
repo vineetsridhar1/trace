@@ -404,6 +404,7 @@ export interface WorkspaceCliSession {
   sessionId: string;
   cwd: string | null;
   status: string;
+  permissionMode?: string | null;
 }
 
 export interface Workspace {

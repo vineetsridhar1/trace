@@ -65,6 +65,7 @@ type WorkspaceCliSession {
   sessionId: String!
   cwd: String
   status: String!
+  permissionMode: String
 }
 
 type WorkspaceConnection {

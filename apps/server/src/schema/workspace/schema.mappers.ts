@@ -15,7 +15,7 @@ export interface WorkspaceMapper {
   agentSessionId: string | null;
   agentType: string | null;
   createdAt: Date;
-  cliSession: { sessionId: string; cwd: string | null; status: string } | null;
+  cliSession: { sessionId: string; cwd: string | null; status: string; permissionMode: string | null } | null;
   user: { id: string; name: string; avatarUrl: string | null } | null;
   _count: { sessions: number };
   isProductDoc: boolean;
@@ -32,6 +32,7 @@ export interface WorkspaceCliSessionMapper {
   sessionId: string;
   cwd: string | null;
   status: string;
+  permissionMode: string | null;
 }
 
 export interface WorkspaceConnectionMapper {

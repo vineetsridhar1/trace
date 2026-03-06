@@ -812,7 +812,8 @@ export function ThreadPanel() {
                         onResponse={(text) => {
                           if (activePlanNode)
                             setDismissedPlanId(activePlanNode.id);
-                          void sendPlanResponse(text, "keep-context");
+                          const inPlanMode = selectedWorkspace?.cliSession?.permissionMode === "plan";
+                          void sendPlanResponse(text, inPlanMode ? "revise" : "keep-context");
                         }}
                         onDismiss={() => {
                           setDismissedQuestionId(showQuestion.id);

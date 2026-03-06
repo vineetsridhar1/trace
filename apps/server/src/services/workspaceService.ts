@@ -10,7 +10,7 @@ type WorkspaceWithSessions = Prisma.WorkspaceGetPayload<{
 
 type FeedWorkspace = Prisma.WorkspaceGetPayload<{
   include: {
-    cliSession: { select: { sessionId: true; cwd: true; status: true } };
+    cliSession: { select: { sessionId: true; cwd: true; status: true; permissionMode: true } };
     user: { select: { id: true; name: true; avatarUrl: true } };
     _count: { select: { sessions: true } };
   };
@@ -79,7 +79,7 @@ export async function getWorkspaceByIdForFeed(workspaceId: string): Promise<Feed
   return prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
-      cliSession: { select: { sessionId: true, cwd: true, status: true } },
+      cliSession: { select: { sessionId: true, cwd: true, status: true, permissionMode: true } },
       user: { select: { id: true, name: true, avatarUrl: true } },
       _count: { select: { sessions: true } },
     },
@@ -111,7 +111,7 @@ export async function getWorkspacesByChannel(
       skip: offset,
       take: limit,
       include: {
-        cliSession: { select: { sessionId: true, cwd: true, status: true } },
+        cliSession: { select: { sessionId: true, cwd: true, status: true, permissionMode: true } },
         user: { select: { id: true, name: true, avatarUrl: true } },
         _count: { select: { sessions: true } },
       },
@@ -138,7 +138,7 @@ export async function getWorkspacesByUser(
     orderBy: { createdAt: 'desc' },
     take: 20,
     include: {
-      cliSession: { select: { sessionId: true, cwd: true, status: true } },
+      cliSession: { select: { sessionId: true, cwd: true, status: true, permissionMode: true } },
       user: { select: { id: true, name: true, avatarUrl: true } },
       _count: { select: { sessions: true } },
       channel: { select: { id: true, name: true } },
