@@ -1,22 +1,27 @@
 import { memo, useState, useCallback } from 'react';
-import { FiSend } from 'react-icons/fi';
+import { FiSend, FiCheck } from 'react-icons/fi';
 import type { AskUserQuestionNode } from '../../types';
 import { formatTime } from '../../utils';
 
 export interface AskUserQuestionActions {
   sendThreadMessage: (text: string) => Promise<unknown>;
+  onAnswered?: () => void;
 }
 
 export const AskUserQuestionInline = memo(function AskUserQuestionInline({
   node,
   actions,
+  isAnswered: isAnsweredProp,
 }: {
   node: AskUserQuestionNode;
   actions?: AskUserQuestionActions;
+  isAnswered?: boolean;
 }) {
   const time = formatTime(node.event.timestamp);
   const [freeText, setFreeText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [answered, setAnswered] = useState(false);
+  const isAnswered = isAnsweredProp || answered;
 
   const handleOptionClick = useCallback(
     async (label: string) => {
@@ -24,6 +29,8 @@ export const AskUserQuestionInline = memo(function AskUserQuestionInline({
       setSubmitting(true);
       try {
         await actions.sendThreadMessage(label);
+        setAnswered(true);
+        actions.onAnswered?.();
       } finally {
         setSubmitting(false);
       }
@@ -39,6 +46,8 @@ export const AskUserQuestionInline = memo(function AskUserQuestionInline({
     try {
       await actions.sendThreadMessage(trimmed);
       setFreeText('');
+      setAnswered(true);
+      actions.onAnswered?.();
     } finally {
       setSubmitting(false);
     }
@@ -76,7 +85,7 @@ export const AskUserQuestionInline = memo(function AskUserQuestionInline({
               {q.options.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {q.options.map((opt) =>
-                    actions ? (
+                    actions && !isAnswered ? (
                       <button
                         key={opt.label}
                         type="button"
@@ -101,14 +110,21 @@ export const AskUserQuestionInline = memo(function AskUserQuestionInline({
           ))}
         </div>
 
-        {actions && !hasOptions && (
+        {isAnswered && (
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-accent-light">
+            <FiCheck size={14} />
+            <span>Answer sent</span>
+          </div>
+        )}
+
+        {actions && !isAnswered && (
           <div className="mt-3 flex gap-2">
             <input
               type="text"
               value={freeText}
               onChange={(e) => setFreeText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type your answer..."
+              placeholder={hasOptions ? 'Or type a custom answer...' : 'Type your answer...'}
               disabled={submitting}
               className="flex-1 rounded-md border border-edge bg-surface px-2.5 py-1.5 text-sm text-primary placeholder:text-muted focus:border-accent/50 focus:outline-none disabled:opacity-50"
             />

@@ -57,9 +57,17 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
     },
   }), [spawnAgent, workspaceId, channelId]);
 
+  const [answeredQuestionId, setAnsweredQuestionId] = useState<string | null>(null);
+  const activeQuestionRef = useRef<AskUserQuestionNode | null>(null);
+
   const questionActions = useMemo((): AskUserQuestionActions => ({
     sendThreadMessage: async (text: string) => {
       await spawnAgent({ workspaceId, prompt: text, channelId });
+    },
+    onAnswered: () => {
+      if (activeQuestionRef.current) {
+        setAnsweredQuestionId(activeQuestionRef.current.id);
+      }
     },
   }), [spawnAgent, workspaceId, channelId]);
 
@@ -166,6 +174,10 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
     return null;
   }, [sessionNodes]);
 
+  useEffect(() => {
+    activeQuestionRef.current = activeQuestionNode;
+  }, [activeQuestionNode]);
+
   const activePlanNode = useMemo((): PlanReviewNode | null => {
     const last = sessionNodes[sessionNodes.length - 1];
     if (last?.kind === 'plan-review') return last;
@@ -241,6 +253,7 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
             toggleTurnGroup={toggleTurnGroup}
             questionActions={questionActions}
             tokenUsage={tokenUsage}
+            answeredQuestionId={answeredQuestionId}
           />
         </div>
       </div>
@@ -260,7 +273,7 @@ export function WebThreadPanel({ workspaceId, channelId }: WebThreadPanelProps) 
           <PlanReview node={activePlanNode} actions={planActions} />
         </div>
       )}
-      {activeQuestionNode && (
+      {activeQuestionNode && activeQuestionNode.id !== answeredQuestionId && (
         <div className="border-t border-edge">
           <AskUserQuestionInline node={activeQuestionNode} actions={questionActions} />
         </div>
@@ -279,6 +292,7 @@ const SessionNodeList = React.memo(function SessionNodeList({
   toggleTurnGroup,
   questionActions,
   tokenUsage,
+  answeredQuestionId,
 }: {
   sessionNodes: SessionRenderNode[];
   expandedReadGroupIds: Record<string, boolean>;
@@ -287,6 +301,7 @@ const SessionNodeList = React.memo(function SessionNodeList({
   toggleTurnGroup: (id: string) => void;
   questionActions: AskUserQuestionActions;
   tokenUsage: TokenUsageInfo | null;
+  answeredQuestionId: string | null;
 }) {
   let lastUserPromptTime: string | null = null;
   return (
@@ -341,7 +356,7 @@ const SessionNodeList = React.memo(function SessionNodeList({
           return <PlanReview key={node.id} node={node} />;
         }
         if (node.kind === 'ask-user-question') {
-          return <AskUserQuestionInline key={node.id} node={node} actions={questionActions} />;
+          return <AskUserQuestionInline key={node.id} node={node} actions={questionActions} isAnswered={node.id === answeredQuestionId} />;
         }
         if (node.kind !== 'event') return null;
 
