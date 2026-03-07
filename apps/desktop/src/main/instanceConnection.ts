@@ -127,6 +127,8 @@ export async function setPassword(
 
 const MAX_RECONNECT_DELAY = 30_000;
 const INITIAL_RECONNECT_DELAY = 1_000;
+const HEALTH_CHECK_INTERVAL_MS = 45_000;
+const HEALTH_CHECK_TIMEOUT_MS = 75_000;
 
 export class InstanceConnection {
   private ws: WebSocket | null = null;
@@ -134,6 +136,9 @@ export class InstanceConnection {
   private reconnectDelay = INITIAL_RECONNECT_DELAY;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
+  private lastServerMessageAt: number = 0;
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private isRegistered = false;
 
   constructor(options: InstanceConnectionOptions) {
     this.options = options;
@@ -146,6 +151,8 @@ export class InstanceConnection {
 
   disconnect(): void {
     this.intentionalClose = true;
+    this.stopHealthCheck();
+    this.isRegistered = false;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -169,6 +176,7 @@ export class InstanceConnection {
     this.ws.on("open", () => {
       console.log("[InstanceConnection] connected");
       this.reconnectDelay = INITIAL_RECONNECT_DELAY;
+      this.lastServerMessageAt = Date.now();
 
       const { instanceId, serverId, instanceName } = this.options;
       this.send({
@@ -190,8 +198,14 @@ export class InstanceConnection {
 
     this.ws.on("close", () => {
       console.log("[InstanceConnection] disconnected");
+      this.stopHealthCheck();
+      this.isRegistered = false;
       this.ws = null;
       this.scheduleReconnect();
+    });
+
+    this.ws.on("ping", () => {
+      this.lastServerMessageAt = Date.now();
     });
 
     this.ws.on("error", (err: Error) => {
@@ -200,10 +214,14 @@ export class InstanceConnection {
   }
 
   private handleMessage(msg: { type: string; [key: string]: unknown }): void {
+    this.lastServerMessageAt = Date.now();
+
     switch (msg.type) {
       case "registered":
         if (msg.ok) {
           console.log("[InstanceConnection] registered successfully");
+          this.isRegistered = true;
+          this.startHealthCheck();
         }
         break;
 
@@ -245,6 +263,35 @@ export class InstanceConnection {
 
       default:
         console.warn("[InstanceConnection] unknown message type:", msg.type);
+    }
+  }
+
+  private startHealthCheck(): void {
+    this.stopHealthCheck();
+    this.healthCheckInterval = setInterval(() => {
+      this.checkConnectionHealth();
+    }, HEALTH_CHECK_INTERVAL_MS);
+    console.log("[InstanceConnection] health check started");
+  }
+
+  private stopHealthCheck(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+  }
+
+  private checkConnectionHealth(): void {
+    if (!this.isRegistered || !this.isConnected() || this.intentionalClose) {
+      return;
+    }
+
+    const elapsed = Date.now() - this.lastServerMessageAt;
+    if (elapsed > HEALTH_CHECK_TIMEOUT_MS) {
+      console.warn(
+        `[InstanceConnection] No server message for ${elapsed}ms, assuming dead connection`,
+      );
+      this.ws?.terminate();
     }
   }
 
