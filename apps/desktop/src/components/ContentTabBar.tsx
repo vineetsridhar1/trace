@@ -137,10 +137,14 @@ export function ContentTabBar({
               key={tab.id}
               ref={(el) => setTabRef(tab.id, el)}
               type="button"
-              onClick={() => onSelectTab(tab.id)}
+              onClick={() => {
+                handleTabMouseLeave();
+                onSelectTab(tab.id);
+              }}
               onMouseDown={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
+                  handleTabMouseLeave();
                   onCloseTab(tab.id);
                 }
               }}

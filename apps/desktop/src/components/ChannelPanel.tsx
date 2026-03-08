@@ -1,5 +1,7 @@
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch } from 'react-icons/fi';
 import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
 import { TAB_LABELS, VIEW_TAB_TYPES, isViewTabAvailable } from '../stores/tabStore';
 import type { GlobalTabType } from '../stores/tabStore';
@@ -18,6 +20,164 @@ const SECTION_CONFIG: Record<SidebarSectionId, { icon: typeof FiHash; label: str
   'my-workspaces': { icon: FiBriefcase, label: 'My Workspaces' },
   'ai-chats': { icon: FiMessageCircle, label: 'AI Chats' },
 };
+
+function projectNeedsJoin(channel: Channel, localConfigs: Record<string, LocalChannelConfig>) {
+  return !!(channel.workspacesEnabled && channel.githubUrl && !localConfigs[channel.id]?.localRepoPath);
+}
+
+function isProjectAvailable(channel: Channel, localConfigs: Record<string, LocalChannelConfig>) {
+  return !projectNeedsJoin(channel, localConfigs);
+}
+
+interface ProjectDirectoryMenuProps {
+  projects: Channel[];
+  activeChannelId: string | null;
+  localConfigs: Record<string, LocalChannelConfig>;
+  anchorRect: DOMRect;
+  triggerRef: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  onJoinProject: (channelId: string) => void;
+  onSwitchChannel: (channelId: string) => void;
+}
+
+function ProjectDirectoryMenu({
+  projects,
+  activeChannelId,
+  localConfigs,
+  anchorRect,
+  triggerRef,
+  onClose,
+  onJoinProject,
+  onSwitchChannel,
+}: ProjectDirectoryMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (triggerRef.current?.contains(event.target as Node)) {
+        return;
+      }
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [onClose, triggerRef]);
+
+  const filterLower = filter.trim().toLowerCase();
+  const filteredProjects = filterLower
+    ? projects.filter((project) => project.name.toLowerCase().includes(filterLower))
+    : projects;
+
+  const width = 280;
+  const viewportPadding = 8;
+  const roomBelow = window.innerHeight - anchorRect.bottom;
+  const roomAbove = anchorRect.top;
+  const openAbove = roomBelow < 280 && roomAbove > roomBelow;
+  const left = Math.max(
+    viewportPadding,
+    Math.min(anchorRect.right - width, window.innerWidth - width - viewportPadding),
+  );
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="fixed z-[100] overflow-hidden rounded-md border border-edge bg-surface-elevated shadow-lg"
+      style={
+        openAbove
+          ? {
+              left,
+              bottom: window.innerHeight - anchorRect.top + 6,
+              width,
+              maxHeight: Math.max(180, roomAbove - 16),
+            }
+          : {
+              left,
+              top: anchorRect.bottom + 6,
+              width,
+              maxHeight: Math.max(180, roomBelow - 12),
+            }
+      }
+    >
+      <div className="border-b border-edge px-2 py-2">
+        <div className="relative">
+          <FiSearch className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Browse projects..."
+            className="w-full rounded border border-edge bg-surface-deep py-1.5 pl-7 pr-2 text-xs text-primary placeholder:text-muted focus:border-accent focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-y-auto py-1">
+        {filteredProjects.length === 0 ? (
+          <div className="px-3 py-2 text-xs text-muted">No matching projects</div>
+        ) : (
+          filteredProjects.map((project) => {
+            const joined = !!localConfigs[project.id]?.localRepoPath;
+            const available = isProjectAvailable(project, localConfigs);
+            const needsJoin = projectNeedsJoin(project, localConfigs);
+            const isActive = project.id === activeChannelId;
+
+            return (
+              <div key={project.id} className="px-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (available) {
+                      onSwitchChannel(project.id);
+                    } else {
+                      onJoinProject(project.id);
+                    }
+                    onClose();
+                  }}
+                  className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                    isActive && available
+                      ? 'bg-surface-hover text-accent-light'
+                      : 'text-primary hover:bg-surface-hover'
+                  }`}
+                >
+                  <FiFolder className="h-3.5 w-3.5 shrink-0 text-muted" />
+                  <span className={`min-w-0 flex-1 truncate ${needsJoin ? 'text-muted' : ''}`}>{project.name}</span>
+                  {available ? (
+                    <span className="shrink-0 rounded border border-edge px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                      {isActive ? 'Open' : joined ? 'Joined' : 'Open'}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded border border-accent/30 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                      Join
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 
 function MyWorkspacesContent({ activeServerId, onOpenWorkspaceLink }: { activeServerId: string | null; onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void }) {
@@ -80,6 +240,7 @@ interface ChannelPanelProps {
   unreadCounts?: Record<string, number>;
   localConfigs?: Record<string, LocalChannelConfig>;
   onSwitchChannel: (id: string) => void;
+  onJoinChannel: (id: string) => void;
   onCreateTeam: () => void;
   onCreateProject: () => void;
   onCreateChannel: () => void;
@@ -115,11 +276,19 @@ export function ChannelPanel({
   onOpenViewTab,
   unreadCounts = {},
   localConfigs = {},
+  onJoinChannel,
 }: ChannelPanelProps) {
   const chatChannels = channels.filter((c) => c.type === 'channel');
   const teamChannels = channels.filter((c) => c.type === 'team');
   const projectChannels = channels.filter((c) => c.type === 'project');
+  const joinedProjectChannels = useMemo(
+    () => projectChannels.filter((channel) => isProjectAvailable(channel, localConfigs)),
+    [projectChannels, localConfigs],
+  );
   const { sectionOrder, collapsedSections, reorder, toggleCollapsed } = useSidebarPrefs();
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [projectMenuAnchor, setProjectMenuAnchor] = useState<DOMRect | null>(null);
+  const projectMenuButtonRef = useRef<HTMLButtonElement>(null);
 
   // Compute available views for the active channel (used by the view select)
   const activeChannel = channels.find((c) => c.id === activeChannelId);
@@ -204,15 +373,34 @@ export function ChannelPanel({
         );
       case 'projects':
         return (
-          <Tooltip text="Create project" position="bottom">
-            <button
-              type="button"
-              onClick={onCreateProject}
-              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent"
-            >
-              <FiPlus className="h-3 w-3" aria-hidden="true" />
-            </button>
-          </Tooltip>
+          <>
+            <Tooltip text="Create project" position="bottom">
+              <button
+                type="button"
+                onClick={onCreateProject}
+                className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent"
+              >
+                <FiPlus className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </Tooltip>
+            <Tooltip text="Browse projects" position="bottom">
+              <button
+                ref={projectMenuButtonRef}
+                type="button"
+                onClick={(event) => {
+                  setProjectMenuAnchor(event.currentTarget.getBoundingClientRect());
+                  setProjectMenuOpen((prev) => !prev);
+                }}
+                className={`rounded p-0.5 transition-colors ${
+                  projectMenuOpen
+                    ? 'bg-surface-elevated text-accent'
+                    : 'text-muted hover:bg-surface-elevated hover:text-accent'
+                }`}
+              >
+                <FiMoreVertical className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          </>
         );
       case 'channels':
         return (
@@ -262,12 +450,12 @@ export function ChannelPanel({
           renderChannelItems(teamChannels)
         );
       case 'projects':
-        return projectChannels.length === 0 ? (
+        return joinedProjectChannels.length === 0 ? (
           <div className="px-3 py-1.5">
-            <span className="text-xs italic text-muted">No projects yet</span>
+            <span className="text-xs italic text-muted">No projects in sidebar</span>
           </div>
         ) : (
-          renderChannelItems(projectChannels)
+          renderChannelItems(joinedProjectChannels)
         );
       case 'my-workspaces':
         return <MyWorkspacesContent activeServerId={activeServerId} onOpenWorkspaceLink={onOpenWorkspaceLink} />;
@@ -361,26 +549,21 @@ export function ChannelPanel({
                 className="relative border-b border-edge bg-surface-deep py-2 last:border-b-0"
                 whileDrag={{ zIndex: 50 }}
               >
-                <div className="mb-1 flex w-full items-center justify-between px-2">
-                  <div className="flex items-center gap-1.5">
-                    <Icon className="h-3 w-3 text-muted" />
-                    <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">
+                <div className="mb-1 flex w-full items-center justify-between rounded-md px-2 hover:bg-surface-elevated">
+                  <button
+                    type="button"
+                    aria-expanded={!isCollapsed}
+                    aria-label={`Toggle ${config.label}`}
+                    onClick={() => toggleCollapsed(id)}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 px-1 py-1 text-left"
+                  >
+                    <Icon className="h-3 w-3 shrink-0 text-muted" />
+                    <h2 className="truncate text-xs font-semibold tracking-wide text-muted uppercase">
                       {config.label}
                     </h2>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-1">
                     {renderActionButton(id)}
-                    <button
-                      type="button"
-                      aria-expanded={!isCollapsed}
-                      aria-label={`Toggle ${config.label}`}
-                      onClick={() => toggleCollapsed(id)}
-                      className="cursor-pointer rounded p-0.5 text-muted hover:bg-surface-elevated"
-                    >
-                      <FiChevronRight
-                        className={`h-3 w-3 transition-transform duration-150 ${!isCollapsed ? 'rotate-90' : ''}`}
-                      />
-                    </button>
                   </div>
                 </div>
                 <div
@@ -415,6 +598,19 @@ export function ChannelPanel({
             e.preventDefault();
             onStartDrag();
           }}
+        />
+      )}
+
+      {projectMenuOpen && projectMenuAnchor && (
+        <ProjectDirectoryMenu
+          projects={projectChannels}
+          activeChannelId={activeChannelId}
+          localConfigs={localConfigs}
+          anchorRect={projectMenuAnchor}
+          triggerRef={projectMenuButtonRef}
+          onClose={() => setProjectMenuOpen(false)}
+          onJoinProject={onJoinChannel}
+          onSwitchChannel={onSwitchChannel}
         />
       )}
     </>

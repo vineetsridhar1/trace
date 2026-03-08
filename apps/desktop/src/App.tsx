@@ -866,12 +866,15 @@ function AppContent() {
       if (!targetId) return;
       try {
         await setLocalConfig(targetId, config);
+        if (targetId !== activeChannelId) {
+          performChannelSwitch(targetId);
+        }
         useAppUIStore.getState().setJoinChannelId(null);
       } catch (err) {
         console.error("[App] Failed to save local config:", err);
       }
     },
-    [joinChannelId, activeChannelId, setLocalConfig],
+    [joinChannelId, activeChannelId, setLocalConfig, performChannelSwitch],
   );
 
   const handleSwitchServer = useCallback(
@@ -1270,6 +1273,10 @@ function AppContent() {
       useAppUIStore.getState().setJoinChannelId(activeChannelId);
   }, [activeChannelId]);
 
+  const handlePromptJoinChannel = useCallback((channelId: string) => {
+    useAppUIStore.getState().setJoinChannelId(channelId);
+  }, []);
+
   const teamProjects = useMemo(
     () =>
       displayChannel?.type === "team"
@@ -1342,6 +1349,7 @@ function AppContent() {
           unreadCounts={unreadCounts}
           localConfigs={localConfigs}
           onSwitchChannel={handleSwitchChannel}
+          onJoinChannel={handlePromptJoinChannel}
           onCreateTeam={handleCreateTeam}
           onCreateProject={handleCreateProject}
           onCreateChannel={handleCreateChannel}

@@ -94,3 +94,8 @@ The server starts on `http://localhost:3100`.
 ```bash
 npm start
 ```
+
+**Option 3 -- Render**
+```bash
+TRACE_PROD=1 pnpm dev:desktop
+```
