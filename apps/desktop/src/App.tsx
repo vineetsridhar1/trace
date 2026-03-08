@@ -1232,10 +1232,6 @@ function AppContent() {
     () => useAppUIStore.getState().setCreateChannelType("channel"),
     [],
   );
-  const handleNewProductDoc = useCallback(
-    () => useAppUIStore.getState().setShowProductDocModal(true),
-    [],
-  );
   const handleStartDragLeft = useCallback(
     () => useAppUIStore.getState().setDragging("left"),
     [],
@@ -1287,7 +1283,6 @@ function AppContent() {
           onCreateAiChat={handleCreateAiChatAction}
           onDeleteAiChat={handleDeleteAiChatAction}
           onStartDrag={handleStartDragLeft}
-          onNewProductDoc={handleNewProductDoc}
           onOpenWorkspaceLink={handleOpenThreadLink}
           onOpenViewTab={handleOpenViewTab}
         />

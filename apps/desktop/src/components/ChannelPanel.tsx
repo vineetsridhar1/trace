@@ -1,5 +1,5 @@
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiFileText, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiSettings } from 'react-icons/fi';
 import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
 import { TAB_LABELS, VIEW_TAB_TYPES, isViewTabAvailable } from '../stores/tabStore';
 import type { GlobalTabType } from '../stores/tabStore';
@@ -87,7 +87,6 @@ interface ChannelPanelProps {
   onCreateAiChat: () => void;
   onDeleteAiChat: (id: string) => void;
   onStartDrag: () => void;
-  onNewProductDoc: () => void;
   onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void;
   onOpenViewTab: (viewType: GlobalTabType) => void;
 }
@@ -112,7 +111,6 @@ export function ChannelPanel({
   onCreateAiChat,
   onDeleteAiChat,
   onStartDrag,
-  onNewProductDoc,
   onOpenWorkspaceLink,
   onOpenViewTab,
   unreadCounts = {},
@@ -340,14 +338,6 @@ export function ChannelPanel({
               ))}
             </select>
           )}
-          <button
-            type="button"
-            onClick={onNewProductDoc}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-surface-elevated transition-colors"
-          >
-            <FiFileText className="h-3.5 w-3.5 text-accent" />
-            <span>New Product Doc</span>
-          </button>
         </div>
 
         <Reorder.Group
