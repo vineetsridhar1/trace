@@ -29,7 +29,6 @@ export function NewWorkspaceModal() {
   const [prompt, setPrompt] = useState('');
   const [startImmediately, setStartImmediately] = useState(true);
   const [mode, setMode] = useState<InteractionMode>('code');
-  const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { attachments, uploading, handlePaste, removeAttachment, clearAttachments, getAttachmentIds, getFilePaths } =
     useImageAttachments();
@@ -52,40 +51,37 @@ export function NewWorkspaceModal() {
 
   const handleSubmit = useCallback(async () => {
     const trimmed = prompt.trim();
-    if (!trimmed || submitting) return;
-    setSubmitting(true);
-    try {
-      const attachmentIds = getAttachmentIds();
-      const filePaths = getFilePaths();
+    if (!trimmed) return;
 
-      const store = useAgentRunStore.getState();
-      const created = await store.workspaceActions.sendMessage(
-        trimmed,
+    // Close modal immediately
+    clearAttachments();
+    useAppUIStore.getState().setShowNewWorkspaceModal(false);
+
+    const attachmentIds = getAttachmentIds();
+    const filePaths = getFilePaths();
+
+    const store = useAgentRunStore.getState();
+    const created = await store.workspaceActions.sendMessage(
+      trimmed,
+      attachmentIds.length > 0 ? attachmentIds : undefined,
+      filePaths.length > 0 ? filePaths : undefined,
+    );
+
+    if (created && startImmediately) {
+      let finalPrompt = trimmed;
+      if (mode === 'plan') {
+        finalPrompt = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${trimmed}`;
+      } else if (mode === 'ask') {
+        finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${trimmed}`;
+      }
+      await useAgentRunStore.getState().workspaceActions.runPendingWorkspace(
+        mode === 'plan',
+        finalPrompt,
         attachmentIds.length > 0 ? attachmentIds : undefined,
         filePaths.length > 0 ? filePaths : undefined,
       );
-
-      if (created && startImmediately) {
-        let finalPrompt = trimmed;
-        if (mode === 'plan') {
-          finalPrompt = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${trimmed}`;
-        } else if (mode === 'ask') {
-          finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${trimmed}`;
-        }
-        await useAgentRunStore.getState().workspaceActions.runPendingWorkspace(
-          mode === 'plan',
-          finalPrompt,
-          attachmentIds.length > 0 ? attachmentIds : undefined,
-          filePaths.length > 0 ? filePaths : undefined,
-        );
-      }
-
-      clearAttachments();
-      useAppUIStore.getState().setShowNewWorkspaceModal(false);
-    } finally {
-      setSubmitting(false);
     }
-  }, [prompt, submitting, startImmediately, mode, getAttachmentIds, getFilePaths, clearAttachments]);
+  }, [prompt, startImmediately, mode, getAttachmentIds, getFilePaths, clearAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -143,18 +139,31 @@ export function NewWorkspaceModal() {
             </div>
           )}
 
-          <label className="mt-3 flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={startImmediately}
-              onChange={(e) => setStartImmediately(e.target.checked)}
-              className="accent-accent h-3.5 w-3.5"
-            />
-            <span className="text-xs text-primary">Start run immediately</span>
-          </label>
+          <div className="mt-3 flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={startImmediately}
+                onClick={() => setStartImmediately((v) => !v)}
+                className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
+                  startImmediately ? 'bg-accent' : 'bg-edge-hover'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5 ${
+                    startImmediately ? 'translate-x-3.5 ml-0' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+              <span className="text-xs text-primary whitespace-nowrap">Run immediately</span>
+            </label>
 
-          {startImmediately && (
-            <div className="mt-2 flex items-center gap-1.5">
+            <div
+              className={`flex items-center gap-1.5 transition-all duration-200 ${
+                startImmediately ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+            >
               <ModelEffortSelector
                 agent={selectedAgent}
                 model={selectedModel}
@@ -180,7 +189,7 @@ export function NewWorkspaceModal() {
                 </button>
               </Tooltip>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
@@ -194,10 +203,10 @@ export function NewWorkspaceModal() {
           <button
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={!prompt.trim() || submitting}
+            disabled={!prompt.trim()}
             className="btn-primary rounded px-3 py-1.5 text-xs font-medium text-on-accent"
           >
-            {submitting ? 'Starting…' : startImmediately ? 'Create & Run' : 'Create'}
+            {startImmediately ? 'Create & Run' : 'Create'}
           </button>
         </div>
       </div>
