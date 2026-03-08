@@ -53,7 +53,8 @@ const BrowserInstance = memo(function BrowserInstance({ workspaceId, isActive }:
   useEffect(() => {
     const update = () => {
       const env = useTerminalStore.getState().getEnvForWorkspace(workspaceId);
-      setPort(env?.PORT);
+      const newPort = env?.PORT;
+      setPort((prev) => prev === newPort ? prev : newPort);
     };
 
     update();

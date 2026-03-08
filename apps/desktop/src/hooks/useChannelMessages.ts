@@ -84,7 +84,10 @@ export function useChannelMessages(channelId: string | null) {
     let stale = false;
 
     void (async () => {
-      // Try cache-only read first for instant display
+      // Show cached messages instantly while network fetches in background.
+      // The promise from useLazyQuery with cache-and-network only resolves
+      // after the network response, so we use a two-step approach to avoid
+      // a blank screen while waiting.
       const { data: cachedData } = await fetchMessages({
         variables: { channelId, limit: 100 },
         fetchPolicy: 'cache-only',
@@ -97,7 +100,7 @@ export function useChannelMessages(channelId: string | null) {
         }
       }
 
-      // Always fetch from network for fresh data
+      // Fetch fresh data from network
       try {
         const { data } = await fetchMessages({
           variables: { channelId, limit: 100 },

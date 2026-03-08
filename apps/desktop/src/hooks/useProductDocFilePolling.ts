@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface ProductDocFilePollingResult {
   prdContent: string;
@@ -15,8 +15,11 @@ export function useProductDocFilePolling(worktreePath: string | null): ProductDo
   const [techContent, setTechContent] = useState('');
   const [ticketsContent, setTicketsContent] = useState('');
 
+  const prevContentRef = useRef({ prd: '', tech: '', tickets: '' });
+
   useEffect(() => {
     if (!worktreePath) return;
+    prevContentRef.current = { prd: '', tech: '', tickets: '' };
 
     const poll = async () => {
       const basePath = `${worktreePath}/.trace`;
@@ -27,28 +30,46 @@ export function useProductDocFilePolling(worktreePath: string | null): ProductDo
       ]);
 
       if (prdResult.status === 'fulfilled' && prdResult.value.success && prdResult.value.content) {
-        setPrdContent(prdResult.value.content);
+        if (prdResult.value.content !== prevContentRef.current.prd) {
+          prevContentRef.current.prd = prdResult.value.content;
+          setPrdContent(prdResult.value.content);
+        }
       } else if (prdResult.status === 'fulfilled' && !prdResult.value.success) {
-        setPrdContent('');
+        if (prevContentRef.current.prd !== '') {
+          prevContentRef.current.prd = '';
+          setPrdContent('');
+        }
       }
       if (techResult.status === 'fulfilled' && techResult.value.success && techResult.value.content) {
-        setTechContent(techResult.value.content);
+        if (techResult.value.content !== prevContentRef.current.tech) {
+          prevContentRef.current.tech = techResult.value.content;
+          setTechContent(techResult.value.content);
+        }
       } else if (techResult.status === 'fulfilled' && !techResult.value.success) {
-        setTechContent('');
+        if (prevContentRef.current.tech !== '') {
+          prevContentRef.current.tech = '';
+          setTechContent('');
+        }
       }
       if (ticketsResult.status === 'fulfilled' && ticketsResult.value.success && ticketsResult.value.content) {
-        try {
-          setTicketsContent(JSON.stringify(JSON.parse(ticketsResult.value.content), null, 2));
-        } catch {
-          setTicketsContent(ticketsResult.value.content);
+        if (ticketsResult.value.content !== prevContentRef.current.tickets) {
+          prevContentRef.current.tickets = ticketsResult.value.content;
+          try {
+            setTicketsContent(JSON.stringify(JSON.parse(ticketsResult.value.content), null, 2));
+          } catch {
+            setTicketsContent(ticketsResult.value.content);
+          }
         }
       } else if (ticketsResult.status === 'fulfilled' && !ticketsResult.value.success) {
-        setTicketsContent('');
+        if (prevContentRef.current.tickets !== '') {
+          prevContentRef.current.tickets = '';
+          setTicketsContent('');
+        }
       }
     };
 
     void poll();
-    const interval = setInterval(() => void poll(), 2000);
+    const interval = setInterval(() => void poll(), 5000);
     return () => clearInterval(interval);
   }, [worktreePath]);
 

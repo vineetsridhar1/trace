@@ -629,39 +629,34 @@ function AppContent() {
   const activeChannelIdRef = useRef(activeChannelId);
   activeChannelIdRef.current = activeChannelId;
 
-  // Sync middlePanelView when a view-type tab becomes active
+  // Consolidated tab-switch effect: sync view, ai chat, channel, and thread panel
   useEffect(() => {
     const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
     if (!tab) return;
-    const viewForTab = TAB_TYPE_TO_VIEW[tab.type];
-    if (!viewForTab) return;
-    const currentView = useAppUIStore.getState().middlePanelView;
-    if (currentView !== viewForTab) {
-      if (tab.channelId) {
-        useAppUIStore.getState().setChannelView(tab.channelId, viewForTab);
-      } else {
-        useAppUIStore.getState().setMiddlePanelView(viewForTab);
-      }
-    }
-    if (viewForTab === 'board' && tab.channelId) void fetchBoard(tab.channelId);
-  }, [activeTabId, fetchBoard]);
 
-  // Sync activeAiChatId for sidebar highlighting
-  useEffect(() => {
-    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
-    if (!tab) return;
+    // Sync middlePanelView for view-type tabs
+    const viewForTab = TAB_TYPE_TO_VIEW[tab.type];
+    if (viewForTab) {
+      const currentView = useAppUIStore.getState().middlePanelView;
+      if (currentView !== viewForTab) {
+        if (tab.channelId) {
+          useAppUIStore.getState().setChannelView(tab.channelId, viewForTab);
+        } else {
+          useAppUIStore.getState().setMiddlePanelView(viewForTab);
+        }
+      }
+      if (viewForTab === 'board' && tab.channelId) void fetchBoard(tab.channelId);
+    }
+
+    // Sync activeAiChatId for sidebar highlighting
     if (tab.type === 'ai-chat' && tab.aiChatId) {
       useAppUIStore.getState().setActiveAiChatId(tab.aiChatId);
     } else {
       const currentAiChatId = useAppUIStore.getState().activeAiChatId;
       if (currentAiChatId) useAppUIStore.getState().setActiveAiChatId(null);
     }
-  }, [activeTabId]);
 
-  // Auto-switch channel if tab belongs to a different channel
-  useEffect(() => {
-    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
-    if (!tab) return;
+    // Auto-switch channel if tab belongs to a different channel
     if (tab.channelId && tab.channelId !== activeChannelIdRef.current) {
       performChannelSwitchRef.current(tab.channelId);
       // Thread tabs: workspaces were just cleared by the channel switch, so use
@@ -673,17 +668,15 @@ function AppContent() {
         });
       }
     }
-  }, [activeTabId]);
 
-  // Re-activate thread when switching to a thread tab
-  useEffect(() => {
-    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
-    if (!tab || tab.type !== 'thread' || !tab.workspaceId) return;
-    const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === tab.workspaceId);
-    if (ws) {
-      useThreadStore.getState().syncActions.openThreadPanel(ws);
+    // Re-activate thread when switching to a thread tab
+    if (tab.type === 'thread' && tab.workspaceId) {
+      const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === tab.workspaceId);
+      if (ws) {
+        useThreadStore.getState().syncActions.openThreadPanel(ws);
+      }
     }
-  }, [activeTabId]);
+  }, [activeTabId, fetchBoard]);
 
   const workspaceSidebarWidth = useAppUIStore((s) => s.workspaceSidebarWidth);
 
@@ -1034,7 +1027,7 @@ function AppContent() {
         void useThreadStore
           .getState()
           .syncActions.loadSessionEvents(selectedWs);
-    }, 3000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [
     activeChannelId,

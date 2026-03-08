@@ -90,8 +90,8 @@ export function createGraphqlClient(): ApolloClient<unknown> {
       },
     }),
     defaultOptions: {
-      query: { fetchPolicy: "network-only" },
-      watchQuery: { fetchPolicy: "network-only", nextFetchPolicy: "network-only" },
+      query: { fetchPolicy: "cache-first" },
+      watchQuery: { fetchPolicy: "cache-and-network", nextFetchPolicy: "cache-first" },
     },
   });
 }
