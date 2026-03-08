@@ -23,6 +23,7 @@ import { useAgentRunStore } from "../stores/agentRunStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useTerminalStore } from "../stores/terminalStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
+import { useTabStore } from "../stores/tabStore";
 import { useKanbanStore } from "../stores/kanbanStore";
 import { useAppUIStore } from "../stores/appUIStore";
 import { usePanelLayoutStore } from "../stores/panelLayoutStore";
@@ -320,6 +321,7 @@ export function ThreadPanel({ asMainContent = false }: { asMainContent?: boolean
     if (!window.confirm("Delete this workspace?")) return;
 
     useThreadStore.getState().closeThreadPanel();
+    useTabStore.getState().closeTabsForWorkspace(wsId);
 
     try {
       await executeDeleteWorkspace({

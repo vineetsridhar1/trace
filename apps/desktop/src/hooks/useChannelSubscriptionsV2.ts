@@ -8,6 +8,7 @@ import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useThreadStore } from '../stores/threadStore';
 import { useKanbanStore } from '../stores/kanbanStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
+import { useTabStore } from '../stores/tabStore';
 
 const WORKSPACE_UPSERTED_SUBSCRIPTION = gql`
   subscription WorkspaceUpserted($channelId: ID!) {
@@ -211,6 +212,7 @@ export function useChannelSubscriptions({
     const deletedWorkspaceId = workspaceDeletedData.workspaceDeleted.workspaceId;
     useWorkspaceStore.getState().removeWorkspace(deletedWorkspaceId);
     useKanbanStore.getState().removeTicketByWorkspaceId(deletedWorkspaceId);
+    useTabStore.getState().closeTabsForWorkspace(deletedWorkspaceId);
     const pendingId = useAgentRunStore.getState().pendingRunWorkspaceId;
     if (pendingId === deletedWorkspaceId) {
       useAgentRunStore.getState().clearPendingRun();
