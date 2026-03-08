@@ -296,8 +296,7 @@ export function useDefaultShortcuts({
     "general.settings",
     "mod+,",
     () => {
-      const channelId = localStorage.getItem("activeChannelId");
-      if (channelId) useAppUIStore.getState().setSettingsChannelId(channelId);
+      useAppUIStore.getState().openSettings();
     },
     { label: "Open settings", category: "general", context: "global" },
   );
@@ -323,8 +322,8 @@ export function useDefaultShortcuts({
         useCommandPaletteStore.getState().close();
       } else if (useShortcutStore.getState().helpDialogOpen) {
         useShortcutStore.getState().setHelpDialogOpen(false);
-      } else if (ui.settingsChannelId) {
-        ui.setSettingsChannelId(null);
+      } else if (ui.showSettings) {
+        ui.closeSettings();
       } else if (ui.joinChannelId) {
         ui.setJoinChannelId(null);
       } else if (ui.createChannelType) {

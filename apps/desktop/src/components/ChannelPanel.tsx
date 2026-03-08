@@ -330,18 +330,6 @@ export function ChannelPanel({
               </span>
             ) : null}
           </button>
-          {!needsJoin && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                useAppUIStore.getState().setSettingsChannelId(channel.id);
-              }}
-              className="mr-1 rounded p-0.5 text-muted opacity-0 hover:bg-surface-elevated hover:text-primary group-hover:opacity-100"
-            >
-              <FiSettings className="h-3 w-3" />
-            </button>
-          )}
         </div>
       );
     });

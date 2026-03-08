@@ -83,6 +83,8 @@ interface AppUIState {
   dragging: DragTarget;
   isFullscreen: boolean;
   savedWidths: { channel: number; thread: number };
+  showSettings: boolean;
+  settingsSection: string; // 'trace' or a channel ID
   settingsChannelId: string | null;
   joinChannelId: string | null;
   createChannelType: ChannelType | null;
@@ -100,6 +102,9 @@ interface AppUIState {
   mobileDrawerOpen: boolean;
   showInstanceSettings: boolean;
 
+  openSettings: (section?: string) => void;
+  closeSettings: () => void;
+  setSettingsSection: (section: string) => void;
   setShowInstanceSettings: (show: boolean) => void;
   setShowNewWorkspaceModal: (show: boolean) => void;
   setAddTabMenuOpen: (open: boolean) => void;
@@ -144,6 +149,8 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   dragging: null,
   isFullscreen: false,
   savedWidths: { channel: 220, thread: 0 },
+  showSettings: false,
+  settingsSection: 'trace',
   settingsChannelId: null,
   joinChannelId: null,
   createChannelType: null,
@@ -161,7 +168,10 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   mobileDrawerOpen: false,
   showInstanceSettings: false,
 
-  setShowInstanceSettings: (show) => set({ showInstanceSettings: show }),
+  openSettings: (section) => set({ showSettings: true, settingsSection: section ?? 'trace' }),
+  closeSettings: () => set({ showSettings: false }),
+  setSettingsSection: (section) => set({ settingsSection: section }),
+  setShowInstanceSettings: (show) => set(show ? { showSettings: true, settingsSection: 'trace' } : { showSettings: false }),
   setShowNewWorkspaceModal: (show) => set({ showNewWorkspaceModal: show }),
   setAddTabMenuOpen: (open) => set({ addTabMenuOpen: open }),
   toggleAddTabMenuOpen: () => set((state) => ({ addTabMenuOpen: !state.addTabMenuOpen })),
@@ -196,7 +206,7 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   setDragging: (target) => set({ dragging: target }),
   setIsFullscreen: (value) => set({ isFullscreen: value }),
   setSavedWidths: (widths) => set({ savedWidths: widths }),
-  setSettingsChannelId: (id) => set({ settingsChannelId: id }),
+  setSettingsChannelId: (id) => set(id ? { settingsChannelId: id, showSettings: true, settingsSection: id } : { settingsChannelId: null }),
   setJoinChannelId: (id) => set({ joinChannelId: id }),
   setCreateChannelType: (type) => set({ createChannelType: type }),
   setShowCreateServer: (show) => set({ showCreateServer: show }),

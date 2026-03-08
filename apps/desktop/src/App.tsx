@@ -34,13 +34,12 @@ import { ChannelPanel } from "./components/ChannelPanel";
 import { ContentTabBar } from "./components/ContentTabBar";
 import { MessagePanel } from "./components/MessagePanel";
 import { ThreadPanel } from "./components/ThreadPanel";
-import { ChannelSettingsModal } from "./components/ChannelSettingsModal";
 import { JoinChannelModal } from "./components/JoinChannelModal";
 import { CreateChannelModal } from "./components/CreateChannelModal";
 import { CreateServerModal } from "./components/CreateServerModal";
 import { ProductDocModal } from "./components/ProductDocModal";
 import { NewWorkspaceModal } from "./components/NewWorkspaceModal";
-import { InstanceSettingsModal } from "./components/InstanceSettingsModal";
+import { SettingsPage } from "./components/SettingsPage";
 import { ProductDocView } from "./components/ProductDocView";
 import { AiChatPanel } from "./components/AiChatPanel";
 import { ChannelTerminalTab } from "./components/ChannelTerminalTab";
@@ -170,13 +169,12 @@ function AppContent() {
   const middlePanelView = useAppUIStore((s) => s.middlePanelView);
   const channelWidth = useAppUIStore((s) => s.channelWidth);
   const isFullscreen = useAppUIStore((s) => s.isFullscreen);
-  const settingsChannelId = useAppUIStore((s) => s.settingsChannelId);
+  const showSettings = useAppUIStore((s) => s.showSettings);
   const joinChannelId = useAppUIStore((s) => s.joinChannelId);
   const createChannelType = useAppUIStore((s) => s.createChannelType);
   const showCreateServer = useAppUIStore((s) => s.showCreateServer);
   const showProductDocModal = useAppUIStore((s) => s.showProductDocModal);
   const showNewWorkspaceModal = useAppUIStore((s) => s.showNewWorkspaceModal);
-  const showInstanceSettings = useAppUIStore((s) => s.showInstanceSettings);
   const activeProductDocId = useAppUIStore((s) => s.activeProductDocId);
   const activeAiChatId = useAppUIStore((s) => s.activeAiChatId);
   const aiChats = useAppUIStore((s) => s.aiChats);
@@ -1210,25 +1208,15 @@ function AppContent() {
   });
 
   // ─── Settings / channel modals ───────────────────────────────────
-  const settingsChannel = useMemo(
-    () =>
-      enrichedChannels.find((channel) => channel.id === settingsChannelId) ??
-      null,
-    [enrichedChannels, settingsChannelId],
-  );
-
   const joinChannel = useMemo(
     () =>
       enrichedChannels.find((channel) => channel.id === joinChannelId) ?? null,
     [enrichedChannels, joinChannelId],
   );
 
-  const handleOpenSettings = useCallback((channelId: string) => {
-    useAppUIStore.getState().setSettingsChannelId(channelId);
-  }, []);
-
-  const handleSaveSettings = useCallback(
+  const handleSaveChannelSettings = useCallback(
     async (
+      channelId: string,
       channelData: {
         name?: string;
         workspacesEnabled?: boolean;
@@ -1236,22 +1224,21 @@ function AppContent() {
         defaultSetupScript?: string | null;
         defaultRunScript?: string | null;
         defaultTeardownScript?: string | null;
+        orchestrateMode?: boolean;
       },
       localCfg: LocalChannelConfig | null,
     ) => {
-      if (!settingsChannelId) return;
-      await updateChannelSettings(settingsChannelId, channelData);
-      if (localCfg) await setLocalConfig(settingsChannelId, localCfg);
+      await updateChannelSettings(channelId, channelData);
+      if (localCfg) await setLocalConfig(channelId, localCfg);
       void refreshChannels();
     },
-    [refreshChannels, settingsChannelId, updateChannelSettings, setLocalConfig],
+    [refreshChannels, updateChannelSettings, setLocalConfig],
   );
 
   const handleDeleteChannel = useCallback(
     async (channelId: string) => {
       const success = await deleteChannel(channelId);
       if (!success) return;
-      useAppUIStore.getState().setSettingsChannelId(null);
       if (activeChannelId === channelId) {
         const remaining = serverChannels.filter((ch) => ch.id !== channelId);
         if (remaining.length > 0) switchChannel(remaining[0].id);
@@ -1496,14 +1483,10 @@ function AppContent() {
         )}
       </div>
 
-      {settingsChannel && (
-        <ChannelSettingsModal
-          channel={settingsChannel}
-          teams={serverChannels.filter((ch) => ch.type === "team")}
-          localConfig={getLocalConfig(settingsChannel.id)}
-          onClose={() => useAppUIStore.getState().setSettingsChannelId(null)}
-          onSave={handleSaveSettings}
-          onDelete={handleDeleteChannel}
+      {showSettings && (
+        <SettingsPage
+          onDeleteChannel={handleDeleteChannel}
+          onSaveChannelSettings={handleSaveChannelSettings}
         />
       )}
 
@@ -1556,12 +1539,6 @@ function AppContent() {
       )}
 
       {showNewWorkspaceModal && <NewWorkspaceModal />}
-
-      {showInstanceSettings && (
-        <InstanceSettingsModal
-          onClose={() => useAppUIStore.getState().setShowInstanceSettings(false)}
-        />
-      )}
 
       <ShortcutHelpDialog />
       <CommandPalette
