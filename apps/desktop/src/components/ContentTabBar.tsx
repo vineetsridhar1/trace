@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiMessageSquare,
   FiCheckSquare,
@@ -15,6 +15,7 @@ import {
 import type { GlobalTab, GlobalTabType } from '../stores/tabStore';
 import type { ChannelType } from '../types';
 import { AddTabMenu } from './AddTabMenu';
+import { TabPopover } from './TabPopover';
 import { Tooltip } from './Tooltip';
 import { useAppUIStore } from '../stores/appUIStore';
 import { useTerminalStore } from '../stores/terminalStore';
@@ -88,6 +89,33 @@ export function ContentTabBar({
     [tabs, activeChannelId],
   );
 
+  // ─── Tab hover popover ──────────────────────────────────────
+  const [hoveredTab, setHoveredTab] = useState<GlobalTab | null>(null);
+  const [popoverRect, setPopoverRect] = useState<DOMRect | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTabMouseEnter = useCallback((tab: GlobalTab, el: HTMLButtonElement) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      const rect = el.getBoundingClientRect();
+      setPopoverRect(rect);
+      setHoveredTab(tab);
+    }, 400);
+  }, []);
+
+  const handleTabMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+    setHoveredTab(null);
+    setPopoverRect(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
+
   return (
     <div className="flex h-[40px] shrink-0 items-center border-b border-edge bg-surface-deep">
       {/* Mobile hamburger */}
@@ -116,6 +144,8 @@ export function ContentTabBar({
                   onCloseTab(tab.id);
                 }
               }}
+              onMouseEnter={(e) => handleTabMouseEnter(tab, e.currentTarget)}
+              onMouseLeave={handleTabMouseLeave}
               className={`group relative flex shrink-0 cursor-pointer items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
                 isActive
                   ? 'text-accent-light'
@@ -193,6 +223,11 @@ export function ContentTabBar({
           />
         )}
       </div>
+
+      {/* Tab hover popover */}
+      {hoveredTab && popoverRect && (
+        <TabPopover tab={hoveredTab} triggerRect={popoverRect} />
+      )}
     </div>
   );
 }
