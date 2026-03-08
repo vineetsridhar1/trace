@@ -148,7 +148,7 @@ export function ChannelPanel({
       const needsJoin = !!(channel.workspacesEnabled && channel.githubUrl && !localConfigs[channel.id]?.localRepoPath);
       const shortcutNum = channelShortcutMap.get(channel.id);
       return (
-        <div key={channel.id} className="my-0.5 flex items-center">
+        <div key={channel.id} className="group my-0.5 flex items-center">
           <button
             type="button"
             onClick={() => onSwitchChannel(channel.id)}
@@ -167,13 +167,25 @@ export function ChannelPanel({
                 {count > 99 ? '99+' : count}
               </span>
             ) : shortcutNum ? (
-              <span className="ml-auto inline-flex shrink-0 items-center gap-px opacity-50">
+              <span className="ml-auto inline-flex shrink-0 items-center gap-px opacity-50 group-hover:hidden">
                 <kbd className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded border border-edge bg-surface-deep px-0.5 text-[9px] font-medium leading-none text-muted">⌘</kbd>
                 <kbd className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded border border-edge bg-surface-deep px-0.5 text-[9px] font-medium leading-none text-muted">⇧</kbd>
                 <kbd className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded border border-edge bg-surface-deep px-0.5 text-[9px] font-medium leading-none text-muted">{shortcutNum}</kbd>
               </span>
             ) : null}
           </button>
+          {!needsJoin && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                useAppUIStore.getState().setSettingsChannelId(channel.id);
+              }}
+              className="mr-1 rounded p-0.5 text-muted opacity-0 hover:bg-surface-elevated hover:text-primary group-hover:opacity-100"
+            >
+              <FiSettings className="h-3 w-3" />
+            </button>
+          )}
         </div>
       );
     });
