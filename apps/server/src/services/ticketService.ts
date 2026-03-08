@@ -292,7 +292,12 @@ export async function getBoard(channelId: string) {
     },
   });
 
-  return columnsWithTickets;
+  // Filter out tickets whose workspace has been soft-deleted (safety net for
+  // previously-deleted workspaces whose tickets weren't cleaned up)
+  return columnsWithTickets.map((col) => ({
+    ...col,
+    tickets: col.tickets.filter((t) => t.workspace?.status !== "deleted"),
+  }));
 }
 
 export async function createTicketForWorkspace(

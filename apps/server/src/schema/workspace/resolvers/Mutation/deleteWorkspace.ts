@@ -2,6 +2,7 @@ import type { MutationResolvers } from './../../../types.generated';
 import { softDeleteWorkspace, getWorkspaceByIdForFeed } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
 import { GraphQLError } from 'graphql';
+import prisma from '../../../../lib/prisma';
 
 export const deleteWorkspace: NonNullable<MutationResolvers['deleteWorkspace']> = async (_parent, { channelId, workspaceId }) => {
   const workspace = await getWorkspaceByIdForFeed(workspaceId);
@@ -10,6 +11,7 @@ export const deleteWorkspace: NonNullable<MutationResolvers['deleteWorkspace']> 
   }
 
   await softDeleteWorkspace(workspaceId);
+  await prisma.ticket.deleteMany({ where: { workspaceId } });
 
   pubsub.publish(TOPICS.WORKSPACE_DELETED(channelId), {
     workspaceDeleted: { channelId, workspaceId },

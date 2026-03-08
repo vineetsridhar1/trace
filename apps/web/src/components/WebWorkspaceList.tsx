@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { FiPlus, FiCircle, FiExternalLink, FiChevronRight } from "react-icons/fi";
+import { FiPlus, FiCircle, FiExternalLink, FiChevronRight, FiFileText } from "react-icons/fi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
 import { usePRStatus } from "../hooks/usePRStatus";
@@ -47,6 +47,7 @@ interface WorkspaceItemData {
   ticketTitle: string | null;
   userName: string | null;
   branch: string | null;
+  isProductDoc: boolean;
 }
 
 interface StatusGroup {
@@ -187,6 +188,7 @@ export function WebWorkspaceList({
   const [showNewModal, setShowNewModal] = useState(false);
   const [newPrompt, setNewPrompt] = useState("");
   const [creating, setCreating] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(true);
 
   const handleSelect = useCallback(
     (id: string) => onSelectWorkspace(id),
@@ -220,6 +222,7 @@ export function WebWorkspaceList({
           ticketTitle: w.ticketTitle,
           userName: w.user?.name ?? null,
           branch: w.branch,
+          isProductDoc: w.isProductDoc,
         })),
     [allWorkspaces, channelId],
   );
@@ -227,6 +230,7 @@ export function WebWorkspaceList({
   const groupedItems = useMemo(() => {
     const buckets = new Map<TicketStatus, WorkspaceItemData[]>();
     for (const item of items) {
+      if (item.isProductDoc) continue;
       let status = (item.status ?? "pending") as TicketStatus;
       if (status === "completed") status = "in_progress";
       let bucket = buckets.get(status);
@@ -246,6 +250,11 @@ export function WebWorkspaceList({
     }
     return groups;
   }, [items]);
+
+  const documentItems = useMemo(
+    () => items.filter((item) => item.isProductDoc),
+    [items],
+  );
 
   const branches = useMemo(
     () => items.filter((w) => w.branch).map((w) => w.branch!),
@@ -283,31 +292,77 @@ export function WebWorkspaceList({
             No workspaces yet
           </p>
         ) : (
-          groupedItems.map((group) => (
-            <CollapsibleStatusGroup
-              key={group.status}
-              status={group.status}
-              count={group.items.length}
-            >
-              {group.items.map((item) => {
-                const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
-                return (
-                  <WorkspaceItem
-                    key={item.id}
-                    id={item.id}
-                    status={item.status}
-                    preview={item.preview}
-                    ticketTitle={item.ticketTitle}
-                    userName={item.userName}
-                    prState={prInfo?.state}
-                    prUrl={prInfo?.prUrl}
-                    isSelected={item.id === selectedWorkspaceId}
-                    onSelect={handleSelect}
+          <>
+            {groupedItems.map((group) => (
+              <CollapsibleStatusGroup
+                key={group.status}
+                status={group.status}
+                count={group.items.length}
+              >
+                {group.items.map((item) => {
+                  const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
+                  return (
+                    <WorkspaceItem
+                      key={item.id}
+                      id={item.id}
+                      status={item.status}
+                      preview={item.preview}
+                      ticketTitle={item.ticketTitle}
+                      userName={item.userName}
+                      prState={prInfo?.state}
+                      prUrl={prInfo?.prUrl}
+                      isSelected={item.id === selectedWorkspaceId}
+                      onSelect={handleSelect}
+                    />
+                  );
+                })}
+              </CollapsibleStatusGroup>
+            ))}
+            {documentItems.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  className="flex w-full cursor-pointer items-center gap-1.5 px-3 py-1.5 hover:bg-surface-elevated/50 transition-colors"
+                  onClick={() => setDocsOpen((v) => !v)}
+                >
+                  <FiChevronRight
+                    className={`h-3 w-3 text-muted transition-transform duration-150 ${docsOpen ? "rotate-90" : ""}`}
                   />
-                );
-              })}
-            </CollapsibleStatusGroup>
-          ))
+                  <FiFileText className="h-3 w-3 flex-shrink-0 text-blue-400" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-blue-400">
+                    Documents
+                  </span>
+                  <span className="rounded-full bg-surface-elevated px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                    {documentItems.length}
+                  </span>
+                </button>
+                <div
+                  className="grid transition-[grid-template-rows] duration-200 ease-out"
+                  style={{ gridTemplateRows: docsOpen ? "1fr" : "0fr" }}
+                >
+                  <div className="overflow-hidden">
+                    {documentItems.map((item) => {
+                      const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
+                      return (
+                        <WorkspaceItem
+                          key={item.id}
+                          id={item.id}
+                          status={item.status}
+                          preview={item.preview}
+                          ticketTitle={item.ticketTitle}
+                          userName={item.userName}
+                          prState={prInfo?.state}
+                          prUrl={prInfo?.prUrl}
+                          isSelected={item.id === selectedWorkspaceId}
+                          onSelect={handleSelect}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
