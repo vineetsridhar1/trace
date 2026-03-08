@@ -3,6 +3,7 @@ import {
   FiCheck,
   FiClock,
   FiCopy,
+  FiCpu,
   FiExternalLink,
   FiGitPullRequest,
   FiLink,
@@ -43,6 +44,7 @@ interface ThreadHeaderProps {
   onSwitchSession: (sessionId: string) => Promise<void>;
   ticketTitle: string | null;
   user: { name: string; avatarUrl: string | null } | null;
+  isOrchestrator?: boolean;
 }
 
 export const ThreadHeader = memo(function ThreadHeader({
@@ -68,6 +70,7 @@ export const ThreadHeader = memo(function ThreadHeader({
   onSwitchSession,
   ticketTitle,
   user,
+  isOrchestrator,
 }: ThreadHeaderProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -184,11 +187,16 @@ export const ThreadHeader = memo(function ThreadHeader({
             {user.name.charAt(0).toUpperCase()}
           </div>
         ) : null}
-        {ticketTitle && (
+        {isOrchestrator ? (
+          <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
+            <FiCpu className="h-3.5 w-3.5" aria-hidden="true" />
+            Orchestrator
+          </span>
+        ) : ticketTitle ? (
           <span className="truncate max-w-[80%] text-xs font-medium text-primary">
             {ticketTitle}
           </span>
-        )}
+        ) : null}
         <span
           className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CONFIG[workspaceStatus].bgColor} ${STATUS_CONFIG[workspaceStatus].color}`}
         >

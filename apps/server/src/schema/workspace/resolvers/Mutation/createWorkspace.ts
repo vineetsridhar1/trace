@@ -7,7 +7,7 @@ import {
   linkTicketToWorkspace,
 } from "../../../../services/ticketService";
 
-export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> = async (_parent, { channelId, text, attachmentIds, ticketId, isProductDoc }, ctx) => {
+export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> = async (_parent, { channelId, text, attachmentIds, ticketId, isProductDoc, isOrchestrator }, ctx) => {
   const user = (ctx as { user?: { id: string } }).user;
   const created = await createUserWorkspace(
     channelId,
@@ -15,6 +15,7 @@ export const createWorkspace: NonNullable<MutationResolvers['createWorkspace']> 
     attachmentIds ?? undefined,
     isProductDoc ?? false,
     user?.id,
+    isOrchestrator ?? false,
   );
 
   pubsub.publish(TOPICS.WORKSPACE_UPSERTED(channelId), {

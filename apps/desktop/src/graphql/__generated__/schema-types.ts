@@ -335,6 +335,7 @@ export type MutationCreateSessionArgs = {
 export type MutationCreateWorkspaceArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
+  isOrchestrator?: InputMaybe<Scalars['Boolean']['input']>;
   isProductDoc?: InputMaybe<Scalars['Boolean']['input']>;
   text: Scalars['String']['input'];
   ticketId?: InputMaybe<Scalars['ID']['input']>;
@@ -886,6 +887,7 @@ export type Workspace = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
+  isOrchestrator: Scalars['Boolean']['output'];
   isProductDoc: Scalars['Boolean']['output'];
   preview?: Maybe<Scalars['String']['output']>;
   queuedRunConfig?: Maybe<Scalars['JSON']['output']>;

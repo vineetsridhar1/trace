@@ -208,7 +208,7 @@ type Mutation {
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createServer(avatarUrl: String, name: String!): Server!
   createSession(channelId: ID!, workspaceId: ID!): Session!
-  createWorkspace(attachmentIds: [String!], channelId: ID!, isProductDoc: Boolean, text: String!, ticketId: ID): CreateWorkspacePayload!
+  createWorkspace(attachmentIds: [String!], channelId: ID!, isOrchestrator: Boolean, isProductDoc: Boolean, text: String!, ticketId: ID): CreateWorkspacePayload!
   deleteAiChat(id: ID!): Boolean!
   deleteChannel(id: ID!): Boolean!
   deleteColumn(columnId: ID!): Boolean!
@@ -408,6 +408,7 @@ type Workspace {
   createdAt: DateTime!
   id: ID!
   importance: String!
+  isOrchestrator: Boolean!
   isProductDoc: Boolean!
   preview: String
   queuedRunConfig: JSON

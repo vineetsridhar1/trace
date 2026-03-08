@@ -350,6 +350,7 @@ export type MutationcreateSessionArgs = {
 export type MutationcreateWorkspaceArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
+  isOrchestrator?: InputMaybe<Scalars['Boolean']['input']>;
   isProductDoc?: InputMaybe<Scalars['Boolean']['input']>;
   text: Scalars['String']['input'];
   ticketId?: InputMaybe<Scalars['ID']['input']>;
@@ -901,6 +902,7 @@ export type Workspace = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
+  isOrchestrator: Scalars['Boolean']['output'];
   isProductDoc: Scalars['Boolean']['output'];
   preview?: Maybe<Scalars['String']['output']>;
   queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
@@ -1544,6 +1546,7 @@ export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversPa
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   importance?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isOrchestrator?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isProductDoc?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   preview?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   queuedRunConfig?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;

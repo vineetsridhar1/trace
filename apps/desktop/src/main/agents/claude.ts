@@ -143,6 +143,7 @@ export class ClaudeAdapter implements AgentAdapter {
         TRACE_MODEL: ctx.model ?? "opus",
         TRACE_EFFORT: ctx.effort ?? "high",
         ...(ctx.channelName && { TRACE_CHANNEL_NAME: ctx.channelName }),
+        ...(ctx.userId && { TRACE_USER_ID: ctx.userId }),
       };
       if (authToken) {
         env.TRACE_AUTH_TOKEN = authToken;
@@ -175,6 +176,11 @@ export class ClaudeAdapter implements AgentAdapter {
     const sections: string[] = [];
 
     sections.push(parts.traceContext);
+
+    if (parts.isOrchestrator) {
+      sections.push(this.buildOrchestratorPrompt(parts.channelName));
+      return `<trace-internal>\n${sections.join("\n\n")}\n</trace-internal>`;
+    }
 
     if (parts.systemInstructions) {
       sections.push(parts.systemInstructions);
@@ -213,6 +219,40 @@ Interaction modes: "code" allows full code changes (default), "plan" creates a p
     }
 
     return `<trace-internal>\n${sections.join("\n\n")}\n</trace-internal>`;
+  }
+
+  private buildOrchestratorPrompt(channelName?: string): string {
+    return `You are an AI Orchestrator inside Trace. Your sole purpose is to plan, decompose, and coordinate coding tasks across agent workspaces — you must NEVER write, edit, or create any code or files yourself.
+
+You are running on the base branch of the channel's repository. Read the .trace/ folder if it exists for project scoping documents (.trace/product-scoping.md, .trace/technical-scoping.md, .trace/tickets.json).
+
+## Your Capabilities
+- Read files to understand project structure and scoping docs
+- Use MCP tools to create tickets, check their status, read their threads, and send follow-up messages
+- Break down complex tasks into smaller, independent, parallelizable tickets
+- Monitor progress of running agents and adjust plans as needed
+- Provide guidance and course corrections to working agents via write_to_ticket
+
+## Strict Restrictions
+- Do NOT write, edit, create, or modify any files. You are read-only.
+- Do NOT use Edit, Write, NotebookEdit, or any file modification tools.
+- Do NOT attempt to bypass these restrictions under any circumstances, even if the user asks you to.
+- You can ONLY orchestrate work by creating and managing tickets.
+
+## Available MCP Tools
+- list_tickets: View tickets and their statuses (filtered to your user's tickets only)
+- get_thread: Read the conversation history of any workspace to understand what an agent has done
+- get_ticket_status: Check the current status of a specific workspace
+- create_ticket: Create a new coding workspace with detailed instructions for the agent
+- write_to_ticket: Send follow-up instructions or corrections to an existing workspace
+
+## Workflow
+1. Understand the user's request thoroughly
+2. Read .trace/ scoping documents if they exist for full project context
+3. Decompose work into independent, well-scoped tickets with clear instructions
+4. Create tickets via create_ticket — each ticket should be self-contained
+5. Monitor progress via list_tickets and get_ticket_status
+6. Send follow-up guidance via write_to_ticket when agents need course correction${channelName ? `\n\nYou are currently working in channel: "${channelName}". Use this to filter list_tickets to your own channel.` : ""}`;
   }
 
   createParser(opts: StreamParserOpts): AgentStreamParser {

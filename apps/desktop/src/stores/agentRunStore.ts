@@ -88,6 +88,7 @@ interface WorkspaceActions {
       planMode: boolean;
     },
   ) => Promise<void>;
+  createOrchestrator: () => Promise<void>;
 }
 
 const noopWarn =
@@ -117,6 +118,9 @@ const defaultWorkspaceActions: WorkspaceActions = {
   reviewCompletedTicket: noopWarn(
     "reviewCompletedTicket",
   ) as WorkspaceActions["reviewCompletedTicket"],
+  createOrchestrator: noopWarn(
+    "createOrchestrator",
+  ) as WorkspaceActions["createOrchestrator"],
 };
 
 interface AgentRunState {

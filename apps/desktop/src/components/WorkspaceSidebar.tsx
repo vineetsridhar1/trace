@@ -155,7 +155,7 @@ export function WorkspaceSidebar({
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
     for (const ws of workspaces) {
-      if (ws.isProductDoc) continue;
+      if (ws.isProductDoc || ws.isOrchestrator) continue;
       let status = (ws.status ?? 'pending') as TicketStatus;
       if (status === 'completed') status = 'in_progress';
       let bucket = buckets.get(status);

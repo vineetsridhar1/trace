@@ -9,6 +9,7 @@ const CHANNEL_NAME = process.env.TRACE_CHANNEL_NAME || undefined;
 const MODEL = process.env.TRACE_MODEL ?? "opus";
 const EFFORT = process.env.TRACE_EFFORT ?? "high";
 const AUTH_TOKEN = process.env.TRACE_AUTH_TOKEN;
+const USER_ID = process.env.TRACE_USER_ID || undefined;
 
 const MAX_TICKETS_PER_SESSION = 10;
 let ticketsCreated = 0;
@@ -79,6 +80,7 @@ const LIST_TICKETS_QUERY = `
           status
           branch
           prUrl
+          userId
         }
       }
     }
@@ -99,6 +101,7 @@ interface BoardColumn {
       status: string;
       branch: string | null;
       prUrl: string | null;
+      userId: string | null;
     } | null;
   }>;
 }
@@ -242,9 +245,12 @@ server.tool(
     for (const col of data.board) {
       if (column && col.slug !== column) continue;
 
-      const filtered = status
+      let filtered = status
         ? col.tickets.filter((t) => t.workspace?.status === status)
         : col.tickets;
+      if (USER_ID) {
+        filtered = filtered.filter((t) => t.workspace?.userId === USER_ID);
+      }
       if (filtered.length === 0 && column) {
         lines.push(`## ${col.name} — no matching tickets`);
         continue;

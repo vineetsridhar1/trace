@@ -17,12 +17,14 @@ const GQL_CREATE_WORKSPACE = gql`
     $text: String!
     $attachmentIds: [String!]
     $isProductDoc: Boolean
+    $isOrchestrator: Boolean
   ) {
     createWorkspace(
       channelId: $channelId
       text: $text
       attachmentIds: $attachmentIds
       isProductDoc: $isProductDoc
+      isOrchestrator: $isOrchestrator
     ) {
       workspace {
         ...WorkspaceFields

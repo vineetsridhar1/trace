@@ -22,7 +22,7 @@ type PRStatus {
 }
 
 extend type Mutation {
-  createWorkspace(channelId: ID!, text: String!, attachmentIds: [String!], ticketId: ID, isProductDoc: Boolean): CreateWorkspacePayload!
+  createWorkspace(channelId: ID!, text: String!, attachmentIds: [String!], ticketId: ID, isProductDoc: Boolean, isOrchestrator: Boolean): CreateWorkspacePayload!
   appendPrompt(channelId: ID!, workspaceId: ID!, text: String!, attachmentIds: [String!], createNewSession: Boolean, sessionId: ID): CreateWorkspacePayload!
   updateWorkspacePreview(channelId: ID!, workspaceId: ID!, preview: String!): Workspace!
   updateWorkspaceStatus(channelId: ID!, workspaceId: ID!, status: String!): Workspace!
@@ -53,6 +53,7 @@ type Workspace {
   sessionCount: Int!
   queuedRunConfig: JSON
   isProductDoc: Boolean!
+  isOrchestrator: Boolean!
 }
 
 type WorkspaceUser {

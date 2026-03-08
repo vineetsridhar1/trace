@@ -81,6 +81,12 @@ async function runSetupScripts(
 }
 
 function buildTraceContext(worktreePath: string, config: SpawnConfig): string {
+  if (config.isOrchestrator) {
+    return (
+      `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
+      `You are an orchestrator running on the base branch at ${worktreePath}. You do not have your own worktree.`
+    );
+  }
   return (
     `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
     `Your work takes place in ${worktreePath} which is an isolated git worktree created for this task.`
@@ -104,57 +110,71 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     branchPrefix,
     channelId,
     channelName,
+    isOrchestrator,
   } = config;
 
   const adapter = getAgent(agentType);
-  const { worktreePath, created } = await ensureWorktree(
-    workspaceId,
-    repoPath,
-    baseBranch,
-    branchPrefix,
-  );
 
-  if (created && creationCommands && creationCommands.length > 0) {
-    appendAgentDebugLog(
+  let worktreePath: string;
+
+  if (isOrchestrator) {
+    // Orchestrators run on the base repo directly — no worktree, no branch
+    worktreePath = repoPath;
+    permissionMode = "ask";
+  } else {
+    const result = await ensureWorktree(
       workspaceId,
-      `running ${creationCommands.length} setup script(s)`,
+      repoPath,
+      baseBranch,
+      branchPrefix,
     );
-    await runSetupScripts(worktreePath, creationCommands);
-    appendAgentDebugLog(workspaceId, "setup scripts completed");
+    worktreePath = result.worktreePath;
+
+    if (result.created && creationCommands && creationCommands.length > 0) {
+      appendAgentDebugLog(
+        workspaceId,
+        `running ${creationCommands.length} setup script(s)`,
+      );
+      await runSetupScripts(worktreePath, creationCommands);
+      appendAgentDebugLog(workspaceId, "setup scripts completed");
+    }
   }
+
   const startedAt = Date.now();
   appendAgentDebugLog(
     workspaceId,
     `spawn start agent=${agentType} cwd=${worktreePath} inactivityTimeoutMs=${AGENT_INACTIVITY_TIMEOUT_MS} promptLen=${prompt.length}`,
   );
 
-  // Rename branch on first spawn (not resume)
-  const prefix = branchPrefix || "trace";
-  const defaultBranch = `${prefix}/${workspaceId.slice(0, 8)}`;
-  const currentBranch = await getWorktreeBranch(workspaceId);
-  if (!resumeSessionId && currentBranch === defaultBranch) {
-    let newBranch = await generateBranchName(prompt, workspaceId, branchPrefix);
-    if (newBranch !== defaultBranch) {
-      let renameResult = await runProcess(
-        "git",
-        ["branch", "-m", newBranch],
-        worktreePath,
-      );
-      if (renameResult.code !== 0) {
-        newBranch = `${newBranch.slice(0, 44)}-${workspaceId.slice(0, 4)}`;
-        renameResult = await runProcess(
+  // Rename branch on first spawn (not resume) — skip for orchestrators
+  if (!isOrchestrator) {
+    const prefix = branchPrefix || "trace";
+    const defaultBranch = `${prefix}/${workspaceId.slice(0, 8)}`;
+    const currentBranch = await getWorktreeBranch(workspaceId);
+    if (!resumeSessionId && currentBranch === defaultBranch) {
+      let newBranch = await generateBranchName(prompt, workspaceId, branchPrefix);
+      if (newBranch !== defaultBranch) {
+        let renameResult = await runProcess(
           "git",
           ["branch", "-m", newBranch],
           worktreePath,
         );
-      }
-      if (renameResult.code === 0) {
-        appendAgentDebugLog(workspaceId, `branch renamed to ${newBranch}`);
-      } else {
-        appendAgentDebugLog(
-          workspaceId,
-          `branch rename failed: ${renameResult.stderr.trim()}`,
-        );
+        if (renameResult.code !== 0) {
+          newBranch = `${newBranch.slice(0, 44)}-${workspaceId.slice(0, 4)}`;
+          renameResult = await runProcess(
+            "git",
+            ["branch", "-m", newBranch],
+            worktreePath,
+          );
+        }
+        if (renameResult.code === 0) {
+          appendAgentDebugLog(workspaceId, `branch renamed to ${newBranch}`);
+        } else {
+          appendAgentDebugLog(
+            workspaceId,
+            `branch rename failed: ${renameResult.stderr.trim()}`,
+          );
+        }
       }
     }
   }
@@ -220,6 +240,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
       filePaths,
       hasMcpTools,
       channelName,
+      isOrchestrator,
     };
     const wrappedSystemPrompt = adapter.wrapSystemPrompt
       ? adapter.wrapSystemPrompt(parts)
@@ -242,6 +263,8 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     channelId,
     channelName,
     serverUrl: SERVER_URL,
+    isOrchestrator,
+    userId: config.userId,
   });
 
   // Build env: apply envFilter if provided, otherwise pass full process.env

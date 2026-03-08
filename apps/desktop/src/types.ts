@@ -52,6 +52,8 @@ export interface SpawnConfig {
   branchPrefix?: string;
   channelId?: string;
   channelName?: string;
+  isOrchestrator?: boolean;
+  userId?: string;
 }
 
 export interface EffortOption {
@@ -448,6 +450,7 @@ export interface Workspace {
     planMode: boolean;
   } | null;
   isProductDoc: boolean;
+  isOrchestrator: boolean;
 }
 
 export type ChannelType = "channel" | "team" | "project";

@@ -72,6 +72,7 @@ export interface SystemPromptParts {
   filePaths?: string[];
   hasMcpTools?: boolean;
   channelName?: string;
+  isOrchestrator?: boolean;
 }
 
 export interface AgentSpawnContext {
@@ -86,6 +87,8 @@ export interface AgentSpawnContext {
   channelId?: string;
   channelName?: string;
   serverUrl?: string;
+  isOrchestrator?: boolean;
+  userId?: string;
 }
 
 export interface AgentAdapter {
