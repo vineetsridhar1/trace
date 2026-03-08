@@ -1408,7 +1408,6 @@ function AppContent() {
               hasGithubUrl={currentHasGithub}
               hasRepoPath={!!enrichedActiveChannel?.localRepoPath}
               activeChannelId={activeChannelId}
-              activeChannelName={displayChannel?.name ?? ''}
               onOpenViewTab={handleOpenViewTab}
             />
           )}

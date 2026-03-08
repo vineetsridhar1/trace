@@ -44,7 +44,6 @@ interface ContentTabBarProps {
   hasGithubUrl: boolean;
   hasRepoPath: boolean;
   activeChannelId: string | null;
-  activeChannelName: string;
   onOpenViewTab: (viewType: GlobalTabType) => void;
 }
 
@@ -60,7 +59,6 @@ export function ContentTabBar({
   hasGithubUrl,
   hasRepoPath,
   activeChannelId,
-  activeChannelName,
   onOpenViewTab,
 }: ContentTabBarProps) {
   const addMenuOpen = useAppUIStore((s) => s.addTabMenuOpen);
@@ -109,6 +107,12 @@ export function ContentTabBar({
     setHoveredTab(null);
     setPopoverRect(null);
   }, []);
+
+  useEffect(() => {
+    if (!hoveredTab) return;
+    const tabStillOpen = tabs.some((tab) => tab.id === hoveredTab.id);
+    if (!tabStillOpen) handleTabMouseLeave();
+  }, [tabs, hoveredTab, handleTabMouseLeave]);
 
   useEffect(() => {
     return () => {
@@ -180,11 +184,13 @@ export function ContentTabBar({
                 tabIndex={-1}
                 onClick={(e) => {
                   e.stopPropagation();
+                  handleTabMouseLeave();
                   onCloseTab(tab.id);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.stopPropagation();
+                    handleTabMouseLeave();
                     onCloseTab(tab.id);
                   }
                 }}
