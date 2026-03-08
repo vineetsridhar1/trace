@@ -156,7 +156,7 @@ export interface TraceAPI {
   onPtyExit: (
     callback: (terminalId: string, exitCode: number) => void,
   ) => () => void;
-  onCloseTerminalTab: (callback: () => void) => () => void;
+  onCloseTab: (callback: () => void) => () => void;
   getWorktreeDiff: (
     workspaceId: string,
     baseBranch: string,

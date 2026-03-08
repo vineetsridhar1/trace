@@ -2,32 +2,34 @@ import { useEffect } from 'react';
 import { useShortcutStore, CONTEXT_PRIORITY } from '../stores/shortcutStore';
 import type { ShortcutDefinition } from '../stores/shortcutStore';
 import { normalizeKeyEvent, hasModifierKey } from '../shortcuts/keyUtils';
+import { keybindingManager } from './useKeybindings';
 
 /** Should we suppress this shortcut while the user is typing? */
-function shouldSuppress(e: KeyboardEvent): boolean {
+function shouldSuppress(e: KeyboardEvent): { suppress: boolean; isTextInput: boolean } {
   const target = e.target as HTMLElement | null;
-  if (!target) return false;
+  if (!target) return { suppress: false, isTextInput: false };
 
   const tag = target.tagName;
   const isTextInput = tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
   const isXterm = target.classList?.contains('xterm-helper-textarea') ?? false;
 
   // In text inputs, let native editing shortcuts (Cmd/Alt+Backspace/Delete) through
-  if (isTextInput && (e.key === 'Backspace' || e.key === 'Delete')) return true;
+  if (isTextInput && (e.key === 'Backspace' || e.key === 'Delete'))
+    return { suppress: true, isTextInput };
 
   // Allow other modifier combos through
-  if (hasModifierKey(e)) return false;
+  if (hasModifierKey(e)) return { suppress: false, isTextInput: isTextInput || isXterm };
 
   // Escape in any text input blurs it
   if (e.key === 'Escape' && (isTextInput || isXterm)) {
     (target as HTMLElement).blur();
-    return true;
+    return { suppress: true, isTextInput: true };
   }
 
   // Suppress plain keys when focused in text inputs or xterm
-  if (isTextInput || isXterm) return true;
+  if (isTextInput || isXterm) return { suppress: true, isTextInput: true };
 
-  return false;
+  return { suppress: false, isTextInput: false };
 }
 
 /**
@@ -43,7 +45,17 @@ export function useShortcuts(): void {
       const keyCombo = normalizeKeyEvent(e);
       if (!keyCombo) return;
 
-      if (shouldSuppress(e)) return;
+      const { suppress, isTextInput } = shouldSuppress(e);
+
+      // Check the keybinding stack first (component-level overrides)
+      const stackCallback = keybindingManager.resolve(keyCombo, isTextInput);
+      if (stackCallback) {
+        e.preventDefault();
+        stackCallback();
+        return;
+      }
+
+      if (suppress) return;
 
       const { shortcuts, activeContexts } = useShortcutStore.getState();
 

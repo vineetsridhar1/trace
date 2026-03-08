@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiMessageSquare,
   FiCheckSquare,
@@ -11,6 +11,7 @@ import {
 import { TAB_LABELS, VIEW_TAB_TYPES, isViewTabAvailable } from '../stores/tabStore';
 import type { GlobalTabType } from '../stores/tabStore';
 import type { ChannelType } from '../types';
+import { useKeybindings, type KeyBinding } from '../hooks/useKeybindings';
 
 interface AddTabMenuProps {
   openTabTypes: Set<GlobalTabType>;
@@ -60,14 +61,6 @@ export function AddTabMenu({
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
   const availableViews = VIEW_TAB_TYPES.filter(
     (type) =>
       isViewTabAvailable(type, channelType, workspacesEnabled, hasGithubUrl, hasRepoPath) &&
@@ -80,6 +73,59 @@ export function AddTabMenu({
     : availableViews;
 
   const showAiChat = !filterLower || TAB_LABELS['ai-chat'].toLowerCase().includes(filterLower);
+
+  // Build ordered list of all visible menu items for numbered shortcuts
+  const menuItems = useMemo(() => {
+    const items: Array<{ type: 'ai-chat' | GlobalTabType; action: () => void }> = [];
+    if (showAiChat) items.push({ type: 'ai-chat', action: onCreateAiChat });
+    for (const type of filteredViews) {
+      items.push({ type, action: () => onAddTab(type) });
+    }
+    return items;
+  }, [showAiChat, filteredViews, onCreateAiChat, onAddTab]);
+
+  // Arrow key highlight index (-1 = none highlighted)
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+
+  // Reset highlight when menu items change (e.g. filter typed)
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [menuItems.length]);
+
+  // Register escape + number + arrow key bindings via the keybinding stack
+  const bindings = useMemo<KeyBinding[]>(() => {
+    const result: KeyBinding[] = [
+      { keys: 'escape', callback: onClose },
+      {
+        keys: 'down',
+        callback: () => setHighlightIndex((prev) => (prev + 1) % menuItems.length),
+      },
+      {
+        keys: 'up',
+        callback: () =>
+          setHighlightIndex((prev) => (prev <= 0 ? menuItems.length - 1 : prev - 1)),
+      },
+      {
+        keys: 'enter',
+        callback: () => {
+          if (highlightIndex >= 0 && highlightIndex < menuItems.length) {
+            menuItems[highlightIndex].action();
+          }
+        },
+      },
+    ];
+    for (let i = 0; i < menuItems.length && i < 9; i++) {
+      const item = menuItems[i];
+      result.push({
+        keys: `${i + 1}`,
+        callback: item.action,
+        ignoreTextInputs: true,
+      });
+    }
+    return result;
+  }, [onClose, menuItems, highlightIndex]);
+
+  useKeybindings(bindings);
 
   return (
     <div
@@ -105,11 +151,11 @@ export function AddTabMenu({
           <button
             type="button"
             onClick={onCreateAiChat}
-            className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary hover:bg-surface-hover transition-colors"
+            className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors ${highlightIndex === 0 ? 'bg-surface-hover' : 'hover:bg-surface-hover'}`}
           >
             <FiMessageCircle className="h-3.5 w-3.5 text-muted" />
             <span className="flex-1">AI Chat</span>
-            <kbd className="text-[10px] text-muted">&#x2318;&#x21E7;C</kbd>
+            <kbd className="text-[10px] text-muted">1</kbd>
           </button>
         </>
       )}
@@ -122,15 +168,19 @@ export function AddTabMenu({
           </div>
           {filteredViews.map((type) => {
             const Icon = VIEW_ICONS[type] ?? FiMessageSquare;
+            const itemIndex = menuItems.findIndex((m) => m.type === type);
             return (
               <button
                 key={type}
                 type="button"
                 onClick={() => onAddTab(type)}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary hover:bg-surface-hover transition-colors"
+                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary transition-colors ${highlightIndex === itemIndex ? 'bg-surface-hover' : 'hover:bg-surface-hover'}`}
               >
                 <Icon className="h-3.5 w-3.5 text-muted" />
-                <span>{TAB_LABELS[type]}</span>
+                <span className="flex-1">{TAB_LABELS[type]}</span>
+                {itemIndex >= 0 && itemIndex < 9 && (
+                  <kbd className="text-[10px] text-muted">{itemIndex + 1}</kbd>
+                )}
               </button>
             );
           })}

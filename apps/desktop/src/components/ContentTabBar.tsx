@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   FiMessageSquare,
   FiCheckSquare,
@@ -61,7 +61,7 @@ export function ContentTabBar({
   activeChannelName,
   onOpenViewTab,
 }: ContentTabBarProps) {
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuOpen = useAppUIStore((s) => s.addTabMenuOpen);
   const tabRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   // Scroll the active tab into view when it changes
@@ -152,7 +152,7 @@ export function ContentTabBar({
         <Tooltip text="Open a tab" position="bottom">
           <button
             type="button"
-            onClick={() => setAddMenuOpen(!addMenuOpen)}
+            onClick={() => useAppUIStore.getState().toggleAddTabMenuOpen()}
             className="flex cursor-pointer items-center rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary"
           >
             <FiPlus className="h-3.5 w-3.5" aria-hidden="true" />
@@ -167,13 +167,13 @@ export function ContentTabBar({
             hasRepoPath={hasRepoPath}
             onAddTab={(type) => {
               onOpenViewTab(type);
-              setAddMenuOpen(false);
+              useAppUIStore.getState().setAddTabMenuOpen(false);
             }}
             onCreateAiChat={() => {
               onCreateAiChat();
-              setAddMenuOpen(false);
+              useAppUIStore.getState().setAddTabMenuOpen(false);
             }}
-            onClose={() => setAddMenuOpen(false)}
+            onClose={() => useAppUIStore.getState().setAddTabMenuOpen(false)}
           />
         )}
       </div>

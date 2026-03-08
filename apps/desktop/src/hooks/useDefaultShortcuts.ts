@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useHotkey } from "./useHotkey";
 import { useAppUIStore } from "../stores/appUIStore";
-import { useTerminalStore } from "../stores/terminalStore";
 import { useThreadStore } from "../stores/threadStore";
 import { useShortcutStore } from "../stores/shortcutStore";
 import { useAgentRunStore } from "../stores/agentRunStore";
@@ -253,12 +252,12 @@ export function useDefaultShortcuts({
     { label: "Close thread panel", category: "panels", context: "thread-open" },
   );
 
-  // ─── Terminal ────────────────────────────────────────────────────
+  // ─── New Tab Menu ──────────────────────────────────────────────
   useHotkey(
-    "terminal.new-tab",
+    "tabs.new",
     "mod+t",
-    () => useTerminalStore.getState().addTerminal(),
-    { label: "New terminal tab", category: "terminal", context: "global" },
+    () => useAppUIStore.getState().toggleAddTabMenuOpen(),
+    { label: "New tab", category: "navigation", context: "global" },
   );
 
   // ─── Thread ──────────────────────────────────────────────────────
@@ -345,16 +344,6 @@ export function useDefaultShortcuts({
   );
 
   // ─── Global Tab Shortcuts ──────────────────────────────────────────
-  useHotkey(
-    "tabs.close",
-    "mod+w",
-    () => {
-      const { activeTabId } = useTabStore.getState();
-      if (activeTabId) useTabStore.getState().closeTab(activeTabId);
-    },
-    { label: "Close tab", category: "navigation", context: "global" },
-  );
-
   useHotkey(
     "tabs.new-ai-chat",
     "mod+shift+c",

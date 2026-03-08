@@ -75,12 +75,15 @@ interface AppUIState {
   aiChats: AiChat[];
   channelViewMap: Record<string, MiddlePanelView>;
   showNewWorkspaceModal: boolean;
+  addTabMenuOpen: boolean;
   pendingThreadOpen: { channelId: string; workspaceId: string } | null;
   mobileDrawerOpen: boolean;
   showInstanceSettings: boolean;
 
   setShowInstanceSettings: (show: boolean) => void;
   setShowNewWorkspaceModal: (show: boolean) => void;
+  setAddTabMenuOpen: (open: boolean) => void;
+  toggleAddTabMenuOpen: () => void;
   setMobileDrawerOpen: (open: boolean) => void;
   setMiddlePanelView: (view: MiddlePanelView) => void;
   setChannelView: (channelId: string, view: MiddlePanelView) => void;
@@ -130,12 +133,15 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   aiChats: [],
   channelViewMap: initialChannelViewMap,
   showNewWorkspaceModal: false,
+  addTabMenuOpen: false,
   pendingThreadOpen: null,
   mobileDrawerOpen: false,
   showInstanceSettings: false,
 
   setShowInstanceSettings: (show) => set({ showInstanceSettings: show }),
   setShowNewWorkspaceModal: (show) => set({ showNewWorkspaceModal: show }),
+  setAddTabMenuOpen: (open) => set({ addTabMenuOpen: open }),
+  toggleAddTabMenuOpen: () => set((state) => ({ addTabMenuOpen: !state.addTabMenuOpen })),
   setMobileDrawerOpen: (open) => set({ mobileDrawerOpen: open }),
   setMiddlePanelView: (view) => set({ middlePanelView: view }),
 

@@ -148,10 +148,10 @@ contextBridge.exposeInMainWorld("traceAPI", {
     return () => ipcRenderer.removeListener("pty-exit", handler);
   },
 
-  onCloseTerminalTab: (callback: () => void) => {
+  onCloseTab: (callback: () => void) => {
     const handler = () => callback();
-    ipcRenderer.on("close-terminal-tab", handler);
-    return () => ipcRenderer.removeListener("close-terminal-tab", handler);
+    ipcRenderer.on("close-tab", handler);
+    return () => ipcRenderer.removeListener("close-tab", handler);
   },
 
   getWorktreeDiff: (workspaceId: string, baseBranch: string) =>

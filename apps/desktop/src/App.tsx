@@ -60,7 +60,7 @@ import {
   getDefaultViewForChannel,
 } from "./stores/appUIStore";
 import { useAgentRunStore } from "./stores/agentRunStore";
-import { usePanelLayoutStore } from "./stores/panelLayoutStore";
+import { usePanelLayoutStore, hasViewInTree } from "./stores/panelLayoutStore";
 import { useSyncStore } from "./stores/syncStore";
 import { useTabStore, TAB_TYPE_TO_VIEW } from "./stores/tabStore";
 import type { GlobalTabType } from "./stores/tabStore";
@@ -225,6 +225,37 @@ function AppContent() {
 
   // Terminal PTY exit listener
   useTerminalInit();
+
+  // Close tab via Cmd+W (intercepted in main process before-input-event).
+  // If a terminal sub-tab is active, close that first; otherwise close the global tab.
+  useEffect(() => {
+    const cleanup = window.traceAPI.onCloseTab(() => {
+      const { tabs, activeTabId: globalTabId } = useTabStore.getState();
+      const globalTab = tabs.find((t) => t.id === globalTabId);
+
+      // Check if the user is viewing a terminal sub-tab
+      if (globalTab) {
+        const isTerminalGlobalTab = globalTab.type === 'terminal';
+        const isThreadWithTerminal =
+          globalTab.type === 'thread' &&
+          hasViewInTree(usePanelLayoutStore.getState().root, 'terminal');
+
+        if (isTerminalGlobalTab || isThreadWithTerminal) {
+          const { activeTabId: termTabId, terminals } = useTerminalStore.getState();
+          if (termTabId) {
+            const term = terminals.find((t) => t.terminalId === termTabId);
+            if (term && !term.readOnly) {
+              useTerminalStore.getState().killTerminal(termTabId);
+              return;
+            }
+          }
+        }
+      }
+
+      if (globalTabId) useTabStore.getState().closeTab(globalTabId);
+    });
+    return cleanup;
+  }, []);
 
   // ─── Panel resize ─────────────────────────────────────────────────
   usePanelResize();
