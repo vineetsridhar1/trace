@@ -18,6 +18,8 @@ export interface RelayResult {
   error?: string;
 }
 
+export type WsConnectionStatus = "connected" | "connecting" | "disconnected";
+
 export interface InstanceConnectionOptions {
   serverUrl: string;
   token: string;
@@ -25,6 +27,7 @@ export interface InstanceConnectionOptions {
   serverId: string;
   instanceName: string;
   onCommand: (command: RelayCommand) => Promise<RelayResult>;
+  onStatusChange?: (status: WsConnectionStatus) => void;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".trace");
@@ -146,6 +149,7 @@ export class InstanceConnection {
 
   connect(): void {
     this.intentionalClose = false;
+    this.options.onStatusChange?.("connecting");
     this.createConnection();
   }
 
@@ -161,6 +165,7 @@ export class InstanceConnection {
       this.ws.close();
       this.ws = null;
     }
+    this.options.onStatusChange?.("disconnected");
   }
 
   isConnected(): boolean {
@@ -222,6 +227,7 @@ export class InstanceConnection {
           console.log("[InstanceConnection] registered successfully");
           this.isRegistered = true;
           this.startHealthCheck();
+          this.options.onStatusChange?.("connected");
         }
         break;
 
@@ -304,6 +310,7 @@ export class InstanceConnection {
   private scheduleReconnect(): void {
     if (this.intentionalClose) return;
 
+    this.options.onStatusChange?.("connecting");
     console.log(
       `[InstanceConnection] reconnecting in ${this.reconnectDelay}ms`,
     );

@@ -347,6 +347,10 @@ export interface TraceAPI {
     success: boolean;
     error?: string;
   }>;
+
+  onWsConnectionStatus: (
+    callback: (status: "connected" | "connecting" | "disconnected") => void,
+  ) => () => void;
 }
 
 declare global {

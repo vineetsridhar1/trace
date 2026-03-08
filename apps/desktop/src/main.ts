@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import started from 'electron-squirrel-startup';
 
-import { registerIpcHandlers, setMainWindow } from './main/ipc';
+import { registerIpcHandlers, setMainWindow, sendToRenderer } from './main/ipc';
 import { resolveServerUrl } from './main/ipc/shared';
 import { setWorktreeBaseFn, runStateByWorkspaceId, stopWatchdog } from './main/watchdog';
 import { killAllPtys } from './main/pty';
@@ -56,6 +56,7 @@ ipcMain.handle('set-instance-auth', (_event, token: string, serverId: string) =>
     serverId,
     instanceName: os.hostname(),
     onCommand: handleRelayCommand,
+    onStatusChange: (status) => sendToRenderer('ws-connection-status', status),
   });
   instanceConnection.connect();
 });

@@ -460,4 +460,15 @@ contextBridge.exposeInMainWorld("traceAPI", {
 
   clearInstanceAuth: () =>
     ipcRenderer.invoke("clear-instance-auth") as Promise<void>,
+
+  onWsConnectionStatus: (
+    callback: (status: "connected" | "connecting" | "disconnected") => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      status: "connected" | "connecting" | "disconnected",
+    ) => callback(status);
+    ipcRenderer.on("ws-connection-status", handler);
+    return () => ipcRenderer.removeListener("ws-connection-status", handler);
+  },
 });

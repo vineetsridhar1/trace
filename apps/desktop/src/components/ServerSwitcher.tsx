@@ -2,6 +2,26 @@ import { useState, useEffect, useRef } from 'react';
 import { FiChevronDown, FiCheck, FiPlus } from 'react-icons/fi';
 import type { Server } from '../types';
 
+type WsStatus = 'connected' | 'connecting' | 'disconnected';
+
+function useWsConnectionStatus(): WsStatus {
+  const [status, setStatus] = useState<WsStatus>('connecting');
+
+  useEffect(() => {
+    if (!window.traceAPI?.onWsConnectionStatus) return;
+    const unsubscribe = window.traceAPI.onWsConnectionStatus(setStatus);
+    return unsubscribe;
+  }, []);
+
+  return status;
+}
+
+const STATUS_DOT: Record<WsStatus, { className: string; label: string }> = {
+  connected: { className: 'bg-green-400', label: 'Connected to server' },
+  connecting: { className: 'bg-yellow-400 animate-pulse', label: 'Connecting to server...' },
+  disconnected: { className: 'bg-red-400', label: 'Disconnected from server' },
+};
+
 interface ServerSwitcherProps {
   servers: Server[];
   activeServerId: string | null;
@@ -19,6 +39,8 @@ export function ServerSwitcher({
 }: ServerSwitcherProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wsStatus = useWsConnectionStatus();
+  const dot = STATUS_DOT[wsStatus];
 
   // Click-outside to close
   useEffect(() => {
@@ -66,8 +88,12 @@ export function ServerSwitcher({
         <span className="truncate text-sm font-bold text-primary">
           {activeServer?.name ?? 'No server'}
         </span>
+        <span
+          title={dot.label}
+          className={`ml-auto h-2 w-2 shrink-0 rounded-full ${dot.className}`}
+        />
         <FiChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
           aria-hidden="true"
         />
       </button>
