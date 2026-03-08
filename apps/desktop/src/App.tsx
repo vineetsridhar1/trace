@@ -508,7 +508,7 @@ function AppContent() {
     useThreadStore.getState().syncActions.openThreadPanel(workspace);
     const ch = activeChannelRef.current;
     if (ch) {
-      const label = workspace.preview || 'Workspace';
+      const label = workspace.ticketTitle || workspace.preview || 'Workspace';
       useTabStore.getState().openThreadTab(ch.id, ch.name, workspace.id, label);
     }
     useWorkspaceStore.getState().clearAttention(workspace.id);

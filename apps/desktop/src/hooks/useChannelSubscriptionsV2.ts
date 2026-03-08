@@ -186,6 +186,15 @@ export function useChannelSubscriptions({
     storeState.upsertWorkspace(workspace);
     useThreadStore.getState().syncSelectedWorkspace(workspace);
 
+    // Sync tab label when ticketTitle becomes available
+    if (workspace.ticketTitle) {
+      const tabId = `thread-${workspace.id}`;
+      const tab = useTabStore.getState().tabs.find((t) => t.id === tabId);
+      if (tab && tab.channelName) {
+        useTabStore.getState().updateTabLabel(tabId, `${workspace.ticketTitle} — #${tab.channelName}`);
+      }
+    }
+
     // Sync workspace fields (branch, status) into the kanban ticket's embedded
     // workspace data so the PR button and other ticket-level UI stays current.
     useKanbanStore.getState().syncWorkspaceFields(workspace.id, {
