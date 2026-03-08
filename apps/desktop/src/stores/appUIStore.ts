@@ -3,6 +3,11 @@ import type { MiddlePanelView, DragTarget, ChannelType, AiChat, ProductDocMode }
 
 const CHANNEL_VIEW_MAP_KEY = 'trace:channelViewMap';
 const WORKSPACE_SIDEBAR_OPEN_KEY = 'trace:workspaceSidebarOpen';
+const WORKSPACE_SIDEBAR_DOCK_SIDE_KEY = 'trace:workspaceSidebarDockSide';
+const MAIN_NAV_COLLAPSED_KEY = 'trace:mainNavCollapsed';
+const DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 220;
+const MIN_WORKSPACE_SIDEBAR_WIDTH = 180;
+const MAX_WORKSPACE_SIDEBAR_WIDTH = 500;
 const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'documents', 'board', 'projects'];
 
 function loadChannelViewMap(): Record<string, MiddlePanelView> {
@@ -49,6 +54,49 @@ function saveWorkspaceSidebarOpen(isOpen: boolean): void {
   }
 }
 
+function loadWorkspaceSidebarDockSide(): 'left' | 'right' {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_SIDEBAR_DOCK_SIDE_KEY);
+    return raw === 'right' ? 'right' : 'left';
+  } catch {
+    return 'left';
+  }
+}
+
+function saveWorkspaceSidebarDockSide(side: 'left' | 'right'): void {
+  try {
+    localStorage.setItem(WORKSPACE_SIDEBAR_DOCK_SIDE_KEY, side);
+  } catch {
+    // Quota error — ignore
+  }
+}
+
+function loadMainNavCollapsed(): boolean {
+  try {
+    return localStorage.getItem(MAIN_NAV_COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function saveMainNavCollapsed(isCollapsed: boolean): void {
+  try {
+    localStorage.setItem(MAIN_NAV_COLLAPSED_KEY, String(isCollapsed));
+  } catch {
+    // Quota error — ignore
+  }
+}
+
+function loadWorkspaceSidebarWidth(): number {
+  try {
+    const raw = Number(localStorage.getItem('trace:workspaceSidebarWidth'));
+    if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_WORKSPACE_SIDEBAR_WIDTH;
+    return Math.min(MAX_WORKSPACE_SIDEBAR_WIDTH, Math.max(MIN_WORKSPACE_SIDEBAR_WIDTH, raw));
+  } catch {
+    return DEFAULT_WORKSPACE_SIDEBAR_WIDTH;
+  }
+}
+
 /** Check whether a saved view is still valid for a given channel configuration. */
 export function isViewValidForChannel(
   view: MiddlePanelView,
@@ -80,6 +128,8 @@ interface AppUIState {
   channelWidth: number;
   workspaceSidebarWidth: number;
   workspaceSidebarOpen: boolean;
+  workspaceSidebarDockSide: 'left' | 'right';
+  mainNavCollapsed: boolean;
   dragging: DragTarget;
   isFullscreen: boolean;
   savedWidths: { channel: number; thread: number };
@@ -115,7 +165,10 @@ interface AppUIState {
   setChannelWidth: (width: number | ((prev: number) => number)) => void;
   setWorkspaceSidebarWidth: (width: number) => void;
   setWorkspaceSidebarOpen: (open: boolean) => void;
+  setWorkspaceSidebarDockSide: (side: 'left' | 'right') => void;
   toggleWorkspaceSidebarOpen: () => void;
+  setMainNavCollapsed: (collapsed: boolean) => void;
+  toggleMainNavCollapsed: () => void;
   setDragging: (target: DragTarget) => void;
   setIsFullscreen: (value: boolean) => void;
   setSavedWidths: (widths: { channel: number; thread: number }) => void;
@@ -144,8 +197,10 @@ const initialMiddlePanelView: MiddlePanelView =
 export const useAppUIStore = create<AppUIState>((set) => ({
   middlePanelView: initialMiddlePanelView,
   channelWidth: 220,
-  workspaceSidebarWidth: Number(localStorage.getItem('trace:workspaceSidebarWidth')) || 280,
+  workspaceSidebarWidth: loadWorkspaceSidebarWidth(),
   workspaceSidebarOpen: loadWorkspaceSidebarOpen(),
+  workspaceSidebarDockSide: loadWorkspaceSidebarDockSide(),
+  mainNavCollapsed: loadMainNavCollapsed(),
   dragging: null,
   isFullscreen: false,
   savedWidths: { channel: 220, thread: 0 },
@@ -196,11 +251,25 @@ export const useAppUIStore = create<AppUIState>((set) => ({
     saveWorkspaceSidebarOpen(open);
     set({ workspaceSidebarOpen: open });
   },
+  setWorkspaceSidebarDockSide: (side) => {
+    saveWorkspaceSidebarDockSide(side);
+    set({ workspaceSidebarDockSide: side });
+  },
   toggleWorkspaceSidebarOpen: () =>
     set((state) => {
       const next = !state.workspaceSidebarOpen;
       saveWorkspaceSidebarOpen(next);
       return { workspaceSidebarOpen: next };
+    }),
+  setMainNavCollapsed: (collapsed) => {
+    saveMainNavCollapsed(collapsed);
+    set({ mainNavCollapsed: collapsed });
+  },
+  toggleMainNavCollapsed: () =>
+    set((state) => {
+      const next = !state.mainNavCollapsed;
+      saveMainNavCollapsed(next);
+      return { mainNavCollapsed: next };
     }),
 
   setDragging: (target) => set({ dragging: target }),

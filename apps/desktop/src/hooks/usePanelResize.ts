@@ -4,6 +4,26 @@ import { useAppUIStore } from '../stores/appUIStore';
 import { useThreadStore } from '../stores/threadStore';
 
 const SERVER_RAIL_WIDTH = 60;
+const MIN_WORKSPACE_SIDEBAR_WIDTH = 180;
+const MAX_WORKSPACE_SIDEBAR_WIDTH = 500;
+
+function getWorkspaceSidebarWidthFromPointer(
+  clientX: number,
+  dockSide: 'left' | 'right',
+): number {
+  const sidebar = document.getElementById('workspace-sidebar');
+  if (!sidebar) {
+    return dockSide === 'left'
+      ? MIN_WORKSPACE_SIDEBAR_WIDTH
+      : MAX_WORKSPACE_SIDEBAR_WIDTH;
+  }
+
+  const rect = sidebar.getBoundingClientRect();
+  const rawWidth =
+    dockSide === 'left' ? clientX - rect.left : rect.right - clientX;
+
+  return clamp(rawWidth, MIN_WORKSPACE_SIDEBAR_WIDTH, MAX_WORKSPACE_SIDEBAR_WIDTH);
+}
 
 export function usePanelResize() {
   const dragging = useAppUIStore((s) => s.dragging);
@@ -17,7 +37,10 @@ export function usePanelResize() {
         return;
       }
       if (dragging === 'workspace-sidebar') {
-        const newWidth = clamp(window.innerWidth - event.clientX, 200, 500);
+        const newWidth = getWorkspaceSidebarWidthFromPointer(
+          event.clientX,
+          useAppUIStore.getState().workspaceSidebarDockSide,
+        );
         useAppUIStore.getState().setWorkspaceSidebarWidth(newWidth);
         return;
       }
@@ -30,7 +53,11 @@ export function usePanelResize() {
         localStorage.setItem('trace:threadWidth', String(finalWidth));
       }
       if (dragging === 'workspace-sidebar') {
-        const finalWidth = clamp(window.innerWidth - event.clientX, 200, 500);
+        const finalWidth = getWorkspaceSidebarWidthFromPointer(
+          event.clientX,
+          useAppUIStore.getState().workspaceSidebarDockSide,
+        );
+        useAppUIStore.getState().setWorkspaceSidebarWidth(finalWidth);
         localStorage.setItem('trace:workspaceSidebarWidth', String(finalWidth));
       }
       useAppUIStore.getState().setDragging(null);

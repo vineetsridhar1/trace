@@ -10,7 +10,13 @@ import { useSyncStore } from "../stores/syncStore";
 import { useChannelContext } from "../context/ChannelContext";
 import { CommitPopover } from "./CommitPopover";
 
-export function SyncStatus({ settingsButton }: { settingsButton?: React.ReactNode }) {
+export function SyncStatus({
+  settingsButton,
+  extraActions,
+}: {
+  settingsButton?: React.ReactNode;
+  extraActions?: React.ReactNode;
+}) {
   const { enrichedActiveChannel } = useChannelContext();
   const repoPath = enrichedActiveChannel?.localRepoPath ?? "";
   const baseBranch = enrichedActiveChannel?.baseBranch || "main";
@@ -51,9 +57,14 @@ export function SyncStatus({ settingsButton }: { settingsButton?: React.ReactNod
   }, []);
 
   if (!repoPath || (isUpToDate === null && !syncError)) {
-    return settingsButton ? (
-      <div className="flex items-center border-t border-edge px-3 py-2">
+    return settingsButton || extraActions ? (
+      <div className="flex items-center gap-2 border-t border-edge px-3 py-2">
         {settingsButton}
+        {extraActions ? (
+          <div className="ml-auto flex items-center gap-1">
+            {extraActions}
+          </div>
+        ) : null}
       </div>
     ) : null;
   }
@@ -65,6 +76,11 @@ export function SyncStatus({ settingsButton }: { settingsButton?: React.ReactNod
         <>
           <FiRefreshCw className="h-3 w-3 animate-spin text-muted" />
           <span className="text-xs text-muted">Checking {baseBranch}...</span>
+          {extraActions ? (
+            <div className="ml-auto flex items-center gap-1">
+              {extraActions}
+            </div>
+          ) : null}
         </>
       ) : syncError ? (
         <>
@@ -84,6 +100,11 @@ export function SyncStatus({ settingsButton }: { settingsButton?: React.ReactNod
           >
             <FiRefreshCw className="h-3 w-3" />
           </button>
+          {extraActions ? (
+            <div className="flex items-center gap-1">
+              {extraActions}
+            </div>
+          ) : null}
         </>
       ) : isUpToDate ? (
         <>
@@ -100,6 +121,11 @@ export function SyncStatus({ settingsButton }: { settingsButton?: React.ReactNod
           >
             <FiRefreshCw className="h-3 w-3" />
           </button>
+          {extraActions ? (
+            <div className="flex items-center gap-1">
+              {extraActions}
+            </div>
+          ) : null}
         </>
       ) : (
         <>
@@ -128,6 +154,11 @@ export function SyncStatus({ settingsButton }: { settingsButton?: React.ReactNod
             )}
             Pull
           </button>
+          {extraActions ? (
+            <div className="flex items-center gap-1">
+              {extraActions}
+            </div>
+          ) : null}
           {showPopover && triggerRect && (
             <CommitPopover
               commits={behindCommits}

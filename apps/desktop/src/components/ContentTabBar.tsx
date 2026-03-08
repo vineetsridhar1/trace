@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiMessageSquare,
+  FiBriefcase,
   FiCheckSquare,
   FiFolder,
   FiFileText,
@@ -11,7 +12,6 @@ import {
   FiMenu,
   FiCpu,
   FiTerminal,
-  FiList,
 } from 'react-icons/fi';
 import type { GlobalTab, GlobalTabType } from '../stores/tabStore';
 import type { AiChat, ChannelType } from '../types';
@@ -25,6 +25,7 @@ import { useTerminalStore } from '../stores/terminalStore';
 const TAB_ICONS: Record<GlobalTabType, typeof FiMessageSquare> = {
   thread: FiCpu,
   chat: FiMessageSquare,
+  workspaces: FiBriefcase,
   board: FiCheckSquare,
   projects: FiFolder,
   documents: FiFileText,
@@ -50,8 +51,6 @@ interface ContentTabBarProps {
   hasRepoPath: boolean;
   activeChannelId: string | null;
   onOpenViewTab: (viewType: GlobalTabType) => void;
-  showWorkspaceSidebar: boolean;
-  onToggleWorkspaceSidebar: () => void;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────
@@ -71,8 +70,6 @@ export function ContentTabBar({
   hasRepoPath,
   activeChannelId,
   onOpenViewTab,
-  showWorkspaceSidebar,
-  onToggleWorkspaceSidebar,
 }: ContentTabBarProps) {
   const addMenuOpen = useAppUIStore((s) => s.addTabMenuOpen);
   const ptyProcesses = useTerminalStore((s) => s.ptyProcesses);
@@ -166,55 +163,6 @@ export function ContentTabBar({
         <FiMenu className="h-4 w-4" aria-hidden="true" />
       </button>
 
-      <div className="flex shrink-0 items-center px-1">
-        {/* Add tab button — outside the overflow container so the dropdown isn't clipped */}
-        <div className="relative shrink-0 px-1">
-          <Tooltip text="Open a tab" position="bottom">
-            <button
-              ref={addButtonRef}
-              type="button"
-              onClick={() => {
-                const nextOpen = !addMenuOpen;
-                if (nextOpen && addButtonRef.current) {
-                  setAddMenuAnchorRect(addButtonRef.current.getBoundingClientRect());
-                }
-                useAppUIStore.getState().setAddTabMenuOpen(nextOpen);
-              }}
-              className="flex cursor-pointer items-center rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary"
-            >
-              <FiPlus className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </Tooltip>
-          {addMenuOpen && addMenuAnchorRect && (
-            <AddTabMenu
-              anchorRect={addMenuAnchorRect}
-              triggerRef={addButtonRef}
-              openTabTypes={openTabTypes}
-              aiChats={aiChats}
-              activeAiChatId={activeAiChatId}
-              channelType={channelType}
-              workspacesEnabled={workspacesEnabled}
-              hasGithubUrl={hasGithubUrl}
-              hasRepoPath={hasRepoPath}
-              onSwitchAiChat={(chatId) => {
-                onSwitchAiChat(chatId);
-                useAppUIStore.getState().setAddTabMenuOpen(false);
-              }}
-              onDeleteAiChat={onDeleteAiChat}
-              onAddTab={(type) => {
-                onOpenViewTab(type);
-                useAppUIStore.getState().setAddTabMenuOpen(false);
-              }}
-              onCreateAiChat={() => {
-                onCreateAiChat();
-                useAppUIStore.getState().setAddTabMenuOpen(false);
-              }}
-              onClose={() => useAppUIStore.getState().setAddTabMenuOpen(false)}
-            />
-          )}
-        </div>
-      </div>
-
       {/* Tab list */}
       <div className="scrollbar-hide flex min-w-0 flex-1 items-center gap-0 overflow-x-auto px-1">
         {tabs.map((tab) => {
@@ -285,31 +233,53 @@ export function ContentTabBar({
             </button>
           );
         })}
-      </div>
 
-      {workspacesEnabled && (
-        <div className="flex shrink-0 items-center px-1">
-          <div className="relative shrink-0 px-1">
-            <Tooltip
-              text={showWorkspaceSidebar ? 'Hide workspace sidebar' : 'Show workspace sidebar'}
-              position="bottom"
+        <div className="relative shrink-0 px-1">
+          <Tooltip text="Open a tab" position="bottom">
+            <button
+              ref={addButtonRef}
+              type="button"
+              onClick={() => {
+                const nextOpen = !addMenuOpen;
+                if (nextOpen && addButtonRef.current) {
+                  setAddMenuAnchorRect(addButtonRef.current.getBoundingClientRect());
+                }
+                useAppUIStore.getState().setAddTabMenuOpen(nextOpen);
+              }}
+              className="flex cursor-pointer items-center rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary"
             >
-              <button
-                type="button"
-                onClick={onToggleWorkspaceSidebar}
-                className={`flex cursor-pointer items-center rounded p-1 transition-colors ${
-                  showWorkspaceSidebar
-                    ? 'bg-accent/15 text-accent-light'
-                    : 'text-muted hover:bg-surface-elevated hover:text-primary'
-                }`}
-                aria-label={showWorkspaceSidebar ? 'Hide workspace sidebar' : 'Show workspace sidebar'}
-              >
-                <FiList className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </Tooltip>
-          </div>
+              <FiPlus className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </Tooltip>
+          {addMenuOpen && addMenuAnchorRect && (
+            <AddTabMenu
+              anchorRect={addMenuAnchorRect}
+              triggerRef={addButtonRef}
+              openTabTypes={openTabTypes}
+              aiChats={aiChats}
+              activeAiChatId={activeAiChatId}
+              channelType={channelType}
+              workspacesEnabled={workspacesEnabled}
+              hasGithubUrl={hasGithubUrl}
+              hasRepoPath={hasRepoPath}
+              onSwitchAiChat={(chatId) => {
+                onSwitchAiChat(chatId);
+                useAppUIStore.getState().setAddTabMenuOpen(false);
+              }}
+              onDeleteAiChat={onDeleteAiChat}
+              onAddTab={(type) => {
+                onOpenViewTab(type);
+                useAppUIStore.getState().setAddTabMenuOpen(false);
+              }}
+              onCreateAiChat={() => {
+                onCreateAiChat();
+                useAppUIStore.getState().setAddTabMenuOpen(false);
+              }}
+              onClose={() => useAppUIStore.getState().setAddTabMenuOpen(false)}
+            />
+          )}
         </div>
-      )}
+      </div>
 
       {/* Tab hover popover */}
       {hoveredTab && popoverRect && (

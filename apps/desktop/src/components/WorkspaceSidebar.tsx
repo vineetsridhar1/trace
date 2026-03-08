@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { FiChevronRight, FiCpu, FiRotateCcw, FiX } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiCpu, FiMaximize2, FiRotateCcw, FiX } from 'react-icons/fi';
 import type { Workspace, TicketStatus, KanbanTicket, KanbanColumn as KanbanColumnType } from '../types';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { WorkspaceInput } from './WorkspaceInput';
@@ -12,6 +12,50 @@ import { Tooltip } from './Tooltip';
 interface StatusGroup {
   status: TicketStatus;
   workspaces: Workspace[];
+}
+
+function ProjectAccordion({
+  name,
+  count,
+  children,
+}: {
+  name: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  const initial = name.trim().charAt(0).toUpperCase() || 'P';
+
+  return (
+    <div className="mx-2 overflow-hidden rounded-xl border border-edge bg-surface-elevated/20">
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-surface-elevated/40"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-surface-elevated text-sm font-semibold text-primary">
+          {initial}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-primary">{name}</span>
+            <span className="text-sm text-muted">({count})</span>
+          </div>
+        </div>
+        <FiChevronRight
+          className={`h-4 w-4 flex-shrink-0 text-muted transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden border-t border-edge/80 py-1">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CollapsibleStatusGroup({
@@ -117,6 +161,9 @@ interface WorkspaceSidebarProps {
   mergedWorkspacesLoaded?: boolean;
   mergedWorkspacesLoading?: boolean;
   onExpandMerged?: () => void;
+  onExpandToFullscreen?: () => void;
+  dockSide?: 'left' | 'right';
+  onToggleDockSide?: () => void;
   sidebarWidth: number;
   isOpen: boolean;
   onToggleOpen: () => void;
@@ -140,6 +187,9 @@ export function WorkspaceSidebar({
   mergedWorkspacesLoaded,
   mergedWorkspacesLoading,
   onExpandMerged,
+  onExpandToFullscreen,
+  dockSide = 'right',
+  onToggleDockSide,
   sidebarWidth,
   isOpen,
   onToggleOpen,
@@ -213,6 +263,19 @@ export function WorkspaceSidebar({
     return groups;
   }, [workspaces, authUser?.id, mergedCount]);
 
+  const projectName = enrichedActiveChannel?.name?.trim() || 'Project';
+
+  const projectWorkspaceCount = useMemo(
+    () =>
+      groupedWorkspaces.reduce((total, group) => {
+        if (group.status === 'merged' && !mergedWorkspacesLoaded) {
+          return total + (mergedCount ?? group.workspaces.length);
+        }
+        return total + group.workspaces.length;
+      }, 0),
+    [groupedWorkspaces, mergedCount, mergedWorkspacesLoaded],
+  );
+
   const workspaceShortcutMap = useMemo(() => {
     const map = new Map<string, number>();
     let idx = 1;
@@ -225,25 +288,48 @@ export function WorkspaceSidebar({
     return map;
   }, [groupedWorkspaces]);
 
-  return (
-    <>
-      <div
-        className={`resize-handle ${dragging ? 'active' : ''}`}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          onStartDrag();
-        }}
-      />
-      <div
-        id="workspace-sidebar"
-        className={`flex min-h-0 flex-col border-l border-edge bg-surface ${isOpen ? 'mobile-workspace-drawer-open' : ''}`}
-        style={{ width: `${sidebarWidth}px`, minWidth: sidebarWidth > 0 ? 200 : 0 }}
-      >
-        {/* Header */}
-        <div className="flex h-[40px] shrink-0 items-center justify-between border-b border-edge px-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Workspaces
-          </h2>
+  const sidebarBody = (
+    <div
+      id="workspace-sidebar"
+      className={`flex min-h-0 flex-col bg-surface ${
+        dockSide === 'left' ? 'border-r border-edge' : 'border-l border-edge'
+      } ${isOpen ? 'mobile-workspace-drawer-open' : ''}`}
+      style={{ width: `${sidebarWidth}px`, minWidth: sidebarWidth > 0 ? 180 : 0 }}
+    >
+      {/* Header */}
+      <div className="flex h-[40px] shrink-0 items-center justify-between border-b border-edge px-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Workspaces
+        </h2>
+        <div className="flex items-center gap-1">
+          {onToggleDockSide && (
+            <Tooltip text={dockSide === 'left' ? 'Dock right' : 'Dock left'}>
+              <button
+                type="button"
+                onClick={onToggleDockSide}
+                className="rounded p-1 text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
+                aria-label={dockSide === 'left' ? 'Dock workspace sidebar to the right' : 'Dock workspace sidebar to the left'}
+              >
+                {dockSide === 'left' ? (
+                  <FiChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                  <FiChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+              </button>
+            </Tooltip>
+          )}
+          {onExpandToFullscreen && (
+            <Tooltip text="Expand workspaces">
+              <button
+                type="button"
+                onClick={onExpandToFullscreen}
+                className="rounded p-1 text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
+                aria-label="Expand workspaces"
+              >
+                <FiMaximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          )}
           <button
             type="button"
             onClick={onToggleOpen}
@@ -253,62 +339,68 @@ export function WorkspaceSidebar({
             <FiX className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
+      </div>
 
-        {/* Workspace list */}
-        <div
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
-        >
-          {/* Orchestrator — pinned at top */}
-          {orchestrateMode && orchestratorWorkspace && (
-            <div className="mb-1 group/orch">
-              <button
-                type="button"
-                className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
-                  orchestratorWorkspace.id === selectedWorkspaceId
-                    ? 'bg-accent/15 text-accent-light'
-                    : 'hover:bg-surface-elevated/50 text-muted'
-                }`}
-                onClick={() => onOpenWorkspace(orchestratorWorkspace)}
-              >
-                <FiCpu className={`h-4 w-4 flex-shrink-0 ${
-                  activeRunWorkspaceIds?.has(orchestratorWorkspace.id)
-                    ? 'text-accent animate-pulse'
-                    : orchestratorWorkspace.id === selectedWorkspaceId
-                      ? 'text-accent-light'
-                      : 'text-muted'
-                }`} />
-                <span className="text-xs font-semibold uppercase tracking-wide">
-                  Orchestrator
-                </span>
-                {activeRunWorkspaceIds?.has(orchestratorWorkspace.id) ? (
-                  <span className="ml-auto h-2 w-2 rounded-full bg-accent animate-pulse" />
-                ) : (
-                  <Tooltip text="Clear context">
-                    <span
-                      role="button"
-                      tabIndex={-1}
-                      className="ml-auto hidden rounded p-0.5 text-muted transition-colors hover:bg-surface-elevated hover:text-primary group-hover/orch:inline-flex"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleClearOrchestratorContext();
-                      }}
-                    >
-                      <FiRotateCcw className="h-3 w-3" />
-                    </span>
-                  </Tooltip>
-                )}
-              </button>
-            </div>
-          )}
+      {/* Workspace list */}
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
+      >
+        {/* Orchestrator — pinned at top */}
+        {orchestrateMode && orchestratorWorkspace && (
+          <div className="mb-1 group/orch">
+            <button
+              type="button"
+              className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
+                orchestratorWorkspace.id === selectedWorkspaceId
+                  ? 'bg-accent/15 text-accent-light'
+                  : 'hover:bg-surface-elevated/50 text-muted'
+              }`}
+              onClick={() => onOpenWorkspace(orchestratorWorkspace)}
+            >
+              <FiCpu className={`h-4 w-4 flex-shrink-0 ${
+                activeRunWorkspaceIds?.has(orchestratorWorkspace.id)
+                  ? 'text-accent animate-pulse'
+                  : orchestratorWorkspace.id === selectedWorkspaceId
+                    ? 'text-accent-light'
+                    : 'text-muted'
+              }`} />
+              <span className="text-xs font-semibold uppercase tracking-wide">
+                Orchestrator
+              </span>
+              {activeRunWorkspaceIds?.has(orchestratorWorkspace.id) ? (
+                <span className="ml-auto h-2 w-2 rounded-full bg-accent animate-pulse" />
+              ) : (
+                <Tooltip text="Clear context">
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    className="ml-auto hidden rounded p-0.5 text-muted transition-colors hover:bg-surface-elevated hover:text-primary group-hover/orch:inline-flex"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleClearOrchestratorContext();
+                    }}
+                  >
+                    <FiRotateCcw className="h-3 w-3" />
+                  </span>
+                </Tooltip>
+              )}
+            </button>
+          </div>
+        )}
 
-          {workspacesLoading && workspaces.length === 0 ? (
+        {workspacesLoading && workspaces.length === 0 ? (
+          <ProjectAccordion name={projectName} count={projectWorkspaceCount}>
             <WorkspaceListSkeleton />
-          ) : groupedWorkspaces.length === 0 && !(orchestrateMode && orchestratorWorkspace) ? (
-            <div className="flex flex-1 items-center justify-center text-xs text-muted">
+          </ProjectAccordion>
+        ) : groupedWorkspaces.length === 0 ? (
+          <ProjectAccordion name={projectName} count={projectWorkspaceCount}>
+            <div className="flex items-center justify-center px-3 py-6 text-xs text-muted">
               No workspaces yet
             </div>
-          ) : (
-            groupedWorkspaces.map((group) => (
+          </ProjectAccordion>
+        ) : (
+          <ProjectAccordion name={projectName} count={projectWorkspaceCount}>
+            {groupedWorkspaces.map((group) => (
               <CollapsibleStatusGroup
                 key={group.status}
                 status={group.status}
@@ -344,13 +436,37 @@ export function WorkspaceSidebar({
                   />
                 ))}
               </CollapsibleStatusGroup>
-            ))
-          )}
-        </div>
-
-        {/* Create workspace input */}
-        <WorkspaceInput />
+            ))}
+          </ProjectAccordion>
+        )}
       </div>
+
+      {/* Create workspace input */}
+      <WorkspaceInput />
+    </div>
+  );
+
+  return (
+    <>
+      {dockSide === 'right' && (
+        <div
+          className={`resize-handle ${dragging ? 'active' : ''}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onStartDrag();
+          }}
+        />
+      )}
+      {sidebarBody}
+      {dockSide === 'left' && (
+        <div
+          className={`resize-handle ${dragging ? 'active' : ''}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onStartDrag();
+          }}
+        />
+      )}
     </>
   );
 }

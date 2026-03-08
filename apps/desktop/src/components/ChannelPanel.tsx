@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiBriefcase, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiBriefcase, FiCheckSquare, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import type { Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
-import { TAB_LABELS, VIEW_TAB_TYPES, isViewTabAvailable } from '../stores/tabStore';
 import type { GlobalTabType } from '../stores/tabStore';
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
@@ -279,19 +278,7 @@ export function ChannelPanel({
   const [projectMenuAnchor, setProjectMenuAnchor] = useState<DOMRect | null>(null);
   const projectMenuButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Compute available views for the active channel (used by the view select)
   const activeChannel = channels.find((c) => c.id === activeChannelId);
-  const availableViews = activeChannel
-    ? VIEW_TAB_TYPES.filter((t) =>
-        isViewTabAvailable(
-          t,
-          activeChannel.type,
-          activeChannel.workspacesEnabled ?? false,
-          !!(activeChannel.workspacesEnabled && activeChannel.githubUrl),
-          !!activeChannel.localRepoPath,
-        ),
-      )
-    : [];
 
   // Map channel id → global shortcut index (1-9) for Mod+Shift+N
   const channelShortcutMap = new Map<string, number>();
@@ -428,6 +415,16 @@ export function ChannelPanel({
   };
 
   const mobileDrawerOpen = useAppUIStore((s) => s.mobileDrawerOpen);
+  const middlePanelView = useAppUIStore((s) => s.middlePanelView);
+  const workspaceSidebarOpen = useAppUIStore((s) => s.workspaceSidebarOpen);
+  const mainNavCollapsed = useAppUIStore((s) => s.mainNavCollapsed);
+  const showWorkspaceNav = !!(activeChannel && activeChannel.type !== 'channel' && activeChannel.workspacesEnabled);
+  const showTasksNav = !!(activeChannel && activeChannel.type !== 'channel');
+  const canCreateWorkspace = !!(activeChannel && activeChannel.workspacesEnabled);
+  const hasMainNav = showWorkspaceNav || showTasksNav || canCreateWorkspace;
+  const workspacesNavActive =
+    showWorkspaceNav &&
+    (workspaceSidebarOpen || middlePanelView === 'workspaces');
 
   return (
     <>
@@ -444,26 +441,61 @@ export function ChannelPanel({
           onCreateServer={onCreateServer}
         />
 
-        <div className="px-3 py-1.5 flex flex-col gap-1.5">
-          {availableViews.length > 0 && (
-            <select
-              value=""
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val) {
-                  onOpenViewTab(val as GlobalTabType);
-                  e.target.value = '';
-                }
+        {hasMainNav && (
+          <div className={`border-b transition-colors ${mainNavCollapsed ? 'border-transparent' : 'border-edge'}`}>
+            <div
+              className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+              style={{
+                gridTemplateRows: mainNavCollapsed ? '0fr' : '1fr',
+                opacity: mainNavCollapsed ? 0 : 1,
+                visibility: mainNavCollapsed ? 'hidden' : 'visible',
               }}
-              className="w-full rounded-md border border-edge bg-surface-elevated px-2 py-1.5 text-xs text-primary focus:border-accent focus:outline-none cursor-pointer"
             >
-              <option value="" disabled>Open view…</option>
-              {availableViews.map((t) => (
-                <option key={t} value={t}>{TAB_LABELS[t]}</option>
-              ))}
-            </select>
-          )}
-        </div>
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-1 px-2 py-2">
+                  {showWorkspaceNav && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenViewTab('workspaces')}
+                      className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors ${
+                        workspacesNavActive
+                          ? 'border-edge bg-surface-elevated/80 text-primary'
+                          : 'border-transparent text-muted hover:bg-surface-elevated hover:text-primary'
+                      }`}
+                    >
+                      <FiBriefcase className="h-4 w-4 flex-shrink-0" />
+                      <span>Workspaces</span>
+                    </button>
+                  )}
+                  {showTasksNav && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenViewTab('board')}
+                      className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors ${
+                        middlePanelView === 'board'
+                          ? 'border-edge bg-surface-elevated/80 text-primary'
+                          : 'border-transparent text-muted hover:bg-surface-elevated hover:text-primary'
+                      }`}
+                    >
+                      <FiCheckSquare className="h-4 w-4 flex-shrink-0" />
+                      <span>Tasks</span>
+                    </button>
+                  )}
+                  {canCreateWorkspace && (
+                    <button
+                      type="button"
+                      onClick={() => useAppUIStore.getState().setShowNewWorkspaceModal(true)}
+                      className="flex w-full items-center gap-2 rounded-xl bg-surface-elevated/50 px-3 py-2 text-left text-sm font-medium text-primary transition-colors hover:bg-surface-elevated"
+                    >
+                      <FiPlus className="h-4 w-4 flex-shrink-0 text-muted" />
+                      <span>New Workspace</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Reorder.Group
           id="channel-items"
@@ -515,17 +547,36 @@ export function ChannelPanel({
             );
           })}
         </Reorder.Group>
-        <SyncStatus settingsButton={
-          <Tooltip text="Instance settings" position="top">
-            <button
-              type="button"
-              onClick={() => useAppUIStore.getState().setShowInstanceSettings(true)}
-              className="rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary transition-colors"
-            >
-              <FiSettings className="h-3.5 w-3.5" />
-            </button>
-          </Tooltip>
-        } />
+        <SyncStatus
+          settingsButton={
+            <Tooltip text="Instance settings" position="top">
+              <button
+                type="button"
+                onClick={() => useAppUIStore.getState().setShowInstanceSettings(true)}
+                className="rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary transition-colors"
+              >
+                <FiSettings className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
+          }
+          extraActions={hasMainNav ? (
+            <Tooltip text={mainNavCollapsed ? 'Expand main nav' : 'Collapse main nav'} position="top">
+              <button
+                type="button"
+                aria-label={mainNavCollapsed ? 'Expand main nav' : 'Collapse main nav'}
+                aria-expanded={!mainNavCollapsed}
+                onClick={() => useAppUIStore.getState().toggleMainNavCollapsed()}
+                className="rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary transition-colors"
+              >
+                {mainNavCollapsed ? (
+                  <FiChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <FiChevronUp className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </Tooltip>
+          ) : null}
+        />
       </div>
 
       {channelWidth > 0 && (

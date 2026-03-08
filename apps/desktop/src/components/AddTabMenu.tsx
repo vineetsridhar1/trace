@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FiMessageSquare,
+  FiBriefcase,
   FiCheckSquare,
   FiFolder,
   FiFileText,
@@ -35,6 +36,7 @@ interface AddTabMenuProps {
 
 const VIEW_ICONS: Partial<Record<GlobalTabType, typeof FiMessageSquare>> = {
   chat: FiMessageSquare,
+  workspaces: FiBriefcase,
   board: FiCheckSquare,
   projects: FiFolder,
   documents: FiFileText,

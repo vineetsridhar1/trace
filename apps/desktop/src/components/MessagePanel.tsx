@@ -28,6 +28,7 @@ import { ChatEmptyState } from "./ChatEmptyState";
 import { ThreadLinkPreview } from "./ThreadLinkPreview";
 import { PullRequestListView } from "./PullRequestListView";
 import { TicketDetailModal } from "./TicketDetailModal";
+import { WorkspacesPanel } from "./WorkspacesPanel";
 import { useChannelMessages } from "../hooks/useChannelMessages";
 import { useAuth } from "../context/AuthContext";
 import { useAgentRunStore } from "../stores/agentRunStore";
@@ -129,6 +130,12 @@ interface MessagePanelProps {
   onPullPR?: (pr: PullRequest) => void;
   pullingPRNumbers?: Set<number>;
   workspacesLoading?: boolean;
+  mergedCount?: number;
+  mergedWorkspacesLoaded?: boolean;
+  mergedWorkspacesLoading?: boolean;
+  onExpandMerged?: () => void;
+  onExpandWorkspacesFullscreen?: () => void;
+  onDockWorkspacesToSidebar?: () => void;
 }
 
 export function MessagePanel({
@@ -157,6 +164,12 @@ export function MessagePanel({
   onPullPR,
   pullingPRNumbers,
   workspacesLoading,
+  mergedCount,
+  mergedWorkspacesLoaded,
+  mergedWorkspacesLoading,
+  onExpandMerged,
+  onExpandWorkspacesFullscreen,
+  onDockWorkspacesToSidebar,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<
     "list" | "board" | "graph"
@@ -442,6 +455,23 @@ export function MessagePanel({
             </div>
           </div>
         </div>
+      ) : middlePanelView === "workspaces" ? (
+        <WorkspacesPanel
+          channelName={panelTitle.replace(/^#\s*/, "")}
+          workspaces={workspaces}
+          selectedWorkspaceId={selectedWorkspaceId}
+          onOpenWorkspace={onOpenWorkspace}
+          kanbanColumns={kanbanColumns}
+          activeRunWorkspaceIds={activeRunWorkspaceIds}
+          workspacesLoading={workspacesLoading}
+          mergedCount={mergedCount}
+          mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+          mergedWorkspacesLoading={mergedWorkspacesLoading}
+          onExpandMerged={onExpandMerged}
+          isFullscreen={isFullscreen}
+          onExpandToFullscreen={onExpandWorkspacesFullscreen}
+          onDockToSidebar={onDockWorkspacesToSidebar}
+        />
       ) : middlePanelView === "board" ? (
         <>
           <div className="flex items-center gap-2 px-3 py-2">
@@ -530,7 +560,7 @@ export function MessagePanel({
       ) : middlePanelView === "pull-requests" ? (
         <PullRequestListView
           repoPath={repoPath ?? null}
-          onPullPR={onPullPR ?? (() => {})}
+          onPullPR={onPullPR ?? (() => undefined)}
           onOpenWorkspace={onOpenWorkspace}
           workspaces={workspaces}
           pullingPRNumbers={pullingPRNumbers ?? new Set()}
@@ -559,11 +589,7 @@ export function MessagePanel({
             ))
           )}
         </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
-          Use the workspace sidebar to browse workspaces
-        </div>
-      )}
+      ) : null}
       {selectedTicket && (
         <TicketDetailModal
           ticket={selectedTicket}

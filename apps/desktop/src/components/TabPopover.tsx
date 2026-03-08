@@ -1,5 +1,6 @@
 import {
   FiMessageSquare,
+  FiBriefcase,
   FiCheckSquare,
   FiFolder,
   FiFileText,
@@ -20,6 +21,7 @@ const GAP = 6;
 const TAB_ICONS: Record<GlobalTabType, typeof FiMessageSquare> = {
   thread: FiCpu,
   chat: FiMessageSquare,
+  workspaces: FiBriefcase,
   board: FiCheckSquare,
   projects: FiFolder,
   documents: FiFileText,

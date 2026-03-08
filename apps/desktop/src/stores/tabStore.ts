@@ -5,6 +5,7 @@ import type { ChannelType, MiddlePanelView } from '../types';
 export type GlobalTabType =
   | 'thread'
   | 'chat'
+  | 'workspaces'
   | 'board'
   | 'projects'
   | 'documents'
@@ -25,10 +26,12 @@ export interface GlobalTab {
 
 // ─── Constants ────────────────────────────────────────────────────────
 const STORAGE_KEY = 'trace:globalTabs';
+const TRANSIENT_VIEW_TAB_TYPES = new Set<GlobalTabType>(['workspaces', 'board']);
 
 /** Map view tab types to their MiddlePanelView counterpart */
 export const TAB_TYPE_TO_VIEW: Partial<Record<GlobalTabType, MiddlePanelView>> = {
   chat: 'chat',
+  workspaces: 'workspaces',
   board: 'board',
   projects: 'projects',
   documents: 'documents',
@@ -38,6 +41,7 @@ export const TAB_TYPE_TO_VIEW: Partial<Record<GlobalTabType, MiddlePanelView>> =
 export const TAB_LABELS: Record<GlobalTabType, string> = {
   thread: 'Thread',
   chat: 'Chat',
+  workspaces: 'Workspaces',
   board: 'Tracker',
   projects: 'Projects',
   documents: 'Docs',
@@ -49,7 +53,6 @@ export const TAB_LABELS: Record<GlobalTabType, string> = {
 /** All view-type tabs that can be opened (excludes thread / ai-chat which have their own flows). */
 export const VIEW_TAB_TYPES: GlobalTabType[] = [
   'chat',
-  'board',
   'projects',
   'documents',
   'pull-requests',
@@ -67,6 +70,7 @@ export function isViewTabAvailable(
   if (type === 'chat') return true;
   if (type === 'terminal') return hasRepoPath;
   if (channelType === 'channel') return false;
+  if (type === 'workspaces') return workspacesEnabled;
   if (type === 'board') return true;
   if (type === 'projects') return channelType === 'team';
   if (type === 'documents') return workspacesEnabled;
@@ -86,9 +90,22 @@ function loadPersistedState(): PersistedState {
     if (!raw) return { tabs: [], activeTabId: null };
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return { tabs: [], activeTabId: null };
+    const tabs = Array.isArray(parsed.tabs)
+      ? parsed.tabs.filter((tab): tab is GlobalTab =>
+          !!tab &&
+          typeof tab === 'object' &&
+          typeof tab.id === 'string' &&
+          typeof tab.type === 'string' &&
+          !TRANSIENT_VIEW_TAB_TYPES.has(tab.type as GlobalTabType),
+        )
+      : [];
+    const activeTabId =
+      typeof parsed.activeTabId === 'string' && tabs.some((tab) => tab.id === parsed.activeTabId)
+        ? parsed.activeTabId
+        : null;
     return {
-      tabs: Array.isArray(parsed.tabs) ? parsed.tabs : [],
-      activeTabId: typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null,
+      tabs,
+      activeTabId,
     };
   } catch {
     return { tabs: [], activeTabId: null };

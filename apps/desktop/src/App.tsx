@@ -43,6 +43,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ProductDocView } from "./components/ProductDocView";
 import { AiChatPanel } from "./components/AiChatPanel";
 import { ChannelTerminalTab } from "./components/ChannelTerminalTab";
+import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { Toaster, toast } from "sonner";
@@ -63,7 +64,6 @@ import { usePanelLayoutStore, hasViewInTree } from "./stores/panelLayoutStore";
 import { useSyncStore } from "./stores/syncStore";
 import { useTabStore, TAB_TYPE_TO_VIEW } from "./stores/tabStore";
 import type { GlobalTabType } from "./stores/tabStore";
-import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useShortcutContextSync } from "./hooks/useShortcutContextSync";
 import { useDefaultShortcuts } from "./hooks/useDefaultShortcuts";
@@ -181,6 +181,8 @@ function AppContent() {
   const dragging = useAppUIStore((s) => s.dragging);
   const mobileDrawerOpen = useAppUIStore((s) => s.mobileDrawerOpen);
   const workspaceSidebarOpen = useAppUIStore((s) => s.workspaceSidebarOpen);
+  const workspaceSidebarWidth = useAppUIStore((s) => s.workspaceSidebarWidth);
+  const workspaceSidebarDockSide = useAppUIStore((s) => s.workspaceSidebarDockSide);
 
   const activeRunWorkspaceIds = useAgentRunStore(
     (s) => s.activeRunWorkspaceIds,
@@ -193,6 +195,14 @@ function AppContent() {
   // ─── Stable channel ref for callbacks ──────────────────────────────
   const activeChannelRef = useRef<Channel | null>(null);
   activeChannelRef.current = enrichedActiveChannel;
+  const dismissTransientCenterView = useCallback(() => {
+    const channelId = activeChannelRef.current?.id;
+    const currentView = useAppUIStore.getState().middlePanelView;
+    if (!channelId) return;
+    if (currentView === 'workspaces' || currentView === 'board') {
+      useAppUIStore.getState().setChannelView(channelId, 'chat');
+    }
+  }, []);
 
   const getChannelRepoPath = useCallback(
     () => activeChannelRef.current?.localRepoPath ?? "",
@@ -335,7 +345,7 @@ function AppContent() {
 
   // ─── Attention / notifications ────────────────────────────────────
   const recentToastsRef = useRef<Record<string, number>>({});
-  const openWorkspaceRef = useRef<(ws: Workspace) => void>(() => {});
+  const openWorkspaceRef = useRef<((ws: Workspace) => void) | null>(null);
   const handleNeedsAttention = useCallback(
     (
       workspaceId: string,
@@ -403,7 +413,7 @@ function AppContent() {
                 const freshWs = useWorkspaceStore
                   .getState()
                   .workspaces.find((item) => item.id === workspaceId);
-                if (freshWs) openWorkspaceRef.current(freshWs);
+                if (freshWs) openWorkspaceRef.current?.(freshWs);
               },
             },
           });
@@ -507,6 +517,7 @@ function AppContent() {
 
   // ─── Open workspace handler ───────────────────────────────────────
   const handleOpenWorkspace = useCallback((workspace: Workspace) => {
+    dismissTransientCenterView();
     useThreadStore.getState().syncActions.openThreadPanel(workspace);
     const ch = activeChannelRef.current;
     if (ch) {
@@ -517,7 +528,7 @@ function AppContent() {
     if (window.innerWidth <= 768) {
       useAppUIStore.getState().setWorkspaceSidebarOpen(false);
     }
-  }, []);
+  }, [dismissTransientCenterView]);
   openWorkspaceRef.current = handleOpenWorkspace;
 
   // ─── Fetch-and-open (handles merged/missing workspaces) ─────────────
@@ -669,14 +680,14 @@ function AppContent() {
   usePresenceReporter(activeChannelId);
   usePresenceSubscription(activeChannelId);
 
-  const switchChannelRef = useRef<(channelId: string) => void>(() => {});
+  const switchChannelRef = useRef<((channelId: string) => void) | null>(null);
   const { unreadCounts } = useChannelMessageNotifications({
     activeServerId,
     activeChannelId,
     activeAiChatId,
     serverChannels,
-    onNavigateToChannel: useCallback(
-      (channelId: string) => switchChannelRef.current(channelId),
+      onNavigateToChannel: useCallback(
+      (channelId: string) => switchChannelRef.current?.(channelId),
       [],
     ),
   });
@@ -697,6 +708,10 @@ function AppContent() {
     () => globalTabs.find((t) => t.id === activeTabId) ?? null,
     [globalTabs, activeTabId],
   );
+  const transientCenterViewActive =
+    middlePanelView === 'workspaces' || middlePanelView === 'board';
+  const workspacesExpanded =
+    middlePanelView === 'workspaces' && !workspaceSidebarOpen;
 
   // Sync middlePanelView when active tab changes (for view tabs).
   // Uses refs for activeChannelId so this only fires on tab changes,
@@ -750,13 +765,26 @@ function AppContent() {
     }
   }, [activeTabId, fetchBoard]);
 
-  const workspaceSidebarWidth = useAppUIStore((s) => s.workspaceSidebarWidth);
-
   // ─── Channel/view switching ──────────────────────────────────────
   const handleOpenViewTab = useCallback(
     (viewType: GlobalTabType) => {
       if (!activeChannelId || !displayChannel) return;
+      if (viewType === 'workspaces') {
+        dismissTransientCenterView();
+        useAppUIStore.getState().setWorkspaceSidebarOpen(true);
+        useAppUIStore.getState().setMobileDrawerOpen(false);
+        return;
+      }
+      if (viewType === 'board') {
+        const viewForTab = TAB_TYPE_TO_VIEW[viewType];
+        if (viewForTab) {
+          useAppUIStore.getState().setChannelView(activeChannelId, viewForTab);
+          if (viewForTab === 'board') void fetchBoard(activeChannelId);
+        }
+        return;
+      }
       if (viewType === 'terminal') {
+        dismissTransientCenterView();
         useTabStore.getState().openTerminalTab(activeChannelId, displayChannel.name);
         return;
       }
@@ -767,8 +795,38 @@ function AppContent() {
         if (viewForTab === 'board') void fetchBoard(activeChannelId);
       }
     },
-    [activeChannelId, displayChannel, fetchBoard],
+    [activeChannelId, dismissTransientCenterView, displayChannel, fetchBoard],
   );
+
+  const handleExpandWorkspacesFullscreen = useCallback(() => {
+    const channelId = activeChannelRef.current?.id;
+    const ui = useAppUIStore.getState();
+
+    if (ui.isFullscreen) {
+      ui.setIsFullscreen(false);
+      ui.setChannelWidth(ui.savedWidths.channel);
+    }
+
+    if (channelId) {
+      ui.setChannelView(channelId, 'workspaces');
+    } else {
+      ui.setMiddlePanelView('workspaces');
+    }
+
+    ui.setWorkspaceSidebarOpen(false);
+    ui.setMobileDrawerOpen(false);
+  }, []);
+
+  const handleDockWorkspacesToSidebar = useCallback(() => {
+    const ui = useAppUIStore.getState();
+    if (ui.isFullscreen) {
+      ui.setIsFullscreen(false);
+      ui.setChannelWidth(ui.savedWidths.channel);
+    }
+    dismissTransientCenterView();
+    ui.setMobileDrawerOpen(false);
+    ui.setWorkspaceSidebarOpen(true);
+  }, [dismissTransientCenterView]);
 
   const handleMoveTicket = useCallback(
     (ticketId: string, columnId: string, sortOrder: number) => {
@@ -901,17 +959,19 @@ function AppContent() {
   );
 
   const handleSwitchAiChat = useCallback((chatId: string) => {
+    dismissTransientCenterView();
     const chat = useAppUIStore.getState().aiChats.find((c) => c.id === chatId);
     useTabStore.getState().openAiChatTab(chatId, chat?.title ?? 'AI Chat');
     useAppUIStore.getState().setActiveAiChatId(chatId);
     useAppUIStore.getState().setChannelWidth(220);
-  }, []);
+  }, [dismissTransientCenterView]);
 
   const handleCreateAiChat = useCallback(async () => {
     if (!activeServerId) return;
     try {
       const chat = await createAiChat(activeServerId);
       if (chat) {
+        dismissTransientCenterView();
         useTabStore.getState().openAiChatTab(chat.id, chat.title);
         useAppUIStore.getState().setActiveAiChatId(chat.id);
         useAppUIStore.getState().setChannelWidth(220);
@@ -919,7 +979,7 @@ function AppContent() {
     } catch (err) {
       console.error("[App] handleCreateAiChat failed:", err);
     }
-  }, [activeServerId, createAiChat]);
+  }, [activeServerId, createAiChat, dismissTransientCenterView]);
 
   const {
     handleRunProductDoc,
@@ -1087,6 +1147,15 @@ function AppContent() {
   useEffect(() => {
     if (activeServerId) void fetchAiChats(activeServerId);
   }, [activeServerId, fetchAiChats]);
+
+  useEffect(() => {
+    const transientTabs = useTabStore
+      .getState()
+      .tabs.filter((tab) => tab.type === 'workspaces' || tab.type === 'board');
+    for (const tab of transientTabs) {
+      useTabStore.getState().closeTab(tab.id);
+    }
+  }, []);
 
   // Fallback polling when subscriptions are down
   useEffect(() => {
@@ -1311,9 +1380,18 @@ function AppContent() {
     () => useAppUIStore.getState().toggleWorkspaceSidebarOpen(),
     [],
   );
+  const handleToggleWorkspaceSidebarDockSide = useCallback(() => {
+    const ui = useAppUIStore.getState();
+    ui.setWorkspaceSidebarDockSide(
+      ui.workspaceSidebarDockSide === 'left' ? 'right' : 'left',
+    );
+  }, []);
   const handleSelectTab = useCallback(
-    (tabId: string) => useTabStore.getState().setActiveTab(tabId),
-    [],
+    (tabId: string) => {
+      dismissTransientCenterView();
+      useTabStore.getState().setActiveTab(tabId);
+    },
+    [dismissTransientCenterView],
   );
   const handleCloseTab = useCallback(
     (tabId: string) => useTabStore.getState().closeTab(tabId),
@@ -1366,12 +1444,43 @@ function AppContent() {
           }}
         />
 
+        {!isFullscreen &&
+          currentWsEnabled &&
+          workspaceSidebarOpen &&
+          workspaceSidebarDockSide === 'left' && (
+          <WorkspaceSidebar
+            workspaces={workspaces}
+            selectedWorkspaceId={selectedWorkspaceId}
+            attentionWorkspaceIds={attentionWorkspaceIds}
+            channelId={activeChannelId}
+            onOpenWorkspace={handleOpenWorkspace}
+            onDeleteWorkspace={handleDeleteWorkspace}
+            onMarkMerged={handleMarkMerged}
+            workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+            activeRunWorkspaceIds={activeRunWorkspaceIds}
+            kanbanColumns={kanbanColumns}
+            workspacesLoading={workspacesLoading}
+            mergedCount={mergedCount}
+            mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+            mergedWorkspacesLoading={mergedWorkspacesLoading}
+            onExpandMerged={handleExpandMerged}
+            onExpandToFullscreen={handleExpandWorkspacesFullscreen}
+            dockSide="left"
+            onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
+            sidebarWidth={workspaceSidebarWidth}
+            isOpen={workspaceSidebarOpen}
+            onToggleOpen={handleToggleWorkspaceSidebar}
+            onStartDrag={handleStartDragWorkspaceSidebar}
+            dragging={dragging === 'workspace-sidebar'}
+          />
+        )}
+
         {/* Center content area */}
         <div
           className="flex min-h-0 min-w-0 flex-col panel-animate"
           style={{ flex: "1 1 0%", overflow: "hidden" }}
         >
-          {!isFullscreen && !activeProductDocId && (
+          {!isFullscreen && !activeProductDocId && !workspacesExpanded && (
             <ContentTabBar
               tabs={globalTabs}
               activeTabId={activeTabId}
@@ -1388,8 +1497,6 @@ function AppContent() {
               hasRepoPath={!!enrichedActiveChannel?.localRepoPath}
               activeChannelId={activeChannelId}
               onOpenViewTab={handleOpenViewTab}
-              showWorkspaceSidebar={workspaceSidebarOpen}
-              onToggleWorkspaceSidebar={handleToggleWorkspaceSidebar}
             />
           )}
           <div className="flex min-h-0 flex-1 flex-col">
@@ -1404,6 +1511,40 @@ function AppContent() {
                 onGenerateTickets={handleRunTickets}
                 onReviewTickets={handleRunReviewTickets}
                 onSwitchTab={handleSwitchProductDocTab}
+              />
+            ) : transientCenterViewActive ? (
+              <MessagePanel
+                panelTitle={panelTitle}
+                channelId={activeChannelId}
+                channelCreatedAt={enrichedActiveChannel?.createdAt ?? null}
+                workspaces={workspaces}
+                selectedWorkspaceId={selectedWorkspaceId}
+                attentionWorkspaceIds={attentionWorkspaceIds}
+                onOpenWorkspace={handleOpenWorkspace}
+                onDeleteWorkspace={handleDeleteWorkspace}
+                onMarkMerged={handleMarkMerged}
+                middlePanelView={middlePanelView}
+                kanbanColumns={kanbanColumns}
+                kanbanLoading={kanbanLoading}
+                onMoveTicket={handleMoveTicket}
+                isFullscreen={isFullscreen || workspacesExpanded}
+                teamProjects={teamProjects}
+                onSwitchChannel={handleSwitchChannel}
+                workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+                activeRunWorkspaceIds={activeRunWorkspaceIds}
+                needsJoin={needsJoin}
+                onJoinChannel={handleOpenJoinModal}
+                onOpenThreadLink={handleOpenThreadLink}
+                repoPath={enrichedActiveChannel?.localRepoPath}
+                onPullPR={handlePullPR}
+                pullingPRNumbers={pullingPRNumbers}
+                workspacesLoading={workspacesLoading}
+                mergedCount={mergedCount}
+                mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+                mergedWorkspacesLoading={mergedWorkspacesLoading}
+                onExpandMerged={handleExpandMerged}
+                onExpandWorkspacesFullscreen={handleExpandWorkspacesFullscreen}
+                onDockWorkspacesToSidebar={handleDockWorkspacesToSidebar}
               />
             ) : activeTab?.type === 'thread' ? (
               <ThreadPanel asMainContent />
@@ -1435,7 +1576,7 @@ function AppContent() {
                 kanbanColumns={kanbanColumns}
                 kanbanLoading={kanbanLoading}
                 onMoveTicket={handleMoveTicket}
-                isFullscreen={isFullscreen}
+                isFullscreen={isFullscreen || workspacesExpanded}
                 teamProjects={teamProjects}
                 onSwitchChannel={handleSwitchChannel}
                 workspacesWithRunningProcesses={workspacesWithRunningProcesses}
@@ -1447,6 +1588,12 @@ function AppContent() {
                 onPullPR={handlePullPR}
                 pullingPRNumbers={pullingPRNumbers}
                 workspacesLoading={workspacesLoading}
+                mergedCount={mergedCount}
+                mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+                mergedWorkspacesLoading={mergedWorkspacesLoading}
+                onExpandMerged={handleExpandMerged}
+                onExpandWorkspacesFullscreen={handleExpandWorkspacesFullscreen}
+                onDockWorkspacesToSidebar={handleDockWorkspacesToSidebar}
               />
             ) : (
               <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
@@ -1456,8 +1603,10 @@ function AppContent() {
           </div>
         </div>
 
-        {/* Right workspace sidebar */}
-        {!isFullscreen && currentWsEnabled && workspaceSidebarOpen && (
+        {!isFullscreen &&
+          currentWsEnabled &&
+          workspaceSidebarOpen &&
+          workspaceSidebarDockSide === 'right' && (
           <WorkspaceSidebar
             workspaces={workspaces}
             selectedWorkspaceId={selectedWorkspaceId}
@@ -1474,6 +1623,9 @@ function AppContent() {
             mergedWorkspacesLoaded={mergedWorkspacesLoaded}
             mergedWorkspacesLoading={mergedWorkspacesLoading}
             onExpandMerged={handleExpandMerged}
+            onExpandToFullscreen={handleExpandWorkspacesFullscreen}
+            dockSide="right"
+            onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
             sidebarWidth={workspaceSidebarWidth}
             isOpen={workspaceSidebarOpen}
             onToggleOpen={handleToggleWorkspaceSidebar}
@@ -1481,6 +1633,7 @@ function AppContent() {
             dragging={dragging === 'workspace-sidebar'}
           />
         )}
+
       </div>
 
       {showSettings && (
