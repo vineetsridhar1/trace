@@ -549,13 +549,13 @@ export function ChannelPanel({
                 className="relative border-b border-edge bg-surface-deep py-2 last:border-b-0"
                 whileDrag={{ zIndex: 50 }}
               >
-                <div className="mb-1 flex w-full items-center justify-between rounded-md px-2 hover:bg-surface-elevated">
+                <div className="mb-1 flex w-full items-center justify-between px-2">
                   <button
                     type="button"
                     aria-expanded={!isCollapsed}
                     aria-label={`Toggle ${config.label}`}
                     onClick={() => toggleCollapsed(id)}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 px-1 py-1 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                   >
                     <Icon className="h-3 w-3 shrink-0 text-muted" />
                     <h2 className="truncate text-xs font-semibold tracking-wide text-muted uppercase">

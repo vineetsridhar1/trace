@@ -182,6 +182,7 @@ function AppContent() {
   const aiChats = useAppUIStore((s) => s.aiChats);
   const dragging = useAppUIStore((s) => s.dragging);
   const mobileDrawerOpen = useAppUIStore((s) => s.mobileDrawerOpen);
+  const workspaceSidebarOpen = useAppUIStore((s) => s.workspaceSidebarOpen);
 
   const activeRunWorkspaceIds = useAgentRunStore(
     (s) => s.activeRunWorkspaceIds,
@@ -515,6 +516,9 @@ function AppContent() {
       useTabStore.getState().openThreadTab(ch.id, ch.name, workspace.id, label);
     }
     useWorkspaceStore.getState().clearAttention(workspace.id);
+    if (window.innerWidth <= 768) {
+      useAppUIStore.getState().setWorkspaceSidebarOpen(false);
+    }
   }, []);
   openWorkspaceRef.current = handleOpenWorkspace;
 
@@ -840,6 +844,9 @@ function AppContent() {
     (channelId: string) => {
       performChannelSwitch(channelId);
       useAppUIStore.getState().setMobileDrawerOpen(false);
+      if (window.innerWidth <= 768) {
+        useAppUIStore.getState().setWorkspaceSidebarOpen(false);
+      }
     },
     [performChannelSwitch],
   );
@@ -1313,6 +1320,10 @@ function AppContent() {
     () => useAppUIStore.getState().setDragging("workspace-sidebar"),
     [],
   );
+  const handleToggleWorkspaceSidebar = useCallback(
+    () => useAppUIStore.getState().toggleWorkspaceSidebarOpen(),
+    [],
+  );
   const handleSelectTab = useCallback(
     (tabId: string) => useTabStore.getState().setActiveTab(tabId),
     [],
@@ -1363,33 +1374,16 @@ function AppContent() {
 
         {/* Mobile drawer overlay */}
         <div
-          className={`mobile-drawer-overlay ${mobileDrawerOpen ? 'visible' : ''}`}
-          onClick={() => useAppUIStore.getState().setMobileDrawerOpen(false)}
+          className={`mobile-drawer-overlay ${
+            mobileDrawerOpen || (workspaceSidebarOpen && !isFullscreen && currentWsEnabled)
+              ? 'visible'
+              : ''
+          }`}
+          onClick={() => {
+            useAppUIStore.getState().setMobileDrawerOpen(false);
+            useAppUIStore.getState().setWorkspaceSidebarOpen(false);
+          }}
         />
-
-        {/* Left workspace sidebar */}
-        {!isFullscreen && currentWsEnabled && (
-          <WorkspaceSidebar
-            workspaces={workspaces}
-            selectedWorkspaceId={selectedWorkspaceId}
-            attentionWorkspaceIds={attentionWorkspaceIds}
-            channelId={activeChannelId}
-            onOpenWorkspace={handleOpenWorkspace}
-            onDeleteWorkspace={handleDeleteWorkspace}
-            onMarkMerged={handleMarkMerged}
-            workspacesWithRunningProcesses={workspacesWithRunningProcesses}
-            activeRunWorkspaceIds={activeRunWorkspaceIds}
-            kanbanColumns={kanbanColumns}
-            workspacesLoading={workspacesLoading}
-            mergedCount={mergedCount}
-            mergedWorkspacesLoaded={mergedWorkspacesLoaded}
-            mergedWorkspacesLoading={mergedWorkspacesLoading}
-            onExpandMerged={handleExpandMerged}
-            sidebarWidth={workspaceSidebarWidth}
-            onStartDrag={handleStartDragWorkspaceSidebar}
-            dragging={dragging === 'workspace-sidebar'}
-          />
-        )}
 
         {/* Center content area */}
         <div
@@ -1409,6 +1403,8 @@ function AppContent() {
               hasRepoPath={!!enrichedActiveChannel?.localRepoPath}
               activeChannelId={activeChannelId}
               onOpenViewTab={handleOpenViewTab}
+              showWorkspaceSidebar={workspaceSidebarOpen}
+              onToggleWorkspaceSidebar={handleToggleWorkspaceSidebar}
             />
           )}
           <div className="flex min-h-0 flex-1 flex-col">
@@ -1474,6 +1470,32 @@ function AppContent() {
             )}
           </div>
         </div>
+
+        {/* Right workspace sidebar */}
+        {!isFullscreen && currentWsEnabled && workspaceSidebarOpen && (
+          <WorkspaceSidebar
+            workspaces={workspaces}
+            selectedWorkspaceId={selectedWorkspaceId}
+            attentionWorkspaceIds={attentionWorkspaceIds}
+            channelId={activeChannelId}
+            onOpenWorkspace={handleOpenWorkspace}
+            onDeleteWorkspace={handleDeleteWorkspace}
+            onMarkMerged={handleMarkMerged}
+            workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+            activeRunWorkspaceIds={activeRunWorkspaceIds}
+            kanbanColumns={kanbanColumns}
+            workspacesLoading={workspacesLoading}
+            mergedCount={mergedCount}
+            mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+            mergedWorkspacesLoading={mergedWorkspacesLoading}
+            onExpandMerged={handleExpandMerged}
+            sidebarWidth={workspaceSidebarWidth}
+            isOpen={workspaceSidebarOpen}
+            onToggleOpen={handleToggleWorkspaceSidebar}
+            onStartDrag={handleStartDragWorkspaceSidebar}
+            dragging={dragging === 'workspace-sidebar'}
+          />
+        )}
       </div>
 
       {settingsChannel && (

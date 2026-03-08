@@ -17,9 +17,7 @@ export function usePanelResize() {
         return;
       }
       if (dragging === 'workspace-sidebar') {
-        const channelWidth = useAppUIStore.getState().channelWidth;
-        const sidebarLeft = SERVER_RAIL_WIDTH + channelWidth;
-        const newWidth = clamp(event.clientX - sidebarLeft, 200, 500);
+        const newWidth = clamp(window.innerWidth - event.clientX, 200, 500);
         useAppUIStore.getState().setWorkspaceSidebarWidth(newWidth);
         return;
       }
@@ -32,9 +30,7 @@ export function usePanelResize() {
         localStorage.setItem('trace:threadWidth', String(finalWidth));
       }
       if (dragging === 'workspace-sidebar') {
-        const channelWidth = useAppUIStore.getState().channelWidth;
-        const sidebarLeft = SERVER_RAIL_WIDTH + channelWidth;
-        const finalWidth = clamp(event.clientX - sidebarLeft, 200, 500);
+        const finalWidth = clamp(window.innerWidth - event.clientX, 200, 500);
         localStorage.setItem('trace:workspaceSidebarWidth', String(finalWidth));
       }
       useAppUIStore.getState().setDragging(null);

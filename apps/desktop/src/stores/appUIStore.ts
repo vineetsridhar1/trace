@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { MiddlePanelView, DragTarget, ChannelType, AiChat, ProductDocMode } from '../types';
 
 const CHANNEL_VIEW_MAP_KEY = 'trace:channelViewMap';
+const WORKSPACE_SIDEBAR_OPEN_KEY = 'trace:workspaceSidebarOpen';
 const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'documents', 'board', 'projects'];
 
 function loadChannelViewMap(): Record<string, MiddlePanelView> {
@@ -25,6 +26,24 @@ function loadChannelViewMap(): Record<string, MiddlePanelView> {
 function saveChannelViewMap(map: Record<string, MiddlePanelView>): void {
   try {
     localStorage.setItem(CHANNEL_VIEW_MAP_KEY, JSON.stringify(map));
+  } catch {
+    // Quota error — ignore
+  }
+}
+
+function loadWorkspaceSidebarOpen(): boolean {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_SIDEBAR_OPEN_KEY);
+    if (raw === null) return typeof window === 'undefined' ? true : window.innerWidth > 768;
+    return raw === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function saveWorkspaceSidebarOpen(isOpen: boolean): void {
+  try {
+    localStorage.setItem(WORKSPACE_SIDEBAR_OPEN_KEY, String(isOpen));
   } catch {
     // Quota error — ignore
   }
@@ -60,6 +79,7 @@ interface AppUIState {
   middlePanelView: MiddlePanelView;
   channelWidth: number;
   workspaceSidebarWidth: number;
+  workspaceSidebarOpen: boolean;
   dragging: DragTarget;
   isFullscreen: boolean;
   savedWidths: { channel: number; thread: number };
@@ -89,6 +109,8 @@ interface AppUIState {
   setChannelView: (channelId: string, view: MiddlePanelView) => void;
   setChannelWidth: (width: number | ((prev: number) => number)) => void;
   setWorkspaceSidebarWidth: (width: number) => void;
+  setWorkspaceSidebarOpen: (open: boolean) => void;
+  toggleWorkspaceSidebarOpen: () => void;
   setDragging: (target: DragTarget) => void;
   setIsFullscreen: (value: boolean) => void;
   setSavedWidths: (widths: { channel: number; thread: number }) => void;
@@ -118,6 +140,7 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   middlePanelView: initialMiddlePanelView,
   channelWidth: 220,
   workspaceSidebarWidth: Number(localStorage.getItem('trace:workspaceSidebarWidth')) || 280,
+  workspaceSidebarOpen: loadWorkspaceSidebarOpen(),
   dragging: null,
   isFullscreen: false,
   savedWidths: { channel: 220, thread: 0 },
@@ -158,6 +181,17 @@ export const useAppUIStore = create<AppUIState>((set) => ({
     })),
 
   setWorkspaceSidebarWidth: (width) => set({ workspaceSidebarWidth: width }),
+
+  setWorkspaceSidebarOpen: (open) => {
+    saveWorkspaceSidebarOpen(open);
+    set({ workspaceSidebarOpen: open });
+  },
+  toggleWorkspaceSidebarOpen: () =>
+    set((state) => {
+      const next = !state.workspaceSidebarOpen;
+      saveWorkspaceSidebarOpen(next);
+      return { workspaceSidebarOpen: next };
+    }),
 
   setDragging: (target) => set({ dragging: target }),
   setIsFullscreen: (value) => set({ isFullscreen: value }),

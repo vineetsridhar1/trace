@@ -72,7 +72,7 @@ export function ServerSwitcher({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex h-[52px] w-full items-center gap-2 border-b border-edge px-4 transition-colors hover:bg-surface-elevated"
+        className="flex h-[40px] w-full items-center gap-2 border-b border-edge px-4 transition-colors hover:bg-surface-elevated"
       >
         {activeServer?.avatarUrl ? (
           <img

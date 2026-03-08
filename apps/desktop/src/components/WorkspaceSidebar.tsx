@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FiChevronRight, FiCpu } from 'react-icons/fi';
+import { FiChevronRight, FiCpu, FiX } from 'react-icons/fi';
 import type { Workspace, TicketStatus, KanbanTicket, KanbanColumn as KanbanColumnType } from '../types';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { WorkspaceInput } from './WorkspaceInput';
@@ -115,6 +115,8 @@ interface WorkspaceSidebarProps {
   mergedWorkspacesLoading?: boolean;
   onExpandMerged?: () => void;
   sidebarWidth: number;
+  isOpen: boolean;
+  onToggleOpen: () => void;
   onStartDrag: () => void;
   dragging: boolean;
 }
@@ -136,6 +138,8 @@ export function WorkspaceSidebar({
   mergedWorkspacesLoading,
   onExpandMerged,
   sidebarWidth,
+  isOpen,
+  onToggleOpen,
   onStartDrag,
   dragging,
 }: WorkspaceSidebarProps) {
@@ -206,14 +210,30 @@ export function WorkspaceSidebar({
   return (
     <>
       <div
-        className="flex min-h-0 flex-col border-r border-edge bg-surface"
+        className={`resize-handle ${dragging ? 'active' : ''}`}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          onStartDrag();
+        }}
+      />
+      <div
+        id="workspace-sidebar"
+        className={`flex min-h-0 flex-col border-l border-edge bg-surface ${isOpen ? 'mobile-workspace-drawer-open' : ''}`}
         style={{ width: `${sidebarWidth}px`, minWidth: sidebarWidth > 0 ? 200 : 0 }}
       >
         {/* Header */}
-        <div className="flex h-[40px] shrink-0 items-center border-b border-edge px-3">
+        <div className="flex h-[40px] shrink-0 items-center justify-between border-b border-edge px-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Workspaces
           </h2>
+          <button
+            type="button"
+            onClick={onToggleOpen}
+            className="rounded p-1 text-muted transition-colors hover:bg-surface-elevated hover:text-primary"
+            aria-label="Hide workspace sidebar"
+          >
+            <FiX className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
         </div>
 
         {/* Workspace list */}
@@ -299,13 +319,6 @@ export function WorkspaceSidebar({
         {/* Create workspace input */}
         <WorkspaceInput />
       </div>
-      <div
-        className={`resize-handle ${dragging ? 'active' : ''}`}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          onStartDrag();
-        }}
-      />
     </>
   );
 }
