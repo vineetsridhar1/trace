@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { killProcessGroup } from "./process";
 
 export const AGENT_INACTIVITY_TIMEOUT_MS = Number(
   process.env.AGENT_INACTIVITY_TIMEOUT_MS ??
@@ -72,12 +73,10 @@ export function scheduleWatchdog(workspaceId: string) {
       `inactivity-timeout reached (${AGENT_INACTIVITY_TIMEOUT_MS}ms idle), sending SIGTERM`,
     );
 
-    if (!latest.child.killed) {
-      latest.child.kill("SIGTERM");
-      console.error(
-        `[agent:${workspaceId.slice(0, 8)}] inactivity timeout after ${AGENT_INACTIVITY_TIMEOUT_MS}ms, sent SIGTERM`,
-      );
-    }
+    killProcessGroup(latest.child);
+    console.error(
+      `[agent:${workspaceId.slice(0, 8)}] inactivity timeout after ${AGENT_INACTIVITY_TIMEOUT_MS}ms, sent SIGTERM to process group`,
+    );
   }, AGENT_INACTIVITY_TIMEOUT_MS);
 }
 

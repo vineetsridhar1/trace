@@ -12,6 +12,7 @@ import {
   getWorktreeBase,
   runningProcesses,
   suppressSyntheticStopFor,
+  killProcessGroup,
 } from './main/worktree';
 import { InstanceConnection, getOrCreateInstanceId, setAuthToken } from './main/instanceConnection';
 import { handleRelayCommand } from './main/instanceCommandHandler';
@@ -139,7 +140,7 @@ app.on('before-quit', () => {
       suppressSyntheticStopFor.add(id);
       stopWatchdog(id, 'app-before-quit');
       runStateByWorkspaceId.delete(id);
-      proc.kill('SIGTERM');
+      killProcessGroup(proc);
     }
   }
   runningProcesses.clear();

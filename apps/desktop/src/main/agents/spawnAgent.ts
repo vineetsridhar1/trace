@@ -13,6 +13,7 @@ import {
 import {
   runningProcesses,
   suppressSyntheticStopFor,
+  killProcessGroup,
   ensureWorktree,
   getWorktreeBranch,
 } from "../worktree";
@@ -162,7 +163,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     suppressSyntheticStopFor.add(workspaceId);
     stopWatchdog(workspaceId, "spawn-replaced");
     runStateByWorkspaceId.delete(workspaceId);
-    existing.kill("SIGTERM");
+    killProcessGroup(existing);
     runningProcesses.delete(workspaceId);
   }
 
@@ -249,6 +250,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     cwd: worktreePath,
     stdio: [cmd.stdinMode, "pipe", "pipe"],
     env,
+    detached: true,
   });
   appendAgentDebugLog(
     workspaceId,
@@ -273,10 +275,8 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
         appendAgentDebugLog(workspaceId, `stream session_id=${id}`),
       onActivity: () => resetWatchdog(workspaceId, "stream-json"),
       onInputRequired: () => {
-        appendAgentDebugLog(workspaceId, "input-required: killing process");
-        if (!child.killed) {
-          child.kill("SIGTERM");
-        }
+        appendAgentDebugLog(workspaceId, "input-required: killing process group");
+        killProcessGroup(child);
       },
     },
     log: (line) => appendAgentDebugLog(workspaceId, line),

@@ -1,12 +1,14 @@
 import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
-import { runProcess } from "./process";
+import { runProcess, killProcessGroup } from "./process";
 import {
   runStateByWorkspaceId,
   stopWatchdog,
   appendAgentDebugLog,
 } from "./watchdog";
+
+export { killProcessGroup };
 
 export const runningProcesses = new Map<
   string,
@@ -290,7 +292,7 @@ export function stopAgentProcess(workspaceId: string): { stopped: boolean } {
     state.userStopped = true;
   }
   stopWatchdog(workspaceId, "user-stop");
-  existing.kill("SIGTERM");
+  killProcessGroup(existing);
   return { stopped: true };
 }
 
@@ -517,7 +519,7 @@ export async function deleteWorktree(
     suppressSyntheticStopFor.add(workspaceId);
     stopWatchdog(workspaceId, "delete-worktree");
     runStateByWorkspaceId.delete(workspaceId);
-    existing.kill("SIGTERM");
+    killProcessGroup(existing);
     runningProcesses.delete(workspaceId);
     appendAgentDebugLog(
       workspaceId,
