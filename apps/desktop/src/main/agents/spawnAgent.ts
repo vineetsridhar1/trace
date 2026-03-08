@@ -359,16 +359,11 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
       `close code=${code} durationMs=${Date.now() - startedAt} stderrLen=${stderrBuffer.length}`,
     );
 
-    // Only remove from the map if this process is still the registered one.
-    // A replacement spawn may have already inserted a new child process, and
-    // blindly deleting would remove the *new* entry.
-    const isCurrentProcess = runningProcesses.get(workspaceId) === child;
-    if (isCurrentProcess) {
+    // Only clean up if this process is still the registered one.
+    // A replacement spawn may have already inserted a new child process and
+    // written a fresh MCP config — deleting it would break the new process.
+    if (runningProcesses.get(workspaceId) === child) {
       runningProcesses.delete(workspaceId);
-    }
-
-    // Clean up MCP config file only if no replacement process is using it
-    if (isCurrentProcess) {
       try {
         fs.unlinkSync(path.join(os.tmpdir(), `trace-mcp-${workspaceId}.json`));
       } catch {

@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { FiChevronRight, FiCpu, FiX } from 'react-icons/fi';
+import React, { useCallback, useMemo, useState } from 'react';
+import { FiChevronRight, FiCpu, FiRotateCcw, FiX } from 'react-icons/fi';
 import type { Workspace, TicketStatus, KanbanTicket, KanbanColumn as KanbanColumnType } from '../types';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { WorkspaceInput } from './WorkspaceInput';
 import { useAuth } from '../context/AuthContext';
+import { useChannelContext } from '../context/ChannelContext';
 import { usePresenceStore } from '../stores/presenceStore';
+import { useThreadStore } from '../stores/threadStore';
+import { Tooltip } from './Tooltip';
 
 interface StatusGroup {
   status: TicketStatus;
@@ -144,6 +147,8 @@ export function WorkspaceSidebar({
   dragging,
 }: WorkspaceSidebarProps) {
   const { user: authUser } = useAuth();
+  const { enrichedActiveChannel } = useChannelContext();
+  const orchestrateMode = enrichedActiveChannel?.orchestrateMode ?? false;
   const presenceByWorkspace = usePresenceStore((s) => s.presenceByWorkspace);
 
   const ticketByWorkspaceId = useMemo(() => {
@@ -160,6 +165,19 @@ export function WorkspaceSidebar({
     () => workspaces.find((ws) => ws.isOrchestrator),
     [workspaces],
   );
+
+  const handleClearOrchestratorContext = useCallback(async () => {
+    if (!orchestratorWorkspace) return;
+    if (!window.confirm('Clear orchestrator context? This will stop the current session and start fresh.')) return;
+    // Select the orchestrator (sets selectedWorkspace synchronously)
+    onOpenWorkspace(orchestratorWorkspace);
+    // Stop agent if running
+    if (activeRunWorkspaceIds?.has(orchestratorWorkspace.id)) {
+      await window.traceAPI.stopAgent(orchestratorWorkspace.id);
+    }
+    // Clear the session
+    await useThreadStore.getState().syncActions.clearSession();
+  }, [orchestratorWorkspace, onOpenWorkspace, activeRunWorkspaceIds]);
 
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
@@ -241,8 +259,8 @@ export function WorkspaceSidebar({
           className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
         >
           {/* Orchestrator — pinned at top */}
-          {orchestratorWorkspace && (
-            <div className="mb-1">
+          {orchestrateMode && orchestratorWorkspace && (
+            <div className="mb-1 group/orch">
               <button
                 type="button"
                 className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
@@ -262,8 +280,22 @@ export function WorkspaceSidebar({
                 <span className="text-xs font-semibold uppercase tracking-wide">
                   Orchestrator
                 </span>
-                {activeRunWorkspaceIds?.has(orchestratorWorkspace.id) && (
+                {activeRunWorkspaceIds?.has(orchestratorWorkspace.id) ? (
                   <span className="ml-auto h-2 w-2 rounded-full bg-accent animate-pulse" />
+                ) : (
+                  <Tooltip text="Clear context">
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      className="ml-auto hidden rounded p-0.5 text-muted transition-colors hover:bg-surface-elevated hover:text-primary group-hover/orch:inline-flex"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleClearOrchestratorContext();
+                      }}
+                    >
+                      <FiRotateCcw className="h-3 w-3" />
+                    </span>
+                  </Tooltip>
                 )}
               </button>
             </div>
@@ -271,7 +303,7 @@ export function WorkspaceSidebar({
 
           {workspacesLoading && workspaces.length === 0 ? (
             <WorkspaceListSkeleton />
-          ) : groupedWorkspaces.length === 0 && !orchestratorWorkspace ? (
+          ) : groupedWorkspaces.length === 0 && !(orchestrateMode && orchestratorWorkspace) ? (
             <div className="flex flex-1 items-center justify-center text-xs text-muted">
               No workspaces yet
             </div>
