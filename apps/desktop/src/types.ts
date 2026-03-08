@@ -337,6 +337,18 @@ export interface TraceAPI {
     workspaceId: string,
   ) => Promise<{ success: boolean; branch?: string; error?: string }>;
 
+  autoDeleteCleanWorktree: (
+    workspaceId: string,
+    repoPath: string,
+    teardownCommands?: string[],
+  ) => Promise<{
+    success: boolean;
+    deleted?: boolean;
+    reason?: string;
+    worktreePath?: string;
+    error?: string;
+  }>;
+
   setInstanceAuth: (token: string, serverId: string) => Promise<void>;
   clearInstanceAuth: () => Promise<void>;
 

@@ -598,3 +598,38 @@ export async function deleteWorktree(
 
   return { removed: true, worktreePath };
 }
+
+export interface AutoDeleteResult {
+  deleted: boolean;
+  reason: "clean" | "dirty" | "not-found" | "error";
+  worktreePath: string;
+}
+
+export async function autoDeleteCleanWorktree(
+  workspaceId: string,
+  repoPath: string,
+  teardownCommands?: string[],
+): Promise<AutoDeleteResult> {
+  const worktreePath = getWorktreePath(workspaceId);
+
+  if (!fs.existsSync(worktreePath)) {
+    return { deleted: false, reason: "not-found", worktreePath };
+  }
+
+  try {
+    const status = await runProcess(
+      "git",
+      ["status", "--porcelain"],
+      worktreePath,
+    );
+    if (status.stdout.trim() !== "") {
+      return { deleted: false, reason: "dirty", worktreePath };
+    }
+
+    await deleteWorktree(workspaceId, repoPath, teardownCommands);
+    return { deleted: true, reason: "clean", worktreePath };
+  } catch (err) {
+    console.error("autoDeleteCleanWorktree failed:", err);
+    return { deleted: false, reason: "error", worktreePath };
+  }
+}

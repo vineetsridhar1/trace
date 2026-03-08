@@ -1,5 +1,6 @@
 import { ipcMain } from "electron";
 import {
+  autoDeleteCleanWorktree,
   checkWorktreeExists,
   commitWorktreeChanges,
   deleteWorktree,
@@ -16,6 +17,7 @@ const MERGE_WORKTREE_CHANNEL = "merge-worktree";
 const COMMIT_WORKTREE_CHANGES_CHANNEL = "commit-worktree-changes";
 const GET_WORKTREE_DIFF_CHANNEL = "get-worktree-diff";
 const GET_WORKTREE_BRANCH_CHANNEL = "get-worktree-branch";
+const AUTO_DELETE_CLEAN_WORKTREE_CHANNEL = "auto-delete-clean-worktree";
 
 export function registerWorktreeHandlers(): void {
   ipcMain.removeHandler(DELETE_WORKTREE_CHANNEL);
@@ -106,6 +108,20 @@ export function registerWorktreeHandlers(): void {
       }
     },
   );
+
+  ipcMain.removeHandler(AUTO_DELETE_CLEAN_WORKTREE_CHANNEL);
+  ipcMain.handle(
+    AUTO_DELETE_CLEAN_WORKTREE_CHANNEL,
+    async (_event, workspaceId: string, repoPath: string, teardownCommands?: string[]) => {
+      try {
+        const result = await autoDeleteCleanWorktree(workspaceId, repoPath, teardownCommands);
+        return { success: true, ...result };
+      } catch (err) {
+        console.error("Failed to auto-delete clean worktree:", err);
+        return { success: false, deleted: false, error: String(err) };
+      }
+    },
+  );
 }
 
 export function registerWorktreeRelayActions(): void {
@@ -158,5 +174,15 @@ export function registerWorktreeRelayActions(): void {
     const { workspaceId } = params as { workspaceId: string };
     const branch = await getWorktreeBranch(workspaceId);
     return { success: true, branch };
+  });
+
+  registerRelayAction("autoDeleteCleanWorktree", async (params) => {
+    const { workspaceId, repoPath, teardownCommands } = params as {
+      workspaceId: string;
+      repoPath: string;
+      teardownCommands?: string[];
+    };
+    const result = await autoDeleteCleanWorktree(workspaceId, repoPath, teardownCommands);
+    return { success: true, ...result };
   });
 }

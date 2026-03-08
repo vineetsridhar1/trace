@@ -439,6 +439,24 @@ contextBridge.exposeInMainWorld("traceAPI", {
       error?: string;
     }>,
 
+  autoDeleteCleanWorktree: async (
+    workspaceId: string,
+    repoPath: string,
+    teardownCommands?: string[],
+  ): Promise<{
+    success: boolean;
+    deleted?: boolean;
+    reason?: string;
+    worktreePath?: string;
+    error?: string;
+  }> => {
+    try {
+      return await ipcRenderer.invoke("auto-delete-clean-worktree", workspaceId, repoPath, teardownCommands);
+    } catch (err) {
+      return { success: false, deleted: false, error: String(err) };
+    }
+  },
+
   instanceGetId: () => ipcRenderer.invoke("instance:getId") as Promise<string>,
 
   instanceGetName: () =>

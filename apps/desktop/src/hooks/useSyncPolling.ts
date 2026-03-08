@@ -26,6 +26,7 @@ interface UseSyncPollingOptions {
     status: TicketStatus,
   ) => Promise<void>;
   persistPrUrl: (workspaceId: string, prUrl: string) => Promise<void>;
+  onWorkspaceMerged?: (workspaceId: string) => void;
 }
 
 function getPRCandidates(workspaces: Workspace[]) {
@@ -46,11 +47,14 @@ export function useSyncPolling({
   getBaseBranch,
   updateWorkspaceStatus,
   persistPrUrl,
+  onWorkspaceMerged,
 }: UseSyncPollingOptions) {
   const updateStatusRef = useRef(updateWorkspaceStatus);
   updateStatusRef.current = updateWorkspaceStatus;
   const persistPrUrlRef = useRef(persistPrUrl);
   persistPrUrlRef.current = persistPrUrl;
+  const onWorkspaceMergedRef = useRef(onWorkspaceMerged);
+  onWorkspaceMergedRef.current = onWorkspaceMerged;
 
   const [ghAvailable, setGhAvailable] = useState<boolean | null>(null);
   const seenPrUrls = useRef<Map<string, string>>(new Map());
@@ -102,8 +106,10 @@ export function useSyncPolling({
           await updateStatusRef.current(ws.id, "review");
         } else if (ws.status === "completed" && pr.state === "merged") {
           await updateStatusRef.current(ws.id, "merged");
+          onWorkspaceMergedRef.current?.(ws.id);
         } else if (ws.status === "review" && pr.state === "merged") {
           await updateStatusRef.current(ws.id, "merged");
+          onWorkspaceMergedRef.current?.(ws.id);
         } else if (
           ws.status === "review" &&
           (pr.state === "closed" || pr.state === "none")
@@ -178,8 +184,10 @@ export function useSyncPolling({
           await updateStatusRef.current(ws.id, "review");
         } else if (ws.status === "completed" && pr.hasPR && pr.merged) {
           await updateStatusRef.current(ws.id, "merged");
+          onWorkspaceMergedRef.current?.(ws.id);
         } else if (ws.status === "review" && pr.merged) {
           await updateStatusRef.current(ws.id, "merged");
+          onWorkspaceMergedRef.current?.(ws.id);
         } else if (ws.status === "review" && !pr.hasPR) {
           await updateStatusRef.current(ws.id, "in_progress");
         }

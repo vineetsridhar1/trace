@@ -433,6 +433,30 @@ function AppContent() {
   // ─── Sync polling (main branch + PR statuses) ───────────────────
   const workspacesRef = useRef(workspaces);
   workspacesRef.current = workspaces;
+
+  const handleWorkspaceMerged = useCallback(
+    (workspaceId: string) => {
+      const repoPath = getChannelRepoPath();
+      if (!repoPath) return;
+
+      void window.traceAPI
+        .autoDeleteCleanWorktree(workspaceId, repoPath, getChannelTeardownCommands())
+        .then((result) => {
+          if (result.success && result.deleted) {
+            void window.traceAPI.releasePorts(workspaceId);
+            useWorkspaceStore.getState().removeWorktreeWorkspaceId(workspaceId);
+            if (workspaceId === useThreadStore.getState().selectedWorkspaceId) {
+              useThreadStore.getState().setHasWorktree(false);
+            }
+          }
+        })
+        .catch(() => {
+          // Best-effort — silent failure
+        });
+    },
+    [getChannelRepoPath, getChannelTeardownCommands],
+  );
+
   const { triggerSync } = useSyncPolling({
     workspacesRef,
     getChannelId: getActiveChannelId,
@@ -440,6 +464,7 @@ function AppContent() {
     getBaseBranch: getChannelBaseBranch,
     updateWorkspaceStatus,
     persistPrUrl,
+    onWorkspaceMerged: handleWorkspaceMerged,
   });
 
   // ─── Open workspace handler ───────────────────────────────────────
