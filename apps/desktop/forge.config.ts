@@ -32,13 +32,15 @@ const config: ForgeConfig = {
           target: 'main',
         },
         {
-          entry: 'src/main/mcp/traceServer.ts',
-          config: 'vite.main.config.ts',
-        },
-        {
           entry: 'src/preload.ts',
           config: 'vite.preload.config.ts',
           target: 'preload',
+        },
+        {
+          // Standalone MCP server spawned by Claude Code as a child process
+          entry: 'src/main/mcp/traceServer.ts',
+          config: 'vite.mcp.config.ts',
+          target: 'main',
         },
       ],
       renderer: [

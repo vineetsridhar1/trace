@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runProcess } from "../process";
+import { getAuthToken } from "../instanceConnection";
 import { ClaudeStreamParser } from "./claudeParser";
 import type {
   AgentAdapter,
@@ -134,22 +135,28 @@ export class ClaudeAdapter implements AgentAdapter {
         os.tmpdir(),
         `trace-mcp-${ctx.workspaceId}.json`,
       );
+      const authToken = getAuthToken();
+      const env: Record<string, string> = {
+        TRACE_SERVER_URL: ctx.serverUrl,
+        TRACE_CHANNEL_ID: ctx.channelId,
+        TRACE_WORKSPACE_ID: ctx.workspaceId,
+        TRACE_MODEL: ctx.model ?? "opus",
+        TRACE_EFFORT: ctx.effort ?? "high",
+        ...(ctx.channelName && { TRACE_CHANNEL_NAME: ctx.channelName }),
+      };
+      if (authToken) {
+        env.TRACE_AUTH_TOKEN = authToken;
+      }
       const mcpConfig = {
         mcpServers: {
           trace: {
             command: "node",
             args: [path.join(__dirname, "traceServer.js")],
-            env: {
-              TRACE_SERVER_URL: ctx.serverUrl,
-              TRACE_CHANNEL_ID: ctx.channelId,
-              TRACE_WORKSPACE_ID: ctx.workspaceId,
-              TRACE_MODEL: ctx.model || "opus",
-              TRACE_EFFORT: ctx.effort || "high",
-            },
+            env,
           },
         },
       };
-      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2), { mode: 0o600 });
       args.push("--mcp-config", mcpConfigPath);
     }
 
@@ -194,16 +201,14 @@ export class ClaudeAdapter implements AgentAdapter {
 
     if (parts.hasMcpTools) {
       sections.push(
-        `## Trace Workspace Management\n\n` +
-        `You have MCP tools to manage workspaces in Trace:\n\n` +
-        `- \`create_ticket\`: Create a new ticket/workspace for a sub-task. Use when you identify work that should run independently or in parallel. Set \`depends_on_current=true\` to queue it until your workspace merges.\n` +
-        `- \`list_tickets\`: List current tickets in the channel to see what's already being worked on.\n` +
-        `- \`get_ticket_status\`: Check a specific workspace's status.\n\n` +
-        `Use these when:\n` +
-        `- A task is large enough to benefit from parallel workstreams\n` +
-        `- You identify an independent sub-task (different files/features)\n` +
-        `- You want to queue follow-up work\n\n` +
-        `Do NOT create tickets for small sub-steps of your current task.`,
+        `You have access to Trace workspace tools via MCP. Use these to coordinate with other workspaces:
+- list_tickets: See all tickets and their statuses on the project board. Filter by channel name, column, or status.
+- get_thread: Read the conversation thread for any workspace (defaults to yours). Use this to understand what another workspace has done.
+- get_ticket_status: Check the current status of a specific workspace.
+- create_ticket: Spin off independent sub-tasks into parallel workspaces. You can choose the interaction mode (code/plan/ask). Only do this for genuinely independent work, not for small sub-steps.
+- write_to_ticket: Send a follow-up message to another workspace and trigger the agent to run on it. By default this resumes the existing Claude session. You can set trigger_run=false to just leave a note, or choose an interaction mode (code/plan/ask).
+
+Interaction modes: "code" allows full code changes (default), "plan" creates a plan for review before implementing, "ask" is read-only analysis only.${parts.channelName ? `\n\nYou are currently working in channel: "${parts.channelName}". Use this to filter list_tickets to your own channel.` : ""}`,
       );
     }
 

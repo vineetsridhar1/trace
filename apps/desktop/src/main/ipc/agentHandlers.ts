@@ -76,6 +76,7 @@ export function registerAgentRelayActions(): void {
       workspaceId,
       prompt,
       channelId,
+      channelName,
       model,
       effort,
       planMode,
@@ -83,6 +84,7 @@ export function registerAgentRelayActions(): void {
       workspaceId: string;
       prompt: string;
       channelId: string;
+      channelName?: string;
       model?: string;
       effort?: string;
       planMode?: boolean;
@@ -106,6 +108,8 @@ export function registerAgentRelayActions(): void {
       effort,
       systemInstructions: localConfig.systemInstructions,
       permissionMode: planMode ? "plan" : undefined,
+      channelId,
+      channelName,
     });
 
     return { success: true, worktreePath };

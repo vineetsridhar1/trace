@@ -3,8 +3,10 @@ import prisma from '../../../../lib/prisma';
 import { getWorkspaceByIdForFeed } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
 import { syncTicketWithWorkspaceStatus } from '../../../../services/ticketService';
+import { requireAuth } from '../../../../lib/requireAuth';
 
-export const triggerWorkspaceRun: NonNullable<MutationResolvers['triggerWorkspaceRun']> = async (_parent, { channelId, workspaceId, runConfig }, _ctx) => {
+export const triggerWorkspaceRun: NonNullable<MutationResolvers['triggerWorkspaceRun']> = async (_parent, { channelId, workspaceId, runConfig }, ctx) => {
+  requireAuth(ctx);
   // Save the run config
   await prisma.workspace.update({
     where: { id: workspaceId },

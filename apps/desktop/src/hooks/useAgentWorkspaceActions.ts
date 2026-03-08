@@ -293,6 +293,7 @@ export function useWorkspaceActions({
           baseBranch,
           branchPrefix: user?.githubUsername ?? undefined,
           channelId: activeChannelIdRef.current ?? undefined,
+          channelName: channelRef.current?.name ?? undefined,
         });
 
         if (!result.success) {
@@ -682,14 +683,22 @@ export function useWorkspaceActions({
         model: string;
         effort: string;
         planMode: boolean;
+        followUp?: boolean;
+        interactionMode?: string;
       },
     ) => {
-      const creationCommands = getSetupCommands();
+      const isFollowUp = runConfig.followUp === true;
 
-      await updatePreviewForPendingRun(workspaceId, runConfig.prompt);
+      // Follow-up runs skip setup commands and status transitions — the
+      // worktree already exists and the message was already appended.
+      const creationCommands = isFollowUp ? [] : getSetupCommands();
 
-      if (creationCommands.length > 0) {
-        await updateWorkspaceStatus(workspaceId, "creation");
+      if (!isFollowUp) {
+        await updatePreviewForPendingRun(workspaceId, runConfig.prompt);
+
+        if (creationCommands.length > 0) {
+          await updateWorkspaceStatus(workspaceId, "creation");
+        }
       }
 
       const baseBranch = getChannelBaseBranch();
@@ -699,13 +708,32 @@ export function useWorkspaceActions({
       ];
       if (userInstructions) instructionParts.push(userInstructions);
 
+      // For follow-up runs, check if we can resume the existing session
+      let resumeSessionId: string | undefined;
+      if (isFollowUp) {
+        const workspace = useWorkspaceStore
+          .getState()
+          .workspaces.find((w) => w.id === workspaceId);
+        const sessionId = workspace?.agentSessionId;
+        if (sessionId && !sessionId.startsWith("trace-local-")) {
+          resumeSessionId = sessionId;
+        }
+      }
+
+      // interactionMode from runConfig overrides planMode
+      const permissionMode =
+        runConfig.interactionMode ?? (runConfig.planMode ? "plan" : undefined);
+
       const success = await spawnAgentForWorkspace(
         workspaceId,
         runConfig.prompt,
         {
           statusOnSuccess: "in_progress",
-          errorPrefix: "Failed to auto-run queued ticket",
+          errorPrefix: isFollowUp
+            ? "Failed to run follow-up on ticket"
+            : "Failed to auto-run queued ticket",
           creationCommands,
+          resumeSessionId,
           model: runConfig.model,
           effort:
             getEffortOptions(
@@ -714,8 +742,10 @@ export function useWorkspaceActions({
             ).length > 0
               ? runConfig.effort
               : undefined,
-          systemInstructions: instructionParts.join("\n\n"),
-          permissionMode: runConfig.planMode ? "plan" : undefined,
+          systemInstructions: resumeSessionId
+            ? undefined
+            : instructionParts.join("\n\n"),
+          permissionMode,
         },
       );
 

@@ -12,6 +12,7 @@ extend type Mutation {
   updateQueuedRunConfig(workspaceId: ID!, runConfig: JSON!): Boolean!
   importTicketsToProject(channelId: ID!, tickets: [ImportTicketInput!]!, runConfig: JSON!): [ImportedTicketResult!]!
   triggerWorkspaceRun(channelId: ID!, workspaceId: ID!, runConfig: JSON!): Boolean!
+  requestWorkspaceRun(channelId: ID!, workspaceId: ID!, runConfig: JSON!): Boolean!
 }
 
 input ImportTicketInput {

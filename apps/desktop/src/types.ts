@@ -51,6 +51,7 @@ export interface SpawnConfig {
   baseBranch?: string;
   branchPrefix?: string;
   channelId?: string;
+  channelName?: string;
 }
 
 export interface EffortOption {

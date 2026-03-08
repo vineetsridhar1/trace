@@ -221,6 +221,7 @@ type Mutation {
   removeTicketDependency(channelId: ID!, dependsOnWorkspaceId: ID!, workspaceId: ID!): Boolean!
   renameAiChat(id: ID!, title: String!): AiChat!
   reportPresence(channelId: ID!, workspaceId: ID): Boolean!
+  requestWorkspaceRun(channelId: ID!, runConfig: JSON!, workspaceId: ID!): Boolean!
   sendAiChatMessage(chatId: ID!, content: String!): AiChatMessage!
   sendChannelMessage(channelId: ID!, content: String!): ChannelMessage!
   setInstancePassword(instanceId: ID!, password: String): Boolean!

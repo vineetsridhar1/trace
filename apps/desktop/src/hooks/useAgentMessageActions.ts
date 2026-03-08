@@ -220,6 +220,7 @@ export function useWorkspaceActions({
           permissionMode: options.permissionMode,
           baseBranch,
           branchPrefix,
+          channelId: activeChannelId ?? undefined,
         });
 
         if (!result.success) {

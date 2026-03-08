@@ -71,6 +71,7 @@ export interface SystemPromptParts {
   interactionMode: InteractionMode;
   filePaths?: string[];
   hasMcpTools?: boolean;
+  channelName?: string;
 }
 
 export interface AgentSpawnContext {
@@ -83,6 +84,7 @@ export interface AgentSpawnContext {
   resumeSessionId?: string;
   filePaths?: string[];
   channelId?: string;
+  channelName?: string;
   serverUrl?: string;
 }
 

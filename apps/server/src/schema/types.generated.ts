@@ -273,6 +273,7 @@ export type Mutation = {
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   reportPresence: Scalars['Boolean']['output'];
+  requestWorkspaceRun: Scalars['Boolean']['output'];
   sendAiChatMessage: AiChatMessage;
   sendChannelMessage: ChannelMessage;
   setInstancePassword: Scalars['Boolean']['output'];
@@ -425,6 +426,13 @@ export type MutationrenameAiChatArgs = {
 export type MutationreportPresenceArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type MutationrequestWorkspaceRunArgs = {
+  channelId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 
@@ -1349,6 +1357,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   removeTicketDependency?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationremoveTicketDependencyArgs, 'channelId' | 'dependsOnWorkspaceId' | 'workspaceId'>>;
   renameAiChat?: Resolver<ResolversTypes['AiChat'], ParentType, ContextType, RequireFields<MutationrenameAiChatArgs, 'id' | 'title'>>;
   reportPresence?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationreportPresenceArgs, 'channelId'>>;
+  requestWorkspaceRun?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationrequestWorkspaceRunArgs, 'channelId' | 'runConfig' | 'workspaceId'>>;
   sendAiChatMessage?: Resolver<ResolversTypes['AiChatMessage'], ParentType, ContextType, RequireFields<MutationsendAiChatMessageArgs, 'chatId' | 'content'>>;
   sendChannelMessage?: Resolver<ResolversTypes['ChannelMessage'], ParentType, ContextType, RequireFields<MutationsendChannelMessageArgs, 'channelId' | 'content'>>;
   setInstancePassword?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationsetInstancePasswordArgs, 'instanceId'>>;

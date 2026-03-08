@@ -102,6 +102,8 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     permissionMode,
     baseBranch,
     branchPrefix,
+    channelId,
+    channelName,
   } = config;
 
   const adapter = getAgent(agentType);
@@ -208,6 +210,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
   // Map permissionMode to interactionMode for adapter consumption
   const interactionMode =
     (permissionMode as InteractionMode | undefined) ?? "code";
+  const hasMcpTools = Boolean(channelId);
   let finalPrompt = prompt;
   if (!resumeSessionId) {
     const parts: SystemPromptParts = {
@@ -215,7 +218,8 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
       systemInstructions,
       interactionMode: interactionMode,
       filePaths,
-      hasMcpTools: !!(config.channelId),
+      hasMcpTools,
+      channelName,
     };
     const wrappedSystemPrompt = adapter.wrapSystemPrompt
       ? adapter.wrapSystemPrompt(parts)
@@ -235,7 +239,8 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     effort,
     resumeSessionId,
     filePaths,
-    channelId: config.channelId,
+    channelId,
+    channelName,
     serverUrl: SERVER_URL,
   });
 
@@ -330,7 +335,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
       `close code=${code} durationMs=${Date.now() - startedAt} stderrLen=${stderrBuffer.length}`,
     );
 
-    // Clean up temp MCP config file
+    // Clean up MCP config file
     try {
       fs.unlinkSync(path.join(os.tmpdir(), `trace-mcp-${workspaceId}.json`));
     } catch {

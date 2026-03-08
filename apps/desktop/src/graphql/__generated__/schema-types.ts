@@ -258,6 +258,7 @@ export type Mutation = {
   removeTicketDependency: Scalars['Boolean']['output'];
   renameAiChat: AiChat;
   reportPresence: Scalars['Boolean']['output'];
+  requestWorkspaceRun: Scalars['Boolean']['output'];
   sendAiChatMessage: AiChatMessage;
   sendChannelMessage: ChannelMessage;
   setInstancePassword: Scalars['Boolean']['output'];
@@ -410,6 +411,13 @@ export type MutationRenameAiChatArgs = {
 export type MutationReportPresenceArgs = {
   channelId: Scalars['ID']['input'];
   workspaceId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type MutationRequestWorkspaceRunArgs = {
+  channelId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
+  workspaceId: Scalars['ID']['input'];
 };
 
 

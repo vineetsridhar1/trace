@@ -519,6 +519,8 @@ function AppContent() {
         model: string;
         effort: string;
         planMode: boolean;
+        followUp?: boolean;
+        interactionMode?: string;
       };
       void useAgentRunStore
         .getState()
