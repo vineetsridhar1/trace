@@ -245,13 +245,6 @@ export function useDefaultShortcuts({
     },
     { label: "Toggle fullscreen", category: "panels", context: "global" },
   );
-  useHotkey(
-    "panels.close-thread",
-    "escape",
-    () => useThreadStore.getState().closeThreadPanel(),
-    { label: "Close thread panel", category: "panels", context: "thread-open" },
-  );
-
   // ─── New Tab Menu ──────────────────────────────────────────────
   useHotkey(
     "tabs.new",
