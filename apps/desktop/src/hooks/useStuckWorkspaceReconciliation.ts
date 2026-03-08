@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Workspace, TicketStatus } from "../types";
+import { useAgentRunStore } from "../stores/agentRunStore";
 
 const ACTIVE_STATUSES: TicketStatus[] = ["in_progress", "creation"];
 const STARTUP_GRACE_MS = 5_000;
@@ -51,6 +52,8 @@ export function useStuckWorkspaceReconciliation({
             `[reconciliation] Workspace ${ws.id} stuck in "${ws.status}" with no running process — transitioning to "${newStatus}"`,
           );
           await updateRef.current(ws.id, newStatus);
+          useAgentRunStore.getState().clearActiveRun(ws.id);
+          useAgentRunStore.getState().removeSpawnedWorkspace(ws.id);
         }
       }
     }

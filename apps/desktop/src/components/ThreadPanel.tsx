@@ -189,6 +189,7 @@ export function ThreadPanel({ asMainContent = false }: { asMainContent?: boolean
     if (!selectedWorkspaceId) return false;
     if (activeRunWorkspaceIds.has(selectedWorkspaceId)) return true;
     if (!spawnedWorkspaceIds.has(selectedWorkspaceId)) return false;
+    if (sessionStatus === "loading" || sessionStatus === "error") return false;
     if (sessionStatus === "empty") return false;
     const lastEvent = sessionEvents[sessionEvents.length - 1];
     if (lastEvent?.hookEventName === "Stop") return false;

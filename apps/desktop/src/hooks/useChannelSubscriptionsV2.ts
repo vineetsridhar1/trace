@@ -240,6 +240,7 @@ export function useChannelSubscriptions({
 
     if (payload.event.hookEventName === 'Stop') {
       useAgentRunStore.getState().clearActiveRun(payload.workspaceId);
+      useAgentRunStore.getState().removeSpawnedWorkspace(payload.workspaceId);
       const existing = useWorkspaceStore.getState().workspaces.find((item) => item.id === payload.workspaceId);
       if (existing && existing.cliSession.status !== 'stopped') {
         useWorkspaceStore.getState().upsertWorkspace({
