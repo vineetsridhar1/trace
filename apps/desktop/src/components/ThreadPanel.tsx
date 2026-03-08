@@ -143,9 +143,10 @@ export function ThreadPanel({ asMainContent = false }: { asMainContent?: boolean
   );
   const kanbanColumns = useKanbanStore((s) => s.columns);
 
+  const threadSelectedWorkspace = useThreadStore((s) => s.selectedWorkspace);
   const selectedWorkspace = useMemo(
-    () => workspaces.find((w) => w.id === selectedWorkspaceId) ?? null,
-    [workspaces, selectedWorkspaceId],
+    () => workspaces.find((w) => w.id === selectedWorkspaceId) ?? threadSelectedWorkspace,
+    [workspaces, selectedWorkspaceId, threadSelectedWorkspace],
   );
 
   const isProductDoc = selectedWorkspace?.isProductDoc ?? false;
