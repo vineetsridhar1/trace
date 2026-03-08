@@ -264,7 +264,7 @@ export class CodexStreamParser implements AgentStreamParser {
   }
 
   private trackPost(payload: Record<string, unknown>): void {
-    const p = this.postEvent(payload);
+    const p = this.postEvent({ ...payload, workspace_id: this.workspaceId });
     this.pendingPosts.push(p);
   }
 

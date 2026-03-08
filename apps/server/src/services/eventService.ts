@@ -129,7 +129,8 @@ export async function ingestEvent(payload: HookEvent) {
   const workspaceIdFromTranscript = extractWorkspaceIdFromWorktreePath(
     payload.transcript_path,
   );
-  const resolvedWorkspaceId = workspaceIdFromCwd ?? workspaceIdFromTranscript;
+  const resolvedWorkspaceId =
+    workspaceIdFromCwd ?? workspaceIdFromTranscript ?? payload.workspace_id;
   const workspace = resolvedWorkspaceId
     ? await getWorkspaceByIdWithSessions(resolvedWorkspaceId)
     : null;

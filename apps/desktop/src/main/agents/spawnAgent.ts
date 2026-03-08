@@ -441,6 +441,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
       const payload = {
         session_id: sessionId ?? `trace-local-${workspaceId}`,
         cwd: worktreePath,
+        workspace_id: workspaceId,
         hook_event_name: "Stop",
         stop_hook_active: false,
         last_assistant_message: messageToPersist,
