@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch } from 'react-icons/fi';
-import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
+import { FiPlus, FiBriefcase, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch } from 'react-icons/fi';
+import type { Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
 import { TAB_LABELS, VIEW_TAB_TYPES, isViewTabAvailable } from '../stores/tabStore';
 import type { GlobalTabType } from '../stores/tabStore';
 import { Tooltip } from './Tooltip';
@@ -18,7 +18,6 @@ const SECTION_CONFIG: Record<SidebarSectionId, { icon: typeof FiHash; label: str
   teams: { icon: FiLayers, label: 'Teams' },
   projects: { icon: FiFolder, label: 'Projects' },
   'my-workspaces': { icon: FiBriefcase, label: 'My Workspaces' },
-  'ai-chats': { icon: FiMessageCircle, label: 'AI Chats' },
 };
 
 function projectNeedsJoin(channel: Channel, localConfigs: Record<string, LocalChannelConfig>) {
@@ -235,8 +234,6 @@ interface ChannelPanelProps {
   activeServer: Server | null;
   onSwitchServer: (serverId: string) => void;
   onCreateServer: () => void;
-  aiChats: AiChat[];
-  activeAiChatId: string | null;
   unreadCounts?: Record<string, number>;
   localConfigs?: Record<string, LocalChannelConfig>;
   onSwitchChannel: (id: string) => void;
@@ -244,9 +241,6 @@ interface ChannelPanelProps {
   onCreateTeam: () => void;
   onCreateProject: () => void;
   onCreateChannel: () => void;
-  onSwitchAiChat: (id: string) => void;
-  onCreateAiChat: () => void;
-  onDeleteAiChat: (id: string) => void;
   onStartDrag: () => void;
   onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void;
   onOpenViewTab: (viewType: GlobalTabType) => void;
@@ -262,15 +256,10 @@ export function ChannelPanel({
   activeServer,
   onSwitchServer,
   onCreateServer,
-  aiChats,
-  activeAiChatId,
   onSwitchChannel,
   onCreateTeam,
   onCreateProject,
   onCreateChannel,
-  onSwitchAiChat,
-  onCreateAiChat,
-  onDeleteAiChat,
   onStartDrag,
   onOpenWorkspaceLink,
   onOpenViewTab,
@@ -416,18 +405,6 @@ export function ChannelPanel({
         );
       case 'my-workspaces':
         return null;
-      case 'ai-chats':
-        return (
-          <Tooltip text="New AI chat" position="bottom">
-            <button
-              type="button"
-              onClick={onCreateAiChat}
-              className="rounded p-0.5 text-muted hover:bg-surface-elevated hover:text-accent-light"
-            >
-              <FiPlus className="h-3 w-3" aria-hidden="true" />
-            </button>
-          </Tooltip>
-        );
     }
   };
 
@@ -459,34 +436,6 @@ export function ChannelPanel({
         );
       case 'my-workspaces':
         return <MyWorkspacesContent activeServerId={activeServerId} onOpenWorkspaceLink={onOpenWorkspaceLink} />;
-      case 'ai-chats':
-        return aiChats.map((chat) => {
-          const isActive = chat.id === activeAiChatId;
-          return (
-            <div key={chat.id} className="group my-0.5 flex items-center">
-              <button
-                type="button"
-                onClick={() => onSwitchAiChat(chat.id)}
-                className={`channel-item flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
-                  isActive ? 'bg-surface-elevated font-semibold text-accent-light' : 'text-primary'
-                }`}
-              >
-                <FiMessageCircle className="h-3 w-3 shrink-0 text-muted" />
-                <span className="truncate">{chat.title}</span>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteAiChat(chat.id);
-                }}
-                className="mr-1 rounded p-0.5 text-muted opacity-0 hover:bg-surface-elevated hover:text-red-400 group-hover:opacity-100"
-              >
-                <FiTrash2 className="h-3 w-3" />
-              </button>
-            </div>
-          );
-        });
     }
   };
 

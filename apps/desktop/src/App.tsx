@@ -1340,7 +1340,6 @@ function AppContent() {
     (id: string) => { void handleDeleteAiChat(id); },
     [handleDeleteAiChat],
   );
-
   // ─── Render ──────────────────────────────────────────────────────
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface text-primary">
@@ -1355,8 +1354,6 @@ function AppContent() {
           activeServer={activeServer}
           onSwitchServer={handleSwitchServer}
           onCreateServer={handleCreateServer}
-          aiChats={aiChats}
-          activeAiChatId={activeAiChatId}
           unreadCounts={unreadCounts}
           localConfigs={localConfigs}
           onSwitchChannel={handleSwitchChannel}
@@ -1364,9 +1361,6 @@ function AppContent() {
           onCreateTeam={handleCreateTeam}
           onCreateProject={handleCreateProject}
           onCreateChannel={handleCreateChannel}
-          onSwitchAiChat={handleSwitchAiChat}
-          onCreateAiChat={handleCreateAiChatAction}
-          onDeleteAiChat={handleDeleteAiChatAction}
           onStartDrag={handleStartDragLeft}
           onOpenWorkspaceLink={handleOpenThreadLink}
           onOpenViewTab={handleOpenViewTab}
@@ -1397,6 +1391,10 @@ function AppContent() {
               onSelectTab={handleSelectTab}
               onCloseTab={handleCloseTab}
               onCreateAiChat={handleCreateAiChatAction}
+              aiChats={aiChats}
+              activeAiChatId={activeAiChatId}
+              onSwitchAiChat={handleSwitchAiChat}
+              onDeleteAiChat={handleDeleteAiChatAction}
               channelType={currentChannelType}
               workspacesEnabled={currentWsEnabled}
               hasGithubUrl={currentHasGithub}

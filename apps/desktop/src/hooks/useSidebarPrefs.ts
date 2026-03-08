@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 
-export type SidebarSectionId = 'channels' | 'teams' | 'projects' | 'my-workspaces' | 'ai-chats';
+export type SidebarSectionId = 'channels' | 'teams' | 'projects' | 'my-workspaces';
 
-const DEFAULT_ORDER: SidebarSectionId[] = ['channels', 'teams', 'projects', 'my-workspaces', 'ai-chats'];
+const DEFAULT_ORDER: SidebarSectionId[] = ['channels', 'teams', 'projects', 'my-workspaces'];
 const ALL_SECTIONS = new Set<SidebarSectionId>(DEFAULT_ORDER);
 
 const ORDER_KEY = 'sidebar-section-order';

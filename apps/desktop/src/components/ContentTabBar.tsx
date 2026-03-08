@@ -14,7 +14,7 @@ import {
   FiList,
 } from 'react-icons/fi';
 import type { GlobalTab, GlobalTabType } from '../stores/tabStore';
-import type { ChannelType } from '../types';
+import type { AiChat, ChannelType } from '../types';
 import { AddTabMenu } from './AddTabMenu';
 import { TabPopover } from './TabPopover';
 import { Tooltip } from './Tooltip';
@@ -40,6 +40,10 @@ interface ContentTabBarProps {
   onSelectTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onCreateAiChat: () => void;
+  aiChats: AiChat[];
+  activeAiChatId: string | null;
+  onSwitchAiChat: (id: string) => void;
+  onDeleteAiChat: (id: string) => void;
   channelType: ChannelType;
   workspacesEnabled: boolean;
   hasGithubUrl: boolean;
@@ -57,6 +61,10 @@ export function ContentTabBar({
   onSelectTab,
   onCloseTab,
   onCreateAiChat,
+  aiChats,
+  activeAiChatId,
+  onSwitchAiChat,
+  onDeleteAiChat,
   channelType,
   workspacesEnabled,
   hasGithubUrl,
@@ -69,6 +77,8 @@ export function ContentTabBar({
   const addMenuOpen = useAppUIStore((s) => s.addTabMenuOpen);
   const ptyProcesses = useTerminalStore((s) => s.ptyProcesses);
   const tabRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const [addMenuAnchorRect, setAddMenuAnchorRect] = useState<DOMRect | null>(null);
 
   // Scroll the active tab into view when it changes
   useEffect(() => {
@@ -125,6 +135,26 @@ export function ContentTabBar({
     };
   }, []);
 
+  useEffect(() => {
+    if (!addMenuOpen) {
+      setAddMenuAnchorRect(null);
+      return;
+    }
+
+    const updateAnchorRect = () => {
+      if (!addButtonRef.current) return;
+      setAddMenuAnchorRect(addButtonRef.current.getBoundingClientRect());
+    };
+
+    updateAnchorRect();
+    window.addEventListener('resize', updateAnchorRect);
+    window.addEventListener('scroll', updateAnchorRect, true);
+    return () => {
+      window.removeEventListener('resize', updateAnchorRect);
+      window.removeEventListener('scroll', updateAnchorRect, true);
+    };
+  }, [addMenuOpen]);
+
   return (
     <div className="flex h-[40px] shrink-0 items-center border-b border-edge bg-surface-deep">
       {/* Mobile hamburger */}
@@ -141,20 +171,36 @@ export function ContentTabBar({
         <div className="relative shrink-0 px-1">
           <Tooltip text="Open a tab" position="bottom">
             <button
+              ref={addButtonRef}
               type="button"
-              onClick={() => useAppUIStore.getState().toggleAddTabMenuOpen()}
+              onClick={() => {
+                const nextOpen = !addMenuOpen;
+                if (nextOpen && addButtonRef.current) {
+                  setAddMenuAnchorRect(addButtonRef.current.getBoundingClientRect());
+                }
+                useAppUIStore.getState().setAddTabMenuOpen(nextOpen);
+              }}
               className="flex cursor-pointer items-center rounded p-1 text-muted hover:bg-surface-elevated hover:text-primary"
             >
               <FiPlus className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
-          {addMenuOpen && (
+          {addMenuOpen && addMenuAnchorRect && (
             <AddTabMenu
+              anchorRect={addMenuAnchorRect}
+              triggerRef={addButtonRef}
               openTabTypes={openTabTypes}
+              aiChats={aiChats}
+              activeAiChatId={activeAiChatId}
               channelType={channelType}
               workspacesEnabled={workspacesEnabled}
               hasGithubUrl={hasGithubUrl}
               hasRepoPath={hasRepoPath}
+              onSwitchAiChat={(chatId) => {
+                onSwitchAiChat(chatId);
+                useAppUIStore.getState().setAddTabMenuOpen(false);
+              }}
+              onDeleteAiChat={onDeleteAiChat}
               onAddTab={(type) => {
                 onOpenViewTab(type);
                 useAppUIStore.getState().setAddTabMenuOpen(false);
