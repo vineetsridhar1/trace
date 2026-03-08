@@ -521,13 +521,16 @@ export function useWorkspaceActions({
     const chId = activeChannelIdRef.current;
     if (!chId) return;
 
+    // Capture channel values upfront so they remain stable across awaits
+    const chName = channelRef.current?.name ?? undefined;
+    const baseBranch = getChannelBaseBranch();
+
     // Check for existing orchestrator in this channel
     const existing = useWorkspaceStore
       .getState()
       .workspaces.find((w) => w.isOrchestrator && w.channelId === chId);
     if (existing) {
       // Open the existing orchestrator's thread
-      useThreadStore.getState().selectWorkspace(existing);
       onWorkspaceCreated(existing);
       return;
     }
@@ -564,7 +567,8 @@ export function useWorkspaceActions({
         prompt: orchestratorPrompt,
         repoPath,
         channelId: chId,
-        channelName: channelRef.current?.name ?? undefined,
+        channelName: chName,
+        baseBranch,
         isOrchestrator: true,
         userId: user?.id ?? undefined,
         model: runStore.selectedModel,

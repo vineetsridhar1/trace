@@ -82,9 +82,10 @@ async function runSetupScripts(
 
 function buildTraceContext(worktreePath: string, config: SpawnConfig): string {
   if (config.isOrchestrator) {
+    const branchInfo = config.baseBranch ? ` The target base branch is ${config.baseBranch}.` : '';
     return (
       `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
-      `You are an orchestrator running on the base branch at ${worktreePath}. You do not have your own worktree.`
+      `You are an orchestrator running on the base branch at ${worktreePath}. You do not have your own worktree.${branchInfo}`
     );
   }
   return (
