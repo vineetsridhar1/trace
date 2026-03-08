@@ -281,23 +281,29 @@ export function useWorkspaceActions({
         const repoPath = getChannelRepoPath();
         const baseBranch = options.baseBranch ?? getChannelBaseBranch();
         const agentType = runStore.selectedAgent;
+
+        // Auto-detect orchestrator from the workspace store so every caller
+        // is covered without having to pass the flag explicitly.
+        const isOrchestrator = options.isOrchestrator ||
+          (useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId)?.isOrchestrator ?? false);
+
         const result = await window.traceAPI.spawnAgent({
           agentType,
           workspaceId,
           prompt,
           repoPath,
-          creationCommands: options.creationCommands,
+          creationCommands: isOrchestrator ? undefined : options.creationCommands,
           resumeSessionId: options.resumeSessionId,
           filePaths: options.filePaths,
           model: options.model,
           effort: options.effort,
           systemInstructions: options.systemInstructions,
-          permissionMode: options.permissionMode,
+          permissionMode: isOrchestrator ? "ask" : options.permissionMode,
           baseBranch,
           branchPrefix: user?.githubUsername ?? undefined,
           channelId: activeChannelIdRef.current ?? undefined,
           channelName: channelRef.current?.name ?? undefined,
-          isOrchestrator: options.isOrchestrator,
+          isOrchestrator,
           userId: user?.id ?? undefined,
         });
 
@@ -308,7 +314,7 @@ export function useWorkspaceActions({
           return false;
         }
 
-        if (options.setHasWorktreeOnSuccess !== false) {
+        if (options.setHasWorktreeOnSuccess !== false && !isOrchestrator) {
           useThreadStore.getState().setHasWorktree(true);
         }
 
@@ -702,11 +708,12 @@ export function useWorkspaceActions({
       }
 
       // Document workspaces (PRD / tech-scope) don't need channel setup scripts
-      const isDocWs =
-        useWorkspaceStore
-          .getState()
-          .workspaces.find((w) => w.id === workspaceId)?.isProductDoc ?? false;
-      const setupCommands = isDocWs ? [] : getSetupCommands();
+      const pendingWs = useWorkspaceStore
+        .getState()
+        .workspaces.find((w) => w.id === workspaceId);
+      const isDocWs = pendingWs?.isProductDoc ?? false;
+      const isOrchestratorWs = pendingWs?.isOrchestrator ?? false;
+      const setupCommands = isDocWs || isOrchestratorWs ? [] : getSetupCommands();
       if (setupCommands.length > 0) {
         await updateWorkspaceStatus(workspaceId, "creation");
       }
@@ -742,6 +749,7 @@ export function useWorkspaceActions({
             : undefined,
         systemInstructions: instructionParts.join("\n\n"),
         permissionMode: planMode ? "plan" : undefined,
+        isOrchestrator: isOrchestratorWs || undefined,
       });
 
       if (!success && setupCommands.length > 0) {
@@ -772,10 +780,13 @@ export function useWorkspaceActions({
       },
     ) => {
       const isFollowUp = runConfig.followUp === true;
+      const isOrchestratorWs = useWorkspaceStore
+        .getState()
+        .workspaces.find((w) => w.id === workspaceId)?.isOrchestrator ?? false;
 
       // Follow-up runs skip setup commands and status transitions — the
       // worktree already exists and the message was already appended.
-      const creationCommands = isFollowUp ? [] : getSetupCommands();
+      const creationCommands = isFollowUp || isOrchestratorWs ? [] : getSetupCommands();
 
       if (!isFollowUp) {
         await updatePreviewForPendingRun(workspaceId, runConfig.prompt);
@@ -830,6 +841,7 @@ export function useWorkspaceActions({
             ? undefined
             : instructionParts.join("\n\n"),
           permissionMode,
+          isOrchestrator: isOrchestratorWs || undefined,
         },
       );
 
@@ -965,6 +977,7 @@ export function useWorkspaceActions({
           getEffortOptions(selectedAgent, selectedModel).length > 0
             ? selectedEffort
             : undefined,
+        isOrchestrator: selectedWorkspace.isOrchestrator || undefined,
       };
 
       // If this workspace was just picked up from a handoff, don't try to resume

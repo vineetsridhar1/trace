@@ -458,19 +458,23 @@ export const ThreadHeader = memo(function ThreadHeader({
                     Mark as merged
                   </button>
                 )}
-                <div className="my-1 h-px bg-surface-elevated" />
-                <button
-                  type="button"
-                  disabled={!selectedWorkspaceId}
-                  onClick={() => {
-                    onDeleteWorkspace();
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <FiTrash2 className="h-3 w-3" aria-hidden="true" />
-                  Delete workspace
-                </button>
+                {!isOrchestrator && (
+                  <>
+                    <div className="my-1 h-px bg-surface-elevated" />
+                    <button
+                      type="button"
+                      disabled={!selectedWorkspaceId}
+                      onClick={() => {
+                        onDeleteWorkspace();
+                        setMenuOpen(false);
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <FiTrash2 className="h-3 w-3" aria-hidden="true" />
+                      Delete workspace
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

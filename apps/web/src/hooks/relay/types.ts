@@ -332,6 +332,7 @@ export interface SpawnAgentParams {
   model?: string;
   effort?: string;
   planMode?: boolean;
+  isOrchestrator?: boolean;
 }
 
 export interface DetectAgentsResult {

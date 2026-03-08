@@ -41,6 +41,7 @@ export function useAgentRelay(): AgentRelayActions {
         model: params.model,
         effort: params.effort,
         planMode: params.planMode,
+        isOrchestrator: params.isOrchestrator,
       });
       return { success: result.success, error: result.error };
     },
