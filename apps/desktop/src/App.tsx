@@ -74,6 +74,7 @@ import {
 } from "./hooks/usePresence";
 import { usePresenceStore } from "./stores/presenceStore";
 import { ExpandableText } from "./components/thread-events/ExpandableText";
+import { useGetWorkspaceLazyQuery } from "./components/__generated__/ThreadLinkPreview.generated";
 
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
   mutation UpdateWorkspaceStatus(
@@ -515,6 +516,36 @@ function AppContent() {
   }, []);
   openWorkspaceRef.current = handleOpenWorkspace;
 
+  // ─── Fetch-and-open (handles merged/missing workspaces) ─────────────
+  const [executeGetWorkspace] = useGetWorkspaceLazyQuery();
+
+  const fetchAndOpenWorkspace = useCallback(
+    async (workspaceId: string) => {
+      const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
+      if (ws) {
+        handleOpenWorkspace(ws);
+        return;
+      }
+      try {
+        const { data } = await executeGetWorkspace({
+          variables: { id: workspaceId },
+          fetchPolicy: 'network-only',
+        });
+        if (data?.workspace) {
+          const fetched = data.workspace as Workspace;
+          useWorkspaceStore.getState().upsertWorkspace(fetched);
+          handleOpenWorkspace(fetched);
+        }
+      } catch (err) {
+        console.error('[fetchAndOpenWorkspace] failed:', err);
+      }
+    },
+    [executeGetWorkspace, handleOpenWorkspace],
+  );
+
+  const fetchAndOpenWorkspaceRef = useRef(fetchAndOpenWorkspace);
+  fetchAndOpenWorkspaceRef.current = fetchAndOpenWorkspace;
+
   // ─── Workspace actions (registers on agentRunStore) ────────────────
   useWorkspaceActions({
     updateWorkspaceStatus,
@@ -671,10 +702,7 @@ function AppContent() {
 
     // Re-activate thread when switching to a thread tab
     if (tab.type === 'thread' && tab.workspaceId) {
-      const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === tab.workspaceId);
-      if (ws) {
-        useThreadStore.getState().syncActions.openThreadPanel(ws);
-      }
+      void fetchAndOpenWorkspaceRef.current(tab.workspaceId);
     }
   }, [activeTabId, fetchBoard]);
 
@@ -779,10 +807,7 @@ function AppContent() {
   const handleOpenThreadLink = useCallback(
     (targetChannelId: string, workspaceId: string) => {
       if (targetChannelId === activeChannelId) {
-        const ws = useWorkspaceStore
-          .getState()
-          .workspaces.find((w) => w.id === workspaceId);
-        if (ws) handleOpenWorkspace(ws);
+        void fetchAndOpenWorkspace(workspaceId);
         return;
       }
       useAppUIStore
@@ -790,7 +815,7 @@ function AppContent() {
         .setPendingThreadOpen({ channelId: targetChannelId, workspaceId });
       performChannelSwitch(targetChannelId);
     },
-    [activeChannelId, handleOpenWorkspace, performChannelSwitch],
+    [activeChannelId, fetchAndOpenWorkspace, performChannelSwitch],
   );
 
   const handleJoinChannel = useCallback(
@@ -1091,10 +1116,9 @@ function AppContent() {
       workspaces.length === 0
     )
       return;
-    const ws = workspaces.find((w) => w.id === pending.workspaceId);
-    if (ws) handleOpenWorkspace(ws);
     useAppUIStore.getState().setPendingThreadOpen(null);
-  }, [workspaces, activeChannelId, handleOpenWorkspace]);
+    void fetchAndOpenWorkspaceRef.current(pending.workspaceId);
+  }, [workspaces, activeChannelId]);
 
   // Sync terminal selection with workspace selection, killing idle PTYs on navigate away
   const prevTerminalWorkspaceRef = useRef<string | null>(null);
