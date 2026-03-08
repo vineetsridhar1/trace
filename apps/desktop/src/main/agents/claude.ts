@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { runProcess } from "../process";
 import { ClaudeStreamParser } from "./claudeParser";
 import type {
@@ -125,6 +128,31 @@ export class ClaudeAdapter implements AgentAdapter {
       args.push("--effort", ctx.effort);
     }
 
+    // Write MCP config for Trace tools if channelId is available
+    if (ctx.channelId && ctx.serverUrl) {
+      const mcpConfigPath = path.join(
+        os.tmpdir(),
+        `trace-mcp-${ctx.workspaceId}.json`,
+      );
+      const mcpConfig = {
+        mcpServers: {
+          trace: {
+            command: "node",
+            args: [path.join(__dirname, "traceServer.js")],
+            env: {
+              TRACE_SERVER_URL: ctx.serverUrl,
+              TRACE_CHANNEL_ID: ctx.channelId,
+              TRACE_WORKSPACE_ID: ctx.workspaceId,
+              TRACE_MODEL: ctx.model || "opus",
+              TRACE_EFFORT: ctx.effort || "high",
+            },
+          },
+        },
+      };
+      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2));
+      args.push("--mcp-config", mcpConfigPath);
+    }
+
     args.push("--output-format", "stream-json", "--verbose");
     args.push("-p", ctx.prompt);
 
@@ -161,6 +189,21 @@ export class ClaudeAdapter implements AgentAdapter {
     if (parts.interactionMode === "plan") {
       sections.push(
         "Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.",
+      );
+    }
+
+    if (parts.hasMcpTools) {
+      sections.push(
+        `## Trace Workspace Management\n\n` +
+        `You have MCP tools to manage workspaces in Trace:\n\n` +
+        `- \`create_ticket\`: Create a new ticket/workspace for a sub-task. Use when you identify work that should run independently or in parallel. Set \`depends_on_current=true\` to queue it until your workspace merges.\n` +
+        `- \`list_tickets\`: List current tickets in the channel to see what's already being worked on.\n` +
+        `- \`get_ticket_status\`: Check a specific workspace's status.\n\n` +
+        `Use these when:\n` +
+        `- A task is large enough to benefit from parallel workstreams\n` +
+        `- You identify an independent sub-task (different files/features)\n` +
+        `- You want to queue follow-up work\n\n` +
+        `Do NOT create tickets for small sub-steps of your current task.`,
       );
     }
 

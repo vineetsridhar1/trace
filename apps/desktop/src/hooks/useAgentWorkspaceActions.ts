@@ -292,6 +292,7 @@ export function useWorkspaceActions({
           permissionMode: options.permissionMode,
           baseBranch,
           branchPrefix: user?.githubUsername ?? undefined,
+          channelId: activeChannelIdRef.current ?? undefined,
         });
 
         if (!result.success) {

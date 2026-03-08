@@ -278,6 +278,7 @@ export type Mutation = {
   setInstancePassword: Scalars['Boolean']['output'];
   setTicketDependencies: Workspace;
   setWorkspacePrUrl: Scalars['Boolean']['output'];
+  triggerWorkspaceRun: Scalars['Boolean']['output'];
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateInitialPrompt: CreateWorkspacePayload;
@@ -456,6 +457,13 @@ export type MutationsetTicketDependenciesArgs = {
 export type MutationsetWorkspacePrUrlArgs = {
   channelId: Scalars['ID']['input'];
   prUrl: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationtriggerWorkspaceRunArgs = {
+  channelId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
   workspaceId: Scalars['ID']['input'];
 };
 
@@ -1346,6 +1354,7 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   setInstancePassword?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationsetInstancePasswordArgs, 'instanceId'>>;
   setTicketDependencies?: Resolver<ResolversTypes['Workspace'], ParentType, ContextType, RequireFields<MutationsetTicketDependenciesArgs, 'channelId' | 'dependsOnWorkspaceIds' | 'runConfig' | 'workspaceId'>>;
   setWorkspacePrUrl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationsetWorkspacePrUrlArgs, 'channelId' | 'prUrl' | 'workspaceId'>>;
+  triggerWorkspaceRun?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationtriggerWorkspaceRunArgs, 'channelId' | 'runConfig' | 'workspaceId'>>;
   updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationupdateChannelArgs, 'id'>>;
   updateColumn?: Resolver<ResolversTypes['KanbanColumn'], ParentType, ContextType, RequireFields<MutationupdateColumnArgs, 'columnId'>>;
   updateInitialPrompt?: Resolver<ResolversTypes['CreateWorkspacePayload'], ParentType, ContextType, RequireFields<MutationupdateInitialPromptArgs, 'channelId' | 'text' | 'workspaceId'>>;

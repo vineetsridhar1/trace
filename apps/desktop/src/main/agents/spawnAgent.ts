@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   AGENT_INACTIVITY_TIMEOUT_MS,
@@ -213,6 +214,7 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
       systemInstructions,
       interactionMode: interactionMode,
       filePaths,
+      hasMcpTools: !!(config.channelId),
     };
     const wrappedSystemPrompt = adapter.wrapSystemPrompt
       ? adapter.wrapSystemPrompt(parts)
@@ -232,6 +234,8 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     effort,
     resumeSessionId,
     filePaths,
+    channelId: config.channelId,
+    serverUrl: SERVER_URL,
   });
 
   // Build env: apply envFilter if provided, otherwise pass full process.env
@@ -325,6 +329,13 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
       workspaceId,
       `close code=${code} durationMs=${Date.now() - startedAt} stderrLen=${stderrBuffer.length}`,
     );
+
+    // Clean up temp MCP config file
+    try {
+      fs.unlinkSync(path.join(os.tmpdir(), `trace-mcp-${workspaceId}.json`));
+    } catch {
+      // File may not exist if MCP wasn't configured
+    }
     // Only remove from the map if this process is still the registered one.
     // A replacement spawn may have already inserted a new child process, and
     // blindly deleting would remove the *new* entry.

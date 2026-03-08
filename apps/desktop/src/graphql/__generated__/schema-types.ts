@@ -263,6 +263,7 @@ export type Mutation = {
   setInstancePassword: Scalars['Boolean']['output'];
   setTicketDependencies: Workspace;
   setWorkspacePrUrl: Scalars['Boolean']['output'];
+  triggerWorkspaceRun: Scalars['Boolean']['output'];
   updateChannel: Channel;
   updateColumn: KanbanColumn;
   updateInitialPrompt: CreateWorkspacePayload;
@@ -441,6 +442,13 @@ export type MutationSetTicketDependenciesArgs = {
 export type MutationSetWorkspacePrUrlArgs = {
   channelId: Scalars['ID']['input'];
   prUrl: Scalars['String']['input'];
+  workspaceId: Scalars['ID']['input'];
+};
+
+
+export type MutationTriggerWorkspaceRunArgs = {
+  channelId: Scalars['ID']['input'];
+  runConfig: Scalars['JSON']['input'];
   workspaceId: Scalars['ID']['input'];
 };
 

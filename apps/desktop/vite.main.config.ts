@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   build: {
     rollupOptions: {
-      external: ['node-pty', 'better-sqlite3', 'bufferutil', 'utf-8-validate'],
+      external: ['node-pty', 'better-sqlite3', 'bufferutil', 'utf-8-validate', '@modelcontextprotocol/sdk', 'zod'],
     },
   },
 });

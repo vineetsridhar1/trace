@@ -11,6 +11,7 @@ extend type Mutation {
   removeTicketDependency(channelId: ID!, workspaceId: ID!, dependsOnWorkspaceId: ID!): Boolean!
   updateQueuedRunConfig(workspaceId: ID!, runConfig: JSON!): Boolean!
   importTicketsToProject(channelId: ID!, tickets: [ImportTicketInput!]!, runConfig: JSON!): [ImportedTicketResult!]!
+  triggerWorkspaceRun(channelId: ID!, workspaceId: ID!, runConfig: JSON!): Boolean!
 }
 
 input ImportTicketInput {
