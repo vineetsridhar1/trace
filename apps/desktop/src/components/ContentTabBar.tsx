@@ -17,6 +17,7 @@ import type { ChannelType } from '../types';
 import { AddTabMenu } from './AddTabMenu';
 import { Tooltip } from './Tooltip';
 import { useAppUIStore } from '../stores/appUIStore';
+import { useTerminalStore } from '../stores/terminalStore';
 
 // ─── Icon map ──────────────────────────────────────────────────────────
 const TAB_ICONS: Record<GlobalTabType, typeof FiMessageSquare> = {
@@ -62,6 +63,7 @@ export function ContentTabBar({
   onOpenViewTab,
 }: ContentTabBarProps) {
   const addMenuOpen = useAppUIStore((s) => s.addTabMenuOpen);
+  const ptyProcesses = useTerminalStore((s) => s.ptyProcesses);
   const tabRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   // Scroll the active tab into view when it changes
@@ -125,6 +127,20 @@ export function ContentTabBar({
               )}
               <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="truncate max-w-[160px]">{tab.label}</span>
+              {(() => {
+                if (tab.type === 'terminal' && tab.channelId) {
+                  const processInfo = ptyProcesses[`channel-terminal-${tab.channelId}`];
+                  if (processInfo && !processInfo.isShellOnly) {
+                    return (
+                      <span className="flex items-center gap-1 text-[10px] text-green-400 font-mono">
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                        {processInfo.processName}
+                      </span>
+                    );
+                  }
+                }
+                return null;
+              })()}
               <span
                 role="button"
                 tabIndex={-1}

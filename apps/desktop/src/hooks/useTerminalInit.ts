@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTerminalStore } from '../stores/terminalStore';
+import { useTabStore } from '../stores/tabStore';
 
 export function useTerminalInit() {
   useEffect(() => {
@@ -17,6 +18,13 @@ export function useTerminalInit() {
       for (const [, state] of allTerminals) {
         for (const t of state.terminals) {
           allIds.push(t.terminalId);
+        }
+      }
+      // Also include channel terminal IDs from open terminal tabs
+      const globalTabs = useTabStore.getState().tabs;
+      for (const tab of globalTabs) {
+        if (tab.type === 'terminal' && tab.channelId) {
+          allIds.push(`channel-terminal-${tab.channelId}`);
         }
       }
       if (allIds.length === 0) {

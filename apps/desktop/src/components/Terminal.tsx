@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTerminal } from "../hooks/useTerminal";
 import { useShortcutStore } from "../stores/shortcutStore";
+import { useTerminalStore } from "../stores/terminalStore";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
@@ -9,6 +10,8 @@ interface TerminalProps {
 }
 
 export function Terminal({ terminalId, cwd }: TerminalProps) {
+  const processInfo = useTerminalStore((s) => s.ptyProcesses[terminalId]);
+  const hasRunningProcess = processInfo && !processInfo.isShellOnly;
   const [fontFamily, setFontFamily] = useState<string | undefined>();
   useEffect(() => {
     window.traceAPI
@@ -128,6 +131,12 @@ export function Terminal({ terminalId, cwd }: TerminalProps) {
     >
       <div className="flex items-center border-b border-edge px-3 py-1.5">
         <h4 className="text-xs font-semibold text-muted">Terminal</h4>
+        {hasRunningProcess && (
+          <span className="ml-2 flex items-center gap-1 text-[10px] text-green-400 font-mono">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+            {processInfo.processName}
+          </span>
+        )}
       </div>
       <div ref={containerRef} className="min-h-0 flex-1 p-1" tabIndex={-1} />
     </div>
