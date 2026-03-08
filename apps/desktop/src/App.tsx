@@ -664,6 +664,14 @@ function AppContent() {
     if (!tab) return;
     if (tab.channelId && tab.channelId !== activeChannelIdRef.current) {
       performChannelSwitchRef.current(tab.channelId);
+      // Thread tabs: workspaces were just cleared by the channel switch, so use
+      // the pending mechanism to open the thread once workspaces reload.
+      if (tab.type === 'thread' && tab.workspaceId) {
+        useAppUIStore.getState().setPendingThreadOpen({
+          channelId: tab.channelId,
+          workspaceId: tab.workspaceId,
+        });
+      }
     }
   }, [activeTabId]);
 
