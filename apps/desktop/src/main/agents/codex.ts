@@ -302,6 +302,11 @@ export class CodexAdapter implements AgentAdapter {
     supportsPlanMode: true,
     models: [
       {
+        value: "gpt-5.4-codex",
+        label: "gpt-5.4-codex",
+        effortOptions: CodexAdapter.REASONING_OPTIONS,
+      },
+      {
         value: "gpt-5.3-codex",
         label: "gpt-5.3-codex",
         effortOptions: CodexAdapter.REASONING_OPTIONS,
@@ -327,7 +332,7 @@ export class CodexAdapter implements AgentAdapter {
         effortOptions: CodexAdapter.REASONING_OPTIONS,
       },
     ],
-    defaultModel: "gpt-5.3-codex",
+    defaultModel: "gpt-5.4-codex",
     effortLabel: "Reasoning",
   };
 
