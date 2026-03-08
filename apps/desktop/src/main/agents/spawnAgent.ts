@@ -249,6 +249,13 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
           .filter(Boolean)
           .join("\n\n");
     finalPrompt = wrappedSystemPrompt + "\n\n" + prompt;
+  } else if (filePaths && filePaths.length > 0) {
+    // For resumed sessions, inject image file references into the prompt
+    // so the agent knows to read the attached images
+    const fileList = filePaths.map((p) => `- ${p}`).join("\n");
+    finalPrompt =
+      `<trace-internal>\nThe user has referenced the following files. Read them to understand the context:\n${fileList}\n</trace-internal>\n\n` +
+      prompt;
   }
 
   // Build the agent-specific command
