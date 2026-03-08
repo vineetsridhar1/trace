@@ -59,6 +59,7 @@ export function getDefaultViewForChannel(
 interface AppUIState {
   middlePanelView: MiddlePanelView;
   channelWidth: number;
+  workspaceSidebarWidth: number;
   dragging: DragTarget;
   isFullscreen: boolean;
   savedWidths: { channel: number; thread: number };
@@ -84,6 +85,7 @@ interface AppUIState {
   setMiddlePanelView: (view: MiddlePanelView) => void;
   setChannelView: (channelId: string, view: MiddlePanelView) => void;
   setChannelWidth: (width: number | ((prev: number) => number)) => void;
+  setWorkspaceSidebarWidth: (width: number) => void;
   setDragging: (target: DragTarget) => void;
   setIsFullscreen: (value: boolean) => void;
   setSavedWidths: (widths: { channel: number; thread: number }) => void;
@@ -112,6 +114,7 @@ const initialMiddlePanelView: MiddlePanelView =
 export const useAppUIStore = create<AppUIState>((set) => ({
   middlePanelView: initialMiddlePanelView,
   channelWidth: 220,
+  workspaceSidebarWidth: Number(localStorage.getItem('trace:workspaceSidebarWidth')) || 280,
   dragging: null,
   isFullscreen: false,
   savedWidths: { channel: 220, thread: 0 },
@@ -147,6 +150,8 @@ export const useAppUIStore = create<AppUIState>((set) => ({
     set((state) => ({
       channelWidth: typeof width === 'function' ? width(state.channelWidth) : width,
     })),
+
+  setWorkspaceSidebarWidth: (width) => set({ workspaceSidebarWidth: width }),
 
   setDragging: (target) => set({ dragging: target }),
   setIsFullscreen: (value) => set({ isFullscreen: value }),

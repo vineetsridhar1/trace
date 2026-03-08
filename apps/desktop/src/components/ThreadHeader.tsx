@@ -12,7 +12,6 @@ import {
   FiMoreVertical,
   FiShare2,
   FiTrash2,
-  FiX,
 } from "react-icons/fi";
 import { Tooltip } from "./Tooltip";
 import type { TicketStatus } from "../types";
@@ -28,7 +27,6 @@ interface ThreadHeaderProps {
   hasWorktree: boolean | null;
   worktreePath: string | null;
   isFullscreen: boolean;
-  onClose: () => void;
   onDeleteWorkspace: () => void;
   onMarkMerged: () => void;
   onEnterFullscreen: () => void;
@@ -43,6 +41,8 @@ interface ThreadHeaderProps {
   sessions: SessionInfo[];
   activeSessionId: string | null;
   onSwitchSession: (sessionId: string) => Promise<void>;
+  ticketTitle: string | null;
+  user: { name: string; avatarUrl: string | null } | null;
 }
 
 export const ThreadHeader = memo(function ThreadHeader({
@@ -52,7 +52,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   hasWorktree,
   worktreePath,
   isFullscreen,
-  onClose,
   onDeleteWorkspace,
   onMarkMerged,
   onEnterFullscreen,
@@ -67,6 +66,8 @@ export const ThreadHeader = memo(function ThreadHeader({
   sessions,
   activeSessionId,
   onSwitchSession,
+  ticketTitle,
+  user,
 }: ThreadHeaderProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -171,23 +172,30 @@ export const ThreadHeader = memo(function ThreadHeader({
       id="thread-header"
       className="flex items-center justify-between border-b border-edge px-4 py-3"
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
+        {user?.avatarUrl ? (
+          <img
+            src={user.avatarUrl}
+            alt={user.name}
+            className="h-5 w-5 flex-shrink-0 rounded-full"
+          />
+        ) : user ? (
+          <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface-elevated text-[10px] font-bold text-muted">
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+        ) : null}
+        {ticketTitle && (
+          <span className="truncate max-w-[80%] text-xs font-medium text-primary">
+            {ticketTitle}
+          </span>
+        )}
         <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CONFIG[workspaceStatus].bgColor} ${STATUS_CONFIG[workspaceStatus].color}`}
+          className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CONFIG[workspaceStatus].bgColor} ${STATUS_CONFIG[workspaceStatus].color}`}
         >
           {STATUS_CONFIG[workspaceStatus].label}
         </span>
-        {hasWorktree === false &&
-          workspaceStatus !== "pending" &&
-          workspaceStatus !== "handed_off" &&
-          workspaceStatus !== "creation" &&
-          selectedWorkspaceId && (
-            <span className="rounded bg-surface-elevated px-1.5 py-0.5 text-[11px] text-muted">
-              Worktree deleted
-            </span>
-          )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {prUrl
           ? (() => {
               const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
@@ -213,7 +221,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                   <button
                     type="button"
                     onClick={() => window.open(prUrl, "_blank")}
-                    className={`inline-flex items-center gap-1.5 cursor-pointer rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-white/5 ${colorClass}`}
+                    className={`inline-flex whitespace-nowrap items-center gap-1.5 cursor-pointer rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-white/5 ${colorClass}`}
                   >
                     <FiGitPullRequest className="h-3 w-3" aria-hidden="true" />
                     {prNumber ? `PR #${prNumber}` : "PR"}
@@ -230,7 +238,7 @@ export const ThreadHeader = memo(function ThreadHeader({
                 <button
                   type="button"
                   onClick={onCreatePR}
-                  className="inline-flex items-center gap-1.5 cursor-pointer rounded-md border border-[#565f89]/50 px-2 py-1 text-[11px] font-medium text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300 hover:bg-white/5"
+                  className="inline-flex whitespace-nowrap items-center gap-1.5 cursor-pointer rounded-md border border-[#565f89]/50 px-2 py-1 text-[11px] font-medium text-[#565f89] transition-colors hover:border-violet-400/50 hover:text-violet-300 hover:bg-white/5"
                 >
                   <FiGitPullRequest className="h-3 w-3" aria-hidden="true" />
                   Create PR
@@ -459,16 +467,6 @@ export const ThreadHeader = memo(function ThreadHeader({
             )}
           </div>
         )}
-        <Tooltip text="Close thread" position="bottom">
-          <button
-            id="thread-close"
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer text-muted hover:text-primary"
-          >
-            <FiX className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </Tooltip>
       </div>
     </div>
   );

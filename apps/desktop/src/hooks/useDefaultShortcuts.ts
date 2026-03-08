@@ -8,6 +8,7 @@ import { useAgentRunStore } from "../stores/agentRunStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useCommandPaletteStore } from "../stores/commandPaletteStore";
 import { usePanelLayoutStore } from "../stores/panelLayoutStore";
+import { useTabStore } from "../stores/tabStore";
 import { useAuth } from "../context/AuthContext";
 import type { Channel, Workspace, TicketStatus } from "../types";
 import { STATUS_GROUP_ORDER } from "../components/MessageItem";
@@ -49,12 +50,14 @@ interface DefaultShortcutsOptions {
   serverChannels: Channel[];
   handleSwitchChannel: (id: string) => void;
   handleOpenWorkspace: (workspace: Workspace) => void;
+  handleCreateAiChat?: () => void;
 }
 
 export function useDefaultShortcuts({
   serverChannels,
   handleSwitchChannel,
   handleOpenWorkspace,
+  handleCreateAiChat,
 }: DefaultShortcutsOptions): void {
   // Keep refs so dynamic shortcuts always see latest closures
   const channelsRef = useRef(serverChannels);
@@ -63,6 +66,8 @@ export function useDefaultShortcuts({
   switchChannelRef.current = handleSwitchChannel;
   const openWorkspaceRef = useRef(handleOpenWorkspace);
   openWorkspaceRef.current = handleOpenWorkspace;
+  const createAiChatRef = useRef(handleCreateAiChat);
+  createAiChatRef.current = handleCreateAiChat;
   const { user: authUser } = useAuth();
   const authUserRef = useRef(authUser);
   authUserRef.current = authUser;
@@ -338,4 +343,64 @@ export function useDefaultShortcuts({
     },
     { label: "Close modal", category: "general", context: "modal-open" },
   );
+
+  // ─── Global Tab Shortcuts ──────────────────────────────────────────
+  useHotkey(
+    "tabs.close",
+    "mod+w",
+    () => {
+      const { activeTabId } = useTabStore.getState();
+      if (activeTabId) useTabStore.getState().closeTab(activeTabId);
+    },
+    { label: "Close tab", category: "navigation", context: "global" },
+  );
+
+  useHotkey(
+    "tabs.new-ai-chat",
+    "mod+shift+c",
+    () => {
+      createAiChatRef.current?.();
+    },
+    { label: "New AI chat", category: "creation", context: "global" },
+  );
+
+  useEffect(() => {
+    const store = useShortcutStore.getState();
+
+    store.register({
+      id: "tabs.next",
+      keys: "ctrl+tab",
+      label: "Next tab",
+      category: "navigation",
+      context: "global",
+      action: () => {
+        const { tabs, activeTabId } = useTabStore.getState();
+        if (tabs.length <= 1) return;
+        const currentIdx = tabs.findIndex((t) => t.id === activeTabId);
+        const nextIdx = (currentIdx + 1) % tabs.length;
+        useTabStore.getState().setActiveTab(tabs[nextIdx].id);
+      },
+    });
+
+    store.register({
+      id: "tabs.prev",
+      keys: "ctrl+shift+tab",
+      label: "Previous tab",
+      category: "navigation",
+      context: "global",
+      action: () => {
+        const { tabs, activeTabId } = useTabStore.getState();
+        if (tabs.length <= 1) return;
+        const currentIdx = tabs.findIndex((t) => t.id === activeTabId);
+        const prevIdx = (currentIdx - 1 + tabs.length) % tabs.length;
+        useTabStore.getState().setActiveTab(tabs[prevIdx].id);
+      },
+    });
+
+    return () => {
+      const s = useShortcutStore.getState();
+      s.unregister("tabs.next");
+      s.unregister("tabs.prev");
+    };
+  }, []);
 }

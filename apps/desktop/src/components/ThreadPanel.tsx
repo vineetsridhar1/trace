@@ -77,7 +77,7 @@ const HANDOFF_ALLOWED_STATUSES = new Set([
   "creation",
 ]);
 
-export function ThreadPanel() {
+export function ThreadPanel({ asMainContent = false }: { asMainContent?: boolean }) {
   const { activeChannelId, enrichedActiveChannel, enrichedChannels } =
     useChannelContext();
 
@@ -246,15 +246,6 @@ export function ThreadPanel() {
   const savedWidthsRef = useRef({ channel: 220, thread: 0 });
 
   // ─── Callbacks ──────────────────────────────────────────────────
-  const handleClose = useCallback(() => {
-    if (useAppUIStore.getState().isFullscreen) {
-      useAppUIStore.getState().setIsFullscreen(false);
-      useAppUIStore.getState().setChannelWidth(savedWidthsRef.current.channel);
-      return;
-    }
-    useThreadStore.getState().closeThreadPanel();
-  }, []);
-
   const handleEnterFullscreen = useCallback(async () => {
     const wsId = useThreadStore.getState().selectedWorkspaceId;
     if (!wsId || !repoPath) return;
@@ -620,9 +611,11 @@ export function ThreadPanel() {
 
   const isOpen = selectedWorkspaceId !== null;
 
+  const fillMode = isFullscreen || asMainContent;
+
   return (
     <>
-      {!isFullscreen && isOpen && (
+      {!fillMode && isOpen && (
         <div
           className={`resize-handle ${dragging === "right" ? "active" : ""}`}
           onMouseDown={(e) => {
@@ -634,9 +627,9 @@ export function ThreadPanel() {
 
       <div
         id="thread-panel"
-        className={`flex shrink-0 min-h-0 flex-col overflow-hidden ${isOpen ? "border-l border-edge" : ""} bg-surface-deep ${dragging ? "" : "panel-animate"}`}
+        className={`flex min-h-0 flex-col overflow-hidden ${fillMode ? "" : "shrink-0"} ${!fillMode && isOpen ? "border-l border-edge" : ""} bg-surface-deep ${dragging ? "" : "panel-animate"}`}
         style={
-          isFullscreen
+          fillMode
             ? { flex: "1 1 0%" }
             : { width: isOpen ? `${threadWidth}px` : 0 }
         }
@@ -648,7 +641,6 @@ export function ThreadPanel() {
           hasWorktree={hasWorktree}
           worktreePath={worktreePath}
           isFullscreen={isFullscreen}
-          onClose={handleClose}
           onDeleteWorkspace={() => {
             void handleDeleteWorkspace();
           }}
@@ -669,6 +661,8 @@ export function ThreadPanel() {
           sessions={sessions}
           activeSessionId={activeSessionId}
           onSwitchSession={switchSession}
+          ticketTitle={ticket?.title ?? selectedWorkspace?.preview ?? null}
+          user={selectedWorkspace?.user ?? null}
         />
 
         <div

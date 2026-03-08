@@ -21,20 +21,16 @@ import type {
   KanbanColumn as KanbanColumnType,
   KanbanTicket,
   MiddlePanelView,
-  TicketStatus,
 } from "../types";
 import { KanbanBoard } from "./KanbanBoard";
-import { WorkspaceInput } from "./WorkspaceInput";
-import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from "./MessageItem";
+import { MessageItem } from "./MessageItem";
 import { ChatEmptyState } from "./ChatEmptyState";
-import { ThreadPanel } from "./ThreadPanel";
 import { ThreadLinkPreview } from "./ThreadLinkPreview";
 import { PullRequestListView } from "./PullRequestListView";
 import { TicketDetailModal } from "./TicketDetailModal";
 import { useChannelMessages } from "../hooks/useChannelMessages";
 import { useAuth } from "../context/AuthContext";
 import { useAgentRunStore } from "../stores/agentRunStore";
-import { usePresenceStore } from "../stores/presenceStore";
 
 const THREAD_LINK_RE =
   /https?:\/\/[^\s/]+\/thread\/([a-f0-9-]+)\/([a-f0-9-]+)/g;
@@ -85,87 +81,6 @@ function renderMessageContent(
   return segments;
 }
 
-interface StatusGroup {
-  status: TicketStatus;
-  workspaces: Workspace[];
-}
-
-function CollapsibleStatusGroup({
-  status,
-  children,
-  count,
-  displayCount,
-  onExpand,
-  loading,
-}: {
-  status: TicketStatus;
-  children: React.ReactNode;
-  count: number;
-  displayCount?: number;
-  onExpand?: () => void;
-  loading?: boolean;
-}) {
-  const [open, setOpen] = useState(status !== "merged");
-  const config = STATUS_CONFIG[status];
-
-  return (
-    <div>
-      <button
-        type="button"
-        className="flex w-full cursor-pointer items-center gap-1.5 px-3 py-1.5 hover:bg-surface-elevated/50 transition-colors"
-        onClick={() => {
-          const willOpen = !open;
-          setOpen(willOpen);
-          if (willOpen && onExpand) onExpand();
-        }}
-      >
-        <FiChevronRight
-          className={`h-3 w-3 text-muted transition-transform duration-150 ${open ? "rotate-90" : ""}`}
-        />
-        <div
-          className={`h-2 w-2 flex-shrink-0 rounded-full ${config.color} bg-current`}
-        />
-        <span
-          className={`text-[11px] font-semibold uppercase tracking-wide ${config.color}`}
-        >
-          {config.label}
-        </span>
-        <span className="rounded-full bg-surface-elevated px-1.5 py-0.5 text-[10px] font-medium text-muted">
-          {displayCount ?? count}
-        </span>
-      </button>
-      <div
-        className="grid transition-[grid-template-rows] duration-200 ease-out"
-        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
-      >
-        <div className="overflow-hidden">
-          {loading ? (
-            <div className="flex flex-col gap-1 px-1 py-2">
-              {Array.from(
-                { length: Math.min(displayCount ?? 3, 3) },
-                (_, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5"
-                  >
-                    <div className="h-8 w-8 flex-shrink-0 rounded-full bg-[#292e42] animate-pulse" />
-                    <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-                      <div className="h-3.5 w-3/5 rounded bg-[#292e42] animate-pulse" />
-                      <div className="h-3 w-4/5 rounded bg-[#292e42] animate-pulse" />
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-          ) : (
-            children
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function WorkspaceListSkeleton() {
   return (
     <div className="flex flex-col gap-1 px-1 py-2">
@@ -214,10 +129,6 @@ interface MessagePanelProps {
   onPullPR?: (pr: PullRequest) => void;
   pullingPRNumbers?: Set<number>;
   workspacesLoading?: boolean;
-  mergedCount?: number;
-  mergedWorkspacesLoaded?: boolean;
-  mergedWorkspacesLoading?: boolean;
-  onExpandMerged?: () => void;
 }
 
 export function MessagePanel({
@@ -246,10 +157,6 @@ export function MessagePanel({
   onPullPR,
   pullingPRNumbers,
   workspacesLoading,
-  mergedCount,
-  mergedWorkspacesLoaded,
-  mergedWorkspacesLoading,
-  onExpandMerged,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<
     "list" | "board" | "graph"
@@ -258,10 +165,7 @@ export function MessagePanel({
     null,
   );
   const [showMyTicketsOnly, setShowMyTicketsOnly] = useState(false);
-  const feedListRef = useRef<HTMLDivElement | null>(null);
   const { user: authUser } = useAuth();
-  const presenceByWorkspace = usePresenceStore((s) => s.presenceByWorkspace);
-
   const filteredKanbanColumns = useMemo(() => {
     if (!showMyTicketsOnly || !authUser?.id) return kanbanColumns;
     return kanbanColumns.map((col) => ({
@@ -287,65 +191,6 @@ export function MessagePanel({
     [workspaces],
   );
 
-  const groupedWorkspaces = useMemo(() => {
-    const buckets = new Map<TicketStatus, Workspace[]>();
-    for (const ws of workspaces) {
-      if (ws.isProductDoc) continue; // product docs go in the Documents tab
-      let status = (ws.status ?? "pending") as TicketStatus;
-      // "completed" is a visual sub-state of "in_progress" — group them together
-      if (status === "completed") status = "in_progress";
-      let bucket = buckets.get(status);
-      if (!bucket) {
-        bucket = [];
-        buckets.set(status, bucket);
-      }
-      bucket.push(ws);
-    }
-
-    const currentUserId = authUser?.id;
-    const groups: StatusGroup[] = [];
-    for (const status of STATUS_GROUP_ORDER) {
-      const items = buckets.get(status);
-      if (items && items.length > 0) {
-        if (currentUserId) {
-          items.sort((a, b) => {
-            const aOwn = a.userId === currentUserId ? 0 : 1;
-            const bOwn = b.userId === currentUserId ? 0 : 1;
-            return aOwn - bOwn;
-          });
-        }
-        groups.push({ status, workspaces: items });
-      } else if (status === "merged" && mergedCount && mergedCount > 0) {
-        // Show collapsed merged header even when merged workspaces aren't loaded yet
-        groups.push({ status, workspaces: [] });
-      }
-    }
-    return groups;
-  }, [workspaces, authUser?.id, mergedCount]);
-
-  const nearBottomRef = useRef(true);
-  const prevWorkspaceCountRef = useRef(0);
-
-  useEffect(() => {
-    const prevCount = prevWorkspaceCountRef.current;
-    const currCount = workspaces.length;
-    prevWorkspaceCountRef.current = currCount;
-
-    const el = feedListRef.current;
-    if (!el) return;
-
-    if (prevCount === 0 || nearBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [workspaces]);
-
-  const handleFeedScroll = useCallback(() => {
-    const el = feedListRef.current;
-    if (!el) return;
-    nearBottomRef.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-  }, []);
-
   const handleBoardClickTicket = useCallback((ticket: KanbanTicket) => {
     setSelectedTicket(ticket);
   }, []);
@@ -364,60 +209,6 @@ export function MessagePanel({
     },
     [workspaces, onOpenWorkspace],
   );
-
-  // Build workspace → shortcut index for keyboard navigation
-  const workspaceShortcutMap = useMemo(() => {
-    const map = new Map<string, number>();
-    let idx = 1;
-    for (const group of groupedWorkspaces) {
-      for (const ws of group.workspaces) {
-        map.set(ws.id, idx);
-        idx++;
-      }
-    }
-    return map;
-  }, [groupedWorkspaces]);
-
-  const renderGroupedWorkspaces = (showDelete: boolean) =>
-    groupedWorkspaces.map((group) => (
-      <CollapsibleStatusGroup
-        key={group.status}
-        status={group.status}
-        count={group.workspaces.length}
-        displayCount={
-          group.status === "merged" && !mergedWorkspacesLoaded
-            ? mergedCount
-            : undefined
-        }
-        onExpand={
-          group.status === "merged" && !mergedWorkspacesLoaded
-            ? onExpandMerged
-            : undefined
-        }
-        loading={group.status === "merged" && mergedWorkspacesLoading}
-      >
-        {group.workspaces.map((workspace) => (
-          <MessageItem
-            key={workspace.id}
-            workspace={workspace}
-            ticket={ticketByWorkspaceId.get(workspace.id) ?? null}
-            isSelected={workspace.id === selectedWorkspaceId}
-            needsAttention={attentionWorkspaceIds.has(workspace.id)}
-            onOpenWorkspace={onOpenWorkspace}
-            onDeleteWorkspace={showDelete ? onDeleteWorkspace : undefined}
-            onMarkMerged={onMarkMerged}
-            channelId={channelId}
-            hasRunningProcess={workspacesWithRunningProcesses?.has(
-              workspace.id,
-            )}
-            dimmed={workspace.status === "merged"}
-            activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
-            shortcutIndex={workspaceShortcutMap.get(workspace.id)}
-            viewers={presenceByWorkspace.get(workspace.id)}
-          />
-        ))}
-      </CollapsibleStatusGroup>
-    ));
 
   // Channel messaging
   const { messages: chatMessages, sendMessage: sendChatMessage } =
@@ -745,62 +536,32 @@ export function MessagePanel({
           pullingPRNumbers={pullingPRNumbers ?? new Set()}
         />
       ) : middlePanelView === "documents" ? (
-        <div className="flex min-h-0 flex-1">
-          {!(isFullscreen && selectedWorkspaceId) && (
-            <div
-              className="flex min-h-0 flex-1 flex-col"
-              style={{ minWidth: 200 }}
-            >
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2">
-                {workspacesLoading && documentWorkspaces.length === 0 ? (
-                  <WorkspaceListSkeleton />
-                ) : documentWorkspaces.length === 0 ? (
-                  <div className="flex flex-1 items-center justify-center text-sm text-muted">
-                    No documents yet
-                  </div>
-                ) : (
-                  documentWorkspaces.map((workspace) => (
-                    <MessageItem
-                      key={workspace.id}
-                      workspace={workspace}
-                      ticket={ticketByWorkspaceId.get(workspace.id) ?? null}
-                      isSelected={workspace.id === selectedWorkspaceId}
-                      needsAttention={attentionWorkspaceIds.has(workspace.id)}
-                      onOpenWorkspace={onOpenWorkspace}
-                      onDeleteWorkspace={onDeleteWorkspace}
-                      hasRunningProcess={workspacesWithRunningProcesses?.has(workspace.id)}
-                      activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
-                    />
-                  ))
-                )}
-              </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2">
+          {workspacesLoading && documentWorkspaces.length === 0 ? (
+            <WorkspaceListSkeleton />
+          ) : documentWorkspaces.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-muted">
+              No documents yet
             </div>
+          ) : (
+            documentWorkspaces.map((workspace) => (
+              <MessageItem
+                key={workspace.id}
+                workspace={workspace}
+                ticket={ticketByWorkspaceId.get(workspace.id) ?? null}
+                isSelected={workspace.id === selectedWorkspaceId}
+                needsAttention={attentionWorkspaceIds.has(workspace.id)}
+                onOpenWorkspace={onOpenWorkspace}
+                onDeleteWorkspace={onDeleteWorkspace}
+                hasRunningProcess={workspacesWithRunningProcesses?.has(workspace.id)}
+                activelyRunning={activeRunWorkspaceIds?.has(workspace.id)}
+              />
+            ))
           )}
-          <ThreadPanel />
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1">
-          {!(isFullscreen && selectedWorkspaceId) && (
-            <div
-              className="flex min-h-0 flex-1 flex-col"
-              style={{ minWidth: 200 }}
-            >
-              <div
-                id="workspaces-list"
-                ref={feedListRef}
-                onScroll={handleFeedScroll}
-                className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
-              >
-                {workspacesLoading && workspaces.length === 0 ? (
-                  <WorkspaceListSkeleton />
-                ) : (
-                  renderGroupedWorkspaces(false)
-                )}
-              </div>
-              <WorkspaceInput />
-            </div>
-          )}
-          <ThreadPanel />
+        <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
+          Use the workspace sidebar to browse workspaces
         </div>
       )}
       {selectedTicket && (

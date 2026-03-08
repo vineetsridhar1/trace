@@ -461,7 +461,7 @@ export type TicketStatus =
   | "review"
   | "handed_off";
 export type SessionStatus = "idle" | "loading" | "ready" | "empty" | "error";
-export type DragTarget = "left" | "right" | null;
+export type DragTarget = "left" | "right" | "workspace-sidebar" | null;
 export type ProductDocMode = "prd" | "tech-scope" | "tickets";
 export type MiddlePanelView =
   | "chat"

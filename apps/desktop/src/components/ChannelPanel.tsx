@@ -1,6 +1,8 @@
 import { Reorder } from 'framer-motion';
 import { FiPlus, FiBriefcase, FiMessageCircle, FiTrash2, FiHash, FiLayers, FiFolder, FiChevronRight, FiFileText, FiSettings } from 'react-icons/fi';
 import type { AiChat, Channel, DragTarget, LocalChannelConfig, Server, TicketStatus } from '../types';
+import { TAB_LABELS, VIEW_TAB_TYPES, isViewTabAvailable } from '../stores/tabStore';
+import type { GlobalTabType } from '../stores/tabStore';
 import { Tooltip } from './Tooltip';
 import { useSidebarPrefs, type SidebarSectionId } from '../hooks/useSidebarPrefs';
 import { ServerSwitcher } from './ServerSwitcher';
@@ -16,6 +18,7 @@ const SECTION_CONFIG: Record<SidebarSectionId, { icon: typeof FiHash; label: str
   'my-workspaces': { icon: FiBriefcase, label: 'My Workspaces' },
   'ai-chats': { icon: FiMessageCircle, label: 'AI Chats' },
 };
+
 
 function MyWorkspacesContent({ activeServerId, onOpenWorkspaceLink }: { activeServerId: string | null; onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void }) {
   const { workspaces, loading } = useMyWorkspaces(activeServerId);
@@ -86,6 +89,7 @@ interface ChannelPanelProps {
   onStartDrag: () => void;
   onNewProductDoc: () => void;
   onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void;
+  onOpenViewTab: (viewType: GlobalTabType) => void;
 }
 
 export function ChannelPanel({
@@ -110,6 +114,7 @@ export function ChannelPanel({
   onStartDrag,
   onNewProductDoc,
   onOpenWorkspaceLink,
+  onOpenViewTab,
   unreadCounts = {},
   localConfigs = {},
 }: ChannelPanelProps) {
@@ -118,13 +123,27 @@ export function ChannelPanel({
   const projectChannels = channels.filter((c) => c.type === 'project');
   const { sectionOrder, collapsedSections, reorder, toggleCollapsed } = useSidebarPrefs();
 
+  // Compute available views for the active channel (used by the view select)
+  const activeChannel = channels.find((c) => c.id === activeChannelId);
+  const availableViews = activeChannel
+    ? VIEW_TAB_TYPES.filter((t) =>
+        isViewTabAvailable(
+          t,
+          activeChannel.type,
+          activeChannel.workspacesEnabled ?? false,
+          !!(activeChannel.workspacesEnabled && activeChannel.githubUrl),
+          !!activeChannel.localRepoPath,
+        ),
+      )
+    : [];
+
   // Map channel id → global shortcut index (1-9) for Mod+Shift+N
   const channelShortcutMap = new Map<string, number>();
   channels.forEach((ch, i) => { if (i < 9) channelShortcutMap.set(ch.id, i + 1); });
 
   const renderChannelItems = (items: Channel[]) =>
     items.map((channel) => {
-      const isActive = channel.id === activeChannelId && !activeAiChatId;
+      const isActive = channel.id === activeChannelId;
       const count = unreadCounts[channel.id] ?? 0;
       const needsJoin = !!(channel.workspacesEnabled && channel.githubUrl && !localConfigs[channel.id]?.localRepoPath);
       const shortcutNum = channelShortcutMap.get(channel.id);
@@ -290,7 +309,25 @@ export function ChannelPanel({
           onCreateServer={onCreateServer}
         />
 
-        <div className="px-2 py-1.5">
+        <div className="px-3 py-1.5 flex flex-col gap-1.5">
+          {availableViews.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val) {
+                  onOpenViewTab(val as GlobalTabType);
+                  e.target.value = '';
+                }
+              }}
+              className="w-full rounded-md border border-edge bg-surface-elevated px-2 py-1.5 text-xs text-primary focus:border-accent focus:outline-none cursor-pointer"
+            >
+              <option value="" disabled>Open view…</option>
+              {availableViews.map((t) => (
+                <option key={t} value={t}>{TAB_LABELS[t]}</option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             onClick={onNewProductDoc}

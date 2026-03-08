@@ -31,8 +31,9 @@ import { useProductDocActions } from "./hooks/useProductDocActions";
 import { ChannelProvider, useChannelContext } from "./context/ChannelContext";
 import { useAuth } from "./context/AuthContext";
 import { ChannelPanel } from "./components/ChannelPanel";
-import { ChannelTopBar } from "./components/ChannelTopBar";
+import { ContentTabBar } from "./components/ContentTabBar";
 import { MessagePanel } from "./components/MessagePanel";
+import { ThreadPanel } from "./components/ThreadPanel";
 import { ChannelSettingsModal } from "./components/ChannelSettingsModal";
 import { JoinChannelModal } from "./components/JoinChannelModal";
 import { CreateChannelModal } from "./components/CreateChannelModal";
@@ -42,6 +43,7 @@ import { NewWorkspaceModal } from "./components/NewWorkspaceModal";
 import { InstanceSettingsModal } from "./components/InstanceSettingsModal";
 import { ProductDocView } from "./components/ProductDocView";
 import { AiChatPanel } from "./components/AiChatPanel";
+import { ChannelTerminalTab } from "./components/ChannelTerminalTab";
 import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { Toaster, toast } from "sonner";
@@ -60,6 +62,9 @@ import {
 import { useAgentRunStore } from "./stores/agentRunStore";
 import { usePanelLayoutStore } from "./stores/panelLayoutStore";
 import { useSyncStore } from "./stores/syncStore";
+import { useTabStore, TAB_TYPE_TO_VIEW } from "./stores/tabStore";
+import type { GlobalTabType } from "./stores/tabStore";
+import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useShortcutContextSync } from "./hooks/useShortcutContextSync";
 import { useDefaultShortcuts } from "./hooks/useDefaultShortcuts";
@@ -470,11 +475,10 @@ function AppContent() {
   // ─── Open workspace handler ───────────────────────────────────────
   const handleOpenWorkspace = useCallback((workspace: Workspace) => {
     useThreadStore.getState().syncActions.openThreadPanel(workspace);
-    const chId = activeChannelRef.current?.id;
-    if (chId) {
-      useAppUIStore.getState().setChannelView(chId, "workspaces");
-    } else {
-      useAppUIStore.getState().setMiddlePanelView("workspaces");
+    const ch = activeChannelRef.current;
+    if (ch) {
+      const label = workspace.preview || 'Workspace';
+      useTabStore.getState().openThreadTab(ch.id, ch.name, workspace.id, label);
     }
     useWorkspaceStore.getState().clearAttention(workspace.id);
   }, []);
@@ -569,17 +573,95 @@ function AppContent() {
     ),
   });
 
-  // ─── Channel/view switching ──────────────────────────────────────
-  const handleSetView = useCallback(
-    (view: MiddlePanelView) => {
-      if (activeChannelId) {
-        useAppUIStore.getState().setChannelView(activeChannelId, view);
+  // ─── Computed values (early — needed by tab store) ────────────────
+  const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
+  const panelTitle = displayChannel ? `# ${displayChannel.name}` : "";
+
+  // ─── Global tab store ──────────────────────────────────────────────
+  const currentChannelType = (displayChannel?.type ?? "channel") as ChannelType;
+  const currentWsEnabled = displayChannel?.workspacesEnabled ?? false;
+  const currentHasGithub = !!(displayChannel?.workspacesEnabled && displayChannel?.githubUrl);
+
+  // Subscribe to global tab store reactively
+  const globalTabs = useTabStore((s) => s.tabs);
+  const activeTabId = useTabStore((s) => s.activeTabId);
+  const activeTab = useMemo(
+    () => globalTabs.find((t) => t.id === activeTabId) ?? null,
+    [globalTabs, activeTabId],
+  );
+
+  // Sync middlePanelView when active tab changes (for view tabs).
+  // Uses refs for activeChannelId so this only fires on tab changes,
+  // NOT on channel changes (which would bounce back to the tab's channel).
+  const activeChannelIdRef = useRef(activeChannelId);
+  activeChannelIdRef.current = activeChannelId;
+
+  // Sync middlePanelView when a view-type tab becomes active
+  useEffect(() => {
+    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
+    if (!tab) return;
+    const viewForTab = TAB_TYPE_TO_VIEW[tab.type];
+    if (!viewForTab) return;
+    const currentView = useAppUIStore.getState().middlePanelView;
+    if (currentView !== viewForTab) {
+      if (tab.channelId) {
+        useAppUIStore.getState().setChannelView(tab.channelId, viewForTab);
       } else {
-        useAppUIStore.getState().setMiddlePanelView(view);
+        useAppUIStore.getState().setMiddlePanelView(viewForTab);
       }
-      if (view === "board" && activeChannelId) void fetchBoard(activeChannelId);
+    }
+    if (viewForTab === 'board' && tab.channelId) void fetchBoard(tab.channelId);
+  }, [activeTabId, fetchBoard]);
+
+  // Sync activeAiChatId for sidebar highlighting
+  useEffect(() => {
+    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
+    if (!tab) return;
+    if (tab.type === 'ai-chat' && tab.aiChatId) {
+      useAppUIStore.getState().setActiveAiChatId(tab.aiChatId);
+    } else {
+      const currentAiChatId = useAppUIStore.getState().activeAiChatId;
+      if (currentAiChatId) useAppUIStore.getState().setActiveAiChatId(null);
+    }
+  }, [activeTabId]);
+
+  // Auto-switch channel if tab belongs to a different channel
+  useEffect(() => {
+    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
+    if (!tab) return;
+    if (tab.channelId && tab.channelId !== activeChannelIdRef.current) {
+      performChannelSwitchRef.current(tab.channelId);
+    }
+  }, [activeTabId]);
+
+  // Re-activate thread when switching to a thread tab
+  useEffect(() => {
+    const tab = useTabStore.getState().tabs.find((t) => t.id === activeTabId);
+    if (!tab || tab.type !== 'thread' || !tab.workspaceId) return;
+    const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === tab.workspaceId);
+    if (ws) {
+      useThreadStore.getState().syncActions.openThreadPanel(ws);
+    }
+  }, [activeTabId]);
+
+  const workspaceSidebarWidth = useAppUIStore((s) => s.workspaceSidebarWidth);
+
+  // ─── Channel/view switching ──────────────────────────────────────
+  const handleOpenViewTab = useCallback(
+    (viewType: GlobalTabType) => {
+      if (!activeChannelId || !displayChannel) return;
+      if (viewType === 'terminal') {
+        useTabStore.getState().openTerminalTab(activeChannelId, displayChannel.name);
+        return;
+      }
+      useTabStore.getState().openViewTab(activeChannelId, displayChannel.name, viewType);
+      const viewForTab = TAB_TYPE_TO_VIEW[viewType];
+      if (viewForTab) {
+        useAppUIStore.getState().setChannelView(activeChannelId, viewForTab);
+        if (viewForTab === 'board') void fetchBoard(activeChannelId);
+      }
     },
-    [activeChannelId, fetchBoard],
+    [activeChannelId, displayChannel, fetchBoard],
   );
 
   const handleMoveTicket = useCallback(
@@ -598,6 +680,7 @@ function AppContent() {
       if (useThreadStore.getState().selectedWorkspaceId === workspaceId) {
         useThreadStore.getState().closeThreadPanel();
       }
+      useTabStore.getState().closeTabsForWorkspace(workspaceId);
 
       try {
         await executeDeleteWorkspace({
@@ -632,13 +715,6 @@ function AppContent() {
       const currentSelected = useThreadStore.getState().selectedWorkspaceId;
       if (currentSelected) void window.traceAPI.releasePorts(currentSelected);
 
-      // Save current channel's view before switching
-      const uiState = useAppUIStore.getState();
-      if (activeChannelId) {
-        uiState.setChannelView(activeChannelId, uiState.middlePanelView);
-      }
-
-      useAppUIStore.getState().setActiveAiChatId(null);
       switchChannel(channelId);
       useKanbanStore.getState().clearBoard();
       useWorkspaceStore.getState().clearWorkspaces();
@@ -646,25 +722,15 @@ function AppContent() {
       useSyncStore.getState().reset();
       usePresenceStore.getState().clear();
 
-      // Restore saved view for target channel (validated)
-      const savedView = useAppUIStore.getState().channelViewMap[channelId];
-      const targetChannel = enrichedChannels.find((ch) => ch.id === channelId);
-      const targetType = targetChannel?.type ?? "channel";
-      const targetWsEnabled = targetChannel?.workspacesEnabled ?? false;
-      const restoredView =
-        savedView &&
-        isViewValidForChannel(savedView, targetType, targetWsEnabled)
-          ? savedView
-          : getDefaultViewForChannel(targetType, targetWsEnabled);
-      useAppUIStore.getState().setMiddlePanelView(restoredView);
-
-      if (restoredView === "board") void fetchBoard(channelId);
-
-      useThreadStore.getState().closeThreadPanel();
+      // Don't touch active tab or middlePanelView — the center content
+      // stays on whatever tab the user already has open. Only the workspace
+      // sidebar updates to reflect the new channel.
       useTerminalStore.getState().detachAll();
     },
-    [switchChannel, activeChannelId, enrichedChannels, fetchBoard],
+    [switchChannel],
   );
+  const performChannelSwitchRef = useRef(performChannelSwitch);
+  performChannelSwitchRef.current = performChannelSwitch;
 
   const handleSwitchChannel = useCallback(
     (channelId: string) => {
@@ -726,8 +792,9 @@ function AppContent() {
   );
 
   const handleSwitchAiChat = useCallback((chatId: string) => {
+    const chat = useAppUIStore.getState().aiChats.find((c) => c.id === chatId);
+    useTabStore.getState().openAiChatTab(chatId, chat?.title ?? 'AI Chat');
     useAppUIStore.getState().setActiveAiChatId(chatId);
-    useThreadStore.getState().closeThreadPanel();
     useAppUIStore.getState().setChannelWidth(220);
   }, []);
 
@@ -736,8 +803,8 @@ function AppContent() {
     try {
       const chat = await createAiChat(activeServerId);
       if (chat) {
+        useTabStore.getState().openAiChatTab(chat.id, chat.title);
         useAppUIStore.getState().setActiveAiChatId(chat.id);
-        useThreadStore.getState().closeThreadPanel();
         useAppUIStore.getState().setChannelWidth(220);
       }
     } catch (err) {
@@ -762,6 +829,7 @@ function AppContent() {
   const handleDeleteAiChat = useCallback(
     async (id: string) => {
       await deleteAiChatMutation(id);
+      useTabStore.getState().closeTabsForAiChat(id);
       if (useAppUIStore.getState().activeAiChatId === id) {
         useAppUIStore.getState().setActiveAiChatId(null);
       }
@@ -1028,6 +1096,7 @@ function AppContent() {
     serverChannels,
     handleSwitchChannel,
     handleOpenWorkspace,
+    handleCreateAiChat: useCallback(() => { void handleCreateAiChat(); }, [handleCreateAiChat]),
   });
 
   // ─── Settings / channel modals ───────────────────────────────────
@@ -1089,9 +1158,6 @@ function AppContent() {
   );
 
   // ─── Computed values ─────────────────────────────────────────────
-  const displayChannel = enrichedActiveChannel ?? serverChannels[0] ?? null;
-  const panelTitle = displayChannel ? `# ${displayChannel.name}` : "";
-
   const needsJoin = !!(
     displayChannel?.workspacesEnabled &&
     displayChannel.githubUrl &&
@@ -1115,6 +1181,52 @@ function AppContent() {
     [displayChannel, serverChannels],
   );
 
+  // ─── Stable callbacks for child components ─────────────────────
+  const handleCreateServer = useCallback(
+    () => useAppUIStore.getState().setShowCreateServer(true),
+    [],
+  );
+  const handleCreateTeam = useCallback(
+    () => useAppUIStore.getState().setCreateChannelType("team"),
+    [],
+  );
+  const handleCreateProject = useCallback(
+    () => useAppUIStore.getState().setCreateChannelType("project"),
+    [],
+  );
+  const handleCreateChannel = useCallback(
+    () => useAppUIStore.getState().setCreateChannelType("channel"),
+    [],
+  );
+  const handleNewProductDoc = useCallback(
+    () => useAppUIStore.getState().setShowProductDocModal(true),
+    [],
+  );
+  const handleStartDragLeft = useCallback(
+    () => useAppUIStore.getState().setDragging("left"),
+    [],
+  );
+  const handleStartDragWorkspaceSidebar = useCallback(
+    () => useAppUIStore.getState().setDragging("workspace-sidebar"),
+    [],
+  );
+  const handleSelectTab = useCallback(
+    (tabId: string) => useTabStore.getState().setActiveTab(tabId),
+    [],
+  );
+  const handleCloseTab = useCallback(
+    (tabId: string) => useTabStore.getState().closeTab(tabId),
+    [],
+  );
+  const handleCreateAiChatAction = useCallback(
+    () => { void handleCreateAiChat(); },
+    [handleCreateAiChat],
+  );
+  const handleDeleteAiChatAction = useCallback(
+    (id: string) => { void handleDeleteAiChat(id); },
+    [handleDeleteAiChat],
+  );
+
   // ─── Render ──────────────────────────────────────────────────────
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-surface text-primary">
@@ -1128,35 +1240,22 @@ function AppContent() {
           activeServerId={activeServerId}
           activeServer={activeServer}
           onSwitchServer={handleSwitchServer}
-          onCreateServer={() =>
-            useAppUIStore.getState().setShowCreateServer(true)
-          }
+          onCreateServer={handleCreateServer}
           aiChats={aiChats}
           activeAiChatId={activeAiChatId}
           unreadCounts={unreadCounts}
           localConfigs={localConfigs}
           onSwitchChannel={handleSwitchChannel}
-          onCreateTeam={() =>
-            useAppUIStore.getState().setCreateChannelType("team")
-          }
-          onCreateProject={() =>
-            useAppUIStore.getState().setCreateChannelType("project")
-          }
-          onCreateChannel={() =>
-            useAppUIStore.getState().setCreateChannelType("channel")
-          }
+          onCreateTeam={handleCreateTeam}
+          onCreateProject={handleCreateProject}
+          onCreateChannel={handleCreateChannel}
           onSwitchAiChat={handleSwitchAiChat}
-          onCreateAiChat={() => {
-            void handleCreateAiChat();
-          }}
-          onDeleteAiChat={(id) => {
-            void handleDeleteAiChat(id);
-          }}
-          onStartDrag={() => useAppUIStore.getState().setDragging("left")}
-          onNewProductDoc={() =>
-            useAppUIStore.getState().setShowProductDocModal(true)
-          }
+          onCreateAiChat={handleCreateAiChatAction}
+          onDeleteAiChat={handleDeleteAiChatAction}
+          onStartDrag={handleStartDragLeft}
+          onNewProductDoc={handleNewProductDoc}
           onOpenWorkspaceLink={handleOpenThreadLink}
+          onOpenViewTab={handleOpenViewTab}
         />
 
         {/* Mobile drawer overlay */}
@@ -1165,24 +1264,49 @@ function AppContent() {
           onClick={() => useAppUIStore.getState().setMobileDrawerOpen(false)}
         />
 
+        {/* Left workspace sidebar */}
+        {!isFullscreen && currentWsEnabled && (
+          <WorkspaceSidebar
+            workspaces={workspaces}
+            selectedWorkspaceId={selectedWorkspaceId}
+            attentionWorkspaceIds={attentionWorkspaceIds}
+            channelId={activeChannelId}
+            onOpenWorkspace={handleOpenWorkspace}
+            onDeleteWorkspace={handleDeleteWorkspace}
+            onMarkMerged={handleMarkMerged}
+            workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+            activeRunWorkspaceIds={activeRunWorkspaceIds}
+            kanbanColumns={kanbanColumns}
+            workspacesLoading={workspacesLoading}
+            mergedCount={mergedCount}
+            mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+            mergedWorkspacesLoading={mergedWorkspacesLoading}
+            onExpandMerged={handleExpandMerged}
+            sidebarWidth={workspaceSidebarWidth}
+            onStartDrag={handleStartDragWorkspaceSidebar}
+            dragging={dragging === 'workspace-sidebar'}
+          />
+        )}
+
+        {/* Center content area */}
         <div
           className="flex min-h-0 min-w-0 flex-col panel-animate"
           style={{ flex: "1 1 0%", overflow: "hidden" }}
         >
-          {!isFullscreen && !activeAiChatId && !activeProductDocId && (
-            <ChannelTopBar
-              panelTitle={panelTitle}
-              channelType={(displayChannel?.type ?? "project") as ChannelType}
-              workspacesEnabled={displayChannel?.workspacesEnabled ?? true}
-              middlePanelView={middlePanelView}
-              onSetView={handleSetView}
-              onOpenSettings={() => {
-                if (displayChannel) handleOpenSettings(displayChannel.id);
-              }}
-              hasGithubUrl={!!displayChannel?.githubUrl}
-              serverChannels={serverChannels}
+          {!isFullscreen && !activeProductDocId && (
+            <ContentTabBar
+              tabs={globalTabs}
+              activeTabId={activeTabId}
+              onSelectTab={handleSelectTab}
+              onCloseTab={handleCloseTab}
+              onCreateAiChat={handleCreateAiChatAction}
+              channelType={currentChannelType}
+              workspacesEnabled={currentWsEnabled}
+              hasGithubUrl={currentHasGithub}
+              hasRepoPath={!!enrichedActiveChannel?.localRepoPath}
               activeChannelId={activeChannelId}
-              onSwitchChannel={handleSwitchChannel}
+              activeChannelName={displayChannel?.name ?? ''}
+              onOpenViewTab={handleOpenViewTab}
             />
           )}
           <div className="flex min-h-0 flex-1 flex-col">
@@ -1198,15 +1322,22 @@ function AppContent() {
                 onReviewTickets={handleRunReviewTickets}
                 onSwitchTab={handleSwitchProductDocTab}
               />
-            ) : activeAiChatId ? (
+            ) : activeTab?.type === 'thread' ? (
+              <ThreadPanel asMainContent />
+            ) : activeTab?.type === 'terminal' && activeTab.channelId && enrichedActiveChannel?.localRepoPath ? (
+              <ChannelTerminalTab
+                channelId={activeTab.channelId}
+                repoPath={enrichedActiveChannel.localRepoPath}
+              />
+            ) : activeTab?.type === 'ai-chat' && activeTab.aiChatId ? (
               <AiChatPanel
-                chatId={activeAiChatId}
+                chatId={activeTab.aiChatId}
                 chatTitle={
-                  aiChats.find((c) => c.id === activeAiChatId)?.title ??
+                  aiChats.find((c) => c.id === activeTab.aiChatId)?.title ??
                   "AI Chat"
                 }
               />
-            ) : (
+            ) : activeTab ? (
               <MessagePanel
                 panelTitle={panelTitle}
                 channelId={activeChannelId}
@@ -1233,11 +1364,11 @@ function AppContent() {
                 onPullPR={handlePullPR}
                 pullingPRNumbers={pullingPRNumbers}
                 workspacesLoading={workspacesLoading}
-                mergedCount={mergedCount}
-                mergedWorkspacesLoaded={mergedWorkspacesLoaded}
-                mergedWorkspacesLoading={mergedWorkspacesLoading}
-                onExpandMerged={handleExpandMerged}
               />
+            ) : (
+              <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
+                Open a tab to get started
+              </div>
             )}
           </div>
         </div>
