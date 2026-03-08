@@ -103,6 +103,7 @@ model Channel {
   defaultSetupScript String?  @map("default_setup_script")
   defaultRunScript      String?  @map("default_run_script")
   defaultTeardownScript String?  @map("default_teardown_script")
+  orchestrateMode       Boolean  @default(false) @map("orchestrate_mode")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 

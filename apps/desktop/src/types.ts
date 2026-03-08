@@ -405,6 +405,7 @@ export interface Channel {
   name: string;
   type: ChannelType;
   workspacesEnabled: boolean;
+  orchestrateMode: boolean;
   teamIds: string[];
   localRepoPath?: string | null;
   baseBranch: string | null;

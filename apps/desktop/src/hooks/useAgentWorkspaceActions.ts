@@ -556,7 +556,7 @@ export function useWorkspaceActions({
       // Auto-run immediately with a default orchestrator prompt
       const runStore = useAgentRunStore.getState();
       const orchestratorPrompt =
-        "You are now active as the orchestrator for this channel. Start by reading the .trace/ folder if it exists, then use list_tickets to understand the current state of work. Wait for user instructions on what to do next.";
+        "You are now active as the orchestrator for this channel. Start by reading the .trace/ folder if it exists, then use list_tickets to understand the current state of work. Analyze the current situation and take action — create tickets, set up dependencies, and get things moving. Do not wait for user instructions.";
 
       runStore.addSpawnedWorkspace(workspace.id);
       runStore.addActiveRun(workspace.id);
@@ -1138,6 +1138,77 @@ export function useWorkspaceActions({
     ],
   );
 
+  // --- Orchestrator auto-trigger ---
+  // Accumulates reasons while the orchestrator is running, so the re-trigger includes all changes
+  const orchestratorPendingReasonsRef = useRef<string[]>([]);
+
+  const triggerOrchestrator = useCallback(
+    async (reason: string) => {
+      const chId = activeChannelIdRef.current;
+      if (!chId) return;
+
+      const orchestrator = useWorkspaceStore
+        .getState()
+        .workspaces.find((w) => w.isOrchestrator && w.channelId === chId);
+      if (!orchestrator) return;
+
+      // If orchestrator is currently running, queue the reason for later
+      const isRunning = useAgentRunStore.getState().activeRunWorkspaceIds.has(orchestrator.id);
+      if (isRunning) {
+        orchestratorPendingReasonsRef.current.push(reason);
+        return;
+      }
+
+      // Don't trigger if it's in a terminal state like merged
+      if (orchestrator.status === 'merged') return;
+
+      const triggerPrompt = `A workspace status has changed: ${reason}. Check the current state of all tickets via list_tickets and take any necessary action. If all work is done, summarize the results.`;
+
+      // Persist the prompt so it appears in the orchestrator thread
+      const persisted = await persistPrompt(
+        orchestrator.id,
+        triggerPrompt,
+        "Failed to persist orchestrator trigger prompt",
+        undefined,
+        true, // createNewSession
+      );
+      if (!persisted) return;
+
+      await spawnAgentForWorkspace(orchestrator.id, triggerPrompt, {
+        statusOnSuccess: "in_progress",
+        errorPrefix: "Failed to spawn orchestrator for status change",
+        model: useAgentRunStore.getState().selectedModel,
+        effort: "high",
+        isOrchestrator: true,
+      });
+    },
+    [persistPrompt, spawnAgentForWorkspace],
+  );
+
+  // Check for pending orchestrator triggers when a run completes
+  const checkPendingOrchestratorTrigger = useCallback(
+    (completedWorkspaceId: string) => {
+      const chId = activeChannelIdRef.current;
+      if (!chId) return;
+
+      const orchestrator = useWorkspaceStore
+        .getState()
+        .workspaces.find((w) => w.isOrchestrator && w.channelId === chId);
+      if (!orchestrator || orchestrator.id !== completedWorkspaceId) return;
+
+      const pendingReasons = orchestratorPendingReasonsRef.current;
+      if (pendingReasons.length > 0) {
+        const summary = pendingReasons.join('; ');
+        orchestratorPendingReasonsRef.current = [];
+        // Small delay to let status updates settle
+        setTimeout(() => {
+          void triggerOrchestrator(`Status changes while orchestrator was running: ${summary}`);
+        }, 2000);
+      }
+    },
+    [triggerOrchestrator],
+  );
+
   const mergeToMain = useCallback(async () => {
     const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
     const chId = activeChannelIdRef.current;
@@ -1180,6 +1251,8 @@ export function useWorkspaceActions({
       createWorkspaceForTicket,
       reviewCompletedTicket,
       createOrchestrator,
+      triggerOrchestrator,
+      checkPendingOrchestratorTrigger,
     });
     return () => useAgentRunStore.getState().clearWorkspaceActions();
   }, [
@@ -1194,6 +1267,8 @@ export function useWorkspaceActions({
     createWorkspaceForTicket,
     reviewCompletedTicket,
     createOrchestrator,
+    triggerOrchestrator,
+    checkPendingOrchestratorTrigger,
   ]);
 
   return {
@@ -1208,5 +1283,7 @@ export function useWorkspaceActions({
     createWorkspaceForTicket,
     reviewCompletedTicket,
     createOrchestrator,
+    triggerOrchestrator,
+    checkPendingOrchestratorTrigger,
   };
 }

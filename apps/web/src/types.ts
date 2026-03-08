@@ -53,6 +53,7 @@ export interface Channel {
   name: string;
   type: ChannelType;
   workspacesEnabled: boolean;
+  orchestrateMode: boolean;
   teamIds: string[];
   baseBranch: string | null;
   githubUrl: string | null;

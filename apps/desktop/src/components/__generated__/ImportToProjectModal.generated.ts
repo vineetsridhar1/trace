@@ -15,7 +15,7 @@ export type CreateChannelForImportMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateChannelForImportMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
+export type CreateChannelForImportMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, orchestrateMode: boolean, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
 
 export type DeleteChannelForCleanupMutationVariables = Types.Exact<{
   id: Types.Scalars['ID']['input'];
@@ -51,6 +51,7 @@ export const CreateChannelForImportDocument = gql`
     name
     type
     workspacesEnabled
+    orchestrateMode
     baseBranch
     githubUrl
     defaultSetupScript

@@ -76,6 +76,8 @@ import { usePresenceStore } from "./stores/presenceStore";
 import { ExpandableText } from "./components/thread-events/ExpandableText";
 import { useGetWorkspaceLazyQuery } from "./components/__generated__/ThreadLinkPreview.generated";
 
+const SIGNIFICANT_STATUSES = new Set(['completed', 'merged', 'needs_input', 'in_progress']);
+
 const GQL_UPDATE_WORKSPACE_STATUS = gql`
   mutation UpdateWorkspaceStatus(
     $channelId: ID!
@@ -552,6 +554,22 @@ function AppContent() {
     onWorkspaceCreated: handleOpenWorkspace,
   });
 
+  // ─── Auto-create orchestrator when orchestrate mode is enabled ────
+  const creatingOrchestratorRef = useRef(false);
+  useEffect(() => {
+    if (!enrichedActiveChannel?.orchestrateMode) return;
+    if (workspacesLoading) return;
+    const hasOrchestrator = workspaces.some(
+      (w) => w.isOrchestrator && w.channelId === activeChannelId,
+    );
+    if (hasOrchestrator) return;
+    if (creatingOrchestratorRef.current) return;
+    creatingOrchestratorRef.current = true;
+    void useAgentRunStore.getState().workspaceActions.createOrchestrator().finally(() => {
+      creatingOrchestratorRef.current = false;
+    });
+  }, [enrichedActiveChannel?.orchestrateMode, activeChannelId, workspacesLoading, workspaces]);
+
   // ─── Reconcile stuck workspace statuses on startup ────────────────
   useStuckWorkspaceReconciliation({
     workspaces,
@@ -573,6 +591,9 @@ function AppContent() {
   >(null);
   const autoReviewRef = useRef<
     ((workspaceId: string, runConfig: unknown) => void) | null
+  >(null);
+  const orchestratorTriggerRef = useRef<
+    ((workspaceId: string, prevStatus: string, newStatus: string) => void) | null
   >(null);
   useEffect(() => {
     autoRunRef.current = (workspaceId: string, runConfig: unknown) => {
@@ -599,6 +620,21 @@ function AppContent() {
         .getState()
         .workspaceActions.reviewCompletedTicket(workspaceId, config);
     };
+    orchestratorTriggerRef.current = (workspaceId: string, _prevStatus: string, newStatus: string) => {
+      if (!SIGNIFICANT_STATUSES.has(newStatus)) return;
+
+      // Check if channel has orchestrate mode enabled
+      const channel = activeChannelRef.current;
+      if (!channel?.orchestrateMode) return;
+
+      const workspace = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId);
+      const ticketTitle = workspace?.ticketTitle ?? workspace?.preview ?? workspaceId.slice(0, 8);
+      void useAgentRunStore
+        .getState()
+        .workspaceActions.triggerOrchestrator(
+          `"${ticketTitle}" changed to ${newStatus}`,
+        );
+    };
   }, []);
 
   const { subscriptionsActive } = useChannelSubscriptions({
@@ -618,6 +654,12 @@ function AppContent() {
       [],
     ),
     onWorkspaceCompleted: triggerSync,
+    onWorkspaceStatusChanged: useCallback(
+      (workspaceId: string, prevStatus: string, newStatus: string) => {
+        orchestratorTriggerRef.current?.(workspaceId, prevStatus, newStatus);
+      },
+      [],
+    ),
     refreshWorkspaces,
   });
 

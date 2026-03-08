@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FiChevronRight } from 'react-icons/fi';
+import { FiChevronRight, FiCpu } from 'react-icons/fi';
 import type { Workspace, TicketStatus, KanbanTicket, KanbanColumn as KanbanColumnType } from '../types';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { WorkspaceInput } from './WorkspaceInput';
@@ -152,6 +152,11 @@ export function WorkspaceSidebar({
     return map;
   }, [kanbanColumns]);
 
+  const orchestratorWorkspace = useMemo(
+    () => workspaces.find((ws) => ws.isOrchestrator),
+    [workspaces],
+  );
+
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
     for (const ws of workspaces) {
@@ -215,9 +220,38 @@ export function WorkspaceSidebar({
         <div
           className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
         >
+          {/* Orchestrator — pinned at top */}
+          {orchestratorWorkspace && (
+            <div className="mb-1">
+              <button
+                type="button"
+                className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
+                  orchestratorWorkspace.id === selectedWorkspaceId
+                    ? 'bg-accent/15 text-accent-light'
+                    : 'hover:bg-surface-elevated/50 text-muted'
+                }`}
+                onClick={() => onOpenWorkspace(orchestratorWorkspace)}
+              >
+                <FiCpu className={`h-4 w-4 flex-shrink-0 ${
+                  activeRunWorkspaceIds?.has(orchestratorWorkspace.id)
+                    ? 'text-accent animate-pulse'
+                    : orchestratorWorkspace.id === selectedWorkspaceId
+                      ? 'text-accent-light'
+                      : 'text-muted'
+                }`} />
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  Orchestrator
+                </span>
+                {activeRunWorkspaceIds?.has(orchestratorWorkspace.id) && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-accent animate-pulse" />
+                )}
+              </button>
+            </div>
+          )}
+
           {workspacesLoading && workspaces.length === 0 ? (
             <WorkspaceListSkeleton />
-          ) : groupedWorkspaces.length === 0 ? (
+          ) : groupedWorkspaces.length === 0 && !orchestratorWorkspace ? (
             <div className="flex flex-1 items-center justify-center text-xs text-muted">
               No workspaces yet
             </div>

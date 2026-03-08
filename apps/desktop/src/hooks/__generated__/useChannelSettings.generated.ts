@@ -14,10 +14,11 @@ export type UpdateChannelMutationVariables = Types.Exact<{
   defaultSetupScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
   defaultRunScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
   defaultTeardownScript?: Types.InputMaybe<Types.Scalars['String']['input']>;
+  orchestrateMode?: Types.InputMaybe<Types.Scalars['Boolean']['input']>;
 }>;
 
 
-export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, defaultTeardownScript?: string | null, createdAt: string, updatedAt: string } };
+export type UpdateChannelMutation = { __typename?: 'Mutation', updateChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, orchestrateMode: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultRepoPath?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, defaultTeardownScript?: string | null, createdAt: string, updatedAt: string } };
 
 export type DeleteChannelMutationVariables = Types.Exact<{
   id: Types.Scalars['ID']['input'];
@@ -28,7 +29,7 @@ export type DeleteChannelMutation = { __typename?: 'Mutation', deleteChannel: bo
 
 
 export const UpdateChannelDocument = gql`
-    mutation UpdateChannel($id: ID!, $name: String, $workspacesEnabled: Boolean, $teamIds: [String!], $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String, $defaultTeardownScript: String) {
+    mutation UpdateChannel($id: ID!, $name: String, $workspacesEnabled: Boolean, $teamIds: [String!], $baseBranch: String, $githubUrl: String, $defaultRepoPath: String, $defaultSetupScript: String, $defaultRunScript: String, $defaultTeardownScript: String, $orchestrateMode: Boolean) {
   updateChannel(
     id: $id
     name: $name
@@ -40,12 +41,14 @@ export const UpdateChannelDocument = gql`
     defaultSetupScript: $defaultSetupScript
     defaultRunScript: $defaultRunScript
     defaultTeardownScript: $defaultTeardownScript
+    orchestrateMode: $orchestrateMode
   ) {
     id
     serverId
     name
     type
     workspacesEnabled
+    orchestrateMode
     teamIds
     baseBranch
     githubUrl
@@ -83,6 +86,7 @@ export type UpdateChannelMutationFn = Apollo.MutationFunction<UpdateChannelMutat
  *      defaultSetupScript: // value for 'defaultSetupScript'
  *      defaultRunScript: // value for 'defaultRunScript'
  *      defaultTeardownScript: // value for 'defaultTeardownScript'
+ *      orchestrateMode: // value for 'orchestrateMode'
  *   },
  * });
  */

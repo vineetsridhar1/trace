@@ -37,6 +37,7 @@ export interface ChannelContextValue {
     defaultSetupScript?: string | null;
     defaultRunScript?: string | null;
     defaultTeardownScript?: string | null;
+    orchestrateMode?: boolean;
   }) => Promise<unknown>;
   deleteChannel: (channelId: string) => Promise<boolean>;
 }

@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { FiChevronDown, FiCpu, FiFileText, FiPlus } from "react-icons/fi";
 import { useAppUIStore } from "../stores/appUIStore";
 import { useAgentRunStore } from "../stores/agentRunStore";
+import { useChannelContext } from "../context/ChannelContext";
 
 export function WorkspaceInput() {
+  const { enrichedActiveChannel } = useChannelContext();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -59,19 +61,21 @@ export function WorkspaceInput() {
           </button>
           {showDropdown && (
             <div className="absolute bottom-full right-0 z-50 mb-1 w-48 rounded-md border border-edge bg-surface-elevated py-1 shadow-lg">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDropdown(false);
-                  useAgentRunStore
-                    .getState()
-                    .workspaceActions.createOrchestrator();
-                }}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary hover:bg-surface-hover"
-              >
-                <FiCpu className="h-3.5 w-3.5" aria-hidden="true" />
-                Orchestrator
-              </button>
+              {enrichedActiveChannel?.orchestrateMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDropdown(false);
+                    useAgentRunStore
+                      .getState()
+                      .workspaceActions.createOrchestrator();
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-primary hover:bg-surface-hover"
+                >
+                  <FiCpu className="h-3.5 w-3.5" aria-hidden="true" />
+                  Orchestrator
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

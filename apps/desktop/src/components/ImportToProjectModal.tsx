@@ -39,6 +39,7 @@ const GQL_CREATE_CHANNEL_FOR_IMPORT = gql`
       name
       type
       workspacesEnabled
+      orchestrateMode
       baseBranch
       githubUrl
       defaultSetupScript

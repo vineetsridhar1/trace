@@ -85,6 +85,7 @@ export type Channel = {
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
+  orchestrateMode: Scalars['Boolean']['output'];
   serverId: Scalars['String']['output'];
   teamIds: Array<Scalars['String']['output']>;
   type: Scalars['String']['output'];
@@ -305,6 +306,7 @@ export type MutationCreateChannelArgs = {
   defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
+  orchestrateMode?: InputMaybe<Scalars['Boolean']['input']>;
   serverId?: InputMaybe<Scalars['String']['input']>;
   teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
   type?: InputMaybe<Scalars['String']['input']>;
@@ -471,6 +473,7 @@ export type MutationUpdateChannelArgs = {
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
+  orchestrateMode?: InputMaybe<Scalars['Boolean']['input']>;
   teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
   workspacesEnabled?: InputMaybe<Scalars['Boolean']['input']>;
 };

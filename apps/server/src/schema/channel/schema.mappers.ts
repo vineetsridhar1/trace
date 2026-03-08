@@ -16,6 +16,7 @@ export interface ChannelMapper {
   defaultSetupScript: string | null;
   defaultRunScript: string | null;
   defaultTeardownScript: string | null;
+  orchestrateMode: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
