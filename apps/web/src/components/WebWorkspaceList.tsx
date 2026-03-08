@@ -1,9 +1,35 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { FiPlus, FiCircle, FiExternalLink, FiChevronRight, FiFileText } from "react-icons/fi";
+import { FiPlus, FiCircle, FiExternalLink, FiChevronRight, FiFileText, FiEdit3, FiMap, FiHelpCircle } from "react-icons/fi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
+import { useAgentRunStore } from "../stores/agentRunStore";
 import { usePRStatus } from "../hooks/usePRStatus";
+import { WebModelEffortSelector } from "./WebModelEffortSelector";
 import type { TicketStatus } from "../types";
+
+type InteractionMode = "code" | "plan" | "ask";
+
+const MODE_CYCLE: InteractionMode[] = ["code", "plan", "ask"];
+const MODE_CONFIG: Record<
+  InteractionMode,
+  { label: string; icon: React.ReactNode; style: string }
+> = {
+  code: {
+    label: "Code",
+    icon: <FiEdit3 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
+    style: "btn-secondary border-edge text-primary",
+  },
+  plan: {
+    label: "Plan",
+    icon: <FiMap className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
+    style: "border-accent bg-accent/20 text-accent-light",
+  },
+  ask: {
+    label: "Ask",
+    icon: <FiHelpCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
+    style: "border-amber-500 bg-amber-500/20 text-amber-300",
+  },
+};
 
 const STATUS_DOT_COLOR: Record<TicketStatus, string> = {
   pending: "text-yellow-400",
@@ -183,33 +209,66 @@ export function WebWorkspaceList({
   repoPath,
 }: WebWorkspaceListProps) {
   const allWorkspaces = useWorkspaceStore((s) => s.workspaces);
-  const { createWorkspace } = useWorkspaceActions();
+  const { createWorkspace, createWorkspaceAndSpawn } = useWorkspaceActions();
 
   const [showNewModal, setShowNewModal] = useState(false);
   const [newPrompt, setNewPrompt] = useState("");
   const [creating, setCreating] = useState(false);
+  const [startImmediately, setStartImmediately] = useState(true);
+  const [mode, setMode] = useState<InteractionMode>("code");
   const [docsOpen, setDocsOpen] = useState(true);
+
+  const selectedModel = useAgentRunStore((s) => s.selectedModel);
+  const selectedEffort = useAgentRunStore((s) => s.selectedEffort);
+  const setSelectedModel = useAgentRunStore((s) => s.setSelectedModel);
+  const setSelectedEffort = useAgentRunStore((s) => s.setSelectedEffort);
 
   const handleSelect = useCallback(
     (id: string) => onSelectWorkspace(id),
     [onSelectWorkspace],
   );
 
+  const cycleMode = useCallback(() => {
+    setMode((m) => MODE_CYCLE[(MODE_CYCLE.indexOf(m) + 1) % MODE_CYCLE.length]);
+  }, []);
+
   const handleCreate = useCallback(async () => {
     const prompt = newPrompt.trim();
     if (!prompt || creating) return;
     setCreating(true);
     try {
-      const { workspaceId } = await createWorkspace({ channelId, prompt });
-      if (workspaceId) {
-        setShowNewModal(false);
-        setNewPrompt("");
-        onSelectWorkspace(workspaceId);
+      let finalPrompt = prompt;
+      if (startImmediately && mode === "plan") {
+        finalPrompt = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${prompt}`;
+      } else if (startImmediately && mode === "ask") {
+        finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${prompt}`;
+      }
+
+      if (startImmediately) {
+        const { workspaceId } = await createWorkspaceAndSpawn({
+          channelId,
+          prompt: finalPrompt,
+          model: selectedModel,
+          effort: selectedEffort,
+          planMode: mode === "plan",
+        });
+        if (workspaceId) {
+          setShowNewModal(false);
+          setNewPrompt("");
+          onSelectWorkspace(workspaceId);
+        }
+      } else {
+        const { workspaceId } = await createWorkspace({ channelId, prompt });
+        if (workspaceId) {
+          setShowNewModal(false);
+          setNewPrompt("");
+          onSelectWorkspace(workspaceId);
+        }
       }
     } finally {
       setCreating(false);
     }
-  }, [newPrompt, creating, createWorkspace, channelId, onSelectWorkspace]);
+  }, [newPrompt, creating, startImmediately, mode, selectedModel, selectedEffort, createWorkspace, createWorkspaceAndSpawn, channelId, onSelectWorkspace]);
 
   const items = useMemo(
     () =>
@@ -378,7 +437,7 @@ export function WebWorkspaceList({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && newPrompt.trim() && !creating) {
                   e.preventDefault();
-                  handleCreate();
+                  void handleCreate();
                 }
               }}
               placeholder="Describe what you'd like to work on..."
@@ -386,6 +445,33 @@ export function WebWorkspaceList({
               rows={4}
               autoFocus
             />
+            <label className="mt-2 flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={startImmediately}
+                onChange={(e) => setStartImmediately(e.target.checked)}
+                className="accent-accent h-3.5 w-3.5"
+              />
+              <span className="text-xs text-primary">Start run immediately</span>
+            </label>
+            {startImmediately && (
+              <div className="mt-2 flex items-center gap-1.5">
+                <WebModelEffortSelector
+                  model={selectedModel}
+                  effort={selectedEffort}
+                  onModelChange={setSelectedModel}
+                  onEffortChange={setSelectedEffort}
+                />
+                <button
+                  type="button"
+                  onClick={cycleMode}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${MODE_CONFIG[mode].style}`}
+                >
+                  {MODE_CONFIG[mode].icon}
+                  {MODE_CONFIG[mode].label}
+                </button>
+              </div>
+            )}
             <div className="mt-3 flex justify-end gap-2">
               <button
                 type="button"
@@ -401,10 +487,10 @@ export function WebWorkspaceList({
               <button
                 type="button"
                 disabled={!newPrompt.trim() || creating}
-                onClick={handleCreate}
+                onClick={() => void handleCreate()}
                 className="rounded-md bg-accent px-3 py-1.5 text-sm text-on-accent transition-colors hover:bg-accent/80 disabled:opacity-50"
               >
-                {creating ? "Creating…" : "Create"}
+                {creating ? "Starting…" : startImmediately ? "Create & Run" : "Create"}
               </button>
             </div>
           </div>

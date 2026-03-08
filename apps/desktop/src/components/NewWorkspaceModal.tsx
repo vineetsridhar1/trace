@@ -1,15 +1,45 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { FiX } from 'react-icons/fi';
+import { FiX, FiEdit3, FiMap, FiHelpCircle } from 'react-icons/fi';
 import { useAgentRunStore } from '../stores/agentRunStore';
 import { useAppUIStore } from '../stores/appUIStore';
 import { useImageAttachments } from '../hooks/useImageAttachments';
 import { ImageThumbnails } from './ImageThumbnails';
+import { ModelEffortSelector } from './ModelEffortSelector';
+import { Tooltip } from './Tooltip';
+import type { InteractionMode } from './RunButtons';
+
+const MODE_CYCLE: InteractionMode[] = ['code', 'plan', 'ask'];
+const MODE_LABELS: Record<InteractionMode, string> = {
+  code: 'Code',
+  plan: 'Plan',
+  ask: 'Ask',
+};
+const MODE_ICONS: Record<InteractionMode, React.ReactNode> = {
+  code: <FiEdit3 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
+  plan: <FiMap className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
+  ask: <FiHelpCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
+};
+const MODE_TOOLTIPS: Record<InteractionMode, string> = {
+  code: 'Code mode – Claude can edit files',
+  plan: 'Plan mode – Claude plans before coding',
+  ask: 'Ask mode – read-only, no file changes',
+};
 
 export function NewWorkspaceModal() {
   const [prompt, setPrompt] = useState('');
+  const [startImmediately, setStartImmediately] = useState(true);
+  const [mode, setMode] = useState<InteractionMode>('code');
+  const [submitting, setSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { attachments, uploading, handlePaste, removeAttachment, clearAttachments, getAttachmentIds, getFilePaths } =
     useImageAttachments();
+
+  const selectedAgent = useAgentRunStore((s) => s.selectedAgent);
+  const selectedModel = useAgentRunStore((s) => s.selectedModel);
+  const selectedEffort = useAgentRunStore((s) => s.selectedEffort);
+  const setSelectedAgent = useAgentRunStore((s) => s.setSelectedAgent);
+  const setSelectedModel = useAgentRunStore((s) => s.setSelectedModel);
+  const setSelectedEffort = useAgentRunStore((s) => s.setSelectedEffort);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -20,19 +50,42 @@ export function NewWorkspaceModal() {
     useAppUIStore.getState().setShowNewWorkspaceModal(false);
   }, [clearAttachments]);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const trimmed = prompt.trim();
-    if (!trimmed) return;
-    const attachmentIds = getAttachmentIds();
-    const filePaths = getFilePaths();
-    void useAgentRunStore.getState().workspaceActions.sendMessage(
-      trimmed,
-      attachmentIds.length > 0 ? attachmentIds : undefined,
-      filePaths.length > 0 ? filePaths : undefined,
-    );
-    clearAttachments();
-    useAppUIStore.getState().setShowNewWorkspaceModal(false);
-  }, [prompt, getAttachmentIds, getFilePaths, clearAttachments]);
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    try {
+      const attachmentIds = getAttachmentIds();
+      const filePaths = getFilePaths();
+
+      const store = useAgentRunStore.getState();
+      const created = await store.workspaceActions.sendMessage(
+        trimmed,
+        attachmentIds.length > 0 ? attachmentIds : undefined,
+        filePaths.length > 0 ? filePaths : undefined,
+      );
+
+      if (created && startImmediately) {
+        let finalPrompt = trimmed;
+        if (mode === 'plan') {
+          finalPrompt = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${trimmed}`;
+        } else if (mode === 'ask') {
+          finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${trimmed}`;
+        }
+        await useAgentRunStore.getState().workspaceActions.runPendingWorkspace(
+          mode === 'plan',
+          finalPrompt,
+          attachmentIds.length > 0 ? attachmentIds : undefined,
+          filePaths.length > 0 ? filePaths : undefined,
+        );
+      }
+
+      clearAttachments();
+      useAppUIStore.getState().setShowNewWorkspaceModal(false);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [prompt, submitting, startImmediately, mode, getAttachmentIds, getFilePaths, clearAttachments]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -42,11 +95,17 @@ export function NewWorkspaceModal() {
       }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        handleSubmit();
+        void handleSubmit();
       }
     },
     [handleClose, handleSubmit],
   );
+
+  const cycleMode = () => {
+    setMode((m) => MODE_CYCLE[(MODE_CYCLE.indexOf(m) + 1) % MODE_CYCLE.length]);
+  };
+
+  const modeConfig = MODE_LABELS[mode];
 
   return (
     <div
@@ -83,6 +142,45 @@ export function NewWorkspaceModal() {
               <ImageThumbnails images={attachments} onRemove={removeAttachment} />
             </div>
           )}
+
+          <label className="mt-3 flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={startImmediately}
+              onChange={(e) => setStartImmediately(e.target.checked)}
+              className="accent-accent h-3.5 w-3.5"
+            />
+            <span className="text-xs text-primary">Start run immediately</span>
+          </label>
+
+          {startImmediately && (
+            <div className="mt-2 flex items-center gap-1.5">
+              <ModelEffortSelector
+                agent={selectedAgent}
+                model={selectedModel}
+                effort={selectedEffort}
+                onAgentChange={setSelectedAgent}
+                onModelChange={setSelectedModel}
+                onEffortChange={setSelectedEffort}
+              />
+              <Tooltip text={MODE_TOOLTIPS[mode]}>
+                <button
+                  type="button"
+                  onClick={cycleMode}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                    mode === 'code'
+                      ? 'btn-secondary border-edge text-primary'
+                      : mode === 'plan'
+                        ? 'border-accent bg-accent/20 text-accent-light'
+                        : 'border-amber-500 bg-amber-500/20 text-amber-300'
+                  }`}
+                >
+                  {MODE_ICONS[mode]}
+                  {modeConfig}
+                </button>
+              </Tooltip>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-edge px-5 py-3">
@@ -95,11 +193,11 @@ export function NewWorkspaceModal() {
           </button>
           <button
             type="button"
-            onClick={handleSubmit}
-            disabled={!prompt.trim()}
+            onClick={() => void handleSubmit()}
+            disabled={!prompt.trim() || submitting}
             className="btn-primary rounded px-3 py-1.5 text-xs font-medium text-on-accent"
           >
-            Create
+            {submitting ? 'Starting…' : startImmediately ? 'Create & Run' : 'Create'}
           </button>
         </div>
       </div>
