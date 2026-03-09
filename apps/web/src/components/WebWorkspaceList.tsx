@@ -1,10 +1,21 @@
-import { memo, useCallback, useMemo, useState } from "react";
-import { FiPlus, FiCircle, FiExternalLink, FiChevronRight, FiFileText, FiEdit3, FiMap, FiHelpCircle } from "react-icons/fi";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import {
+  FiPlus,
+  FiCircle,
+  FiExternalLink,
+  FiChevronRight,
+  FiFileText,
+  FiEdit3,
+  FiMap,
+  FiHelpCircle,
+} from "react-icons/fi";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
 import { useAgentRunStore } from "../stores/agentRunStore";
 import { usePRStatus } from "../hooks/usePRStatus";
+import { useFileMention } from "../hooks/useFileMention";
 import { WebModelEffortSelector } from "./WebModelEffortSelector";
+import { WebFileMentionMenu } from "./WebFileMentionMenu";
 import type { TicketStatus } from "../types";
 
 type InteractionMode = "code" | "plan" | "ask";
@@ -26,7 +37,9 @@ const MODE_CONFIG: Record<
   },
   ask: {
     label: "Ask",
-    icon: <FiHelpCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
+    icon: (
+      <FiHelpCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+    ),
     style: "border-amber-500 bg-amber-500/20 text-amber-300",
   },
 };
@@ -119,9 +132,7 @@ function CollapsibleStatusGroup({
         className="grid transition-[grid-template-rows] duration-200 ease-out"
         style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
       >
-        <div className="overflow-hidden">
-          {children}
-        </div>
+        <div className="overflow-hidden">{children}</div>
       </div>
     </div>
   );
@@ -153,9 +164,20 @@ interface WorkspaceItemProps {
 }
 
 const WorkspaceItem = memo(
-  function WorkspaceItem({ id, status, preview, ticketTitle, userName, prState, prUrl, isSelected, onSelect }: WorkspaceItemProps) {
+  function WorkspaceItem({
+    id,
+    status,
+    preview,
+    ticketTitle,
+    userName,
+    prState,
+    prUrl,
+    isSelected,
+    onSelect,
+  }: WorkspaceItemProps) {
     const dotColor = STATUS_DOT_COLOR[status] ?? STATUS_DOT_COLOR.pending;
-    const displayText = ticketTitle || preview?.split("\n")[0] || "New Workspace";
+    const displayText =
+      ticketTitle || preview?.split("\n")[0] || "New Workspace";
     const prConfig = prState ? PR_STATE_CONFIG[prState] : null;
 
     return (
@@ -168,11 +190,15 @@ const WorkspaceItem = memo(
             : "text-muted hover:bg-surface-elevated hover:text-primary"
         }`}
       >
-        <FiCircle className={`mt-0.5 h-2.5 w-2.5 shrink-0 self-start fill-current ${dotColor}`} />
+        <FiCircle
+          className={`mt-0.5 h-2.5 w-2.5 shrink-0 self-start fill-current ${dotColor}`}
+        />
         <div className="min-w-0 flex-1">
           <span className="block truncate">{displayText}</span>
           {userName && (
-            <span className="block truncate text-xs text-muted">{userName}</span>
+            <span className="block truncate text-xs text-muted">
+              {userName}
+            </span>
           )}
         </div>
         {prConfig && (
@@ -217,11 +243,19 @@ export function WebWorkspaceList({
   const [startImmediately, setStartImmediately] = useState(true);
   const [mode, setMode] = useState<InteractionMode>("code");
   const [docsOpen, setDocsOpen] = useState(true);
+  const newPromptRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedModel = useAgentRunStore((s) => s.selectedModel);
   const selectedEffort = useAgentRunStore((s) => s.selectedEffort);
   const setSelectedModel = useAgentRunStore((s) => s.setSelectedModel);
   const setSelectedEffort = useAgentRunStore((s) => s.setSelectedEffort);
+
+  const fileMention = useFileMention(
+    newPrompt,
+    setNewPrompt,
+    repoPath ?? "",
+    newPromptRef,
+  );
 
   const handleSelect = useCallback(
     (id: string) => onSelectWorkspace(id),
@@ -242,6 +276,11 @@ export function WebWorkspaceList({
         finalPrompt = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${prompt}`;
       } else if (startImmediately && mode === "ask") {
         finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${prompt}`;
+      }
+
+      const mentionedFiles = fileMention.getMentionedFiles();
+      if (mentionedFiles.length > 0) {
+        finalPrompt += `\n\n<trace-internal>Referenced files: ${mentionedFiles.join(", ")}</trace-internal>`;
       }
 
       if (startImmediately) {
@@ -268,7 +307,19 @@ export function WebWorkspaceList({
     } finally {
       setCreating(false);
     }
-  }, [newPrompt, creating, startImmediately, mode, selectedModel, selectedEffort, createWorkspace, createWorkspaceAndSpawn, channelId, onSelectWorkspace]);
+  }, [
+    newPrompt,
+    creating,
+    startImmediately,
+    mode,
+    selectedModel,
+    selectedEffort,
+    fileMention,
+    createWorkspace,
+    createWorkspaceAndSpawn,
+    channelId,
+    onSelectWorkspace,
+  ]);
 
   const items = useMemo(
     () =>
@@ -359,7 +410,9 @@ export function WebWorkspaceList({
                 count={group.items.length}
               >
                 {group.items.map((item) => {
-                  const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
+                  const prInfo = item.branch
+                    ? prStatusByBranch.get(item.branch)
+                    : undefined;
                   return (
                     <WorkspaceItem
                       key={item.id}
@@ -401,7 +454,9 @@ export function WebWorkspaceList({
                 >
                   <div className="overflow-hidden">
                     {documentItems.map((item) => {
-                      const prInfo = item.branch ? prStatusByBranch.get(item.branch) : undefined;
+                      const prInfo = item.branch
+                        ? prStatusByBranch.get(item.branch)
+                        : undefined;
                       return (
                         <WorkspaceItem
                           key={item.id}
@@ -428,23 +483,38 @@ export function WebWorkspaceList({
       {showNewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-96 mx-4 rounded-lg border border-edge bg-surface-elevated p-4 shadow-xl">
-            <h3 className="text-sm font-medium text-primary">
-              New Workspace
-            </h3>
-            <textarea
-              value={newPrompt}
-              onChange={(e) => setNewPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && newPrompt.trim() && !creating) {
-                  e.preventDefault();
-                  void handleCreate();
-                }
-              }}
-              placeholder="Describe what you'd like to work on..."
-              className="mt-2 w-full rounded-md border border-edge bg-surface p-2 text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none"
-              rows={4}
-              autoFocus
-            />
+            <h3 className="text-sm font-medium text-primary">New Workspace</h3>
+            <div className="relative mt-2">
+              <WebFileMentionMenu
+                isOpen={fileMention.isOpen}
+                files={fileMention.filteredFiles}
+                selectedIndex={fileMention.selectedIndex}
+                onSelect={fileMention.selectFile}
+              />
+              <textarea
+                ref={newPromptRef}
+                value={newPrompt}
+                onChange={(e) => setNewPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (fileMention.handleKeyDown(e)) return;
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    newPrompt.trim() &&
+                    !creating
+                  ) {
+                    e.preventDefault();
+                    void handleCreate();
+                  }
+                }}
+                onSelect={fileMention.handleSelect}
+                onClick={fileMention.handleSelect}
+                placeholder="Describe what you'd like to work on... (@ for files)"
+                className="w-full rounded-md border border-edge bg-surface p-2 text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none"
+                rows={4}
+                autoFocus
+              />
+            </div>
             <label className="mt-2 flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -452,7 +522,9 @@ export function WebWorkspaceList({
                 onChange={(e) => setStartImmediately(e.target.checked)}
                 className="accent-accent h-3.5 w-3.5"
               />
-              <span className="text-xs text-primary">Start run immediately</span>
+              <span className="text-xs text-primary">
+                Start run immediately
+              </span>
             </label>
             {startImmediately && (
               <div className="mt-2 flex items-center gap-1.5">
@@ -490,7 +562,11 @@ export function WebWorkspaceList({
                 onClick={() => void handleCreate()}
                 className="rounded-md bg-accent px-3 py-1.5 text-sm text-on-accent transition-colors hover:bg-accent/80 disabled:opacity-50"
               >
-                {creating ? "Starting…" : startImmediately ? "Create & Run" : "Create"}
+                {creating
+                  ? "Starting…"
+                  : startImmediately
+                    ? "Create & Run"
+                    : "Create"}
               </button>
             </div>
           </div>

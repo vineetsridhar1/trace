@@ -1,29 +1,33 @@
-import { useEffect, useState, useRef } from 'react';
-import { FiEdit3, FiMap, FiHelpCircle } from 'react-icons/fi';
-import { WebModelEffortSelector } from './WebModelEffortSelector';
-import { useAgentRunStore } from '../stores/agentRunStore';
+import { useEffect, useState, useRef } from "react";
+import { FiEdit3, FiMap, FiHelpCircle } from "react-icons/fi";
+import { WebModelEffortSelector } from "./WebModelEffortSelector";
+import { WebFileMentionMenu } from "./WebFileMentionMenu";
+import { useAgentRunStore } from "../stores/agentRunStore";
+import { useFileMention } from "../hooks/useFileMention";
 
-type InteractionMode = 'code' | 'plan' | 'ask';
+type InteractionMode = "code" | "plan" | "ask";
 
-const MODE_CYCLE: InteractionMode[] = ['code', 'plan', 'ask'];
+const MODE_CYCLE: InteractionMode[] = ["code", "plan", "ask"];
 const MODE_CONFIG: Record<
   InteractionMode,
   { label: string; icon: React.ReactNode; style: string }
 > = {
   code: {
-    label: 'Code',
+    label: "Code",
     icon: <FiEdit3 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
-    style: 'btn-secondary border-edge text-primary',
+    style: "btn-secondary border-edge text-primary",
   },
   plan: {
-    label: 'Plan',
+    label: "Plan",
     icon: <FiMap className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
-    style: 'border-accent bg-accent/20 text-accent-light',
+    style: "border-accent bg-accent/20 text-accent-light",
   },
   ask: {
-    label: 'Ask',
-    icon: <FiHelpCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />,
-    style: 'border-amber-500 bg-amber-500/20 text-amber-300',
+    label: "Ask",
+    icon: (
+      <FiHelpCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+    ),
+    style: "border-amber-500 bg-amber-500/20 text-amber-300",
   },
 };
 
@@ -32,6 +36,7 @@ interface WebRunButtonsProps {
   workspaceId: string;
   channelId: string;
   disabled?: boolean;
+  repoPath?: string;
   onRun: (params: {
     prompt: string;
     model: string;
@@ -44,6 +49,7 @@ export function WebRunButtons({
   initialPrompt,
   workspaceId,
   disabled,
+  repoPath,
   onRun,
 }: WebRunButtonsProps) {
   const selectedModel = useAgentRunStore((s) => s.selectedModel);
@@ -52,9 +58,15 @@ export function WebRunButtons({
   const setSelectedEffort = useAgentRunStore((s) => s.setSelectedEffort);
 
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [mode, setMode] = useState<InteractionMode>('plan');
+  const [mode, setMode] = useState<InteractionMode>("plan");
   const [running, setRunning] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileMention = useFileMention(
+    prompt,
+    setPrompt,
+    repoPath ?? "",
+    textareaRef,
+  );
 
   useEffect(() => {
     setPrompt(initialPrompt);
@@ -72,10 +84,15 @@ export function WebRunButtons({
     if (!prompt.trim() || disabled || running) return;
 
     let finalPrompt = prompt;
-    if (mode === 'plan') {
+    if (mode === "plan") {
       finalPrompt = `Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.\n\n${prompt}`;
-    } else if (mode === 'ask') {
+    } else if (mode === "ask") {
       finalPrompt = `<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n${prompt}`;
+    }
+
+    const mentionedFiles = fileMention.getMentionedFiles();
+    if (mentionedFiles.length > 0) {
+      finalPrompt += `\n\n<trace-internal>Referenced files: ${mentionedFiles.join(", ")}</trace-internal>`;
     }
 
     setRunning(true);
@@ -84,7 +101,7 @@ export function WebRunButtons({
         prompt: finalPrompt,
         model: selectedModel,
         effort: selectedEffort,
-        planMode: mode === 'plan',
+        planMode: mode === "plan",
       });
       // Keep running=true — the component will unmount when the workspace
       // status transitions away from "pending" via subscription.
@@ -93,34 +110,49 @@ export function WebRunButtons({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (fileMention.handleKeyDown(e)) return;
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      void handleRun();
+    }
+  };
+
   const config = MODE_CONFIG[mode];
 
   return (
     <div className="border-t border-edge px-3 py-3">
-      <textarea
-        ref={textareaRef}
-        rows={1}
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            void handleRun();
+      <div className="relative mb-2">
+        <WebFileMentionMenu
+          isOpen={fileMention.isOpen}
+          files={fileMention.filteredFiles}
+          selectedIndex={fileMention.selectedIndex}
+          onSelect={fileMention.selectFile}
+        />
+        <textarea
+          ref={textareaRef}
+          rows={1}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onSelect={fileMention.handleSelect}
+          onClick={fileMention.handleSelect}
+          disabled={disabled}
+          placeholder="What would you like to build? (@ for files)"
+          style={
+            {
+              fieldSizing: "content",
+              minHeight: 38,
+              maxHeight: 300,
+            } as React.CSSProperties
           }
-        }}
-        disabled={disabled}
-        placeholder="What would you like to build?"
-        style={
-          {
-            fieldSizing: 'content',
-            minHeight: 38,
-            maxHeight: 300,
-          } as React.CSSProperties
-        }
-        className={`mb-2 w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-edge-hover ${
-          disabled ? 'cursor-not-allowed border-edge opacity-50' : 'border-edge'
-        }`}
-      />
+          className={`w-full resize-none rounded-md border bg-surface px-3 py-2 text-sm text-primary outline-none transition-colors placeholder:text-muted focus:border-edge-hover ${
+            disabled
+              ? "cursor-not-allowed border-edge opacity-50"
+              : "border-edge"
+          }`}
+        />
+      </div>
       <div className="mb-2 flex items-center gap-1.5">
         <WebModelEffortSelector
           model={selectedModel}
@@ -144,7 +176,7 @@ export function WebRunButtons({
         disabled={disabled || !prompt.trim() || running}
         className="btn-primary w-full cursor-pointer rounded-md px-4 py-2 text-sm font-medium text-on-accent disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {running ? 'Starting...' : 'Run'}
+        {running ? "Starting..." : "Run"}
       </button>
     </div>
   );
