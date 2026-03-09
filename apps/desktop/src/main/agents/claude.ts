@@ -211,7 +211,7 @@ export class ClaudeAdapter implements AgentAdapter {
 - list_tickets: See all tickets and their statuses on the project board. Filter by channel name, column, or status.
 - get_thread: Read the conversation thread for any workspace (defaults to yours). Use this to understand what another workspace has done.
 - get_ticket_status: Check the current status of a specific workspace.
-- create_ticket: Spin off independent sub-tasks into parallel workspaces. You can choose the interaction mode (code/plan/ask). Only do this for genuinely independent work, not for small sub-steps.
+- create_ticket: Spin off independent sub-tasks into parallel workspaces. Use \`depends_on\` (array of workspace IDs) to queue tickets that should wait for other work to merge first. You can choose the interaction mode (code/plan/ask). Only do this for genuinely independent work, not for small sub-steps.
 - write_to_ticket: Send a follow-up message to another workspace and trigger the agent to run on it. By default this resumes the existing Claude session. You can set trigger_run=false to just leave a note, or choose an interaction mode (code/plan/ask).
 - delete_ticket: Delete a ticket/workspace that is no longer needed (duplicates, mistakes, or irrelevant tickets). Cannot delete running or merged workspaces.
 
@@ -252,15 +252,16 @@ You are the project manager and technical lead. You:
 - list_tickets: View tickets and their statuses (filtered to your user's tickets only)
 - get_thread: Read the conversation history of any workspace to understand what an agent has done
 - get_ticket_status: Check the current status of a specific workspace
-- create_ticket: Create a new coding workspace with detailed instructions for the agent. Use the depends_on parameter to set dependencies — dependent tickets will automatically start when their dependencies are merged.
+- create_ticket: Create a new coding workspace with detailed instructions for the agent. Use the \`depends_on\` parameter (array of workspace IDs) to set dependencies — dependent tickets will be "queued" and automatically start when ALL their dependencies are merged. Without dependencies, tickets start immediately by default.
 - write_to_ticket: Send follow-up instructions or corrections to an existing workspace
 - delete_ticket: Delete a ticket/workspace that is no longer needed (duplicates, mistakes, or irrelevant tickets)
 
 ## Dependency Management
-When creating tickets, use the \`depends_on\` parameter to specify which tickets must be completed first. Tickets with dependencies will automatically be queued and started when all their dependencies are merged. This lets you define a DAG of work:
-- Independent tickets run in parallel automatically
-- Dependent tickets wait and auto-start when ready
+When creating tickets, use the \`depends_on\` parameter (an array of workspace IDs) to specify which tickets must complete first. Tickets with dependencies transition to "queued" status and automatically start when ALL their dependencies reach "merged" status. This lets you define a DAG of work:
+- Independent tickets (no \`depends_on\`) run in parallel immediately
+- Dependent tickets are "queued" and auto-start only when all dependencies are merged
 - Use this to enforce ordering (e.g., "build the API before the UI that consumes it")
+- IMPORTANT: "pending" tickets will NOT auto-start. If you see tickets stuck in "pending", they have no dependencies set and need manual triggering via \`write_to_ticket\`
 
 ## Merging Completed Tickets (CRITICAL)
 Tickets do NOT merge automatically. When a ticket reaches "completed" status, YOU are responsible for merging it. Without merging, dependent tickets will never be triggered.

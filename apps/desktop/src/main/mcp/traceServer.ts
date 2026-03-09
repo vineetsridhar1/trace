@@ -365,26 +365,30 @@ server.tool(
 // create_ticket
 server.tool(
   "create_ticket",
-  "Create a new workspace/ticket for a sub-task. Use this when you want to spin off independent work into a parallel workspace.",
+  "Create a new workspace/ticket for a sub-task. Use this when you want to spin off independent work into a parallel workspace. Tickets with dependencies (depends_on/depends_on_current) are 'queued' and auto-start when all dependencies are merged. Tickets without dependencies and auto_run=false are 'pending' and will NOT auto-start — they require manual triggering via write_to_ticket.",
   {
     title: z.string().describe("Short title for the ticket."),
     prompt: z
       .string()
       .describe("The full prompt/instructions for the agent that will work on this ticket."),
+    depends_on: z
+      .array(z.string())
+      .optional()
+      .describe("Array of workspace IDs this ticket depends on. The ticket will be queued and auto-start only when ALL listed workspaces are merged. When set, auto_run is ignored."),
     depends_on_current: z
       .boolean()
       .optional()
-      .describe("If true, this ticket will be queued to run after the current workspace merges."),
+      .describe("If true, this ticket depends on the current workspace and will be queued to auto-start after the current workspace merges. Can be combined with depends_on."),
     auto_run: z
       .boolean()
       .optional()
-      .describe("If true, immediately start the agent on this ticket (default: true)."),
+      .describe("If true (default), immediately start the agent. If false, ticket stays in 'pending' status and will NOT auto-start. Ignored when depends_on or depends_on_current is set."),
     interaction_mode: z
       .enum(["code", "plan", "ask"])
       .optional()
       .describe('The interaction mode for the new agent. "code" (default) allows full code changes, "plan" creates a plan for review first, "ask" is read-only analysis.'),
   },
-  async ({ title, prompt, depends_on_current, auto_run, interaction_mode }) => {
+  async ({ title, prompt, depends_on, depends_on_current, auto_run, interaction_mode }) => {
     if (ticketsCreated >= MAX_TICKETS_PER_SESSION) {
       return {
         content: [
@@ -413,18 +417,29 @@ server.tool(
       interactionMode: interaction_mode ?? "code",
     };
 
+    // Collect all dependency workspace IDs
+    const depIds: string[] = [];
+    if (depends_on && depends_on.length > 0) {
+      depIds.push(...depends_on);
+    }
     if (depends_on_current) {
+      depIds.push(WORKSPACE_ID);
+    }
+
+    if (depIds.length > 0) {
+      const uniqueDepIds = [...new Set(depIds)];
       await gqlFetch(SET_DEPENDENCIES_MUTATION, {
         channelId: CHANNEL_ID,
         workspaceId: newWorkspaceId,
-        dependsOnWorkspaceIds: [WORKSPACE_ID],
+        dependsOnWorkspaceIds: uniqueDepIds,
         runConfig,
       });
+      const depDesc = uniqueDepIds.map((id) => id === WORKSPACE_ID ? "current workspace" : id).join(", ");
       return {
         content: [
           {
             type: "text" as const,
-            text: `Created ticket "${title}" (workspace=${newWorkspaceId}). Queued to run after current workspace merges.`,
+            text: `Created ticket "${title}" (workspace=${newWorkspaceId}). Status: queued. Will auto-start when all dependencies are merged: [${depDesc}].`,
           },
         ],
       };
@@ -443,7 +458,7 @@ server.tool(
       content: [
         {
           type: "text" as const,
-          text: `Created ticket "${title}" (workspace=${newWorkspaceId}).${shouldRun ? " Agent run triggered." : " Ticket is pending."}`,
+          text: `Created ticket "${title}" (workspace=${newWorkspaceId}).${shouldRun ? " Agent run triggered." : " Status: pending (will NOT auto-start — use write_to_ticket to trigger it manually)."}`,
         },
       ],
     };
