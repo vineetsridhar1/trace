@@ -58,7 +58,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
 ];
 
-// Module-level cache so both WorkspaceInput and ThreadInput share the same results
+// Module-level cache so callers share the same results
 const CACHE_TTL_MS = 30_000;
 const commandCache = new Map<
   string,

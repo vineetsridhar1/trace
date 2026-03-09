@@ -2,12 +2,7 @@ import { create } from 'zustand';
 import type { MiddlePanelView, DragTarget, ChannelType, AiChat, ProductDocMode } from '../types';
 
 const CHANNEL_VIEW_MAP_KEY = 'trace:channelViewMap';
-const WORKSPACE_SIDEBAR_OPEN_KEY = 'trace:workspaceSidebarOpen';
-const WORKSPACE_SIDEBAR_DOCK_SIDE_KEY = 'trace:workspaceSidebarDockSide';
 const MAIN_NAV_COLLAPSED_KEY = 'trace:mainNavCollapsed';
-const DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 220;
-const MIN_WORKSPACE_SIDEBAR_WIDTH = 180;
-const MAX_WORKSPACE_SIDEBAR_WIDTH = 500;
 const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'documents', 'board', 'projects'];
 
 function loadChannelViewMap(): Record<string, MiddlePanelView> {
@@ -36,41 +31,6 @@ function saveChannelViewMap(map: Record<string, MiddlePanelView>): void {
   }
 }
 
-function loadWorkspaceSidebarOpen(): boolean {
-  try {
-    const raw = localStorage.getItem(WORKSPACE_SIDEBAR_OPEN_KEY);
-    if (raw === null) return typeof window === 'undefined' ? true : window.innerWidth > 768;
-    return raw === 'true';
-  } catch {
-    return true;
-  }
-}
-
-function saveWorkspaceSidebarOpen(isOpen: boolean): void {
-  try {
-    localStorage.setItem(WORKSPACE_SIDEBAR_OPEN_KEY, String(isOpen));
-  } catch {
-    // Quota error — ignore
-  }
-}
-
-function loadWorkspaceSidebarDockSide(): 'left' | 'right' {
-  try {
-    const raw = localStorage.getItem(WORKSPACE_SIDEBAR_DOCK_SIDE_KEY);
-    return raw === 'right' ? 'right' : 'left';
-  } catch {
-    return 'left';
-  }
-}
-
-function saveWorkspaceSidebarDockSide(side: 'left' | 'right'): void {
-  try {
-    localStorage.setItem(WORKSPACE_SIDEBAR_DOCK_SIDE_KEY, side);
-  } catch {
-    // Quota error — ignore
-  }
-}
-
 function loadMainNavCollapsed(): boolean {
   try {
     return localStorage.getItem(MAIN_NAV_COLLAPSED_KEY) === 'true';
@@ -84,16 +44,6 @@ function saveMainNavCollapsed(isCollapsed: boolean): void {
     localStorage.setItem(MAIN_NAV_COLLAPSED_KEY, String(isCollapsed));
   } catch {
     // Quota error — ignore
-  }
-}
-
-function loadWorkspaceSidebarWidth(): number {
-  try {
-    const raw = Number(localStorage.getItem('trace:workspaceSidebarWidth'));
-    if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_WORKSPACE_SIDEBAR_WIDTH;
-    return Math.min(MAX_WORKSPACE_SIDEBAR_WIDTH, Math.max(MIN_WORKSPACE_SIDEBAR_WIDTH, raw));
-  } catch {
-    return DEFAULT_WORKSPACE_SIDEBAR_WIDTH;
   }
 }
 
@@ -126,9 +76,6 @@ export function getDefaultViewForChannel(
 interface AppUIState {
   middlePanelView: MiddlePanelView;
   channelWidth: number;
-  workspaceSidebarWidth: number;
-  workspaceSidebarOpen: boolean;
-  workspaceSidebarDockSide: 'left' | 'right';
   mainNavCollapsed: boolean;
   dragging: DragTarget;
   isFullscreen: boolean;
@@ -163,10 +110,6 @@ interface AppUIState {
   setMiddlePanelView: (view: MiddlePanelView) => void;
   setChannelView: (channelId: string, view: MiddlePanelView) => void;
   setChannelWidth: (width: number | ((prev: number) => number)) => void;
-  setWorkspaceSidebarWidth: (width: number) => void;
-  setWorkspaceSidebarOpen: (open: boolean) => void;
-  setWorkspaceSidebarDockSide: (side: 'left' | 'right') => void;
-  toggleWorkspaceSidebarOpen: () => void;
   setMainNavCollapsed: (collapsed: boolean) => void;
   toggleMainNavCollapsed: () => void;
   setDragging: (target: DragTarget) => void;
@@ -197,9 +140,6 @@ const initialMiddlePanelView: MiddlePanelView =
 export const useAppUIStore = create<AppUIState>((set) => ({
   middlePanelView: initialMiddlePanelView,
   channelWidth: 220,
-  workspaceSidebarWidth: loadWorkspaceSidebarWidth(),
-  workspaceSidebarOpen: loadWorkspaceSidebarOpen(),
-  workspaceSidebarDockSide: loadWorkspaceSidebarDockSide(),
   mainNavCollapsed: loadMainNavCollapsed(),
   dragging: null,
   isFullscreen: false,
@@ -245,22 +185,6 @@ export const useAppUIStore = create<AppUIState>((set) => ({
       channelWidth: typeof width === 'function' ? width(state.channelWidth) : width,
     })),
 
-  setWorkspaceSidebarWidth: (width) => set({ workspaceSidebarWidth: width }),
-
-  setWorkspaceSidebarOpen: (open) => {
-    saveWorkspaceSidebarOpen(open);
-    set({ workspaceSidebarOpen: open });
-  },
-  setWorkspaceSidebarDockSide: (side) => {
-    saveWorkspaceSidebarDockSide(side);
-    set({ workspaceSidebarDockSide: side });
-  },
-  toggleWorkspaceSidebarOpen: () =>
-    set((state) => {
-      const next = !state.workspaceSidebarOpen;
-      saveWorkspaceSidebarOpen(next);
-      return { workspaceSidebarOpen: next };
-    }),
   setMainNavCollapsed: (collapsed) => {
     saveMainNavCollapsed(collapsed);
     set({ mainNavCollapsed: collapsed });

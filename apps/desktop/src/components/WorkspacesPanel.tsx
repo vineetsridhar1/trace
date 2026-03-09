@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   FiBriefcase,
   FiFolder,
-  FiMaximize2,
-  FiMinimize2,
   FiSearch,
   FiX,
 } from 'react-icons/fi';
@@ -123,9 +121,6 @@ interface WorkspacesPanelProps {
   mergedWorkspacesLoaded?: boolean;
   mergedWorkspacesLoading?: boolean;
   onExpandMerged?: () => void;
-  isFullscreen?: boolean;
-  onExpandToFullscreen?: () => void;
-  onDockToSidebar?: () => void;
 }
 
 export function WorkspacesPanel({
@@ -140,9 +135,6 @@ export function WorkspacesPanel({
   mergedWorkspacesLoaded = false,
   mergedWorkspacesLoading = false,
   onExpandMerged,
-  isFullscreen = false,
-  onExpandToFullscreen,
-  onDockToSidebar,
 }: WorkspacesPanelProps) {
   const { user: authUser } = useAuth();
   const [filter, setFilter] = useState<WorkspaceFilter>('all');
@@ -293,30 +285,6 @@ export function WorkspacesPanel({
               </button>
             )}
           </div>
-          {(onDockToSidebar || onExpandToFullscreen) && (
-            <div className="flex items-center gap-2">
-              {onDockToSidebar && (
-                <button
-                  type="button"
-                  onClick={onDockToSidebar}
-                  className="inline-flex items-center gap-2 rounded-xl border border-edge bg-surface-elevated px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-surface"
-                >
-                  <FiMinimize2 className="h-3.5 w-3.5" />
-                  <span>Sidebar</span>
-                </button>
-              )}
-              {!isFullscreen && onExpandToFullscreen && (
-                <button
-                  type="button"
-                  onClick={onExpandToFullscreen}
-                  className="inline-flex items-center gap-2 rounded-xl border border-edge bg-surface-elevated px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-surface"
-                >
-                  <FiMaximize2 className="h-3.5 w-3.5" />
-                  <span>Expand</span>
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
