@@ -134,6 +134,8 @@ interface MessagePanelProps {
   mergedWorkspacesLoaded?: boolean;
   mergedWorkspacesLoading?: boolean;
   onExpandMerged?: () => void;
+  onExpandWorkspacesFullscreen?: () => void;
+  onDockWorkspacesToSidebar?: () => void;
 }
 
 export function MessagePanel({
@@ -166,6 +168,8 @@ export function MessagePanel({
   mergedWorkspacesLoaded,
   mergedWorkspacesLoading,
   onExpandMerged,
+  onExpandWorkspacesFullscreen,
+  onDockWorkspacesToSidebar,
 }: MessagePanelProps) {
   const [projectSubView, setProjectSubView] = useState<
     "list" | "board" | "graph"
@@ -464,6 +468,9 @@ export function MessagePanel({
           mergedWorkspacesLoaded={mergedWorkspacesLoaded}
           mergedWorkspacesLoading={mergedWorkspacesLoading}
           onExpandMerged={onExpandMerged}
+          isFullscreen={isFullscreen}
+          onExpandToFullscreen={onExpandWorkspacesFullscreen}
+          onDockToSidebar={onDockWorkspacesToSidebar}
         />
       ) : middlePanelView === "board" ? (
         <>

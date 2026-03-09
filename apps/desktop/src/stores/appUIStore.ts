@@ -3,6 +3,11 @@ import type { MiddlePanelView, DragTarget, ChannelType, AiChat, ProductDocMode }
 
 const CHANNEL_VIEW_MAP_KEY = 'trace:channelViewMap';
 const MAIN_NAV_COLLAPSED_KEY = 'trace:mainNavCollapsed';
+const WORKSPACE_SIDEBAR_OPEN_KEY = 'trace:workspaceSidebarOpen';
+const WORKSPACE_SIDEBAR_DOCK_SIDE_KEY = 'trace:workspaceSidebarDockSide';
+const DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 220;
+const MIN_WORKSPACE_SIDEBAR_WIDTH = 180;
+const MAX_WORKSPACE_SIDEBAR_WIDTH = 500;
 const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'documents', 'board', 'projects'];
 
 function loadChannelViewMap(): Record<string, MiddlePanelView> {
@@ -44,6 +49,51 @@ function saveMainNavCollapsed(isCollapsed: boolean): void {
     localStorage.setItem(MAIN_NAV_COLLAPSED_KEY, String(isCollapsed));
   } catch {
     // Quota error — ignore
+  }
+}
+
+function loadWorkspaceSidebarOpen(): boolean {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_SIDEBAR_OPEN_KEY);
+    if (raw === null) return typeof window === 'undefined' ? true : window.innerWidth > 768;
+    return raw === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function saveWorkspaceSidebarOpen(isOpen: boolean): void {
+  try {
+    localStorage.setItem(WORKSPACE_SIDEBAR_OPEN_KEY, String(isOpen));
+  } catch {
+    // Quota error — ignore
+  }
+}
+
+function loadWorkspaceSidebarDockSide(): 'left' | 'right' {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_SIDEBAR_DOCK_SIDE_KEY);
+    return raw === 'right' ? 'right' : 'left';
+  } catch {
+    return 'left';
+  }
+}
+
+function saveWorkspaceSidebarDockSide(side: 'left' | 'right'): void {
+  try {
+    localStorage.setItem(WORKSPACE_SIDEBAR_DOCK_SIDE_KEY, side);
+  } catch {
+    // Quota error — ignore
+  }
+}
+
+function loadWorkspaceSidebarWidth(): number {
+  try {
+    const raw = Number(localStorage.getItem('trace:workspaceSidebarWidth'));
+    if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_WORKSPACE_SIDEBAR_WIDTH;
+    return Math.min(MAX_WORKSPACE_SIDEBAR_WIDTH, Math.max(MIN_WORKSPACE_SIDEBAR_WIDTH, raw));
+  } catch {
+    return DEFAULT_WORKSPACE_SIDEBAR_WIDTH;
   }
 }
 
@@ -96,6 +146,9 @@ interface AppUIState {
   showNewWorkspaceModal: boolean;
   addTabMenuOpen: boolean;
   pendingThreadOpen: { channelId: string; workspaceId: string } | null;
+  workspaceSidebarWidth: number;
+  workspaceSidebarOpen: boolean;
+  workspaceSidebarDockSide: 'left' | 'right';
   mobileDrawerOpen: boolean;
   showInstanceSettings: boolean;
 
@@ -129,6 +182,10 @@ interface AppUIState {
   upsertAiChat: (chat: Partial<AiChat> & { id: string }) => void;
   removeAiChat: (id: string) => void;
   prependAiChat: (chat: AiChat) => void;
+  setWorkspaceSidebarWidth: (width: number) => void;
+  setWorkspaceSidebarOpen: (open: boolean) => void;
+  setWorkspaceSidebarDockSide: (side: 'left' | 'right') => void;
+  toggleWorkspaceSidebarOpen: () => void;
   setPendingThreadOpen: (value: { channelId: string; workspaceId: string } | null) => void;
 }
 
@@ -160,6 +217,9 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   showNewWorkspaceModal: false,
   addTabMenuOpen: false,
   pendingThreadOpen: null,
+  workspaceSidebarWidth: loadWorkspaceSidebarWidth(),
+  workspaceSidebarOpen: loadWorkspaceSidebarOpen(),
+  workspaceSidebarDockSide: loadWorkspaceSidebarDockSide(),
   mobileDrawerOpen: false,
   showInstanceSettings: false,
 
@@ -230,5 +290,21 @@ export const useAppUIStore = create<AppUIState>((set) => ({
       aiChats: [chat, ...state.aiChats],
     })),
 
+  setWorkspaceSidebarWidth: (width) => set({ workspaceSidebarWidth: width }),
+
+  setWorkspaceSidebarOpen: (open) => {
+    saveWorkspaceSidebarOpen(open);
+    set({ workspaceSidebarOpen: open });
+  },
+  setWorkspaceSidebarDockSide: (side) => {
+    saveWorkspaceSidebarDockSide(side);
+    set({ workspaceSidebarDockSide: side });
+  },
+  toggleWorkspaceSidebarOpen: () =>
+    set((state) => {
+      const next = !state.workspaceSidebarOpen;
+      saveWorkspaceSidebarOpen(next);
+      return { workspaceSidebarOpen: next };
+    }),
   setPendingThreadOpen: (value) => set({ pendingThreadOpen: value }),
 }));
