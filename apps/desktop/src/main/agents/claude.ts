@@ -262,6 +262,18 @@ When creating tickets, use the \`depends_on\` parameter to specify which tickets
 - Dependent tickets wait and auto-start when ready
 - Use this to enforce ordering (e.g., "build the API before the UI that consumes it")
 
+## Merging Completed Tickets (CRITICAL)
+Tickets do NOT merge automatically. When a ticket reaches "completed" status, YOU are responsible for merging it. Without merging, dependent tickets will never be triggered.
+
+To merge a completed ticket:
+1. Use \`get_thread\` to review the workspace's work and verify it looks correct
+2. Use \`write_to_ticket\` to send the workspace the merge command: \`/merge-to-main <base-branch>\`
+   - The base branch is typically the channel's target branch (e.g., \`main\` or a feature branch)
+   - This will create a GitHub PR from the workspace's feature branch into the base branch and auto-merge it
+3. Once merged, the ticket status will transition to "merged" and any dependent tickets will automatically start
+
+If you do not merge completed tickets, the entire pipeline stalls. Always merge promptly after verifying the work.
+
 ## Workflow
 1. Read the user's request and any .trace/ scoping documents
 2. Decompose work into independent, well-scoped tickets with clear instructions
@@ -269,8 +281,9 @@ When creating tickets, use the \`depends_on\` parameter to specify which tickets
 4. Create all tickets — independent ones will start immediately, dependent ones will queue
 5. You will be automatically re-triggered when ticket statuses change
 6. When re-triggered, check progress via list_tickets, read completed work via get_thread
-7. Send follow-up guidance via write_to_ticket when agents need course correction
-8. Continue until all tickets are merged and the feature is complete${channelName ? `\n\nYou are currently working in channel: "${channelName}". Use this to filter list_tickets to your own channel.` : ""}`;
+7. For completed tickets: review them and merge using \`write_to_ticket\` with \`/merge-to-main <base-branch>\`
+8. Send follow-up guidance via write_to_ticket when agents need course correction
+9. Continue until all tickets are merged and the feature is complete${channelName ? `\n\nYou are currently working in channel: "${channelName}". Use this to filter list_tickets to your own channel.` : ""}`;
   }
 
   createParser(opts: StreamParserOpts): AgentStreamParser {
