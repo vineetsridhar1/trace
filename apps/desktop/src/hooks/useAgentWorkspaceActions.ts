@@ -20,14 +20,12 @@ const GQL_CREATE_WORKSPACE = gql`
     $text: String!
     $attachmentIds: [String!]
     $isProductDoc: Boolean
-    $isOrchestrator: Boolean
   ) {
     createWorkspace(
       channelId: $channelId
       text: $text
       attachmentIds: $attachmentIds
       isProductDoc: $isProductDoc
-      isOrchestrator: $isOrchestrator
     ) {
       workspace {
         ...WorkspaceFields
@@ -208,7 +206,6 @@ interface SpawnOptions {
   systemInstructions?: string;
   permissionMode?: string;
   baseBranch?: string;
-  isOrchestrator?: boolean;
 }
 
 interface UseWorkspaceActionsOptions {
@@ -282,28 +279,22 @@ export function useWorkspaceActions({
         const baseBranch = options.baseBranch ?? getChannelBaseBranch();
         const agentType = runStore.selectedAgent;
 
-        // Auto-detect orchestrator from the workspace store so every caller
-        // is covered without having to pass the flag explicitly.
-        const isOrchestrator = options.isOrchestrator ||
-          (useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId)?.isOrchestrator ?? false);
-
         const result = await window.traceAPI.spawnAgent({
           agentType,
           workspaceId,
           prompt,
           repoPath,
-          creationCommands: isOrchestrator ? undefined : options.creationCommands,
+          creationCommands: options.creationCommands,
           resumeSessionId: options.resumeSessionId,
           filePaths: options.filePaths,
           model: options.model,
           effort: options.effort,
           systemInstructions: options.systemInstructions,
-          permissionMode: isOrchestrator ? "ask" : options.permissionMode,
+          permissionMode: options.permissionMode,
           baseBranch,
           branchPrefix: user?.githubUsername ?? undefined,
           channelId: activeChannelIdRef.current ?? undefined,
           channelName: channelRef.current?.name ?? undefined,
-          isOrchestrator,
           userId: user?.id ?? undefined,
         });
 
@@ -314,7 +305,7 @@ export function useWorkspaceActions({
           return false;
         }
 
-        if (options.setHasWorktreeOnSuccess !== false && !isOrchestrator) {
+        if (options.setHasWorktreeOnSuccess !== false) {
           useThreadStore.getState().setHasWorktree(true);
         }
 
@@ -517,89 +508,6 @@ export function useWorkspaceActions({
     [executeCreateWorkspace, onWorkspaceCreated, upsertWorkspace],
   );
 
-  const createOrchestrator = useCallback(async () => {
-    const chId = activeChannelIdRef.current;
-    if (!chId) return;
-
-    // Capture channel values upfront so they remain stable across awaits
-    const chName = channelRef.current?.name ?? undefined;
-    const baseBranch = getChannelBaseBranch();
-
-    // Check for existing orchestrator in this channel
-    const existing = useWorkspaceStore
-      .getState()
-      .workspaces.find((w) => w.isOrchestrator && w.channelId === chId);
-    if (existing) {
-      // Open the existing orchestrator's thread
-      onWorkspaceCreated(existing);
-      return;
-    }
-
-    const repoPath = getChannelRepoPath();
-    if (!repoPath) return;
-
-    let createdWorkspaceId: string | null = null;
-    try {
-      const { data } = await executeCreateWorkspace({
-        variables: {
-          channelId: chId,
-          text: "",
-          isOrchestrator: true,
-        },
-      });
-      if (!data?.createWorkspace) return;
-      const workspace = data.createWorkspace.workspace as Workspace;
-      createdWorkspaceId = workspace.id;
-      upsertWorkspace(workspace);
-      onWorkspaceCreated(workspace);
-
-      // Auto-run immediately with a default orchestrator prompt
-      const runStore = useAgentRunStore.getState();
-      const orchestratorPrompt =
-        "You are now active as the orchestrator for this channel. Start by reading the .trace/ folder if it exists, then use list_tickets to understand the current state of work. Analyze the current situation and take action — create tickets, set up dependencies, and get things moving. Do not wait for user instructions.";
-
-      runStore.addSpawnedWorkspace(workspace.id);
-      runStore.addActiveRun(workspace.id);
-
-      const result = await window.traceAPI.spawnAgent({
-        agentType: runStore.selectedAgent,
-        workspaceId: workspace.id,
-        prompt: orchestratorPrompt,
-        repoPath,
-        channelId: chId,
-        channelName: chName,
-        baseBranch,
-        isOrchestrator: true,
-        userId: user?.id ?? undefined,
-        model: runStore.selectedModel,
-        effort: "high",
-        permissionMode: "ask",
-      });
-
-      if (!result.success) {
-        useAgentRunStore.getState().removeSpawnedWorkspace(workspace.id);
-        useAgentRunStore.getState().clearActiveRun(workspace.id);
-        console.error("Failed to spawn orchestrator:", result.error);
-        return;
-      }
-
-      await updateWorkspaceStatus(workspace.id, "in_progress");
-    } catch {
-      if (createdWorkspaceId) {
-        useAgentRunStore.getState().removeSpawnedWorkspace(createdWorkspaceId);
-        useAgentRunStore.getState().clearActiveRun(createdWorkspaceId);
-      }
-      console.error("Failed to create orchestrator workspace");
-    }
-  }, [
-    executeCreateWorkspace,
-    getChannelRepoPath,
-    onWorkspaceCreated,
-    updateWorkspaceStatus,
-    upsertWorkspace,
-    user?.id,
-  ]);
-
   const runPendingWorkspace = useCallback(
     async (
       planMode: boolean,
@@ -716,8 +624,7 @@ export function useWorkspaceActions({
         .getState()
         .workspaces.find((w) => w.id === workspaceId);
       const isDocWs = pendingWs?.isProductDoc ?? false;
-      const isOrchestratorWs = pendingWs?.isOrchestrator ?? false;
-      const setupCommands = isDocWs || isOrchestratorWs ? [] : getSetupCommands();
+      const setupCommands = isDocWs ? [] : getSetupCommands();
       if (setupCommands.length > 0) {
         await updateWorkspaceStatus(workspaceId, "creation");
       }
@@ -753,7 +660,6 @@ export function useWorkspaceActions({
             : undefined,
         systemInstructions: instructionParts.join("\n\n"),
         permissionMode: planMode ? "plan" : undefined,
-        isOrchestrator: isOrchestratorWs || undefined,
       });
 
       if (!success && setupCommands.length > 0) {
@@ -784,13 +690,10 @@ export function useWorkspaceActions({
       },
     ) => {
       const isFollowUp = runConfig.followUp === true;
-      const isOrchestratorWs = useWorkspaceStore
-        .getState()
-        .workspaces.find((w) => w.id === workspaceId)?.isOrchestrator ?? false;
 
       // Follow-up runs skip setup commands and status transitions — the
       // worktree already exists and the message was already appended.
-      const creationCommands = isFollowUp || isOrchestratorWs ? [] : getSetupCommands();
+      const creationCommands = isFollowUp ? [] : getSetupCommands();
 
       if (!isFollowUp) {
         await updatePreviewForPendingRun(workspaceId, runConfig.prompt);
@@ -845,7 +748,6 @@ export function useWorkspaceActions({
             ? undefined
             : instructionParts.join("\n\n"),
           permissionMode,
-          isOrchestrator: isOrchestratorWs || undefined,
         },
       );
 
@@ -981,7 +883,6 @@ export function useWorkspaceActions({
           getEffortOptions(selectedAgent, selectedModel).length > 0
             ? selectedEffort
             : undefined,
-        isOrchestrator: selectedWorkspace.isOrchestrator || undefined,
       };
 
       // If this workspace was just picked up from a handoff, don't try to resume
@@ -1138,108 +1039,6 @@ export function useWorkspaceActions({
     ],
   );
 
-  // --- Orchestrator auto-trigger ---
-  // Tracks orchestrator workspace IDs by channel (populated by server events)
-  const orchestratorIdsByChannelRef = useRef<Map<string, string>>(new Map());
-  // Accumulates reasons per channel while orchestrator is running, so re-trigger includes all changes
-  const orchestratorPendingReasonsRef = useRef<Map<string, string[]>>(new Map());
-
-  const resolveOrchestratorId = useCallback(
-    (channelId: string, orchestratorWorkspaceId?: string): string | null => {
-      // Prefer the server-provided ID (works even if workspace isn't in the store)
-      if (orchestratorWorkspaceId) {
-        orchestratorIdsByChannelRef.current.set(channelId, orchestratorWorkspaceId);
-        return orchestratorWorkspaceId;
-      }
-      // Check cached ID from a previous server event
-      const cached = orchestratorIdsByChannelRef.current.get(channelId);
-      if (cached) return cached;
-      // Fall back to store lookup (only works for the active channel)
-      const fromStore = useWorkspaceStore
-        .getState()
-        .workspaces.find((w) => w.isOrchestrator && w.channelId === channelId);
-      return fromStore?.id ?? null;
-    },
-    [],
-  );
-
-  const triggerOrchestrator = useCallback(
-    async (reason: string, channelId?: string, orchestratorWorkspaceId?: string) => {
-      const chId = channelId ?? activeChannelIdRef.current;
-      if (!chId) return;
-
-      const orchId = resolveOrchestratorId(chId, orchestratorWorkspaceId);
-      if (!orchId) return;
-
-      // If orchestrator is currently running, queue the reason for later
-      const isRunning = useAgentRunStore.getState().activeRunWorkspaceIds.has(orchId);
-      if (isRunning) {
-        const pending = orchestratorPendingReasonsRef.current;
-        if (!pending.has(chId)) pending.set(chId, []);
-        pending.get(chId)!.push(reason);
-        return;
-      }
-
-      const triggerPrompt = `A workspace status has changed: ${reason}. Check the current state of all tickets via list_tickets and take any necessary action. If all work is done, summarize the results.`;
-
-      // Persist the prompt so it appears in the orchestrator thread
-      const persisted = await persistPrompt(
-        orchId,
-        triggerPrompt,
-        "Failed to persist orchestrator trigger prompt",
-        undefined,
-        true, // createNewSession
-      );
-      if (!persisted) return;
-
-      await spawnAgentForWorkspace(orchId, triggerPrompt, {
-        statusOnSuccess: "in_progress",
-        errorPrefix: "Failed to spawn orchestrator for status change",
-        model: useAgentRunStore.getState().selectedModel,
-        effort: "high",
-        isOrchestrator: true,
-      });
-    },
-    [resolveOrchestratorId, persistPrompt, spawnAgentForWorkspace],
-  );
-
-  // Check for pending orchestrator triggers when a run completes
-  const checkPendingOrchestratorTrigger = useCallback(
-    (completedWorkspaceId: string) => {
-      // Find which channel this orchestrator belongs to
-      const pending = orchestratorPendingReasonsRef.current;
-      const idsByChannel = orchestratorIdsByChannelRef.current;
-
-      // Look up the channel for this orchestrator ID
-      let chId: string | undefined;
-      for (const [channelId, orchId] of idsByChannel) {
-        if (orchId === completedWorkspaceId) {
-          chId = channelId;
-          break;
-        }
-      }
-      // Fall back to store lookup for active channel
-      if (!chId) {
-        const fromStore = useWorkspaceStore
-          .getState()
-          .workspaces.find((w) => w.id === completedWorkspaceId && w.isOrchestrator);
-        if (!fromStore) return;
-        chId = fromStore.channelId;
-      }
-
-      const reasons = pending.get(chId);
-      if (reasons && reasons.length > 0) {
-        const summary = reasons.join('; ');
-        pending.delete(chId);
-        // Small delay to let status updates settle
-        setTimeout(() => {
-          void triggerOrchestrator(`Status changes while orchestrator was running: ${summary}`, chId);
-        }, 2000);
-      }
-    },
-    [triggerOrchestrator],
-  );
-
   const mergeToMain = useCallback(async () => {
     const selectedWorkspace = useThreadStore.getState().selectedWorkspace;
     const chId = activeChannelIdRef.current;
@@ -1281,9 +1080,6 @@ export function useWorkspaceActions({
       markMerged,
       createWorkspaceForTicket,
       reviewCompletedTicket,
-      createOrchestrator,
-      triggerOrchestrator,
-      checkPendingOrchestratorTrigger,
     });
     return () => useAgentRunStore.getState().clearWorkspaceActions();
   }, [
@@ -1297,9 +1093,6 @@ export function useWorkspaceActions({
     markMerged,
     createWorkspaceForTicket,
     reviewCompletedTicket,
-    createOrchestrator,
-    triggerOrchestrator,
-    checkPendingOrchestratorTrigger,
   ]);
 
   return {
@@ -1313,8 +1106,5 @@ export function useWorkspaceActions({
     markMerged,
     createWorkspaceForTicket,
     reviewCompletedTicket,
-    createOrchestrator,
-    triggerOrchestrator,
-    checkPendingOrchestratorTrigger,
   };
 }

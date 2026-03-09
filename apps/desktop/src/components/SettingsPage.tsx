@@ -31,7 +31,6 @@ interface SettingsPageProps {
       defaultSetupScript?: string | null;
       defaultRunScript?: string | null;
       defaultTeardownScript?: string | null;
-      orchestrateMode?: boolean;
     },
     localConfig: LocalChannelConfig | null,
   ) => Promise<void>;
@@ -401,7 +400,6 @@ interface ChannelSettingsSectionProps {
       defaultSetupScript?: string | null;
       defaultRunScript?: string | null;
       defaultTeardownScript?: string | null;
-      orchestrateMode?: boolean;
     },
     localConfig: LocalChannelConfig | null,
   ) => Promise<void>;
@@ -433,10 +431,6 @@ function ChannelSettingsSection({
   const [draftDefaultTeardownScript, setDraftDefaultTeardownScript] = useState(
     channel.defaultTeardownScript ?? "",
   );
-  const [draftOrchestrateMode, setDraftOrchestrateMode] = useState(
-    channel.orchestrateMode ?? false,
-  );
-
   // User settings (local config)
   const [draftLocalRepoPath, setDraftLocalRepoPath] = useState(
     localConfig?.localRepoPath ?? "",
@@ -504,14 +498,12 @@ function ChannelSettingsSection({
         defaultSetupScript?: string | null;
         defaultRunScript?: string | null;
         defaultTeardownScript?: string | null;
-        orchestrateMode?: boolean;
       } = {
         name: draftName.trim() || undefined,
         workspacesEnabled: draftWorkspacesEnabled,
         defaultSetupScript: draftDefaultSetupScript.trim() || null,
         defaultRunScript: draftDefaultRunScript.trim() || null,
         defaultTeardownScript: draftDefaultTeardownScript.trim() || null,
-        orchestrateMode: draftOrchestrateMode,
       };
       if (channel.type === "project") {
         channelData.teamIds = draftTeamIds;
@@ -542,7 +534,6 @@ function ChannelSettingsSection({
     draftDefaultSetupScript,
     draftDefaultRunScript,
     draftDefaultTeardownScript,
-    draftOrchestrateMode,
     draftLocalRepoPath,
     draftSetupScript,
     draftRunScript,
@@ -737,39 +728,6 @@ function ChannelSettingsSection({
                 />
               </button>
             </div>
-
-            {/* Orchestrate mode toggle */}
-            {draftWorkspacesEnabled && (
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-medium text-primary">
-                    Orchestrate Mode
-                  </label>
-                  <p className="text-xs text-muted">
-                    Auto-create an orchestrator to manage all tasks
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraftOrchestrateMode(!draftOrchestrateMode)
-                  }
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                    draftOrchestrateMode
-                      ? "bg-accent"
-                      : "bg-surface-elevated"
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      draftOrchestrateMode
-                        ? "translate-x-4"
-                        : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
 
             {/* Repository section */}
             {draftWorkspacesEnabled && (

@@ -60,7 +60,6 @@ type Channel {
   githubUrl: String
   id: ID!
   name: String!
-  orchestrateMode: Boolean!
   serverId: String!
   teamIds: [String!]!
   type: String!
@@ -205,11 +204,11 @@ type Mutation {
   appendPrompt(attachmentIds: [String!], channelId: ID!, createNewSession: Boolean, sessionId: ID, text: String!, workspaceId: ID!): CreateWorkspacePayload!
   connectToInstance(instanceId: ID!, password: String): InstanceConnection!
   createAiChat(channelId: ID, serverId: ID!, title: String): AiChat!
-  createChannel(baseBranch: String, defaultRunScript: String, defaultSetupScript: String, defaultTeardownScript: String, githubUrl: String, name: String!, orchestrateMode: Boolean, serverId: String, teamIds: [String!], type: String, workspacesEnabled: Boolean): Channel!
+  createChannel(baseBranch: String, defaultRunScript: String, defaultSetupScript: String, defaultTeardownScript: String, githubUrl: String, name: String!, serverId: String, teamIds: [String!], type: String, workspacesEnabled: Boolean): Channel!
   createColumn(channelId: ID!, color: String, name: String!, slug: String!): KanbanColumn!
   createServer(avatarUrl: String, name: String!): Server!
   createSession(channelId: ID!, workspaceId: ID!): Session!
-  createWorkspace(attachmentIds: [String!], channelId: ID!, isOrchestrator: Boolean, isProductDoc: Boolean, text: String!, ticketId: ID): CreateWorkspacePayload!
+  createWorkspace(attachmentIds: [String!], channelId: ID!, isProductDoc: Boolean, text: String!, ticketId: ID): CreateWorkspacePayload!
   deleteAiChat(id: ID!): Boolean!
   deleteChannel(id: ID!): Boolean!
   deleteColumn(columnId: ID!): Boolean!
@@ -229,21 +228,13 @@ type Mutation {
   setTicketDependencies(channelId: ID!, dependsOnWorkspaceIds: [ID!]!, runConfig: JSON!, workspaceId: ID!): Workspace!
   setWorkspacePrUrl(channelId: ID!, prUrl: String!, workspaceId: ID!): Boolean!
   triggerWorkspaceRun(channelId: ID!, runConfig: JSON!, workspaceId: ID!): Boolean!
-  updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, defaultTeardownScript: String, githubUrl: String, id: ID!, name: String, orchestrateMode: Boolean, teamIds: [String!], workspacesEnabled: Boolean): Channel!
+  updateChannel(baseBranch: String, defaultRepoPath: String, defaultRunScript: String, defaultSetupScript: String, defaultTeardownScript: String, githubUrl: String, id: ID!, name: String, teamIds: [String!], workspacesEnabled: Boolean): Channel!
   updateColumn(color: String, columnId: ID!, name: String, sortOrder: Int): KanbanColumn!
   updateInitialPrompt(attachmentIds: [String!], channelId: ID!, text: String!, workspaceId: ID!): CreateWorkspacePayload!
   updateQueuedRunConfig(runConfig: JSON!, workspaceId: ID!): Boolean!
   updateWorkspacePreview(channelId: ID!, preview: String!, workspaceId: ID!): Workspace!
   updateWorkspaceStatus(channelId: ID!, status: String!, workspaceId: ID!): Workspace!
   uploadAttachment(contentType: String!, data: String!, filename: String!): Attachment!
-}
-
-type OrchestratorTriggerPayload {
-  channelId: String!
-  newStatus: String!
-  orchestratorWorkspaceId: String!
-  ticketTitle: String!
-  workspaceId: String!
 }
 
 type PRStatus {
@@ -325,7 +316,6 @@ type Subscription {
   channelMessageCreated(channelId: ID!): ChannelMessage!
   channelMessageCreatedInServer(serverId: ID!): ChannelMessage!
   instanceStatusChanged(serverId: ID!): InstanceStatusPayload!
-  orchestratorTrigger(serverId: ID!): OrchestratorTriggerPayload!
   presenceUpdated(channelId: ID!): PresencePayload!
   sessionEventCreated(channelId: ID!): SessionEventPayload!
   sessionEventUpdated(channelId: ID!): SessionEventPayload!
@@ -418,7 +408,6 @@ type Workspace {
   createdAt: DateTime!
   id: ID!
   importance: String!
-  isOrchestrator: Boolean!
   isProductDoc: Boolean!
   preview: String
   queuedRunConfig: JSON

@@ -100,7 +100,6 @@ export type Channel = {
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
-  orchestrateMode: Scalars['Boolean']['output'];
   serverId: Scalars['String']['output'];
   teamIds: Array<Scalars['String']['output']>;
   type: Scalars['String']['output'];
@@ -321,7 +320,6 @@ export type MutationcreateChannelArgs = {
   defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
-  orchestrateMode?: InputMaybe<Scalars['Boolean']['input']>;
   serverId?: InputMaybe<Scalars['String']['input']>;
   teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
   type?: InputMaybe<Scalars['String']['input']>;
@@ -352,7 +350,6 @@ export type MutationcreateSessionArgs = {
 export type MutationcreateWorkspaceArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
-  isOrchestrator?: InputMaybe<Scalars['Boolean']['input']>;
   isProductDoc?: InputMaybe<Scalars['Boolean']['input']>;
   text: Scalars['String']['input'];
   ticketId?: InputMaybe<Scalars['ID']['input']>;
@@ -488,7 +485,6 @@ export type MutationupdateChannelArgs = {
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
-  orchestrateMode?: InputMaybe<Scalars['Boolean']['input']>;
   teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
   workspacesEnabled?: InputMaybe<Scalars['Boolean']['input']>;
 };
@@ -534,15 +530,6 @@ export type MutationuploadAttachmentArgs = {
   contentType: Scalars['String']['input'];
   data: Scalars['String']['input'];
   filename: Scalars['String']['input'];
-};
-
-export type OrchestratorTriggerPayload = {
-  __typename?: 'OrchestratorTriggerPayload';
-  channelId: Scalars['String']['output'];
-  newStatus: Scalars['String']['output'];
-  orchestratorWorkspaceId: Scalars['String']['output'];
-  ticketTitle: Scalars['String']['output'];
-  workspaceId: Scalars['String']['output'];
 };
 
 export type PRStatus = {
@@ -747,7 +734,6 @@ export type Subscription = {
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
   instanceStatusChanged: InstanceStatusPayload;
-  orchestratorTrigger: OrchestratorTriggerPayload;
   presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
@@ -780,11 +766,6 @@ export type SubscriptionchannelMessageCreatedInServerArgs = {
 
 
 export type SubscriptioninstanceStatusChangedArgs = {
-  serverId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionorchestratorTriggerArgs = {
   serverId: Scalars['ID']['input'];
 };
 
@@ -920,7 +901,6 @@ export type Workspace = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
-  isOrchestrator: Scalars['Boolean']['output'];
   isProductDoc: Scalars['Boolean']['output'];
   preview?: Maybe<Scalars['String']['output']>;
   queuedRunConfig?: Maybe<Scalars['JSON']['output']>;
@@ -1072,7 +1052,6 @@ export type ResolversTypes = {
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
-  OrchestratorTriggerPayload: ResolverTypeWrapper<OrchestratorTriggerPayload>;
   PRStatus: ResolverTypeWrapper<PRStatusMapper>;
   PresencePayload: ResolverTypeWrapper<PresencePayloadMapper>;
   PresenceUser: ResolverTypeWrapper<PresenceUserMapper>;
@@ -1132,7 +1111,6 @@ export type ResolversParentTypes = {
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
   Mutation: Record<PropertyKey, never>;
-  OrchestratorTriggerPayload: OrchestratorTriggerPayload;
   PRStatus: PRStatusMapper;
   PresencePayload: PresencePayloadMapper;
   PresenceUser: PresenceUserMapper;
@@ -1221,7 +1199,6 @@ export type ChannelResolvers<ContextType = any, ParentType extends ResolversPare
   githubUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  orchestrateMode?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   serverId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   teamIds?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1396,14 +1373,6 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   uploadAttachment?: Resolver<ResolversTypes['Attachment'], ParentType, ContextType, RequireFields<MutationuploadAttachmentArgs, 'contentType' | 'data' | 'filename'>>;
 };
 
-export type OrchestratorTriggerPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['OrchestratorTriggerPayload'] = ResolversParentTypes['OrchestratorTriggerPayload']> = {
-  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  newStatus?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  orchestratorWorkspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  ticketTitle?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-};
-
 export type PRStatusResolvers<ContextType = any, ParentType extends ResolversParentTypes['PRStatus'] = ResolversParentTypes['PRStatus']> = {
   branch?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   hasPR?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -1483,7 +1452,6 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   channelMessageCreated?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreated", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedArgs, 'channelId'>>;
   channelMessageCreatedInServer?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreatedInServer", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedInServerArgs, 'serverId'>>;
   instanceStatusChanged?: SubscriptionResolver<ResolversTypes['InstanceStatusPayload'], "instanceStatusChanged", ParentType, ContextType, RequireFields<SubscriptioninstanceStatusChangedArgs, 'serverId'>>;
-  orchestratorTrigger?: SubscriptionResolver<ResolversTypes['OrchestratorTriggerPayload'], "orchestratorTrigger", ParentType, ContextType, RequireFields<SubscriptionorchestratorTriggerArgs, 'serverId'>>;
   presenceUpdated?: SubscriptionResolver<ResolversTypes['PresencePayload'], "presenceUpdated", ParentType, ContextType, RequireFields<SubscriptionpresenceUpdatedArgs, 'channelId'>>;
   sessionEventCreated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventCreated", ParentType, ContextType, RequireFields<SubscriptionsessionEventCreatedArgs, 'channelId'>>;
   sessionEventUpdated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventUpdated", ParentType, ContextType, RequireFields<SubscriptionsessionEventUpdatedArgs, 'channelId'>>;
@@ -1576,7 +1544,6 @@ export type WorkspaceResolvers<ContextType = any, ParentType extends ResolversPa
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   importance?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  isOrchestrator?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isProductDoc?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   preview?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   queuedRunConfig?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
@@ -1645,7 +1612,6 @@ export type Resolvers<ContextType = any> = {
   JSON?: GraphQLScalarType;
   KanbanColumn?: KanbanColumnResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
-  OrchestratorTriggerPayload?: OrchestratorTriggerPayloadResolvers<ContextType>;
   PRStatus?: PRStatusResolvers<ContextType>;
   PresencePayload?: PresencePayloadResolvers<ContextType>;
   PresenceUser?: PresenceUserResolvers<ContextType>;

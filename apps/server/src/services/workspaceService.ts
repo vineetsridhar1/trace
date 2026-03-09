@@ -211,7 +211,7 @@ export async function updateWorkspaceSummaryAndBranch(
   });
 }
 
-export async function createUserWorkspace(channelId: string, text: string, attachmentIds?: string[], isProductDoc = false, userId?: string, isOrchestrator = false) {
+export async function createUserWorkspace(channelId: string, text: string, attachmentIds?: string[], isProductDoc = false, userId?: string) {
   await ensureManualInputCliSession();
 
   const attachmentMetas = await resolveAttachmentMetas(attachmentIds ?? []);
@@ -224,7 +224,6 @@ export async function createUserWorkspace(channelId: string, text: string, attac
         preview: text,
         importance: 'important',
         isProductDoc,
-        isOrchestrator,
         ...(userId ? { userId } : {}),
         ...(attachmentIds && attachmentIds.length > 0
           ? { attachments: { connect: attachmentIds.map((id) => ({ id })) } }

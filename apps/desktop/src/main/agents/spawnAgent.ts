@@ -80,14 +80,7 @@ async function runSetupScripts(
   }
 }
 
-function buildTraceContext(worktreePath: string, config: SpawnConfig): string {
-  if (config.isOrchestrator) {
-    const branchInfo = config.baseBranch ? ` The target base branch is ${config.baseBranch}.` : '';
-    return (
-      `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
-      `You are an orchestrator running on the base branch at ${worktreePath}. You do not have your own worktree.${branchInfo}`
-    );
-  }
+function buildTraceContext(worktreePath: string): string {
   return (
     `You are working inside Trace, a Mac app for running coding agents in parallel.\n` +
     `Your work takes place in ${worktreePath} which is an isolated git worktree created for this task.`
@@ -111,34 +104,25 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     branchPrefix,
     channelId,
     channelName,
-    isOrchestrator,
   } = config;
 
   const adapter = getAgent(agentType);
 
-  let worktreePath: string;
+  const result = await ensureWorktree(
+    workspaceId,
+    repoPath,
+    baseBranch,
+    branchPrefix,
+  );
+  const worktreePath = result.worktreePath;
 
-  if (isOrchestrator) {
-    // Orchestrators run on the base repo directly — no worktree, no branch
-    worktreePath = repoPath;
-    permissionMode = "ask";
-  } else {
-    const result = await ensureWorktree(
+  if (result.created && creationCommands && creationCommands.length > 0) {
+    appendAgentDebugLog(
       workspaceId,
-      repoPath,
-      baseBranch,
-      branchPrefix,
+      `running ${creationCommands.length} setup script(s)`,
     );
-    worktreePath = result.worktreePath;
-
-    if (result.created && creationCommands && creationCommands.length > 0) {
-      appendAgentDebugLog(
-        workspaceId,
-        `running ${creationCommands.length} setup script(s)`,
-      );
-      await runSetupScripts(worktreePath, creationCommands);
-      appendAgentDebugLog(workspaceId, "setup scripts completed");
-    }
+    await runSetupScripts(worktreePath, creationCommands);
+    appendAgentDebugLog(workspaceId, "setup scripts completed");
   }
 
   const startedAt = Date.now();
@@ -147,8 +131,8 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     `spawn start agent=${agentType} cwd=${worktreePath} inactivityTimeoutMs=${AGENT_INACTIVITY_TIMEOUT_MS} promptLen=${prompt.length}`,
   );
 
-  // Rename branch on first spawn (not resume) — skip for orchestrators
-  if (!isOrchestrator) {
+  // Rename branch on first spawn (not resume)
+  {
     const prefix = branchPrefix || "trace";
     const defaultBranch = `${prefix}/${workspaceId.slice(0, 8)}`;
     const currentBranch = await getWorktreeBranch(workspaceId);
@@ -235,13 +219,12 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
   let finalPrompt = prompt;
   if (!resumeSessionId) {
     const parts: SystemPromptParts = {
-      traceContext: buildTraceContext(worktreePath, config),
+      traceContext: buildTraceContext(worktreePath),
       systemInstructions,
       interactionMode: interactionMode,
       filePaths,
       hasMcpTools,
       channelName,
-      isOrchestrator,
     };
     const wrappedSystemPrompt = adapter.wrapSystemPrompt
       ? adapter.wrapSystemPrompt(parts)
@@ -271,7 +254,6 @@ export async function spawnAgent(config: SpawnConfig): Promise<string> {
     channelId,
     channelName,
     serverUrl: SERVER_URL,
-    isOrchestrator,
     userId: config.userId,
   });
 

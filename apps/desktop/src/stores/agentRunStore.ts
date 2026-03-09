@@ -88,9 +88,6 @@ interface WorkspaceActions {
       planMode: boolean;
     },
   ) => Promise<void>;
-  createOrchestrator: () => Promise<void>;
-  triggerOrchestrator: (reason: string, channelId?: string, orchestratorWorkspaceId?: string) => Promise<void>;
-  checkPendingOrchestratorTrigger: (completedWorkspaceId: string) => void;
 }
 
 const noopWarn =
@@ -120,15 +117,6 @@ const defaultWorkspaceActions: WorkspaceActions = {
   reviewCompletedTicket: noopWarn(
     "reviewCompletedTicket",
   ) as WorkspaceActions["reviewCompletedTicket"],
-  createOrchestrator: noopWarn(
-    "createOrchestrator",
-  ) as WorkspaceActions["createOrchestrator"],
-  triggerOrchestrator: noopWarn(
-    "triggerOrchestrator",
-  ) as WorkspaceActions["triggerOrchestrator"],
-  checkPendingOrchestratorTrigger: noopWarn(
-    "checkPendingOrchestratorTrigger",
-  ) as WorkspaceActions["checkPendingOrchestratorTrigger"],
 };
 
 interface AgentRunState {

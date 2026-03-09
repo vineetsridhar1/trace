@@ -159,7 +159,7 @@ export function WorkspacesPanel({
   }, [kanbanColumns]);
 
   const regularWorkspaces = useMemo(() => {
-    const items = workspaces.filter((workspace) => !workspace.isProductDoc && !workspace.isOrchestrator);
+    const items = workspaces.filter((workspace) => !workspace.isProductDoc);
     return [...items].sort((a, b) => {
       if (authUser?.id) {
         const aOwn = a.userId === authUser.id ? 0 : 1;

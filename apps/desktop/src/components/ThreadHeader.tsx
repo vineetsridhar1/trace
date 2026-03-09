@@ -3,7 +3,6 @@ import {
   FiCheck,
   FiClock,
   FiCopy,
-  FiCpu,
   FiExternalLink,
   FiGitPullRequest,
   FiLink,
@@ -44,7 +43,6 @@ interface ThreadHeaderProps {
   onSwitchSession: (sessionId: string) => Promise<void>;
   ticketTitle: string | null;
   user: { name: string; avatarUrl: string | null } | null;
-  isOrchestrator?: boolean;
 }
 
 export const ThreadHeader = memo(function ThreadHeader({
@@ -70,7 +68,6 @@ export const ThreadHeader = memo(function ThreadHeader({
   onSwitchSession,
   ticketTitle,
   user,
-  isOrchestrator,
 }: ThreadHeaderProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -187,12 +184,7 @@ export const ThreadHeader = memo(function ThreadHeader({
             {user.name.charAt(0).toUpperCase()}
           </div>
         ) : null}
-        {isOrchestrator ? (
-          <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
-            <FiCpu className="h-3.5 w-3.5" aria-hidden="true" />
-            Orchestrator
-          </span>
-        ) : ticketTitle ? (
+        {ticketTitle ? (
           <span className="truncate max-w-[80%] text-xs font-medium text-primary">
             {ticketTitle}
           </span>
@@ -458,23 +450,19 @@ export const ThreadHeader = memo(function ThreadHeader({
                     Mark as merged
                   </button>
                 )}
-                {!isOrchestrator && (
-                  <>
-                    <div className="my-1 h-px bg-surface-elevated" />
-                    <button
-                      type="button"
-                      disabled={!selectedWorkspaceId}
-                      onClick={() => {
-                        onDeleteWorkspace();
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <FiTrash2 className="h-3 w-3" aria-hidden="true" />
-                      Delete workspace
-                    </button>
-                  </>
-                )}
+                <div className="my-1 h-px bg-surface-elevated" />
+                <button
+                  type="button"
+                  disabled={!selectedWorkspaceId}
+                  onClick={() => {
+                    onDeleteWorkspace();
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <FiTrash2 className="h-3 w-3" aria-hidden="true" />
+                  Delete workspace
+                </button>
               </div>
             )}
           </div>

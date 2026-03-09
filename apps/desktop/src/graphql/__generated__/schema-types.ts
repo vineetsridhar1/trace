@@ -85,7 +85,6 @@ export type Channel = {
   githubUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
-  orchestrateMode: Scalars['Boolean']['output'];
   serverId: Scalars['String']['output'];
   teamIds: Array<Scalars['String']['output']>;
   type: Scalars['String']['output'];
@@ -306,7 +305,6 @@ export type MutationCreateChannelArgs = {
   defaultTeardownScript?: InputMaybe<Scalars['String']['input']>;
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
-  orchestrateMode?: InputMaybe<Scalars['Boolean']['input']>;
   serverId?: InputMaybe<Scalars['String']['input']>;
   teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
   type?: InputMaybe<Scalars['String']['input']>;
@@ -337,7 +335,6 @@ export type MutationCreateSessionArgs = {
 export type MutationCreateWorkspaceArgs = {
   attachmentIds?: InputMaybe<Array<Scalars['String']['input']>>;
   channelId: Scalars['ID']['input'];
-  isOrchestrator?: InputMaybe<Scalars['Boolean']['input']>;
   isProductDoc?: InputMaybe<Scalars['Boolean']['input']>;
   text: Scalars['String']['input'];
   ticketId?: InputMaybe<Scalars['ID']['input']>;
@@ -473,7 +470,6 @@ export type MutationUpdateChannelArgs = {
   githubUrl?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
-  orchestrateMode?: InputMaybe<Scalars['Boolean']['input']>;
   teamIds?: InputMaybe<Array<Scalars['String']['input']>>;
   workspacesEnabled?: InputMaybe<Scalars['Boolean']['input']>;
 };
@@ -519,15 +515,6 @@ export type MutationUploadAttachmentArgs = {
   contentType: Scalars['String']['input'];
   data: Scalars['String']['input'];
   filename: Scalars['String']['input'];
-};
-
-export type OrchestratorTriggerPayload = {
-  __typename?: 'OrchestratorTriggerPayload';
-  channelId: Scalars['String']['output'];
-  newStatus: Scalars['String']['output'];
-  orchestratorWorkspaceId: Scalars['String']['output'];
-  ticketTitle: Scalars['String']['output'];
-  workspaceId: Scalars['String']['output'];
 };
 
 export type PrStatus = {
@@ -732,7 +719,6 @@ export type Subscription = {
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
   instanceStatusChanged: InstanceStatusPayload;
-  orchestratorTrigger: OrchestratorTriggerPayload;
   presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
@@ -765,11 +751,6 @@ export type SubscriptionChannelMessageCreatedInServerArgs = {
 
 
 export type SubscriptionInstanceStatusChangedArgs = {
-  serverId: Scalars['ID']['input'];
-};
-
-
-export type SubscriptionOrchestratorTriggerArgs = {
   serverId: Scalars['ID']['input'];
 };
 
@@ -905,7 +886,6 @@ export type Workspace = {
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   importance: Scalars['String']['output'];
-  isOrchestrator: Scalars['Boolean']['output'];
   isProductDoc: Scalars['Boolean']['output'];
   preview?: Maybe<Scalars['String']['output']>;
   queuedRunConfig?: Maybe<Scalars['JSON']['output']>;

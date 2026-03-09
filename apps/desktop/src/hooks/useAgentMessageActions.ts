@@ -4,7 +4,6 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { Workspace, ServerEvent, TicketStatus } from "../types";
 import type { PlanResponseMode } from "../stores/agentRunStore";
 import { useAgentRunStore, getEffortOptions } from "../stores/agentRunStore";
-import { useWorkspaceStore } from "../stores/workspaceStore";
 import { WORKSPACE_FIELDS } from "../graphql/fragments";
 import {
   useCreateWorkspaceMutation,
@@ -18,14 +17,12 @@ const GQL_CREATE_WORKSPACE = gql`
     $text: String!
     $attachmentIds: [String!]
     $isProductDoc: Boolean
-    $isOrchestrator: Boolean
   ) {
     createWorkspace(
       channelId: $channelId
       text: $text
       attachmentIds: $attachmentIds
       isProductDoc: $isProductDoc
-      isOrchestrator: $isOrchestrator
     ) {
       workspace {
         ...WorkspaceFields
@@ -140,7 +137,6 @@ interface SpawnOptions {
   systemInstructions?: string;
   permissionMode?: string;
   baseBranch?: string;
-  isOrchestrator?: boolean;
 }
 
 export function useWorkspaceActions({
@@ -211,27 +207,21 @@ export function useWorkspaceActions({
         const repoPath = getChannelRepoPath();
         const baseBranch = options.baseBranch ?? getChannelBaseBranch();
 
-        // Auto-detect orchestrator from the workspace store so every caller
-        // is covered without having to pass the flag explicitly.
-        const isOrchestrator = options.isOrchestrator ||
-          (useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceId)?.isOrchestrator ?? false);
-
         const result = await window.traceAPI.spawnAgent({
           agentType: useAgentRunStore.getState().selectedAgent,
           workspaceId,
           prompt,
           repoPath,
-          creationCommands: isOrchestrator ? undefined : options.creationCommands,
+          creationCommands: options.creationCommands,
           resumeSessionId: options.resumeSessionId,
           filePaths: options.filePaths,
           model: options.model,
           effort: options.effort,
           systemInstructions: options.systemInstructions,
-          permissionMode: isOrchestrator ? "ask" : options.permissionMode,
+          permissionMode: options.permissionMode,
           baseBranch,
           branchPrefix,
           channelId: activeChannelId ?? undefined,
-          isOrchestrator,
         });
 
         if (!result.success) {
@@ -241,7 +231,7 @@ export function useWorkspaceActions({
           return false;
         }
 
-        if (options.setHasWorktreeOnSuccess !== false && !isOrchestrator) {
+        if (options.setHasWorktreeOnSuccess !== false) {
           setHasWorktree(true);
         }
 

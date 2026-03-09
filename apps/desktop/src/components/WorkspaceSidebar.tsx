@@ -1,12 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { FiChevronLeft, FiChevronRight, FiCpu, FiMaximize2, FiRotateCcw, FiX } from 'react-icons/fi';
+import React, { useMemo, useState } from 'react';
+import { FiChevronLeft, FiChevronRight, FiMaximize2, FiX } from 'react-icons/fi';
 import type { Workspace, TicketStatus, KanbanTicket, KanbanColumn as KanbanColumnType } from '../types';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { WorkspaceInput } from './WorkspaceInput';
 import { useAuth } from '../context/AuthContext';
 import { useChannelContext } from '../context/ChannelContext';
 import { usePresenceStore } from '../stores/presenceStore';
-import { useThreadStore } from '../stores/threadStore';
 import { Tooltip } from './Tooltip';
 
 interface StatusGroup {
@@ -198,7 +197,6 @@ export function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const { user: authUser } = useAuth();
   const { enrichedActiveChannel } = useChannelContext();
-  const orchestrateMode = enrichedActiveChannel?.orchestrateMode ?? false;
   const presenceByWorkspace = usePresenceStore((s) => s.presenceByWorkspace);
 
   const ticketByWorkspaceId = useMemo(() => {
@@ -211,28 +209,10 @@ export function WorkspaceSidebar({
     return map;
   }, [kanbanColumns]);
 
-  const orchestratorWorkspace = useMemo(
-    () => workspaces.find((ws) => ws.isOrchestrator),
-    [workspaces],
-  );
-
-  const handleClearOrchestratorContext = useCallback(async () => {
-    if (!orchestratorWorkspace) return;
-    if (!window.confirm('Clear orchestrator context? This will stop the current session and start fresh.')) return;
-    // Select the orchestrator (sets selectedWorkspace synchronously)
-    onOpenWorkspace(orchestratorWorkspace);
-    // Stop agent if running
-    if (activeRunWorkspaceIds?.has(orchestratorWorkspace.id)) {
-      await window.traceAPI.stopAgent(orchestratorWorkspace.id);
-    }
-    // Clear the session
-    await useThreadStore.getState().syncActions.clearSession();
-  }, [orchestratorWorkspace, onOpenWorkspace, activeRunWorkspaceIds]);
-
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
     for (const ws of workspaces) {
-      if (ws.isProductDoc || ws.isOrchestrator) continue;
+      if (ws.isProductDoc) continue;
       let status = (ws.status ?? 'pending') as TicketStatus;
       if (status === 'completed') status = 'in_progress';
       let bucket = buckets.get(status);
@@ -345,49 +325,6 @@ export function WorkspaceSidebar({
       <div
         className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2"
       >
-        {/* Orchestrator — pinned at top */}
-        {orchestrateMode && orchestratorWorkspace && (
-          <div className="mb-1 group/orch">
-            <button
-              type="button"
-              className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
-                orchestratorWorkspace.id === selectedWorkspaceId
-                  ? 'bg-accent/15 text-accent-light'
-                  : 'hover:bg-surface-elevated/50 text-muted'
-              }`}
-              onClick={() => onOpenWorkspace(orchestratorWorkspace)}
-            >
-              <FiCpu className={`h-4 w-4 flex-shrink-0 ${
-                activeRunWorkspaceIds?.has(orchestratorWorkspace.id)
-                  ? 'text-accent animate-pulse'
-                  : orchestratorWorkspace.id === selectedWorkspaceId
-                    ? 'text-accent-light'
-                    : 'text-muted'
-              }`} />
-              <span className="text-xs font-semibold uppercase tracking-wide">
-                Orchestrator
-              </span>
-              {activeRunWorkspaceIds?.has(orchestratorWorkspace.id) ? (
-                <span className="ml-auto h-2 w-2 rounded-full bg-accent animate-pulse" />
-              ) : (
-                <Tooltip text="Clear context">
-                  <span
-                    role="button"
-                    tabIndex={-1}
-                    className="ml-auto hidden rounded p-0.5 text-muted transition-colors hover:bg-surface-elevated hover:text-primary group-hover/orch:inline-flex"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleClearOrchestratorContext();
-                    }}
-                  >
-                    <FiRotateCcw className="h-3 w-3" />
-                  </span>
-                </Tooltip>
-              )}
-            </button>
-          </div>
-        )}
-
         {workspacesLoading && workspaces.length === 0 ? (
           <ProjectAccordion name={projectName} count={projectWorkspaceCount}>
             <WorkspaceListSkeleton />

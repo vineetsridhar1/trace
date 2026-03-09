@@ -29,7 +29,6 @@ export const WORKSPACE_FIELDS = gql`
     sessionCount
     queuedRunConfig
     isProductDoc
-    isOrchestrator
   }
 `;
 

@@ -72,7 +72,6 @@ import {
   usePresenceSubscription,
 } from "./hooks/usePresence";
 import { usePresenceStore } from "./stores/presenceStore";
-import { useOrchestratorSubscription } from "./hooks/useOrchestratorSubscription";
 import { ExpandableText } from "./components/thread-events/ExpandableText";
 import { useGetWorkspaceLazyQuery } from "./components/__generated__/ThreadLinkPreview.generated";
 
@@ -566,22 +565,6 @@ function AppContent() {
     onWorkspaceCreated: handleOpenWorkspace,
   });
 
-  // ─── Auto-create orchestrator when orchestrate mode is enabled ────
-  const creatingOrchestratorRef = useRef(false);
-  useEffect(() => {
-    if (!enrichedActiveChannel?.orchestrateMode) return;
-    if (workspacesLoading) return;
-    const hasOrchestrator = workspaces.some(
-      (w) => w.isOrchestrator && w.channelId === activeChannelId,
-    );
-    if (hasOrchestrator) return;
-    if (creatingOrchestratorRef.current) return;
-    creatingOrchestratorRef.current = true;
-    void useAgentRunStore.getState().workspaceActions.createOrchestrator().finally(() => {
-      creatingOrchestratorRef.current = false;
-    });
-  }, [enrichedActiveChannel?.orchestrateMode, activeChannelId, workspacesLoading, workspaces]);
-
   // ─── Reconcile stuck workspace statuses on startup ────────────────
   useStuckWorkspaceReconciliation({
     workspaces,
@@ -650,9 +633,6 @@ function AppContent() {
     onWorkspaceCompleted: triggerSync,
     refreshWorkspaces,
   });
-
-  // ─── Orchestrator trigger (server-scoped, works across channels) ──
-  useOrchestratorSubscription({ activeServerId });
 
   // ─── Presence tracking ──────────────────────────────────────────
   usePresenceReporter(activeChannelId);
@@ -1271,7 +1251,6 @@ function AppContent() {
         defaultSetupScript?: string | null;
         defaultRunScript?: string | null;
         defaultTeardownScript?: string | null;
-        orchestrateMode?: boolean;
       },
       localCfg: LocalChannelConfig | null,
     ) => {

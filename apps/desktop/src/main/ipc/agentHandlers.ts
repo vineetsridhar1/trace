@@ -80,7 +80,6 @@ export function registerAgentRelayActions(): void {
       model,
       effort,
       planMode,
-      isOrchestrator,
     } = params as {
       workspaceId: string;
       prompt: string;
@@ -89,7 +88,6 @@ export function registerAgentRelayActions(): void {
       model?: string;
       effort?: string;
       planMode?: boolean;
-      isOrchestrator?: boolean;
     };
 
     const localConfig = getChannelLocalConfig(channelId);
@@ -103,16 +101,15 @@ export function registerAgentRelayActions(): void {
       workspaceId,
       prompt,
       repoPath: localConfig.localRepoPath,
-      creationCommands: isOrchestrator ? undefined : (localConfig.setupScript
+      creationCommands: localConfig.setupScript
         ? [localConfig.setupScript]
-        : undefined),
+        : undefined,
       model,
       effort,
       systemInstructions: localConfig.systemInstructions,
       permissionMode: planMode ? "plan" : undefined,
       channelId,
       channelName,
-      isOrchestrator,
     });
 
     return { success: true, worktreePath };

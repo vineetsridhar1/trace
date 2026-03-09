@@ -4,7 +4,7 @@ import { createChannel as createChannelService } from '../../../../services/chan
 import { getOrCreateDefaultServer } from '../../../../services/serverService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
 
-export const createChannel: NonNullable<MutationResolvers['createChannel']> = async (_parent, { name, serverId, type, workspacesEnabled, teamIds, githubUrl, baseBranch, defaultSetupScript, defaultRunScript, defaultTeardownScript, orchestrateMode }, _ctx) => {
+export const createChannel: NonNullable<MutationResolvers['createChannel']> = async (_parent, { name, serverId, type, workspacesEnabled, teamIds, githubUrl, baseBranch, defaultSetupScript, defaultRunScript, defaultTeardownScript }, _ctx) => {
   let resolvedServerId = serverId || await getOrCreateDefaultServer();
   if (serverId) {
     const exists = await prisma.server.findUnique({ where: { id: serverId }, select: { id: true } });
@@ -21,7 +21,6 @@ export const createChannel: NonNullable<MutationResolvers['createChannel']> = as
     defaultSetupScript: defaultSetupScript || null,
     defaultRunScript: defaultRunScript || null,
     defaultTeardownScript: defaultTeardownScript || null,
-    orchestrateMode: orchestrateMode ?? false,
   });
   void pubsub.publish(TOPICS.CHANNEL_CHANGED_SERVER(resolvedServerId), {
     channelChangedInServer: { channelId: channel.id, action: 'created' },

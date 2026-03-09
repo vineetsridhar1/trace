@@ -52,7 +52,6 @@ export interface SpawnConfig {
   branchPrefix?: string;
   channelId?: string;
   channelName?: string;
-  isOrchestrator?: boolean;
   userId?: string;
 }
 
@@ -405,7 +404,6 @@ export interface Channel {
   name: string;
   type: ChannelType;
   workspacesEnabled: boolean;
-  orchestrateMode: boolean;
   teamIds: string[];
   localRepoPath?: string | null;
   baseBranch: string | null;
@@ -452,7 +450,6 @@ export interface Workspace {
     planMode: boolean;
   } | null;
   isProductDoc: boolean;
-  isOrchestrator: boolean;
 }
 
 export type ChannelType = "channel" | "team" | "project";

@@ -252,9 +252,6 @@ export function useChannelSubscriptions({
           cliSession: { ...existing.cliSession, status: 'stopped' },
         });
       }
-      // Check if this was the orchestrator completing — re-trigger if pending
-      useAgentRunStore.getState().workspaceActions.checkPendingOrchestratorTrigger(payload.workspaceId);
-
       const selectedWorkspaceId = useThreadStore.getState().selectedWorkspaceId;
       if (selectedWorkspaceId !== payload.workspaceId) {
         const reason = payload.event.toolName === 'AskUserQuestion' ? 'ask-user-question' : 'stopped';

@@ -11,7 +11,6 @@ const GQL_CHANNELS = gql`
       name
       type
       workspacesEnabled
-      orchestrateMode
       teamIds
       baseBranch
       githubUrl

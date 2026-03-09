@@ -32,7 +32,6 @@ const GQL_CREATE_CHANNEL = gql`
       name
       type
       workspacesEnabled
-      orchestrateMode
       teamIds
       baseBranch
       githubUrl

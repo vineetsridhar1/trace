@@ -16,7 +16,7 @@ export type CreateChannelMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, orchestrateMode: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
+export type CreateChannelMutation = { __typename?: 'Mutation', createChannel: { __typename?: 'Channel', id: string, serverId: string, name: string, type: string, workspacesEnabled: boolean, teamIds: Array<string>, baseBranch?: string | null, githubUrl?: string | null, defaultSetupScript?: string | null, defaultRunScript?: string | null, createdAt: string, updatedAt: string } };
 
 
 export const CreateChannelDocument = gql`
@@ -37,7 +37,6 @@ export const CreateChannelDocument = gql`
     name
     type
     workspacesEnabled
-    orchestrateMode
     teamIds
     baseBranch
     githubUrl
