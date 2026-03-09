@@ -3,10 +3,9 @@ import type { ReactNode } from 'react';
 import { FiHash, FiUsers, FiFolder, FiGitBranch } from 'react-icons/fi';
 import { createElement } from 'react';
 import { gql } from '@apollo/client';
-import type { Channel, Workspace, TicketStatus, KanbanColumn } from '../types';
+import type { Channel, Workspace, TicketStatus } from '../types';
 import { WORKSPACE_FIELDS } from '../graphql/fragments';
 import { useWorkspacesLazyQuery } from './__generated__/useMessages.generated';
-import { useBoardLazyQuery } from './__generated__/useKanban.generated';
 import { useCommandPaletteStore } from '../stores/commandPaletteStore';
 import { STATUS_CONFIG } from '../components/MessageItem';
 
@@ -127,9 +126,7 @@ export function useCommandPaletteItems({
   const ticketTitles = useCommandPaletteStore((s) => s.ticketTitles);
 
   const [executeWorkspaces] = useWorkspacesLazyQuery();
-  const [executeBoard] = useBoardLazyQuery();
-
-  // Fetch workspaces and board (ticket titles) for all channels when the palette opens
+  // Fetch workspaces for all channels when the palette opens
   useEffect(() => {
     if (!isOpen) return;
 
@@ -143,16 +140,12 @@ export function useCommandPaletteItems({
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         ) as Workspace[];
         useCommandPaletteStore.getState().setChannelWorkspaces(channel.id, fetched);
-      });
 
-      void executeBoard({ variables: { channelId: channel.id } }).then(({ data }) => {
-        if (!data) return;
+        // Extract ticket titles from workspace data
         const titles: Record<string, string> = {};
-        for (const col of data.board as KanbanColumn[]) {
-          for (const ticket of col.tickets) {
-            if (ticket.workspaceId && ticket.title) {
-              titles[ticket.workspaceId] = ticket.title;
-            }
+        for (const ws of fetched) {
+          if (ws.ticketTitle) {
+            titles[ws.id] = ws.ticketTitle;
           }
         }
         if (Object.keys(titles).length > 0) {
@@ -160,7 +153,7 @@ export function useCommandPaletteItems({
         }
       });
     }
-  }, [isOpen, serverChannels, executeWorkspaces, executeBoard]);
+  }, [isOpen, serverChannels, executeWorkspaces]);
 
   // Build a channel ID → name lookup
   const channelMap = useMemo(() => {

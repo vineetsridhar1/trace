@@ -25,7 +25,6 @@ import { useTerminalInit } from "./hooks/useTerminalInit";
 import { useWorkspaceActions } from "./hooks/useAgentWorkspaceActions";
 import { useStuckWorkspaceReconciliation } from "./hooks/useStuckWorkspaceReconciliation";
 import { useSyncPolling } from "./hooks/useSyncPolling";
-import { useKanbanSync } from "./hooks/useKanbanSync";
 import { useAiChatSync } from "./hooks/useAiChatSync";
 import { useProductDocActions } from "./hooks/useProductDocActions";
 import { ChannelProvider, useChannelContext } from "./context/ChannelContext";
@@ -53,7 +52,6 @@ import { FiCheckCircle, FiGitMerge, FiAlertCircle } from "react-icons/fi";
 import { useWorkspaceStore } from "./stores/workspaceStore";
 import { useThreadStore } from "./stores/threadStore";
 import { useTerminalStore } from "./stores/terminalStore";
-import { useKanbanStore } from "./stores/kanbanStore";
 import {
   useAppUIStore,
   isViewValidForChannel,
@@ -161,9 +159,6 @@ function AppContent() {
     (s) => s.workspacesWithRunningProcesses,
   );
 
-  const kanbanColumns = useKanbanStore((s) => s.columns);
-  const kanbanLoading = useKanbanStore((s) => s.loading);
-
   const middlePanelView = useAppUIStore((s) => s.middlePanelView);
   const channelWidth = useAppUIStore((s) => s.channelWidth);
   const isFullscreen = useAppUIStore((s) => s.isFullscreen);
@@ -197,7 +192,7 @@ function AppContent() {
     const channelId = activeChannelRef.current?.id;
     const currentView = useAppUIStore.getState().middlePanelView;
     if (!channelId) return;
-    if (currentView === 'workspaces' || currentView === 'board') {
+    if (currentView === 'workspaces') {
       useAppUIStore.getState().setChannelView(channelId, 'chat');
     }
   }, []);
@@ -223,7 +218,6 @@ function AppContent() {
 
   // ─── Bridge hooks (GraphQL → stores) ──────────────────────────────
   const { refreshWorkspaces, loadMergedWorkspaces } = useWorkspaceSync();
-  const { fetchBoard, moveTicket } = useKanbanSync();
   const {
     fetchAiChats,
     createAiChat,
@@ -468,7 +462,6 @@ function AppContent() {
         await executeSetWorkspacePrUrl({
           variables: { channelId: activeChannelId, workspaceId, prUrl },
         });
-        useKanbanStore.getState().setTicketWorkspacePrUrl(workspaceId, prUrl);
       } catch {
         // Silent — best-effort persistence
       }
@@ -667,7 +660,7 @@ function AppContent() {
     [globalTabs, activeTabId],
   );
   const transientCenterViewActive =
-    middlePanelView === 'workspaces' || middlePanelView === 'board';
+    middlePanelView === 'workspaces';
   const workspacesExpanded =
     middlePanelView === 'workspaces' && !workspaceSidebarOpen;
 
@@ -693,7 +686,6 @@ function AppContent() {
           useAppUIStore.getState().setMiddlePanelView(viewForTab);
         }
       }
-      if (viewForTab === 'board' && tab.channelId) void fetchBoard(tab.channelId);
     }
 
     // Sync activeAiChatId for sidebar highlighting
@@ -721,7 +713,7 @@ function AppContent() {
     if (tab.type === 'thread' && tab.workspaceId) {
       void fetchAndOpenWorkspaceRef.current(tab.workspaceId);
     }
-  }, [activeTabId, fetchBoard]);
+  }, [activeTabId]);
 
   // ─── Channel/view switching ──────────────────────────────────────
   const handleOpenViewTab = useCallback(
@@ -733,14 +725,6 @@ function AppContent() {
         useAppUIStore.getState().setMobileDrawerOpen(false);
         return;
       }
-      if (viewType === 'board') {
-        const viewForTab = TAB_TYPE_TO_VIEW[viewType];
-        if (viewForTab) {
-          useAppUIStore.getState().setChannelView(activeChannelId, viewForTab);
-          if (viewForTab === 'board') void fetchBoard(activeChannelId);
-        }
-        return;
-      }
       if (viewType === 'terminal') {
         dismissTransientCenterView();
         useTabStore.getState().openTerminalTab(activeChannelId, displayChannel.name);
@@ -750,18 +734,9 @@ function AppContent() {
       const viewForTab = TAB_TYPE_TO_VIEW[viewType];
       if (viewForTab) {
         useAppUIStore.getState().setChannelView(activeChannelId, viewForTab);
-        if (viewForTab === 'board') void fetchBoard(activeChannelId);
       }
     },
-    [activeChannelId, dismissTransientCenterView, displayChannel, fetchBoard],
-  );
-
-  const handleMoveTicket = useCallback(
-    (ticketId: string, columnId: string, sortOrder: number) => {
-      if (!activeChannelId) return;
-      void moveTicket(activeChannelId, ticketId, columnId, sortOrder);
-    },
-    [activeChannelId, moveTicket],
+    [activeChannelId, dismissTransientCenterView, displayChannel],
   );
 
   const handleDeleteWorkspace = useCallback(
@@ -779,7 +754,6 @@ function AppContent() {
           variables: { channelId: activeChannelId, workspaceId },
         });
         useWorkspaceStore.getState().removeWorkspace(workspaceId);
-        useKanbanStore.getState().removeTicketByWorkspaceId(workspaceId);
         useTerminalStore.getState().killAllForWorkspace(workspaceId);
         usePanelLayoutStore.getState().clearSavedLayout(workspaceId);
         void window.traceAPI.releasePorts(workspaceId);
@@ -838,9 +812,7 @@ function AppContent() {
       if (currentSelected) void window.traceAPI.releasePorts(currentSelected);
 
       switchChannel(channelId);
-      useKanbanStore.getState().clearBoard();
       useWorkspaceStore.getState().clearWorkspaces();
-      useKanbanStore.getState().setLoading(true);
       useSyncStore.getState().reset();
       usePresenceStore.getState().clear();
 
@@ -1050,7 +1022,6 @@ function AppContent() {
             prUrl: pr.url,
           },
         });
-        useKanbanStore.getState().setTicketWorkspacePrUrl(workspace.id, pr.url);
 
         // 4. Switch to workspaces view and open the workspace
         handleOpenWorkspace(workspace);
@@ -1097,10 +1068,9 @@ function AppContent() {
   useEffect(() => {
     if (activeChannelId) {
       void refreshWorkspaces(activeChannelId);
-      void fetchBoard(activeChannelId);
       useTerminalStore.getState().reattach();
     }
-  }, [activeChannelId, refreshWorkspaces, fetchBoard]);
+  }, [activeChannelId, refreshWorkspaces]);
 
   useEffect(() => {
     if (activeServerId) void fetchAiChats(activeServerId);
@@ -1109,7 +1079,7 @@ function AppContent() {
   useEffect(() => {
     const transientTabs = useTabStore
       .getState()
-      .tabs.filter((tab) => tab.type === 'workspaces' || tab.type === 'board');
+      .tabs.filter((tab) => tab.type === 'workspaces');
     for (const tab of transientTabs) {
       useTabStore.getState().closeTab(tab.id);
     }
@@ -1151,7 +1121,6 @@ function AppContent() {
       } else {
         void refreshWorkspaces(activeChannelId);
       }
-      void fetchBoard(activeChannelId);
     }
     prevSubscriptionsActive.current = subscriptionsActive;
   }, [
@@ -1159,7 +1128,6 @@ function AppContent() {
     activeChannelId,
     refreshWorkspaces,
     loadMergedWorkspaces,
-    fetchBoard,
   ]);
 
   // One-time initial view correction after channel data loads
@@ -1414,7 +1382,7 @@ function AppContent() {
             onMarkMerged={handleMarkMerged}
             workspacesWithRunningProcesses={workspacesWithRunningProcesses}
             activeRunWorkspaceIds={activeRunWorkspaceIds}
-            kanbanColumns={kanbanColumns}
+
             workspacesLoading={workspacesLoading}
             mergedCount={mergedCount}
             mergedWorkspacesLoaded={mergedWorkspacesLoaded}
@@ -1480,9 +1448,9 @@ function AppContent() {
                 onDeleteWorkspace={handleDeleteWorkspace}
                 onMarkMerged={handleMarkMerged}
                 middlePanelView={middlePanelView}
-                kanbanColumns={kanbanColumns}
-                kanbanLoading={kanbanLoading}
-                onMoveTicket={handleMoveTicket}
+    
+
+
                 isFullscreen={isFullscreen || workspacesExpanded}
                 teamProjects={teamProjects}
                 onSwitchChannel={handleSwitchChannel}
@@ -1529,9 +1497,9 @@ function AppContent() {
                 onDeleteWorkspace={handleDeleteWorkspace}
                 onMarkMerged={handleMarkMerged}
                 middlePanelView={middlePanelView}
-                kanbanColumns={kanbanColumns}
-                kanbanLoading={kanbanLoading}
-                onMoveTicket={handleMoveTicket}
+    
+
+
                 isFullscreen={isFullscreen || workspacesExpanded}
                 teamProjects={teamProjects}
                 onSwitchChannel={handleSwitchChannel}
@@ -1573,7 +1541,7 @@ function AppContent() {
             onMarkMerged={handleMarkMerged}
             workspacesWithRunningProcesses={workspacesWithRunningProcesses}
             activeRunWorkspaceIds={activeRunWorkspaceIds}
-            kanbanColumns={kanbanColumns}
+
             workspacesLoading={workspacesLoading}
             mergedCount={mergedCount}
             mergedWorkspacesLoaded={mergedWorkspacesLoaded}

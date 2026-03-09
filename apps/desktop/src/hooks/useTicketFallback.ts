@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { gql } from '@apollo/client';
 import { useTicketByWorkspaceIdLazyQuery } from './__generated__/useTicketFallback.generated';
-import { useKanbanStore } from '../stores/kanbanStore';
 import type { KanbanTicket } from '../types';
 
 const _GQL_TICKET_BY_WORKSPACE_ID = gql`
@@ -39,8 +38,8 @@ const _GQL_TICKET_BY_WORKSPACE_ID = gql`
 const RETRY_DELAYS = [1000, 2000, 4000, 8000];
 
 /**
- * Fetches a single ticket by workspace ID directly, instead of loading the
- * entire board. Falls back to exponential retry when the ticket hasn't been
+ * Fetches a single ticket by workspace ID directly.
+ * Falls back to exponential retry when the ticket hasn't been
  * created yet (AI-generated ticket creation is async).
  *
  * Returns { ticket, retriesExhausted, resetRetries }.
@@ -54,12 +53,7 @@ export function useTicketFallback(
   const [queriedTicket, setQueriedTicket] = useState<KanbanTicket | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Also check the kanban store for real-time subscription updates (O(1) lookup)
-  const storeTicket = useKanbanStore((s) =>
-    selectedWorkspaceId ? (s.workspaceTickets[selectedWorkspaceId] ?? null) : null,
-  );
-
-  const ticket = storeTicket ?? queriedTicket;
+  const ticket = queriedTicket;
 
   // Reset when workspace changes
   useEffect(() => {
@@ -87,8 +81,6 @@ export function useTicketFallback(
         if (data?.ticketByWorkspaceId) {
           const fetched = data.ticketByWorkspaceId as KanbanTicket;
           setQueriedTicket(fetched);
-          // Keep board in sync
-          useKanbanStore.getState().upsertTicket(fetched, activeChannelId);
         }
       } catch {
         // Silently retry on next interval

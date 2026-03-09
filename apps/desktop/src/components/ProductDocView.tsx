@@ -433,7 +433,7 @@ export function ProductDocView({ onBack, onGenerateTechScope, onGenerateTickets,
             setShowImportModal(false);
             useAppUIStore.getState().setActiveProductDocId(null);
             useAppUIStore.getState().setProductDocMode('prd');
-            useAppUIStore.getState().setMiddlePanelView('board');
+            useAppUIStore.getState().setMiddlePanelView('workspaces');
             switchChannel(channelId);
           }}
           onLocalConfigSave={setLocalConfig}

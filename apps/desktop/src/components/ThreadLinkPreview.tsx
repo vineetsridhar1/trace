@@ -2,7 +2,6 @@ import { memo } from 'react';
 import { gql } from '@apollo/client';
 import type { TicketStatus } from '../types';
 import { useWorkspaceStore } from '../stores/workspaceStore';
-import { useKanbanStore } from '../stores/kanbanStore';
 import { WORKSPACE_FIELDS } from '../graphql/fragments';
 import { useGetWorkspaceQuery } from './__generated__/ThreadLinkPreview.generated';
 import { STATUS_CONFIG } from './MessageItem';
@@ -31,13 +30,6 @@ export const ThreadLinkPreview = memo(function ThreadLinkPreview({
   const localWorkspace = useWorkspaceStore((s) =>
     s.workspaces.find((w) => w.id === workspaceId),
   );
-  const ticket = useKanbanStore((s) => {
-    for (const col of s.columns) {
-      const found = col.tickets.find((t) => t.workspaceId === workspaceId);
-      if (found) return found;
-    }
-    return null;
-  });
 
   // Slow path: fetch single workspace by ID (skipped if already in store)
   const { data, loading } = useGetWorkspaceQuery({
@@ -65,7 +57,7 @@ export const ThreadLinkPreview = memo(function ThreadLinkPreview({
 
   const status = (workspace.status ?? 'pending') as TicketStatus;
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
-  const title = ticket?.title || workspace.preview || 'New Workspace';
+  const title = workspace.preview || 'New Workspace';
   const branch = workspace.branch?.replace(/^trace\//, '');
 
   return (

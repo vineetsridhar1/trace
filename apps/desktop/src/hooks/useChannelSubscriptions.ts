@@ -2,7 +2,6 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { gql, useSubscription } from '@apollo/client';
 import { WORKSPACE_FIELDS, SESSION_EVENT_PAYLOAD_FIELDS } from '../graphql/fragments';
 import { subscribeWsConnection, getWsConnectionSnapshot } from '../graphql/client';
-import { useKanbanStore } from '../stores/kanbanStore';
 import type { Workspace, KanbanTicket, ServerEvent } from '../types';
 
 const WORKSPACE_UPSERTED_SUBSCRIPTION = gql`
@@ -166,13 +165,6 @@ export function useChannelSubscriptions({
     }
 
     upsertWorkspace(workspace);
-
-    // Sync workspace fields (branch, status) into the kanban ticket's embedded
-    // workspace data so the PR button and other ticket-level UI stays current.
-    useKanbanStore.getState().syncWorkspaceFields(workspace.id, {
-      branch: workspace.branch,
-      status: workspace.status,
-    });
 
     // Trigger merge check after React flushes the upsertWorkspace state update
     // so workspacesRef reflects the new "completed" status when checkMerged reads it

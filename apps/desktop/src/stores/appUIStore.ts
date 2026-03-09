@@ -8,7 +8,7 @@ const WORKSPACE_SIDEBAR_DOCK_SIDE_KEY = 'trace:workspaceSidebarDockSide';
 const DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 220;
 const MIN_WORKSPACE_SIDEBAR_WIDTH = 180;
 const MAX_WORKSPACE_SIDEBAR_WIDTH = 500;
-const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'documents', 'board', 'projects'];
+const VALID_VIEWS: MiddlePanelView[] = ['chat', 'workspaces', 'documents', 'projects'];
 
 function loadChannelViewMap(): Record<string, MiddlePanelView> {
   try {
@@ -105,7 +105,6 @@ export function isViewValidForChannel(
 ): boolean {
   if (view === 'chat') return true;
   if (channelType === 'channel') return false;
-  if (view === 'board') return true; // valid for team + project
   if (view === 'projects') return channelType === 'team';
   if (view === 'workspaces') return workspacesEnabled;
   if (view === 'documents') return workspacesEnabled;

@@ -65,9 +65,8 @@ export function ChannelTopBar({
   activeChannelId,
   onSwitchChannel,
 }: ChannelTopBarProps) {
-  const showTracker = channelType === 'team' || channelType === 'project';
   const showProjects = channelType === 'team';
-  const showWorkspaces = showTracker && workspacesEnabled;
+  const showWorkspaces = (channelType === 'team' || channelType === 'project') && workspacesEnabled;
   const showPRs = showWorkspaces && hasGithubUrl;
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -162,19 +161,6 @@ export function ChannelTopBar({
           >
             Chat
           </button>
-          {showTracker && (
-            <button
-              type="button"
-              onClick={() => onSetView('board')}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
-                middlePanelView === 'board'
-                  ? 'bg-accent/20 text-accent-light'
-                  : 'btn-ghost text-muted hover:text-primary'
-              }`}
-            >
-              Tracker
-            </button>
-          )}
           {showProjects && (
             <button
               type="button"

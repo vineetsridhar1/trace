@@ -6,7 +6,6 @@ import type { Workspace, KanbanTicket, ServerEvent } from '../types';
 import { normalizeToolName } from '../utils';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useThreadStore } from '../stores/threadStore';
-import { useKanbanStore } from '../stores/kanbanStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
 import { useTabStore } from '../stores/tabStore';
 
@@ -195,13 +194,6 @@ export function useChannelSubscriptions({
       }
     }
 
-    // Sync workspace fields (branch, status) into the kanban ticket's embedded
-    // workspace data so the PR button and other ticket-level UI stays current.
-    useKanbanStore.getState().syncWorkspaceFields(workspace.id, {
-      branch: workspace.branch,
-      status: workspace.status,
-    });
-
     const pendingId = useAgentRunStore.getState().pendingRunWorkspaceId;
     if (pendingId === workspace.id && workspace.status !== 'pending') {
       useAgentRunStore.getState().clearPendingRun();
@@ -220,7 +212,6 @@ export function useChannelSubscriptions({
     if (workspaceDeletedData.workspaceDeleted.channelId !== channelIdRef.current) return;
     const deletedWorkspaceId = workspaceDeletedData.workspaceDeleted.workspaceId;
     useWorkspaceStore.getState().removeWorkspace(deletedWorkspaceId);
-    useKanbanStore.getState().removeTicketByWorkspaceId(deletedWorkspaceId);
     useTabStore.getState().closeTabsForWorkspace(deletedWorkspaceId);
     const pendingId = useAgentRunStore.getState().pendingRunWorkspaceId;
     if (pendingId === deletedWorkspaceId) {
@@ -343,9 +334,7 @@ export function useChannelSubscriptions({
 
   useEffect(() => {
     if (!ticketData?.ticketUpserted || !activeChannelId) return;
-    const payload = ticketData.ticketUpserted;
-    if (payload.channelId !== channelIdRef.current) return;
-    useKanbanStore.getState().upsertTicket({ ...payload.ticket, columnSlug: payload.columnSlug } as KanbanTicket, payload.channelId);
+    // Ticket upsert is received but kanban board UI has been removed
   }, [ticketData, activeChannelId]);
 
   // --- Ticket ready to run ---

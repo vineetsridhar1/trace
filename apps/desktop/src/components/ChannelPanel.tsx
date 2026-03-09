@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiBriefcase, FiCheckSquare, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiPlus, FiBriefcase, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import type { Channel, DragTarget, LocalChannelConfig, Server } from '../types';
 import type { GlobalTabType } from '../stores/tabStore';
 import { Tooltip } from './Tooltip';
@@ -366,9 +366,8 @@ export function ChannelPanel({
   const middlePanelView = useAppUIStore((s) => s.middlePanelView);
   const mainNavCollapsed = useAppUIStore((s) => s.mainNavCollapsed);
   const showWorkspaceNav = !!(activeChannel && activeChannel.type !== 'channel' && activeChannel.workspacesEnabled);
-  const showTasksNav = !!(activeChannel && activeChannel.type !== 'channel');
   const canCreateWorkspace = !!(activeChannel && activeChannel.workspacesEnabled);
-  const hasMainNav = showWorkspaceNav || showTasksNav || canCreateWorkspace;
+  const hasMainNav = showWorkspaceNav || canCreateWorkspace;
   const workspacesNavActive =
     showWorkspaceNav && middlePanelView === 'workspaces';
 
@@ -411,20 +410,6 @@ export function ChannelPanel({
                     >
                       <FiBriefcase className="h-4 w-4 flex-shrink-0" />
                       <span>Workspaces</span>
-                    </button>
-                  )}
-                  {showTasksNav && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenViewTab('board')}
-                      className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors ${
-                        middlePanelView === 'board'
-                          ? 'border-edge bg-surface-elevated/80 text-primary'
-                          : 'border-transparent text-muted hover:bg-surface-elevated hover:text-primary'
-                      }`}
-                    >
-                      <FiCheckSquare className="h-4 w-4 flex-shrink-0" />
-                      <span>Tasks</span>
                     </button>
                   )}
                   {canCreateWorkspace && (

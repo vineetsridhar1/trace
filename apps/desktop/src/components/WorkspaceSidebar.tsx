@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FiChevronLeft, FiChevronRight, FiMaximize2, FiX } from 'react-icons/fi';
-import type { Workspace, TicketStatus, KanbanTicket, KanbanColumn as KanbanColumnType } from '../types';
+import type { Workspace, TicketStatus } from '../types';
 import { MessageItem, STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
 import { WorkspaceInput } from './WorkspaceInput';
 import { useAuth } from '../context/AuthContext';
@@ -154,7 +154,6 @@ interface WorkspaceSidebarProps {
   onMarkMerged?: (workspaceId: string) => void;
   workspacesWithRunningProcesses?: Set<string>;
   activeRunWorkspaceIds?: Set<string>;
-  kanbanColumns: KanbanColumnType[];
   workspacesLoading?: boolean;
   mergedCount?: number;
   mergedWorkspacesLoaded?: boolean;
@@ -180,7 +179,6 @@ export function WorkspaceSidebar({
   onMarkMerged,
   workspacesWithRunningProcesses,
   activeRunWorkspaceIds,
-  kanbanColumns,
   workspacesLoading,
   mergedCount,
   mergedWorkspacesLoaded,
@@ -199,15 +197,6 @@ export function WorkspaceSidebar({
   const { enrichedActiveChannel } = useChannelContext();
   const presenceByWorkspace = usePresenceStore((s) => s.presenceByWorkspace);
 
-  const ticketByWorkspaceId = useMemo(() => {
-    const map = new Map<string, KanbanTicket>();
-    for (const col of kanbanColumns) {
-      for (const ticket of col.tickets) {
-        if (ticket.workspaceId) map.set(ticket.workspaceId, ticket);
-      }
-    }
-    return map;
-  }, [kanbanColumns]);
 
   const groupedWorkspaces = useMemo(() => {
     const buckets = new Map<TicketStatus, Workspace[]>();
@@ -358,7 +347,7 @@ export function WorkspaceSidebar({
                   <MessageItem
                     key={workspace.id}
                     workspace={workspace}
-                    ticket={ticketByWorkspaceId.get(workspace.id) ?? null}
+                    ticket={null}
                     isSelected={workspace.id === selectedWorkspaceId}
                     needsAttention={attentionWorkspaceIds.has(workspace.id)}
                     onOpenWorkspace={onOpenWorkspace}

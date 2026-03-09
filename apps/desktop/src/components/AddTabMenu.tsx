@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import {
   FiMessageSquare,
   FiBriefcase,
-  FiCheckSquare,
   FiFolder,
   FiFileText,
   FiGitPullRequest,
@@ -37,7 +36,6 @@ interface AddTabMenuProps {
 const VIEW_ICONS: Partial<Record<GlobalTabType, typeof FiMessageSquare>> = {
   chat: FiMessageSquare,
   workspaces: FiBriefcase,
-  board: FiCheckSquare,
   projects: FiFolder,
   documents: FiFileText,
   'pull-requests': FiGitPullRequest,

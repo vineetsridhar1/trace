@@ -468,7 +468,6 @@ export type DragTarget = "left" | "right" | "workspace-sidebar" | null;
 export type ProductDocMode = "prd" | "tech-scope" | "tickets";
 export type MiddlePanelView =
   | "chat"
-  | "board"
   | "workspaces"
   | "documents"
   | "projects"

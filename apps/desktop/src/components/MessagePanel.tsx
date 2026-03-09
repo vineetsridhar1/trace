@@ -7,31 +7,22 @@ import React, {
 } from "react";
 import {
   FiChevronRight,
-  FiColumns,
   FiFolder,
-  FiList,
   FiSend,
-  FiShare2,
-  FiUser,
 } from "react-icons/fi";
 import type {
   Channel,
   PullRequest,
   Workspace,
-  KanbanColumn as KanbanColumnType,
-  KanbanTicket,
   MiddlePanelView,
 } from "../types";
-import { KanbanBoard } from "./KanbanBoard";
 import { MessageItem } from "./MessageItem";
 import { ChatEmptyState } from "./ChatEmptyState";
 import { ThreadLinkPreview } from "./ThreadLinkPreview";
 import { PullRequestListView } from "./PullRequestListView";
-import { TicketDetailModal } from "./TicketDetailModal";
 import { WorkspacesPanel } from "./WorkspacesPanel";
 import { useChannelMessages } from "../hooks/useChannelMessages";
 import { useAuth } from "../context/AuthContext";
-import { useAgentRunStore } from "../stores/agentRunStore";
 
 const THREAD_LINK_RE =
   /https?:\/\/[^\s/]+\/thread\/([a-f0-9-]+)\/([a-f0-9-]+)/g;
@@ -113,9 +104,6 @@ interface MessagePanelProps {
   attentionWorkspaceIds: Set<string>;
   onOpenWorkspace: (workspace: Workspace) => void;
   middlePanelView: MiddlePanelView;
-  kanbanColumns: KanbanColumnType[];
-  kanbanLoading: boolean;
-  onMoveTicket: (ticketId: string, columnId: string, sortOrder: number) => void;
   onDeleteWorkspace?: (workspaceId: string) => void;
   onMarkMerged?: (workspaceId: string) => void;
   isFullscreen?: boolean;
@@ -147,11 +135,8 @@ export function MessagePanel({
   attentionWorkspaceIds,
   onOpenWorkspace,
   middlePanelView,
-  kanbanColumns,
-  kanbanLoading,
   onDeleteWorkspace,
   onMarkMerged,
-  onMoveTicket,
   isFullscreen,
   teamProjects = [],
   onSwitchChannel,
@@ -171,56 +156,11 @@ export function MessagePanel({
   onExpandWorkspacesFullscreen,
   onDockWorkspacesToSidebar,
 }: MessagePanelProps) {
-  const [projectSubView, setProjectSubView] = useState<
-    "list" | "board" | "graph"
-  >("board");
-  const [selectedTicket, setSelectedTicket] = useState<KanbanTicket | null>(
-    null,
-  );
-  const [showMyTicketsOnly, setShowMyTicketsOnly] = useState(false);
   const { user: authUser } = useAuth();
-  const filteredKanbanColumns = useMemo(() => {
-    if (!showMyTicketsOnly || !authUser?.id) return kanbanColumns;
-    return kanbanColumns.map((col) => ({
-      ...col,
-      tickets: col.tickets.filter(
-        (t) => t.workspace?.userId === authUser.id,
-      ),
-    }));
-  }, [kanbanColumns, showMyTicketsOnly, authUser?.id]);
-
-  const ticketByWorkspaceId = useMemo(() => {
-    const map = new Map<string, KanbanTicket>();
-    for (const col of kanbanColumns) {
-      for (const ticket of col.tickets) {
-        if (ticket.workspaceId) map.set(ticket.workspaceId, ticket);
-      }
-    }
-    return map;
-  }, [kanbanColumns]);
 
   const documentWorkspaces = useMemo(
     () => workspaces.filter((ws) => ws.isProductDoc),
     [workspaces],
-  );
-
-  const handleBoardClickTicket = useCallback((ticket: KanbanTicket) => {
-    setSelectedTicket(ticket);
-  }, []);
-
-  const handleBoardCreatePR = useCallback(
-    (workspaceId: string) => {
-      // Open the workspace first, then send the /create-pr command
-      const workspace = workspaces.find((m) => m.id === workspaceId);
-      if (workspace) onOpenWorkspace(workspace);
-      // Send after a microtask so the workspace is selected
-      queueMicrotask(() => {
-        const { sendThreadMessage } =
-          useAgentRunStore.getState().workspaceActions;
-        void sendThreadMessage("/create-pr", [], []);
-      });
-    },
-    [workspaces, onOpenWorkspace],
   );
 
   // Channel messaging
@@ -461,7 +401,6 @@ export function MessagePanel({
           workspaces={workspaces}
           selectedWorkspaceId={selectedWorkspaceId}
           onOpenWorkspace={onOpenWorkspace}
-          kanbanColumns={kanbanColumns}
           activeRunWorkspaceIds={activeRunWorkspaceIds}
           workspacesLoading={workspacesLoading}
           mergedCount={mergedCount}
@@ -472,64 +411,6 @@ export function MessagePanel({
           onExpandToFullscreen={onExpandWorkspacesFullscreen}
           onDockToSidebar={onDockWorkspacesToSidebar}
         />
-      ) : middlePanelView === "board" ? (
-        <>
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="flex rounded-lg bg-surface-elevated p-0.5">
-              {(
-                [
-                  { key: "list", label: "List", icon: FiList },
-                  { key: "board", label: "Board", icon: FiColumns },
-                  { key: "graph", label: "Graph", icon: FiShare2 },
-                ] as const
-              ).map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setProjectSubView(key)}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                    projectSubView === key
-                      ? "bg-accent/20 text-accent-light"
-                      : "text-muted hover:text-primary"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowMyTicketsOnly((v) => !v)}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                showMyTicketsOnly
-                  ? "bg-accent/20 text-accent-light"
-                  : "text-muted hover:text-primary"
-              }`}
-            >
-              <FiUser className="h-3.5 w-3.5" />
-              My Tickets
-            </button>
-          </div>
-          {projectSubView === "board" ? (
-            <KanbanBoard
-              columns={filteredKanbanColumns}
-              loading={kanbanLoading}
-              onClickTicket={handleBoardClickTicket}
-              onMoveTicket={onMoveTicket}
-              onDeleteWorkspace={onDeleteWorkspace}
-              onCreatePR={handleBoardCreatePR}
-            />
-          ) : projectSubView === "list" ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
-              List view coming soon
-            </div>
-          ) : (
-            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
-              Graph view coming soon
-            </div>
-          )}
-        </>
       ) : middlePanelView === "projects" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {teamProjects.length === 0 ? (
@@ -578,7 +459,7 @@ export function MessagePanel({
               <MessageItem
                 key={workspace.id}
                 workspace={workspace}
-                ticket={ticketByWorkspaceId.get(workspace.id) ?? null}
+                ticket={null}
                 isSelected={workspace.id === selectedWorkspaceId}
                 needsAttention={attentionWorkspaceIds.has(workspace.id)}
                 onOpenWorkspace={onOpenWorkspace}
@@ -590,35 +471,6 @@ export function MessagePanel({
           )}
         </div>
       ) : null}
-      {selectedTicket && (
-        <TicketDetailModal
-          ticket={selectedTicket}
-          onClose={() => setSelectedTicket(null)}
-          onOpenWorkspace={
-            selectedTicket.workspaceId &&
-            workspaces.some((w) => w.id === selectedTicket.workspaceId)
-              ? () => {
-                  const workspace = workspaces.find(
-                    (w) => w.id === selectedTicket.workspaceId,
-                  );
-                  setSelectedTicket(null);
-                  if (workspace) onOpenWorkspace(workspace);
-                }
-              : undefined
-          }
-          onCreateWorkspace={
-            !selectedTicket.workspaceId
-              ? () => {
-                  const ticket = selectedTicket;
-                  setSelectedTicket(null);
-                  void useAgentRunStore
-                    .getState()
-                    .workspaceActions.createWorkspaceForTicket(ticket);
-                }
-              : undefined
-          }
-        />
-      )}
     </div>
   );
 }

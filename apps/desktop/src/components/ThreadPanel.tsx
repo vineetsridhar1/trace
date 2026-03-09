@@ -24,7 +24,6 @@ import { useThreadStore } from "../stores/threadStore";
 import { useTerminalStore } from "../stores/terminalStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useTabStore } from "../stores/tabStore";
-import { useKanbanStore } from "../stores/kanbanStore";
 import { useAppUIStore } from "../stores/appUIStore";
 import { usePanelLayoutStore } from "../stores/panelLayoutStore";
 import { useChannelContext } from "../context/ChannelContext";
@@ -141,8 +140,6 @@ export function ThreadPanel({ asMainContent = false }: { asMainContent?: boolean
   const ciStatus = useWorkspaceStore((s) =>
     selectedWorkspaceId ? (s.ciStatuses[selectedWorkspaceId] ?? null) : null,
   );
-  const kanbanColumns = useKanbanStore((s) => s.columns);
-
   const threadSelectedWorkspace = useThreadStore((s) => s.selectedWorkspace);
   const selectedWorkspace = useMemo(
     () => workspaces.find((w) => w.id === selectedWorkspaceId) ?? threadSelectedWorkspace,
@@ -161,22 +158,7 @@ export function ThreadPanel({ asMainContent = false }: { asMainContent?: boolean
 
   const { ticket, retriesExhausted, resetRetries } = useTicketFallback(selectedWorkspaceId, activeChannelId);
 
-  const channelTickets = useMemo(
-    () =>
-      kanbanColumns.flatMap((col) =>
-        col.tickets
-          .filter(
-            (t): t is typeof t & { workspaceId: string } =>
-              t.workspaceId != null,
-          )
-          .map((t) => ({
-            workspaceId: t.workspaceId,
-            title: t.title,
-            status: t.workspace?.status ?? "pending",
-          })),
-      ),
-    [kanbanColumns],
-  );
+  const channelTickets: { workspaceId: string; title: string; status: string }[] = [];
 
   const isViewingOlderSession = useMemo(() => {
     if (!activeSessionId || sessions.length === 0) return false;
@@ -330,7 +312,6 @@ export function ThreadPanel({ asMainContent = false }: { asMainContent?: boolean
         variables: { channelId: activeChannelId, workspaceId: wsId },
       });
       useWorkspaceStore.getState().removeWorkspace(wsId);
-      useKanbanStore.getState().removeTicketByWorkspaceId(wsId);
       useTerminalStore.getState().killAllForWorkspace(wsId);
       void window.traceAPI.releasePorts(wsId);
       if (repoPath) {

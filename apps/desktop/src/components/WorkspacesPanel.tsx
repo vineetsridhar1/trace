@@ -9,8 +9,6 @@ import {
 } from 'react-icons/fi';
 import type {
   Workspace,
-  KanbanColumn as KanbanColumnType,
-  KanbanTicket,
   TicketStatus,
 } from '../types';
 import { STATUS_CONFIG, STATUS_GROUP_ORDER } from './MessageItem';
@@ -107,8 +105,8 @@ function formatRelativeTime(value: string): string {
   return formatter.format(Math.round(diffMs / year), 'year');
 }
 
-function workspaceTitle(workspace: Workspace, ticket: KanbanTicket | null): string {
-  return ticket?.title || workspace.ticketTitle || workspace.preview || 'New Workspace';
+function workspaceTitle(workspace: Workspace): string {
+  return workspace.ticketTitle || workspace.preview || 'New Workspace';
 }
 
 interface WorkspacesPanelProps {
@@ -116,7 +114,6 @@ interface WorkspacesPanelProps {
   workspaces: Workspace[];
   selectedWorkspaceId: string | null;
   onOpenWorkspace: (workspace: Workspace) => void;
-  kanbanColumns: KanbanColumnType[];
   activeRunWorkspaceIds?: Set<string>;
   workspacesLoading?: boolean;
   mergedCount?: number;
@@ -133,7 +130,6 @@ export function WorkspacesPanel({
   workspaces,
   selectedWorkspaceId,
   onOpenWorkspace,
-  kanbanColumns,
   activeRunWorkspaceIds,
   workspacesLoading,
   mergedCount = 0,
@@ -147,16 +143,6 @@ export function WorkspacesPanel({
   const { user: authUser } = useAuth();
   const [filter, setFilter] = useState<WorkspaceFilter>('all');
   const [search, setSearch] = useState('');
-
-  const ticketByWorkspaceId = useMemo(() => {
-    const map = new Map<string, KanbanTicket>();
-    for (const column of kanbanColumns) {
-      for (const ticket of column.tickets) {
-        if (ticket.workspaceId) map.set(ticket.workspaceId, ticket);
-      }
-    }
-    return map;
-  }, [kanbanColumns]);
 
   const regularWorkspaces = useMemo(() => {
     const items = workspaces.filter((workspace) => !workspace.isProductDoc);
@@ -209,9 +195,8 @@ export function WorkspacesPanel({
         if (filter === 'merged' && normalizeStatus(workspace.status) !== 'merged') return false;
         if (!searchNeedle) return true;
 
-        const ticket = ticketByWorkspaceId.get(workspace.id) ?? null;
         const haystack = [
-          workspaceTitle(workspace, ticket),
+          workspaceTitle(workspace),
           workspace.preview,
           workspace.branch,
           workspace.user?.name,
@@ -223,7 +208,7 @@ export function WorkspacesPanel({
 
         return haystack.includes(searchNeedle);
       }),
-    [filter, regularWorkspaces, searchNeedle, ticketByWorkspaceId],
+    [filter, regularWorkspaces, searchNeedle],
   );
 
   const filters = useMemo(() => {
@@ -346,9 +331,8 @@ export function WorkspacesPanel({
                 >
                   <div className="overflow-hidden rounded-2xl border border-edge bg-surface-elevated/10">
                     {group.workspaces.map((workspace, index) => {
-                      const ticket = ticketByWorkspaceId.get(workspace.id) ?? null;
                       const status = STATUS_CONFIG[workspace.status] ?? STATUS_CONFIG.pending;
-                      const title = workspaceTitle(workspace, ticket);
+                      const title = workspaceTitle(workspace);
                       const branch = workspace.branch?.replace(/^trace\//, '') || workspace.user?.name || status.label;
                       const isSelected = workspace.id === selectedWorkspaceId;
                       const isRunning = activeRunWorkspaceIds?.has(workspace.id) ?? false;

@@ -6,7 +6,6 @@ export type GlobalTabType =
   | 'thread'
   | 'chat'
   | 'workspaces'
-  | 'board'
   | 'projects'
   | 'documents'
   | 'pull-requests'
@@ -26,13 +25,12 @@ export interface GlobalTab {
 
 // ─── Constants ────────────────────────────────────────────────────────
 const STORAGE_KEY = 'trace:globalTabs';
-const TRANSIENT_VIEW_TAB_TYPES = new Set<GlobalTabType>(['workspaces', 'board']);
+const TRANSIENT_VIEW_TAB_TYPES = new Set<GlobalTabType>(['workspaces']);
 
 /** Map view tab types to their MiddlePanelView counterpart */
 export const TAB_TYPE_TO_VIEW: Partial<Record<GlobalTabType, MiddlePanelView>> = {
   chat: 'chat',
   workspaces: 'workspaces',
-  board: 'board',
   projects: 'projects',
   documents: 'documents',
   'pull-requests': 'pull-requests',
@@ -42,7 +40,6 @@ export const TAB_LABELS: Record<GlobalTabType, string> = {
   thread: 'Thread',
   chat: 'Chat',
   workspaces: 'Workspaces',
-  board: 'Tracker',
   projects: 'Projects',
   documents: 'Docs',
   'pull-requests': 'PRs',
@@ -71,7 +68,6 @@ export function isViewTabAvailable(
   if (type === 'terminal') return hasRepoPath;
   if (channelType === 'channel') return false;
   if (type === 'workspaces') return workspacesEnabled;
-  if (type === 'board') return true;
   if (type === 'projects') return channelType === 'team';
   if (type === 'documents') return workspacesEnabled;
   if (type === 'pull-requests') return workspacesEnabled && hasGithubUrl;
