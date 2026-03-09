@@ -1,7 +1,7 @@
 import type { MutationResolvers } from './../../../types.generated';
 import { updateWorkspaceStatus as updateStatus, getWorkspaceByIdForFeed, claimWorkspace } from '../../../../services/workspaceService';
 import { pubsub, TOPICS } from '../../../../services/pubsub';
-import { syncTicketWithWorkspaceStatus, checkAndTriggerDependents } from '../../../../services/ticketService';
+import { syncTicketWithWorkspaceStatus, checkAndTriggerDependents, notifyOrchestratorOfStatusChange } from '../../../../services/ticketService';
 import { requireAuth } from '../../../../lib/requireAuth';
 import { GraphQLError } from 'graphql';
 
@@ -66,6 +66,7 @@ export const updateWorkspaceStatus: NonNullable<MutationResolvers['updateWorkspa
   });
 
   void syncTicketWithWorkspaceStatus(workspaceId, channelId, status);
+  void notifyOrchestratorOfStatusChange(workspaceId, channelId, status);
 
   if (status === 'merged') {
     void checkAndTriggerDependents(workspaceId, channelId);

@@ -180,6 +180,9 @@ async function reconcileStaleWorkspaces(channelId: string): Promise<void> {
 
       // If any dependents were waiting on this workspace, check them now.
       void checkAndTriggerDependents(ws.id, channelId);
+
+      // Notify orchestrator of the status change
+      void notifyOrchestratorOfStatusChange(ws.id, channelId, newStatus);
     }
   } catch (err) {
     console.error("[reconcileStaleWorkspaces] failed:", err);
@@ -701,6 +704,76 @@ export async function triggerReviewIfAutonomous(
     });
   } catch (err) {
     console.error("[ticketService] triggerReviewIfAutonomous failed:", err);
+  }
+}
+
+const ORCHESTRATOR_SIGNIFICANT_STATUSES = new Set([
+  "completed",
+  "merged",
+  "needs_input",
+]);
+
+/**
+ * Notify the frontend that an orchestrator should be triggered because a
+ * non-orchestrator workspace in the same channel changed to a significant
+ * status. Publishes a server-scoped event so the frontend can react
+ * regardless of which channel the user is currently viewing.
+ *
+ * The payload includes the orchestrator workspace ID so the frontend can
+ * spawn it directly without needing the workspace in its local store
+ * (which only contains the active channel's workspaces).
+ */
+export async function notifyOrchestratorOfStatusChange(
+  workspaceId: string,
+  channelId: string,
+  newStatus: string,
+): Promise<void> {
+  try {
+    if (!ORCHESTRATOR_SIGNIFICANT_STATUSES.has(newStatus)) return;
+
+    // Single query: fetch workspace with its channel in one round-trip
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: {
+        isOrchestrator: true,
+        preview: true,
+        ticket: { select: { title: true } },
+        channel: {
+          select: { orchestrateMode: true, serverId: true },
+        },
+      },
+    });
+    if (!workspace || workspace.isOrchestrator) return;
+    if (!workspace.channel.orchestrateMode) return;
+
+    // Find the orchestrator workspace for this channel (must not be merged)
+    const orchestrator = await prisma.workspace.findFirst({
+      where: {
+        channelId,
+        isOrchestrator: true,
+        status: { not: "merged" },
+      },
+      select: { id: true },
+    });
+    if (!orchestrator) return;
+
+    const ticketTitle =
+      workspace.ticket?.title ?? workspace.preview ?? workspaceId.slice(0, 8);
+
+    pubsub.publish(TOPICS.ORCHESTRATOR_TRIGGER(workspace.channel.serverId), {
+      orchestratorTrigger: {
+        channelId,
+        workspaceId,
+        newStatus,
+        ticketTitle,
+        orchestratorWorkspaceId: orchestrator.id,
+      },
+    });
+  } catch (err) {
+    console.error(
+      "[ticketService] notifyOrchestratorOfStatusChange failed:",
+      err,
+    );
   }
 }
 

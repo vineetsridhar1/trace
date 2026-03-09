@@ -18,4 +18,5 @@ export const TOPICS = {
   INSTANCE_STATUS_CHANGED: (serverId: string) => `INSTANCE_STATUS_CHANGED.${serverId}`,
   REVIEW_RUN_UPDATED: (runId: string) => `REVIEW_RUN_UPDATED.${runId}`,
   REVIEW_STEP_STREAM: (runId: string) => `REVIEW_STEP_STREAM.${runId}`,
+  ORCHESTRATOR_TRIGGER: (serverId: string) => `ORCHESTRATOR_TRIGGER.${serverId}`,
 } as const;

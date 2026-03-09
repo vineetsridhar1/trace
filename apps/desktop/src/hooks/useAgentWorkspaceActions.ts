@@ -1139,34 +1139,52 @@ export function useWorkspaceActions({
   );
 
   // --- Orchestrator auto-trigger ---
-  // Accumulates reasons while the orchestrator is running, so the re-trigger includes all changes
-  const orchestratorPendingReasonsRef = useRef<string[]>([]);
+  // Tracks orchestrator workspace IDs by channel (populated by server events)
+  const orchestratorIdsByChannelRef = useRef<Map<string, string>>(new Map());
+  // Accumulates reasons per channel while orchestrator is running, so re-trigger includes all changes
+  const orchestratorPendingReasonsRef = useRef<Map<string, string[]>>(new Map());
+
+  const resolveOrchestratorId = useCallback(
+    (channelId: string, orchestratorWorkspaceId?: string): string | null => {
+      // Prefer the server-provided ID (works even if workspace isn't in the store)
+      if (orchestratorWorkspaceId) {
+        orchestratorIdsByChannelRef.current.set(channelId, orchestratorWorkspaceId);
+        return orchestratorWorkspaceId;
+      }
+      // Check cached ID from a previous server event
+      const cached = orchestratorIdsByChannelRef.current.get(channelId);
+      if (cached) return cached;
+      // Fall back to store lookup (only works for the active channel)
+      const fromStore = useWorkspaceStore
+        .getState()
+        .workspaces.find((w) => w.isOrchestrator && w.channelId === channelId);
+      return fromStore?.id ?? null;
+    },
+    [],
+  );
 
   const triggerOrchestrator = useCallback(
-    async (reason: string) => {
-      const chId = activeChannelIdRef.current;
+    async (reason: string, channelId?: string, orchestratorWorkspaceId?: string) => {
+      const chId = channelId ?? activeChannelIdRef.current;
       if (!chId) return;
 
-      const orchestrator = useWorkspaceStore
-        .getState()
-        .workspaces.find((w) => w.isOrchestrator && w.channelId === chId);
-      if (!orchestrator) return;
+      const orchId = resolveOrchestratorId(chId, orchestratorWorkspaceId);
+      if (!orchId) return;
 
       // If orchestrator is currently running, queue the reason for later
-      const isRunning = useAgentRunStore.getState().activeRunWorkspaceIds.has(orchestrator.id);
+      const isRunning = useAgentRunStore.getState().activeRunWorkspaceIds.has(orchId);
       if (isRunning) {
-        orchestratorPendingReasonsRef.current.push(reason);
+        const pending = orchestratorPendingReasonsRef.current;
+        if (!pending.has(chId)) pending.set(chId, []);
+        pending.get(chId)!.push(reason);
         return;
       }
-
-      // Don't trigger if it's in a terminal state like merged
-      if (orchestrator.status === 'merged') return;
 
       const triggerPrompt = `A workspace status has changed: ${reason}. Check the current state of all tickets via list_tickets and take any necessary action. If all work is done, summarize the results.`;
 
       // Persist the prompt so it appears in the orchestrator thread
       const persisted = await persistPrompt(
-        orchestrator.id,
+        orchId,
         triggerPrompt,
         "Failed to persist orchestrator trigger prompt",
         undefined,
@@ -1174,7 +1192,7 @@ export function useWorkspaceActions({
       );
       if (!persisted) return;
 
-      await spawnAgentForWorkspace(orchestrator.id, triggerPrompt, {
+      await spawnAgentForWorkspace(orchId, triggerPrompt, {
         statusOnSuccess: "in_progress",
         errorPrefix: "Failed to spawn orchestrator for status change",
         model: useAgentRunStore.getState().selectedModel,
@@ -1182,27 +1200,40 @@ export function useWorkspaceActions({
         isOrchestrator: true,
       });
     },
-    [persistPrompt, spawnAgentForWorkspace],
+    [resolveOrchestratorId, persistPrompt, spawnAgentForWorkspace],
   );
 
   // Check for pending orchestrator triggers when a run completes
   const checkPendingOrchestratorTrigger = useCallback(
     (completedWorkspaceId: string) => {
-      const chId = activeChannelIdRef.current;
-      if (!chId) return;
+      // Find which channel this orchestrator belongs to
+      const pending = orchestratorPendingReasonsRef.current;
+      const idsByChannel = orchestratorIdsByChannelRef.current;
 
-      const orchestrator = useWorkspaceStore
-        .getState()
-        .workspaces.find((w) => w.isOrchestrator && w.channelId === chId);
-      if (!orchestrator || orchestrator.id !== completedWorkspaceId) return;
+      // Look up the channel for this orchestrator ID
+      let chId: string | undefined;
+      for (const [channelId, orchId] of idsByChannel) {
+        if (orchId === completedWorkspaceId) {
+          chId = channelId;
+          break;
+        }
+      }
+      // Fall back to store lookup for active channel
+      if (!chId) {
+        const fromStore = useWorkspaceStore
+          .getState()
+          .workspaces.find((w) => w.id === completedWorkspaceId && w.isOrchestrator);
+        if (!fromStore) return;
+        chId = fromStore.channelId;
+      }
 
-      const pendingReasons = orchestratorPendingReasonsRef.current;
-      if (pendingReasons.length > 0) {
-        const summary = pendingReasons.join('; ');
-        orchestratorPendingReasonsRef.current = [];
+      const reasons = pending.get(chId);
+      if (reasons && reasons.length > 0) {
+        const summary = reasons.join('; ');
+        pending.delete(chId);
         // Small delay to let status updates settle
         setTimeout(() => {
-          void triggerOrchestrator(`Status changes while orchestrator was running: ${summary}`);
+          void triggerOrchestrator(`Status changes while orchestrator was running: ${summary}`, chId);
         }, 2000);
       }
     },

@@ -87,6 +87,15 @@ extend type Subscription {
   workspaceUpserted(channelId: ID!): Workspace!
   workspaceDeleted(channelId: ID!): WorkspaceDeletedPayload!
   presenceUpdated(channelId: ID!): PresencePayload!
+  orchestratorTrigger(serverId: ID!): OrchestratorTriggerPayload!
+}
+
+type OrchestratorTriggerPayload {
+  channelId: String!
+  workspaceId: String!
+  newStatus: String!
+  ticketTitle: String!
+  orchestratorWorkspaceId: String!
 }
 
 type WorkspaceDeletedPayload {

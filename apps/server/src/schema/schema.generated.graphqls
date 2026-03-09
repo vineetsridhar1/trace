@@ -238,6 +238,14 @@ type Mutation {
   uploadAttachment(contentType: String!, data: String!, filename: String!): Attachment!
 }
 
+type OrchestratorTriggerPayload {
+  channelId: String!
+  newStatus: String!
+  orchestratorWorkspaceId: String!
+  ticketTitle: String!
+  workspaceId: String!
+}
+
 type PRStatus {
   branch: String!
   hasPR: Boolean!
@@ -317,6 +325,7 @@ type Subscription {
   channelMessageCreated(channelId: ID!): ChannelMessage!
   channelMessageCreatedInServer(serverId: ID!): ChannelMessage!
   instanceStatusChanged(serverId: ID!): InstanceStatusPayload!
+  orchestratorTrigger(serverId: ID!): OrchestratorTriggerPayload!
   presenceUpdated(channelId: ID!): PresencePayload!
   sessionEventCreated(channelId: ID!): SessionEventPayload!
   sessionEventUpdated(channelId: ID!): SessionEventPayload!

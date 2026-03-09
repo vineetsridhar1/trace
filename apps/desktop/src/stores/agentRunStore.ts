@@ -89,7 +89,7 @@ interface WorkspaceActions {
     },
   ) => Promise<void>;
   createOrchestrator: () => Promise<void>;
-  triggerOrchestrator: (reason: string) => Promise<void>;
+  triggerOrchestrator: (reason: string, channelId?: string, orchestratorWorkspaceId?: string) => Promise<void>;
   checkPendingOrchestratorTrigger: (completedWorkspaceId: string) => void;
 }
 

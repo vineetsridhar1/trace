@@ -110,7 +110,6 @@ interface UseChannelSubscriptionsOptions {
   onTicketReadyToRun?: (workspaceId: string, runConfig: unknown) => void;
   onTicketReadyForReview?: (workspaceId: string, runConfig: unknown) => void;
   onWorkspaceCompleted?: () => void;
-  onWorkspaceStatusChanged?: (workspaceId: string, prevStatus: string, newStatus: string) => void;
   refreshWorkspaces?: (channelId: string) => Promise<void>;
 }
 
@@ -121,7 +120,6 @@ export function useChannelSubscriptions({
   onTicketReadyToRun,
   onTicketReadyForReview,
   onWorkspaceCompleted,
-  onWorkspaceStatusChanged,
   refreshWorkspaces,
 }: UseChannelSubscriptionsOptions) {
   const subscriptionsActive = useSyncExternalStore(subscribeWsConnection, getWsConnectionSnapshot);
@@ -212,16 +210,7 @@ export function useChannelSubscriptions({
     if (transitionedToCompleted && onWorkspaceCompleted) {
       setTimeout(onWorkspaceCompleted, 0);
     }
-
-    // Notify orchestrator of status changes on non-orchestrator workspaces
-    if (onWorkspaceStatusChanged && !workspace.isOrchestrator) {
-      const prev = storeState.workspaces.find((w) => w.id === workspace.id);
-      const prevStatus = prev?.status ?? 'unknown';
-      if (prevStatus !== workspace.status) {
-        onWorkspaceStatusChanged(workspace.id, prevStatus, workspace.status);
-      }
-    }
-  }, [workspaceData, activeChannelId, onNeedsAttention, onWorkspaceCompleted, onWorkspaceStatusChanged]);
+  }, [workspaceData, activeChannelId, onNeedsAttention, onWorkspaceCompleted]);
 
   // --- Workspace deleted ---
   const { data: workspaceDeletedData } = useSubscription(WORKSPACE_DELETED_SUBSCRIPTION, { variables, skip });

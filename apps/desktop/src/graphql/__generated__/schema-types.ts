@@ -521,6 +521,15 @@ export type MutationUploadAttachmentArgs = {
   filename: Scalars['String']['input'];
 };
 
+export type OrchestratorTriggerPayload = {
+  __typename?: 'OrchestratorTriggerPayload';
+  channelId: Scalars['String']['output'];
+  newStatus: Scalars['String']['output'];
+  orchestratorWorkspaceId: Scalars['String']['output'];
+  ticketTitle: Scalars['String']['output'];
+  workspaceId: Scalars['String']['output'];
+};
+
 export type PrStatus = {
   __typename?: 'PRStatus';
   branch: Scalars['String']['output'];
@@ -723,6 +732,7 @@ export type Subscription = {
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
   instanceStatusChanged: InstanceStatusPayload;
+  orchestratorTrigger: OrchestratorTriggerPayload;
   presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
@@ -755,6 +765,11 @@ export type SubscriptionChannelMessageCreatedInServerArgs = {
 
 
 export type SubscriptionInstanceStatusChangedArgs = {
+  serverId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionOrchestratorTriggerArgs = {
   serverId: Scalars['ID']['input'];
 };
 

@@ -14,6 +14,7 @@ import {
   refreshTicketBroadcast,
   checkAndTriggerDependents,
   triggerReviewIfAutonomous,
+  notifyOrchestratorOfStatusChange,
 } from "./ticketService";
 
 function extractWorkspaceIdFromWorktreePath(
@@ -118,6 +119,7 @@ async function runAutoCompleteIfNeeded(
     void syncTicketWithWorkspaceStatus(workspaceId, channelId, "completed");
     void checkAndTriggerDependents(workspaceId, channelId);
     void triggerReviewIfAutonomous(workspaceId, channelId);
+    void notifyOrchestratorOfStatusChange(workspaceId, channelId, "completed");
   }
 }
 
@@ -487,6 +489,7 @@ export async function ingestEvent(payload: HookEvent) {
   ) {
     await updateWorkspaceStatus(workspace.id, "needs_input");
     void syncTicketWithWorkspaceStatus(workspace.id, channelId, "needs_input");
+    void notifyOrchestratorOfStatusChange(workspace.id, channelId, "needs_input");
     currentStatus = "needs_input";
   }
 

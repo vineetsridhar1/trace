@@ -536,6 +536,15 @@ export type MutationuploadAttachmentArgs = {
   filename: Scalars['String']['input'];
 };
 
+export type OrchestratorTriggerPayload = {
+  __typename?: 'OrchestratorTriggerPayload';
+  channelId: Scalars['String']['output'];
+  newStatus: Scalars['String']['output'];
+  orchestratorWorkspaceId: Scalars['String']['output'];
+  ticketTitle: Scalars['String']['output'];
+  workspaceId: Scalars['String']['output'];
+};
+
 export type PRStatus = {
   __typename?: 'PRStatus';
   branch: Scalars['String']['output'];
@@ -738,6 +747,7 @@ export type Subscription = {
   channelMessageCreated: ChannelMessage;
   channelMessageCreatedInServer: ChannelMessage;
   instanceStatusChanged: InstanceStatusPayload;
+  orchestratorTrigger: OrchestratorTriggerPayload;
   presenceUpdated: PresencePayload;
   sessionEventCreated: SessionEventPayload;
   sessionEventUpdated: SessionEventPayload;
@@ -770,6 +780,11 @@ export type SubscriptionchannelMessageCreatedInServerArgs = {
 
 
 export type SubscriptioninstanceStatusChangedArgs = {
+  serverId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionorchestratorTriggerArgs = {
   serverId: Scalars['ID']['input'];
 };
 
@@ -1057,6 +1072,7 @@ export type ResolversTypes = {
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   KanbanColumn: ResolverTypeWrapper<KanbanColumnMapper>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  OrchestratorTriggerPayload: ResolverTypeWrapper<OrchestratorTriggerPayload>;
   PRStatus: ResolverTypeWrapper<PRStatusMapper>;
   PresencePayload: ResolverTypeWrapper<PresencePayloadMapper>;
   PresenceUser: ResolverTypeWrapper<PresenceUserMapper>;
@@ -1116,6 +1132,7 @@ export type ResolversParentTypes = {
   JSON: Scalars['JSON']['output'];
   KanbanColumn: KanbanColumnMapper;
   Mutation: Record<PropertyKey, never>;
+  OrchestratorTriggerPayload: OrchestratorTriggerPayload;
   PRStatus: PRStatusMapper;
   PresencePayload: PresencePayloadMapper;
   PresenceUser: PresenceUserMapper;
@@ -1379,6 +1396,14 @@ export type MutationResolvers<ContextType = any, ParentType extends ResolversPar
   uploadAttachment?: Resolver<ResolversTypes['Attachment'], ParentType, ContextType, RequireFields<MutationuploadAttachmentArgs, 'contentType' | 'data' | 'filename'>>;
 };
 
+export type OrchestratorTriggerPayloadResolvers<ContextType = any, ParentType extends ResolversParentTypes['OrchestratorTriggerPayload'] = ResolversParentTypes['OrchestratorTriggerPayload']> = {
+  channelId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  newStatus?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  orchestratorWorkspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  ticketTitle?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  workspaceId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+};
+
 export type PRStatusResolvers<ContextType = any, ParentType extends ResolversParentTypes['PRStatus'] = ResolversParentTypes['PRStatus']> = {
   branch?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   hasPR?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -1458,6 +1483,7 @@ export type SubscriptionResolvers<ContextType = any, ParentType extends Resolver
   channelMessageCreated?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreated", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedArgs, 'channelId'>>;
   channelMessageCreatedInServer?: SubscriptionResolver<ResolversTypes['ChannelMessage'], "channelMessageCreatedInServer", ParentType, ContextType, RequireFields<SubscriptionchannelMessageCreatedInServerArgs, 'serverId'>>;
   instanceStatusChanged?: SubscriptionResolver<ResolversTypes['InstanceStatusPayload'], "instanceStatusChanged", ParentType, ContextType, RequireFields<SubscriptioninstanceStatusChangedArgs, 'serverId'>>;
+  orchestratorTrigger?: SubscriptionResolver<ResolversTypes['OrchestratorTriggerPayload'], "orchestratorTrigger", ParentType, ContextType, RequireFields<SubscriptionorchestratorTriggerArgs, 'serverId'>>;
   presenceUpdated?: SubscriptionResolver<ResolversTypes['PresencePayload'], "presenceUpdated", ParentType, ContextType, RequireFields<SubscriptionpresenceUpdatedArgs, 'channelId'>>;
   sessionEventCreated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventCreated", ParentType, ContextType, RequireFields<SubscriptionsessionEventCreatedArgs, 'channelId'>>;
   sessionEventUpdated?: SubscriptionResolver<ResolversTypes['SessionEventPayload'], "sessionEventUpdated", ParentType, ContextType, RequireFields<SubscriptionsessionEventUpdatedArgs, 'channelId'>>;
@@ -1619,6 +1645,7 @@ export type Resolvers<ContextType = any> = {
   JSON?: GraphQLScalarType;
   KanbanColumn?: KanbanColumnResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
+  OrchestratorTriggerPayload?: OrchestratorTriggerPayloadResolvers<ContextType>;
   PRStatus?: PRStatusResolvers<ContextType>;
   PresencePayload?: PresencePayloadResolvers<ContextType>;
   PresenceUser?: PresenceUserResolvers<ContextType>;
