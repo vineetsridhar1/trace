@@ -57,7 +57,42 @@ export async function ensureWorktree(
   }
 
   const branchName = `${branchPrefix || "trace"}/${workspaceId.slice(0, 8)}`;
-  const startPoint = baseBranch || "HEAD";
+  let startPoint = baseBranch || "HEAD";
+
+  // If baseBranch was provided, verify it's a valid local ref.
+  // If not, try origin/<baseBranch> or fetch it from remote first.
+  if (baseBranch) {
+    const check = await runProcess(
+      "git",
+      ["rev-parse", "--verify", baseBranch],
+      repoPath,
+    );
+    if (check.code !== 0) {
+      // Not a local ref — try origin/<baseBranch>
+      const remoteRef = `origin/${baseBranch}`;
+      const remoteCheck = await runProcess(
+        "git",
+        ["rev-parse", "--verify", remoteRef],
+        repoPath,
+      );
+      if (remoteCheck.code === 0) {
+        startPoint = remoteRef;
+      } else {
+        // Try fetching from remote
+        const fetchResult = await runProcess(
+          "git",
+          ["fetch", "origin", baseBranch],
+          repoPath,
+        );
+        if (fetchResult.code === 0) {
+          startPoint = remoteRef;
+        } else {
+          // Fall back to HEAD
+          startPoint = "HEAD";
+        }
+      }
+    }
+  }
 
   const result = await new Promise<EnsureWorktreeResult>((resolve, reject) => {
     const proc = spawn(
