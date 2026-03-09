@@ -213,6 +213,7 @@ export class ClaudeAdapter implements AgentAdapter {
 - get_ticket_status: Check the current status of a specific workspace.
 - create_ticket: Spin off independent sub-tasks into parallel workspaces. You can choose the interaction mode (code/plan/ask). Only do this for genuinely independent work, not for small sub-steps.
 - write_to_ticket: Send a follow-up message to another workspace and trigger the agent to run on it. By default this resumes the existing Claude session. You can set trigger_run=false to just leave a note, or choose an interaction mode (code/plan/ask).
+- delete_ticket: Delete a ticket/workspace that is no longer needed (duplicates, mistakes, or irrelevant tickets). Cannot delete running or merged workspaces.
 
 Interaction modes: "code" allows full code changes (default), "plan" creates a plan for review before implementing, "ask" is read-only analysis only.${parts.channelName ? `\n\nYou are currently working in channel: "${parts.channelName}". Use this to filter list_tickets to your own channel.` : ""}`,
       );
@@ -253,6 +254,7 @@ You are the project manager and technical lead. You:
 - get_ticket_status: Check the current status of a specific workspace
 - create_ticket: Create a new coding workspace with detailed instructions for the agent. Use the depends_on parameter to set dependencies — dependent tickets will automatically start when their dependencies are merged.
 - write_to_ticket: Send follow-up instructions or corrections to an existing workspace
+- delete_ticket: Delete a ticket/workspace that is no longer needed (duplicates, mistakes, or irrelevant tickets)
 
 ## Dependency Management
 When creating tickets, use the \`depends_on\` parameter to specify which tickets must be completed first. Tickets with dependencies will automatically be queued and started when all their dependencies are merged. This lets you define a DAG of work:

@@ -538,6 +538,83 @@ server.tool(
   },
 );
 
+// delete_ticket
+const DELETE_WORKSPACE_MUTATION = `
+  mutation McpDeleteWorkspace($channelId: ID!, $workspaceId: ID!) {
+    deleteWorkspace(channelId: $channelId, workspaceId: $workspaceId)
+  }
+`;
+
+server.tool(
+  "delete_ticket",
+  "Delete a ticket/workspace that is no longer needed. Use this to clean up tickets that were created by mistake, are duplicates, or are no longer relevant. Cannot delete workspaces that are currently running (in_progress) or already merged.",
+  {
+    workspace_id: z.string().describe("The workspace ID of the ticket to delete."),
+    reason: z.string().optional().describe("Brief reason for deleting the ticket (for logging purposes)."),
+  },
+  async ({ workspace_id, reason }) => {
+    // Prevent deleting the current workspace
+    if (workspace_id === WORKSPACE_ID) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: "Cannot delete your own workspace.",
+        }],
+        isError: true,
+      };
+    }
+
+    // Check workspace status before proceeding
+    const statusData = await gqlFetch<GetWorkspaceResult>(GET_WORKSPACE_QUERY, {
+      workspaceId: workspace_id,
+    });
+
+    if (!statusData.workspace) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Workspace ${workspace_id} not found.`,
+        }],
+        isError: true,
+      };
+    }
+
+    const currentStatus = statusData.workspace.status;
+    if (currentStatus === "in_progress") {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Cannot delete workspace ${workspace_id}: it is currently in_progress (an agent is running). Wait for it to finish or stop it first.`,
+        }],
+        isError: true,
+      };
+    }
+    if (currentStatus === "merged") {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Cannot delete workspace ${workspace_id}: it has already been merged.`,
+        }],
+        isError: true,
+      };
+    }
+
+    await gqlFetch<{ deleteWorkspace: boolean }>(DELETE_WORKSPACE_MUTATION, {
+      channelId: CHANNEL_ID,
+      workspaceId: workspace_id,
+    });
+
+    const title = statusData.workspace.ticketTitle ?? "(untitled)";
+    const reasonSuffix = reason ? ` Reason: ${reason}` : "";
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Deleted ticket "${title}" (workspace=${workspace_id}).${reasonSuffix}`,
+      }],
+    };
+  },
+);
+
 // ── Start server ────────────────────────────────────────────────────
 
 async function main() {
