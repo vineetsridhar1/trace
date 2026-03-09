@@ -27,7 +27,7 @@ function ProjectAccordion({
   const initial = name.trim().charAt(0).toUpperCase() || 'P';
 
   return (
-    <div className="mx-2 overflow-hidden rounded-xl border border-edge bg-surface-elevated/20">
+    <div className="overflow-hidden">
       <button
         type="button"
         className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-surface-elevated/40"
@@ -50,7 +50,7 @@ function ProjectAccordion({
         className="grid transition-[grid-template-rows] duration-200 ease-out"
         style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
       >
-        <div className="overflow-hidden border-t border-edge/80 py-1">
+        <div className="overflow-hidden border-t border-edge/60 pt-1">
           {children}
         </div>
       </div>
