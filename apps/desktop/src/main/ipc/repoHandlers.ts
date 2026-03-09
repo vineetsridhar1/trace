@@ -296,7 +296,8 @@ async function doValidateRepo(repoPath: string) {
   if (!originUrl) {
     return {
       valid: false,
-      error: "No origin remote found. Please add an origin remote to this repository.",
+      error:
+        "No origin remote found. Please add an origin remote to this repository.",
     };
   }
   return { valid: true, originUrl };
@@ -335,7 +336,9 @@ function doListSlashCommands(repoPath: string) {
             const content = fs.readFileSync(path.join(dir, file), "utf-8");
             const fm = parseFrontmatter(content);
             if (fm.description) description = fm.description;
-          } catch { /* ignore read errors */ }
+          } catch {
+            /* ignore read errors */
+          }
           return { name: file.replace(/\.md$/, ""), description, source };
         });
     } catch {
@@ -359,7 +362,13 @@ function doListSlashCommands(repoPath: string) {
             const content = fs.readFileSync(skillFile, "utf-8");
             const fm = parseFrontmatter(content);
             if (fm["user-invocable"] === "false") return [];
-            return [{ name: fm.name || entry.name, description: fm.description || "", source }];
+            return [
+              {
+                name: fm.name || entry.name,
+                description: fm.description || "",
+                source,
+              },
+            ];
           } catch {
             return [];
           }
@@ -369,12 +378,88 @@ function doListSlashCommands(repoPath: string) {
     }
   }
 
+  function discoverPluginCommands(repoPath: string): DiscoveredCommand[] {
+    const homeDir = os.homedir();
+    const installedPath = path.join(
+      homeDir,
+      ".claude",
+      "plugins",
+      "installed_plugins.json",
+    );
+    const settingsPath = path.join(homeDir, ".claude", "settings.json");
+    if (!fs.existsSync(installedPath)) return [];
+
+    let installed: {
+      plugins: Record<
+        string,
+        Array<{
+          scope: string;
+          projectPath?: string;
+          installPath: string;
+        }>
+      >;
+    };
+    try {
+      installed = JSON.parse(fs.readFileSync(installedPath, "utf-8"));
+    } catch {
+      return [];
+    }
+
+    let enabledPlugins: Record<string, boolean> = {};
+    try {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+      enabledPlugins = settings.enabledPlugins ?? {};
+    } catch {
+      /* no settings, treat all as enabled */
+    }
+
+    const results: DiscoveredCommand[] = [];
+    for (const [pluginKey, installations] of Object.entries(
+      installed.plugins ?? {},
+    )) {
+      if (enabledPlugins[pluginKey] === false) continue;
+
+      for (const install of installations) {
+        if (install.scope === "project" && install.projectPath !== repoPath)
+          continue;
+        if (!fs.existsSync(install.installPath)) continue;
+
+        const pluginJsonPath = path.join(
+          install.installPath,
+          ".claude-plugin",
+          "plugin.json",
+        );
+        let pluginName = pluginKey.split("@")[0];
+        try {
+          const pluginJson = JSON.parse(
+            fs.readFileSync(pluginJsonPath, "utf-8"),
+          );
+          if (pluginJson.name) pluginName = pluginJson.name;
+        } catch {
+          /* use fallback name */
+        }
+
+        const commandsDir = path.join(install.installPath, "commands");
+        for (const cmd of discoverCommands(commandsDir, "global")) {
+          results.push({ ...cmd, name: `${pluginName}:${cmd.name}` });
+        }
+
+        const skillsDir = path.join(install.installPath, "skills");
+        for (const skill of discoverSkills(skillsDir, "global")) {
+          results.push({ ...skill, name: skill.name });
+        }
+      }
+    }
+    return results;
+  }
+
   const homeDir = os.homedir();
   const globalSkillsDir = path.join(homeDir, ".claude", "skills");
   const globalCommandsDir = path.join(homeDir, ".claude", "commands");
   const all = [
     ...discoverSkills(globalSkillsDir, "global"),
     ...discoverCommands(globalCommandsDir, "global"),
+    ...discoverPluginCommands(repoPath),
   ];
 
   if (repoPath) {

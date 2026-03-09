@@ -23,9 +23,21 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     source: "built-in",
   },
   {
+    name: "config",
+    displayName: "/config",
+    description: "Open configuration",
+    source: "built-in",
+  },
+  {
     name: "cost",
     displayName: "/cost",
     description: "Show token usage and cost",
+    source: "built-in",
+  },
+  {
+    name: "doctor",
+    displayName: "/doctor",
+    description: "Check health of Claude Code installation",
     source: "built-in",
   },
   {
@@ -41,6 +53,24 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     source: "built-in",
   },
   {
+    name: "model",
+    displayName: "/model",
+    description: "Switch the AI model",
+    source: "built-in",
+  },
+  {
+    name: "permissions",
+    displayName: "/permissions",
+    description: "View and manage tool permissions",
+    source: "built-in",
+  },
+  {
+    name: "pr-comments",
+    displayName: "/pr-comments",
+    description: "View and address PR review comments",
+    source: "built-in",
+  },
+  {
     name: "review",
     displayName: "/review",
     description: "Review code changes",
@@ -52,11 +82,26 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     description: "Show session status",
     source: "built-in",
   },
+  {
+    name: "terminal-setup",
+    displayName: "/terminal-setup",
+    description: "Configure terminal integration",
+    source: "built-in",
+  },
+  {
+    name: "vim",
+    displayName: "/vim",
+    description: "Toggle vim keybindings mode",
+    source: "built-in",
+  },
 ];
 
 const CACHE_TTL_MS = 30_000;
 const MAX_CACHE_ENTRIES = 20;
-const commandCache = new Map<string, { commands: SlashCommand[]; ts: number }>();
+const commandCache = new Map<
+  string,
+  { commands: SlashCommand[]; ts: number }
+>();
 
 export function useSlashCommands(
   inputValue: string,
