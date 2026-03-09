@@ -2,6 +2,7 @@ extend type Query {
   workspace(id: ID!): Workspace
   workspaces(channelId: ID!, limit: Int, offset: Int, excludeStatus: String): WorkspaceConnection!
   myWorkspaces(serverId: ID!, excludeStatuses: [String!]): [Workspace!]!
+  myWorkspacesMergedCount(serverId: ID!): Int!
   checkPRStatuses(channelId: ID!, branches: [String!]!): [PRStatus!]!
   generateBranchName(prompt: String!): String
   suggestScripts(fileContents: JSON!): SuggestScriptsResult

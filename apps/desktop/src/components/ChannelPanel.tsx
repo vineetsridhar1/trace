@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Reorder } from 'framer-motion';
-import { FiPlus, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiHash, FiLayers, FiFolder, FiSettings, FiMoreVertical, FiSearch, FiActivity } from 'react-icons/fi';
 import type { Channel, DragTarget, LocalChannelConfig, Server } from '../types';
 import type { GlobalTabType } from '../stores/tabStore';
 import { Tooltip } from './Tooltip';
@@ -195,6 +195,8 @@ interface ChannelPanelProps {
   onStartDrag: () => void;
   onOpenWorkspaceLink: (channelId: string, workspaceId: string) => void;
   onOpenViewTab: (viewType: GlobalTabType) => void;
+  onOpenMyActivity: () => void;
+  isMyActivityActive?: boolean;
 }
 
 export function ChannelPanel({
@@ -217,6 +219,8 @@ export function ChannelPanel({
   unreadCounts = {},
   localConfigs = {},
   onJoinChannel,
+  onOpenMyActivity,
+  isMyActivityActive,
 }: ChannelPanelProps) {
   const chatChannels = channels.filter((c) => c.type === 'channel');
   const teamChannels = channels.filter((c) => c.type === 'team');
@@ -378,6 +382,19 @@ export function ChannelPanel({
           onSwitchServer={onSwitchServer}
           onCreateServer={onCreateServer}
         />
+
+        <div className="px-2 pt-2 pb-1">
+          <button
+            type="button"
+            onClick={onOpenMyActivity}
+            className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
+              isMyActivityActive ? 'bg-surface-elevated font-semibold text-accent-light' : 'text-primary hover:bg-surface-elevated/50'
+            }`}
+          >
+            <FiActivity className="h-3.5 w-3.5 shrink-0 text-muted" />
+            <span>My Activity</span>
+          </button>
+        </div>
 
         <Reorder.Group
           id="channel-items"

@@ -126,9 +126,9 @@ export async function getWorkspacesByChannel(
 export async function getWorkspacesByUser(
   userId: string,
   serverId: string,
-  options: { excludeStatuses?: string[] } = {},
+  options: { excludeStatuses?: string[]; limit?: number } = {},
 ) {
-  const { excludeStatuses = [] } = options;
+  const { excludeStatuses = [], limit = 200 } = options;
   return prisma.workspace.findMany({
     where: {
       userId,
@@ -136,13 +136,23 @@ export async function getWorkspacesByUser(
       channel: { serverId },
     },
     orderBy: { createdAt: 'desc' },
-    take: 20,
+    take: limit,
     include: {
       cliSession: { select: { sessionId: true, cwd: true, status: true, permissionMode: true } },
       user: { select: { id: true, name: true, avatarUrl: true } },
       _count: { select: { sessions: true } },
       channel: { select: { id: true, name: true } },
       ticket: { select: { title: true } },
+    },
+  });
+}
+
+export async function getWorkspacesMergedCountByUser(userId: string, serverId: string) {
+  return prisma.workspace.count({
+    where: {
+      userId,
+      status: 'merged',
+      channel: { serverId },
     },
   });
 }

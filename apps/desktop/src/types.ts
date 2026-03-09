@@ -429,6 +429,7 @@ export interface WorkspaceCliSession {
 export interface Workspace {
   id: string;
   channelId: string;
+  channelName?: string | null;
   cliSessionId: string;
   userId: string | null;
   preview: string | null;

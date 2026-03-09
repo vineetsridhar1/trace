@@ -569,6 +569,7 @@ export type Query = {
   me?: Maybe<AuthUser>;
   myInstances: Array<ElectronInstance>;
   myWorkspaces: Array<Workspace>;
+  myWorkspacesMergedCount: Scalars['Int']['output'];
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
@@ -638,6 +639,11 @@ export type QueryinstanceArgs = {
 
 export type QuerymyWorkspacesArgs = {
   excludeStatuses?: InputMaybe<Array<Scalars['String']['input']>>;
+  serverId: Scalars['ID']['input'];
+};
+
+
+export type QuerymyWorkspacesMergedCountArgs = {
   serverId: Scalars['ID']['input'];
 };
 
@@ -1406,6 +1412,7 @@ export type QueryResolvers<ContextType = any, ParentType extends ResolversParent
   me?: Resolver<Maybe<ResolversTypes['AuthUser']>, ParentType, ContextType>;
   myInstances?: Resolver<Array<ResolversTypes['ElectronInstance']>, ParentType, ContextType>;
   myWorkspaces?: Resolver<Array<ResolversTypes['Workspace']>, ParentType, ContextType, RequireFields<QuerymyWorkspacesArgs, 'serverId'>>;
+  myWorkspacesMergedCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<QuerymyWorkspacesMergedCountArgs, 'serverId'>>;
   servers?: Resolver<Array<ResolversTypes['Server']>, ParentType, ContextType>;
   sessionEvents?: Resolver<ResolversTypes['EventConnection'], ParentType, ContextType, RequireFields<QuerysessionEventsArgs, 'channelId' | 'sessionId' | 'workspaceId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerysessionsArgs, 'channelId' | 'workspaceId'>>;

@@ -150,6 +150,7 @@ interface AppUIState {
   workspaceSidebarDockSide: 'left' | 'right';
   mobileDrawerOpen: boolean;
   showInstanceSettings: boolean;
+  myActivityActive: boolean;
 
   openSettings: (section?: string) => void;
   closeSettings: () => void;
@@ -186,6 +187,7 @@ interface AppUIState {
   setWorkspaceSidebarDockSide: (side: 'left' | 'right') => void;
   toggleWorkspaceSidebarOpen: () => void;
   setPendingThreadOpen: (value: { channelId: string; workspaceId: string } | null) => void;
+  setMyActivityActive: (active: boolean) => void;
 }
 
 const initialChannelViewMap = loadChannelViewMap();
@@ -221,6 +223,7 @@ export const useAppUIStore = create<AppUIState>((set) => ({
   workspaceSidebarDockSide: loadWorkspaceSidebarDockSide(),
   mobileDrawerOpen: false,
   showInstanceSettings: false,
+  myActivityActive: false,
 
   openSettings: (section) => set({ showSettings: true, settingsSection: section ?? 'trace' }),
   closeSettings: () => set({ showSettings: false }),
@@ -306,4 +309,5 @@ export const useAppUIStore = create<AppUIState>((set) => ({
       return { workspaceSidebarOpen: next };
     }),
   setPendingThreadOpen: (value) => set({ pendingThreadOpen: value }),
+  setMyActivityActive: (active) => set({ myActivityActive: active }),
 }));

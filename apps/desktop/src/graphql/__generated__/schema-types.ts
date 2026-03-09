@@ -554,6 +554,7 @@ export type Query = {
   me?: Maybe<AuthUser>;
   myInstances: Array<ElectronInstance>;
   myWorkspaces: Array<Workspace>;
+  myWorkspacesMergedCount: Scalars['Int']['output'];
   servers: Array<Server>;
   sessionEvents: EventConnection;
   sessions: Array<Session>;
@@ -623,6 +624,11 @@ export type QueryInstanceArgs = {
 
 export type QueryMyWorkspacesArgs = {
   excludeStatuses?: InputMaybe<Array<Scalars['String']['input']>>;
+  serverId: Scalars['ID']['input'];
+};
+
+
+export type QueryMyWorkspacesMergedCountArgs = {
   serverId: Scalars['ID']['input'];
 };
 

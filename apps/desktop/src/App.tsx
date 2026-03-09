@@ -45,6 +45,8 @@ import { ChannelTerminalTab } from "./components/ChannelTerminalTab";
 import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { ShortcutHelpDialog } from "./components/ShortcutHelpDialog";
 import { CommandPalette } from "./components/CommandPalette";
+import { MyActivitySidebar } from "./components/MyActivityPanel";
+import { useMyWorkspaces } from "./hooks/useMyWorkspaces";
 import { Toaster, toast } from "sonner";
 import { FiCheckCircle, FiGitMerge, FiAlertCircle } from "react-icons/fi";
 
@@ -176,6 +178,7 @@ function AppContent() {
   const workspaceSidebarOpen = useAppUIStore((s) => s.workspaceSidebarOpen);
   const workspaceSidebarWidth = useAppUIStore((s) => s.workspaceSidebarWidth);
   const workspaceSidebarDockSide = useAppUIStore((s) => s.workspaceSidebarDockSide);
+  const myActivityActive = useAppUIStore((s) => s.myActivityActive);
 
   const activeRunWorkspaceIds = useAgentRunStore(
     (s) => s.activeRunWorkspaceIds,
@@ -184,6 +187,9 @@ function AppContent() {
   const { user: authUser } = useAuth();
   const authUserIdRef = useRef<string | null>(null);
   authUserIdRef.current = authUser?.id ?? null;
+
+  // Ref to suppress myActivityActive clearing during My Activity navigation
+  const preserveMyActivityRef = useRef(false);
 
   // ─── Stable channel ref for callbacks ──────────────────────────────
   const activeChannelRef = useRef<Channel | null>(null);
@@ -223,6 +229,7 @@ function AppContent() {
     createAiChat,
     deleteAiChat: deleteAiChatMutation,
   } = useAiChatSync();
+  const { refreshMyWorkspaces, loadMergedMyWorkspaces } = useMyWorkspaces();
 
   // Thread sync — registers sync actions on threadStore
   useThreadSync(getActiveChannelId, getChannelRepoPath, getChannelBaseBranch, getChannelTeardownCommands);
@@ -715,6 +722,33 @@ function AppContent() {
     }
   }, [activeTabId]);
 
+  // ─── My Activity ─────────────────────────────────────────────────
+  const joinedChannelIds = useMemo(
+    () => new Set(Object.keys(localConfigs).filter((id) => localConfigs[id]?.localRepoPath)),
+    [localConfigs],
+  );
+
+  const handleOpenMyActivity = useCallback(() => {
+    useAppUIStore.getState().setMyActivityActive(true);
+    useAppUIStore.getState().setWorkspaceSidebarOpen(true);
+    if (activeServerId) {
+      void refreshMyWorkspaces(activeServerId);
+    }
+  }, [activeServerId, refreshMyWorkspaces]);
+
+  const handleExpandMergedMyActivity = useCallback(() => {
+    if (activeServerId) {
+      void loadMergedMyWorkspaces(activeServerId);
+    }
+  }, [activeServerId, loadMergedMyWorkspaces]);
+
+  // Refresh my activity data when sidebar becomes active
+  useEffect(() => {
+    if (myActivityActive && activeServerId) {
+      void refreshMyWorkspaces(activeServerId);
+    }
+  }, [myActivityActive, activeServerId, refreshMyWorkspaces]);
+
   // ─── Channel/view switching ──────────────────────────────────────
   const handleOpenViewTab = useCallback(
     (viewType: GlobalTabType) => {
@@ -815,6 +849,9 @@ function AppContent() {
       useWorkspaceStore.getState().clearWorkspaces();
       useSyncStore.getState().reset();
       usePresenceStore.getState().clear();
+      if (!preserveMyActivityRef.current) {
+        useAppUIStore.getState().setMyActivityActive(false);
+      }
 
       // Don't touch active tab or middlePanelView — the center content
       // stays on whatever tab the user already has open. Only the workspace
@@ -853,6 +890,15 @@ function AppContent() {
     [activeChannelId, fetchAndOpenWorkspace, performChannelSwitch],
   );
 
+  const handleMyActivityOpenWorkspace = useCallback(
+    (channelId: string, workspaceId: string) => {
+      preserveMyActivityRef.current = true;
+      handleOpenThreadLink(channelId, workspaceId);
+      preserveMyActivityRef.current = false;
+    },
+    [handleOpenThreadLink],
+  );
+
   const handleJoinChannel = useCallback(
     async (config: LocalChannelConfig) => {
       const targetId = joinChannelId ?? activeChannelId;
@@ -879,6 +925,7 @@ function AppContent() {
         return;
       }
       switchServer(serverId);
+      useAppUIStore.getState().setMyActivityActive(false);
       useAppUIStore.getState().setChannelWidth(220);
       const firstChannel = enrichedChannels.find(
         (ch) => ch.serverId === serverId,
@@ -1305,6 +1352,10 @@ function AppContent() {
     () => useAppUIStore.getState().toggleWorkspaceSidebarOpen(),
     [],
   );
+  const handleCloseMyActivitySidebar = useCallback(() => {
+    useAppUIStore.getState().setMyActivityActive(false);
+    useAppUIStore.getState().setWorkspaceSidebarOpen(false);
+  }, []);
   const handleToggleWorkspaceSidebarDockSide = useCallback(() => {
     const ui = useAppUIStore.getState();
     ui.setWorkspaceSidebarDockSide(
@@ -1354,12 +1405,14 @@ function AppContent() {
           onStartDrag={handleStartDragLeft}
           onOpenWorkspaceLink={handleOpenThreadLink}
           onOpenViewTab={handleOpenViewTab}
+          onOpenMyActivity={handleOpenMyActivity}
+          isMyActivityActive={myActivityActive}
         />
 
         {/* Mobile drawer overlay */}
         <div
           className={`mobile-drawer-overlay ${
-            mobileDrawerOpen || (workspaceSidebarOpen && !isFullscreen && currentWsEnabled)
+            mobileDrawerOpen || (workspaceSidebarOpen && !isFullscreen && (currentWsEnabled || myActivityActive))
               ? 'visible'
               : ''
           }`}
@@ -1369,34 +1422,51 @@ function AppContent() {
           }}
         />
         {!isFullscreen &&
-          currentWsEnabled &&
+          (currentWsEnabled || myActivityActive) &&
           workspaceSidebarOpen &&
           workspaceSidebarDockSide === 'left' && (
-          <WorkspaceSidebar
-            workspaces={workspaces}
-            selectedWorkspaceId={selectedWorkspaceId}
-            attentionWorkspaceIds={attentionWorkspaceIds}
-            channelId={activeChannelId}
-            onOpenWorkspace={handleOpenWorkspace}
-            onDeleteWorkspace={handleDeleteWorkspace}
-            onMarkMerged={handleMarkMerged}
-            workspacesWithRunningProcesses={workspacesWithRunningProcesses}
-            activeRunWorkspaceIds={activeRunWorkspaceIds}
+          myActivityActive ? (
+            <MyActivitySidebar
+              onOpenWorkspace={handleMyActivityOpenWorkspace}
+              onExpandMerged={handleExpandMergedMyActivity}
+              activeChannelId={activeChannelId}
+              selectedWorkspaceId={selectedWorkspaceId}
+              joinedChannelIds={joinedChannelIds}
+              dockSide="left"
+              onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
+              sidebarWidth={workspaceSidebarWidth}
+              isOpen={workspaceSidebarOpen}
+              onToggleOpen={handleCloseMyActivitySidebar}
+              onStartDrag={handleStartDragWorkspaceSidebar}
+              dragging={dragging === 'workspace-sidebar'}
+            />
+          ) : (
+            <WorkspaceSidebar
+              workspaces={workspaces}
+              selectedWorkspaceId={selectedWorkspaceId}
+              attentionWorkspaceIds={attentionWorkspaceIds}
+              channelId={activeChannelId}
+              onOpenWorkspace={handleOpenWorkspace}
+              onDeleteWorkspace={handleDeleteWorkspace}
+              onMarkMerged={handleMarkMerged}
+              workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+              activeRunWorkspaceIds={activeRunWorkspaceIds}
 
-            workspacesLoading={workspacesLoading}
-            mergedCount={mergedCount}
-            mergedWorkspacesLoaded={mergedWorkspacesLoaded}
-            mergedWorkspacesLoading={mergedWorkspacesLoading}
-            onExpandMerged={handleExpandMerged}
-            onExpandToFullscreen={handleExpandWorkspacesFullscreen}
-            dockSide="left"
-            onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
-            sidebarWidth={workspaceSidebarWidth}
-            isOpen={workspaceSidebarOpen}
-            onToggleOpen={handleToggleWorkspaceSidebar}
-            onStartDrag={handleStartDragWorkspaceSidebar}
-            dragging={dragging === 'workspace-sidebar'}
-          />
+              workspacesLoading={workspacesLoading}
+              mergedCount={mergedCount}
+              mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+              mergedWorkspacesLoading={mergedWorkspacesLoading}
+              onExpandMerged={handleExpandMerged}
+              onExpandToFullscreen={handleExpandWorkspacesFullscreen}
+              dockSide="left"
+              onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
+              sidebarWidth={workspaceSidebarWidth}
+              isOpen={workspaceSidebarOpen}
+              onToggleOpen={handleToggleWorkspaceSidebar}
+              onStartDrag={handleStartDragWorkspaceSidebar}
+              dragging={dragging === 'workspace-sidebar'}
+            />
+          )
         )}
 
         {/* Center content area */}
@@ -1528,34 +1598,51 @@ function AppContent() {
         </div>
 
         {!isFullscreen &&
-          currentWsEnabled &&
+          (currentWsEnabled || myActivityActive) &&
           workspaceSidebarOpen &&
           workspaceSidebarDockSide === 'right' && (
-          <WorkspaceSidebar
-            workspaces={workspaces}
-            selectedWorkspaceId={selectedWorkspaceId}
-            attentionWorkspaceIds={attentionWorkspaceIds}
-            channelId={activeChannelId}
-            onOpenWorkspace={handleOpenWorkspace}
-            onDeleteWorkspace={handleDeleteWorkspace}
-            onMarkMerged={handleMarkMerged}
-            workspacesWithRunningProcesses={workspacesWithRunningProcesses}
-            activeRunWorkspaceIds={activeRunWorkspaceIds}
+          myActivityActive ? (
+            <MyActivitySidebar
+              onOpenWorkspace={handleMyActivityOpenWorkspace}
+              onExpandMerged={handleExpandMergedMyActivity}
+              activeChannelId={activeChannelId}
+              selectedWorkspaceId={selectedWorkspaceId}
+              joinedChannelIds={joinedChannelIds}
+              dockSide="right"
+              onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
+              sidebarWidth={workspaceSidebarWidth}
+              isOpen={workspaceSidebarOpen}
+              onToggleOpen={handleCloseMyActivitySidebar}
+              onStartDrag={handleStartDragWorkspaceSidebar}
+              dragging={dragging === 'workspace-sidebar'}
+            />
+          ) : (
+            <WorkspaceSidebar
+              workspaces={workspaces}
+              selectedWorkspaceId={selectedWorkspaceId}
+              attentionWorkspaceIds={attentionWorkspaceIds}
+              channelId={activeChannelId}
+              onOpenWorkspace={handleOpenWorkspace}
+              onDeleteWorkspace={handleDeleteWorkspace}
+              onMarkMerged={handleMarkMerged}
+              workspacesWithRunningProcesses={workspacesWithRunningProcesses}
+              activeRunWorkspaceIds={activeRunWorkspaceIds}
 
-            workspacesLoading={workspacesLoading}
-            mergedCount={mergedCount}
-            mergedWorkspacesLoaded={mergedWorkspacesLoaded}
-            mergedWorkspacesLoading={mergedWorkspacesLoading}
-            onExpandMerged={handleExpandMerged}
-            onExpandToFullscreen={handleExpandWorkspacesFullscreen}
-            dockSide="right"
-            onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
-            sidebarWidth={workspaceSidebarWidth}
-            isOpen={workspaceSidebarOpen}
-            onToggleOpen={handleToggleWorkspaceSidebar}
-            onStartDrag={handleStartDragWorkspaceSidebar}
-            dragging={dragging === 'workspace-sidebar'}
-          />
+              workspacesLoading={workspacesLoading}
+              mergedCount={mergedCount}
+              mergedWorkspacesLoaded={mergedWorkspacesLoaded}
+              mergedWorkspacesLoading={mergedWorkspacesLoading}
+              onExpandMerged={handleExpandMerged}
+              onExpandToFullscreen={handleExpandWorkspacesFullscreen}
+              dockSide="right"
+              onToggleDockSide={handleToggleWorkspaceSidebarDockSide}
+              sidebarWidth={workspaceSidebarWidth}
+              isOpen={workspaceSidebarOpen}
+              onToggleOpen={handleToggleWorkspaceSidebar}
+              onStartDrag={handleStartDragWorkspaceSidebar}
+              dragging={dragging === 'workspace-sidebar'}
+            />
+          )
         )}
       </div>
 
