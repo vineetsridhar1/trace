@@ -16,4 +16,6 @@ export const TOPICS = {
   CHANNEL_CHANGED_SERVER: (serverId: string) => `CHANNEL_CHANGED_SERVER.${serverId}`,
   PRESENCE_UPDATED: (channelId: string) => `PRESENCE_UPDATED.${channelId}`,
   INSTANCE_STATUS_CHANGED: (serverId: string) => `INSTANCE_STATUS_CHANGED.${serverId}`,
+  REVIEW_RUN_UPDATED: (runId: string) => `REVIEW_RUN_UPDATED.${runId}`,
+  REVIEW_STEP_STREAM: (runId: string) => `REVIEW_STEP_STREAM.${runId}`,
 } as const;

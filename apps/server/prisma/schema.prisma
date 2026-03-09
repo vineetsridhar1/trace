@@ -107,14 +107,15 @@ model Channel {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  server         Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  workspaces     Workspace[]
-  kanbanColumns  KanbanColumn[]
-  members        ChannelMember[]
-  aiChats        AiChat[]
+  server           Server           @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  workspaces       Workspace[]
+  kanbanColumns    KanbanColumn[]
+  members          ChannelMember[]
+  aiChats          AiChat[]
   teamLinks        ChannelTeam[]    @relation("projectTeams")
   projectLinks     ChannelTeam[]    @relation("teamProjects")
   channelMessages  ChannelMessage[]
+  reviewWorkflows  ReviewWorkflow[]
 
   @@map("channels")
 }
@@ -158,6 +159,7 @@ model Workspace {
   attachments  Attachment[] @relation("AttachmentToMessage")
   dependencies TicketDependency[] @relation("ticketDeps")
   dependedOnBy TicketDependency[] @relation("depTarget")
+  reviewRuns   ReviewRun[]
 
   @@index([channelId, createdAt])
   @@index([userId])
@@ -329,4 +331,81 @@ model ChannelMessage {
 
   @@index([channelId, createdAt])
   @@map("channel_messages")
+}
+
+model ReviewWorkflow {
+  id          String   @id @default(uuid())
+  channelId   String   @map("channel_id")
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  channel Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  agents  ReviewAgent[]
+  runs    ReviewRun[]
+
+  @@index([channelId])
+  @@map("review_workflows")
+}
+
+model ReviewAgent {
+  id           String   @id @default(uuid())
+  workflowId   String   @map("workflow_id")
+  name         String
+  role         String
+  systemPrompt String   @map("system_prompt")
+  sortOrder    Int      @default(0) @map("sort_order")
+  model        String?
+  maxTokens    Int?     @map("max_tokens")
+  config       Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workflow ReviewWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  steps    ReviewStep[]
+
+  @@index([workflowId, sortOrder])
+  @@map("review_agents")
+}
+
+model ReviewRun {
+  id          String   @id @default(uuid())
+  workflowId  String   @map("workflow_id")
+  workspaceId String?  @map("workspace_id")
+  status      String   @default("pending")
+  input       Json
+  summary     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workflow  ReviewWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workspace Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  steps     ReviewStep[]
+
+  @@index([workflowId, createdAt])
+  @@index([workspaceId])
+  @@map("review_runs")
+}
+
+model ReviewStep {
+  id          String    @id @default(uuid())
+  runId       String    @map("run_id")
+  agentId     String    @map("agent_id")
+  status      String    @default("pending")
+  review      Json?
+  rawResponse String?   @map("raw_response")
+  tokensUsed  Int?      @map("tokens_used")
+  costCents   Float?    @map("cost_cents")
+  error       String?
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  run         ReviewRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  reviewAgent ReviewAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([agentId])
+  @@map("review_steps")
 }
