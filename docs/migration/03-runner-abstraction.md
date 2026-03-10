@@ -1,7 +1,7 @@
 # Ticket 3: Runner Abstraction
 
 ## Goal
-Create a `RunnerAdapter` interface that decouples relay hooks from the specific transport mechanism. Implement `ServerRelayAdapter` (wraps the existing double-hop path through the remote server) and stub `DirectAdapter` (for future direct browser→Electron connection). Rewire all 6 relay hooks to use the new abstraction.
+Create a `RunnerAdapter` interface that decouples relay hooks from the specific transport mechanism. Implement `ServerRelayAdapter` around the existing browser → server → Electron path and rewire all 6 relay hooks to use the new abstraction. The purpose is not to bypass Electron; it is to keep Electron as a first-class runtime without hardwiring browser code to one transport.
 
 ## Context
 
@@ -21,10 +21,10 @@ export function useXxxRelay() {
 `useInstance()` comes from `InstanceContext.tsx`, which provides:
 - `relayAction(action, params)` → calls GraphQL `RelayAction` mutation → server forwards to Electron via WebSocket
 
-The problem: every relay hook is tightly coupled to the GraphQL-mutation-through-server transport. We want to support:
-- **ServerRelayAdapter**: Browser → Server → Electron (existing double-hop, works today)
-- **DirectAdapter**: Browser → Local Electron directly (future, for when browser is on same machine)
-- **CloudRunnerAdapter**: Browser → Server executes directly (future, no Electron needed)
+The problem: every relay hook is tightly coupled to the GraphQL-mutation-through-server transport. We want the web app to depend on an execution interface, not the transport details. The primary production path is:
+- **ServerRelayAdapter**: Browser → Server → Electron (existing double-hop, works today, remains the main path)
+
+The abstraction may support additional server-mediated execution strategies later, but **do not** design this ticket around bypassing Electron.
 
 ### The `typedRelay` function
 In `apps/web/src/hooks/relay/useRelayAction.ts`:
@@ -65,7 +65,7 @@ export interface RunnerAdapter {
 
   /**
    * Execute a relay action. This is the core method — all relay hooks call this.
-   * The adapter decides the transport (GraphQL mutation, direct WebSocket, REST, etc.)
+   * The adapter decides the transport (GraphQL mutation, server orchestration, etc.)
    */
   execute<T = void>(
     action: string,
@@ -332,44 +332,15 @@ The `relayAction` function should remain on `InstanceContext` for now since `Run
 
 Verify: `grep -r "useInstance()" apps/web/src/hooks/relay/` should return zero results.
 
-### 8. Create `apps/web/src/features/runner/adapters/DirectAdapter.ts` (stub)
+### 8. Document extension points, but do not add speculative adapters
 
-This is a non-functional stub for the future direct-connection adapter. It documents the protocol and can be fleshed out later.
+Do **not** create a `DirectAdapter` stub. It adds conceptual surface area without a committed product path.
 
-```ts
-import type { RunnerAdapter, RunnerStatus } from '../types';
-import type { RelayResult } from '../../../hooks/relay/useRelayAction';
+Instead:
 
-/**
- * DirectAdapter connects to a local Electron instance via WebSocket,
- * bypassing the remote server. Uses the same protocol as the server relay:
- * - Send: { type: 'action', id: string, action: string, params: object }
- * - Recv: { type: 'action-result', id: string, success: boolean, data?: unknown, error?: string }
- *
- * Future implementation will:
- * 1. Connect to wss://local.trace.dev:PORT (Electron's local HTTPS server)
- * 2. Auth via a short-lived token exchanged through the remote server
- * 3. Fall back to ServerRelayAdapter if connection fails
- */
-export class DirectAdapter implements RunnerAdapter {
-  readonly status: RunnerStatus = 'disconnected';
-
-  async execute<T = void>(
-    _action: string,
-    _params: Record<string, unknown>,
-  ): Promise<RelayResult<T>> {
-    return {
-      success: false,
-      data: undefined,
-      error: 'DirectAdapter not yet implemented',
-    };
-  }
-
-  onStatusChange(_cb: (s: RunnerStatus) => void): () => void {
-    return () => {};
-  }
-}
-```
+- keep `RunnerAdapter` narrowly defined around `execute()` and status tracking
+- document in code comments that `ServerRelayAdapter` is the default production implementation
+- leave room for future adapters only when a real execution path exists and has product justification
 
 ## Verification
 
@@ -382,7 +353,7 @@ export class DirectAdapter implements RunnerAdapter {
 7. Functional test: Disconnect instance, verify relay calls return appropriate errors
 
 ## Files Changed
-- **Created**: `apps/web/src/features/runner/types.ts`, `apps/web/src/features/runner/RunnerContext.tsx`, `apps/web/src/features/runner/adapters/ServerRelayAdapter.ts`, `apps/web/src/features/runner/adapters/DirectAdapter.ts`
+- **Created**: `apps/web/src/features/runner/types.ts`, `apps/web/src/features/runner/RunnerContext.tsx`, `apps/web/src/features/runner/adapters/ServerRelayAdapter.ts`
 - **Modified**: `apps/web/src/App.tsx` (add RunnerProvider), all 6 `apps/web/src/hooks/relay/use*Relay.ts` files, `apps/web/src/hooks/relay/useRelayAction.ts` (cleanup)
 
 ## Dependencies

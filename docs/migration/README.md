@@ -1,77 +1,109 @@
-# Web-First Migration Tickets
+# Production-Readiness Migration Program
 
 **[Read the vision first →](./00-vision.md)**
 
-Run these sequentially. Each ticket produces a working app.
+## Scope Reality
 
-## Execution Order
+Tickets **1-8 are not fully comprehensive for the full codebase**. They are the web-first client modernization plan plus a targeted server-side status fix. That work is necessary, but it does **not** make Trace production-ready by itself because the repo currently spans roughly:
+
+- `apps/web/src/`: 60 files
+- `apps/desktop/src/`: 226 files
+- `apps/server/src/`: 196 files
+- `packages/shared-ui/src/`: 28 files
+
+If the goal is "rewrite this software so the architecture is clean, reliable, and production ready," the plan needs to cover the full stack. Tickets **9-13** below extend the migration into platform boundaries, server/runtime hardening, Electron hardening, shared package convergence, and delivery/operability.
+
+## Ticket Catalog
+
+### Phase 1: Web-First Stabilization
 
 | # | Ticket | Depends On | Scope |
 |---|--------|------------|-------|
-| 1 | [Foundation & Tooling](./01-foundation-and-tooling.md) | — | Path aliases, feature dirs, `lib/storage.ts`, `lib/events.ts`, delete dead `appUIStore.ts`, migrate all `localStorage` calls, delete dead `utils.ts` |
-| 2 | [Kill Registered Actions](./02-kill-registered-actions.md) | 1 | Remove `syncActions`/`workspaceActions` pattern, use event bus, fix `clearSession` in WebThreadPanel |
-| 3 | [Runner Abstraction](./03-runner-abstraction.md) | 1 | `RunnerAdapter` interface, `ServerRelayAdapter`, rewire all 6 relay hooks |
-| 4 | [Component Decomposition](./04-component-decomposition.md) | 1 | Break 3 large components into ~12 small files, extract shared constants, deduplicate `WORKSPACE_FIELDS` fragment and `MODE_CONFIG` |
-| 5 | [Performance Foundations](./05-performance-foundations.md) | — | Lazy routes, error boundaries, prep for virtualization |
-| 6 | [Instant Workspace Switching](./06-instant-workspace-switching.md) | — | Per-workspace session cache, stale-while-revalidate, subscription buffering |
-| 7 | [Comprehensive Cleanup & Quality](./07-comprehensive-cleanup.md) | 1-6 | Audit all ~31 untouched files, TypeScript strictness, document Apollo cache, remove dead types, final consistency pass |
-| 8 | [Reliable Status System](./08-reliable-status-system.md) | — | Server-authoritative status, broadcast every transition, remove client-side optimistic status, reconnect resilience |
+| 1 | [Foundation & Tooling](./01-foundation-and-tooling.md) | — | Web aliases, feature dirs, `lib/storage.ts`, `lib/events.ts`, delete dead web code |
+| 2 | [Kill Registered Actions](./02-kill-registered-actions.md) | 1 | Remove `syncActions` / `workspaceActions` pattern from the web app |
+| 3 | [Runner Abstraction](./03-runner-abstraction.md) | 1 | `RunnerAdapter`, `ServerRelayAdapter`, decouple relay hooks from `InstanceContext` |
+| 4 | [Component Decomposition](./04-component-decomposition.md) | 1 | Break up the largest web components, dedupe fragments/constants |
+| 5 | [Performance Foundations](./05-performance-foundations.md) | — | Lazy routes, error boundaries, virtualization prep |
+| 6 | [Instant Workspace Switching](./06-instant-workspace-switching.md) | — | Per-workspace thread cache, stale-while-revalidate, buffered subscriptions |
+| 7 | [Comprehensive Cleanup & Quality](./07-comprehensive-cleanup.md) | 1-6 | Web consistency pass, stricter TS, dead-code removal, Apollo cache docs |
+| 8 | [Reliable Status System](./08-reliable-status-system.md) | — | Server-authoritative workspace status and reconnect resilience |
+
+### Phase 2: Codebase-Wide Architecture Hardening
+
+| # | Ticket | Depends On | Scope |
+|---|--------|------------|-------|
+| 9 | [Platform Boundaries & Monorepo Hygiene](./09-platform-boundaries-and-monorepo-hygiene.md) | — | Shared contracts/config, package-manager cleanup, root scripts, dependency boundaries |
+| 10 | [Server Runtime, Data & Eventing Hardening](./10-server-runtime-data-and-eventing-hardening.md) | 9 recommended | Secure config, distributed pubsub/outbox, service decomposition, transactional invariants |
+| 11 | [Desktop Runtime & Electron Hardening](./11-desktop-runtime-and-electron-hardening.md) | 9 | Typed IPC/relay contracts, BrowserWindow security, process/worktree recovery |
+| 12 | [Shared Surface & Client Convergence](./12-shared-surface-and-client-convergence.md) | 1-4, 9 | Remove duplicated desktop/web/shared-ui logic and converge shared UI/domain code |
+| 13 | [Quality Gates, Observability & Delivery](./13-quality-gates-observability-and-delivery.md) | 1-12 | CI, e2e, release process, telemetry, runbooks, migration rollout, SLOs |
 
 ## Priority
 
-**Tickets 6 and 8 are the highest-impact changes for perceived quality.**
-- Ticket 6 fixes workspace switching lag (500ms-1s → instant)
-- Ticket 8 fixes status desync (agent running but UI says "completed", etc.)
+There are two different notions of "high priority" here:
 
-Both are independent of Tickets 1-5 and can be done first.
+- **Highest user-facing impact**: Tickets **6** and **8**
+- **Highest systemic risk reduction**: Tickets **10** and **11**
+- **Foundational for the full rewrite**: Ticket **9**
+- **Final release gate**: Ticket **13**
+
+If you only execute Tickets 1-8, you will get a much better web app, but you will still have:
+
+- an Electron main process with large stringly-typed IPC/relay surfaces
+- a server that is still not production-grade in security, eventing, and operability
+- duplicated shared logic across desktop and `packages/shared-ui`
+- no complete CI / release / observability program
+
+## Recommended Order
+
+Recommended full-program order:
+
+`9 → 10 → 11 → 8 → 6 → 1 → 2 → 3 → 4 → 5 → 7 → 12 → 13`
+
+Why:
+
+- `9` gives you shared contracts, config, and repo hygiene so later work does not create more duplication.
+- `10` addresses the biggest back-end production risks early.
+- `11` moves Electron hardening forward because Electron is a permanent runtime, not a temporary bridge.
+- `8` and `6` fix the most trust-destroying user-facing issues immediately.
+- `1-7` clean up the web client on top of the new foundation.
+- `12` converges the shared surface after the desktop/runtime boundaries are hardened.
+- `13` closes the loop with quality gates, rollout safety, and operational readiness.
 
 ## Parallelism
 
-Tickets 2, 3, and 4 are independent of each other — they all depend only on Ticket 1. They can be run in parallel after Ticket 1 merges, as long as they touch different files. In practice:
-
-- **Tickets 2 + 3 can run in parallel** (2 touches stores/hooks, 3 touches relay hooks and App.tsx)
-- **Ticket 4 is safest to run alone** since it restructures the same component files that other tickets may reference
-- **Ticket 5 can run any time** since it only adds new code (ErrorBoundary) and wraps existing components
-- **Ticket 6 can run any time** since it modifies threadStore and useThreadSync which other tickets don't deeply restructure
-- **Ticket 7 must run after 1-6** — it's a final sweep that depends on all patterns from Tickets 1-6 being in place
-- **Ticket 8 can run any time** — it touches server code + agentRunStore/subscriptions, independent of the UI restructuring tickets
-
-Recommended order for maximum impact: `8 → 6 → 1 → 2 → 3 → 4 → 5 → 7`
-Safest order: `1 → 2 → 3 → 4 → 5 → 6 → 8 → 7`
+- `8` can proceed in parallel with `9`
+- `10` can start once the contract/config direction from `9` is set
+- `11` can start once `9` is merged; it should not wait until the web track is done
+- `1-7` can continue as the web-first track in parallel with early `10`
+- `12` should not begin until `9` and the core parts of `11` are merged, otherwise it will just reintroduce duplication
+- `13` should start early for CI scaffolding, but its final gate only closes after `1-12`
 
 ## Coverage
 
-These 8 tickets collectively touch **every file** in `apps/web/src/` and the critical server status paths:
+### What Tickets 1-8 cover well
 
-| Category | Files | Covered By |
-|----------|-------|------------|
-| Stores (5 files) | `threadStore`, `agentRunStore`, `appUIStore`, `instanceStore`, `workspaceStore` | Tickets 1, 2, 6, 7, 8 |
-| Relay hooks (8 files) | All `use*Relay.ts` + `types.ts` + `useRelayAction.ts` | Ticket 3 |
-| Core hooks (6 files) | `useThreadSync`, `useChannelSubscriptions`, `useWorkspaceActions`, `useWorkspaceSync`, `useWorktreeChanges`, `usePRStatus` | Tickets 2, 6, 7, 8 |
-| Input hooks (3 files) | `useFileMention`, `useSlashCommands`, `useImageAttachments` | Ticket 7 |
-| Large components (3 files) | `WebWorkspaceList`, `WebThreadPanel`, `WebThreadInput` | Ticket 4 |
-| Small components (8 files) | `WebRunButtons`, `WebModelEffortSelector`, `ConnectionStatusBar`, etc. | Ticket 7 |
-| Pages (4 files) | `LoginPage`, `AuthCallbackPage`, `InstancePickerPage`, `WorkspacePage` | Tickets 5, 7 |
-| Contexts (2 files) | `AuthContext`, `ChannelContext` | Ticket 7 |
-| GraphQL (2 files) | `client.ts`, `fragments.ts` | Tickets 4, 7 |
-| Config & entry (4 files) | `App.tsx`, `main.tsx`, `types.ts`, `vite.config.ts` | Tickets 1, 3, 5, 7 |
-| Server status (4 files) | `eventService.ts`, `workspaceService.ts`, `ticketService.ts`, `updateWorkspaceStatus.ts` | Ticket 8 |
-| Server schema (1 file) | `schema.prisma` | Ticket 8 |
+- The entire `apps/web/src/` surface
+- The current server-side status lifecycle and reconnect correctness path
+- Web performance, state management, component decomposition, and relay abstraction
+
+### What Tickets 1-8 do not cover
+
+- Root monorepo hygiene and shared contracts
+- Server security, config validation, scalable eventing, and transactional boundaries
+- Electron runtime hardening, typed IPC validation, and restart/orphan recovery
+- Shared package convergence between desktop, web, and `packages/shared-ui`
+- CI/CD, deployment, observability, incident response, migration rollout, and backups
 
 ## After all tickets
 
-The web app will have:
-- **Reliable status tracking** — server-authoritative, every transition broadcasts, no client-side guessing
-- **Instant workspace switching** with per-workspace session cache and subscription buffering
-- Feature-based directory skeleton with path aliases
-- **Centralized localStorage** via `lib/storage.ts` (no scattered `localStorage` calls)
-- Clean, focused Zustand stores (no god store, no registered actions)
-- Runner abstraction layer ready for cloud execution
-- Small (<200 line) component files with no duplication
-- Route-level code splitting and error boundaries
-- `@tanstack/react-virtual` installed and ready for thread virtualization
-- **Documented Apollo cache policies** with rationale
-- **Stricter TypeScript** (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`)
-- **Zero dead code** — no unused types, re-export barrels, or orphaned patterns
-- **Single source of truth** for GraphQL fragments and shared constants
-- **Reconnect resilience** — subscription reconnect triggers full workspace refresh
+The codebase will have:
+
+- Reliable, server-authoritative status tracking with reconnect safety
+- Fast web workspace switching and a clean browser architecture
+- Explicit platform boundaries between web, desktop, server, and shared packages
+- A typed cross-process contract for relay actions and runtime configuration
+- A production-grade server eventing model that can scale beyond one process
+- A hardened Electron runtime with validated IPC and recoverable process lifecycle
+- A real shared surface for session rendering, status helpers, and GraphQL contracts
+- CI, smoke/e2e coverage, release runbooks, observability, and rollback safety
