@@ -6,8 +6,6 @@ export function App() {
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
   const fetchMe = useAuthStore((s) => s.fetchMe);
-  const logout = useAuthStore((s) => s.logout);
-
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
@@ -28,17 +26,8 @@ export function App() {
     <div className="flex h-screen">
       <ServerSidebar />
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border px-4 py-2">
+        <header className="flex items-center border-b border-border px-4 py-2">
           <h1 className="text-lg font-semibold text-foreground">Trace</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-foreground">{user.name}</span>
-            <button
-              onClick={logout}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Sign out
-            </button>
-          </div>
         </header>
         <main className="flex-1 p-4">
           <h2 className="text-foreground">Welcome, {user.name}</h2>

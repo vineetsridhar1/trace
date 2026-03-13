@@ -63,6 +63,16 @@ No core system has a hard dependency on a specific vendor. Adding a new hosting 
 - **Optimistic updates** — write to cache before server round-trip, reconcile when the event comes back.
 - **Viewport-driven subscriptions** — subscribe on navigate-in, unsubscribe on navigate-away. Only the ambient tier (badges, mentions, notifications) stays always-on.
 
+### UI & Component Guidelines
+
+- **Use shadcn/ui components** as the primary component library. Add new shadcn components via `npx shadcn@latest add <component>` from `apps/web/`. Do not hand-roll components that shadcn already provides.
+- **Use Tailwind CSS idiomatically.** Prefer utility classes over custom CSS. Use the project's semantic tokens (`bg-surface-deep`, `text-muted-foreground`, etc.) over raw color values. Compose with `cn()` from `@/lib/utils`.
+- **One component per file.** Each React component gets its own file. Small helper components used only within a single file (e.g., a list item renderer) are the sole exception.
+- **Keep components small and focused.** If a component exceeds ~150 lines, split it. Extract sub-components, hooks, or utilities into their own files.
+- **File structure mirrors the UI tree.** Place components in directories that reflect where they appear: `components/sidebar/`, `components/channel/`, `components/session/`, etc. Shared primitives go in `components/ui/`.
+- **Minimize re-renders.** Use fine-grained Zustand selectors (`useEntityField`), not broad store subscriptions. Avoid inline object/array literals in props. Extract stable callbacks with `useCallback` only when passed to memoized children.
+- **Animations use framer-motion.** Keep animations subtle and purposeful — spring transitions for interactive elements, layout animations for list reordering. No animation for the sake of animation.
+
 ### Server
 
 - **Service layer owns all business logic**. Both GraphQL resolvers and the agent runtime call the same services.
