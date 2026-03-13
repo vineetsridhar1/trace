@@ -106,6 +106,7 @@ type User {
   id: ID!
   email: String!
   name: String!
+  avatarUrl: String
   role: UserRole!
 }
 

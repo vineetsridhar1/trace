@@ -1,28 +1,12 @@
-import type { Priority, TicketStatus, ActorType } from "@trace/gql";
+import type { CreateTicketInput, UpdateTicketInput, ActorType } from "@trace/gql";
 
-export interface CreateTicketInput {
-  organizationId: string;
-  title: string;
-  description?: string;
-  priority?: Priority;
-  labels?: string[];
-  channelId?: string;
-  projectId?: string;
-  originEventId?: string;
+export type CreateTicketServiceInput = CreateTicketInput & {
   actorType: ActorType;
   actorId: string;
-}
-
-export interface UpdateTicketInput {
-  title?: string;
-  description?: string;
-  status?: TicketStatus;
-  priority?: Priority;
-  labels?: string[];
-}
+};
 
 export class TicketService {
-  async create(_input: CreateTicketInput) {
+  async create(_input: CreateTicketServiceInput) {
     throw new Error("Not implemented");
   }
 

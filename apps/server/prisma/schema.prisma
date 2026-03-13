@@ -106,6 +106,8 @@ model User {
   id             String       @id @default(uuid())
   email          String       @unique
   name           String
+  avatarUrl      String?
+  githubId       Int?         @unique
   role           UserRole     @default(member)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])

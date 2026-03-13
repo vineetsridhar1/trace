@@ -1,20 +1,12 @@
-import type { CodingTool, HostingMode, ActorType } from "@trace/gql";
+import type { StartSessionInput, ActorType } from "@trace/gql";
 
-export interface StartSessionInput {
-  tool: CodingTool;
-  hosting: HostingMode;
+export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
   createdById: string;
-  repoId?: string;
-  branch?: string;
-  ticketId?: string;
-  channelId?: string;
-  projectId?: string;
-  prompt?: string;
-}
+};
 
 export class SessionService {
-  async start(_input: StartSessionInput) {
+  async start(_input: StartSessionServiceInput) {
     throw new Error("Not implemented");
   }
 

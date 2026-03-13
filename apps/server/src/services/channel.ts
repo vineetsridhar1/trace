@@ -1,11 +1,4 @@
-import type { ChannelType, ActorType } from "@trace/gql";
-
-export interface CreateChannelInput {
-  organizationId: string;
-  name: string;
-  type?: ChannelType;
-  projectIds?: string[];
-}
+import type { CreateChannelInput, ActorType } from "@trace/gql";
 
 export class ChannelService {
   async create(_input: CreateChannelInput) {
