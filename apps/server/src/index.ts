@@ -1,12 +1,16 @@
 import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@as-integrations/express5";
-import express from "express";
+import express, { type RequestHandler } from "express";
 import { createServer } from "http";
+import { readFileSync } from "fs";
+import { createRequire } from "module";
 import { WebSocketServer } from "ws";
 import { useServer } from "graphql-ws/lib/use/ws";
 import { makeExecutableSchema } from "@graphql-tools/schema";
-import { typeDefs } from "./schema/typeDefs.js";
 import { resolvers } from "./schema/resolvers.js";
+
+const require = createRequire(import.meta.url);
+const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
 
 async function main() {
   const app = express();
@@ -64,7 +68,7 @@ async function main() {
         userId: req.headers["x-user-id"] as string | undefined,
         actorType: "user" as const,
       }),
-    }),
+    }) as unknown as RequestHandler,
   );
 
   const PORT = process.env.PORT ?? 4000;

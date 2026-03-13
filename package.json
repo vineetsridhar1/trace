@@ -8,6 +8,7 @@
     "dev:desktop": "pnpm --filter @trace/desktop dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
+    "gql:codegen": "pnpm --filter @trace/gql codegen",
     "db:migrate": "pnpm --filter @trace/server exec prisma migrate dev",
     "db:generate": "pnpm --filter @trace/server exec prisma generate"
   },
@@ -16,6 +17,9 @@
     "pnpm": ">=9"
   },
   "pnpm": {
+    "overrides": {
+      "graphql": "^16.10.0"
+    },
     "onlyBuiltDependencies": [
       "esbuild",
       "electron",

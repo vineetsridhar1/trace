@@ -7,3 +7,14 @@ dist/
 .turbo/
 coverage/
 .DS_Store
+
+# TypeScript build artifacts in source dirs
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+!vite.config.ts
+!codegen.ts
+
+# GraphQL codegen output
+packages/gql/src/generated/

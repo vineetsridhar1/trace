@@ -62,6 +62,35 @@ enum EntityType {
   channel
 }
 
+enum UserRole {
+  admin
+  member
+  observer
+}
+
+enum AgentTrustLevel {
+  autonomous
+  suggest
+  blocked
+}
+
+enum EventType {
+  message_sent
+  message_edited
+  message_deleted
+  session_started
+  session_paused
+  session_resumed
+  session_terminated
+  session_output
+  ticket_created
+  ticket_updated
+  ticket_commented
+  entity_linked
+  member_joined
+  member_left
+}
+
 # --- Core Types ---
 
 type Organization {
@@ -77,7 +106,7 @@ type User {
   id: ID!
   email: String!
   name: String!
-  role: String!
+  role: UserRole!
 }
 
 type Repo {
@@ -141,7 +170,7 @@ type Event {
   id: ID!
   scopeType: ScopeType!
   scopeId: ID!
-  eventType: String!
+  eventType: EventType!
   payload: JSON!
   actor: Actor!
   parentId: ID

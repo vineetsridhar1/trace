@@ -1,0 +1,542 @@
+/* eslint-disable */
+export type Maybe<T> = T | null;
+export type InputMaybe<T> = Maybe<T>;
+export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
+export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
+export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
+export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
+/** All built-in and custom scalars, mapped to their actual values */
+export type Scalars = {
+  ID: { input: string; output: string; }
+  String: { input: string; output: string; }
+  Boolean: { input: boolean; output: boolean; }
+  Int: { input: number; output: number; }
+  Float: { input: number; output: number; }
+  DateTime: { input: any; output: any; }
+  JSON: { input: any; output: any; }
+};
+
+export type Actor = {
+  __typename?: 'Actor';
+  id: Scalars['ID']['output'];
+  type: ActorType;
+};
+
+export enum ActorType {
+  Agent = 'agent',
+  System = 'system',
+  User = 'user'
+}
+
+export enum AgentTrustLevel {
+  Autonomous = 'autonomous',
+  Blocked = 'blocked',
+  Suggest = 'suggest'
+}
+
+export type Channel = {
+  __typename?: 'Channel';
+  id: Scalars['ID']['output'];
+  members: Array<User>;
+  messages: Array<Event>;
+  name: Scalars['String']['output'];
+  projects: Array<Project>;
+  type: ChannelType;
+};
+
+
+export type ChannelMessagesArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export enum ChannelType {
+  Announcement = 'announcement',
+  Default = 'default',
+  Feed = 'feed',
+  Triage = 'triage'
+}
+
+export enum CodingTool {
+  ClaudeCode = 'claude_code',
+  Cursor = 'cursor',
+  Custom = 'custom'
+}
+
+export type CreateChannelInput = {
+  name: Scalars['String']['input'];
+  organizationId: Scalars['ID']['input'];
+  projectIds?: InputMaybe<Array<Scalars['ID']['input']>>;
+  type?: InputMaybe<ChannelType>;
+};
+
+export type CreateProjectInput = {
+  name: Scalars['String']['input'];
+  organizationId: Scalars['ID']['input'];
+  repoId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+export type CreateRepoInput = {
+  defaultBranch?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  organizationId: Scalars['ID']['input'];
+  remoteUrl: Scalars['String']['input'];
+};
+
+export type CreateTicketInput = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  labels?: InputMaybe<Array<Scalars['String']['input']>>;
+  organizationId: Scalars['ID']['input'];
+  priority?: InputMaybe<Priority>;
+  projectId?: InputMaybe<Scalars['ID']['input']>;
+  title: Scalars['String']['input'];
+};
+
+export enum EntityType {
+  Channel = 'channel',
+  Session = 'session',
+  Ticket = 'ticket'
+}
+
+export type Event = {
+  __typename?: 'Event';
+  actor: Actor;
+  eventType: EventType;
+  id: Scalars['ID']['output'];
+  metadata?: Maybe<Scalars['JSON']['output']>;
+  parentId?: Maybe<Scalars['ID']['output']>;
+  payload: Scalars['JSON']['output'];
+  scopeId: Scalars['ID']['output'];
+  scopeType: ScopeType;
+  timestamp: Scalars['DateTime']['output'];
+};
+
+export enum EventType {
+  EntityLinked = 'entity_linked',
+  MemberJoined = 'member_joined',
+  MemberLeft = 'member_left',
+  MessageDeleted = 'message_deleted',
+  MessageEdited = 'message_edited',
+  MessageSent = 'message_sent',
+  SessionOutput = 'session_output',
+  SessionPaused = 'session_paused',
+  SessionResumed = 'session_resumed',
+  SessionStarted = 'session_started',
+  SessionTerminated = 'session_terminated',
+  TicketCommented = 'ticket_commented',
+  TicketCreated = 'ticket_created',
+  TicketUpdated = 'ticket_updated'
+}
+
+export enum HostingMode {
+  Cloud = 'cloud',
+  Local = 'local'
+}
+
+export type Mutation = {
+  __typename?: 'Mutation';
+  commentOnTicket: Event;
+  createChannel: Channel;
+  createProject: Project;
+  createRepo: Repo;
+  createTicket: Ticket;
+  linkEntityToProject: Project;
+  linkSessionToTicket: Session;
+  pauseSession: Session;
+  resumeSession: Session;
+  sendMessage: Event;
+  sendSessionMessage: Event;
+  startSession: Session;
+  terminateSession: Session;
+  updateTicket: Ticket;
+};
+
+
+export type MutationCommentOnTicketArgs = {
+  text: Scalars['String']['input'];
+  ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateChannelArgs = {
+  input: CreateChannelInput;
+};
+
+
+export type MutationCreateProjectArgs = {
+  input: CreateProjectInput;
+};
+
+
+export type MutationCreateRepoArgs = {
+  input: CreateRepoInput;
+};
+
+
+export type MutationCreateTicketArgs = {
+  input: CreateTicketInput;
+};
+
+
+export type MutationLinkEntityToProjectArgs = {
+  entityId: Scalars['ID']['input'];
+  entityType: EntityType;
+  projectId: Scalars['ID']['input'];
+};
+
+
+export type MutationLinkSessionToTicketArgs = {
+  sessionId: Scalars['ID']['input'];
+  ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationPauseSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationResumeSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationSendMessageArgs = {
+  channelId: Scalars['ID']['input'];
+  parentId?: InputMaybe<Scalars['ID']['input']>;
+  text: Scalars['String']['input'];
+};
+
+
+export type MutationSendSessionMessageArgs = {
+  sessionId: Scalars['ID']['input'];
+  text: Scalars['String']['input'];
+};
+
+
+export type MutationStartSessionArgs = {
+  input: StartSessionInput;
+};
+
+
+export type MutationTerminateSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateTicketArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateTicketInput;
+};
+
+export type Notification = {
+  __typename?: 'Notification';
+  id: Scalars['ID']['output'];
+  message: Scalars['String']['output'];
+  timestamp: Scalars['DateTime']['output'];
+  type: Scalars['String']['output'];
+};
+
+export type Organization = {
+  __typename?: 'Organization';
+  channels: Array<Channel>;
+  id: Scalars['ID']['output'];
+  members: Array<User>;
+  name: Scalars['String']['output'];
+  projects: Array<Project>;
+  repos: Array<Repo>;
+};
+
+export type PortEndpoint = {
+  __typename?: 'PortEndpoint';
+  label: Scalars['String']['output'];
+  port: Scalars['Int']['output'];
+  status: Scalars['String']['output'];
+  url: Scalars['String']['output'];
+};
+
+export enum Priority {
+  High = 'high',
+  Low = 'low',
+  Medium = 'medium',
+  Urgent = 'urgent'
+}
+
+export type Project = {
+  __typename?: 'Project';
+  channels: Array<Channel>;
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  repo?: Maybe<Repo>;
+  sessions: Array<Session>;
+  tickets: Array<Ticket>;
+};
+
+export type Query = {
+  __typename?: 'Query';
+  channel?: Maybe<Channel>;
+  channels: Array<Channel>;
+  events: Array<Event>;
+  mySessions: Array<Session>;
+  organization?: Maybe<Organization>;
+  project?: Maybe<Project>;
+  projects: Array<Project>;
+  repo?: Maybe<Repo>;
+  repos: Array<Repo>;
+  session?: Maybe<Session>;
+  sessions: Array<Session>;
+  ticket?: Maybe<Ticket>;
+  tickets: Array<Ticket>;
+};
+
+
+export type QueryChannelArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryChannelsArgs = {
+  organizationId: Scalars['ID']['input'];
+  projectId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type QueryEventsArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  organizationId: Scalars['ID']['input'];
+  scope?: InputMaybe<ScopeInput>;
+  types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type QueryMySessionsArgs = {
+  organizationId: Scalars['ID']['input'];
+  status?: InputMaybe<SessionStatus>;
+};
+
+
+export type QueryOrganizationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryProjectArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryProjectsArgs = {
+  organizationId: Scalars['ID']['input'];
+  repoId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type QueryRepoArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryReposArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionsArgs = {
+  filters?: InputMaybe<SessionFilters>;
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryTicketArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryTicketsArgs = {
+  filters?: InputMaybe<TicketFilters>;
+  organizationId: Scalars['ID']['input'];
+};
+
+export type Repo = {
+  __typename?: 'Repo';
+  defaultBranch: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  projects: Array<Project>;
+  remoteUrl: Scalars['String']['output'];
+  sessions: Array<Session>;
+};
+
+export type ScopeInput = {
+  id: Scalars['ID']['input'];
+  type: ScopeType;
+};
+
+export enum ScopeType {
+  Channel = 'channel',
+  Session = 'session',
+  System = 'system',
+  Ticket = 'ticket'
+}
+
+export type Session = {
+  __typename?: 'Session';
+  branch?: Maybe<Scalars['String']['output']>;
+  channel?: Maybe<Channel>;
+  connection?: Maybe<SessionConnection>;
+  createdBy: User;
+  endpoints?: Maybe<SessionEndpoints>;
+  hosting: HostingMode;
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  projects: Array<Project>;
+  repo?: Maybe<Repo>;
+  status: SessionStatus;
+  tickets: Array<Ticket>;
+  tool: CodingTool;
+};
+
+export type SessionConnection = {
+  __typename?: 'SessionConnection';
+  bridgeVersion?: Maybe<Scalars['String']['output']>;
+  lastSeen?: Maybe<Scalars['DateTime']['output']>;
+};
+
+export type SessionEndpoints = {
+  __typename?: 'SessionEndpoints';
+  ports: Array<PortEndpoint>;
+  terminals: Array<TerminalEndpoint>;
+};
+
+export type SessionFilters = {
+  repoId?: InputMaybe<Scalars['ID']['input']>;
+  status?: InputMaybe<SessionStatus>;
+  tool?: InputMaybe<CodingTool>;
+};
+
+export enum SessionStatus {
+  Active = 'active',
+  Completed = 'completed',
+  Failed = 'failed',
+  Paused = 'paused',
+  Unreachable = 'unreachable'
+}
+
+export type StartSessionInput = {
+  branch?: InputMaybe<Scalars['String']['input']>;
+  channelId?: InputMaybe<Scalars['ID']['input']>;
+  hosting: HostingMode;
+  projectId?: InputMaybe<Scalars['ID']['input']>;
+  prompt?: InputMaybe<Scalars['String']['input']>;
+  repoId?: InputMaybe<Scalars['ID']['input']>;
+  ticketId?: InputMaybe<Scalars['ID']['input']>;
+  tool: CodingTool;
+};
+
+export type Subscription = {
+  __typename?: 'Subscription';
+  channelEvents: Event;
+  sessionEvents: Event;
+  sessionPortsChanged: SessionEndpoints;
+  sessionStatusChanged: Session;
+  ticketEvents: Event;
+  userNotifications: Notification;
+};
+
+
+export type SubscriptionChannelEventsArgs = {
+  channelId: Scalars['ID']['input'];
+  types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionSessionEventsArgs = {
+  sessionId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionSessionPortsChangedArgs = {
+  sessionId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionSessionStatusChangedArgs = {
+  sessionId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionTicketEventsArgs = {
+  ticketId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionUserNotificationsArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+export type TerminalEndpoint = {
+  __typename?: 'TerminalEndpoint';
+  id: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  wsUrl: Scalars['String']['output'];
+};
+
+export type Ticket = {
+  __typename?: 'Ticket';
+  assignees: Array<User>;
+  channel?: Maybe<Channel>;
+  description: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  labels: Array<Scalars['String']['output']>;
+  origin?: Maybe<Event>;
+  priority: Priority;
+  projects: Array<Project>;
+  sessions: Array<Session>;
+  status: TicketStatus;
+  title: Scalars['String']['output'];
+};
+
+export type TicketFilters = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
+  priority?: InputMaybe<Priority>;
+  status?: InputMaybe<TicketStatus>;
+};
+
+export enum TicketStatus {
+  Backlog = 'backlog',
+  Cancelled = 'cancelled',
+  Done = 'done',
+  InProgress = 'in_progress',
+  InReview = 'in_review',
+  Todo = 'todo'
+}
+
+export type UpdateTicketInput = {
+  description?: InputMaybe<Scalars['String']['input']>;
+  labels?: InputMaybe<Array<Scalars['String']['input']>>;
+  priority?: InputMaybe<Priority>;
+  status?: InputMaybe<TicketStatus>;
+  title?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type User = {
+  __typename?: 'User';
+  email: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  role: UserRole;
+};
+
+export enum UserRole {
+  Admin = 'admin',
+  Member = 'member',
+  Observer = 'observer'
+}
