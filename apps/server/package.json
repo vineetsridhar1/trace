@@ -1,0 +1,31 @@
+{
+  "name": "@trace/server",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.11.3",
+    "@as-integrations/express5": "^1.1.2",
+    "express": "^5.0.1",
+    "graphql": "^16.10.0",
+    "graphql-ws": "^5.16.2",
+    "@graphql-tools/schema": "^10.0.14",
+    "graphql-scalars": "^1.24.0",
+    "ws": "^8.18.0",
+    "@prisma/client": "^6.2.1",
+    "@trace/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/ws": "^8.5.13",
+    "prisma": "^6.2.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}

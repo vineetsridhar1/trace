@@ -1,0 +1,22 @@
+{
+  "name": "@trace/gql",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "codegen": "graphql-codegen --config codegen.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "graphql": "^16.10.0"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^5.0.3",
+    "@graphql-codegen/typescript": "^4.1.2",
+    "@graphql-codegen/typescript-operations": "^4.4.0",
+    "@graphql-codegen/typescript-urql": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}

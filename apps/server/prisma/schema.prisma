@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id       String   @id @default(uuid())
+  name     String
+  settings Json     @default("{}")
+
+  members  User[]
+  repos    Repo[]
+  projects Project[]
+  channels Channel[]
+  sessions Session[]
+  tickets  Ticket[]
+  events   Event[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  name           String
+  role           String       @default("member")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdSessions Session[] @relation("SessionCreator")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Repo {
+  id             String       @id @default(uuid())
+  name           String
+  remoteUrl      String
+  defaultBranch  String       @default("main")
+  setupConfig    Json         @default("{}")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  projects Project[]
+  sessions Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id             String       @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  repoId         String?
+  repo           Repo?        @relation(fields: [repoId], references: [id])
+
+  channels       ChannelProject[]
+  sessions       SessionProject[]
+  tickets        TicketProject[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Channel {
+  id             String       @id @default(uuid())
+  name           String
+  type           String       @default("default")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  projects ChannelProject[]
+  sessions Session[]
+  tickets  Ticket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChannelProject {
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  @@id([channelId, projectId])
+}
+
+model Session {
+  id             String       @id @default(uuid())
+  name           String
+  status         String       @default("active")
+  tool           String
+  hosting        String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User         @relation("SessionCreator", fields: [createdById], references: [id])
+  repoId         String?
+  repo           Repo?        @relation(fields: [repoId], references: [id])
+  branch         String?
+  channelId      String?
+  channel        Channel?     @relation(fields: [channelId], references: [id])
+  endpoints      Json?
+  connection     Json?
+
+  projects SessionProject[]
+  tickets  SessionTicket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SessionProject {
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  @@id([sessionId, projectId])
+}
+
+model Ticket {
+  id             String       @id @default(uuid())
+  title          String
+  description    String       @default("")
+  status         String       @default("backlog")
+  priority       String       @default("medium")
+  labels         String[]     @default([])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  originEventId  String?
+  channelId      String?
+  channel        Channel?     @relation(fields: [channelId], references: [id])
+
+  projects TicketProject[]
+  sessions SessionTicket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TicketProject {
+  ticketId  String
+  ticket    Ticket  @relation(fields: [ticketId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  @@id([ticketId, projectId])
+}
+
+model SessionTicket {
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
+  ticketId  String
+  ticket    Ticket  @relation(fields: [ticketId], references: [id])
+
+  @@id([sessionId, ticketId])
+}
+
+model Event {
+  id             String       @id @default(uuid())
+  scopeType      String
+  scopeId        String
+  eventType      String
+  payload        Json
+  actorType      String
+  actorId        String
+  parentId       String?
+  metadata       Json?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  timestamp DateTime @default(now())
+
+  @@index([organizationId, scopeType, scopeId])
+  @@index([organizationId, eventType])
+  @@index([parentId])
+}

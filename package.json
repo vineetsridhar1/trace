@@ -1,0 +1,27 @@
+{
+  "name": "tracev2",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter @trace/web dev",
+    "dev:server": "pnpm --filter @trace/server dev",
+    "dev:desktop": "pnpm --filter @trace/desktop dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "db:migrate": "pnpm --filter @trace/server exec prisma migrate dev",
+    "db:generate": "pnpm --filter @trace/server exec prisma generate"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "electron",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
+  }
+}
