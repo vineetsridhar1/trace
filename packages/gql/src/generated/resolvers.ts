@@ -25,17 +25,15 @@ export type Actor = {
   type: ActorType;
 };
 
-export enum ActorType {
-  Agent = 'agent',
-  System = 'system',
-  User = 'user'
-}
+export type ActorType =
+  | 'agent'
+  | 'system'
+  | 'user';
 
-export enum AgentTrustLevel {
-  Autonomous = 'autonomous',
-  Blocked = 'blocked',
-  Suggest = 'suggest'
-}
+export type AgentTrustLevel =
+  | 'autonomous'
+  | 'blocked'
+  | 'suggest';
 
 export type Channel = {
   __typename?: 'Channel';
@@ -53,18 +51,16 @@ export type ChannelMessagesArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
-export enum ChannelType {
-  Announcement = 'announcement',
-  Default = 'default',
-  Feed = 'feed',
-  Triage = 'triage'
-}
+export type ChannelType =
+  | 'announcement'
+  | 'default'
+  | 'feed'
+  | 'triage';
 
-export enum CodingTool {
-  ClaudeCode = 'claude_code',
-  Cursor = 'cursor',
-  Custom = 'custom'
-}
+export type CodingTool =
+  | 'claude_code'
+  | 'cursor'
+  | 'custom';
 
 export type CreateChannelInput = {
   name: Scalars['String']['input'];
@@ -96,11 +92,10 @@ export type CreateTicketInput = {
   title: Scalars['String']['input'];
 };
 
-export enum EntityType {
-  Channel = 'channel',
-  Session = 'session',
-  Ticket = 'ticket'
-}
+export type EntityType =
+  | 'channel'
+  | 'session'
+  | 'ticket';
 
 export type Event = {
   __typename?: 'Event';
@@ -115,27 +110,25 @@ export type Event = {
   timestamp: Scalars['DateTime']['output'];
 };
 
-export enum EventType {
-  EntityLinked = 'entity_linked',
-  MemberJoined = 'member_joined',
-  MemberLeft = 'member_left',
-  MessageDeleted = 'message_deleted',
-  MessageEdited = 'message_edited',
-  MessageSent = 'message_sent',
-  SessionOutput = 'session_output',
-  SessionPaused = 'session_paused',
-  SessionResumed = 'session_resumed',
-  SessionStarted = 'session_started',
-  SessionTerminated = 'session_terminated',
-  TicketCommented = 'ticket_commented',
-  TicketCreated = 'ticket_created',
-  TicketUpdated = 'ticket_updated'
-}
+export type EventType =
+  | 'entity_linked'
+  | 'member_joined'
+  | 'member_left'
+  | 'message_deleted'
+  | 'message_edited'
+  | 'message_sent'
+  | 'session_output'
+  | 'session_paused'
+  | 'session_resumed'
+  | 'session_started'
+  | 'session_terminated'
+  | 'ticket_commented'
+  | 'ticket_created'
+  | 'ticket_updated';
 
-export enum HostingMode {
-  Cloud = 'cloud',
-  Local = 'local'
-}
+export type HostingMode =
+  | 'cloud'
+  | 'local';
 
 export type Mutation = {
   __typename?: 'Mutation';
@@ -259,12 +252,11 @@ export type PortEndpoint = {
   url: Scalars['String']['output'];
 };
 
-export enum Priority {
-  High = 'high',
-  Low = 'low',
-  Medium = 'medium',
-  Urgent = 'urgent'
-}
+export type Priority =
+  | 'high'
+  | 'low'
+  | 'medium'
+  | 'urgent';
 
 export type Project = {
   __typename?: 'Project';
@@ -382,12 +374,11 @@ export type ScopeInput = {
   type: ScopeType;
 };
 
-export enum ScopeType {
-  Channel = 'channel',
-  Session = 'session',
-  System = 'system',
-  Ticket = 'ticket'
-}
+export type ScopeType =
+  | 'channel'
+  | 'session'
+  | 'system'
+  | 'ticket';
 
 export type Session = {
   __typename?: 'Session';
@@ -424,13 +415,12 @@ export type SessionFilters = {
   tool?: InputMaybe<CodingTool>;
 };
 
-export enum SessionStatus {
-  Active = 'active',
-  Completed = 'completed',
-  Failed = 'failed',
-  Paused = 'paused',
-  Unreachable = 'unreachable'
-}
+export type SessionStatus =
+  | 'active'
+  | 'completed'
+  | 'failed'
+  | 'paused'
+  | 'unreachable';
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
@@ -456,26 +446,31 @@ export type Subscription = {
 
 export type SubscriptionChannelEventsArgs = {
   channelId: Scalars['ID']['input'];
+  organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
 
 export type SubscriptionSessionEventsArgs = {
+  organizationId: Scalars['ID']['input'];
   sessionId: Scalars['ID']['input'];
 };
 
 
 export type SubscriptionSessionPortsChangedArgs = {
+  organizationId: Scalars['ID']['input'];
   sessionId: Scalars['ID']['input'];
 };
 
 
 export type SubscriptionSessionStatusChangedArgs = {
+  organizationId: Scalars['ID']['input'];
   sessionId: Scalars['ID']['input'];
 };
 
 
 export type SubscriptionTicketEventsArgs = {
+  organizationId: Scalars['ID']['input'];
   ticketId: Scalars['ID']['input'];
 };
 
@@ -512,14 +507,13 @@ export type TicketFilters = {
   status?: InputMaybe<TicketStatus>;
 };
 
-export enum TicketStatus {
-  Backlog = 'backlog',
-  Cancelled = 'cancelled',
-  Done = 'done',
-  InProgress = 'in_progress',
-  InReview = 'in_review',
-  Todo = 'todo'
-}
+export type TicketStatus =
+  | 'backlog'
+  | 'cancelled'
+  | 'done'
+  | 'in_progress'
+  | 'in_review'
+  | 'todo';
 
 export type UpdateTicketInput = {
   description?: InputMaybe<Scalars['String']['input']>;
@@ -537,11 +531,10 @@ export type User = {
   role: UserRole;
 };
 
-export enum UserRole {
-  Admin = 'admin',
-  Member = 'member',
-  Observer = 'observer'
-}
+export type UserRole =
+  | 'admin'
+  | 'member'
+  | 'observer';
 
 export type WithIndex<TObject> = TObject & Record<string, any>;
 export type ResolversObject<TObject> = WithIndex<TObject>;
@@ -843,11 +836,11 @@ export type SessionEndpointsResolvers<ContextType = Context, ParentType extends 
 }>;
 
 export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
-  channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId'>>;
-  sessionEvents?: SubscriptionResolver<ResolversTypes['Event'], "sessionEvents", ParentType, ContextType, RequireFields<SubscriptionSessionEventsArgs, 'sessionId'>>;
-  sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'sessionId'>>;
-  sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'sessionId'>>;
-  ticketEvents?: SubscriptionResolver<ResolversTypes['Event'], "ticketEvents", ParentType, ContextType, RequireFields<SubscriptionTicketEventsArgs, 'ticketId'>>;
+  channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId' | 'organizationId'>>;
+  sessionEvents?: SubscriptionResolver<ResolversTypes['Event'], "sessionEvents", ParentType, ContextType, RequireFields<SubscriptionSessionEventsArgs, 'organizationId' | 'sessionId'>>;
+  sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'organizationId' | 'sessionId'>>;
+  sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'organizationId' | 'sessionId'>>;
+  ticketEvents?: SubscriptionResolver<ResolversTypes['Event'], "ticketEvents", ParentType, ContextType, RequireFields<SubscriptionTicketEventsArgs, 'organizationId' | 'ticketId'>>;
   userNotifications?: SubscriptionResolver<ResolversTypes['Notification'], "userNotifications", ParentType, ContextType, RequireFields<SubscriptionUserNotificationsArgs, 'organizationId'>>;
 }>;
 

@@ -7,6 +7,84 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  admin
+  member
+  observer
+}
+
+enum ChannelType {
+  default
+  announcement
+  triage
+  feed
+}
+
+enum SessionStatus {
+  active
+  paused
+  completed
+  failed
+  unreachable
+}
+
+enum TicketStatus {
+  backlog
+  todo
+  in_progress
+  in_review
+  done
+  cancelled
+}
+
+enum Priority {
+  urgent
+  high
+  medium
+  low
+}
+
+enum HostingMode {
+  cloud
+  local
+}
+
+enum CodingTool {
+  claude_code
+  cursor
+  custom
+}
+
+enum ScopeType {
+  channel
+  session
+  ticket
+  system
+}
+
+enum ActorType {
+  user
+  agent
+  system
+}
+
+enum EventType {
+  message_sent
+  message_edited
+  message_deleted
+  session_started
+  session_paused
+  session_resumed
+  session_terminated
+  session_output
+  ticket_created
+  ticket_updated
+  ticket_commented
+  entity_linked
+  member_joined
+  member_left
+}
+
 model Organization {
   id       String   @id @default(uuid())
   name     String
@@ -28,7 +106,7 @@ model User {
   id             String       @id @default(uuid())
   email          String       @unique
   name           String
-  role           String       @default("member")
+  role           UserRole     @default(member)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
@@ -73,7 +151,7 @@ model Project {
 model Channel {
   id             String       @id @default(uuid())
   name           String
-  type           String       @default("default")
+  type           ChannelType  @default(default)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
@@ -97,9 +175,9 @@ model ChannelProject {
 model Session {
   id             String       @id @default(uuid())
   name           String
-  status         String       @default("active")
-  tool           String
-  hosting        String
+  status         SessionStatus @default(active)
+  tool           CodingTool
+  hosting        HostingMode
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdById    String
@@ -132,8 +210,8 @@ model Ticket {
   id             String       @id @default(uuid())
   title          String
   description    String       @default("")
-  status         String       @default("backlog")
-  priority       String       @default("medium")
+  status         TicketStatus @default(backlog)
+  priority       Priority     @default(medium)
   labels         String[]     @default([])
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -168,11 +246,11 @@ model SessionTicket {
 
 model Event {
   id             String       @id @default(uuid())
-  scopeType      String
+  scopeType      ScopeType
   scopeId        String
-  eventType      String
+  eventType      EventType
   payload        Json
-  actorType      String
+  actorType      ActorType
   actorId        String
   parentId       String?
   metadata       Json?

@@ -1,6 +1,8 @@
-import type { ActorType } from "./generated/types";
+import type { ActorType, UserRole } from "./generated/types";
 
 export interface Context {
-  userId: string | undefined;
+  userId: string;
+  organizationId: string;
+  role: UserRole;
   actorType: ActorType;
 }

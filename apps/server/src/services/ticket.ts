@@ -1,14 +1,24 @@
+import type { Priority, TicketStatus, ActorType } from "@trace/gql";
+
 export interface CreateTicketInput {
   organizationId: string;
   title: string;
   description?: string;
-  priority?: string;
+  priority?: Priority;
   labels?: string[];
   channelId?: string;
   projectId?: string;
   originEventId?: string;
-  actorType: string;
+  actorType: ActorType;
   actorId: string;
+}
+
+export interface UpdateTicketInput {
+  title?: string;
+  description?: string;
+  status?: TicketStatus;
+  priority?: Priority;
+  labels?: string[];
 }
 
 export class TicketService {
@@ -16,11 +26,11 @@ export class TicketService {
     throw new Error("Not implemented");
   }
 
-  async update(_id: string, _input: Partial<CreateTicketInput>) {
+  async update(_id: string, _input: UpdateTicketInput) {
     throw new Error("Not implemented");
   }
 
-  async addComment(_ticketId: string, _text: string, _actorType: string, _actorId: string) {
+  async addComment(_ticketId: string, _text: string, _actorType: ActorType, _actorId: string) {
     throw new Error("Not implemented");
   }
 }

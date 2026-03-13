@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -b",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc -b"
   },
   "dependencies": {
     "@apollo/server": "^4.11.3",
@@ -16,7 +16,6 @@
     "graphql": "^16.10.0",
     "graphql-ws": "^5.16.2",
     "@graphql-tools/schema": "^10.0.14",
-    "graphql-scalars": "^1.24.0",
     "ws": "^8.18.0",
     "@prisma/client": "^6.2.1",
     "@trace/gql": "workspace:*",

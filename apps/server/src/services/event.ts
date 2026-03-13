@@ -1,13 +1,23 @@
+import type { ScopeType, EventType, ActorType } from "@trace/gql";
+
 export interface CreateEventInput {
   organizationId: string;
-  scopeType: string;
+  scopeType: ScopeType;
   scopeId: string;
-  eventType: string;
-  payload: unknown;
-  actorType: string;
+  eventType: EventType;
+  payload: Record<string, unknown>;
+  actorType: ActorType;
   actorId: string;
   parentId?: string;
-  metadata?: unknown;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EventQueryOpts {
+  scopeType?: ScopeType;
+  scopeId?: string;
+  types?: EventType[];
+  after?: Date;
+  limit?: number;
 }
 
 export class EventService {
@@ -15,7 +25,7 @@ export class EventService {
     throw new Error("Not implemented");
   }
 
-  async query(_organizationId: string, _opts: { scopeType?: string; scopeId?: string; types?: string[]; after?: Date; limit?: number }) {
+  async query(_organizationId: string, _opts: EventQueryOpts) {
     throw new Error("Not implemented");
   }
 }

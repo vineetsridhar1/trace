@@ -1,27 +1,45 @@
 import { create } from "zustand";
+import type {
+  Organization,
+  User,
+  Repo,
+  Project,
+  Channel,
+  Session,
+  Ticket,
+  Event,
+} from "@trace/gql";
 
-type EntityMap = Record<string, unknown>;
+/** Entity types that the store manages, keyed by ID */
+export type EntityTableMap = {
+  organizations: Organization;
+  users: User;
+  repos: Repo;
+  projects: Project;
+  channels: Channel;
+  sessions: Session;
+  tickets: Ticket;
+  events: Event;
+};
 
-interface EntityState {
-  organizations: EntityMap;
-  repos: EntityMap;
-  projects: EntityMap;
-  channels: EntityMap;
-  sessions: EntityMap;
-  tickets: EntityMap;
-  events: EntityMap;
+export type EntityType = keyof EntityTableMap;
 
-  upsert: (entityType: string, id: string, data: unknown) => void;
-  upsertMany: (entityType: string, items: Array<{ id: string }>) => void;
-  remove: (entityType: string, id: string) => void;
+type Tables = { [K in EntityType]: Record<string, EntityTableMap[K]> };
+
+interface EntityActions {
+  upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) => void;
+  upsertMany: <T extends EntityType>(
+    entityType: T,
+    items: Array<EntityTableMap[T] & { id: string }>,
+  ) => void;
+  remove: (entityType: EntityType, id: string) => void;
 }
 
-function getTable(state: EntityState, entityType: string): EntityMap {
-  return (state as unknown as Record<string, EntityMap>)[entityType] ?? {};
-}
+type EntityState = Tables & EntityActions;
 
 export const useEntityStore = create<EntityState>((set) => ({
   organizations: {},
+  users: {},
   repos: {},
   projects: {},
   channels: {},
@@ -30,23 +48,36 @@ export const useEntityStore = create<EntityState>((set) => ({
   events: {},
 
   upsert: (entityType, id, data) =>
-    set((state) => ({
-      [entityType]: { ...getTable(state, entityType), [id]: data },
-    })),
+    set((state) => {
+      const table = { ...(state[entityType] as Record<string, unknown>) };
+      table[id] = data;
+      return { [entityType]: table } as Partial<Tables>;
+    }),
 
   upsertMany: (entityType, items) =>
     set((state) => {
-      const merged = { ...getTable(state, entityType) };
+      const table = { ...(state[entityType] as Record<string, unknown>) };
       for (const item of items) {
-        merged[item.id] = item;
+        table[item.id] = item;
       }
-      return { [entityType]: merged };
+      return { [entityType]: table } as Partial<Tables>;
     }),
 
   remove: (entityType, id) =>
     set((state) => {
-      const merged = { ...getTable(state, entityType) };
-      delete merged[id];
-      return { [entityType]: merged };
+      const { [id]: _, ...rest } = state[entityType] as Record<string, unknown>;
+      return { [entityType]: rest } as Partial<Tables>;
     }),
 }));
+
+/** Fine-grained selector: subscribe to a single field of a single entity */
+export function useEntityField<T extends EntityType, F extends keyof EntityTableMap[T]>(
+  type: T,
+  id: string,
+  field: F,
+): EntityTableMap[T][F] | undefined {
+  return useEntityStore((state) => {
+    const entity = state[type][id] as EntityTableMap[T] | undefined;
+    return entity?.[field];
+  });
+}

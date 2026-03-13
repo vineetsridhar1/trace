@@ -1,6 +1,7 @@
 {
   "name": "tracev2",
   "private": true,
+  "packageManager": "pnpm@10.7.0",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @trace/web dev",
@@ -8,13 +9,16 @@
     "dev:desktop": "pnpm --filter @trace/desktop dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
+    "lint:eslint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "gql:codegen": "pnpm --filter @trace/gql codegen",
     "db:migrate": "pnpm --filter @trace/server exec prisma migrate dev",
     "db:generate": "pnpm --filter @trace/server exec prisma generate"
   },
   "engines": {
-    "node": ">=20",
-    "pnpm": ">=9"
+    "node": ">=22",
+    "pnpm": ">=10"
   },
   "pnpm": {
     "overrides": {
@@ -27,5 +31,11 @@
       "@prisma/engines",
       "prisma"
     ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.3",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.57.0"
   }
 }

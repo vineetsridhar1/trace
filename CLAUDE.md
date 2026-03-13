@@ -79,7 +79,7 @@ No core system has a hard dependency on a specific vendor. Adding a new hosting 
 
 ```
 packages/gql/        — GraphQL schema, codegen, generated types (no runtime code)
-packages/shared/     — Non-schema enums and shared constants (UserRole, AgentTrustLevel)
+packages/shared/     — Non-schema shared constants (keep this minimal)
 apps/server/         — Apollo + Express, service layer, Prisma, WebSocket endpoints
 apps/web/            — React + Vite + urql + Zustand, TailwindCSS
 apps/desktop/        — Electron shell + bridge client

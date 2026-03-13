@@ -298,7 +298,13 @@ type Query {
   mySessions(organizationId: ID!, status: SessionStatus): [Session!]!
   tickets(organizationId: ID!, filters: TicketFilters): [Ticket!]!
   ticket(id: ID!): Ticket
-  events(organizationId: ID!, scope: ScopeInput, types: [String!], after: DateTime, limit: Int): [Event!]!
+  events(
+    organizationId: ID!
+    scope: ScopeInput
+    types: [String!]
+    after: DateTime
+    limit: Int
+  ): [Event!]!
 }
 
 # --- Mutations ---
@@ -323,10 +329,10 @@ type Mutation {
 # --- Subscriptions ---
 
 type Subscription {
-  channelEvents(channelId: ID!, types: [String!]): Event!
-  sessionEvents(sessionId: ID!): Event!
-  ticketEvents(ticketId: ID!): Event!
+  channelEvents(channelId: ID!, organizationId: ID!, types: [String!]): Event!
+  sessionEvents(sessionId: ID!, organizationId: ID!): Event!
+  ticketEvents(ticketId: ID!, organizationId: ID!): Event!
   userNotifications(organizationId: ID!): Notification!
-  sessionPortsChanged(sessionId: ID!): SessionEndpoints!
-  sessionStatusChanged(sessionId: ID!): Session!
+  sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
+  sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
 }

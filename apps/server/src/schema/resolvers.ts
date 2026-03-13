@@ -27,7 +27,9 @@ function parseLiteralJSON(ast: any): unknown {
     case Kind.FLOAT:
       return parseFloat(ast.value);
     case Kind.OBJECT:
-      return Object.fromEntries(ast.fields.map((f: any) => [f.name.value, parseLiteralJSON(f.value)]));
+      return Object.fromEntries(
+        ast.fields.map((f: any) => [f.name.value, parseLiteralJSON(f.value)]),
+      );
     case Kind.LIST:
       return ast.values.map(parseLiteralJSON);
     case Kind.NULL:

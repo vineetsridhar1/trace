@@ -12,9 +12,9 @@
     "./schema.graphql": "./src/schema.graphql"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "pnpm codegen && tsc -b",
     "codegen": "graphql-codegen --config codegen.ts",
-    "lint": "tsc --noEmit"
+    "lint": "pnpm codegen && tsc -b"
   },
   "dependencies": {
     "graphql": "^16.10.0"

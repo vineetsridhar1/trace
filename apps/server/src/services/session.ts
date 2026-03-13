@@ -1,6 +1,8 @@
+import type { CodingTool, HostingMode, ActorType } from "@trace/gql";
+
 export interface StartSessionInput {
-  tool: string;
-  hosting: string;
+  tool: CodingTool;
+  hosting: HostingMode;
   organizationId: string;
   createdById: string;
   repoId?: string;
@@ -28,7 +30,7 @@ export class SessionService {
     throw new Error("Not implemented");
   }
 
-  async sendMessage(_sessionId: string, _text: string, _actorType: string, _actorId: string) {
+  async sendMessage(_sessionId: string, _text: string, _actorType: ActorType, _actorId: string) {
     throw new Error("Not implemented");
   }
 }

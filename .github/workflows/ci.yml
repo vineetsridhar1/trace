@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate GraphQL types
+        run: pnpm gql:codegen
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Typecheck
+        run: pnpm lint
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @trace/server exec prisma validate
+
+      - name: ESLint
+        run: pnpm lint:eslint
+
+      - name: Format check
+        run: pnpm format:check

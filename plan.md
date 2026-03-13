@@ -1,7 +1,7 @@
 # Trace — Product Document v0.1
 
 **The Unified Platform for AI-Native Teams**
-*First Draft — March 2026 — CONFIDENTIAL*
+_First Draft — March 2026 — CONFIDENTIAL_
 
 ---
 
@@ -207,20 +207,28 @@ The `unreachable` status is specific to local sessions — it means events have 
 
 ```graphql
 mutation {
-  startSession(input: {
-    tool: CLAUDE_CODE
-    hosting: CLOUD
-    repoId: "repo_abc"           # optional
-    branch: "main"               # optional, defaults to repo default
-    ticketId: "ticket_xyz"       # optional, auto-links
-    channelId: "channel_123"     # optional, posts notification
-    projectId: "project_456"     # optional, auto-links
-    prompt: "Fix the Safari..."  # optional initial prompt
-  }) {
+  startSession(
+    input: {
+      tool: CLAUDE_CODE
+      hosting: CLOUD
+      repoId: "repo_abc" # optional
+      branch: "main" # optional, defaults to repo default
+      ticketId: "ticket_xyz" # optional, auto-links
+      channelId: "channel_123" # optional, posts notification
+      projectId: "project_456" # optional, auto-links
+      prompt: "Fix the Safari..." # optional initial prompt
+    }
+  ) {
     id
     name
     status
-    endpoints { ports { port url label } }
+    endpoints {
+      ports {
+        port
+        url
+        label
+      }
+    }
   }
 }
 ```
@@ -240,7 +248,7 @@ The user's main checkout stays untouched. Multiple sessions on the same repo eac
 
 ### 3.7 Ticket
 
-Tickets are structured work items — bugs, features, tasks, epics. Unlike traditional tools, tickets in Trace are often *created by agents* or *derived from events* rather than manually authored.
+Tickets are structured work items — bugs, features, tasks, epics. Unlike traditional tools, tickets in Trace are often _created by agents_ or _derived from events_ rather than manually authored.
 
 ```
 Ticket {
@@ -332,12 +340,12 @@ const resolvers = {
     createTicket: (_, { input }, ctx) => {
       return ticketService.create({
         ...input,
-        actorType: ctx.actorType,  // "user" — from auth context
+        actorType: ctx.actorType, // "user" — from auth context
         actorId: ctx.userId,
-      })
-    }
-  }
-}
+      });
+    },
+  },
+};
 
 // Agent runtime — calls the same service directly
 async function handleBugReport(event: Event) {
@@ -349,9 +357,9 @@ async function handleBugReport(event: Event) {
     labels: ["bug", "performance"],
     originEventId: event.id,
     channelId: event.scopeId,
-    actorType: "agent",            // agent identity
+    actorType: "agent", // agent identity
     actorId: "agent_ambient_001",
-  })
+  });
 }
 ```
 
@@ -405,7 +413,7 @@ Agent action:
     → All frontends receive the event through their subscriptions
 ```
 
-This guarantees that every event has a valid ID, a trustworthy timestamp, and has passed through authorization — regardless of whether the action came from a GraphQL mutation or the agent runtime. The GraphQL schema has a clean separation: **mutations are the action layer** (things users *do* via the UI), **subscriptions are the event layer** (things that *happened*), and **queries are the hydration layer** (current state of entities). The agent bypasses the first layer and calls services directly, but the events it produces flow through the same event and hydration layers.
+This guarantees that every event has a valid ID, a trustworthy timestamp, and has passed through authorization — regardless of whether the action came from a GraphQL mutation or the agent runtime. The GraphQL schema has a clean separation: **mutations are the action layer** (things users _do_ via the UI), **subscriptions are the event layer** (things that _happened_), and **queries are the hydration layer** (current state of entities). The agent bypasses the first layer and calls services directly, but the events it produces flow through the same event and hydration layers.
 
 ### 5.3 Schema Domains
 
@@ -538,7 +546,13 @@ type Query {
   ticket(id: ID!): Ticket
 
   # Events
-  events(organizationId: ID!, scope: ScopeInput, types: [String!], after: DateTime, limit: Int): [Event!]!
+  events(
+    organizationId: ID!
+    scope: ScopeInput
+    types: [String!]
+    after: DateTime
+    limit: Int
+  ): [Event!]!
 }
 ```
 
@@ -574,12 +588,12 @@ type Mutation {
 input StartSessionInput {
   tool: CodingTool!
   hosting: HostingMode!
-  repoId: ID              # optional
-  branch: String           # optional, defaults to repo default
-  ticketId: ID             # optional, auto-links
-  channelId: ID            # optional, posts notification
-  projectId: ID            # optional, auto-links
-  prompt: String           # optional initial prompt
+  repoId: ID # optional
+  branch: String # optional, defaults to repo default
+  ticketId: ID # optional, auto-links
+  channelId: ID # optional, posts notification
+  projectId: ID # optional, auto-links
+  prompt: String # optional initial prompt
 }
 ```
 
@@ -649,7 +663,7 @@ The board is the project management surface — a kanban-style view of tickets w
 **Key differences from Linear:**
 
 - Tickets have full provenance. Every ticket links back to the conversation, session, or event that created it.
-- The board is a *view* over the event stream, not a separate data store. Filtering the board is equivalent to filtering events with `scope_type: ticket`.
+- The board is a _view_ over the event stream, not a separate data store. Filtering the board is equivalent to filtering events with `scope_type: ticket`.
 - The board can be scoped to a project, showing only tickets belonging to that project, or viewed across the entire organization.
 - Agents can be assigned to tickets, and their progress is visible on the board like any other assignee.
 - Ticket comments flow into the event stream, so the ambient agent can respond to them in context.
@@ -687,7 +701,7 @@ The mobile client connects to the same GraphQL API and subscription layer as the
 
 ### 7.1 Workflow: Bug Reported in Chat → Ticket → Session → Resolution
 
-1. A user posts in #frontend: *"The dashboard is crashing when you filter by date range on Safari."*
+1. A user posts in #frontend: _"The dashboard is crashing when you filter by date range on Safari."_
 2. The ambient agent detects this as a bug report and suggests creating a ticket — pre-filled with title, description, priority, and labels.
 3. The user accepts with one tap. The ticket is created with `origin` pointing to the original message, linked to #frontend.
 4. The agent, assigned to triage, sets priority to high and assigns it to a frontend developer.
@@ -698,7 +712,7 @@ The mobile client connects to the same GraphQL API and subscription layer as the
 
 ### 7.2 Workflow: Agent-Driven Research & Ticket Enrichment
 
-1. A new ticket is created: *"Evaluate switching from REST to gRPC for the session protocol."*
+1. A new ticket is created: _"Evaluate switching from REST to gRPC for the session protocol."_
 2. The ambient agent picks up the ticket, recognizes it as a research task, and begins autonomous research.
 3. The agent searches documentation, analyzes the current codebase, reviews benchmarks, and reads relevant discussions in channels.
 4. The agent posts a structured research summary as a ticket comment with findings, tradeoffs, and a recommendation.
@@ -707,9 +721,9 @@ The mobile client connects to the same GraphQL API and subscription layer as the
 
 ### 7.3 Workflow: Cross-Entity Linking
 
-1. In #backend, a user mentions: *"The webhook retry logic is broken again."*
-2. The ambient agent searches existing tickets and finds TRACE-142: *"Webhook retries not respecting backoff policy"* from two weeks ago.
-3. The agent posts in the channel: *"This might be related to TRACE-142 — should I reopen it?"*
+1. In #backend, a user mentions: _"The webhook retry logic is broken again."_
+2. The ambient agent searches existing tickets and finds TRACE-142: _"Webhook retries not respecting backoff policy"_ from two weeks ago.
+3. The agent posts in the channel: _"This might be related to TRACE-142 — should I reopen it?"_
 4. The user confirms, and the agent reopens the ticket, adds the new conversation as context, and bumps the priority.
 
 ---
@@ -790,12 +804,12 @@ The session adapter is the core abstraction that makes cloud and local sessions 
 
 ```typescript
 interface SessionAdapter {
-  start(config: SessionConfig): Promise<SessionHandle>
-  send(sessionId: string, event: SessionEvent): Promise<void>
-  pause(sessionId: string): Promise<void>
-  resume(sessionId: string): Promise<void>
-  terminate(sessionId: string): Promise<void>
-  onEvent(sessionId: string, callback: (event: SessionEvent) => void): void
+  start(config: SessionConfig): Promise<SessionHandle>;
+  send(sessionId: string, event: SessionEvent): Promise<void>;
+  pause(sessionId: string): Promise<void>;
+  resume(sessionId: string): Promise<void>;
+  terminate(sessionId: string): Promise<void>;
+  onEvent(sessionId: string, callback: (event: SessionEvent) => void): void;
 }
 ```
 
@@ -827,14 +841,14 @@ class LocalAdapter implements SessionAdapter {
 }
 ```
 
-**Coding tool adapter.** The `SessionAdapter` handles *where* a session runs. A second interface handles *what* coding tool runs inside it. Claude Code and Cursor have completely different input/output protocols — different ways to spawn, send messages, and parse output. This should be an explicit boundary rather than something buried inside the session adapter.
+**Coding tool adapter.** The `SessionAdapter` handles _where_ a session runs. A second interface handles _what_ coding tool runs inside it. Claude Code and Cursor have completely different input/output protocols — different ways to spawn, send messages, and parse output. This should be an explicit boundary rather than something buried inside the session adapter.
 
 ```typescript
 interface CodingToolAdapter {
-  spawn(workingDir: string, config: ToolConfig): Promise<ToolProcess>
-  sendMessage(process: ToolProcess, message: string): Promise<void>
-  onOutput(process: ToolProcess, callback: (event: SessionEvent) => void): void
-  kill(process: ToolProcess): Promise<void>
+  spawn(workingDir: string, config: ToolConfig): Promise<ToolProcess>;
+  sendMessage(process: ToolProcess, message: string): Promise<void>;
+  onOutput(process: ToolProcess, callback: (event: SessionEvent) => void): void;
+  kill(process: ToolProcess): Promise<void>;
 }
 
 class ClaudeCodeAdapter implements CodingToolAdapter {
@@ -860,18 +874,18 @@ The router is the dispatch layer that sits between the service layer and the ses
 
 ```typescript
 class SessionRouter {
-  private flyAdapter: FlyAdapter
-  private bridgeConnections: Map<string, WebSocket>  // sessionId → bridge WS
+  private flyAdapter: FlyAdapter;
+  private bridgeConnections: Map<string, WebSocket>; // sessionId → bridge WS
 
   async send(sessionId: string, event: SessionEvent): Promise<void> {
-    const session = await this.getSession(sessionId)
+    const session = await this.getSession(sessionId);
 
     if (session.hosting === "cloud") {
-      await this.flyAdapter.send(sessionId, event)
+      await this.flyAdapter.send(sessionId, event);
     } else {
-      const bridge = this.bridgeConnections.get(sessionId)
-      if (!bridge) throw new SessionUnreachableError(sessionId)
-      bridge.send(JSON.stringify({ type: "send", event }))
+      const bridge = this.bridgeConnections.get(sessionId);
+      if (!bridge) throw new SessionUnreachableError(sessionId);
+      bridge.send(JSON.stringify({ type: "send", event }));
     }
   }
 
@@ -898,12 +912,20 @@ On the Electron side, a thin translation layer maps bridge commands to local ada
 ```typescript
 bridge.onMessage((msg) => {
   switch (msg.type) {
-    case "send":      localAdapter.send(msg.sessionId, msg.event); break;
-    case "pause":     localAdapter.pause(msg.sessionId); break;
-    case "resume":    localAdapter.resume(msg.sessionId); break;
-    case "terminate": localAdapter.terminate(msg.sessionId); break;
+    case "send":
+      localAdapter.send(msg.sessionId, msg.event);
+      break;
+    case "pause":
+      localAdapter.pause(msg.sessionId);
+      break;
+    case "resume":
+      localAdapter.resume(msg.sessionId);
+      break;
+    case "terminate":
+      localAdapter.terminate(msg.sessionId);
+      break;
   }
-})
+});
 ```
 
 **Unified data flow.** Whether a session is cloud or local, the event flow is the same from every other component's perspective:
@@ -943,7 +965,7 @@ Repo-specific setup is defined in a `.trace/config.yml` file committed to the re
 ```yaml
 # .trace/config.yml
 runtime:
-  image: node:20          # base image override (optional)
+  image: node:20 # base image override (optional)
   resources:
     cpu: 2
     memory: 4gb
@@ -960,7 +982,7 @@ ports:
     label: "API"
 
 on_ready:
-  - npm run dev            # runs after setup, before coding tool starts
+  - npm run dev # runs after setup, before coding tool starts
 ```
 
 **Provisioning flow (cloud):**
@@ -1009,8 +1031,8 @@ The agent runtime is stateless between events (all state is in the event log) an
 
 ```typescript
 interface LLMAdapter {
-  complete(messages: Message[], options: CompletionOptions): Promise<LLMResponse>
-  stream(messages: Message[], options: CompletionOptions): AsyncIterable<LLMChunk>
+  complete(messages: Message[], options: CompletionOptions): Promise<LLMResponse>;
+  stream(messages: Message[], options: CompletionOptions): AsyncIterable<LLMChunk>;
 }
 
 class AnthropicAdapter implements LLMAdapter {
@@ -1030,11 +1052,11 @@ Organizations can configure which model powers the agent and potentially set dif
 
 Three interfaces define Trace's pluggable boundaries:
 
-| Interface | Axis | Implementations | Used by |
-|---|---|---|---|
-| `SessionAdapter` | Where the session runs | `FlyAdapter` (cloud), `LocalAdapter` (Electron) | Session Router (in service layer) |
-| `CodingToolAdapter` | What coding tool runs | `ClaudeCodeAdapter`, `CursorAdapter`, etc. | Session adapters, bridge process |
-| `LLMAdapter` | What model powers AI features | `AnthropicAdapter`, `OpenAIAdapter`, etc. | Agent runtime, service layer |
+| Interface           | Axis                          | Implementations                                 | Used by                           |
+| ------------------- | ----------------------------- | ----------------------------------------------- | --------------------------------- |
+| `SessionAdapter`    | Where the session runs        | `FlyAdapter` (cloud), `LocalAdapter` (Electron) | Session Router (in service layer) |
+| `CodingToolAdapter` | What coding tool runs         | `ClaudeCodeAdapter`, `CursorAdapter`, etc.      | Session adapters, bridge process  |
+| `LLMAdapter`        | What model powers AI features | `AnthropicAdapter`, `OpenAIAdapter`, etc.       | Agent runtime, service layer      |
 
 Adding a new hosting mode, coding tool, or LLM provider means implementing one interface. No other part of the platform changes. GraphQL resolvers, the agent runtime, and all other consumers go through the service layer, which resolves the correct adapter implementation based on configuration.
 
@@ -1165,25 +1187,25 @@ const useEntityStore = create<EntityStore>((set, get) => ({
   projects: {},
   // Targeted updates — only touch the entity that changed
   updateEntity: (type, id, patch) =>
-    set(state => ({
-      [type]: { ...state[type], [id]: { ...state[type][id], ...patch } }
+    set((state) => ({
+      [type]: { ...state[type], [id]: { ...state[type][id], ...patch } },
     })),
-}))
+}));
 
 // UI state — local to the app, not server-synced
 const useUIStore = create<UIStore>((set) => ({
-  activeSidebarTab: 'channels',
+  activeSidebarTab: "channels",
   expandedThreadId: null,
   commandPaletteOpen: false,
   // ...
-}))
+}));
 
 // Subscription state — tracks active subscriptions and connection health
 const useSubscriptionStore = create<SubscriptionStore>((set) => ({
   activeScopes: new Set<string>(),
-  connectionStatus: 'connected',
+  connectionStatus: "connected",
   // ...
-}))
+}));
 ```
 
 **Component-local state.** `useState` is allowed only for state that is truly local to a single component and has no possible consumer elsewhere — a text input's current value before submission, a dropdown's open/closed state, an animation flag. If two components ever need the same piece of state, it moves to a Zustand store immediately. When in doubt, put it in Zustand.
@@ -1193,10 +1215,10 @@ const useSubscriptionStore = create<SubscriptionStore>((set) => ({
 ```typescript
 // Query result flows into Zustand, not into component state
 async function hydrateChannel(channelId: string) {
-  const result = await gqlClient.query(ChannelQuery, { id: channelId })
-  const { channel, messages } = normalize(result.data)
-  useEntityStore.getState().mergeEntities('channels', channel)
-  useEntityStore.getState().mergeEntities('messages', messages)
+  const result = await gqlClient.query(ChannelQuery, { id: channelId });
+  const { channel, messages } = normalize(result.data);
+  useEntityStore.getState().mergeEntities("channels", channel);
+  useEntityStore.getState().mergeEntities("messages", messages);
   // Components reading from these cache keys re-render automatically
 }
 ```
@@ -1277,25 +1299,25 @@ function SessionCard({ name, status, tool, onPause }: SessionCardProps) {
 
 ```typescript
 // hooks/useSession.ts — reads session fields from Zustand entity store
-export function useSessionField<K extends keyof Session>(
-  sessionId: string,
-  field: K
-): Session[K] {
+export function useSessionField<K extends keyof Session>(sessionId: string, field: K): Session[K] {
   return useEntityStore(
     useCallback((state) => state.sessions[sessionId]?.[field], [sessionId, field]),
-    shallow
-  )
+    shallow,
+  );
 }
 
 // hooks/useSessionActions.ts — wraps GraphQL mutations, returns stable callbacks
 export function useSessionActions() {
-  const client = useUrqlClient()
-  return useMemo(() => ({
-    start: (input: StartSessionInput) => client.mutation(StartSessionMutation, { input }),
-    pause: (id: string) => client.mutation(PauseSessionMutation, { id }),
-    resume: (id: string) => client.mutation(ResumeSessionMutation, { id }),
-    terminate: (id: string) => client.mutation(TerminateSessionMutation, { id }),
-  }), [client])
+  const client = useUrqlClient();
+  return useMemo(
+    () => ({
+      start: (input: StartSessionInput) => client.mutation(StartSessionMutation, { input }),
+      pause: (id: string) => client.mutation(PauseSessionMutation, { id }),
+      resume: (id: string) => client.mutation(ResumeSessionMutation, { id }),
+      terminate: (id: string) => client.mutation(TerminateSessionMutation, { id }),
+    }),
+    [client],
+  );
 }
 ```
 
@@ -1331,13 +1353,13 @@ return <div>{hasActive && <span>{activeNames}</span>}</div>
 
 ```typescript
 // ❌ Bad — useEffect to derive state causes extra render
-const [isActive, setIsActive] = useState(false)
+const [isActive, setIsActive] = useState(false);
 useEffect(() => {
-  setIsActive(status === 'active')
-}, [status])
+  setIsActive(status === "active");
+}, [status]);
 
 // ✅ Good — derived inline, no extra render
-const isActive = status === 'active'
+const isActive = status === "active";
 ```
 
 **Subscription lifecycle management.** Every GraphQL subscription is managed by a custom hook that handles subscribe, unsubscribe, and cleanup. Subscriptions are tied to component mount/unmount via the hook. No subscription is ever opened in a `useEffect` with manual cleanup — use a dedicated `useSubscription` hook that encapsulates the lifecycle:
@@ -1347,8 +1369,8 @@ const isActive = status === 'active'
 export function useSessionEvents(sessionId: string | null) {
   useSubscription(
     sessionId ? { query: SessionEventsSubscription, variables: { sessionId } } : null,
-    (event) => eventProcessor.process(event)  // normalizes and writes to Zustand entity store
-  )
+    (event) => eventProcessor.process(event), // normalizes and writes to Zustand entity store
+  );
 }
 ```
 
@@ -1436,23 +1458,29 @@ These are unresolved design decisions for the next iteration of this document:
 ## 13. Phased Delivery
 
 ### Phase 1 — Foundation (Months 1–3)
+
 Event store, organization & channel primitives, repo discovery via CLI, basic messaging, user auth, real-time sync with viewport-driven subscriptions, mobile shell app.
 
 ### Phase 2 — Sessions (Months 3–5)
+
 Session model, Claude Code adapter, session event streaming, multiplayer observation, session-channel linking. Cloud session infrastructure on Fly Machines: container image, bridge process, `.trace/config.yml` setup flow. Local session bridge CLI with git worktree support.
 
 ### Phase 3 — Cloud Dev Environment (Months 5–6)
+
 Web-based terminal access via `ttyd`, dynamic port detection and preview URLs, idle management (auto-stop/resume). Local session bridge CLI (`trace connect`).
 
 ### Phase 4 — Tickets (Months 6–8)
+
 Ticket model, board UI, ticket-event linking, origin tracking, comments, labels, assignment.
 
 ### Phase 5 — Ambient Agent (Months 8–11)
+
 Agent runtime, event stream processing, ticket creation from conversations, comment responses, proactive suggestions, trust level configuration.
 
 ### Phase 6 — Polish & Expand (Months 11–14)
+
 Additional coding tool adapters, external integrations, advanced agent behaviors, mobile feature parity, performance optimization, public API documentation.
 
 ---
 
-*End of document. This is a living document — expect significant revision as architectural decisions are validated and user research is incorporated.*
+_End of document. This is a living document — expect significant revision as architectural decisions are validated and user research is incorporated._

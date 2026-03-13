@@ -1,6 +1,8 @@
 import { ApolloServer } from "@apollo/server";
+import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHttpServer";
 import { expressMiddleware } from "@as-integrations/express5";
-import express, { type RequestHandler } from "express";
+import type { ExpressContextFunctionArgument } from "@as-integrations/express5";
+import express from "express";
 import { createServer } from "http";
 import { readFileSync } from "fs";
 import { createRequire } from "module";
@@ -8,15 +10,46 @@ import { WebSocketServer } from "ws";
 import { useServer } from "graphql-ws/lib/use/ws";
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import { resolvers } from "./schema/resolvers.js";
+import type { Context } from "./context.js";
+import { AuthenticationError } from "./lib/errors.js";
+import { prisma } from "./lib/db.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
+
+async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
+  // TODO: Replace header-based auth with JWT verification
+  const rawUserId = req.headers["x-user-id"];
+  const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+
+  if (!userId) {
+    throw new AuthenticationError();
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, organizationId: true, role: true },
+  });
+
+  if (!user) {
+    throw new AuthenticationError("User not found");
+  }
+
+  return {
+    userId: user.id,
+    organizationId: user.organizationId,
+    role: user.role as Context["role"],
+    actorType: "user",
+  };
+}
 
 async function main() {
   const app = express();
   const httpServer = createServer(app);
 
   const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+  app.use(express.json());
 
   // WebSocket server for subscriptions
   const wsServer = new WebSocketServer({
@@ -42,14 +75,16 @@ async function main() {
   });
 
   // Apollo Server
-  const apollo = new ApolloServer({
+  const apollo = new ApolloServer<Context>({
     schema,
     plugins: [
+      ApolloServerPluginDrainHttpServer({ httpServer }),
       {
         async serverWillStart() {
           return {
             async drainServer() {
               await wsServerCleanup.dispose();
+              bridgeWss.close();
             },
           };
         },
@@ -59,17 +94,7 @@ async function main() {
 
   await apollo.start();
 
-  app.use(express.json());
-  app.use(
-    "/graphql",
-    expressMiddleware(apollo, {
-      context: async ({ req }) => ({
-        // TODO: auth context
-        userId: req.headers["x-user-id"] as string | undefined,
-        actorType: "user" as const,
-      }),
-    }) as unknown as RequestHandler,
-  );
+  app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
 
   const PORT = process.env.PORT ?? 4000;
   httpServer.listen(PORT, () => {
