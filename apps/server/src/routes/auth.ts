@@ -94,10 +94,12 @@ router.get("/auth/github/callback", async (req, res) => {
         include: { organization: true },
       });
     } else {
-      // Create org + user for new signups
-      const org = await prisma.organization.create({
-        data: { name: `${ghUser.login}'s org` },
-      });
+      // New user — join the first existing organization
+      const org = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
+
+      if (!org) {
+        return res.status(400).json({ error: "No organization available to join" });
+      }
 
       user = await prisma.user.create({
         data: {
@@ -105,7 +107,7 @@ router.get("/auth/github/callback", async (req, res) => {
           name: ghUser.name || ghUser.login,
           githubId: ghUser.id,
           avatarUrl: ghUser.avatar_url,
-          role: "admin",
+          role: "member",
           organizationId: org.id,
         },
         include: { organization: true },
@@ -127,10 +129,25 @@ router.get("/auth/github/callback", async (req, res) => {
       path: "/",
     });
 
-    res.redirect(WEB_URL);
+    // Signal the opener window and close the popup
+    res.send(`<!DOCTYPE html><html><body><script>
+      if (window.opener) {
+        window.opener.postMessage({ type: "auth:success" }, "${WEB_URL}");
+        window.close();
+      } else {
+        window.location.href = "${WEB_URL}";
+      }
+    </script></body></html>`);
   } catch (err) {
     console.error("GitHub OAuth error:", err);
-    res.status(500).json({ error: "Authentication failed" });
+    res.send(`<!DOCTYPE html><html><body><script>
+      if (window.opener) {
+        window.opener.postMessage({ type: "auth:error" }, "${WEB_URL}");
+        window.close();
+      } else {
+        document.body.textContent = "Authentication failed";
+      }
+    </script></body></html>`);
   }
 });
 
@@ -145,7 +162,15 @@ router.get("/auth/me", async (req, res) => {
     const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true, name: true, avatarUrl: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        role: true,
+        organizationId: true,
+        organization: { select: { id: true, name: true } },
+      },
     });
 
     if (!user) {
