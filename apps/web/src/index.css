@@ -5,77 +5,70 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Trace dark theme ── */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  --background: #171717;
+  --foreground: #d4d4d8;
+  --card: #262626;
+  --card-foreground: #d4d4d8;
+  --popover: #262626;
+  --popover-foreground: #d4d4d8;
+  --primary: #a1a1aa;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #d4d4d8;
+  --muted: #262626;
+  --muted-foreground: #71717a;
+  --accent: #3b82f6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --border: #262626;
+  --input: #262626;
+  --ring: #3b82f6;
+  --radius: 0.5rem;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --chart-1: #3b82f6;
+  --chart-2: #60a5fa;
+  --chart-3: #93c5fd;
+  --chart-4: #2563eb;
+  --chart-5: #1d4ed8;
+
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #d4d4d8;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #d4d4d8;
+  --sidebar-border: #262626;
+  --sidebar-ring: #3b82f6;
+
+  /* Trace semantic tokens */
+  --th-surface: #171717;
+  --th-surface-deep: #0a0a0a;
+  --th-surface-elevated: #262626;
+  --th-surface-hover: #404040;
+  --th-primary: #a1a1aa;
+  --th-muted: #71717a;
+  --th-heading: #d4d4d8;
+  --th-faint: #52525b;
+  --th-on-accent: #171717;
+  --th-edge: #262626;
+  --th-edge-hover: #404040;
+  --th-accent: #3b82f6;
+  --th-accent-light: #60a5fa;
+  --th-accent-tint: #3b82f622;
+  --th-hover-rgb: 38,38,38;
+  --th-code-bg: #0a0a0a;
 }
 
 @theme inline {
   --font-sans: "Geist Variable", sans-serif;
+
+  --color-surface: var(--th-surface);
+  --color-surface-deep: var(--th-surface-deep);
+  --color-surface-elevated: var(--th-surface-elevated);
+  --color-surface-hover: var(--th-surface-hover);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -126,4 +119,97 @@
   html {
     @apply font-sans;
   }
+  html, body, #root {
+    height: 100%;
+  }
+}
+
+/* ── Button utilities ── */
+.btn-primary {
+  color: white !important;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent-light) 40%, var(--th-accent)),
+    color-mix(in srgb, var(--th-accent) 85%, black)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, white 18%, transparent),
+    0 1px 3px 0 rgb(0 0 0 / 0.4) !important;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.btn-primary:hover {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent-light) 55%, var(--th-accent)),
+    var(--th-accent)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, white 25%, transparent),
+    0 3px 10px 0 rgb(0 0 0 / 0.45) !important;
+}
+.btn-primary:active {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--th-accent) 80%, black),
+    var(--th-accent)
+  ) !important;
+  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.4) !important;
+  transform: scale(0.97);
+}
+.btn-primary:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.15) !important;
+  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+}
+.btn-secondary:hover {
+  border-color: var(--th-edge-hover);
+  background: var(--th-surface-elevated) !important;
+  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.2) !important;
+}
+.btn-secondary:active {
+  background: var(--th-surface) !important;
+  box-shadow: inset 0 1px 3px 0 rgb(0 0 0 / 0.2) !important;
+  transform: scale(0.98);
+}
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+
+.btn-ghost {
+  background: transparent;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-ghost:hover {
+  background: var(--th-surface-elevated);
+}
+.btn-ghost:active {
+  background: var(--th-surface-hover);
+  transform: scale(0.95);
+}
+.btn-ghost:focus-visible {
+  outline: 2px solid var(--th-accent-light);
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--th-edge);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--th-edge-hover);
 }
