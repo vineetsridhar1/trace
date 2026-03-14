@@ -32,6 +32,8 @@ interface EntityActions {
     entityType: T,
     items: Array<EntityTableMap[T] & { id: string }>,
   ) => void;
+  /** Shallow-merge a partial update into an existing entity */
+  patch: <T extends EntityType>(entityType: T, id: string, data: Partial<EntityTableMap[T]>) => void;
   remove: (entityType: EntityType, id: string) => void;
 }
 
@@ -59,6 +61,16 @@ export const useEntityStore = create<EntityState>((set) => ({
       const table = { ...(state[entityType] as Record<string, unknown>) };
       for (const item of items) {
         table[item.id] = item;
+      }
+      return { [entityType]: table } as Partial<Tables>;
+    }),
+
+  patch: (entityType, id, data) =>
+    set((state) => {
+      const table = { ...(state[entityType] as Record<string, unknown>) };
+      const existing = table[id];
+      if (existing) {
+        table[id] = { ...(existing as object), ...data };
       }
       return { [entityType]: table } as Partial<Tables>;
     }),

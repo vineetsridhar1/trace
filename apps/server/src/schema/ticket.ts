@@ -30,8 +30,8 @@ export const ticketMutations = {
       actorId: ctx.userId,
     });
   },
-  updateTicket: (_: unknown, args: { id: string; input: UpdateTicketInput }, _ctx: Context) => {
-    return ticketService.update(args.id, args.input);
+  updateTicket: (_: unknown, args: { id: string; input: UpdateTicketInput }, ctx: Context) => {
+    return ticketService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
   commentOnTicket: (_: unknown, args: { ticketId: string; text: string }, ctx: Context) => {
     return ticketService.addComment(args.ticketId, args.text, ctx.actorType, ctx.userId);

@@ -56,6 +56,7 @@ export type ChannelType =
 
 export type CodingTool =
   | 'claude_code'
+  | 'codex'
   | 'cursor'
   | 'custom';
 
@@ -108,6 +109,7 @@ export type Event = {
 };
 
 export type EventType =
+  | 'channel_created'
   | 'entity_linked'
   | 'member_joined'
   | 'member_left'
@@ -138,10 +140,12 @@ export type Mutation = {
   linkSessionToTicket: Session;
   pauseSession: Session;
   resumeSession: Session;
+  runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
   startSession: Session;
   terminateSession: Session;
+  updateSessionTool: Session;
   updateTicket: Ticket;
 };
 
@@ -195,6 +199,12 @@ export type MutationResumeSessionArgs = {
 };
 
 
+export type MutationRunSessionArgs = {
+  id: Scalars['ID']['input'];
+  prompt?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type MutationSendMessageArgs = {
   channelId: Scalars['ID']['input'];
   parentId?: InputMaybe<Scalars['ID']['input']>;
@@ -215,6 +225,12 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateSessionToolArgs = {
+  sessionId: Scalars['ID']['input'];
+  tool: CodingTool;
 };
 
 
@@ -382,6 +398,7 @@ export type Session = {
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
+  createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   endpoints?: Maybe<SessionEndpoints>;
   hosting: HostingMode;
@@ -392,6 +409,7 @@ export type Session = {
   status: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
+  updatedAt: Scalars['DateTime']['output'];
 };
 
 export type SessionConnection = {
@@ -407,6 +425,7 @@ export type SessionEndpoints = {
 };
 
 export type SessionFilters = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
   status?: InputMaybe<SessionStatus>;
   tool?: InputMaybe<CodingTool>;
@@ -417,6 +436,7 @@ export type SessionStatus =
   | 'completed'
   | 'failed'
   | 'paused'
+  | 'pending'
   | 'unreachable';
 
 export type StartSessionInput = {
@@ -433,6 +453,7 @@ export type StartSessionInput = {
 export type Subscription = {
   __typename?: 'Subscription';
   channelEvents: Event;
+  orgEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -443,6 +464,12 @@ export type Subscription = {
 
 export type SubscriptionChannelEventsArgs = {
   channelId: Scalars['ID']['input'];
+  organizationId: Scalars['ID']['input'];
+  types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
 };

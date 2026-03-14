@@ -2,6 +2,7 @@ scalar DateTime
 scalar JSON
 
 enum SessionStatus {
+  pending
   active
   paused
   completed
@@ -32,6 +33,7 @@ enum HostingMode {
 
 enum CodingTool {
   claude_code
+  codex
   cursor
   custom
 }
@@ -87,6 +89,7 @@ enum EventType {
   ticket_updated
   ticket_commented
   entity_linked
+  channel_created
   member_joined
   member_left
 }
@@ -151,6 +154,8 @@ type Session {
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
   connection: SessionConnection
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type Ticket {
@@ -240,6 +245,7 @@ input SessionFilters {
   status: SessionStatus
   tool: CodingTool
   repoId: ID
+  channelId: ID
 }
 
 input CreateTicketInput {
@@ -316,7 +322,9 @@ type Mutation {
   startSession(input: StartSessionInput!): Session!
   pauseSession(id: ID!): Session!
   resumeSession(id: ID!): Session!
+  runSession(id: ID!, prompt: String): Session!
   terminateSession(id: ID!): Session!
+  updateSessionTool(sessionId: ID!, tool: CodingTool!): Session!
   sendSessionMessage(sessionId: ID!, text: String!): Event!
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!
@@ -330,6 +338,7 @@ type Mutation {
 # --- Subscriptions ---
 
 type Subscription {
+  orgEvents(organizationId: ID!, types: [String!]): Event!
   channelEvents(channelId: ID!, organizationId: ID!, types: [String!]): Event!
   sessionEvents(sessionId: ID!, organizationId: ID!): Event!
   ticketEvents(ticketId: ID!, organizationId: ID!): Event!

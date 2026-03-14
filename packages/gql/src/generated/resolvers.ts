@@ -59,6 +59,7 @@ export type ChannelType =
 
 export type CodingTool =
   | 'claude_code'
+  | 'codex'
   | 'cursor'
   | 'custom';
 
@@ -111,6 +112,7 @@ export type Event = {
 };
 
 export type EventType =
+  | 'channel_created'
   | 'entity_linked'
   | 'member_joined'
   | 'member_left'
@@ -141,10 +143,12 @@ export type Mutation = {
   linkSessionToTicket: Session;
   pauseSession: Session;
   resumeSession: Session;
+  runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
   startSession: Session;
   terminateSession: Session;
+  updateSessionTool: Session;
   updateTicket: Ticket;
 };
 
@@ -198,6 +202,12 @@ export type MutationResumeSessionArgs = {
 };
 
 
+export type MutationRunSessionArgs = {
+  id: Scalars['ID']['input'];
+  prompt?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type MutationSendMessageArgs = {
   channelId: Scalars['ID']['input'];
   parentId?: InputMaybe<Scalars['ID']['input']>;
@@ -218,6 +228,12 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateSessionToolArgs = {
+  sessionId: Scalars['ID']['input'];
+  tool: CodingTool;
 };
 
 
@@ -385,6 +401,7 @@ export type Session = {
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
+  createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   endpoints?: Maybe<SessionEndpoints>;
   hosting: HostingMode;
@@ -395,6 +412,7 @@ export type Session = {
   status: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
+  updatedAt: Scalars['DateTime']['output'];
 };
 
 export type SessionConnection = {
@@ -410,6 +428,7 @@ export type SessionEndpoints = {
 };
 
 export type SessionFilters = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
   status?: InputMaybe<SessionStatus>;
   tool?: InputMaybe<CodingTool>;
@@ -420,6 +439,7 @@ export type SessionStatus =
   | 'completed'
   | 'failed'
   | 'paused'
+  | 'pending'
   | 'unreachable';
 
 export type StartSessionInput = {
@@ -436,6 +456,7 @@ export type StartSessionInput = {
 export type Subscription = {
   __typename?: 'Subscription';
   channelEvents: Event;
+  orgEvents: Event;
   sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -446,6 +467,12 @@ export type Subscription = {
 
 export type SubscriptionChannelEventsArgs = {
   channelId: Scalars['ID']['input'];
+  organizationId: Scalars['ID']['input'];
+  types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
 };
@@ -738,10 +765,12 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
   pauseSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationPauseSessionArgs, 'id'>>;
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
+  runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
+  updateSessionTool?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionToolArgs, 'sessionId' | 'tool'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
 }>;
 
@@ -811,6 +840,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   endpoints?: Resolver<Maybe<ResolversTypes['SessionEndpoints']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
@@ -821,6 +851,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   status?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType>;
   tool?: Resolver<ResolversTypes['CodingTool'], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -838,6 +869,7 @@ export type SessionEndpointsResolvers<ContextType = Context, ParentType extends 
 
 export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
   channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId' | 'organizationId'>>;
+  orgEvents?: SubscriptionResolver<ResolversTypes['Event'], "orgEvents", ParentType, ContextType, RequireFields<SubscriptionOrgEventsArgs, 'organizationId'>>;
   sessionEvents?: SubscriptionResolver<ResolversTypes['Event'], "sessionEvents", ParentType, ContextType, RequireFields<SubscriptionSessionEventsArgs, 'organizationId' | 'sessionId'>>;
   sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'organizationId' | 'sessionId'>>;
   sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'organizationId' | 'sessionId'>>;

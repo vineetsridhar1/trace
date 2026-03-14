@@ -1,8 +1,10 @@
 import WebSocket from "ws";
+import { ClaudeCodeAdapter, CodexAdapter, type CodingToolAdapter } from "@trace/shared";
 
 export class BridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
+  private adapters = new Map<string, CodingToolAdapter>();
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
@@ -30,24 +32,60 @@ export class BridgeClient {
     });
   }
 
-  private handleMessage(msg: { type: string; sessionId?: string; event?: unknown }) {
+  private createAdapter(tool?: string): CodingToolAdapter {
+    switch (tool) {
+      case "codex":
+        return new CodexAdapter();
+      case "claude_code":
+      default:
+        return new ClaudeCodeAdapter();
+    }
+  }
+
+  private runPrompt(sessionId: string, prompt: string, cwd?: string, tool?: string) {
+    const workdir = cwd ?? process.cwd();
+
+    // Reuse existing adapter (retains session state for --resume)
+    let adapter = this.adapters.get(sessionId);
+    if (!adapter) {
+      adapter = this.createAdapter(tool);
+      this.adapters.set(sessionId, adapter);
+      this.send({ type: "register_session", sessionId });
+    }
+
+    adapter.run(
+      prompt,
+      workdir,
+      (output) => {
+        this.send({ type: "session_output", sessionId, data: output });
+      },
+      () => {
+        this.send({ type: "session_complete", sessionId });
+      },
+    );
+  }
+
+  private handleMessage(msg: { type: string; sessionId?: string; prompt?: string; [key: string]: unknown }) {
     switch (msg.type) {
-      case "send":
-        // TODO: forward event to local session adapter
-        console.log("[bridge] send event to session", msg.sessionId);
+      case "run": {
+        if (!msg.sessionId) return;
+        this.runPrompt(msg.sessionId, msg.prompt ?? "", msg.cwd as string | undefined, msg.tool as string | undefined);
         break;
-      case "pause":
-        // TODO: pause local session
-        console.log("[bridge] pause session", msg.sessionId);
+      }
+      case "send": {
+        if (!msg.sessionId || !msg.prompt) return;
+        this.runPrompt(msg.sessionId, msg.prompt as string);
         break;
-      case "resume":
-        // TODO: resume local session
-        console.log("[bridge] resume session", msg.sessionId);
+      }
+      case "terminate": {
+        if (!msg.sessionId) return;
+        const adapter = this.adapters.get(msg.sessionId);
+        if (adapter) {
+          adapter.abort();
+          this.adapters.delete(msg.sessionId);
+        }
         break;
-      case "terminate":
-        // TODO: terminate local session
-        console.log("[bridge] terminate session", msg.sessionId);
-        break;
+      }
     }
   }
 
@@ -58,6 +96,10 @@ export class BridgeClient {
   }
 
   disconnect() {
+    for (const adapter of this.adapters.values()) {
+      adapter.abort();
+    }
+    this.adapters.clear();
     this.ws?.close();
     this.ws = null;
   }

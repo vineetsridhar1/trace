@@ -21,8 +21,8 @@ export const channelQueries = {
 };
 
 export const channelMutations = {
-  createChannel: (_: unknown, args: { input: CreateChannelInput }, _ctx: Context) => {
-    return channelService.create(args.input);
+  createChannel: (_: unknown, args: { input: CreateChannelInput }, ctx: Context) => {
+    return channelService.create(args.input, ctx.actorType, ctx.userId);
   },
   sendMessage: (_: unknown, args: { channelId: string; text: string; parentId?: string }, ctx: Context) => {
     return channelService.sendMessage(args.channelId, args.text, args.parentId ?? null, ctx.actorType, ctx.userId);

@@ -1,6 +1,7 @@
 import type { Context } from "../context.js";
 import type { CreateRepoInput, CreateProjectInput, EntityType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
+import { organizationService } from "../services/organization.js";
 
 const projectInclude = {
   repo: true,
@@ -43,38 +44,13 @@ export const organizationQueries = {
 };
 
 export const organizationMutations = {
-  createRepo: (_: unknown, args: { input: CreateRepoInput }, _ctx: Context) => {
-    return prisma.repo.create({
-      data: {
-        name: args.input.name,
-        remoteUrl: args.input.remoteUrl,
-        defaultBranch: args.input.defaultBranch ?? "main",
-        organizationId: args.input.organizationId,
-      },
-      include: { projects: true, sessions: true },
-    });
+  createRepo: (_: unknown, args: { input: CreateRepoInput }, ctx: Context) => {
+    return organizationService.createRepo(args.input, ctx.actorType, ctx.userId);
   },
-  createProject: (_: unknown, args: { input: CreateProjectInput }, _ctx: Context) => {
-    return prisma.project.create({
-      data: {
-        name: args.input.name,
-        organizationId: args.input.organizationId,
-        ...(args.input.repoId && { repoId: args.input.repoId }),
-      },
-      include: projectInclude,
-    });
+  createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
+    return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
   },
-  linkEntityToProject: (_: unknown, args: { entityType: EntityType; entityId: string; projectId: string }, _ctx: Context) => {
-    const joinOps: Record<EntityType, () => Promise<unknown>> = {
-      session: () => prisma.sessionProject.create({ data: { sessionId: args.entityId, projectId: args.projectId } }),
-      ticket: () => prisma.ticketProject.create({ data: { ticketId: args.entityId, projectId: args.projectId } }),
-      channel: () => prisma.channelProject.create({ data: { channelId: args.entityId, projectId: args.projectId } }),
-    };
-    return joinOps[args.entityType]().then(() =>
-      prisma.project.findUniqueOrThrow({
-        where: { id: args.projectId },
-        include: projectInclude,
-      }),
-    );
+  linkEntityToProject: (_: unknown, args: { entityType: EntityType; entityId: string; projectId: string }, ctx: Context) => {
+    return organizationService.linkEntityToProject(args.entityType, args.entityId, args.projectId, ctx.actorType, ctx.userId);
   },
 };

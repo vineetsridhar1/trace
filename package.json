@@ -14,7 +14,8 @@
     "format:check": "prettier --check .",
     "gql:codegen": "pnpm --filter @trace/gql codegen",
     "db:migrate": "pnpm --filter @trace/server exec prisma migrate dev",
-    "db:generate": "pnpm --filter @trace/server exec prisma generate"
+    "db:generate": "pnpm --filter @trace/server exec prisma generate",
+    "codegen": "pnpm db:generate && node packages/gql/scripts/codegen.cjs && pnpm --filter @trace/gql build"
   },
   "engines": {
     "node": ">=22",
