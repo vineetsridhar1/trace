@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useAuthStore } from "./stores/auth";
-import { ServerSidebar } from "./components/ServerSidebar";
+import { AppSidebar } from "./components/AppSidebar";
+import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
+import { TooltipProvider } from "./components/ui/tooltip";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -23,17 +25,20 @@ export function App() {
   }
 
   return (
-    <div className="flex h-screen">
-      <ServerSidebar />
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center border-b border-border px-4 py-2">
-          <h1 className="text-lg font-semibold text-foreground">Trace</h1>
-        </header>
-        <main className="flex-1 p-4">
-          <h2 className="text-foreground">Welcome, {user.name}</h2>
-        </main>
-      </div>
-    </div>
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <div className="flex flex-1 flex-col">
+          <header className="flex h-12 items-center gap-2 border-b border-border px-4">
+            <SidebarTrigger />
+            <h1 className="text-lg font-semibold text-foreground">Trace</h1>
+          </header>
+          <main className="flex-1 p-4">
+            <h2 className="text-foreground">Welcome, {user.name}</h2>
+          </main>
+        </div>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
 

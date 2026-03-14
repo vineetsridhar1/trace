@@ -1,8 +1,21 @@
 import type { CreateChannelInput, ActorType } from "@trace/gql";
+import { prisma } from "../lib/db.js";
 
 export class ChannelService {
-  async create(_input: CreateChannelInput) {
-    throw new Error("Not implemented");
+  async create(input: CreateChannelInput) {
+    const channel = await prisma.channel.create({
+      data: {
+        name: input.name,
+        type: input.type ?? "default",
+        organizationId: input.organizationId,
+        ...(input.projectIds?.length && {
+          projects: {
+            create: input.projectIds.map((projectId) => ({ projectId })),
+          },
+        }),
+      },
+    });
+    return channel;
   }
 
   async sendMessage(
