@@ -20,6 +20,16 @@ function createWindow() {
   const webUrl = process.env.TRACE_WEB_URL ?? "http://localhost:3000";
   mainWindow.loadURL(webUrl);
 
+  // Forward mouse back/forward buttons as browser-style navigation
+  // On macOS, use swipe events; on Windows/Linux, use app-command
+  mainWindow.on("app-command", (_event, command) => {
+    if (command === "browser-backward") {
+      mainWindow?.webContents.executeJavaScript("history.back()");
+    } else if (command === "browser-forward") {
+      mainWindow?.webContents.executeJavaScript("history.forward()");
+    }
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });

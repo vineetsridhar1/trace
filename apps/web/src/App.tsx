@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
+import { useHistorySync } from "./hooks/useHistorySync";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -34,6 +35,7 @@ export function App() {
 
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
+  useHistorySync();
 
   return (
     <TooltipProvider>
