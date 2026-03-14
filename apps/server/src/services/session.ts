@@ -1,4 +1,5 @@
 import type { StartSessionInput, ActorType } from "@trace/gql";
+import type { SessionStatus, EventType, CodingTool } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -11,6 +12,25 @@ export type StartSessionServiceInput = StartSessionInput & {
 const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true } as const;
 
 export class SessionService {
+  async list(organizationId: string, filters?: { status?: string | null; tool?: string | null; repoId?: string | null; channelId?: string | null }) {
+    const where: Record<string, unknown> = { organizationId };
+    if (filters?.status) where.status = filters.status;
+    if (filters?.tool) where.tool = filters.tool;
+    if (filters?.repoId) where.repoId = filters.repoId;
+    if (filters?.channelId) where.channelId = filters.channelId;
+    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: SESSION_INCLUDE });
+  }
+
+  async get(id: string) {
+    return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
+  }
+
+  async listByUser(organizationId: string, userId: string, status?: string | null) {
+    const where: Record<string, unknown> = { organizationId, createdById: userId };
+    if (status) where.status = status;
+    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: SESSION_INCLUDE });
+  }
+
   async start(input: StartSessionServiceInput) {
     const name = input.prompt
       ? input.prompt.slice(0, 80)
@@ -40,10 +60,17 @@ export class SessionService {
         scopeId: session.id,
         eventType: "session_started",
         payload: {
-          sessionId: session.id,
-          name: session.name,
-          tool: session.tool,
-          hosting: session.hosting,
+          session: {
+            id: session.id,
+            name: session.name,
+            status: session.status,
+            tool: session.tool,
+            hosting: session.hosting,
+            createdBy: session.createdBy,
+            channel: session.channel,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+          },
           prompt: input.prompt ?? null,
         },
         actorType: "user",
@@ -94,11 +121,23 @@ export class SessionService {
     }
 
     // Update status to active and return with includes
-    return prisma.session.update({
+    const updated = await prisma.session.update({
       where: { id },
       data: { status: "active" },
       include: SESSION_INCLUDE,
     });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: id,
+      eventType: "session_resumed",
+      payload: { sessionId: id },
+      actorType: "user",
+      actorId: session.createdById,
+    });
+
+    return updated;
   }
 
   async pause(id: string, actorType: ActorType = "system", actorId: string = "system") {
@@ -110,14 +149,14 @@ export class SessionService {
   }
 
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.transition(id, "terminate", "completed", "session_terminated", actorType, actorId);
+    return this.transition(id, "terminate", "failed", "session_terminated", actorType, actorId);
   }
 
   private async transition(
     id: string,
     command: "pause" | "resume" | "terminate",
-    newStatus: string,
-    eventType: string,
+    newStatus: SessionStatus,
+    eventType: EventType,
     actorType: ActorType,
     actorId: string,
   ) {
@@ -125,7 +164,7 @@ export class SessionService {
 
     const session = await prisma.session.update({
       where: { id },
-      data: { status: newStatus as any },
+      data: { status: newStatus },
       include: SESSION_INCLUDE,
     });
 
@@ -133,7 +172,7 @@ export class SessionService {
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: id,
-      eventType: eventType as any,
+      eventType,
       payload: { sessionId: id },
       actorType,
       actorId,
@@ -142,10 +181,10 @@ export class SessionService {
     return session;
   }
 
-  async updateTool(sessionId: string, tool: string, actorType: ActorType, actorId: string) {
+  async updateTool(sessionId: string, tool: CodingTool, actorType: ActorType, actorId: string) {
     const session = await prisma.session.update({
       where: { id: sessionId },
-      data: { tool: tool as any },
+      data: { tool },
       include: SESSION_INCLUDE,
     });
 
@@ -201,9 +240,21 @@ export class SessionService {
   }
 
   async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string) {
-    const session = await prisma.session.findUniqueOrThrow({
+    const session = await prisma.session.update({
       where: { id: sessionId },
+      data: { status: "active" },
       select: { organizationId: true },
+    });
+
+    // Emit a resumed event so all clients see the status change
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_resumed",
+      payload: { sessionId },
+      actorType,
+      actorId,
     });
 
     const event = await eventService.create({

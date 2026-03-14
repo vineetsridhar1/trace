@@ -23,7 +23,7 @@ export class ChannelService {
         scopeType: "channel",
         scopeId: channel.id,
         eventType: "channel_created",
-        payload: { channelId: channel.id, name: channel.name, type: channel.type },
+        payload: { channel: { id: channel.id, name: channel.name, type: channel.type } },
         actorType,
         actorId,
       }, tx);

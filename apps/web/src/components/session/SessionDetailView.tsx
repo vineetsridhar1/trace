@@ -10,7 +10,6 @@ const RUN_SESSION_MUTATION = gql`
   mutation RunSession($id: ID!, $prompt: String) {
     runSession(id: $id, prompt: $prompt) {
       id
-      status
     }
   }
 `;
@@ -19,7 +18,6 @@ const TERMINATE_SESSION_MUTATION = gql`
   mutation TerminateSession($id: ID!) {
     terminateSession(id: $id) {
       id
-      status
     }
   }
 `;

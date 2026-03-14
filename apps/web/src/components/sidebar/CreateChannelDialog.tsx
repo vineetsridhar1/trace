@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
-import { useEntityStore } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import {
@@ -19,13 +18,11 @@ const CREATE_CHANNEL_MUTATION = gql`
   mutation CreateChannel($input: CreateChannelInput!) {
     createChannel(input: $input) {
       id
-      name
-      type
     }
   }
 `;
 
-export function CreateChannelDialog({ onCreated }: { onCreated: () => void }) {
+export function CreateChannelDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -44,11 +41,8 @@ export function CreateChannelDialog({ onCreated }: { onCreated: () => void }) {
         .toPromise();
 
       if (result.data?.createChannel) {
-        const channel = result.data.createChannel;
-        useEntityStore.getState().upsert("channels", channel.id, channel);
         setName("");
         setOpen(false);
-        onCreated();
       }
     } finally {
       setCreating(false);

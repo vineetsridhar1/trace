@@ -15,7 +15,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   run(prompt: string, cwd: string, onOutput: OutputCallback, onComplete: () => void) {
     this.cwd = cwd;
 
-    const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+    const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"];
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }

@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { Hash } from "lucide-react";
-import { useEntityStore, useEntityField } from "../../stores/entity";
+import type { Session } from "@trace/gql";
+import { useEntityStore, useEntityField, useEntityIds } from "../../stores/entity";
+import type { SessionEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
@@ -35,7 +37,6 @@ export function ChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
-  const [sessionIds, setSessionIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const activeSessionId = useUIStore((s) => s.activeSessionId);
 
@@ -49,9 +50,8 @@ export function ChannelView({ channelId }: { channelId: string }) {
       .toPromise();
 
     if (result.data?.sessions) {
-      const sessions = result.data.sessions as Array<{ id: string }>;
-      upsertMany("sessions", sessions as Array<{ id: string } & any>);
-      setSessionIds(sessions.map((s) => s.id));
+      const fetched = result.data.sessions as Array<Session & { id: string }>;
+      upsertMany("sessions", fetched);
     }
     setLoading(false);
   }, [activeOrgId, channelId, upsertMany]);
@@ -60,6 +60,14 @@ export function ChannelView({ channelId }: { channelId: string }) {
     setLoading(true);
     fetchSessions();
   }, [fetchSessions]);
+
+  const sessionIds = useEntityIds(
+    "sessions",
+    (s) => {
+      const ch = (s as SessionEntity).channel as { id: string } | null | undefined;
+      return ch?.id === channelId;
+    },
+  );
 
   if (activeSessionId) {
     return <SessionDetailView sessionId={activeSessionId} />;
@@ -74,7 +82,7 @@ export function ChannelView({ channelId }: { channelId: string }) {
             {channelName ?? "Channel"}
           </h2>
         </div>
-        <StartSessionDialog channelId={channelId} onCreated={fetchSessions} />
+        <StartSessionDialog channelId={channelId} />
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -90,23 +98,11 @@ export function ChannelView({ channelId }: { channelId: string }) {
             </p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th className="py-2 px-3 text-xs font-medium text-muted-foreground">Session</th>
-                <th className="py-2 px-3 text-xs font-medium text-muted-foreground">Status</th>
-                <th className="py-2 px-3 text-xs font-medium text-muted-foreground">Created by</th>
-                <th className="py-2 px-3 text-xs font-medium text-muted-foreground text-right">
-                  Last active
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessionIds.map((id) => (
-                <SessionRow key={id} id={id} />
-              ))}
-            </tbody>
-          </table>
+          <div className="divide-y divide-border">
+            {sessionIds.map((id) => (
+              <SessionRow key={id} id={id} />
+            ))}
+          </div>
         )}
       </div>
     </div>

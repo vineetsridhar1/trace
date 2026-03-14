@@ -104,6 +104,8 @@ apps/desktop/        — Electron shell + bridge client
 - **No deep object passing to components.** Pass IDs, select fields via Zustand hooks.
 - **No `useState` for state that could be shared.** If two components might need it, use Zustand.
 - **No urql cache for state management.** urql is transport only. Data lives in Zustand.
+- **No `any` types.** Never use `any` — use `unknown` with runtime narrowing for truly unknown data, or import the correct type from `@trace/gql` or `@prisma/client`. GQL scalar overrides in codegen ensure `DateTime` → `string` and `JSON` → `Record<string, unknown>`.
+- **Events are the source of truth for state changes.** Never read mutation results to update the Zustand store. Mutations fire-and-forget; the org-wide event subscription (`useOrgEvents`) receives the resulting event and updates the store. This ensures all clients see changes, not just the one that triggered the mutation. Event payloads must carry enough data to upsert the full entity directly — no refetches. Lists derive from the entity store (e.g. filter `sessions` by `channel.id`), so new entities appear automatically when upserted by event handlers.
 
 ## Commands
 

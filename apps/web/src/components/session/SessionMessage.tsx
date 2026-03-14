@@ -10,28 +10,49 @@ import { SystemBadge } from "./messages/SystemBadge";
 /** Types we skip rendering entirely */
 const SKIP_TYPES = new Set(["system", "stderr", "rate_limit_event"]);
 
-function renderAssistantContent(payload: Record<string, any>, ts: string) {
-  const contentBlocks = payload?.message?.content as Array<Record<string, any>> | undefined;
-  if (!contentBlocks || !Array.isArray(contentBlocks)) {
-    const text = payload?.text ?? "";
+/** Safely read a string from an unknown value, returning fallback if not a string */
+function str(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+/** Safely narrow unknown to a record for property access */
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/** Narrow unknown to the output type expected by ToolResultRow */
+function asOutput(value: unknown): string | Record<string, unknown> | undefined {
+  if (typeof value === "string") return value;
+  return asRecord(value);
+}
+
+function renderAssistantContent(payload: Record<string, unknown>, ts: string) {
+  const message = asRecord(payload.message);
+  const contentBlocks = message?.content;
+  if (!Array.isArray(contentBlocks)) {
+    const text = str(payload.text);
     return text ? <AssistantText text={text} timestamp={ts} /> : null;
   }
 
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < contentBlocks.length; i++) {
-    const block = contentBlocks[i];
-    if (block.type === "text" && block.text) {
+    const block = asRecord(contentBlocks[i]);
+    if (!block) continue;
+
+    if (block.type === "text" && typeof block.text === "string") {
       elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
     } else if (block.type === "tool_use") {
-      const name = block.name ?? "Tool";
+      const name = str(block.name, "Tool");
       // Check if it's a subagent
       if (name.toLowerCase() === "agent" || name.toLowerCase() === "task") {
-        const input = block.input as Record<string, any> | undefined;
+        const input = asRecord(block.input);
         elements.push(
           <SubagentRow
             key={i}
-            description={input?.description ?? input?.prompt ?? "Subagent"}
-            subagentType={input?.subagent_type ?? "agent"}
+            description={str(input?.description) || str(input?.prompt) || "Subagent"}
+            subagentType={str(input?.subagent_type, "agent")}
             isLoading={true}
             timestamp={ts}
           />,
@@ -41,7 +62,7 @@ function renderAssistantContent(payload: Record<string, any>, ts: string) {
           <ToolCallRow
             key={i}
             name={name}
-            input={block.input as Record<string, unknown> | undefined}
+            input={asRecord(block.input)}
             timestamp={ts}
           />,
         );
@@ -50,8 +71,8 @@ function renderAssistantContent(payload: Record<string, any>, ts: string) {
       elements.push(
         <ToolResultRow
           key={i}
-          name={block.name ?? "Tool"}
-          output={block.content ?? block.output}
+          name={str(block.name, "Tool")}
+          output={asOutput(block.content ?? block.output)}
           timestamp={ts}
         />,
       );
@@ -61,36 +82,35 @@ function renderAssistantContent(payload: Record<string, any>, ts: string) {
   return elements.length > 0 ? <>{elements}</> : null;
 }
 
-function renderSessionOutput(payload: Record<string, any>, ts: string) {
-  const type = payload?.type;
-  if (!type || SKIP_TYPES.has(type)) return null;
+function renderSessionOutput(payload: Record<string, unknown>, ts: string) {
+  const type = payload.type;
+  if (typeof type !== "string" || SKIP_TYPES.has(type)) return null;
 
   if (type === "assistant" || type === "text") {
     return renderAssistantContent(payload, ts);
   }
 
   if (type === "tool_use") {
-    const name = payload?.name ?? payload?.tool ?? "Tool";
-    return <ToolCallRow name={name} input={payload?.input} timestamp={ts} />;
+    const name = str(payload.name) || str(payload.tool) || "Tool";
+    return <ToolCallRow name={name} input={asRecord(payload.input)} timestamp={ts} />;
   }
 
   if (type === "tool_result") {
-    const name = payload?.name ?? payload?.tool ?? "Tool";
-    return <ToolResultRow name={name} output={payload?.content ?? payload?.output} timestamp={ts} />;
+    const name = str(payload.name) || str(payload.tool) || "Tool";
+    return <ToolResultRow name={name} output={asOutput(payload.content ?? payload.output)} timestamp={ts} />;
   }
 
   if (type === "result") {
-    if ("exitCode" in (payload ?? {})) return null;
-    // Don't re-render the result text — it was already shown by the assistant event
+    if ("exitCode" in payload) return null;
     return <CompletionRow timestamp={ts} />;
   }
 
   if (type === "error") {
-    return <CompletionRow timestamp={ts} result={payload?.message ?? "Error"} isUserStop />;
+    return <CompletionRow timestamp={ts} result={str(payload.message, "Error")} isUserStop />;
   }
 
   // Fallback for unknown types with text content
-  const fallback = payload?.text ?? payload?.content ?? payload?.message;
+  const fallback = payload.text ?? payload.content ?? payload.message;
   if (typeof fallback === "string" && fallback) {
     return <AssistantText text={fallback} timestamp={ts} />;
   }
@@ -99,15 +119,15 @@ function renderSessionOutput(payload: Record<string, any>, ts: string) {
 }
 
 export function SessionMessage({ id }: { id: string }) {
-  const eventType = useEntityField("events", id, "eventType") as string | undefined;
-  const payload = useEntityField("events", id, "payload") as Record<string, any> | undefined;
-  const timestamp = useEntityField("events", id, "timestamp") as string | undefined;
+  const eventType = useEntityField("events", id, "eventType");
+  const payload = useEntityField("events", id, "payload");
+  const timestamp = useEntityField("events", id, "timestamp");
 
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
     case "session_started":
-      return payload?.prompt
+      return typeof payload?.prompt === "string"
         ? <UserBubble text={payload.prompt} timestamp={timestamp} />
         : <SystemBadge text="Session started" />;
 
@@ -115,7 +135,7 @@ export function SessionMessage({ id }: { id: string }) {
       return payload ? renderSessionOutput(payload, timestamp) : null;
 
     case "message_sent":
-      return <UserBubble text={payload?.text ?? ""} timestamp={timestamp} />;
+      return <UserBubble text={str(payload?.text)} timestamp={timestamp} />;
 
     case "session_terminated": {
       const isManualStop = payload?.reason !== "bridge_complete";

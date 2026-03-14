@@ -11,6 +11,10 @@ const config: CodegenConfig = {
         // Keeps @trace/gql "no runtime code": enums become string unions instead
         // of emitted JS enums.
         enumsAsTypes: true,
+        scalars: {
+          DateTime: "string",
+          JSON: "Record<string, unknown>",
+        },
       },
     },
     // Server resolver types — used by @trace/server
@@ -20,6 +24,10 @@ const config: CodegenConfig = {
         useIndexSignature: true,
         contextType: "../context#Context",
         enumsAsTypes: true,
+        scalars: {
+          DateTime: "string",
+          JSON: "Record<string, unknown>",
+        },
       },
     },
     // Client hooks and document nodes — used by @trace/web
@@ -28,6 +36,10 @@ const config: CodegenConfig = {
       documents: ["../../apps/web/src/**/*.tsx", "../../apps/web/src/**/*.ts"],
       config: {
         enumsAsTypes: true,
+        scalars: {
+          DateTime: "string",
+          JSON: "Record<string, unknown>",
+        },
       },
     },
   },

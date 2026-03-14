@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
+import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
@@ -61,8 +62,8 @@ export function useSessionEvents(sessionId: string) {
       .toPromise();
 
     if (result.data?.events) {
-      const events = result.data.events as Array<{ id: string }>;
-      useEntityStore.getState().upsertMany("events", events as Array<{ id: string } & any>);
+      const events = result.data.events as Array<Event & { id: string }>;
+      useEntityStore.getState().upsertMany("events", events);
       const ids = events.map((e) => e.id);
       seenRef.current = new Set(ids);
       setEventIds(ids);
@@ -85,10 +86,10 @@ export function useSessionEvents(sessionId: string) {
       })
       .subscribe((result) => {
         if (result.data?.sessionEvents) {
-          const event = result.data.sessionEvents as { id: string };
+          const event = result.data.sessionEvents as Event;
           if (seenRef.current.has(event.id)) return;
           seenRef.current.add(event.id);
-          useEntityStore.getState().upsert("events", event.id, event as any);
+          useEntityStore.getState().upsert("events", event.id, event);
           setEventIds((prev) => [...prev, event.id]);
         }
       });

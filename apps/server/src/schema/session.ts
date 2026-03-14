@@ -1,4 +1,3 @@
-import type { Prisma } from "@prisma/client";
 import type { Context } from "../context.js";
 import type {
   CodingTool,
@@ -6,29 +5,18 @@ import type {
   SessionStatus,
   StartSessionInput,
 } from "@trace/gql";
-import { prisma } from "../lib/db.js";
 import { sessionService } from "../services/session.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
 export const sessionQueries = {
-  sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }, _ctx: Context) => {
-    const where: Prisma.SessionWhereInput = { organizationId: args.organizationId };
-    if (args.filters?.status) where.status = args.filters.status;
-    if (args.filters?.tool) where.tool = args.filters.tool;
-    if (args.filters?.repoId) where.repoId = args.filters.repoId;
-    if (args.filters?.channelId) where.channelId = args.filters.channelId;
-    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: { createdBy: true, repo: true, channel: true } });
+  sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }) => {
+    return sessionService.list(args.organizationId, args.filters ?? undefined);
   },
-  session: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return prisma.session.findUnique({
-      where: { id: args.id },
-      include: { createdBy: true, repo: true, channel: true },
-    });
+  session: (_: unknown, args: { id: string }) => {
+    return sessionService.get(args.id);
   },
   mySessions: (_: unknown, args: { organizationId: string; status?: SessionStatus }, ctx: Context) => {
-    const where: Prisma.SessionWhereInput = { organizationId: args.organizationId, createdById: ctx.userId };
-    if (args.status) where.status = args.status;
-    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: { createdBy: true, repo: true, channel: true } });
+    return sessionService.listByUser(args.organizationId, ctx.userId, args.status ?? undefined);
   },
 };
 

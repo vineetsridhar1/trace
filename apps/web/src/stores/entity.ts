@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type {
   Organization,
   User,
@@ -10,6 +11,11 @@ import type {
   Event,
 } from "@trace/gql";
 
+/** Client-side session entity with extra fields not in the GQL schema */
+export type SessionEntity = Session & {
+  _lastEventPreview?: string;
+};
+
 /** Entity types that the store manages, keyed by ID */
 export type EntityTableMap = {
   organizations: Organization;
@@ -17,7 +23,7 @@ export type EntityTableMap = {
   repos: Repo;
   projects: Project;
   channels: Channel;
-  sessions: Session;
+  sessions: SessionEntity;
   tickets: Ticket;
   events: Event;
 };
@@ -92,4 +98,22 @@ export function useEntityField<T extends EntityType, F extends keyof EntityTable
     const entity = state[type][id] as EntityTableMap[T] | undefined;
     return entity?.[field];
   });
+}
+
+/** Subscribe to sorted IDs of an entity table, optionally filtered.
+ *  Uses shallow comparison to avoid spurious re-renders. */
+export function useEntityIds<T extends EntityType>(
+  type: T,
+  filter?: (entity: EntityTableMap[T]) => boolean,
+  sort?: (a: EntityTableMap[T], b: EntityTableMap[T]) => number,
+): string[] {
+  return useEntityStore(
+    useShallow((state) => {
+      const table = state[type] as Record<string, EntityTableMap[T]>;
+      let entries = Object.entries(table);
+      if (filter) entries = entries.filter(([, e]) => filter(e));
+      if (sort) entries.sort(([, a], [, b]) => sort(a, b));
+      return entries.map(([id]) => id);
+    }),
+  );
 }

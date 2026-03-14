@@ -6,6 +6,7 @@ import { ChannelView } from "./components/channel/ChannelView";
 import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
+import { useOrgEvents } from "./hooks/useOrgEvents";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -27,6 +28,12 @@ export function App() {
   if (!user) {
     return <LoginPage />;
   }
+
+  return <AuthenticatedApp activeChannelId={activeChannelId} />;
+}
+
+function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
+  useOrgEvents();
 
   return (
     <TooltipProvider>

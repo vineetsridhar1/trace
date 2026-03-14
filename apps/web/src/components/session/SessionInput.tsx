@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import { gql } from "@urql/core";
+import type { CodingTool } from "@trace/gql";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import {
@@ -39,7 +40,7 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
 
   const handleToolChange = useCallback(async (newTool: string | null) => {
     if (!newTool) return;
-    useEntityStore.getState().patch("sessions", sessionId, { tool: newTool as any });
+    useEntityStore.getState().patch("sessions", sessionId, { tool: newTool as CodingTool });
     await client.mutation(UPDATE_SESSION_TOOL_MUTATION, { sessionId, tool: newTool }).toPromise();
   }, [sessionId]);
 

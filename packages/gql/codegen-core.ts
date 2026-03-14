@@ -7,6 +7,10 @@ const config: CodegenConfig = {
       plugins: ["typescript"],
       config: {
         enumsAsTypes: true,
+        scalars: {
+          DateTime: "string",
+          JSON: "Record<string, unknown>",
+        },
       },
     },
     "src/generated/resolvers.ts": {
@@ -15,6 +19,10 @@ const config: CodegenConfig = {
         useIndexSignature: true,
         contextType: "../context#Context",
         enumsAsTypes: true,
+        scalars: {
+          DateTime: "string",
+          JSON: "Record<string, unknown>",
+        },
       },
     },
   },

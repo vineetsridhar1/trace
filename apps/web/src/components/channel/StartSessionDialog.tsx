@@ -17,7 +17,6 @@ import {
 } from "../ui/select";
 import { Button } from "../ui/button";
 import { useAuthStore } from "../../stores/auth";
-import { useEntityStore } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 
@@ -25,27 +24,11 @@ const START_SESSION_MUTATION = gql`
   mutation StartSession($input: StartSessionInput!) {
     startSession(input: $input) {
       id
-      name
-      status
-      tool
-      hosting
-      createdBy {
-        id
-        name
-        avatarUrl
-      }
-      createdAt
     }
   }
 `;
 
-export function StartSessionDialog({
-  channelId,
-  onCreated,
-}: {
-  channelId: string;
-  onCreated: () => void;
-}) {
+export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [tool, setTool] = useState<string>("claude_code");
@@ -70,11 +53,8 @@ export function StartSessionDialog({
         .toPromise();
 
       if (result.data?.startSession) {
-        const session = result.data.startSession;
-        useEntityStore.getState().upsert("sessions", session.id, session);
         setPrompt("");
         setOpen(false);
-        onCreated();
       }
     } finally {
       setCreating(false);

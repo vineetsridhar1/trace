@@ -15,13 +15,13 @@ export function SessionHeader({
   onStop: () => void;
 }) {
   const name = useEntityField("sessions", sessionId, "name");
-  const status = useEntityField("sessions", sessionId, "status") as string | undefined;
+  const status = useEntityField("sessions", sessionId, "status");
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
 
   const isActive = status === "active";
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+    <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
       <button
         onClick={() => setActiveSessionId(null)}
         className="text-muted-foreground hover:text-foreground transition-colors"
@@ -29,11 +29,13 @@ export function SessionHeader({
         <ArrowLeft size={16} />
       </button>
 
-      <h2 className="text-sm font-semibold text-foreground truncate flex-1">
-        {name ?? "Session"}
-      </h2>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-sm font-semibold text-foreground truncate">
+          {name ?? "Session"}
+        </h2>
+      </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <span className={`flex items-center gap-1.5 text-xs ${statusColor[status ?? "active"]}`}>
           <Circle size={6} className="fill-current" />
           {statusLabel[status ?? "active"]}

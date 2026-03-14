@@ -280,6 +280,41 @@
   overflow-y: auto;
 }
 
+/* Read/Glob group */
+.read-group-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--th-muted);
+  transition: transform 0.2s ease;
+}
+
+.read-group-chevron.open {
+  transform: rotate(180deg);
+}
+
+.read-group-body {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.24s ease, opacity 0.24s ease;
+}
+
+.read-group-body.open {
+  max-height: 520px;
+  opacity: 1;
+  overflow-y: auto;
+}
+
+.read-group-subline {
+  display: flex;
+  align-items: center;
+  padding: 2px 8px 2px 20px;
+  font-family: Menlo, Monaco, monospace;
+  font-size: 11px;
+}
+
 .subagent-result-pre {
   margin-top: 6px;
   max-height: 15rem;

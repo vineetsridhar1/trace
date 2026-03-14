@@ -17,7 +17,10 @@ export const eventQueries = {
 
 export const eventSubscriptions = {
   orgEvents: {
-    subscribe: (_: unknown, args: { organizationId: string }) => {
+    subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+      if (ctx.organizationId !== args.organizationId) {
+        throw new Error("Not authorized for this organization");
+      }
       return pubsub.asyncIterator(topics.orgEvents(args.organizationId));
     },
   },
