@@ -428,6 +428,7 @@ export type SessionEndpoints = {
 };
 
 export type SessionFilters = {
+  channelId?: InputMaybe<Scalars['ID']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
   status?: InputMaybe<SessionStatus>;
   tool?: InputMaybe<CodingTool>;

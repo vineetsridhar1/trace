@@ -1,0 +1,63 @@
+import { ArrowLeft, Play, Square, Circle } from "lucide-react";
+import { useEntityField } from "../../stores/entity";
+import { useUIStore } from "../../stores/ui";
+import { statusColor, statusLabel } from "./sessionStatus";
+
+export function SessionHeader({
+  sessionId,
+  running,
+  onRun,
+  onStop,
+}: {
+  sessionId: string;
+  running: boolean;
+  onRun: () => void;
+  onStop: () => void;
+}) {
+  const name = useEntityField("sessions", sessionId, "name");
+  const status = useEntityField("sessions", sessionId, "status") as string | undefined;
+  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+
+  const isActive = status === "active";
+
+  return (
+    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+      <button
+        onClick={() => setActiveSessionId(null)}
+        className="text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft size={16} />
+      </button>
+
+      <h2 className="text-sm font-semibold text-foreground truncate flex-1">
+        {name ?? "Session"}
+      </h2>
+
+      <div className="flex items-center gap-2">
+        <span className={`flex items-center gap-1.5 text-xs ${statusColor[status ?? "active"]}`}>
+          <Circle size={6} className="fill-current" />
+          {statusLabel[status ?? "active"]}
+        </span>
+
+        {isActive ? (
+          <button
+            onClick={onStop}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
+          >
+            <Square size={12} />
+            Stop
+          </button>
+        ) : (
+          <button
+            onClick={onRun}
+            disabled={running}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
+          >
+            <Play size={12} />
+            Run
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

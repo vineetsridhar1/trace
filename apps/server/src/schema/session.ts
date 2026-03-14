@@ -16,6 +16,7 @@ export const sessionQueries = {
     if (args.filters?.status) where.status = args.filters.status;
     if (args.filters?.tool) where.tool = args.filters.tool;
     if (args.filters?.repoId) where.repoId = args.filters.repoId;
+    if (args.filters?.channelId) where.channelId = args.filters.channelId;
     return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: { createdBy: true, repo: true, channel: true } });
   },
   session: (_: unknown, args: { id: string }, _ctx: Context) => {
@@ -39,34 +40,26 @@ export const sessionMutations = {
       createdById: ctx.userId,
     });
   },
-  pauseSession: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return sessionService.pause(args.id);
+  pauseSession: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.pause(args.id, ctx.actorType, ctx.userId);
   },
-  resumeSession: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return sessionService.resume(args.id);
+  resumeSession: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.resume(args.id, ctx.actorType, ctx.userId);
   },
   runSession: (_: unknown, args: { id: string; prompt?: string | null }, _ctx: Context) => {
     return sessionService.run(args.id, args.prompt);
   },
-  terminateSession: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return sessionService.terminate(args.id);
+  terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
   },
-  updateSessionTool: (_: unknown, args: { sessionId: string; tool: CodingTool }, _ctx: Context) => {
-    return prisma.session.update({
-      where: { id: args.sessionId },
-      data: { tool: args.tool },
-      include: { createdBy: true, repo: true, channel: true },
-    });
+  updateSessionTool: (_: unknown, args: { sessionId: string; tool: CodingTool }, ctx: Context) => {
+    return sessionService.updateTool(args.sessionId, args.tool, ctx.actorType, ctx.userId);
   },
   sendSessionMessage: (_: unknown, args: { sessionId: string; text: string }, ctx: Context) => {
     return sessionService.sendMessage(args.sessionId, args.text, ctx.actorType, ctx.userId);
   },
-  linkSessionToTicket: (_: unknown, args: { sessionId: string; ticketId: string }, _ctx: Context) => {
-    return prisma.session.update({
-      where: { id: args.sessionId },
-      data: { tickets: { create: { ticketId: args.ticketId } } },
-      include: { createdBy: true, repo: true, channel: true },
-    });
+  linkSessionToTicket: (_: unknown, args: { sessionId: string; ticketId: string }, ctx: Context) => {
+    return sessionService.linkToTicket(args.sessionId, args.ticketId, ctx.actorType, ctx.userId);
   },
 };
 

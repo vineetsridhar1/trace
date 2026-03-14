@@ -99,7 +99,7 @@ export function StartSessionDialog({
               <label className="mb-1.5 block text-sm text-muted-foreground">
                 Coding tool
               </label>
-              <Select value={tool} onValueChange={setTool}>
+              <Select value={tool} onValueChange={(v) => { if (v) setTool(v); }}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

@@ -93,32 +93,39 @@ export class SessionService {
       }
     }
 
-    // Update status to active
-    await prisma.session.update({
+    // Update status to active and return with includes
+    return prisma.session.update({
       where: { id },
       data: { status: "active" },
-    });
-
-    return prisma.session.findUniqueOrThrow({
-      where: { id },
       include: SESSION_INCLUDE,
     });
   }
 
-  async pause(_id: string) {
-    throw new Error("Not implemented");
+  async pause(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    return this.transition(id, "pause", "paused", "session_paused", actorType, actorId);
   }
 
-  async resume(_id: string) {
-    throw new Error("Not implemented");
+  async resume(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    return this.transition(id, "resume", "active", "session_resumed", actorType, actorId);
   }
 
-  async terminate(id: string) {
-    sessionRouter.send(id, { type: "terminate", sessionId: id });
+  async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    return this.transition(id, "terminate", "completed", "session_terminated", actorType, actorId);
+  }
+
+  private async transition(
+    id: string,
+    command: "pause" | "resume" | "terminate",
+    newStatus: string,
+    eventType: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    sessionRouter.send(id, { type: command, sessionId: id });
 
     const session = await prisma.session.update({
       where: { id },
-      data: { status: "completed" },
+      data: { status: newStatus as any },
       include: SESSION_INCLUDE,
     });
 
@@ -126,19 +133,76 @@ export class SessionService {
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: id,
-      eventType: "session_terminated",
+      eventType: eventType as any,
       payload: { sessionId: id },
-      actorType: "system",
-      actorId: "system",
+      actorType,
+      actorId,
     });
 
     return session;
   }
 
-  async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string) {
+  async updateTool(sessionId: string, tool: string, actorType: ActorType, actorId: string) {
     const session = await prisma.session.update({
       where: { id: sessionId },
-      data: { updatedAt: new Date() },
+      data: { tool: tool as any },
+      include: SESSION_INCLUDE,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: { type: "tool_changed", tool },
+      actorType,
+      actorId,
+    });
+
+    return session;
+  }
+
+  async linkToTicket(sessionId: string, ticketId: string, actorType: ActorType, actorId: string) {
+    const session = await prisma.session.update({
+      where: { id: sessionId },
+      data: { tickets: { create: { ticketId } } },
+      include: SESSION_INCLUDE,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "entity_linked",
+      payload: { sessionId, ticketId },
+      actorType,
+      actorId,
+    });
+
+    return session;
+  }
+
+  async complete(id: string) {
+    const session = await prisma.session.update({
+      where: { id },
+      data: { status: "completed" },
+      select: { organizationId: true },
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: id,
+      eventType: "session_terminated",
+      payload: { sessionId: id, reason: "bridge_complete" },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
       select: { organizationId: true },
     });
 

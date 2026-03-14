@@ -81,7 +81,8 @@ function renderSessionOutput(payload: Record<string, any>, ts: string) {
 
   if (type === "result") {
     if ("exitCode" in (payload ?? {})) return null;
-    return <CompletionRow timestamp={ts} result={payload?.result} />;
+    // Don't re-render the result text — it was already shown by the assistant event
+    return <CompletionRow timestamp={ts} />;
   }
 
   if (type === "error") {
@@ -116,8 +117,10 @@ export function SessionMessage({ id }: { id: string }) {
     case "message_sent":
       return <UserBubble text={payload?.text ?? ""} timestamp={timestamp} />;
 
-    case "session_terminated":
-      return <SystemBadge text="Session terminated" />;
+    case "session_terminated": {
+      const isManualStop = payload?.reason !== "bridge_complete";
+      return isManualStop ? <SystemBadge text="Session terminated" /> : null;
+    }
 
     default:
       return null;

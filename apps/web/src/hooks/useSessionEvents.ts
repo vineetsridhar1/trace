@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
 import { client } from "../lib/urql";
 import { useEntityStore } from "../stores/entity";
@@ -44,10 +44,9 @@ const SESSION_EVENTS_SUBSCRIPTION = gql`
 
 export function useSessionEvents(sessionId: string) {
   const [eventIds, setEventIds] = useState<string[]>([]);
+  const seenRef = useRef(new Set<string>());
   const [loading, setLoading] = useState(true);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const upsert = useEntityStore((s) => s.upsert);
-  const upsertMany = useEntityStore((s) => s.upsertMany);
 
   // Fetch existing events
   const fetchEvents = useCallback(async () => {
@@ -63,11 +62,13 @@ export function useSessionEvents(sessionId: string) {
 
     if (result.data?.events) {
       const events = result.data.events as Array<{ id: string }>;
-      upsertMany("events", events as Array<{ id: string } & any>);
-      setEventIds(events.map((e) => e.id));
+      useEntityStore.getState().upsertMany("events", events as Array<{ id: string } & any>);
+      const ids = events.map((e) => e.id);
+      seenRef.current = new Set(ids);
+      setEventIds(ids);
     }
     setLoading(false);
-  }, [activeOrgId, sessionId, upsertMany]);
+  }, [activeOrgId, sessionId]);
 
   useEffect(() => {
     fetchEvents();
@@ -85,16 +86,15 @@ export function useSessionEvents(sessionId: string) {
       .subscribe((result) => {
         if (result.data?.sessionEvents) {
           const event = result.data.sessionEvents as { id: string };
-          upsert("events", event.id, event as any);
-          setEventIds((prev) => {
-            if (prev.includes(event.id)) return prev;
-            return [...prev, event.id];
-          });
+          if (seenRef.current.has(event.id)) return;
+          seenRef.current.add(event.id);
+          useEntityStore.getState().upsert("events", event.id, event as any);
+          setEventIds((prev) => [...prev, event.id]);
         }
       });
 
     return () => subscription.unsubscribe();
-  }, [activeOrgId, sessionId, upsert]);
+  }, [activeOrgId, sessionId]);
 
   return { eventIds, loading };
 }

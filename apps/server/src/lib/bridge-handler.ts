@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "./db.js";
 import { sessionRouter } from "./session-router.js";
 import { eventService } from "../services/event.js";
+import { sessionService } from "../services/session.js";
 
 export function handleBridgeConnection(ws: WebSocket) {
   const bridgeId = randomUUID();
@@ -56,10 +57,7 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
-          await prisma.session.update({
-            where: { id: msg.sessionId },
-            data: { status: "completed" },
-          });
+          await sessionService.complete(msg.sessionId);
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         sessionRouter.bindSession(msg.sessionId, bridgeId);

@@ -35,13 +35,27 @@ export class ChannelService {
   }
 
   async sendMessage(
-    _channelId: string,
-    _text: string,
-    _parentId: string | null,
-    _actorType: ActorType,
-    _actorId: string,
+    channelId: string,
+    text: string,
+    parentId: string | null,
+    actorType: ActorType,
+    actorId: string,
   ) {
-    throw new Error("Not implemented");
+    const channel = await prisma.channel.findUniqueOrThrow({
+      where: { id: channelId },
+      select: { organizationId: true },
+    });
+
+    return eventService.create({
+      organizationId: channel.organizationId,
+      scopeType: "channel",
+      scopeId: channelId,
+      eventType: "message_sent",
+      payload: { text },
+      actorType,
+      actorId,
+      parentId: parentId ?? undefined,
+    });
   }
 }
 

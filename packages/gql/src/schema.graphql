@@ -245,6 +245,7 @@ input SessionFilters {
   status: SessionStatus
   tool: CodingTool
   repoId: ID
+  channelId: ID
 }
 
 input CreateTicketInput {
