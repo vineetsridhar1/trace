@@ -59,6 +59,7 @@ export type ChannelType =
 
 export type CodingTool =
   | 'claude_code'
+  | 'codex'
   | 'cursor'
   | 'custom';
 
@@ -142,10 +143,12 @@ export type Mutation = {
   linkSessionToTicket: Session;
   pauseSession: Session;
   resumeSession: Session;
+  runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
   startSession: Session;
   terminateSession: Session;
+  updateSessionTool: Session;
   updateTicket: Ticket;
 };
 
@@ -199,6 +202,12 @@ export type MutationResumeSessionArgs = {
 };
 
 
+export type MutationRunSessionArgs = {
+  id: Scalars['ID']['input'];
+  prompt?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type MutationSendMessageArgs = {
   channelId: Scalars['ID']['input'];
   parentId?: InputMaybe<Scalars['ID']['input']>;
@@ -219,6 +228,12 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateSessionToolArgs = {
+  sessionId: Scalars['ID']['input'];
+  tool: CodingTool;
 };
 
 
@@ -397,6 +412,7 @@ export type Session = {
   status: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
+  updatedAt: Scalars['DateTime']['output'];
 };
 
 export type SessionConnection = {
@@ -422,6 +438,7 @@ export type SessionStatus =
   | 'completed'
   | 'failed'
   | 'paused'
+  | 'pending'
   | 'unreachable';
 
 export type StartSessionInput = {
@@ -747,10 +764,12 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
   pauseSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationPauseSessionArgs, 'id'>>;
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
+  runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
+  updateSessionTool?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionToolArgs, 'sessionId' | 'tool'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
 }>;
 
@@ -831,6 +850,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   status?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType>;
   tool?: Resolver<ResolversTypes['CodingTool'], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 

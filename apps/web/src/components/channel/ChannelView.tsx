@@ -2,9 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import { Hash, Circle } from "lucide-react";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
+import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { StartSessionDialog } from "./StartSessionDialog";
+import { SessionDetailView } from "../session/SessionDetailView";
 
 const SESSIONS_QUERY = gql`
   query Sessions($organizationId: ID!, $filters: SessionFilters) {
@@ -23,11 +25,13 @@ const SESSIONS_QUERY = gql`
         id
       }
       createdAt
+      updatedAt
     }
   }
 `;
 
 const statusColor: Record<string, string> = {
+  pending: "text-muted-foreground",
   active: "text-green-400",
   paused: "text-yellow-400",
   completed: "text-muted-foreground",
@@ -36,6 +40,7 @@ const statusColor: Record<string, string> = {
 };
 
 const statusLabel: Record<string, string> = {
+  pending: "Pending",
   active: "Active",
   paused: "Paused",
   completed: "Completed",
@@ -57,13 +62,17 @@ function timeAgo(date: string): string {
 function SessionRow({ id }: { id: string }) {
   const name = useEntityField("sessions", id, "name");
   const status = useEntityField("sessions", id, "status") as string | undefined;
-  const createdAt = useEntityField("sessions", id, "createdAt") as string | undefined;
+  const updatedAt = useEntityField("sessions", id, "updatedAt") as string | undefined;
   const createdBy = useEntityField("sessions", id, "createdBy") as
     | { name?: string; avatarUrl?: string }
     | undefined;
+  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
 
   return (
-    <tr className="group border-b border-border last:border-b-0 transition-colors hover:bg-surface-elevated/50">
+    <tr
+      className="group border-b border-border last:border-b-0 transition-colors hover:bg-surface-elevated/50 cursor-pointer"
+      onClick={() => setActiveSessionId(id)}
+    >
       <td className="py-2.5 px-3">
         <div className="flex items-center gap-2">
           <Circle size={8} className={`shrink-0 fill-current ${statusColor[status ?? "active"]}`} />
@@ -89,7 +98,7 @@ function SessionRow({ id }: { id: string }) {
       </td>
       <td className="py-2.5 px-3 text-right">
         <span className="text-xs text-muted-foreground">
-          {createdAt ? timeAgo(createdAt) : ""}
+          {updatedAt ? timeAgo(updatedAt) : ""}
         </span>
       </td>
     </tr>
@@ -102,6 +111,7 @@ export function ChannelView({ channelId }: { channelId: string }) {
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [sessionIds, setSessionIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const activeSessionId = useUIStore((s) => s.activeSessionId);
 
   const fetchSessions = useCallback(async () => {
     if (!activeOrgId) return;
@@ -124,6 +134,10 @@ export function ChannelView({ channelId }: { channelId: string }) {
     setLoading(true);
     fetchSessions();
   }, [fetchSessions]);
+
+  if (activeSessionId) {
+    return <SessionDetailView sessionId={activeSessionId} />;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -159,7 +173,7 @@ export function ChannelView({ channelId }: { channelId: string }) {
                 <th className="py-2 px-3 text-xs font-medium text-muted-foreground">Status</th>
                 <th className="py-2 px-3 text-xs font-medium text-muted-foreground">Created by</th>
                 <th className="py-2 px-3 text-xs font-medium text-muted-foreground text-right">
-                  Created
+                  Last active
                 </th>
               </tr>
             </thead>

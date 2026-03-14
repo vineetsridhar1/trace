@@ -56,6 +56,7 @@ export type ChannelType =
 
 export type CodingTool =
   | 'claude_code'
+  | 'codex'
   | 'cursor'
   | 'custom';
 
@@ -139,10 +140,12 @@ export type Mutation = {
   linkSessionToTicket: Session;
   pauseSession: Session;
   resumeSession: Session;
+  runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
   startSession: Session;
   terminateSession: Session;
+  updateSessionTool: Session;
   updateTicket: Ticket;
 };
 
@@ -196,6 +199,12 @@ export type MutationResumeSessionArgs = {
 };
 
 
+export type MutationRunSessionArgs = {
+  id: Scalars['ID']['input'];
+  prompt?: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type MutationSendMessageArgs = {
   channelId: Scalars['ID']['input'];
   parentId?: InputMaybe<Scalars['ID']['input']>;
@@ -216,6 +225,12 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateSessionToolArgs = {
+  sessionId: Scalars['ID']['input'];
+  tool: CodingTool;
 };
 
 
@@ -394,6 +409,7 @@ export type Session = {
   status: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
+  updatedAt: Scalars['DateTime']['output'];
 };
 
 export type SessionConnection = {
@@ -419,6 +435,7 @@ export type SessionStatus =
   | 'completed'
   | 'failed'
   | 'paused'
+  | 'pending'
   | 'unreachable';
 
 export type StartSessionInput = {

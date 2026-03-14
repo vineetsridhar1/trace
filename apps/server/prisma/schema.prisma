@@ -21,6 +21,7 @@ enum ChannelType {
 }
 
 enum SessionStatus {
+  pending
   active
   paused
   completed
@@ -51,6 +52,7 @@ enum HostingMode {
 
 enum CodingTool {
   claude_code
+  codex
   cursor
   custom
 }
@@ -178,7 +180,7 @@ model ChannelProject {
 model Session {
   id             String       @id @default(uuid())
   name           String
-  status         SessionStatus @default(active)
+  status         SessionStatus @default(pending)
   tool           CodingTool
   hosting        HostingMode
   organizationId String

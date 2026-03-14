@@ -64,8 +64,19 @@ export class EventService {
     return event;
   }
 
-  async query(_organizationId: string, _opts: EventQueryOpts) {
-    throw new Error("Not implemented");
+  async query(organizationId: string, opts: EventQueryOpts) {
+    const where: Prisma.EventWhereInput = { organizationId };
+
+    if (opts.scopeType) where.scopeType = opts.scopeType;
+    if (opts.scopeId) where.scopeId = opts.scopeId;
+    if (opts.types?.length) where.eventType = { in: opts.types };
+    if (opts.after) where.timestamp = { gt: opts.after };
+
+    return prisma.event.findMany({
+      where,
+      orderBy: { timestamp: "asc" },
+      take: opts.limit ?? 200,
+    });
   }
 }
 

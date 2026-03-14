@@ -2,6 +2,7 @@ scalar DateTime
 scalar JSON
 
 enum SessionStatus {
+  pending
   active
   paused
   completed
@@ -32,6 +33,7 @@ enum HostingMode {
 
 enum CodingTool {
   claude_code
+  codex
   cursor
   custom
 }
@@ -153,6 +155,7 @@ type Session {
   endpoints: SessionEndpoints
   connection: SessionConnection
   createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type Ticket {
@@ -318,7 +321,9 @@ type Mutation {
   startSession(input: StartSessionInput!): Session!
   pauseSession(id: ID!): Session!
   resumeSession(id: ID!): Session!
+  runSession(id: ID!, prompt: String): Session!
   terminateSession(id: ID!): Session!
+  updateSessionTool(sessionId: ID!, tool: CodingTool!): Session!
   sendSessionMessage(sessionId: ID!, text: String!): Event!
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!

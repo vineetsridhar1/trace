@@ -31,12 +31,12 @@ export function App() {
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
-        <div className="flex flex-1 flex-col">
-          <header className="flex h-12 items-center gap-2 border-b border-border px-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
             <h1 className="text-lg font-semibold text-foreground">Trace</h1>
           </header>
-          <main className="flex-1 overflow-hidden">
+          <main className="min-h-0 flex-1">
             {activeChannelId ? (
               <ChannelView channelId={activeChannelId} />
             ) : (

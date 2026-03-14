@@ -9,6 +9,13 @@ export const resolvers = {
   DateTime: DateTimeScalar,
   JSON: JSONScalar,
 
+  Event: {
+    actor: (event: { actorType: string; actorId: string }) => ({
+      type: event.actorType,
+      id: event.actorId,
+    }),
+  },
+
   Query: {
     ...organizationQueries,
     ...channelQueries,

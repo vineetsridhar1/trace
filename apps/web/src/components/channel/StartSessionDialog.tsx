@@ -8,6 +8,13 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "../ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Button } from "../ui/button";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityStore } from "../../stores/entity";
@@ -41,6 +48,7 @@ export function StartSessionDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [tool, setTool] = useState<string>("claude_code");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
 
@@ -53,7 +61,7 @@ export function StartSessionDialog({
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
-            tool: "claude_code",
+            tool,
             hosting: "cloud",
             channelId,
             prompt: prompt.trim(),
@@ -86,7 +94,23 @@ export function StartSessionDialog({
           <DialogHeader>
             <DialogTitle>Start Session</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
+          <div className="py-4 space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm text-muted-foreground">
+                Coding tool
+              </label>
+              <Select value={tool} onValueChange={setTool}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude_code">Claude Code</SelectItem>
+                  <SelectItem value="codex">Codex</SelectItem>
+                  <SelectItem value="cursor">Cursor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
             <label className="mb-1.5 block text-sm text-muted-foreground">
               What should the agent work on?
             </label>
@@ -106,6 +130,7 @@ export function StartSessionDialog({
             <p className="mt-1.5 text-xs text-muted-foreground">
               Press {navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to submit
             </p>
+            </div>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={!prompt.trim() || creating}>

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { Context } from "../context.js";
 import type {
+  CodingTool,
   SessionFilters,
   SessionStatus,
   StartSessionInput,
@@ -15,7 +16,7 @@ export const sessionQueries = {
     if (args.filters?.status) where.status = args.filters.status;
     if (args.filters?.tool) where.tool = args.filters.tool;
     if (args.filters?.repoId) where.repoId = args.filters.repoId;
-    return prisma.session.findMany({ where, include: { createdBy: true, repo: true, channel: true } });
+    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: { createdBy: true, repo: true, channel: true } });
   },
   session: (_: unknown, args: { id: string }, _ctx: Context) => {
     return prisma.session.findUnique({
@@ -26,7 +27,7 @@ export const sessionQueries = {
   mySessions: (_: unknown, args: { organizationId: string; status?: SessionStatus }, ctx: Context) => {
     const where: Prisma.SessionWhereInput = { organizationId: args.organizationId, createdById: ctx.userId };
     if (args.status) where.status = args.status;
-    return prisma.session.findMany({ where, include: { createdBy: true, repo: true, channel: true } });
+    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: { createdBy: true, repo: true, channel: true } });
   },
 };
 
@@ -44,8 +45,18 @@ export const sessionMutations = {
   resumeSession: (_: unknown, args: { id: string }, _ctx: Context) => {
     return sessionService.resume(args.id);
   },
+  runSession: (_: unknown, args: { id: string; prompt?: string | null }, _ctx: Context) => {
+    return sessionService.run(args.id, args.prompt);
+  },
   terminateSession: (_: unknown, args: { id: string }, _ctx: Context) => {
     return sessionService.terminate(args.id);
+  },
+  updateSessionTool: (_: unknown, args: { sessionId: string; tool: CodingTool }, _ctx: Context) => {
+    return prisma.session.update({
+      where: { id: args.sessionId },
+      data: { tool: args.tool },
+      include: { createdBy: true, repo: true, channel: true },
+    });
   },
   sendSessionMessage: (_: unknown, args: { sessionId: string; text: string }, ctx: Context) => {
     return sessionService.sendMessage(args.sessionId, args.text, ctx.actorType, ctx.userId);
