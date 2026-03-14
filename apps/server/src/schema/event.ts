@@ -16,6 +16,11 @@ export const eventQueries = {
 };
 
 export const eventSubscriptions = {
+  orgEvents: {
+    subscribe: (_: unknown, args: { organizationId: string }) => {
+      return pubsub.asyncIterator(topics.orgEvents(args.organizationId));
+    },
+  },
   userNotifications: {
     subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
       return pubsub.asyncIterator(topics.userNotifications(args.organizationId, ctx.userId));

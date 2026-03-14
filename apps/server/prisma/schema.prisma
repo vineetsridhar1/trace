@@ -81,6 +81,7 @@ enum EventType {
   ticket_updated
   ticket_commented
   entity_linked
+  channel_created
   member_joined
   member_left
 }

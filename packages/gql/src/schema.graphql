@@ -87,6 +87,7 @@ enum EventType {
   ticket_updated
   ticket_commented
   entity_linked
+  channel_created
   member_joined
   member_left
 }
@@ -151,6 +152,7 @@ type Session {
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
   connection: SessionConnection
+  createdAt: DateTime!
 }
 
 type Ticket {
@@ -330,6 +332,7 @@ type Mutation {
 # --- Subscriptions ---
 
 type Subscription {
+  orgEvents(organizationId: ID!, types: [String!]): Event!
   channelEvents(channelId: ID!, organizationId: ID!, types: [String!]): Event!
   sessionEvents(sessionId: ID!, organizationId: ID!): Event!
   ticketEvents(ticketId: ID!, organizationId: ID!): Event!

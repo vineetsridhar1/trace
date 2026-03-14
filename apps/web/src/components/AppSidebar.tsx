@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { Channel } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore } from "../stores/entity";
+import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { gql } from "@urql/core";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -290,7 +291,8 @@ export function AppSidebar() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const channels = useEntityStore((s) => s.channels);
   const upsertMany = useEntityStore((s) => s.upsertMany);
-  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const activeChannelId = useUIStore((s) => s.activeChannelId);
+  const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const [channelIds, setChannelIds] = useState<string[]>([]);
   const [peeking, setPeeking] = useState(false);
   const { state } = useSidebar();

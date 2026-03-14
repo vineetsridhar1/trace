@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useAuthStore } from "./stores/auth";
+import { useUIStore } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
+import { ChannelView } from "./components/channel/ChannelView";
 import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 
@@ -8,6 +10,7 @@ export function App() {
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
   const fetchMe = useAuthStore((s) => s.fetchMe);
+  const activeChannelId = useUIStore((s) => s.activeChannelId);
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
@@ -33,8 +36,16 @@ export function App() {
             <SidebarTrigger />
             <h1 className="text-lg font-semibold text-foreground">Trace</h1>
           </header>
-          <main className="flex-1 p-4">
-            <h2 className="text-foreground">Welcome, {user.name}</h2>
+          <main className="flex-1 overflow-hidden">
+            {activeChannelId ? (
+              <ChannelView channelId={activeChannelId} />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-muted-foreground">
+                  Select a channel to get started
+                </p>
+              </div>
+            )}
           </main>
         </div>
       </SidebarProvider>

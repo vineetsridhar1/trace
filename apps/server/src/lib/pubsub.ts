@@ -68,6 +68,7 @@ export const topics = {
   sessionEvents: (sessionId: string) => `session:${sessionId}:events`,
   ticketEvents: (ticketId: string) => `ticket:${ticketId}:events`,
   userNotifications: (orgId: string, userId: string) => `org:${orgId}:user:${userId}:notifications`,
+  orgEvents: (orgId: string) => `org:${orgId}:events`,
   sessionStatus: (sessionId: string) => `session:${sessionId}:status`,
   sessionPorts: (sessionId: string) => `session:${sessionId}:ports`,
 } as const;
