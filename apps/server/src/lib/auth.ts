@@ -15,7 +15,11 @@ export function parseCookieToken(cookieHeader?: string): string | undefined {
 export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
 
-  const token = req.cookies?.trace_token;
+  // Accept token from Authorization header, cookie, or x-user-id fallback
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : req.cookies?.trace_token;
   if (token) {
     try {
       const payload = jwt.verify(token, JWT_SECRET) as { userId: string };

@@ -1,5 +1,6 @@
 import { createClient, fetchExchange, subscriptionExchange } from "@urql/core";
 import { createClient as createWSClient } from "graphql-ws";
+import { getAuthHeaders } from "../stores/auth";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const wsBase = API_URL
@@ -8,11 +9,18 @@ const wsBase = API_URL
 
 const wsClient = createWSClient({
   url: `${wsBase}/ws`,
+  connectionParams: () => {
+    const token = localStorage.getItem("trace_token");
+    return token ? { token } : {};
+  },
 });
 
 export const client = createClient({
   url: `${API_URL}/graphql`,
-  fetchOptions: { credentials: "include" },
+  fetchOptions: () => ({
+    credentials: "include" as const,
+    headers: getAuthHeaders(),
+  }),
   exchanges: [
     fetchExchange,
     subscriptionExchange({

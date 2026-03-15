@@ -3,11 +3,22 @@ import type { Organization, User } from "@trace/gql";
 import { useEntityStore } from "./entity";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
+const TOKEN_KEY = "trace_token";
+
+function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 interface AuthState {
   user: User | null;
   activeOrgId: string | null;
   loading: boolean;
+  setToken: (token: string) => void;
   fetchMe: () => Promise<void>;
   logout: () => Promise<void>;
   setActiveOrg: (orgId: string) => void;
@@ -18,9 +29,16 @@ export const useAuthStore = create<AuthState>((set) => ({
   activeOrgId: null,
   loading: true,
 
+  setToken: (token: string) => {
+    localStorage.setItem(TOKEN_KEY, token);
+  },
+
   fetchMe: async () => {
     try {
-      const res = await fetch(`${API_URL}/auth/me`, { credentials: "include" });
+      const res = await fetch(`${API_URL}/auth/me`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
       if (!res.ok) {
         set({ user: null, activeOrgId: null, loading: false });
         return;
@@ -43,7 +61,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
-    await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
+    localStorage.removeItem(TOKEN_KEY);
+    await fetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: getAuthHeaders(),
+    });
     set({ user: null, activeOrgId: null });
   },
 
