@@ -38,7 +38,7 @@ export function CommandExecutionRow({
   timestamp,
   exitCode,
 }: CommandExecutionRowProps) {
-  const [open, setOpen] = useState(Boolean(output));
+  const [open, setOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(0);
   const prefix = getCommandPrefix(command);
