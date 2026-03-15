@@ -15,9 +15,13 @@ export class CodexAdapter implements CodingToolAdapter {
   private threadId: string | null = null;
   private resultEmitted = false;
 
-  run({ prompt, cwd, onOutput, onComplete, model }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, model, toolSessionId }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
+
+    if (toolSessionId && !this.threadId) {
+      this.threadId = toolSessionId;
+    }
 
     const args = this.threadId
       ? ["exec", "resume", this.threadId, "--json", "--dangerously-bypass-approvals-and-sandbox", prompt]
@@ -122,6 +126,10 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     // reasoning — skip (internal model thinking)
+  }
+
+  getSessionId(): string | null {
+    return this.threadId;
   }
 
   abort() {

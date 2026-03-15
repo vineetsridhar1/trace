@@ -32,8 +32,12 @@ export class BridgeClient {
     });
 
     this.ws.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      this.handleMessage(msg);
+      try {
+        const msg = JSON.parse(data.toString());
+        this.handleMessage(msg);
+      } catch (err) {
+        console.error("[bridge] failed to parse message:", err);
+      }
     });
 
     this.ws.on("close", () => {
@@ -111,14 +115,11 @@ export class BridgeClient {
         this.send({ type: "session_output", sessionId, data: output });
         // When the adapter discovers its tool session ID, report it to the server
         // so it can be passed back on retry/resume
-        if (output.type === "assistant") {
-          const ccAdapter = adapter as import("@trace/shared").ClaudeCodeAdapter;
-          if (typeof ccAdapter.getSessionId === "function") {
-            const sid = ccAdapter.getSessionId();
-            if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {
-              this.reportedToolSessionIds.set(sessionId, sid);
-              this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
-            }
+        if (adapter.getSessionId) {
+          const sid = adapter.getSessionId();
+          if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {
+            this.reportedToolSessionIds.set(sessionId, sid);
+            this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
           }
         }
       },
@@ -178,7 +179,7 @@ export class BridgeClient {
           break;
         }
 
-        createWorktree({ repoPath, repoName, sessionId, defaultBranch })
+        createWorktree({ repoPath, repoId, sessionId, defaultBranch })
           .then(({ workdir }) => {
             this.send({ type: "workspace_ready", sessionId, workdir });
           })

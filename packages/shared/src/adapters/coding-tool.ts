@@ -62,4 +62,6 @@ export interface RunOptions {
 export interface CodingToolAdapter {
   run(options: RunOptions): void;
   abort(): void;
+  /** Return the tool-specific session/thread ID for resume, if available */
+  getSessionId?(): string | null;
 }

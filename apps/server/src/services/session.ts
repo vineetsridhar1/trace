@@ -425,6 +425,24 @@ export class SessionService {
     return session;
   }
 
+  async recordOutput(sessionId: string, data: Record<string, unknown>) {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { organizationId: true },
+    });
+    if (!session) return;
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: data as unknown as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
   async complete(id: string) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({ where: { id }, select: { status: true } });
@@ -572,16 +590,20 @@ export class SessionService {
   }
 
   async workspaceReady(sessionId: string, workdir: string) {
-    // Read pendingRun before clearing it atomically
-    const prev = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
-      select: { pendingRun: true },
-    });
+    // Read and clear pendingRun atomically in a transaction to prevent double-delivery
+    const [session, pendingRun] = await prisma.$transaction(async (tx) => {
+      const prev = await tx.session.findUniqueOrThrow({
+        where: { id: sessionId },
+        select: { pendingRun: true },
+      });
 
-    const session = await prisma.session.update({
-      where: { id: sessionId },
-      data: { status: "pending", workdir, pendingRun: Prisma.DbNull },
-      include: SESSION_INCLUDE,
+      const updated = await tx.session.update({
+        where: { id: sessionId },
+        data: { status: "pending", workdir, pendingRun: Prisma.DbNull },
+        include: SESSION_INCLUDE,
+      });
+
+      return [updated, prev.pendingRun] as const;
     });
 
     await eventService.create({
@@ -595,8 +617,8 @@ export class SessionService {
     });
 
     // If a run was queued while workspace was being prepared, execute it now
-    if (prev.pendingRun) {
-      const replayResult = await this.deliverPendingCommand(sessionId, prev.pendingRun);
+    if (pendingRun) {
+      const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
       if (replayResult && replayResult !== "delivered") {
         await this.persistConnectionFailure(sessionId, session.organizationId, replayResult, "workspace_replay");
       }
@@ -1031,19 +1053,7 @@ export class SessionService {
       where: { id: sessionId },
       select: { tool: true },
     });
-
-    const allRuntimes = sessionRouter
-      .listRuntimes()
-      .filter((runtime) => runtime.supportedTools.includes(session.tool));
-
-    return allRuntimes.map((r) => ({
-      id: r.id,
-      label: r.label,
-      hostingMode: r.hostingMode,
-      supportedTools: r.supportedTools,
-      connected: r.ws.readyState === r.ws.OPEN,
-      sessionCount: r.boundSessions.size,
-    }));
+    return this.listRuntimesForTool(session.tool);
   }
 
   // ─── Helpers ───

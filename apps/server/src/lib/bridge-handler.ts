@@ -1,8 +1,6 @@
 import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
-import { prisma } from "./db.js";
 import { sessionRouter } from "./session-router.js";
-import { eventService } from "../services/event.js";
 import { sessionService } from "../services/session.js";
 
 export function handleBridgeConnection(ws: WebSocket) {
@@ -13,21 +11,6 @@ export function handleBridgeConnection(ws: WebSocket) {
   // Register with defaults until runtime_hello arrives
   sessionRouter.registerBridge(runtimeId, ws);
   registered = true;
-
-  // Cache organizationId per session to avoid a DB lookup on every output event
-  const orgIdCache = new Map<string, string>();
-
-  async function getOrgId(sessionId: string): Promise<string | null> {
-    const cached = orgIdCache.get(sessionId);
-    if (cached) return cached;
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { organizationId: true },
-    });
-    if (!session) return null;
-    orgIdCache.set(sessionId, session.organizationId);
-    return session.organizationId;
-  }
 
   // Serialize event creation per session to preserve ordering
   const queues = new Map<string, Promise<void>>();
@@ -81,21 +64,10 @@ export function handleBridgeConnection(ws: WebSocket) {
 
       if (msg.type === "session_output" && msg.sessionId) {
         const sessionId = msg.sessionId as string;
-        const data = msg.data ?? {};
+        const data = (msg.data ?? {}) as Record<string, unknown>;
 
         enqueueEvent(sessionId, async () => {
-          const orgId = await getOrgId(sessionId);
-          if (!orgId) return;
-
-          await eventService.create({
-            organizationId: orgId,
-            scopeType: "session",
-            scopeId: sessionId,
-            eventType: "session_output",
-            payload: data,
-            actorType: "system",
-            actorId: "system",
-          });
+          await sessionService.recordOutput(sessionId, data);
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {

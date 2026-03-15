@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Plus, Cloud, Monitor, Loader2 } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import { Button } from "../ui/button";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { START_SESSION_MUTATION, RUN_SESSION_MUTATION, AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
+import { START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
 import {
   type InteractionMode,
   MODE_CYCLE,
@@ -27,16 +27,8 @@ import {
   wrapPrompt,
 } from "../session/interactionModes";
 import { getModelsForTool, getDefaultModel } from "../session/modelOptions";
+import { RuntimeSelector } from "../session/RuntimeSelector";
 import { cn } from "../../lib/utils";
-
-interface RuntimeInstance {
-  id: string;
-  label: string;
-  hostingMode: string;
-  supportedTools: string[];
-  connected: boolean;
-  sessionCount: number;
-}
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [open, setOpen] = useState(false);
@@ -50,30 +42,6 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const repoIds = useEntityIds("repos");
-
-  const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
-  const [loadingRuntimes, setLoadingRuntimes] = useState(false);
-
-  // Fetch available runtimes when dialog opens or tool changes
-  useEffect(() => {
-    if (!open) return;
-    setLoadingRuntimes(true);
-    client
-      .query(AVAILABLE_RUNTIMES_QUERY, { tool })
-      .toPromise()
-      .then((result) => {
-        const fetched = (result.data?.availableRuntimes ?? []) as RuntimeInstance[];
-        setRuntimes(fetched);
-        // Auto-select if there's exactly one connected runtime
-        const connected = fetched.filter((r) => r.connected);
-        if (connected.length === 1) {
-          setRuntimeInstanceId(connected[0].id);
-        } else if (!fetched.find((r) => r.id === runtimeInstanceId)) {
-          setRuntimeInstanceId(undefined);
-        }
-      })
-      .finally(() => setLoadingRuntimes(false));
-  }, [open, tool]);
 
   const cycleMode = useCallback(() => {
     setMode((prev) => {
@@ -130,9 +98,6 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     }
   };
 
-  const connectedRuntimes = runtimes.filter((r) => r.connected);
-  const selectedRuntime = runtimes.find((r) => r.id === runtimeInstanceId);
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
@@ -183,53 +148,12 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
                 <label className="mb-1.5 block text-sm text-muted-foreground">
                   Runtime
                 </label>
-                {loadingRuntimes ? (
-                  <div className="flex h-9 items-center gap-2 rounded-md border border-border px-3">
-                    <Loader2 size={14} className="animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Loading...</span>
-                  </div>
-                ) : connectedRuntimes.length === 0 ? (
-                  <div className="flex h-9 items-center rounded-md border border-border px-3">
-                    <span className="text-sm text-muted-foreground">No runtimes available</span>
-                  </div>
-                ) : (
-                  <Select
-                    value={runtimeInstanceId ?? ""}
-                    onValueChange={(v) => { if (v) setRuntimeInstanceId(v); }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select runtime...">
-                        {selectedRuntime && (
-                          <span className="flex items-center gap-1.5">
-                            {selectedRuntime.hostingMode === "cloud" ? (
-                              <Cloud size={12} className="shrink-0 text-blue-400" />
-                            ) : (
-                              <Monitor size={12} className="shrink-0 text-green-400" />
-                            )}
-                            {selectedRuntime.label}
-                          </span>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {connectedRuntimes.map((rt) => (
-                        <SelectItem key={rt.id} value={rt.id}>
-                          <span className="flex items-center gap-1.5">
-                            {rt.hostingMode === "cloud" ? (
-                              <Cloud size={12} className="shrink-0 text-blue-400" />
-                            ) : (
-                              <Monitor size={12} className="shrink-0 text-green-400" />
-                            )}
-                            {rt.label}
-                            <span className="text-xs text-muted-foreground">
-                              ({rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""})
-                            </span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                <RuntimeSelector
+                  tool={tool}
+                  open={open}
+                  value={runtimeInstanceId}
+                  onChange={setRuntimeInstanceId}
+                />
               </div>
               {repoIds.length > 0 && (
                 <div>

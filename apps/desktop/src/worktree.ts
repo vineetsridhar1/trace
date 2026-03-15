@@ -8,17 +8,17 @@ const execFileAsync = promisify(execFile);
 
 export async function createWorktree({
   repoPath,
-  repoName,
+  repoId,
   sessionId,
   defaultBranch,
 }: {
   repoPath: string;
-  repoName: string;
+  repoId: string;
   sessionId: string;
   defaultBranch: string;
 }): Promise<{ workdir: string; branch: string }> {
   const branch = `trace/${sessionId}`;
-  const targetPath = path.join(os.homedir(), "trace", "sessions", repoName, sessionId);
+  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
 
   // If the worktree directory already exists, reuse it
   if (fs.existsSync(targetPath)) {
