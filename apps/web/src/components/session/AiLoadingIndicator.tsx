@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import Lottie from "lottie-react";
+import { Loader2 } from "lucide-react";
 
 interface AiLoadingIndicatorProps {
   model: string;
-  animationData: Record<string, unknown> | null;
 }
 
-export function AiLoadingIndicator({ model, animationData }: AiLoadingIndicatorProps) {
+export function AiLoadingIndicator({ model }: AiLoadingIndicatorProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -23,11 +22,9 @@ export function AiLoadingIndicator({ model, animationData }: AiLoadingIndicatorP
   };
 
   return (
-    <div className="mb-2 flex items-center justify-center gap-2">
-      {animationData ? (
-        <Lottie animationData={animationData} loop className="h-6 w-6" />
-      ) : null}
-      <span className="text-xs text-muted-foreground">
+    <div className="mt-2 flex h-7 items-center gap-1.5">
+      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+      <span className="text-[11px] text-muted-foreground">
         {model} is working • {formatTime(elapsed)}
       </span>
     </div>

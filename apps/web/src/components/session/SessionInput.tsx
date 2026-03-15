@@ -9,7 +9,6 @@ import {
   MODE_CYCLE,
   wrapPrompt,
 } from "./interactionModes";
-import { useAiLoadingAnimation } from "../../hooks/useAiLoadingAnimation";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
 
@@ -20,8 +19,6 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const animationData = useAiLoadingAnimation();
-
   const isActive = status === "active";
   const displayModel = model ?? "Claude Code";
 
@@ -79,7 +76,7 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
       </div>
 
       {isActive ? (
-        <AiLoadingIndicator model={displayModel} animationData={animationData} />
+        <AiLoadingIndicator model={displayModel} />
       ) : (
         <SessionInputOptions
           sessionId={sessionId}
