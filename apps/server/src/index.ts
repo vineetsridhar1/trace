@@ -17,6 +17,7 @@ import { buildContext, buildWsContext } from "./lib/auth.js";
 import { handleBridgeConnection } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
 import { sessionService } from "./services/session.js";
+import { flyAdapter } from "./lib/fly-adapter.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -73,6 +74,15 @@ async function main() {
         wsServer.emit("connection", ws, req);
       });
     } else if (pathname === "/bridge") {
+      // Cloud bridges must provide a valid token; local bridges (no token) are allowed
+      const url = new URL(req.url ?? "", "http://localhost");
+      const token = url.searchParams.get("token");
+      if (token && !flyAdapter.isValidBridgeToken(token)) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
       bridgeWss.handleUpgrade(req, socket, head, (ws) => {
         bridgeWss.emit("connection", ws, req);
       });
@@ -102,6 +112,9 @@ async function main() {
 
   await apollo.start();
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
+
+  // Restore cloud session machine mappings from DB
+  await flyAdapter.restoreFromDb();
 
   const PORT = process.env.PORT ?? 4000;
   httpServer.listen(PORT, () => {

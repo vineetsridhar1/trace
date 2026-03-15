@@ -24,6 +24,22 @@ importers:
         specifier: ^8.57.0
         version: 8.57.0(eslint@10.0.3(jiti@2.6.1))(typescript@5.9.3)
 
+  apps/container-bridge:
+    dependencies:
+      '@trace/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   apps/desktop:
     dependencies:
       '@trace/shared':

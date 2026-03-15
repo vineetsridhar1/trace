@@ -4,9 +4,10 @@ import { getAuthHeaders } from "../stores/auth";
 import { useConnectionStore } from "../stores/connection";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
+const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsBase = API_URL
-  ? API_URL.replace(/^http/, "ws")
-  : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+  ? API_URL.replace(/^https?:/, wsProtocol)
+  : `${wsProtocol}//${window.location.host}`;
 
 const wsClient = createWSClient({
   url: `${wsBase}/ws`,

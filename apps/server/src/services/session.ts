@@ -6,6 +6,7 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
+import { flyAdapter } from "../lib/fly-adapter.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
@@ -236,8 +237,25 @@ export class SessionService {
       });
     }
 
-    // If repo selected, send prepare command to bridge for worktree creation
-    if (needsWorkspace && session.repo) {
+    if (session.hosting === "cloud") {
+      // Cloud: spin up a Fly Machine. The container-bridge handles repo clone
+      // on boot via env vars, then sends workspace_ready through the existing protocol.
+      flyAdapter
+        .createMachine({
+          sessionId: session.id,
+          tool: session.tool,
+          model: session.model ?? undefined,
+          repoRemoteUrl: session.repo?.remoteUrl,
+          repoDefaultBranch: session.repo?.defaultBranch,
+          branch: input.branch ?? undefined,
+        })
+        .then(() => flyAdapter.waitForStarted(session.id))
+        .catch((err: Error) => {
+          console.error(`[session] failed to create cloud machine for ${session.id}:`, err.message);
+          this.workspaceFailed(session.id, `Cloud machine failed: ${err.message}`);
+        });
+    } else if (needsWorkspace && session.repo) {
+      // Local: send prepare command to Electron bridge for worktree creation
       const result = sessionRouter.send(session.id, {
         type: "prepare",
         sessionId: session.id,
@@ -417,14 +435,22 @@ export class SessionService {
     actorType: ActorType,
     actorId: string,
   ) {
-    const deliveryResult = sessionRouter.send(id, { type: command, sessionId: id });
+    const current = await prisma.session.findUniqueOrThrow({
+      where: { id },
+      select: { hosting: true, organizationId: true },
+    });
 
-    // For terminate, proceed regardless — we want the session marked as terminated
-    // For pause/resume, only proceed if delivered or if terminating
-    if (command !== "terminate" && deliveryResult !== "delivered") {
-      const session = await prisma.session.findUniqueOrThrow({ where: { id }, select: { organizationId: true } });
-      await this.persistConnectionFailure(id, session.organizationId, deliveryResult, command);
-      return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+    if (current.hosting === "cloud") {
+      await this.cloudTransition(id, command);
+    } else {
+      const deliveryResult = sessionRouter.send(id, { type: command, sessionId: id });
+
+      // For terminate, proceed regardless — we want the session marked as terminated
+      // For pause/resume, only proceed if delivered or if terminating
+      if (command !== "terminate" && deliveryResult !== "delivered") {
+        await this.persistConnectionFailure(id, current.organizationId, deliveryResult, command);
+        return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+      }
     }
 
     const session = await prisma.session.update({
@@ -444,6 +470,33 @@ export class SessionService {
     });
 
     return session;
+  }
+
+  /**
+   * Handle cloud-specific lifecycle transitions via Fly Machines.
+   */
+  private async cloudTransition(sessionId: string, command: "pause" | "resume" | "terminate"): Promise<void> {
+    switch (command) {
+      case "pause":
+        // Send pause to bridge first, then stop the Machine to save cost
+        sessionRouter.send(sessionId, { type: "pause", sessionId });
+        await flyAdapter.stopMachine(sessionId);
+        break;
+
+      case "resume":
+        // Start Machine first, wait for bridge reconnection, then send resume
+        await flyAdapter.startMachine(sessionId);
+        await flyAdapter.waitForStarted(sessionId);
+        await sessionRouter.waitForBridge(sessionId);
+        sessionRouter.send(sessionId, { type: "resume", sessionId });
+        break;
+
+      case "terminate":
+        // Send terminate to bridge, then destroy the Machine
+        sessionRouter.send(sessionId, { type: "terminate", sessionId });
+        await flyAdapter.destroyMachine(sessionId);
+        break;
+    }
   }
 
   async updateConfig(

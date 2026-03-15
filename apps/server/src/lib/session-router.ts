@@ -32,6 +32,8 @@ export class SessionRouter {
   private runtimes = new Map<string, RuntimeInstance>();
   /** Maps sessionId → runtimeId */
   private sessionRuntime = new Map<string, string>();
+  /** Pending waitForBridge promises for cloud sessions */
+  private pendingWaits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
 
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
@@ -58,6 +60,34 @@ export class SessionRouter {
   }
 
   /**
+   * Wait for a bridge/runtime to register for the given session.
+   * Used by cloud sessions where there's a timing gap between
+   * Machine creation and bridge connection.
+   */
+  waitForBridge(sessionId: string, timeoutMs = 60_000): Promise<void> {
+    // Already bound
+    if (this.sessionRuntime.has(sessionId)) return Promise.resolve();
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingWaits.delete(sessionId);
+        reject(new Error(`Bridge for session ${sessionId} did not connect within ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      this.pendingWaits.set(sessionId, {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (err: Error) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  /**
    * Unregister a runtime and return the session IDs that were bound to it.
    */
   unregisterRuntime(runtimeId: string): string[] {
@@ -81,6 +111,13 @@ export class SessionRouter {
     const runtime = this.runtimes.get(runtimeId);
     if (runtime) {
       runtime.boundSessions.add(sessionId);
+    }
+
+    // Resolve any pending waitForBridge promise
+    const pending = this.pendingWaits.get(sessionId);
+    if (pending) {
+      this.pendingWaits.delete(sessionId);
+      pending.resolve();
     }
   }
 
