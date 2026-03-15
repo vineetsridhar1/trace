@@ -57,7 +57,6 @@ export type ChannelType =
 export type CodingTool =
   | 'claude_code'
   | 'codex'
-  | 'cursor'
   | 'custom';
 
 export type CreateChannelInput = {
@@ -146,7 +145,7 @@ export type Mutation = {
   sendSessionMessage: Event;
   startSession: Session;
   terminateSession: Session;
-  updateSessionTool: Session;
+  updateSessionConfig: Session;
   updateTicket: Ticket;
 };
 
@@ -231,9 +230,10 @@ export type MutationTerminateSessionArgs = {
 };
 
 
-export type MutationUpdateSessionToolArgs = {
+export type MutationUpdateSessionConfigArgs = {
+  model?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
-  tool: CodingTool;
+  tool?: InputMaybe<CodingTool>;
 };
 
 
@@ -407,6 +407,7 @@ export type Session = {
   endpoints?: Maybe<SessionEndpoints>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
+  model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   parentSession?: Maybe<Session>;
   projects: Array<Project>;
@@ -449,6 +450,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting: HostingMode;
+  model?: InputMaybe<Scalars['String']['input']>;
   parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;

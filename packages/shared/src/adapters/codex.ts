@@ -15,13 +15,16 @@ export class CodexAdapter implements CodingToolAdapter {
   private threadId: string | null = null;
   private resultEmitted = false;
 
-  run({ prompt, cwd, onOutput, onComplete }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, model }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
 
     const args = this.threadId
       ? ["exec", "resume", this.threadId, "--json", "--dangerously-bypass-approvals-and-sandbox", prompt]
       : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", prompt];
+    if (model) {
+      args.push("--model", model);
+    }
 
     this.process = spawn("codex", args, {
       cwd,

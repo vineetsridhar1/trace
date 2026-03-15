@@ -60,7 +60,6 @@ export type ChannelType =
 export type CodingTool =
   | 'claude_code'
   | 'codex'
-  | 'cursor'
   | 'custom';
 
 export type CreateChannelInput = {
@@ -149,7 +148,7 @@ export type Mutation = {
   sendSessionMessage: Event;
   startSession: Session;
   terminateSession: Session;
-  updateSessionTool: Session;
+  updateSessionConfig: Session;
   updateTicket: Ticket;
 };
 
@@ -234,9 +233,10 @@ export type MutationTerminateSessionArgs = {
 };
 
 
-export type MutationUpdateSessionToolArgs = {
+export type MutationUpdateSessionConfigArgs = {
+  model?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
-  tool: CodingTool;
+  tool?: InputMaybe<CodingTool>;
 };
 
 
@@ -410,6 +410,7 @@ export type Session = {
   endpoints?: Maybe<SessionEndpoints>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
+  model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   parentSession?: Maybe<Session>;
   projects: Array<Project>;
@@ -452,6 +453,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting: HostingMode;
+  model?: InputMaybe<Scalars['String']['input']>;
   parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
@@ -770,7 +772,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
-  updateSessionTool?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionToolArgs, 'sessionId' | 'tool'>>;
+  updateSessionConfig?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionConfigArgs, 'sessionId'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
 }>;
 
@@ -846,6 +848,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   endpoints?: Resolver<Maybe<ResolversTypes['SessionEndpoints']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   parentSession?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;

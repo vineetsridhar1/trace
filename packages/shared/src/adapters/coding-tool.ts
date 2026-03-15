@@ -48,6 +48,7 @@ export interface RunOptions {
   onOutput: OutputCallback;
   onComplete: () => void;
   interactionMode?: "code" | "plan" | "ask";
+  model?: string;
 }
 
 /**

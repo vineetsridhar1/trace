@@ -25,14 +25,17 @@ import {
   MODE_CONFIG,
   wrapPrompt,
 } from "../session/interactionModes";
+import { getModelsForTool, getDefaultModel } from "../session/modelOptions";
 import { cn } from "../../lib/utils";
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [tool, setTool] = useState<string>("claude_code");
+  const [model, setModel] = useState<string | undefined>(getDefaultModel("claude_code"));
   const [hosting, setHosting] = useState<string>("local");
   const [mode, setMode] = useState<InteractionMode>("code");
+  const modelOptions = getModelsForTool(tool);
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
 
@@ -55,6 +58,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
         .mutation(START_SESSION_MUTATION, {
           input: {
             tool,
+            model: model ?? undefined,
             hosting,
             channelId,
             prompt: prompt.trim(),
@@ -95,23 +99,39 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             <DialogTitle>Start Session</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="mb-1.5 block text-sm text-muted-foreground">
                   Coding tool
                 </label>
-                <Select value={tool} onValueChange={(v) => { if (v) setTool(v); }}>
+                <Select value={tool} onValueChange={(v) => { if (v) { setTool(v); setModel(getDefaultModel(v)); } }}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="claude_code">Claude Code</SelectItem>
                     <SelectItem value="codex">Codex</SelectItem>
-                    <SelectItem value="cursor">Cursor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex-1">
+              {modelOptions.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">
+                    Model
+                  </label>
+                  <Select value={model ?? ""} onValueChange={(v) => { if (v) setModel(v); }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modelOptions.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div>
                 <label className="mb-1.5 block text-sm text-muted-foreground">
                   Hosting
                 </label>

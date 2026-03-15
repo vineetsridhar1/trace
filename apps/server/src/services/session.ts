@@ -11,6 +11,56 @@ export type StartSessionServiceInput = StartSessionInput & {
 
 const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true, parentSession: true, childSessions: true } as const;
 
+/**
+ * Build a conversation transcript from session events.
+ * Includes user messages and assistant text (no tool calls).
+ * Used to give a new coding tool context when switching mid-session.
+ */
+async function buildConversationContext(sessionId: string): Promise<string | null> {
+  const events = await prisma.event.findMany({
+    where: {
+      scopeId: sessionId,
+      scopeType: "session",
+      eventType: { in: ["session_started", "message_sent", "session_output"] },
+    },
+    orderBy: { timestamp: "asc" },
+  });
+
+  const lines: string[] = [];
+
+  for (const evt of events) {
+    const payload = evt.payload as Record<string, unknown>;
+
+    if (evt.eventType === "session_started") {
+      const prompt = payload.prompt as string | undefined;
+      if (prompt) lines.push(`[User]: ${prompt}`);
+      continue;
+    }
+
+    if (evt.eventType === "message_sent") {
+      const text = payload.text as string | undefined;
+      if (text) lines.push(`[User]: ${text}`);
+      continue;
+    }
+
+    // Assistant output — extract only text blocks, skip tool calls
+    if (payload.type === "assistant") {
+      const message = payload.message as Record<string, unknown> | undefined;
+      const content = message?.content;
+      if (!Array.isArray(content)) continue;
+      for (const block of content) {
+        const b = block as Record<string, unknown>;
+        if (b.type === "text" && typeof b.text === "string") {
+          lines.push(`[Assistant]: ${b.text}`);
+        }
+      }
+    }
+  }
+
+  if (lines.length === 0) return null;
+  return `<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n${lines.join("\n\n")}\n</conversation-history>`;
+}
+
 export class SessionService {
   async list(organizationId: string, filters?: { status?: string | null; tool?: string | null; repoId?: string | null; channelId?: string | null }) {
     const where: Record<string, unknown> = { organizationId };
@@ -41,6 +91,7 @@ export class SessionService {
         data: {
           name,
           tool: input.tool,
+          model: input.model ?? undefined,
           hosting: input.hosting,
           organizationId: input.organizationId,
           createdById: input.createdById,
@@ -66,6 +117,7 @@ export class SessionService {
             name: session.name,
             status: session.status,
             tool: session.tool,
+            model: session.model,
             hosting: session.hosting,
             createdBy: session.createdBy,
             channel: session.channel,
@@ -110,6 +162,7 @@ export class SessionService {
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
       tool: session.tool,
+      model: session.model ?? undefined,
       interactionMode,
     };
 
@@ -185,10 +238,27 @@ export class SessionService {
     return session;
   }
 
-  async updateTool(sessionId: string, tool: CodingTool, actorType: ActorType, actorId: string) {
+  async updateConfig(
+    sessionId: string,
+    config: { tool?: CodingTool; model?: string },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const prev = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { tool: true },
+    });
+
+    const toolChanged = config.tool != null && config.tool !== prev.tool;
+
+    const data: Record<string, unknown> = {};
+    if (config.tool != null) data.tool = config.tool;
+    if (config.model != null) data.model = config.model;
+    if (toolChanged) data.toolChangedAt = new Date();
+
     const session = await prisma.session.update({
       where: { id: sessionId },
-      data: { tool },
+      data,
       include: SESSION_INCLUDE,
     });
 
@@ -197,7 +267,12 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
-      payload: { type: "tool_changed", tool },
+      payload: {
+        type: "config_changed",
+        tool: config.tool ?? session.tool,
+        model: config.model ?? session.model,
+        toolChanged,
+      },
       actorType,
       actorId,
     });
@@ -287,8 +362,28 @@ export class SessionService {
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: { status: "active" },
-      select: { organizationId: true, tool: true },
+      select: { organizationId: true, tool: true, model: true, toolChangedAt: true },
     });
+
+    // If the tool was recently switched and no user message has been sent since,
+    // prepend conversation history so the new coding tool has context.
+    let prompt = text;
+    if (session.toolChangedAt) {
+      const msgSinceSwitch = await prisma.event.findFirst({
+        where: {
+          scopeId: sessionId,
+          scopeType: "session",
+          eventType: "message_sent",
+          timestamp: { gt: session.toolChangedAt },
+        },
+      });
+      if (!msgSinceSwitch) {
+        const context = await buildConversationContext(sessionId);
+        if (context) {
+          prompt = `${context}\n\n${text}`;
+        }
+      }
+    }
 
     // Emit a resumed event so all clients see the status change
     await eventService.create({
@@ -315,8 +410,9 @@ export class SessionService {
     sessionRouter.send(sessionId, {
       type: "send",
       sessionId,
-      prompt: text,
+      prompt,
       tool: session.tool,
+      model: session.model ?? undefined,
       interactionMode,
     });
 

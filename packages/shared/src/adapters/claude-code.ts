@@ -18,7 +18,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private cwd: string | null = null;
   private resultEmitted = false;
 
-  run({ prompt, cwd, onOutput, onComplete, interactionMode }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, interactionMode, model }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
 
@@ -26,6 +26,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       ? "--permission-mode"
       : "--dangerously-skip-permissions";
     const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+    if (model) {
+      args.push("--model", model);
+    }
     if (interactionMode === "plan") {
       args.push(permissionFlag, "plan");
     } else {

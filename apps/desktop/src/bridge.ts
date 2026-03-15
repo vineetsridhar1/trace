@@ -5,6 +5,7 @@ export class BridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
   private adapters = new Map<string, CodingToolAdapter>();
+  private sessionTools = new Map<string, string>();
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
@@ -42,8 +43,16 @@ export class BridgeClient {
     }
   }
 
-  private runPrompt({ sessionId, prompt, cwd, tool, interactionMode }: { sessionId: string; prompt: string; cwd?: string; tool?: string; interactionMode?: string }) {
+  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string }) {
     const workdir = cwd ?? process.cwd();
+
+    // If tool changed, abort old adapter and create a fresh one
+    const prevTool = this.sessionTools.get(sessionId);
+    if (tool && prevTool && prevTool !== tool) {
+      const oldAdapter = this.adapters.get(sessionId);
+      if (oldAdapter) oldAdapter.abort();
+      this.adapters.delete(sessionId);
+    }
 
     // Reuse existing adapter (retains session state for --resume)
     let adapter = this.adapters.get(sessionId);
@@ -52,6 +61,7 @@ export class BridgeClient {
       this.adapters.set(sessionId, adapter);
       this.send({ type: "register_session", sessionId });
     }
+    if (tool) this.sessionTools.set(sessionId, tool);
 
     adapter.run({
       prompt,
@@ -63,6 +73,7 @@ export class BridgeClient {
         this.send({ type: "session_complete", sessionId });
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
+      model,
     });
   }
 
@@ -75,6 +86,7 @@ export class BridgeClient {
           prompt: msg.prompt as string ?? "",
           cwd: msg.cwd as string | undefined,
           tool: msg.tool as string | undefined,
+          model: msg.model as string | undefined,
           interactionMode: msg.interactionMode as string | undefined,
         });
         break;
@@ -85,6 +97,7 @@ export class BridgeClient {
           sessionId: msg.sessionId,
           prompt: msg.prompt as string,
           tool: msg.tool as string | undefined,
+          model: msg.model as string | undefined,
           interactionMode: msg.interactionMode as string | undefined,
         });
         break;

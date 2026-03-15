@@ -40,8 +40,8 @@ export const sessionMutations = {
   terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
   },
-  updateSessionTool: (_: unknown, args: { sessionId: string; tool: CodingTool }, ctx: Context) => {
-    return sessionService.updateTool(args.sessionId, args.tool, ctx.actorType, ctx.userId);
+  updateSessionConfig: (_: unknown, args: { sessionId: string; tool?: CodingTool | null; model?: string | null }, ctx: Context) => {
+    return sessionService.updateConfig(args.sessionId, { tool: args.tool ?? undefined, model: args.model ?? undefined }, ctx.actorType, ctx.userId);
   },
   sendSessionMessage: (_: unknown, args: { sessionId: string; text: string; interactionMode?: string | null }, ctx: Context) => {
     return sessionService.sendMessage(args.sessionId, args.text, ctx.actorType, ctx.userId, args.interactionMode ?? undefined);

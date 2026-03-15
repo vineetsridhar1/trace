@@ -18,13 +18,15 @@ import {
   MODE_CONFIG,
   wrapPrompt,
 } from "./interactionModes";
+import { getModelsForTool, getDefaultModel } from "./modelOptions";
 import { cn } from "../../lib/utils";
 
-const UPDATE_SESSION_TOOL_MUTATION = gql`
-  mutation UpdateSessionTool($sessionId: ID!, $tool: CodingTool!) {
-    updateSessionTool(sessionId: $sessionId, tool: $tool) {
+const UPDATE_SESSION_CONFIG_MUTATION = gql`
+  mutation UpdateSessionConfig($sessionId: ID!, $tool: CodingTool, $model: String) {
+    updateSessionConfig(sessionId: $sessionId, tool: $tool, model: $model) {
       id
       tool
+      model
     }
   }
 `;
@@ -32,12 +34,16 @@ const UPDATE_SESSION_TOOL_MUTATION = gql`
 export function SessionInput({ sessionId }: { sessionId: string }) {
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
+  const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const isActive = status === "active";
+  const currentTool = tool ?? "claude_code";
+  const modelOptions = getModelsForTool(currentTool);
+  const currentModel = model ?? getDefaultModel(currentTool);
 
   const cycleMode = useCallback(() => {
     setMode((prev) => {
@@ -48,8 +54,15 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
 
   const handleToolChange = useCallback(async (newTool: string | null) => {
     if (!newTool) return;
-    useEntityStore.getState().patch("sessions", sessionId, { tool: newTool as CodingTool });
-    await client.mutation(UPDATE_SESSION_TOOL_MUTATION, { sessionId, tool: newTool }).toPromise();
+    const newDefault = getDefaultModel(newTool);
+    useEntityStore.getState().patch("sessions", sessionId, { tool: newTool as CodingTool, model: newDefault ?? null });
+    await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool, model: newDefault }).toPromise();
+  }, [sessionId]);
+
+  const handleModelChange = useCallback(async (newModel: string | null) => {
+    if (!newModel) return;
+    useEntityStore.getState().patch("sessions", sessionId, { model: newModel });
+    await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel }).toPromise();
   }, [sessionId]);
 
   const handleSend = useCallback(async () => {
@@ -76,16 +89,27 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
       <div className="mb-2 flex items-center gap-1">
-        <Select value={tool ?? "claude_code"} onValueChange={handleToolChange} disabled={isActive}>
+        <Select value={currentTool} onValueChange={handleToolChange} disabled={isActive}>
           <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="claude_code">Claude Code</SelectItem>
             <SelectItem value="codex">Codex</SelectItem>
-            <SelectItem value="cursor">Cursor</SelectItem>
           </SelectContent>
         </Select>
+        {modelOptions.length > 0 && (
+          <Select value={currentModel ?? ""} onValueChange={handleModelChange} disabled={isActive}>
+            <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {modelOptions.map((m) => (
+                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <button
           type="button"
           onClick={cycleMode}
