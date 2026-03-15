@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 import { Send } from "lucide-react";
-import { gql } from "@urql/core";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
@@ -11,15 +10,19 @@ import {
 } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
+import { isDisconnected } from "./sessionStatus";
+import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 
 export function SessionInput({ sessionId }: { sessionId: string }) {
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isActive = status === "active";
+  const disconnected = isDisconnected(connection);
   const displayModel = model ?? "Claude Code";
 
   const cycleMode = useCallback(() => {
@@ -46,6 +49,11 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
       inputRef.current?.focus();
     }
   }, [sessionId, message, sending, mode]);
+
+  // Show recovery panel instead of input when disconnected
+  if (disconnected) {
+    return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
+  }
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">

@@ -3,12 +3,53 @@ import type { SessionStatus, EventType, CodingTool } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
-import { sessionRouter } from "../lib/session-router.js";
+import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
   createdById: string;
 };
+
+/** Shape of Session.connection JSON stored in the DB */
+export type SessionConnectionData = {
+  state: "connected" | "degraded" | "disconnected";
+  runtimeInstanceId?: string;
+  runtimeLabel?: string;
+  lastSeen?: string;
+  lastError?: string;
+  lastDeliveryFailureAt?: string;
+  retryCount: number;
+  canRetry: boolean;
+  canMove: boolean;
+  [key: string]: unknown;
+};
+
+type PendingSessionCommand =
+  | {
+      type: "run";
+      prompt?: string | null;
+      interactionMode?: string | null;
+    }
+  | {
+      type: "send";
+      prompt: string;
+      interactionMode?: string | null;
+    };
+
+function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
+  return {
+    state: "connected",
+    retryCount: 0,
+    canRetry: true,
+    canMove: true,
+    ...overrides,
+  };
+}
+
+/** Cast connection data to Prisma-compatible JSON */
+function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
+  return data as unknown as Prisma.InputJsonValue;
+}
 
 const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true, parentSession: true, childSessions: true } as const;
 
@@ -62,6 +103,13 @@ async function buildConversationContext(sessionId: string): Promise<string | nul
   return `<conversation-history>\nThe following is the conversation history from a previous coding tool in this session. Use it as context.\n\n${lines.join("\n\n")}\n</conversation-history>`;
 }
 
+function buildMigrationPrompt(context: string | null): string {
+  if (!context) {
+    return "Continue this session on the new runtime.";
+  }
+  return `${context}\n\nContinue this session on the new runtime.`;
+}
+
 export class SessionService {
   async list(organizationId: string, filters?: { status?: string | null; tool?: string | null; repoId?: string | null; channelId?: string | null }) {
     const where: Record<string, unknown> = { organizationId };
@@ -105,6 +153,7 @@ export class SessionService {
           branch: input.branch ?? undefined,
           channelId: input.channelId ?? undefined,
           parentSessionId: input.parentSessionId ?? undefined,
+          connection: connJson(defaultConnection()),
           ...(input.projectId && {
             projects: { create: { projectId: input.projectId } },
           }),
@@ -130,6 +179,7 @@ export class SessionService {
             channel: session.channel,
             parentSession: session.parentSession ?? null,
             childSessions: session.childSessions ?? [],
+            connection: session.connection,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
           },
@@ -144,7 +194,7 @@ export class SessionService {
 
     // If repo selected, send prepare command to bridge for worktree creation
     if (needsWorkspace && session.repo) {
-      sessionRouter.send(session.id, {
+      const result = sessionRouter.send(session.id, {
         type: "prepare",
         sessionId: session.id,
         repoId: session.repo.id,
@@ -153,6 +203,10 @@ export class SessionService {
         defaultBranch: session.repo.defaultBranch,
         branch: input.branch ?? undefined,
       });
+
+      if (result !== "delivered") {
+        await this.persistConnectionFailure(session.id, session.organizationId, result, "prepare");
+      }
     }
 
     return session;
@@ -168,7 +222,7 @@ export class SessionService {
     if (session.status === "creating") {
       const updated = await prisma.session.update({
         where: { id },
-        data: { pendingRun: { prompt: prompt ?? null, interactionMode: interactionMode ?? null } },
+        data: { pendingRun: { type: "run", prompt: prompt ?? null, interactionMode: interactionMode ?? null } },
         include: SESSION_INCLUDE,
       });
       return updated;
@@ -202,21 +256,21 @@ export class SessionService {
       cwd: session.workdir ?? undefined,
     };
 
-    const sent = sessionRouter.send(id, command);
+    const deliveryResult = sessionRouter.send(id, command);
 
-    if (!sent) {
-      // Try binding to a default bridge and retry
-      const bridge = sessionRouter.getDefaultBridge();
-      if (bridge) {
-        sessionRouter.bindSession(id, bridge.id);
-        sessionRouter.send(id, command);
-      }
+    if (deliveryResult !== "delivered") {
+      await this.storePendingCommand(id, { type: "run", prompt: resolvedPrompt ?? null, interactionMode: interactionMode ?? null });
+      await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
+      return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
 
-    // Update status to active and return with includes
+    // Only transition to active after successful delivery
     const updated = await prisma.session.update({
       where: { id },
-      data: { status: "active" },
+      data: {
+        status: "active",
+        connection: this.mergeConnection(session.connection, { state: "connected", lastSeen: new Date().toISOString() }),
+      },
       include: SESSION_INCLUDE,
     });
 
@@ -253,7 +307,15 @@ export class SessionService {
     actorType: ActorType,
     actorId: string,
   ) {
-    sessionRouter.send(id, { type: command, sessionId: id });
+    const deliveryResult = sessionRouter.send(id, { type: command, sessionId: id });
+
+    // For terminate, proceed regardless — we want the session marked as terminated
+    // For pause/resume, only proceed if delivered or if terminating
+    if (command !== "terminate" && deliveryResult !== "delivered") {
+      const session = await prisma.session.findUniqueOrThrow({ where: { id }, select: { organizationId: true } });
+      await this.persistConnectionFailure(id, session.organizationId, deliveryResult, command);
+      return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+    }
 
     const session = await prisma.session.update({
       where: { id },
@@ -395,10 +457,9 @@ export class SessionService {
   }
 
   async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string, interactionMode?: string) {
-    const session = await prisma.session.update({
+    const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      data: { status: "active" },
-      select: { organizationId: true, tool: true, model: true, toolChangedAt: true, workdir: true },
+      select: { organizationId: true, tool: true, model: true, toolChangedAt: true, workdir: true, connection: true },
     });
 
     // If the tool was recently switched and no user message has been sent since,
@@ -421,6 +482,43 @@ export class SessionService {
       }
     }
 
+    // Attempt delivery before marking active
+    const deliveryResult = sessionRouter.send(sessionId, {
+      type: "send",
+      sessionId,
+      prompt,
+      tool: session.tool,
+      model: session.model ?? undefined,
+      interactionMode,
+      cwd: session.workdir ?? undefined,
+    });
+
+    if (deliveryResult !== "delivered") {
+      await this.storePendingCommand(sessionId, { type: "send", prompt, interactionMode: interactionMode ?? null });
+      await this.persistConnectionFailure(sessionId, session.organizationId, deliveryResult, "send");
+      // Still record the message event so it's not lost
+      const event = await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "message_sent",
+        payload: { text, deliveryFailed: true },
+        actorType,
+        actorId,
+      });
+      return event;
+    }
+
+    // Only mark active after successful delivery
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        status: "active",
+        connection: this.mergeConnection(session.connection, { state: "connected", lastSeen: new Date().toISOString() }),
+        pendingRun: Prisma.DbNull,
+      },
+    });
+
     // Emit a resumed event so all clients see the status change
     await eventService.create({
       organizationId: session.organizationId,
@@ -442,19 +540,9 @@ export class SessionService {
       actorId,
     });
 
-    // Forward to bridge so the coding tool receives the message
-    sessionRouter.send(sessionId, {
-      type: "send",
-      sessionId,
-      prompt,
-      tool: session.tool,
-      model: session.model ?? undefined,
-      interactionMode,
-      cwd: session.workdir ?? undefined,
-    });
-
     return event;
   }
+
   async workspaceReady(sessionId: string, workdir: string) {
     // Read pendingRun before clearing it atomically
     const prev = await prisma.session.findUniqueOrThrow({
@@ -480,19 +568,21 @@ export class SessionService {
 
     // If a run was queued while workspace was being prepared, execute it now
     if (prev.pendingRun) {
-      const pending = prev.pendingRun as Record<string, unknown>;
-      await this.run(
-        sessionId,
-        (pending.prompt as string) ?? undefined,
-        (pending.interactionMode as string) ?? undefined,
-      );
+      const replayResult = await this.deliverPendingCommand(sessionId, prev.pendingRun);
+      if (replayResult && replayResult !== "delivered") {
+        await this.persistConnectionFailure(sessionId, session.organizationId, replayResult, "workspace_replay");
+      }
     }
   }
 
   async workspaceFailed(sessionId: string, error: string) {
     const session = await prisma.session.update({
       where: { id: sessionId },
-      data: { status: "failed", pendingRun: Prisma.DbNull },
+      data: {
+        status: "failed",
+        pendingRun: Prisma.DbNull,
+        connection: connJson(defaultConnection({ state: "disconnected", lastError: error })),
+      },
       include: SESSION_INCLUDE,
     });
 
@@ -502,6 +592,546 @@ export class SessionService {
       scopeId: sessionId,
       eventType: "session_terminated",
       payload: { sessionId, reason: "workspace_failed", error },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  // ─── Connection Management ───
+
+  async markConnectionLost(sessionId: string, reason: string, runtimeInstanceId?: string) {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { organizationId: true, status: true, connection: true },
+    });
+    if (!session) return;
+
+    // Don't mark completed/failed sessions as disconnected
+    if (session.status === "completed" || session.status === "failed") return;
+
+    const conn = this.parseConnection(session.connection);
+    const updated: SessionConnectionData = {
+      ...conn,
+      state: "disconnected",
+      lastError: reason,
+      runtimeInstanceId: runtimeInstanceId ?? conn.runtimeInstanceId,
+      canRetry: true,
+      canMove: true,
+    };
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: connJson(updated) },
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "connection_lost",
+        reason,
+        runtimeInstanceId,
+        connection: connJson(updated),
+        sessionStatus: session.status,
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  async markConnectionRestored(sessionId: string, runtimeInstanceId: string) {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { organizationId: true, connection: true },
+    });
+    if (!session) return;
+
+    const conn = this.parseConnection(session.connection);
+    const updated: SessionConnectionData = {
+      ...conn,
+      state: "connected",
+      runtimeInstanceId,
+      runtimeLabel: sessionRouter.getRuntime(runtimeInstanceId)?.label ?? conn.runtimeLabel,
+      lastSeen: new Date().toISOString(),
+      lastError: undefined,
+      canRetry: true,
+      canMove: true,
+    };
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: connJson(updated) },
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "connection_restored",
+        runtimeInstanceId,
+        connection: connJson(updated),
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  async retryConnection(sessionId: string, actorType: ActorType, actorId: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      include: SESSION_INCLUDE,
+    });
+
+    const conn = this.parseConnection(session.connection);
+
+    // Emit retry requested event
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: { type: "recovery_requested", retryCount: conn.retryCount + 1 },
+      actorType,
+      actorId,
+    });
+
+    // Try to find a runtime to bind to
+    const runtime = conn.runtimeInstanceId
+      ? sessionRouter.getRuntimeForSession(sessionId) ?? sessionRouter.getDefaultRuntime()
+      : sessionRouter.getDefaultRuntime();
+
+    if (!runtime) {
+      const failedConn: SessionConnectionData = {
+        ...conn,
+        state: "disconnected",
+        retryCount: conn.retryCount + 1,
+        lastError: "No runtime available",
+        lastDeliveryFailureAt: new Date().toISOString(),
+        canRetry: true,
+        canMove: true,
+      };
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { connection: connJson(failedConn) },
+      });
+
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: { type: "recovery_failed", reason: "no_runtime", connection: connJson(failedConn) },
+        actorType: "system",
+        actorId: "system",
+      });
+
+      return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
+    }
+
+    // Bind and attempt workspace setup if needed
+    sessionRouter.bindSession(sessionId, runtime.id);
+
+    if (session.repo) {
+      // Re-run workspace preparation
+      const prepResult = sessionRouter.send(sessionId, {
+        type: "prepare",
+        sessionId,
+        repoId: session.repo.id,
+        repoName: session.repo.name,
+        repoRemoteUrl: session.repo.remoteUrl,
+        defaultBranch: session.repo.defaultBranch,
+        branch: session.branch ?? undefined,
+      });
+
+      if (prepResult !== "delivered") {
+        await this.persistConnectionFailure(sessionId, session.organizationId, prepResult, "retry_prepare");
+        return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
+      }
+
+      // Mark as creating — workspace_ready callback will transition to pending
+      const restoredConn: SessionConnectionData = {
+        ...conn,
+        state: "connected",
+        runtimeInstanceId: runtime.id,
+        runtimeLabel: runtime.label,
+        lastSeen: new Date().toISOString(),
+        lastError: undefined,
+        retryCount: conn.retryCount + 1,
+      };
+
+      const updated = await prisma.session.update({
+        where: { id: sessionId },
+        data: {
+          status: "creating",
+          connection: connJson(restoredConn),
+        },
+        include: SESSION_INCLUDE,
+      });
+
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: { type: "connection_restored", runtimeInstanceId: runtime.id, connection: connJson(restoredConn) },
+        actorType: "system",
+        actorId: "system",
+      });
+
+      return updated;
+    }
+
+    // No repo — just restore connection
+    const restoredConn: SessionConnectionData = {
+      ...conn,
+      state: "connected",
+      runtimeInstanceId: runtime.id,
+      runtimeLabel: runtime.label,
+      lastSeen: new Date().toISOString(),
+      lastError: undefined,
+      retryCount: conn.retryCount + 1,
+    };
+
+    const updated = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        status: "pending",
+        connection: connJson(restoredConn),
+      },
+      include: SESSION_INCLUDE,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: { type: "connection_restored", runtimeInstanceId: runtime.id, connection: connJson(restoredConn) },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    const pending = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { pendingRun: true },
+    });
+    if (pending?.pendingRun) {
+      const replayResult = await this.deliverPendingCommand(sessionId, pending.pendingRun);
+      if (replayResult && replayResult !== "delivered") {
+        await this.persistConnectionFailure(sessionId, session.organizationId, replayResult, "retry_replay");
+      }
+      return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
+    }
+
+    return updated;
+  }
+
+  async moveToRuntime(sessionId: string, runtimeInstanceId: string, actorType: ActorType, actorId: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      include: { ...SESSION_INCLUDE, projects: true, tickets: true },
+    });
+    const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId);
+    if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
+      throw new Error("Selected runtime is not available");
+    }
+    if (!targetRuntime.supportedTools.includes(session.tool)) {
+      throw new Error("Selected runtime does not support this tool");
+    }
+
+    // Build conversation context from the old session
+    const context = await buildConversationContext(sessionId);
+    const bootstrapPrompt = buildMigrationPrompt(context);
+
+    // Create child session targeted at the chosen runtime
+    const childSession = await prisma.session.create({
+      data: {
+        name: session.name,
+        status: session.repoId ? "creating" : "pending",
+        tool: session.tool,
+        model: session.model ?? undefined,
+        hosting: targetRuntime.hostingMode,
+        organizationId: session.organizationId,
+        createdById: actorId,
+        repoId: session.repoId ?? undefined,
+        branch: session.branch ?? undefined,
+        channelId: session.channelId ?? undefined,
+        parentSessionId: sessionId,
+        pendingRun: session.repoId
+          ? ({ type: "run", prompt: bootstrapPrompt, interactionMode: null } satisfies PendingSessionCommand)
+          : Prisma.DbNull,
+        connection: connJson(defaultConnection({
+          runtimeInstanceId,
+          runtimeLabel: targetRuntime.label,
+        })),
+        ...(session.projects.length > 0 && {
+          projects: {
+            create: session.projects.map((sp: { projectId: string }) => ({ projectId: sp.projectId })),
+          },
+        }),
+        ...(session.tickets.length > 0 && {
+          tickets: {
+            create: session.tickets.map((st: { ticketId: string }) => ({ ticketId: st.ticketId })),
+          },
+        }),
+      },
+      include: SESSION_INCLUDE,
+    });
+
+    // Bind the child session to the target runtime
+    sessionRouter.bindSession(childSession.id, runtimeInstanceId);
+
+    // Emit session_started for the child
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: childSession.id,
+      eventType: "session_started",
+      payload: {
+        session: {
+          id: childSession.id,
+          name: childSession.name,
+          status: childSession.status,
+          tool: childSession.tool,
+          model: childSession.model,
+          hosting: childSession.hosting,
+          createdBy: childSession.createdBy,
+          repo: childSession.repo ?? null,
+          channel: childSession.channel,
+          parentSession: childSession.parentSession ?? null,
+          childSessions: [],
+          connection: childSession.connection,
+          createdAt: childSession.createdAt,
+          updatedAt: childSession.updatedAt,
+        },
+        prompt: bootstrapPrompt,
+        movedFromSessionId: sessionId,
+      },
+      actorType,
+      actorId,
+    });
+
+    // Start workspace preparation on the target runtime if needed
+    if (childSession.repo) {
+      const prepareResult = sessionRouter.send(childSession.id, {
+        type: "prepare",
+        sessionId: childSession.id,
+        repoId: childSession.repo.id,
+        repoName: childSession.repo.name,
+        repoRemoteUrl: childSession.repo.remoteUrl,
+        defaultBranch: childSession.repo.defaultBranch,
+        branch: childSession.branch ?? undefined,
+      });
+      if (prepareResult !== "delivered") {
+        await this.persistConnectionFailure(childSession.id, childSession.organizationId, prepareResult, "move_prepare");
+      }
+    } else {
+      const deliveryResult = await this.deliverPendingCommand(childSession.id, {
+        type: "run",
+        prompt: bootstrapPrompt,
+        interactionMode: null,
+      });
+      if (deliveryResult && deliveryResult !== "delivered") {
+        await this.persistConnectionFailure(childSession.id, childSession.organizationId, deliveryResult, "move_run");
+      }
+    }
+
+    // Mark the old session as disconnected with context about the move
+    const oldConn = this.parseConnection(session.connection);
+    const rehomedConnection = {
+      ...oldConn,
+      state: "disconnected",
+      lastError: `Moved to new session ${childSession.id}`,
+      canRetry: false,
+      canMove: true,
+    } satisfies SessionConnectionData;
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        connection: connJson(rehomedConnection),
+      },
+    });
+
+    // Emit rehome event on old session
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "session_rehomed",
+        newSessionId: childSession.id,
+        runtimeInstanceId,
+        connection: connJson(rehomedConnection),
+      },
+      actorType,
+      actorId,
+    });
+
+    return childSession;
+  }
+
+  async listAvailableRuntimes(sessionId: string) {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { tool: true },
+    });
+
+    const allRuntimes = sessionRouter
+      .listRuntimes()
+      .filter((runtime) => runtime.supportedTools.includes(session.tool));
+
+    return allRuntimes.map((r) => ({
+      id: r.id,
+      label: r.label,
+      hostingMode: r.hostingMode,
+      supportedTools: r.supportedTools,
+      connected: r.ws.readyState === r.ws.OPEN,
+      sessionCount: r.boundSessions.size,
+    }));
+  }
+
+  // ─── Helpers ───
+
+  private parseConnection(raw: unknown): SessionConnectionData {
+    if (!raw || typeof raw !== "object") return defaultConnection();
+    return defaultConnection(raw as Partial<SessionConnectionData>);
+  }
+
+  private mergeConnection(existing: unknown, patch: Partial<SessionConnectionData>): Prisma.InputJsonValue {
+    const conn = this.parseConnection(existing);
+    return connJson({ ...conn, ...patch });
+  }
+
+  private parsePendingCommand(raw: unknown): PendingSessionCommand | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const pending = raw as Record<string, unknown>;
+    if (pending.type === "send" && typeof pending.prompt === "string") {
+      return {
+        type: "send",
+        prompt: pending.prompt,
+        interactionMode: typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+      };
+    }
+    if (pending.type === "run" || pending.type == null) {
+      return {
+        type: "run",
+        prompt: typeof pending.prompt === "string" ? pending.prompt : null,
+        interactionMode: typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+      };
+    }
+    return null;
+  }
+
+  private async storePendingCommand(sessionId: string, pending: PendingSessionCommand) {
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { pendingRun: pending as unknown as Prisma.InputJsonValue },
+    });
+  }
+
+  private async deliverPendingCommand(sessionId: string, rawPending: unknown): Promise<DeliveryResult | null> {
+    const pending = this.parsePendingCommand(rawPending);
+    if (!pending) return null;
+
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: {
+        organizationId: true,
+        tool: true,
+        model: true,
+        workdir: true,
+        connection: true,
+      },
+    });
+
+    const command = {
+      type: pending.type,
+      sessionId,
+      prompt: pending.prompt ?? undefined,
+      tool: session.tool,
+      model: session.model ?? undefined,
+      interactionMode: pending.interactionMode ?? undefined,
+      cwd: session.workdir ?? undefined,
+    } satisfies {
+      type: "run" | "send";
+      sessionId: string;
+      prompt?: string;
+      tool: CodingTool;
+      model?: string;
+      interactionMode?: string;
+      cwd?: string;
+    };
+
+    const deliveryResult = sessionRouter.send(sessionId, command);
+    if (deliveryResult !== "delivered") {
+      return deliveryResult;
+    }
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        status: "active",
+        pendingRun: Prisma.DbNull,
+        connection: this.mergeConnection(session.connection, {
+          state: "connected",
+          lastSeen: new Date().toISOString(),
+          lastError: undefined,
+        }),
+      },
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_resumed",
+      payload: { sessionId },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    return "delivered";
+  }
+
+  private async persistConnectionFailure(sessionId: string, organizationId: string, deliveryResult: DeliveryResult, operation: string) {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { connection: true },
+    });
+    const conn = this.parseConnection(session?.connection);
+
+    const updated: SessionConnectionData = {
+      ...conn,
+      state: "disconnected",
+      lastError: `${operation}: ${deliveryResult}`,
+      lastDeliveryFailureAt: new Date().toISOString(),
+      retryCount: conn.retryCount + 1,
+      canRetry: true,
+      canMove: true,
+    };
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { connection: connJson(updated) },
+    });
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "connection_lost",
+        reason: deliveryResult,
+        operation,
+        connection: connJson(updated),
+      },
       actorType: "system",
       actorId: "system",
     });

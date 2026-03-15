@@ -6,8 +6,13 @@ import { eventService } from "../services/event.js";
 import { sessionService } from "../services/session.js";
 
 export function handleBridgeConnection(ws: WebSocket) {
-  const bridgeId = randomUUID();
-  sessionRouter.registerBridge(bridgeId, ws);
+  // Default runtime ID; replaced if the bridge sends runtime_hello
+  let runtimeId: string = randomUUID();
+  let registered = false;
+
+  // Register with defaults until runtime_hello arrives
+  sessionRouter.registerBridge(runtimeId, ws);
+  registered = true;
 
   // Cache organizationId per session to avoid a DB lookup on every output event
   const orgIdCache = new Map<string, string>();
@@ -36,6 +41,43 @@ export function handleBridgeConnection(ws: WebSocket) {
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
+
+      if (msg.type === "runtime_hello") {
+        // Bridge is announcing its identity. Re-register with the real info.
+        const oldId = runtimeId;
+        const newId = (msg.instanceId as string) ?? runtimeId;
+
+        if (registered) {
+          sessionRouter.unregisterRuntime(oldId);
+        }
+
+        runtimeId = newId;
+        sessionRouter.registerRuntime({
+          id: runtimeId,
+          label: (msg.label as string) ?? runtimeId,
+          ws,
+          hostingMode: (msg.hostingMode as "cloud" | "local") ?? "local",
+          supportedTools: (msg.supportedTools as string[]) ?? ["claude_code", "codex", "custom"],
+        });
+        registered = true;
+
+        // Re-register any sessions the bridge still owns (reconnect scenario)
+        const sessionIds = msg.sessionIds as string[] | undefined;
+        if (sessionIds) {
+          for (const sid of sessionIds) {
+            sessionRouter.bindSession(sid, runtimeId);
+            enqueueEvent(sid, async () => {
+              await sessionService.markConnectionRestored(sid, runtimeId);
+            });
+          }
+        }
+        return;
+      }
+
+      if (msg.type === "runtime_heartbeat") {
+        sessionRouter.recordHeartbeat(runtimeId);
+        return;
+      }
 
       if (msg.type === "session_output" && msg.sessionId) {
         const sessionId = msg.sessionId as string;
@@ -68,7 +110,7 @@ export function handleBridgeConnection(ws: WebSocket) {
           await sessionService.workspaceFailed(msg.sessionId, (msg.error as string) ?? "Unknown error");
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
-        sessionRouter.bindSession(msg.sessionId, bridgeId);
+        sessionRouter.bindSession(msg.sessionId, runtimeId);
       }
     } catch (err) {
       console.error("[bridge] error handling message:", err);
@@ -76,6 +118,13 @@ export function handleBridgeConnection(ws: WebSocket) {
   });
 
   ws.on("close", () => {
-    sessionRouter.unregisterBridge(bridgeId);
+    const affectedSessions = sessionRouter.unregisterRuntime(runtimeId);
+
+    // Mark all bound sessions as disconnected through the service layer
+    for (const sessionId of affectedSessions) {
+      enqueueEvent(sessionId, async () => {
+        await sessionService.markConnectionLost(sessionId, "runtime_disconnected", runtimeId);
+      });
+    }
   });
 }

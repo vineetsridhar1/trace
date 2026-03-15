@@ -22,6 +22,7 @@ export type Scalars = {
 export type Actor = {
   __typename?: 'Actor';
   id: Scalars['ID']['output'];
+  name?: Maybe<Scalars['String']['output']>;
   type: ActorType;
 };
 
@@ -92,6 +93,13 @@ export type CreateTicketInput = {
   title: Scalars['String']['input'];
 };
 
+export type DeliveryResult =
+  | 'delivered'
+  | 'delivery_failed'
+  | 'no_runtime'
+  | 'runtime_disconnected'
+  | 'session_unbound';
+
 export type EntityType =
   | 'channel'
   | 'session'
@@ -141,8 +149,10 @@ export type Mutation = {
   createTicket: Ticket;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
+  moveSessionToRuntime: Session;
   pauseSession: Session;
   resumeSession: Session;
+  retrySessionConnection: Session;
   runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
@@ -192,6 +202,12 @@ export type MutationLinkSessionToTicketArgs = {
 };
 
 
+export type MutationMoveSessionToRuntimeArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  sessionId: Scalars['ID']['input'];
+};
+
+
 export type MutationPauseSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -199,6 +215,11 @@ export type MutationPauseSessionArgs = {
 
 export type MutationResumeSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationRetrySessionConnectionArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -289,6 +310,7 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
+  availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   events: Array<Event>;
@@ -302,6 +324,11 @@ export type Query = {
   sessions: Array<Session>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
+};
+
+
+export type QueryAvailableSessionRuntimesArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -424,9 +451,21 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: 'SessionConnection';
-  bridgeVersion?: Maybe<Scalars['String']['output']>;
+  canMove: Scalars['Boolean']['output'];
+  canRetry: Scalars['Boolean']['output'];
+  lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;
+  lastError?: Maybe<Scalars['String']['output']>;
   lastSeen?: Maybe<Scalars['DateTime']['output']>;
+  retryCount: Scalars['Int']['output'];
+  runtimeInstanceId?: Maybe<Scalars['String']['output']>;
+  runtimeLabel?: Maybe<Scalars['String']['output']>;
+  state: SessionConnectionState;
 };
+
+export type SessionConnectionState =
+  | 'connected'
+  | 'degraded'
+  | 'disconnected';
 
 export type SessionEndpoints = {
   __typename?: 'SessionEndpoints';
@@ -439,6 +478,16 @@ export type SessionFilters = {
   repoId?: InputMaybe<Scalars['ID']['input']>;
   status?: InputMaybe<SessionStatus>;
   tool?: InputMaybe<CodingTool>;
+};
+
+export type SessionRuntimeInstance = {
+  __typename?: 'SessionRuntimeInstance';
+  connected: Scalars['Boolean']['output'];
+  hostingMode: HostingMode;
+  id: Scalars['ID']['output'];
+  label: Scalars['String']['output'];
+  sessionCount: Scalars['Int']['output'];
+  supportedTools: Array<CodingTool>;
 };
 
 export type SessionStatus =
@@ -652,6 +701,7 @@ export type ResolversTypes = ResolversObject<{
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars['DateTime']['output']>;
+  DeliveryResult: DeliveryResult;
   EntityType: EntityType;
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
@@ -671,8 +721,10 @@ export type ResolversTypes = ResolversObject<{
   ScopeType: ScopeType;
   Session: ResolverTypeWrapper<Session>;
   SessionConnection: ResolverTypeWrapper<SessionConnection>;
+  SessionConnectionState: SessionConnectionState;
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
+  SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionStatus: SessionStatus;
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
@@ -712,6 +764,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionConnection: SessionConnection;
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
+  SessionRuntimeInstance: SessionRuntimeInstance;
   StartSessionInput: StartSessionInput;
   String: Scalars['String']['output'];
   Subscription: {};
@@ -724,6 +777,7 @@ export type ResolversParentTypes = ResolversObject<{
 
 export type ActorResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Actor'] = ResolversParentTypes['Actor']> = ResolversObject<{
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  name?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['ActorType'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
@@ -767,8 +821,10 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationCreateTicketArgs, 'input'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
+  moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
   pauseSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationPauseSessionArgs, 'id'>>;
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
+  retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
@@ -815,6 +871,7 @@ export type ProjectResolvers<ContextType = Context, ParentType extends Resolvers
 }>;
 
 export type QueryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
+  availableSessionRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableSessionRuntimesArgs, 'sessionId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
@@ -864,14 +921,31 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
 }>;
 
 export type SessionConnectionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionConnection'] = ResolversParentTypes['SessionConnection']> = ResolversObject<{
-  bridgeVersion?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  canMove?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  canRetry?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  lastDeliveryFailureAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   lastSeen?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  retryCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  runtimeInstanceId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  runtimeLabel?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  state?: Resolver<ResolversTypes['SessionConnectionState'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
 export type SessionEndpointsResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionEndpoints'] = ResolversParentTypes['SessionEndpoints']> = ResolversObject<{
   ports?: Resolver<Array<ResolversTypes['PortEndpoint']>, ParentType, ContextType>;
   terminals?: Resolver<Array<ResolversTypes['TerminalEndpoint']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionRuntimeInstanceResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionRuntimeInstance'] = ResolversParentTypes['SessionRuntimeInstance']> = ResolversObject<{
+  connected?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  hostingMode?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  label?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  supportedTools?: Resolver<Array<ResolversTypes['CodingTool']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -931,6 +1005,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Session?: SessionResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
+  SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   TerminalEndpoint?: TerminalEndpointResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;

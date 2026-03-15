@@ -19,6 +19,7 @@ export type Scalars = {
 export type Actor = {
   __typename?: 'Actor';
   id: Scalars['ID']['output'];
+  name?: Maybe<Scalars['String']['output']>;
   type: ActorType;
 };
 
@@ -89,6 +90,13 @@ export type CreateTicketInput = {
   title: Scalars['String']['input'];
 };
 
+export type DeliveryResult =
+  | 'delivered'
+  | 'delivery_failed'
+  | 'no_runtime'
+  | 'runtime_disconnected'
+  | 'session_unbound';
+
 export type EntityType =
   | 'channel'
   | 'session'
@@ -138,8 +146,10 @@ export type Mutation = {
   createTicket: Ticket;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
+  moveSessionToRuntime: Session;
   pauseSession: Session;
   resumeSession: Session;
+  retrySessionConnection: Session;
   runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
@@ -189,6 +199,12 @@ export type MutationLinkSessionToTicketArgs = {
 };
 
 
+export type MutationMoveSessionToRuntimeArgs = {
+  runtimeInstanceId: Scalars['ID']['input'];
+  sessionId: Scalars['ID']['input'];
+};
+
+
 export type MutationPauseSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -196,6 +212,11 @@ export type MutationPauseSessionArgs = {
 
 export type MutationResumeSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationRetrySessionConnectionArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -286,6 +307,7 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
+  availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   events: Array<Event>;
@@ -299,6 +321,11 @@ export type Query = {
   sessions: Array<Session>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
+};
+
+
+export type QueryAvailableSessionRuntimesArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -421,9 +448,21 @@ export type Session = {
 
 export type SessionConnection = {
   __typename?: 'SessionConnection';
-  bridgeVersion?: Maybe<Scalars['String']['output']>;
+  canMove: Scalars['Boolean']['output'];
+  canRetry: Scalars['Boolean']['output'];
+  lastDeliveryFailureAt?: Maybe<Scalars['DateTime']['output']>;
+  lastError?: Maybe<Scalars['String']['output']>;
   lastSeen?: Maybe<Scalars['DateTime']['output']>;
+  retryCount: Scalars['Int']['output'];
+  runtimeInstanceId?: Maybe<Scalars['String']['output']>;
+  runtimeLabel?: Maybe<Scalars['String']['output']>;
+  state: SessionConnectionState;
 };
+
+export type SessionConnectionState =
+  | 'connected'
+  | 'degraded'
+  | 'disconnected';
 
 export type SessionEndpoints = {
   __typename?: 'SessionEndpoints';
@@ -436,6 +475,16 @@ export type SessionFilters = {
   repoId?: InputMaybe<Scalars['ID']['input']>;
   status?: InputMaybe<SessionStatus>;
   tool?: InputMaybe<CodingTool>;
+};
+
+export type SessionRuntimeInstance = {
+  __typename?: 'SessionRuntimeInstance';
+  connected: Scalars['Boolean']['output'];
+  hostingMode: HostingMode;
+  id: Scalars['ID']['output'];
+  label: Scalars['String']['output'];
+  sessionCount: Scalars['Int']['output'];
+  supportedTools: Array<CodingTool>;
 };
 
 export type SessionStatus =

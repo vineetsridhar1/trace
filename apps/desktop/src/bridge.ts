@@ -1,16 +1,24 @@
 import WebSocket from "ws";
+import { randomUUID } from "crypto";
+import os from "os";
 import { ClaudeCodeAdapter, CodexAdapter, type CodingToolAdapter } from "@trace/shared";
 import { readConfig } from "./config.js";
 import { createWorktree } from "./worktree.js";
+
+const HEARTBEAT_INTERVAL_MS = 10_000;
 
 export class BridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
   private adapters = new Map<string, CodingToolAdapter>();
   private sessionTools = new Map<string, string>();
+  private instanceId: string;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
+    // Stable instance ID persisted for the lifetime of this bridge process
+    this.instanceId = randomUUID();
   }
 
   connect() {
@@ -18,6 +26,8 @@ export class BridgeClient {
 
     this.ws.on("open", () => {
       console.log("[bridge] connected to server");
+      this.sendRuntimeHello();
+      this.startHeartbeat();
     });
 
     this.ws.on("message", (data) => {
@@ -27,12 +37,40 @@ export class BridgeClient {
 
     this.ws.on("close", () => {
       console.log("[bridge] disconnected, reconnecting in 3s...");
+      this.stopHeartbeat();
       setTimeout(() => this.connect(), 3000);
     });
 
     this.ws.on("error", (err) => {
       console.error("[bridge] error:", err.message);
     });
+  }
+
+  private sendRuntimeHello() {
+    // Announce identity so the server can track this runtime instance
+    const ownedSessionIds = [...this.adapters.keys()];
+    this.send({
+      type: "runtime_hello",
+      instanceId: this.instanceId,
+      label: os.hostname(),
+      hostingMode: "local",
+      supportedTools: ["claude_code", "codex", "custom"],
+      sessionIds: ownedSessionIds,
+    });
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      this.send({ type: "runtime_heartbeat", instanceId: this.instanceId });
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   private createAdapter(tool?: string): CodingToolAdapter {
@@ -153,6 +191,7 @@ export class BridgeClient {
   }
 
   disconnect() {
+    this.stopHeartbeat();
     for (const adapter of this.adapters.values()) {
       adapter.abort();
     }

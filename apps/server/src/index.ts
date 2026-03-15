@@ -15,6 +15,8 @@ import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
 import { buildContext, buildWsContext } from "./lib/auth.js";
 import { handleBridgeConnection } from "./lib/bridge-handler.js";
+import { sessionRouter } from "./lib/session-router.js";
+import { sessionService } from "./services/session.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -52,6 +54,16 @@ async function main() {
   const bridgeWss = new WebSocketServer({ noServer: true });
   bridgeWss.on("connection", handleBridgeConnection);
 
+  const staleRuntimeMonitor = setInterval(() => {
+    const staleRuntimes = sessionRouter.checkStaleRuntimes();
+    for (const stale of staleRuntimes) {
+      const affectedSessions = sessionRouter.unregisterRuntime(stale.runtimeId);
+      for (const sessionId of affectedSessions) {
+        void sessionService.markConnectionLost(sessionId, "runtime_heartbeat_timeout", stale.runtimeId);
+      }
+    }
+  }, 5_000);
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req, socket, head) => {
     const { pathname } = new URL(req.url ?? "", "http://localhost");
@@ -79,6 +91,7 @@ async function main() {
           return {
             async drainServer() {
               await wsServerCleanup.dispose();
+              clearInterval(staleRuntimeMonitor);
               bridgeWss.close();
             },
           };
