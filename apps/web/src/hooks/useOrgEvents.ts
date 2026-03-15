@@ -17,6 +17,7 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
       actor {
         type
         id
+        name
       }
       parentId
       timestamp

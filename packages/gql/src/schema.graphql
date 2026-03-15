@@ -193,6 +193,7 @@ type Event {
 type Actor {
   type: ActorType!
   id: ID!
+  name: String
 }
 
 type TerminalEndpoint {

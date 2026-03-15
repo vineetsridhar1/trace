@@ -16,6 +16,7 @@ const SESSION_EVENTS_QUERY = gql`
       actor {
         type
         id
+        name
       }
       parentId
       timestamp

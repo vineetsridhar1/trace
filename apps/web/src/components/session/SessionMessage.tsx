@@ -102,20 +102,21 @@ export function SessionMessage({ id }: { id: string }) {
   const eventType = useEntityField("events", id, "eventType");
   const payload = useEntityField("events", id, "payload");
   const timestamp = useEntityField("events", id, "timestamp");
+  const actor = useEntityField("events", id, "actor") as { type: string; id: string; name?: string | null } | undefined;
 
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
     case "session_started":
       return typeof payload?.prompt === "string"
-        ? <UserBubble text={payload.prompt} timestamp={timestamp} />
+        ? <UserBubble text={payload.prompt} timestamp={timestamp} actorId={actor?.id} actorName={actor?.name} />
         : <SystemBadge text="Session started" />;
 
     case "session_output":
       return payload ? renderSessionOutput(payload, timestamp) : null;
 
     case "message_sent":
-      return <UserBubble text={str(payload?.text)} timestamp={timestamp} />;
+      return <UserBubble text={str(payload?.text)} timestamp={timestamp} actorId={actor?.id} actorName={actor?.name} />;
 
     case "session_terminated": {
       const isManualStop = payload?.reason !== "bridge_complete";

@@ -10,11 +10,15 @@ const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const WEB_URL = process.env.TRACE_WEB_URL || "http://localhost:3000";
 
 // Redirect to GitHub OAuth
-router.get("/auth/github", (_req, res) => {
+router.get("/auth/github", (req, res) => {
+  const origin = req.query.origin as string | undefined;
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
     scope: "read:user user:email",
   });
+  if (origin) {
+    params.set("state", origin);
+  }
   res.redirect(`https://github.com/login/oauth/authorize?${params}`);
 });
 
@@ -129,20 +133,24 @@ router.get("/auth/github/callback", async (req, res) => {
       path: "/",
     });
 
+    // Use origin from OAuth state param if available, otherwise fall back to WEB_URL
+    const redirectOrigin = (req.query.state as string) || WEB_URL;
+
     // Signal the opener window and close the popup
     res.send(`<!DOCTYPE html><html><body><script>
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:success" }, "${WEB_URL}");
+        window.opener.postMessage({ type: "auth:success" }, "${redirectOrigin}");
         window.close();
       } else {
-        window.location.href = "${WEB_URL}";
+        window.location.href = "${redirectOrigin}";
       }
     </script></body></html>`);
   } catch (err) {
     console.error("GitHub OAuth error:", err);
+    const errorOrigin = (req.query.state as string) || WEB_URL;
     res.send(`<!DOCTYPE html><html><body><script>
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:error" }, "${WEB_URL}");
+        window.opener.postMessage({ type: "auth:error" }, "${errorOrigin}");
         window.close();
       } else {
         document.body.textContent = "Authentication failed";

@@ -90,7 +90,7 @@ function LoginPage() {
     const left = window.screenX + (window.innerWidth - w) / 2;
     const top = window.screenY + (window.innerHeight - h) / 2;
     window.open(
-      "/auth/github",
+      `/auth/github?origin=${encodeURIComponent(window.location.origin)}`,
       "github-login",
       `width=${w},height=${h},left=${left},top=${top}`,
     );
