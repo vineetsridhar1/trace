@@ -1,4 +1,5 @@
 export const statusColor: Record<string, string> = {
+  creating: "text-purple-400",
   pending: "text-muted-foreground",
   active: "text-blue-400",
   paused: "text-yellow-400",
@@ -9,6 +10,7 @@ export const statusColor: Record<string, string> = {
 };
 
 export const statusLabel: Record<string, string> = {
+  creating: "Preparing...",
   pending: "Pending",
   active: "In Progress",
   paused: "Paused",

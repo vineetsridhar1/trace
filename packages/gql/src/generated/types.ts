@@ -416,6 +416,7 @@ export type Session = {
   tickets: Array<Ticket>;
   tool: CodingTool;
   updatedAt: Scalars['DateTime']['output'];
+  workdir?: Maybe<Scalars['String']['output']>;
 };
 
 export type SessionConnection = {
@@ -440,6 +441,7 @@ export type SessionFilters = {
 export type SessionStatus =
   | 'active'
   | 'completed'
+  | 'creating'
   | 'failed'
   | 'needs_input'
   | 'paused'

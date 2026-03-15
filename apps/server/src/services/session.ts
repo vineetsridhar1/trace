@@ -1,5 +1,6 @@
 import type { StartSessionInput, ActorType } from "@trace/gql";
 import type { SessionStatus, EventType, CodingTool } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -86,10 +87,15 @@ export class SessionService {
       ? input.prompt.slice(0, 80)
       : `Session ${new Date().toLocaleString()}`;
 
+    // If a repo is selected, start in "creating" status to prepare workspace
+    const needsWorkspace = !!input.repoId;
+    const initialStatus = needsWorkspace ? "creating" : "pending";
+
     const [session] = await prisma.$transaction(async (tx) => {
       const session = await tx.session.create({
         data: {
           name,
+          status: initialStatus,
           tool: input.tool,
           model: input.model ?? undefined,
           hosting: input.hosting,
@@ -120,6 +126,7 @@ export class SessionService {
             model: session.model,
             hosting: session.hosting,
             createdBy: session.createdBy,
+            repo: session.repo ?? null,
             channel: session.channel,
             parentSession: session.parentSession ?? null,
             childSessions: session.childSessions ?? [],
@@ -135,6 +142,19 @@ export class SessionService {
       return [session, event] as const;
     });
 
+    // If repo selected, send prepare command to bridge for worktree creation
+    if (needsWorkspace && session.repo) {
+      sessionRouter.send(session.id, {
+        type: "prepare",
+        sessionId: session.id,
+        repoId: session.repo.id,
+        repoName: session.repo.name,
+        repoRemoteUrl: session.repo.remoteUrl,
+        defaultBranch: session.repo.defaultBranch,
+        branch: input.branch ?? undefined,
+      });
+    }
+
     return session;
   }
 
@@ -143,6 +163,21 @@ export class SessionService {
       where: { id },
       include: SESSION_INCLUDE,
     });
+
+    // If workspace is still being prepared, queue the run for later
+    if (session.status === "creating") {
+      const updated = await prisma.session.update({
+        where: { id },
+        data: { pendingRun: { prompt: prompt ?? null, interactionMode: interactionMode ?? null } },
+        include: SESSION_INCLUDE,
+      });
+      return updated;
+    }
+
+    // Don't run if session is in a terminal state (e.g. workspace preparation failed)
+    if (session.status === "failed" || session.status === "completed") {
+      return session;
+    }
 
     // If no prompt provided, retrieve the original prompt from the session_started event
     let resolvedPrompt = prompt;
@@ -164,6 +199,7 @@ export class SessionService {
       tool: session.tool,
       model: session.model ?? undefined,
       interactionMode,
+      cwd: session.workdir ?? undefined,
     };
 
     const sent = sessionRouter.send(id, command);
@@ -362,7 +398,7 @@ export class SessionService {
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: { status: "active" },
-      select: { organizationId: true, tool: true, model: true, toolChangedAt: true },
+      select: { organizationId: true, tool: true, model: true, toolChangedAt: true, workdir: true },
     });
 
     // If the tool was recently switched and no user message has been sent since,
@@ -414,9 +450,61 @@ export class SessionService {
       tool: session.tool,
       model: session.model ?? undefined,
       interactionMode,
+      cwd: session.workdir ?? undefined,
     });
 
     return event;
+  }
+  async workspaceReady(sessionId: string, workdir: string) {
+    // Read pendingRun before clearing it atomically
+    const prev = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { pendingRun: true },
+    });
+
+    const session = await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: "pending", workdir, pendingRun: Prisma.DbNull },
+      include: SESSION_INCLUDE,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: { type: "workspace_ready", workdir },
+      actorType: "system",
+      actorId: "system",
+    });
+
+    // If a run was queued while workspace was being prepared, execute it now
+    if (prev.pendingRun) {
+      const pending = prev.pendingRun as Record<string, unknown>;
+      await this.run(
+        sessionId,
+        (pending.prompt as string) ?? undefined,
+        (pending.interactionMode as string) ?? undefined,
+      );
+    }
+  }
+
+  async workspaceFailed(sessionId: string, error: string) {
+    const session = await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: "failed", pendingRun: Prisma.DbNull },
+      include: SESSION_INCLUDE,
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_terminated",
+      payload: { sessionId, reason: "workspace_failed", error },
+      actorType: "system",
+      actorId: "system",
+    });
   }
 }
 

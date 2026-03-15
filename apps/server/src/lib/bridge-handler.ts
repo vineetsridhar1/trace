@@ -59,6 +59,14 @@ export function handleBridgeConnection(ws: WebSocket) {
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.complete(msg.sessionId);
         });
+      } else if (msg.type === "workspace_ready" && msg.sessionId) {
+        enqueueEvent(msg.sessionId, async () => {
+          await sessionService.workspaceReady(msg.sessionId, msg.workdir as string);
+        });
+      } else if (msg.type === "workspace_failed" && msg.sessionId) {
+        enqueueEvent(msg.sessionId, async () => {
+          await sessionService.workspaceFailed(msg.sessionId, (msg.error as string) ?? "Unknown error");
+        });
       } else if (msg.type === "register_session" && msg.sessionId) {
         sessionRouter.bindSession(msg.sessionId, bridgeId);
       }

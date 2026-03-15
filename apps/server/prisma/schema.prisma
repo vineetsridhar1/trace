@@ -21,6 +21,7 @@ enum ChannelType {
 }
 
 enum SessionStatus {
+  creating
   pending
   active
   paused
@@ -200,6 +201,8 @@ model Session {
   parentSessionId String?
   parentSession   Session?  @relation("SessionLineage", fields: [parentSessionId], references: [id])
   childSessions   Session[] @relation("SessionLineage")
+  workdir         String?
+  pendingRun      Json?
   endpoints       Json?
   connection      Json?
 

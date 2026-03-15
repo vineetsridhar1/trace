@@ -45,7 +45,12 @@ function statusFromEvent(eventType: EventType, payload: Record<string, unknown>)
 
   // Fallback for older events without status in payload
   switch (eventType) {
-    case "session_started":
+    case "session_started": {
+      // Session may start in "creating" status when a repo is selected
+      const session = payload.session as Record<string, unknown> | undefined;
+      const status = session?.status as SessionStatus | undefined;
+      return status ?? "pending";
+    }
     case "session_resumed":
       return "active";
     case "session_paused":
@@ -55,6 +60,14 @@ function statusFromEvent(eventType: EventType, payload: Record<string, unknown>)
     default:
       return undefined;
   }
+}
+
+/** Extract session field updates from session_output subtypes (e.g. workspace_ready) */
+function sessionPatchFromOutput(payload: Record<string, unknown>): Partial<SessionEntity> | undefined {
+  if (payload.type === "workspace_ready" && typeof payload.workdir === "string") {
+    return { status: "pending" as SessionStatus, workdir: payload.workdir };
+  }
+  return undefined;
 }
 
 /** Safely narrow unknown to a record */
@@ -154,6 +167,14 @@ export function useOrgEvents() {
               status,
               updatedAt: event.timestamp,
             });
+          }
+        }
+
+        // Handle session_output subtypes that update session fields
+        if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType)) {
+          const sessionPatch = sessionPatchFromOutput(event.payload);
+          if (sessionPatch) {
+            patch("sessions", event.scopeId, { ...sessionPatch, updatedAt: event.timestamp });
           }
         }
 

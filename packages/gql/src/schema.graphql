@@ -2,6 +2,7 @@ scalar DateTime
 scalar JSON
 
 enum SessionStatus {
+  creating
   pending
   active
   paused
@@ -151,6 +152,7 @@ type Session {
   createdBy: User!
   repo: Repo
   branch: String
+  workdir: String
   channel: Channel
   parentSession: Session
   childSessions: [Session!]!

@@ -17,6 +17,7 @@ import {
 } from "../ui/select";
 import { Button } from "../ui/button";
 import { useAuthStore } from "../../stores/auth";
+import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
 import {
@@ -34,10 +35,12 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [tool, setTool] = useState<string>("claude_code");
   const [model, setModel] = useState<string | undefined>(getDefaultModel("claude_code"));
   const [hosting, setHosting] = useState<string>("local");
+  const [repoId, setRepoId] = useState<string | undefined>(undefined);
   const [mode, setMode] = useState<InteractionMode>("code");
   const modelOptions = getModelsForTool(tool);
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const repoIds = useEntityIds("repos");
 
   const cycleMode = useCallback(() => {
     setMode((prev) => {
@@ -61,6 +64,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             model: model ?? undefined,
             hosting,
             channelId,
+            repoId: repoId ?? undefined,
             prompt: prompt.trim(),
           },
         })
@@ -85,8 +89,13 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const modeConfig = MODE_CONFIG[mode];
   const ModeIcon = modeConfig.icon;
 
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) setRepoId(undefined);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
         title="Start session"
@@ -145,6 +154,24 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              {repoIds.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">
+                    Repository
+                  </label>
+                  <Select value={repoId ?? "__none__"} onValueChange={(v) => { if (v) setRepoId(v === "__none__" ? undefined : v); }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No repo</SelectItem>
+                      {repoIds.map((id) => (
+                        <RepoOption key={id} id={id} />
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <label className="mb-1.5 block text-sm text-muted-foreground">
                   Mode
@@ -193,4 +220,9 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function RepoOption({ id }: { id: string }) {
+  const name = useEntityField("repos", id, "name");
+  return <SelectItem value={id}>{name ?? id}</SelectItem>;
 }

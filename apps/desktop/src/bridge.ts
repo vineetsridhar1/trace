@@ -1,5 +1,7 @@
 import WebSocket from "ws";
 import { ClaudeCodeAdapter, CodexAdapter, type CodingToolAdapter } from "@trace/shared";
+import { readConfig } from "./config.js";
+import { createWorktree } from "./worktree.js";
 
 export class BridgeClient {
   private ws: WebSocket | null = null;
@@ -96,10 +98,39 @@ export class BridgeClient {
         this.runPrompt({
           sessionId: msg.sessionId,
           prompt: msg.prompt as string,
+          cwd: msg.cwd as string | undefined,
           tool: msg.tool as string | undefined,
           model: msg.model as string | undefined,
           interactionMode: msg.interactionMode as string | undefined,
         });
+        break;
+      }
+      case "prepare": {
+        if (!msg.sessionId) return;
+        const sessionId = msg.sessionId;
+        const repoId = msg.repoId as string;
+        const repoName = msg.repoName as string;
+        const defaultBranch = (msg.defaultBranch as string) ?? "main";
+
+        const config = readConfig();
+        const repoPath = config.repos[repoId];
+
+        if (!repoPath) {
+          this.send({
+            type: "workspace_failed",
+            sessionId,
+            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+          });
+          break;
+        }
+
+        createWorktree({ repoPath, repoName, sessionId, defaultBranch })
+          .then(({ workdir }) => {
+            this.send({ type: "workspace_ready", sessionId, workdir });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId, error: err.message });
+          });
         break;
       }
       case "terminate": {

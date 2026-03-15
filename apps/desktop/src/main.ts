@@ -1,37 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
-import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { BridgeClient } from "./bridge.js";
+import { readConfig, writeConfig } from "./config.js";
 
 const execFileAsync = promisify(execFile);
-
-// --- Local repo path mapping (persisted in ~/.trace/config.json) ---
-
-interface RepoPathConfig {
-  repos: Record<string, string>; // repoId → local folder path
-}
-
-function getConfigPath(): string {
-  const home = app.getPath("home");
-  return path.join(home, ".trace", "config.json");
-}
-
-function readConfig(): RepoPathConfig {
-  try {
-    const raw = fs.readFileSync(getConfigPath(), "utf-8");
-    return JSON.parse(raw) as RepoPathConfig;
-  } catch {
-    return { repos: {} };
-  }
-}
-
-function writeConfig(config: RepoPathConfig): void {
-  const configPath = getConfigPath();
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
-}
 
 let mainWindow: BrowserWindow | null = null;
 const serverUrl = process.env.TRACE_SERVER_URL ?? "http://localhost:4000";

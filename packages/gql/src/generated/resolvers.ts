@@ -419,6 +419,7 @@ export type Session = {
   tickets: Array<Ticket>;
   tool: CodingTool;
   updatedAt: Scalars['DateTime']['output'];
+  workdir?: Maybe<Scalars['String']['output']>;
 };
 
 export type SessionConnection = {
@@ -443,6 +444,7 @@ export type SessionFilters = {
 export type SessionStatus =
   | 'active'
   | 'completed'
+  | 'creating'
   | 'failed'
   | 'needs_input'
   | 'paused'
@@ -857,6 +859,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType>;
   tool?: Resolver<ResolversTypes['CodingTool'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 

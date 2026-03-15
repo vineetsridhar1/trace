@@ -119,8 +119,12 @@ export function SessionMessage({ id }: { id: string }) {
       return <UserBubble text={str(payload?.text)} timestamp={timestamp} actorId={actor?.id} actorName={actor?.name} />;
 
     case "session_terminated": {
-      const isManualStop = payload?.reason !== "bridge_complete";
-      return isManualStop ? <SystemBadge text="Session terminated" /> : null;
+      if (payload?.reason === "bridge_complete") return null;
+      if (payload?.reason === "workspace_failed") {
+        const error = str(payload?.error);
+        return <SystemBadge text={error || "Workspace preparation failed"} />;
+      }
+      return <SystemBadge text="Session terminated" />;
     }
 
     default:

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Channel } from "@trace/gql";
+import type { Channel, Repo } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
@@ -33,6 +33,17 @@ const CHANNELS_QUERY = gql`
   }
 `;
 
+const REPOS_QUERY = gql`
+  query Repos($organizationId: ID!) {
+    repos(organizationId: $organizationId) {
+      id
+      name
+      remoteUrl
+      defaultBranch
+    }
+  }
+`;
+
 export function AppSidebar() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
@@ -51,9 +62,19 @@ export function AppSidebar() {
     }
   }, [activeOrgId, upsertMany]);
 
+  const fetchRepos = useCallback(async () => {
+    if (!activeOrgId) return;
+    const result = await client.query(REPOS_QUERY, { organizationId: activeOrgId }).toPromise();
+
+    if (result.data?.repos) {
+      upsertMany("repos", result.data.repos as Array<Repo & { id: string }>);
+    }
+  }, [activeOrgId, upsertMany]);
+
   useEffect(() => {
     fetchChannels();
-  }, [fetchChannels]);
+    fetchRepos();
+  }, [fetchChannels, fetchRepos]);
 
   // Close peek when sidebar gets pinned open
   useEffect(() => {

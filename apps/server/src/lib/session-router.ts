@@ -1,7 +1,7 @@
 import type WebSocket from "ws";
 
 export interface SessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send";
+  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare";
   sessionId: string;
   prompt?: string;
   [key: string]: unknown;
