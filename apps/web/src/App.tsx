@@ -73,16 +73,20 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
 function LoginPage() {
   const fetchMe = useAuthStore((s) => s.fetchMe);
+  const setToken = useAuthStore((s) => s.setToken);
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.data?.type === "auth:success") {
+        if (e.data.token) {
+          setToken(e.data.token);
+        }
         fetchMe();
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [fetchMe]);
+  }, [fetchMe, setToken]);
 
   function openGithubLogin() {
     const w = 500;

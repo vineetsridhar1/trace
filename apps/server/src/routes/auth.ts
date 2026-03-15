@@ -139,7 +139,7 @@ router.get("/auth/github/callback", async (req, res) => {
     // Signal the opener window and close the popup
     res.send(`<!DOCTYPE html><html><body><script>
       if (window.opener) {
-        window.opener.postMessage({ type: "auth:success" }, "${redirectOrigin}");
+        window.opener.postMessage({ type: "auth:success", token: "${token}" }, "${redirectOrigin}");
         window.close();
       } else {
         window.location.href = "${redirectOrigin}";
@@ -161,7 +161,10 @@ router.get("/auth/github/callback", async (req, res) => {
 
 // Get current user
 router.get("/auth/me", async (req, res) => {
-  const token = req.cookies?.trace_token;
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : req.cookies?.trace_token;
   if (!token) {
     return res.status(401).json({ error: "Not authenticated" });
   }
