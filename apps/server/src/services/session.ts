@@ -9,7 +9,7 @@ export type StartSessionServiceInput = StartSessionInput & {
   createdById: string;
 };
 
-const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true } as const;
+const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true, parentSession: true, childSessions: true } as const;
 
 export class SessionService {
   async list(organizationId: string, filters?: { status?: string | null; tool?: string | null; repoId?: string | null; channelId?: string | null }) {
@@ -47,6 +47,7 @@ export class SessionService {
           repoId: input.repoId ?? undefined,
           branch: input.branch ?? undefined,
           channelId: input.channelId ?? undefined,
+          parentSessionId: input.parentSessionId ?? undefined,
           ...(input.projectId && {
             projects: { create: { projectId: input.projectId } },
           }),
@@ -68,6 +69,8 @@ export class SessionService {
             hosting: session.hosting,
             createdBy: session.createdBy,
             channel: session.channel,
+            parentSession: session.parentSession ?? null,
+            childSessions: session.childSessions ?? [],
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
           },
@@ -83,7 +86,7 @@ export class SessionService {
     return session;
   }
 
-  async run(id: string, prompt?: string | null) {
+  async run(id: string, prompt?: string | null, interactionMode?: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
       include: SESSION_INCLUDE,
@@ -107,6 +110,7 @@ export class SessionService {
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
       tool: session.tool,
+      interactionMode,
     };
 
     const sent = sessionRouter.send(id, command);
@@ -173,7 +177,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: id,
       eventType,
-      payload: { sessionId: id },
+      payload: { sessionId: id, status: newStatus },
       actorType,
       actorId,
     });
@@ -222,9 +226,49 @@ export class SessionService {
   }
 
   async complete(id: string) {
+    // Only transition from active — don't overwrite explicit user actions
+    const current = await prisma.session.findUnique({ where: { id }, select: { status: true } });
+    if (!current || current.status !== "active") return;
+
+    // Find when the current run started (last session_resumed or session_started)
+    const lastResume = await prisma.event.findFirst({
+      where: {
+        scopeId: id,
+        scopeType: "session",
+        eventType: { in: ["session_resumed", "session_started"] },
+      },
+      orderBy: { timestamp: "desc" },
+    });
+
+    // Only check session_output events from the current run
+    const recentEvents = await prisma.event.findMany({
+      where: {
+        scopeId: id,
+        scopeType: "session",
+        eventType: "session_output",
+        ...(lastResume && { timestamp: { gte: lastResume.timestamp } }),
+      },
+      orderBy: { timestamp: "desc" },
+      take: 10,
+    });
+
+    const hasPendingPlan = recentEvents.some((evt) => {
+      const payload = evt.payload as Record<string, unknown>;
+      if (payload.type !== "assistant") return false;
+      const message = payload.message as Record<string, unknown> | undefined;
+      const content = message?.content;
+      if (!Array.isArray(content)) return false;
+      return content.some((block: unknown) => {
+        const b = block as Record<string, unknown> | undefined;
+        return b?.type === "tool_use" && b?.name === "ExitPlanMode";
+      });
+    });
+
+    const newStatus = hasPendingPlan ? "needs_input" : "completed";
+
     const session = await prisma.session.update({
       where: { id },
-      data: { status: "completed" },
+      data: { status: newStatus },
       select: { organizationId: true },
     });
 
@@ -233,13 +277,13 @@ export class SessionService {
       scopeType: "session",
       scopeId: id,
       eventType: "session_terminated",
-      payload: { sessionId: id, reason: "bridge_complete" },
+      payload: { sessionId: id, reason: "bridge_complete", status: newStatus },
       actorType: "system",
       actorId: "system",
     });
   }
 
-  async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string) {
+  async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string, interactionMode?: string) {
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: { status: "active" },
@@ -273,6 +317,7 @@ export class SessionService {
       sessionId,
       prompt: text,
       tool: session.tool,
+      interactionMode,
     });
 
     return event;

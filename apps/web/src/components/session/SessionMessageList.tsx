@@ -1,25 +1,20 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef } from "react";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
-import { buildSessionNodes } from "./groupReadGlob";
-import { useEntityStore } from "../../stores/entity";
+import { PlanReviewCard } from "./messages/PlanReviewCard";
+import type { SessionNode } from "./groupReadGlob";
 
 interface SessionMessageListProps {
   eventIds: string[];
+  nodes: SessionNode[];
 }
 
-export function SessionMessageList({ eventIds }: SessionMessageListProps) {
+export function SessionMessageList({ eventIds, nodes }: SessionMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const events = useEntityStore((s) => s.events);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [eventIds.length]);
-
-  const nodes = useMemo(
-    () => buildSessionNodes(eventIds, events),
-    [eventIds, events],
-  );
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -27,6 +22,13 @@ export function SessionMessageList({ eventIds }: SessionMessageListProps) {
         {nodes.map((node) =>
           node.kind === "event" ? (
             <SessionMessage key={node.id} id={node.id} />
+          ) : node.kind === "plan-review" ? (
+            <PlanReviewCard
+              key={node.id}
+              planContent={node.planContent}
+              planFilePath={node.planFilePath}
+              timestamp={node.timestamp}
+            />
           ) : (
             <ReadGlobGroup
               key={node.items[0].id}

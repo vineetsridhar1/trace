@@ -202,6 +202,7 @@ export type MutationResumeSessionArgs = {
 
 export type MutationRunSessionArgs = {
   id: Scalars['ID']['input'];
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -214,6 +215,7 @@ export type MutationSendMessageArgs = {
 
 
 export type MutationSendSessionMessageArgs = {
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
 };
@@ -398,6 +400,7 @@ export type Session = {
   __typename?: 'Session';
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
+  childSessions: Array<Session>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -405,6 +408,7 @@ export type Session = {
   hosting: HostingMode;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
+  parentSession?: Maybe<Session>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   status: SessionStatus;
@@ -436,6 +440,7 @@ export type SessionStatus =
   | 'active'
   | 'completed'
   | 'failed'
+  | 'needs_input'
   | 'paused'
   | 'pending'
   | 'unreachable';
@@ -444,6 +449,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting: HostingMode;
+  parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;

@@ -8,7 +8,8 @@ const INVISIBLE_PAYLOAD_TYPES = new Set(["result"]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
-  | { kind: "readglob-group"; items: ReadGlobItem[] };
+  | { kind: "readglob-group"; items: ReadGlobItem[] }
+  | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string };
 
 /** Safely narrow unknown to a record for property access */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -103,5 +104,134 @@ export function buildSessionNodes(
   }
 
   flushBucket();
+
+  // Deduplicate consecutive "result" events (race between readline and process close)
+  const deduped = deduplicateResultEvents(result, events);
+
+  // Post-process: detect ExitPlanMode tool_use and replace with plan-review nodes
+  return detectPlanReviewNodes(deduped, events);
+}
+
+/** Remove duplicate consecutive "result" session_output events */
+function deduplicateResultEvents(
+  nodes: SessionNode[],
+  events: Record<string, Event>,
+): SessionNode[] {
+  const result: SessionNode[] = [];
+  let lastWasResult = false;
+
+  for (const node of nodes) {
+    if (node.kind === "event") {
+      const event = events[node.id];
+      const payload = event?.eventType === "session_output"
+        ? asRecord(event.payload)
+        : undefined;
+      const isResult = payload?.type === "result";
+
+      if (isResult && lastWasResult) continue; // skip duplicate
+      lastWasResult = isResult;
+    } else {
+      lastWasResult = false;
+    }
+    result.push(node);
+  }
+
+  return result;
+}
+
+/** Walk backwards through nodes to find ExitPlanMode tool calls and replace them with plan-review nodes */
+function detectPlanReviewNodes(
+  nodes: SessionNode[],
+  events: Record<string, Event>,
+): SessionNode[] {
+  const result: SessionNode[] = [...nodes];
+
+  for (let i = result.length - 1; i >= 0; i--) {
+    const node = result[i];
+    if (node.kind !== "event") continue;
+
+    const event = events[node.id];
+    if (!event || event.eventType !== "session_output") continue;
+
+    const payload = asRecord(event.payload);
+    if (!payload || payload.type !== "assistant") continue;
+
+    const message = asRecord(payload.message);
+    const blocks = message?.content;
+    if (!Array.isArray(blocks)) continue;
+
+    // Check if this event contains an ExitPlanMode tool_use
+    const hasExitPlanMode = blocks.some((rawBlock: unknown) => {
+      const block = asRecord(rawBlock);
+      return block?.type === "tool_use" && block?.name === "ExitPlanMode";
+    });
+    if (!hasExitPlanMode) continue;
+
+    // Look backwards for Write/Edit to a .claude/plans/ .md file
+    let planContent = "";
+    let planFilePath = "";
+    let planEventIndex = -1;
+    let fallbackText = "";
+
+    for (let j = i - 1; j >= 0; j--) {
+      const prevNode = result[j];
+      if (prevNode.kind !== "event") continue;
+
+      const prevEvent = events[prevNode.id];
+      if (!prevEvent || prevEvent.eventType !== "session_output") continue;
+
+      const prevPayload = asRecord(prevEvent.payload);
+      if (!prevPayload || prevPayload.type !== "assistant") continue;
+
+      const prevMessage = asRecord(prevPayload.message);
+      const prevBlocks = prevMessage?.content;
+      if (!Array.isArray(prevBlocks)) continue;
+
+      for (const rawBlock of prevBlocks) {
+        const block = asRecord(rawBlock);
+        if (!block) continue;
+
+        // Collect fallback text
+        if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
+          fallbackText = block.text;
+        }
+
+        if (block.type === "tool_use" && (block.name === "Write" || block.name === "Edit")) {
+          const input = asRecord(block.input);
+          if (!input) continue;
+          const fp = String(input.file_path ?? "");
+          if (fp.includes(".claude/plans/") && fp.endsWith(".md")) {
+            planContent = String(input.content ?? "");
+            planFilePath = fp;
+            planEventIndex = j;
+            break;
+          }
+        }
+      }
+
+      if (planContent) break;
+    }
+
+    if (!planContent && fallbackText) {
+      planContent = fallbackText;
+    }
+
+    if (planContent) {
+      // Replace the ExitPlanMode event with a plan-review node
+      result[i] = {
+        kind: "plan-review",
+        id: node.id,
+        planContent,
+        planFilePath,
+        timestamp: event.timestamp,
+      };
+
+      // Remove the Write/Edit event that wrote the plan (if found)
+      if (planEventIndex >= 0) {
+        result.splice(planEventIndex, 1);
+      }
+    }
+  }
+
   return result;
 }

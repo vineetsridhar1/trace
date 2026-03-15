@@ -5,6 +5,7 @@ enum SessionStatus {
   pending
   active
   paused
+  needs_input
   completed
   failed
   unreachable
@@ -151,6 +152,8 @@ type Session {
   repo: Repo
   branch: String
   channel: Channel
+  parentSession: Session
+  childSessions: [Session!]!
   projects: [Project!]!
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
@@ -239,6 +242,7 @@ input StartSessionInput {
   ticketId: ID
   channelId: ID
   projectId: ID
+  parentSessionId: ID
   prompt: String
 }
 
@@ -323,10 +327,10 @@ type Mutation {
   startSession(input: StartSessionInput!): Session!
   pauseSession(id: ID!): Session!
   resumeSession(id: ID!): Session!
-  runSession(id: ID!, prompt: String): Session!
+  runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!
   updateSessionTool(sessionId: ID!, tool: CodingTool!): Session!
-  sendSessionMessage(sessionId: ID!, text: String!): Event!
+  sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!
   commentOnTicket(ticketId: ID!, text: String!): Event!

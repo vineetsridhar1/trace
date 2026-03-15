@@ -24,6 +24,7 @@ enum SessionStatus {
   pending
   active
   paused
+  needs_input
   completed
   failed
   unreachable
@@ -195,8 +196,11 @@ model Session {
   branch         String?
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
-  endpoints      Json?
-  connection     Json?
+  parentSessionId String?
+  parentSession   Session?  @relation("SessionLineage", fields: [parentSessionId], references: [id])
+  childSessions   Session[] @relation("SessionLineage")
+  endpoints       Json?
+  connection      Json?
 
   projects SessionProject[]
   tickets  SessionTicket[]

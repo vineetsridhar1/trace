@@ -16,11 +16,21 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private claudeSessionId: string | null = null;
   private cwd: string | null = null;
+  private resultEmitted = false;
 
-  run({ prompt, cwd, onOutput, onComplete }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, interactionMode }: RunOptions) {
     this.cwd = cwd;
+    this.resultEmitted = false;
 
-    const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"];
+    const permissionFlag = interactionMode === "plan"
+      ? "--permission-mode"
+      : "--dangerously-skip-permissions";
+    const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+    if (interactionMode === "plan") {
+      args.push(permissionFlag, "plan");
+    } else {
+      args.push(permissionFlag);
+    }
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
@@ -30,6 +40,20 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
     });
+
+    // Track process exit code so readline close handler can emit a fallback result
+    let exitCode: number | null = null;
+    let rlClosed = false;
+    let processClosed = false;
+
+    const maybeFinish = () => {
+      if (!rlClosed || !processClosed) return;
+      if (!this.resultEmitted) {
+        onOutput({ type: "result", subtype: exitCode === 0 || exitCode === null ? "success" : "error" });
+      }
+      onComplete();
+      this.process = null;
+    };
 
     if (this.process.stdout) {
       const rl = createInterface({ input: this.process.stdout });
@@ -50,6 +74,12 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
           // Non-JSON text from stdout
         }
       });
+      rl.on("close", () => {
+        rlClosed = true;
+        maybeFinish();
+      });
+    } else {
+      rlClosed = true;
     }
 
     if (this.process.stderr) {
@@ -60,9 +90,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
 
     this.process.on("close", (code) => {
-      onOutput({ type: "result", subtype: code === 0 || code === null ? "success" : "error" });
-      onComplete();
-      this.process = null;
+      exitCode = code;
+      processClosed = true;
+      maybeFinish();
     });
 
     this.process.on("error", (err) => {
@@ -91,6 +121,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
 
     if (type === "result") {
       const isError = data.is_error === true || data.subtype === "error";
+      this.resultEmitted = true;
       onOutput({ type: "result", subtype: isError ? "error" : "success" });
       return;
     }

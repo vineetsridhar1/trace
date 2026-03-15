@@ -1,4 +1,4 @@
-import { Circle } from "lucide-react";
+import { Circle, GitBranch } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel } from "../session/sessionStatus";
@@ -9,6 +9,7 @@ export function SessionRow({ id }: { id: string }) {
   const status = useEntityField("sessions", id, "status");
   const updatedAt = useEntityField("sessions", id, "updatedAt");
   const lastEventPreview = useEntityField("sessions", id, "_lastEventPreview");
+  const parentSession = useEntityField("sessions", id, "parentSession") as { id: string; name: string } | null | undefined;
   const createdBy = useEntityField("sessions", id, "createdBy");
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
 
@@ -20,17 +21,21 @@ export function SessionRow({ id }: { id: string }) {
     >
       <Circle size={8} className={`shrink-0 fill-current ${statusColor[status ?? "active"]}`} />
 
-      {/* Name + preview — takes remaining space, truncates */}
       <div className="min-w-0 flex-1">
         <span className="text-sm text-foreground truncate block">{name}</span>
-        {lastEventPreview && (
+        {parentSession && (
+          <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <GitBranch size={10} className="shrink-0" />
+            <span className="truncate">from {parentSession.name}</span>
+          </span>
+        )}
+        {lastEventPreview && !parentSession && (
           <span className="mt-0.5 truncate block border-l-2 border-muted-foreground/30 pl-2 text-xs text-muted-foreground italic">
             {lastEventPreview}
           </span>
         )}
       </div>
 
-      {/* Status + created by — hidden on small screens */}
       <span className={`hidden shrink-0 text-xs sm:inline ${statusColor[status ?? "active"]}`}>
         {statusLabel[status ?? "active"]}
       </span>
@@ -46,7 +51,6 @@ export function SessionRow({ id }: { id: string }) {
         <span className="text-xs text-muted-foreground">{createdBy?.name}</span>
       </div>
 
-      {/* Timestamp — always visible */}
       <span className="shrink-0 text-xs text-muted-foreground">
         {updatedAt ? timeAgo(updatedAt) : ""}
       </span>

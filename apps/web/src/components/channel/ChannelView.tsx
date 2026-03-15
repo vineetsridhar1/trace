@@ -27,6 +27,14 @@ const SESSIONS_QUERY = gql`
       channel {
         id
       }
+      parentSession {
+        id
+        name
+      }
+      childSessions {
+        id
+        name
+      }
       createdAt
       updatedAt
     }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 import {
   Dialog,
@@ -18,30 +18,30 @@ import {
 import { Button } from "../ui/button";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
-
-const START_SESSION_MUTATION = gql`
-  mutation StartSession($input: StartSessionInput!) {
-    startSession(input: $input) {
-      id
-    }
-  }
-`;
-
-const RUN_SESSION_MUTATION = gql`
-  mutation RunSession($id: ID!, $prompt: String) {
-    runSession(id: $id, prompt: $prompt) {
-      id
-    }
-  }
-`;
+import { START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
+import {
+  type InteractionMode,
+  MODE_CYCLE,
+  MODE_CONFIG,
+  wrapPrompt,
+} from "../session/interactionModes";
+import { cn } from "../../lib/utils";
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [tool, setTool] = useState<string>("claude_code");
+  const [hosting, setHosting] = useState<string>("local");
+  const [mode, setMode] = useState<InteractionMode>("code");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+
+  const cycleMode = useCallback(() => {
+    setMode((prev) => {
+      const idx = MODE_CYCLE.indexOf(prev);
+      return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
+    });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,11 +49,13 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
 
     setCreating(true);
     try {
+      const wrappedPrompt = wrapPrompt(mode, prompt.trim());
+
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
             tool,
-            hosting: "cloud",
+            hosting,
             channelId,
             prompt: prompt.trim(),
           },
@@ -62,14 +64,22 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
 
       const sessionId = result.data?.startSession?.id;
       if (sessionId) {
-        await client.mutation(RUN_SESSION_MUTATION, { id: sessionId, prompt: prompt.trim() }).toPromise();
+        await client.mutation(RUN_SESSION_MUTATION, {
+          id: sessionId,
+          prompt: wrappedPrompt,
+          interactionMode: mode === "code" ? undefined : mode,
+        }).toPromise();
         setPrompt("");
+        setMode("code");
         setOpen(false);
       }
     } finally {
       setCreating(false);
     }
   }
+
+  const modeConfig = MODE_CONFIG[mode];
+  const ModeIcon = modeConfig.icon;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -85,20 +95,52 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             <DialogTitle>Start Session</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm text-muted-foreground">
-                Coding tool
-              </label>
-              <Select value={tool} onValueChange={(v) => { if (v) setTool(v); }}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="claude_code">Claude Code</SelectItem>
-                  <SelectItem value="codex">Codex</SelectItem>
-                  <SelectItem value="cursor">Cursor</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <label className="mb-1.5 block text-sm text-muted-foreground">
+                  Coding tool
+                </label>
+                <Select value={tool} onValueChange={(v) => { if (v) setTool(v); }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="claude_code">Claude Code</SelectItem>
+                    <SelectItem value="codex">Codex</SelectItem>
+                    <SelectItem value="cursor">Cursor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <label className="mb-1.5 block text-sm text-muted-foreground">
+                  Hosting
+                </label>
+                <Select value={hosting} onValueChange={(v) => { if (v) setHosting(v); }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">Local</SelectItem>
+                    <SelectItem value="cloud">Cloud</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm text-muted-foreground">
+                  Mode
+                </label>
+                <button
+                  type="button"
+                  onClick={cycleMode}
+                  className={cn(
+                    "flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors",
+                    modeConfig.style,
+                  )}
+                >
+                  <ModeIcon size={14} className="shrink-0" />
+                  {modeConfig.label}
+                </button>
+              </div>
             </div>
             <div>
             <label className="mb-1.5 block text-sm text-muted-foreground">

@@ -34,8 +34,8 @@ export const sessionMutations = {
   resumeSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.resume(args.id, ctx.actorType, ctx.userId);
   },
-  runSession: (_: unknown, args: { id: string; prompt?: string | null }, _ctx: Context) => {
-    return sessionService.run(args.id, args.prompt);
+  runSession: (_: unknown, args: { id: string; prompt?: string | null; interactionMode?: string | null }, _ctx: Context) => {
+    return sessionService.run(args.id, args.prompt, args.interactionMode ?? undefined);
   },
   terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
@@ -43,8 +43,8 @@ export const sessionMutations = {
   updateSessionTool: (_: unknown, args: { sessionId: string; tool: CodingTool }, ctx: Context) => {
     return sessionService.updateTool(args.sessionId, args.tool, ctx.actorType, ctx.userId);
   },
-  sendSessionMessage: (_: unknown, args: { sessionId: string; text: string }, ctx: Context) => {
-    return sessionService.sendMessage(args.sessionId, args.text, ctx.actorType, ctx.userId);
+  sendSessionMessage: (_: unknown, args: { sessionId: string; text: string; interactionMode?: string | null }, ctx: Context) => {
+    return sessionService.sendMessage(args.sessionId, args.text, ctx.actorType, ctx.userId, args.interactionMode ?? undefined);
   },
   linkSessionToTicket: (_: unknown, args: { sessionId: string; ticketId: string }, ctx: Context) => {
     return sessionService.linkToTicket(args.sessionId, args.ticketId, ctx.actorType, ctx.userId);

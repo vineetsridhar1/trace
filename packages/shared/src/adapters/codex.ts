@@ -13,9 +13,11 @@ export class CodexAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private cwd: string | null = null;
   private threadId: string | null = null;
+  private resultEmitted = false;
 
   run({ prompt, cwd, onOutput, onComplete }: RunOptions) {
     this.cwd = cwd;
+    this.resultEmitted = false;
 
     const args = this.threadId
       ? ["exec", "resume", this.threadId, "--json", "--dangerously-bypass-approvals-and-sandbox", prompt]
@@ -42,13 +44,15 @@ export class CodexAdapter implements CodingToolAdapter {
 
     if (this.process.stderr) {
       const rl = createInterface({ input: this.process.stderr });
-      rl.on("line", (line) => {
+      rl.on("line", () => {
         // stderr dropped
       });
     }
 
     this.process.on("close", (code) => {
-      onOutput({ type: "result", subtype: code === 0 || code === null ? "success" : "error" });
+      if (!this.resultEmitted) {
+        onOutput({ type: "result", subtype: code === 0 || code === null ? "success" : "error" });
+      }
       onComplete();
       this.process = null;
     });

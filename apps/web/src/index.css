@@ -315,6 +315,13 @@
   font-size: 11px;
 }
 
+/* Accent dashed container (plan review, interactive questions) */
+.accent-dashed-container {
+  border: 1px dashed color-mix(in srgb, var(--th-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--th-accent) 5%, transparent);
+  border-radius: 0.5rem;
+}
+
 .subagent-result-pre {
   margin-top: 6px;
   max-height: 15rem;

@@ -38,6 +38,11 @@ const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set([
 ]);
 
 function statusFromEvent(eventType: EventType, payload: Record<string, unknown>): SessionStatus | undefined {
+  // Server includes the authoritative status in all session event payloads
+  const explicit = payload.status as SessionStatus | undefined;
+  if (explicit) return explicit;
+
+  // Fallback for older events without status in payload
   switch (eventType) {
     case "session_started":
     case "session_resumed":
@@ -121,6 +126,22 @@ export function useOrgEvents() {
           const session = asRecord(event.payload.session);
           if (session && typeof session.id === "string") {
             upsert("sessions", session.id, session as unknown as SessionEntity);
+
+            // If this session has a parent, update the parent's childSessions
+            const parent = asRecord(session.parentSession);
+            if (parent && typeof parent.id === "string") {
+              const { sessions } = useEntityStore.getState();
+              const parentEntity = sessions[parent.id];
+              if (parentEntity) {
+                const existing = (parentEntity.childSessions ?? []) as Array<{ id: string; name: string }>;
+                const alreadyLinked = existing.some((c) => c.id === session.id);
+                if (!alreadyLinked) {
+                  patch("sessions", parent.id, {
+                    childSessions: [...existing, { id: session.id, name: session.name }],
+                  });
+                }
+              }
+            }
           }
         }
 

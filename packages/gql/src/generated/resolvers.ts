@@ -205,6 +205,7 @@ export type MutationResumeSessionArgs = {
 
 export type MutationRunSessionArgs = {
   id: Scalars['ID']['input'];
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -217,6 +218,7 @@ export type MutationSendMessageArgs = {
 
 
 export type MutationSendSessionMessageArgs = {
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
 };
@@ -401,6 +403,7 @@ export type Session = {
   __typename?: 'Session';
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
+  childSessions: Array<Session>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -408,6 +411,7 @@ export type Session = {
   hosting: HostingMode;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
+  parentSession?: Maybe<Session>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   status: SessionStatus;
@@ -439,6 +443,7 @@ export type SessionStatus =
   | 'active'
   | 'completed'
   | 'failed'
+  | 'needs_input'
   | 'paused'
   | 'pending'
   | 'unreachable';
@@ -447,6 +452,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting: HostingMode;
+  parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
@@ -833,6 +839,7 @@ export type RepoResolvers<ContextType = Context, ParentType extends ResolversPar
 export type SessionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Session'] = ResolversParentTypes['Session']> = ResolversObject<{
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
+  childSessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
@@ -840,6 +847,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  parentSession?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;

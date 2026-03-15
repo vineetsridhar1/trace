@@ -47,6 +47,7 @@ export interface RunOptions {
   cwd: string;
   onOutput: OutputCallback;
   onComplete: () => void;
+  interactionMode?: "code" | "plan" | "ask";
 }
 
 /**

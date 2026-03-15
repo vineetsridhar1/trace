@@ -42,7 +42,7 @@ export class BridgeClient {
     }
   }
 
-  private runPrompt({ sessionId, prompt, cwd, tool }: { sessionId: string; prompt: string; cwd?: string; tool?: string }) {
+  private runPrompt({ sessionId, prompt, cwd, tool, interactionMode }: { sessionId: string; prompt: string; cwd?: string; tool?: string; interactionMode?: string }) {
     const workdir = cwd ?? process.cwd();
 
     // Reuse existing adapter (retains session state for --resume)
@@ -62,6 +62,7 @@ export class BridgeClient {
       onComplete: () => {
         this.send({ type: "session_complete", sessionId });
       },
+      interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
     });
   }
 
@@ -74,6 +75,7 @@ export class BridgeClient {
           prompt: msg.prompt as string ?? "",
           cwd: msg.cwd as string | undefined,
           tool: msg.tool as string | undefined,
+          interactionMode: msg.interactionMode as string | undefined,
         });
         break;
       }
@@ -83,6 +85,7 @@ export class BridgeClient {
           sessionId: msg.sessionId,
           prompt: msg.prompt as string,
           tool: msg.tool as string | undefined,
+          interactionMode: msg.interactionMode as string | undefined,
         });
         break;
       }
@@ -90,8 +93,9 @@ export class BridgeClient {
         if (!msg.sessionId) return;
         const adapter = this.adapters.get(msg.sessionId);
         if (adapter) {
+          // Abort the running process but keep the adapter so it retains
+          // the Claude Code session ID for --resume on subsequent messages.
           adapter.abort();
-          this.adapters.delete(msg.sessionId);
         }
         break;
       }
