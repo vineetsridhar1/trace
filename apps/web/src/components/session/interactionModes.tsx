@@ -42,10 +42,12 @@ export function wrapPrompt(mode: InteractionMode, prompt: string): string {
   }
 }
 
-const TRACE_INTERNAL_RE = /<trace-internal>[\s\S]*?<\/trace-internal>\s*/;
+const TRACE_INTERNAL_RE = /<trace-internal>[\s\S]*?<\/trace-internal>\s*/g;
+const CONVERSATION_HISTORY_RE = /<conversation-history>[\s\S]*?<\/conversation-history>\s*/g;
 
 export function stripPromptWrapping(text: string): string {
   let cleaned = text.replace(TRACE_INTERNAL_RE, "");
+  cleaned = cleaned.replace(CONVERSATION_HISTORY_RE, "");
   if (cleaned.startsWith(PLAN_PREFIX)) {
     cleaned = cleaned.slice(PLAN_PREFIX.length);
   }

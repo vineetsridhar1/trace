@@ -1,6 +1,7 @@
 import { formatTime } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
 import { useAuthStore } from "../../../stores/auth";
+import { Markdown } from "../../ui/Markdown";
 
 export function UserBubble({
   text,
@@ -25,7 +26,9 @@ export function UserBubble({
           <span className="text-xs font-semibold text-accent">{displayName}</span>
           <span className="text-[10px] text-muted-foreground">{formatTime(timestamp)}</span>
         </div>
-        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{displayText}</p>
+        <div className="text-sm leading-relaxed break-words">
+          <Markdown>{displayText}</Markdown>
+        </div>
       </div>
     </div>
   );
