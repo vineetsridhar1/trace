@@ -23,7 +23,7 @@ export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
       renderedOutput = undefined;
     }
   }
-  const [open, setOpen] = useState(Boolean(commandResult && renderedOutput));
+  const [open, setOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(0);
 
