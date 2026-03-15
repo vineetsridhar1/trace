@@ -55,7 +55,7 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
       setSending(false);
       inputRef.current?.focus();
     }
-  }, [sessionId, message, sending]);
+  }, [sessionId, message, sending, status]);
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">

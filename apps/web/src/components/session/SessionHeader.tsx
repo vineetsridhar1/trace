@@ -1,17 +1,13 @@
-import { ArrowLeft, Play, Square, Circle } from "lucide-react";
+import { ArrowLeft, Square, Circle } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel } from "./sessionStatus";
 
 export function SessionHeader({
   sessionId,
-  running,
-  onRun,
   onStop,
 }: {
   sessionId: string;
-  running: boolean;
-  onRun: () => void;
   onStop: () => void;
 }) {
   const name = useEntityField("sessions", sessionId, "name");
@@ -41,22 +37,13 @@ export function SessionHeader({
           {statusLabel[status ?? "active"]}
         </span>
 
-        {isActive ? (
+        {isActive && (
           <button
             onClick={onStop}
             className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
           >
             <Square size={12} />
             Stop
-          </button>
-        ) : (
-          <button
-            onClick={onRun}
-            disabled={running}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors disabled:opacity-50"
-          >
-            <Play size={12} />
-            Run
           </button>
         )}
       </div>

@@ -28,6 +28,14 @@ const START_SESSION_MUTATION = gql`
   }
 `;
 
+const RUN_SESSION_MUTATION = gql`
+  mutation RunSession($id: ID!, $prompt: String) {
+    runSession(id: $id, prompt: $prompt) {
+      id
+    }
+  }
+`;
+
 export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -52,7 +60,9 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
         })
         .toPromise();
 
-      if (result.data?.startSession) {
+      const sessionId = result.data?.startSession?.id;
+      if (sessionId) {
+        await client.mutation(RUN_SESSION_MUTATION, { id: sessionId, prompt: prompt.trim() }).toPromise();
         setPrompt("");
         setOpen(false);
       }

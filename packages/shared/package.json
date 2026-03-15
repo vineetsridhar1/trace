@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
-    "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch &; wait)",
+    "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
     "lint": "tsc -b"
   },
   "devDependencies": {
