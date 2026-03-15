@@ -1,12 +1,19 @@
 import { createClient, fetchExchange, subscriptionExchange } from "@urql/core";
 import { createClient as createWSClient } from "graphql-ws";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "";
+const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+const wsBase = API_URL
+  ? API_URL.replace(/^https?:/, wsProtocol)
+  : `${wsProtocol}//${window.location.host}`;
+
 const wsClient = createWSClient({
-  url: `ws://${window.location.host}/ws`,
+  url: `${wsBase}/ws`,
 });
 
 export const client = createClient({
-  url: "/graphql",
+  url: `${API_URL}/graphql`,
+  fetchOptions: { credentials: "include" },
   exchanges: [
     fetchExchange,
     subscriptionExchange({

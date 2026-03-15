@@ -2,6 +2,7 @@ import { ApolloServer } from "@apollo/server";
 import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHttpServer";
 import { expressMiddleware } from "@as-integrations/express5";
 import express from "express";
+import cors from "cors";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import { readFileSync } from "fs";
@@ -23,6 +24,10 @@ async function main() {
   const httpServer = createServer(app);
   const schema = makeExecutableSchema({ typeDefs, resolvers });
 
+  app.use(cors({
+    origin: process.env.WEB_APP_URL ?? true,
+    credentials: true,
+  }));
   app.use(express.json());
   app.use(cookieParser());
   app.use(authRouter);

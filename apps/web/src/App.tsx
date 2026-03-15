@@ -89,8 +89,9 @@ function LoginPage() {
     const h = 700;
     const left = window.screenX + (window.innerWidth - w) / 2;
     const top = window.screenY + (window.innerHeight - h) / 2;
+    const apiUrl = import.meta.env.VITE_API_URL ?? "";
     window.open(
-      `/auth/github?origin=${encodeURIComponent(window.location.origin)}`,
+      `${apiUrl}/auth/github?origin=${encodeURIComponent(window.location.origin)}`,
       "github-login",
       `width=${w},height=${h},left=${left},top=${top}`,
     );

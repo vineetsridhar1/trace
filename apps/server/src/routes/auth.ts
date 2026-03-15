@@ -128,7 +128,7 @@ router.get("/auth/github/callback", async (req, res) => {
     res.cookie("trace_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
     });
@@ -193,7 +193,11 @@ router.get("/auth/me", async (req, res) => {
 
 // Logout
 router.post("/auth/logout", (_req, res) => {
-  res.clearCookie("trace_token", { path: "/" });
+  res.clearCookie("trace_token", {
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  });
   res.json({ ok: true });
 });
 
