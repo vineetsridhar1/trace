@@ -3,6 +3,7 @@ import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
+import { SettingsPage } from "./components/settings/SettingsPage";
 import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
@@ -36,27 +37,34 @@ export function App() {
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
   useHistorySync();
+  const activePage = useUIStore((s) => s.activePage);
 
   return (
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-            <SidebarTrigger />
-            <h1 className="text-lg font-semibold text-foreground">Trace</h1>
-          </header>
-          <main className="min-h-0 flex-1">
-            {activeChannelId ? (
-              <ChannelView channelId={activeChannelId} />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  Select a channel to get started
-                </p>
-              </div>
-            )}
-          </main>
+          {activePage === "settings" ? (
+            <SettingsPage />
+          ) : (
+            <>
+              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+                <SidebarTrigger />
+                <h1 className="text-lg font-semibold text-foreground">Trace</h1>
+              </header>
+              <main className="min-h-0 flex-1">
+                {activeChannelId ? (
+                  <ChannelView channelId={activeChannelId} />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    <p className="text-sm text-muted-foreground">
+                      Select a channel to get started
+                    </p>
+                  </div>
+                )}
+              </main>
+            </>
+          )}
         </div>
       </SidebarProvider>
     </TooltipProvider>

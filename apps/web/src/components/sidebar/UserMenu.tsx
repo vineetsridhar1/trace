@@ -1,12 +1,14 @@
 import { Settings, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuthStore } from "../../stores/auth";
+import { useUIStore } from "../../stores/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
 
 export function UserMenu() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const setActivePage = useUIStore((s) => s.setActivePage);
 
   return (
     <Popover>
@@ -32,7 +34,10 @@ export function UserMenu() {
           <p className="text-sm font-medium text-foreground">{user?.name}</p>
           <p className="text-xs text-muted-foreground">{user?.email}</p>
         </div>
-        <button className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover">
+        <button
+          onClick={() => setActivePage("settings")}
+          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-surface-hover"
+        >
           <Settings size={16} className="text-muted-foreground" />
           Settings
         </button>

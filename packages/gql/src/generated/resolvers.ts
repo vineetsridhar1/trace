@@ -119,6 +119,7 @@ export type EventType =
   | 'message_deleted'
   | 'message_edited'
   | 'message_sent'
+  | 'repo_created'
   | 'session_output'
   | 'session_paused'
   | 'session_resumed'

@@ -4,7 +4,7 @@ import { client } from "../lib/urql";
 import { useEntityStore } from "../stores/entity";
 import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
-import type { Event, EventType, ScopeType, SessionStatus, Channel } from "@trace/gql";
+import type { Event, EventType, ScopeType, SessionStatus, Channel, Repo } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -104,6 +104,14 @@ export function useOrgEvents() {
 
         // Always upsert the raw event
         upsert("events", event.id, event);
+
+        // New repo — upsert directly from payload
+        if (event.eventType === "repo_created") {
+          const repo = asRecord(event.payload.repo);
+          if (repo && typeof repo.id === "string") {
+            upsert("repos", repo.id, repo as unknown as Repo);
+          }
+        }
 
         // New channel — upsert directly from payload
         if (event.eventType === "channel_created") {

@@ -11,6 +11,19 @@ const PROJECT_INCLUDE = {
 
 export class OrganizationService {
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
+    // Deduplicate by remote URL within the org — if it already exists, return it
+    const existing = await prisma.repo.findUnique({
+      where: {
+        organizationId_remoteUrl: {
+          organizationId: input.organizationId,
+          remoteUrl: input.remoteUrl,
+        },
+      },
+      include: { projects: true, sessions: true },
+    });
+
+    if (existing) return existing;
+
     const [repo] = await prisma.$transaction(async (tx) => {
       const repo = await tx.repo.create({
         data: {
@@ -26,8 +39,15 @@ export class OrganizationService {
         organizationId: input.organizationId,
         scopeType: "system",
         scopeId: repo.id,
-        eventType: "entity_linked",
-        payload: { type: "repo_created", repoId: repo.id, name: repo.name },
+        eventType: "repo_created",
+        payload: {
+          repo: {
+            id: repo.id,
+            name: repo.name,
+            remoteUrl: repo.remoteUrl,
+            defaultBranch: repo.defaultBranch,
+          },
+        },
         actorType,
         actorId,
       }, tx);

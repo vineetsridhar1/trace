@@ -83,6 +83,7 @@ enum EventType {
   ticket_updated
   ticket_commented
   entity_linked
+  repo_created
   channel_created
   member_joined
   member_left
@@ -135,6 +136,8 @@ model Repo {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, remoteUrl])
 }
 
 model Project {
