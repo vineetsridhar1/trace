@@ -25,7 +25,9 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
 
   app.use(cors({
-    origin: process.env.TRACE_WEB_URL ?? true,
+    origin: process.env.CORS_ALLOWED_ORIGINS
+      ? process.env.CORS_ALLOWED_ORIGINS.split(",")
+      : true,
     credentials: true,
   }));
   app.use(express.json());
