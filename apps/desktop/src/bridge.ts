@@ -12,6 +12,7 @@ export class BridgeClient {
   private serverUrl: string;
   private adapters = new Map<string, CodingToolAdapter>();
   private sessionTools = new Map<string, string>();
+  private reportedToolSessionIds = new Map<string, string>();
   private instanceId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -83,7 +84,7 @@ export class BridgeClient {
     }
   }
 
-  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string }) {
+  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string; toolSessionId?: string }) {
     const workdir = cwd ?? process.cwd();
 
     // If tool changed, abort old adapter and create a fresh one
@@ -108,12 +109,25 @@ export class BridgeClient {
       cwd: workdir,
       onOutput: (output) => {
         this.send({ type: "session_output", sessionId, data: output });
+        // When the adapter discovers its tool session ID, report it to the server
+        // so it can be passed back on retry/resume
+        if (output.type === "assistant") {
+          const ccAdapter = adapter as import("@trace/shared").ClaudeCodeAdapter;
+          if (typeof ccAdapter.getSessionId === "function") {
+            const sid = ccAdapter.getSessionId();
+            if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {
+              this.reportedToolSessionIds.set(sessionId, sid);
+              this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
+            }
+          }
+        }
       },
       onComplete: () => {
         this.send({ type: "session_complete", sessionId });
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
+      toolSessionId,
     });
   }
 
@@ -128,6 +142,7 @@ export class BridgeClient {
           tool: msg.tool as string | undefined,
           model: msg.model as string | undefined,
           interactionMode: msg.interactionMode as string | undefined,
+          toolSessionId: msg.toolSessionId as string | undefined,
         });
         break;
       }
@@ -140,6 +155,7 @@ export class BridgeClient {
           tool: msg.tool as string | undefined,
           model: msg.model as string | undefined,
           interactionMode: msg.interactionMode as string | undefined,
+          toolSessionId: msg.toolSessionId as string | undefined,
         });
         break;
       }

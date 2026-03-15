@@ -167,6 +167,7 @@ type Session {
   repo: Repo
   branch: String
   workdir: String
+  toolSessionId: String
   channel: Channel
   parentSession: Session
   childSessions: [Session!]!
@@ -270,7 +271,8 @@ input CreateChannelInput {
 input StartSessionInput {
   tool: CodingTool!
   model: String
-  hosting: HostingMode!
+  hosting: HostingMode
+  runtimeInstanceId: ID
   repoId: ID
   branch: String
   ticketId: ID
@@ -352,6 +354,7 @@ type Query {
     limit: Int
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
+  availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
 }
 
 # --- Mutations ---

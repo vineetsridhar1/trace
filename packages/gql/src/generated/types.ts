@@ -324,6 +324,11 @@ export type Query = {
 };
 
 
+export type QueryAvailableRuntimesArgs = {
+  tool: CodingTool;
+};
+
+
 export type QueryAvailableSessionRuntimesArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -500,12 +505,13 @@ export type SessionStatus =
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
-  hosting: HostingMode;
+  hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars['String']['input']>;
   parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
+  runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
   ticketId?: InputMaybe<Scalars['ID']['input']>;
   tool: CodingTool;
 };

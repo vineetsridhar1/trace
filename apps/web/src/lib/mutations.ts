@@ -60,3 +60,16 @@ export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
     }
   }
 `;
+
+export const AVAILABLE_RUNTIMES_QUERY = gql`
+  query AvailableRuntimes($tool: CodingTool!) {
+    availableRuntimes(tool: $tool) {
+      id
+      label
+      hostingMode
+      supportedTools
+      connected
+      sessionCount
+    }
+  }
+`;

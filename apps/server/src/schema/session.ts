@@ -5,6 +5,7 @@ import type {
   SessionStatus,
   StartSessionInput,
 } from "@trace/gql";
+import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
@@ -20,6 +21,9 @@ export const sessionQueries = {
   },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }) => {
     return sessionService.listAvailableRuntimes(args.sessionId);
+  },
+  availableRuntimes: (_: unknown, args: { tool: CodingToolEnum }) => {
+    return sessionService.listRuntimesForTool(args.tool);
   },
 };
 

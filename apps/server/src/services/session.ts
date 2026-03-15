@@ -139,6 +139,15 @@ export class SessionService {
     const needsWorkspace = !!input.repoId;
     const initialStatus = needsWorkspace ? "creating" : "pending";
 
+    // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
+    let hosting = input.hosting ?? "cloud";
+    if (input.runtimeInstanceId) {
+      const runtime = sessionRouter.getRuntime(input.runtimeInstanceId);
+      if (runtime) {
+        hosting = runtime.hostingMode;
+      }
+    }
+
     const [session] = await prisma.$transaction(async (tx) => {
       const session = await tx.session.create({
         data: {
@@ -146,7 +155,7 @@ export class SessionService {
           status: initialStatus,
           tool: input.tool,
           model: input.model ?? undefined,
-          hosting: input.hosting,
+          hosting,
           organizationId: input.organizationId,
           createdById: input.createdById,
           repoId: input.repoId ?? undefined,
@@ -191,6 +200,11 @@ export class SessionService {
 
       return [session, event] as const;
     });
+
+    // Pre-bind to the requested runtime so subsequent commands route to it
+    if (input.runtimeInstanceId) {
+      sessionRouter.bindSession(session.id, input.runtimeInstanceId);
+    }
 
     // If repo selected, send prepare command to bridge for worktree creation
     if (needsWorkspace && session.repo) {
@@ -246,6 +260,15 @@ export class SessionService {
       }
     }
 
+    // If no tool session ID exists and this isn't the first run, prepend
+    // conversation history so the new process has full context.
+    if (!session.toolSessionId && resolvedPrompt) {
+      const context = await buildConversationContext(id);
+      if (context) {
+        resolvedPrompt = `${context}\n\n${resolvedPrompt}`;
+      }
+    }
+
     const command = {
       type: "run" as const,
       sessionId: id,
@@ -254,6 +277,7 @@ export class SessionService {
       model: session.model ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
+      toolSessionId: session.toolSessionId ?? undefined,
     };
 
     const deliveryResult = sessionRouter.send(id, command);
@@ -352,7 +376,10 @@ export class SessionService {
     const data: Record<string, unknown> = {};
     if (config.tool != null) data.tool = config.tool;
     if (config.model != null) data.model = config.model;
-    if (toolChanged) data.toolChangedAt = new Date();
+    if (toolChanged) {
+      data.toolChangedAt = new Date();
+      data.toolSessionId = null;
+    }
 
     const session = await prisma.session.update({
       where: { id: sessionId },
@@ -459,7 +486,7 @@ export class SessionService {
   async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string, interactionMode?: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { organizationId: true, tool: true, model: true, toolChangedAt: true, workdir: true, connection: true },
+      select: { organizationId: true, tool: true, model: true, toolChangedAt: true, workdir: true, toolSessionId: true, connection: true },
     });
 
     // If the tool was recently switched and no user message has been sent since,
@@ -491,6 +518,7 @@ export class SessionService {
       model: session.model ?? undefined,
       interactionMode,
       cwd: session.workdir ?? undefined,
+      toolSessionId: session.toolSessionId ?? undefined,
     });
 
     if (deliveryResult !== "delivered") {
@@ -677,6 +705,13 @@ export class SessionService {
       },
       actorType: "system",
       actorId: "system",
+    });
+  }
+
+  async storeToolSessionId(sessionId: string, toolSessionId: string) {
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { toolSessionId },
     });
   }
 
@@ -976,6 +1011,21 @@ export class SessionService {
     return childSession;
   }
 
+  listRuntimesForTool(tool: string) {
+    const allRuntimes = sessionRouter
+      .listRuntimes()
+      .filter((runtime) => runtime.supportedTools.includes(tool));
+
+    return allRuntimes.map((r) => ({
+      id: r.id,
+      label: r.label,
+      hostingMode: r.hostingMode,
+      supportedTools: r.supportedTools,
+      connected: r.ws.readyState === r.ws.OPEN,
+      sessionCount: r.boundSessions.size,
+    }));
+  }
+
   async listAvailableRuntimes(sessionId: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -1046,18 +1096,30 @@ export class SessionService {
         tool: true,
         model: true,
         workdir: true,
+        toolSessionId: true,
         connection: true,
       },
     });
 
+    // If no tool session ID exists, prepend conversation context so the new
+    // process has the full history (same pattern as tool-switch).
+    let prompt = pending.prompt;
+    if (!session.toolSessionId && prompt) {
+      const context = await buildConversationContext(sessionId);
+      if (context) {
+        prompt = `${context}\n\n${prompt}`;
+      }
+    }
+
     const command = {
       type: pending.type,
       sessionId,
-      prompt: pending.prompt ?? undefined,
+      prompt: prompt ?? undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
+      toolSessionId: session.toolSessionId ?? undefined,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -1066,6 +1128,7 @@ export class SessionService {
       model?: string;
       interactionMode?: string;
       cwd?: string;
+      toolSessionId?: string;
     };
 
     const deliveryResult = sessionRouter.send(sessionId, command);

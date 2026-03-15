@@ -327,6 +327,11 @@ export type Query = {
 };
 
 
+export type QueryAvailableRuntimesArgs = {
+  tool: CodingTool;
+};
+
+
 export type QueryAvailableSessionRuntimesArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -503,12 +508,13 @@ export type SessionStatus =
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
-  hosting: HostingMode;
+  hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars['String']['input']>;
   parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
+  runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
   ticketId?: InputMaybe<Scalars['ID']['input']>;
   tool: CodingTool;
 };
@@ -871,6 +877,7 @@ export type ProjectResolvers<ContextType = Context, ParentType extends Resolvers
 }>;
 
 export type QueryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
+  availableRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableRuntimesArgs, 'tool'>>;
   availableSessionRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableSessionRuntimesArgs, 'sessionId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;

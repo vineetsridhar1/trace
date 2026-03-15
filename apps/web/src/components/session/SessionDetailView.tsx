@@ -17,7 +17,17 @@ const SESSION_DETAIL_QUERY = gql`
       name
       status
       tool
+      model
       hosting
+      connection {
+        state
+        runtimeInstanceId
+        runtimeLabel
+        lastError
+        retryCount
+        canRetry
+        canMove
+      }
       createdBy { id name avatarUrl }
       channel { id }
       parentSession { id name status }

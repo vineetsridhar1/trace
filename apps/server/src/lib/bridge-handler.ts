@@ -111,6 +111,13 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
         sessionRouter.bindSession(msg.sessionId, runtimeId);
+      } else if (msg.type === "tool_session_id" && msg.sessionId && msg.toolSessionId) {
+        enqueueEvent(msg.sessionId, async () => {
+          await sessionService.storeToolSessionId(
+            msg.sessionId as string,
+            msg.toolSessionId as string,
+          );
+        });
       }
     } catch (err) {
       console.error("[bridge] error handling message:", err);
