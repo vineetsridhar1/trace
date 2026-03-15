@@ -52,11 +52,6 @@ export const sessionMutations = {
 };
 
 export const sessionSubscriptions = {
-  sessionEvents: {
-    subscribe: (_: unknown, args: { sessionId: string; organizationId: string }) => {
-      return pubsub.asyncIterator(topics.sessionEvents(args.sessionId));
-    },
-  },
   sessionPortsChanged: {
     subscribe: (_: unknown, args: { sessionId: string; organizationId: string }) => {
       return pubsub.asyncIterator(topics.sessionPorts(args.sessionId));

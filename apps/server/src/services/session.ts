@@ -243,7 +243,7 @@ export class SessionService {
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: { status: "active" },
-      select: { organizationId: true },
+      select: { organizationId: true, tool: true },
     });
 
     // Emit a resumed event so all clients see the status change
@@ -267,11 +267,12 @@ export class SessionService {
       actorId,
     });
 
-    // Forward to bridge so Claude Code receives the message
+    // Forward to bridge so the coding tool receives the message
     sessionRouter.send(sessionId, {
       type: "send",
       sessionId,
       prompt: text,
+      tool: session.tool,
     });
 
     return event;

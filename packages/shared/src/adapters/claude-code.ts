@@ -1,18 +1,23 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, OutputCallback } from "./coding-tool.js";
+import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
+
+/** Types we drop entirely — not relevant to the frontend */
+const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
 
 /**
  * Adapter for running Claude Code CLI sessions.
- * First call spawns `claude -p <prompt> --output-format json --verbose`.
+ * First call spawns `claude -p <prompt> --output-format stream-json --verbose`.
  * Subsequent calls use `--resume <sessionId>` to continue the conversation.
+ *
+ * Normalizes Claude Code's native output into the shared ToolOutput schema.
  */
 export class ClaudeCodeAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private claudeSessionId: string | null = null;
   private cwd: string | null = null;
 
-  run(prompt: string, cwd: string, onOutput: OutputCallback, onComplete: () => void) {
+  run({ prompt, cwd, onOutput, onComplete }: RunOptions) {
     this.cwd = cwd;
 
     const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"];
@@ -32,34 +37,30 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
         if (!line.trim()) return;
         try {
           const parsed = JSON.parse(line);
-          // Claude Code can emit arrays (e.g. init messages) — flatten them
           if (Array.isArray(parsed)) {
             for (const item of parsed) {
               if (item && typeof item === "object") {
-                this.extractSessionId(item as Record<string, unknown>);
-                onOutput(item as Record<string, unknown>);
+                this.processEvent(item as Record<string, unknown>, onOutput);
               }
             }
           } else {
-            this.extractSessionId(parsed);
-            onOutput(parsed);
+            this.processEvent(parsed, onOutput);
           }
         } catch {
-          onOutput({ type: "text", text: line });
+          // Non-JSON text from stdout
         }
       });
     }
 
     if (this.process.stderr) {
       const rl = createInterface({ input: this.process.stderr });
-      rl.on("line", (line) => {
-        if (!line.trim()) return;
-        onOutput({ type: "stderr", text: line });
+      rl.on("line", () => {
+        // stderr is dropped — not part of the normalized schema
       });
     }
 
     this.process.on("close", (code) => {
-      onOutput({ type: "result", exitCode: code });
+      onOutput({ type: "result", subtype: code === 0 || code === null ? "success" : "error" });
       onComplete();
       this.process = null;
     });
@@ -71,7 +72,30 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     });
   }
 
-  /** Extract Claude Code's session_id from init or result messages for --resume */
+  private processEvent(data: Record<string, unknown>, onOutput: (event: ToolOutput) => void) {
+    this.extractSessionId(data);
+
+    const type = data.type as string | undefined;
+    if (!type || SKIP_TYPES.has(type)) return;
+
+    // Claude Code's "assistant" events carry message.content[] with
+    // text/tool_use/tool_result blocks — extract and forward.
+    if (type === "assistant") {
+      const message = data.message as Record<string, unknown> | undefined;
+      const content = message?.content;
+      if (Array.isArray(content)) {
+        onOutput({ type: "assistant", message: { content: content as MessageBlock[] } });
+      }
+      return;
+    }
+
+    if (type === "result") {
+      const isError = data.is_error === true || data.subtype === "error";
+      onOutput({ type: "result", subtype: isError ? "error" : "success" });
+      return;
+    }
+  }
+
   private extractSessionId(data: Record<string, unknown>) {
     const id = data.session_id as string | undefined;
     if (id) {

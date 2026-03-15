@@ -65,7 +65,6 @@ export const pubsub = new PubSub();
 // Standard topic builders
 export const topics = {
   channelEvents: (channelId: string) => `channel:${channelId}:events`,
-  sessionEvents: (sessionId: string) => `session:${sessionId}:events`,
   ticketEvents: (ticketId: string) => `ticket:${ticketId}:events`,
   userNotifications: (orgId: string, userId: string) => `org:${orgId}:user:${userId}:notifications`,
   orgEvents: (orgId: string) => `org:${orgId}:events`,

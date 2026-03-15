@@ -58,29 +58,24 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** Extract a human-readable preview from a message payload, skipping tool calls */
+/** Extract a human-readable preview from a normalized message payload */
 function extractMessagePreview(eventType: EventType, payload: Record<string, unknown>): string | null {
   if (eventType === "message_sent") {
     return typeof payload.text === "string" ? payload.text : null;
   }
 
-  const type = payload.type;
-  if (type === "tool_use" || type === "tool_result" || type === "system" || type === "stderr") {
-    return null;
-  }
+  // Adapters normalize all output to { type: "assistant", message: { content: [...] } }
+  if (payload.type !== "assistant") return null;
 
-  if (type === "assistant" || type === "text") {
-    const message = asRecord(payload.message);
-    const content = message?.content;
-    if (Array.isArray(content)) {
-      for (const block of content) {
-        const b = asRecord(block);
-        if (b?.type === "text" && typeof b.text === "string" && b.text.trim()) {
-          return b.text;
-        }
-      }
+  const message = asRecord(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return null;
+
+  for (const block of content) {
+    const b = asRecord(block);
+    if (b?.type === "text" && typeof b.text === "string" && b.text.trim()) {
+      return b.text;
     }
-    if (typeof payload.text === "string" && payload.text.trim()) return payload.text;
   }
 
   return null;

@@ -42,7 +42,7 @@ export class BridgeClient {
     }
   }
 
-  private runPrompt(sessionId: string, prompt: string, cwd?: string, tool?: string) {
+  private runPrompt({ sessionId, prompt, cwd, tool }: { sessionId: string; prompt: string; cwd?: string; tool?: string }) {
     const workdir = cwd ?? process.cwd();
 
     // Reuse existing adapter (retains session state for --resume)
@@ -53,28 +53,37 @@ export class BridgeClient {
       this.send({ type: "register_session", sessionId });
     }
 
-    adapter.run(
+    adapter.run({
       prompt,
-      workdir,
-      (output) => {
+      cwd: workdir,
+      onOutput: (output) => {
         this.send({ type: "session_output", sessionId, data: output });
       },
-      () => {
+      onComplete: () => {
         this.send({ type: "session_complete", sessionId });
       },
-    );
+    });
   }
 
   private handleMessage(msg: { type: string; sessionId?: string; prompt?: string; [key: string]: unknown }) {
     switch (msg.type) {
       case "run": {
         if (!msg.sessionId) return;
-        this.runPrompt(msg.sessionId, msg.prompt ?? "", msg.cwd as string | undefined, msg.tool as string | undefined);
+        this.runPrompt({
+          sessionId: msg.sessionId,
+          prompt: msg.prompt as string ?? "",
+          cwd: msg.cwd as string | undefined,
+          tool: msg.tool as string | undefined,
+        });
         break;
       }
       case "send": {
         if (!msg.sessionId || !msg.prompt) return;
-        this.runPrompt(msg.sessionId, msg.prompt as string);
+        this.runPrompt({
+          sessionId: msg.sessionId,
+          prompt: msg.prompt as string,
+          tool: msg.tool as string | undefined,
+        });
         break;
       }
       case "terminate": {

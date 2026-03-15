@@ -1,19 +1,25 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
-import type { CodingToolAdapter, OutputCallback } from "./coding-tool.js";
+import type { CodingToolAdapter, RunOptions, ToolOutput } from "./coding-tool.js";
 
 /**
  * Adapter for running OpenAI Codex CLI sessions.
- * Spawns `codex --quiet --json` for non-interactive, JSON-streamed output.
+ * Spawns `codex exec --json` for non-interactive, JSONL-streamed output.
+ * Subsequent calls use `codex exec resume <threadId>` to continue the conversation.
+ *
+ * Normalizes Codex's native output into the shared ToolOutput schema.
  */
 export class CodexAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private cwd: string | null = null;
+  private threadId: string | null = null;
 
-  run(prompt: string, cwd: string, onOutput: OutputCallback, onComplete: () => void) {
+  run({ prompt, cwd, onOutput, onComplete }: RunOptions) {
     this.cwd = cwd;
 
-    const args = ["--quiet", "--json", prompt];
+    const args = this.threadId
+      ? ["exec", "resume", this.threadId, "--json", "--dangerously-bypass-approvals-and-sandbox", prompt]
+      : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", prompt];
 
     this.process = spawn("codex", args, {
       cwd,
@@ -27,17 +33,9 @@ export class CodexAdapter implements CodingToolAdapter {
         if (!line.trim()) return;
         try {
           const parsed = JSON.parse(line);
-          if (Array.isArray(parsed)) {
-            for (const item of parsed) {
-              if (item && typeof item === "object") {
-                onOutput(item as Record<string, unknown>);
-              }
-            }
-          } else {
-            onOutput(parsed);
-          }
+          this.processEvent(parsed, onOutput);
         } catch {
-          onOutput({ type: "text", text: line });
+          // Non-JSON text from stdout
         }
       });
     }
@@ -45,13 +43,12 @@ export class CodexAdapter implements CodingToolAdapter {
     if (this.process.stderr) {
       const rl = createInterface({ input: this.process.stderr });
       rl.on("line", (line) => {
-        if (!line.trim()) return;
-        onOutput({ type: "stderr", text: line });
+        // stderr dropped
       });
     }
 
     this.process.on("close", (code) => {
-      onOutput({ type: "result", exitCode: code });
+      onOutput({ type: "result", subtype: code === 0 || code === null ? "success" : "error" });
       onComplete();
       this.process = null;
     });
@@ -61,6 +58,58 @@ export class CodexAdapter implements CodingToolAdapter {
       onComplete();
       this.process = null;
     });
+  }
+
+  private processEvent(data: Record<string, unknown>, onOutput: (event: ToolOutput) => void) {
+    const eventType = data.type as string | undefined;
+    if (!eventType) return;
+
+    if (eventType === "thread.started" && typeof data.thread_id === "string") {
+      this.threadId = data.thread_id;
+      return;
+    }
+
+    const item = data.item as Record<string, unknown> | undefined;
+    if (!item) return;
+    const itemType = item.type as string | undefined;
+
+    // item.started + command_execution → tool_use (command is being invoked)
+    if (eventType === "item.started" && itemType === "command_execution") {
+      const command = item.command as string | undefined;
+      if (command) {
+        onOutput({
+          type: "assistant",
+          message: { content: [{ type: "tool_use", name: "command", input: { command } }] },
+        });
+      }
+      return;
+    }
+
+    if (eventType !== "item.completed") return;
+
+    // command_execution completed → tool_result
+    if (itemType === "command_execution") {
+      const output = item.aggregated_output as string | undefined;
+      onOutput({
+        type: "assistant",
+        message: { content: [{ type: "tool_result", name: "command", content: output ?? "" }] },
+      });
+      return;
+    }
+
+    // agent_message → text response
+    if (itemType === "agent_message") {
+      const text = item.text as string | undefined;
+      if (text) {
+        onOutput({
+          type: "assistant",
+          message: { content: [{ type: "text", text }] },
+        });
+      }
+      return;
+    }
+
+    // reasoning — skip (internal model thinking)
   }
 
   abort() {

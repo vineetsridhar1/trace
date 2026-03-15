@@ -341,7 +341,6 @@ type Mutation {
 type Subscription {
   orgEvents(organizationId: ID!, types: [String!]): Event!
   channelEvents(channelId: ID!, organizationId: ID!, types: [String!]): Event!
-  sessionEvents(sessionId: ID!, organizationId: ID!): Event!
   ticketEvents(ticketId: ID!, organizationId: ID!): Event!
   userNotifications(organizationId: ID!): Notification!
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!

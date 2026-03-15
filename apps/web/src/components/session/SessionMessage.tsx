@@ -7,9 +7,6 @@ import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 
-/** Types we skip rendering entirely */
-const SKIP_TYPES = new Set(["system", "stderr", "rate_limit_event"]);
-
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -28,13 +25,14 @@ function asOutput(value: unknown): string | Record<string, unknown> | undefined 
   return asRecord(value);
 }
 
+/**
+ * Render an assistant event. Adapters normalize all tool output into a
+ * consistent schema: { type: "assistant", message: { content: MessageBlock[] } }
+ */
 function renderAssistantContent(payload: Record<string, unknown>, ts: string) {
   const message = asRecord(payload.message);
   const contentBlocks = message?.content;
-  if (!Array.isArray(contentBlocks)) {
-    const text = str(payload.text);
-    return text ? <AssistantText text={text} timestamp={ts} /> : null;
-  }
+  if (!Array.isArray(contentBlocks)) return null;
 
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < contentBlocks.length; i++) {
@@ -45,7 +43,6 @@ function renderAssistantContent(payload: Record<string, unknown>, ts: string) {
       elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
     } else if (block.type === "tool_use") {
       const name = str(block.name, "Tool");
-      // Check if it's a subagent
       if (name.toLowerCase() === "agent" || name.toLowerCase() === "task") {
         const input = asRecord(block.input);
         elements.push(
@@ -84,35 +81,18 @@ function renderAssistantContent(payload: Record<string, unknown>, ts: string) {
 
 function renderSessionOutput(payload: Record<string, unknown>, ts: string) {
   const type = payload.type;
-  if (typeof type !== "string" || SKIP_TYPES.has(type)) return null;
+  if (typeof type !== "string") return null;
 
-  if (type === "assistant" || type === "text") {
+  if (type === "assistant") {
     return renderAssistantContent(payload, ts);
   }
 
-  if (type === "tool_use") {
-    const name = str(payload.name) || str(payload.tool) || "Tool";
-    return <ToolCallRow name={name} input={asRecord(payload.input)} timestamp={ts} />;
-  }
-
-  if (type === "tool_result") {
-    const name = str(payload.name) || str(payload.tool) || "Tool";
-    return <ToolResultRow name={name} output={asOutput(payload.content ?? payload.output)} timestamp={ts} />;
-  }
-
   if (type === "result") {
-    if ("exitCode" in payload) return null;
     return <CompletionRow timestamp={ts} />;
   }
 
   if (type === "error") {
     return <CompletionRow timestamp={ts} result={str(payload.message, "Error")} isUserStop />;
-  }
-
-  // Fallback for unknown types with text content
-  const fallback = payload.text ?? payload.content ?? payload.message;
-  if (typeof fallback === "string" && fallback) {
-    return <AssistantText text={fallback} timestamp={ts} />;
   }
 
   return null;

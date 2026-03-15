@@ -4,7 +4,7 @@ import type { ReadGlobItem } from "./messages/ReadGlobGroup";
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
 
 /** Payload types that render as nothing in SessionMessage — these should not break a Read/Glob bucket */
-const INVISIBLE_PAYLOAD_TYPES = new Set(["user", "system", "stderr", "rate_limit_event"]);
+const INVISIBLE_PAYLOAD_TYPES = new Set(["result"]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
@@ -27,18 +27,8 @@ function extractReadGlobInfo(
 
   const type = payload.type;
 
-  // Standalone tool_use / tool_result events
-  if (type === "tool_use" || type === "tool_result") {
-    const name = String(payload.name ?? payload.tool ?? "");
-    if (!READ_GLOB_NAMES.has(name.toLowerCase())) return null;
-    const input = asRecord(payload.input) ?? {};
-    const filePath =
-      input.file_path ?? input.path ?? input.pattern ?? input.filepath ?? "";
-    return { id, toolName: name, filePath: String(filePath), timestamp };
-  }
-
   // Assistant message with purely Read/Glob tool_use content blocks (no text)
-  if (type === "assistant" || type === "text") {
+  if (type === "assistant") {
     const message = asRecord(payload.message);
     const blocks = message?.content;
     if (!Array.isArray(blocks)) return null;

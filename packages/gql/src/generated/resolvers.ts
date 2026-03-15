@@ -458,7 +458,6 @@ export type Subscription = {
   __typename?: 'Subscription';
   channelEvents: Event;
   orgEvents: Event;
-  sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -476,12 +475,6 @@ export type SubscriptionChannelEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type SubscriptionSessionEventsArgs = {
-  organizationId: Scalars['ID']['input'];
-  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -871,7 +864,6 @@ export type SessionEndpointsResolvers<ContextType = Context, ParentType extends 
 export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
   channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId' | 'organizationId'>>;
   orgEvents?: SubscriptionResolver<ResolversTypes['Event'], "orgEvents", ParentType, ContextType, RequireFields<SubscriptionOrgEventsArgs, 'organizationId'>>;
-  sessionEvents?: SubscriptionResolver<ResolversTypes['Event'], "sessionEvents", ParentType, ContextType, RequireFields<SubscriptionSessionEventsArgs, 'organizationId' | 'sessionId'>>;
   sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'organizationId' | 'sessionId'>>;
   sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'organizationId' | 'sessionId'>>;
   ticketEvents?: SubscriptionResolver<ResolversTypes['Event'], "ticketEvents", ParentType, ContextType, RequireFields<SubscriptionTicketEventsArgs, 'organizationId' | 'ticketId'>>;

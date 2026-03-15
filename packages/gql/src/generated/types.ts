@@ -455,7 +455,6 @@ export type Subscription = {
   __typename?: 'Subscription';
   channelEvents: Event;
   orgEvents: Event;
-  sessionEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
@@ -473,12 +472,6 @@ export type SubscriptionChannelEventsArgs = {
 export type SubscriptionOrgEventsArgs = {
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type SubscriptionSessionEventsArgs = {
-  organizationId: Scalars['ID']['input'];
-  sessionId: Scalars['ID']['input'];
 };
 
 
