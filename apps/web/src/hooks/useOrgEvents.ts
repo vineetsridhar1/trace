@@ -4,6 +4,7 @@ import { client } from "../lib/urql";
 import { useEntityStore } from "../stores/entity";
 import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
+import { useUIStore } from "../stores/ui";
 import type { Event, EventType, ScopeType, SessionStatus, Channel, Repo } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -62,10 +63,26 @@ function statusFromEvent(eventType: EventType, payload: Record<string, unknown>)
   }
 }
 
-/** Extract session field updates from session_output subtypes (e.g. workspace_ready) */
+/** Connection event types that carry a connection patch */
+const CONNECTION_EVENT_TYPES = new Set([
+  "connection_lost",
+  "connection_restored",
+  "recovery_failed",
+  "recovery_requested",
+  "session_rehomed",
+]);
+
+/** Extract session field updates from session_output subtypes (e.g. workspace_ready, connection events) */
 function sessionPatchFromOutput(payload: Record<string, unknown>): Partial<SessionEntity> | undefined {
   if (payload.type === "workspace_ready" && typeof payload.workdir === "string") {
     return { status: "pending" as SessionStatus, workdir: payload.workdir };
+  }
+  // Connection state events carry a full connection patch
+  if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
+    const connection = asRecord(payload.connection);
+    if (connection) {
+      return { connection } as Partial<SessionEntity>;
+    }
   }
   return undefined;
 }
@@ -147,11 +164,11 @@ export function useOrgEvents() {
               const { sessions } = useEntityStore.getState();
               const parentEntity = sessions[parent.id];
               if (parentEntity) {
-                const existing = (parentEntity.childSessions ?? []) as Array<{ id: string; name: string }>;
+                const existing = (parentEntity.childSessions ?? []) as SessionEntity[];
                 const alreadyLinked = existing.some((c) => c.id === session.id);
                 if (!alreadyLinked) {
                   patch("sessions", parent.id, {
-                    childSessions: [...existing, { id: session.id, name: session.name }],
+                    childSessions: [...existing, session as unknown as SessionEntity],
                   });
                 }
               }
@@ -175,6 +192,13 @@ export function useOrgEvents() {
           const sessionPatch = sessionPatchFromOutput(event.payload);
           if (sessionPatch) {
             patch("sessions", event.scopeId, { ...sessionPatch, updatedAt: event.timestamp });
+          }
+
+          if (event.payload.type === "session_rehomed" && typeof event.payload.newSessionId === "string") {
+            const activeSessionId = useUIStore.getState().activeSessionId;
+            if (activeSessionId === event.scopeId) {
+              useUIStore.getState().setActiveSessionId(event.payload.newSessionId);
+            }
           }
         }
 

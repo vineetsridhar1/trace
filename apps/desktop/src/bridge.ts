@@ -1,16 +1,25 @@
 import WebSocket from "ws";
+import { randomUUID } from "crypto";
+import os from "os";
 import { ClaudeCodeAdapter, CodexAdapter, type CodingToolAdapter } from "@trace/shared";
 import { readConfig } from "./config.js";
 import { createWorktree } from "./worktree.js";
+
+const HEARTBEAT_INTERVAL_MS = 10_000;
 
 export class BridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
   private adapters = new Map<string, CodingToolAdapter>();
   private sessionTools = new Map<string, string>();
+  private reportedToolSessionIds = new Map<string, string>();
+  private instanceId: string;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
+    // Stable instance ID persisted for the lifetime of this bridge process
+    this.instanceId = randomUUID();
   }
 
   connect() {
@@ -18,21 +27,55 @@ export class BridgeClient {
 
     this.ws.on("open", () => {
       console.log("[bridge] connected to server");
+      this.sendRuntimeHello();
+      this.startHeartbeat();
     });
 
     this.ws.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      this.handleMessage(msg);
+      try {
+        const msg = JSON.parse(data.toString());
+        this.handleMessage(msg);
+      } catch (err) {
+        console.error("[bridge] failed to parse message:", err);
+      }
     });
 
     this.ws.on("close", () => {
       console.log("[bridge] disconnected, reconnecting in 3s...");
+      this.stopHeartbeat();
       setTimeout(() => this.connect(), 3000);
     });
 
     this.ws.on("error", (err) => {
       console.error("[bridge] error:", err.message);
     });
+  }
+
+  private sendRuntimeHello() {
+    // Announce identity so the server can track this runtime instance
+    const ownedSessionIds = [...this.adapters.keys()];
+    this.send({
+      type: "runtime_hello",
+      instanceId: this.instanceId,
+      label: os.hostname(),
+      hostingMode: "local",
+      supportedTools: ["claude_code", "codex", "custom"],
+      sessionIds: ownedSessionIds,
+    });
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      this.send({ type: "runtime_heartbeat", instanceId: this.instanceId });
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   private createAdapter(tool?: string): CodingToolAdapter {
@@ -45,7 +88,7 @@ export class BridgeClient {
     }
   }
 
-  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string }) {
+  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string; toolSessionId?: string }) {
     const workdir = cwd ?? process.cwd();
 
     // If tool changed, abort old adapter and create a fresh one
@@ -70,12 +113,22 @@ export class BridgeClient {
       cwd: workdir,
       onOutput: (output) => {
         this.send({ type: "session_output", sessionId, data: output });
+        // When the adapter discovers its tool session ID, report it to the server
+        // so it can be passed back on retry/resume
+        if (adapter.getSessionId) {
+          const sid = adapter.getSessionId();
+          if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {
+            this.reportedToolSessionIds.set(sessionId, sid);
+            this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
+          }
+        }
       },
       onComplete: () => {
         this.send({ type: "session_complete", sessionId });
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
+      toolSessionId,
     });
   }
 
@@ -90,6 +143,7 @@ export class BridgeClient {
           tool: msg.tool as string | undefined,
           model: msg.model as string | undefined,
           interactionMode: msg.interactionMode as string | undefined,
+          toolSessionId: msg.toolSessionId as string | undefined,
         });
         break;
       }
@@ -102,6 +156,7 @@ export class BridgeClient {
           tool: msg.tool as string | undefined,
           model: msg.model as string | undefined,
           interactionMode: msg.interactionMode as string | undefined,
+          toolSessionId: msg.toolSessionId as string | undefined,
         });
         break;
       }
@@ -124,7 +179,7 @@ export class BridgeClient {
           break;
         }
 
-        createWorktree({ repoPath, repoName, sessionId, defaultBranch })
+        createWorktree({ repoPath, repoId, sessionId, defaultBranch })
           .then(({ workdir }) => {
             this.send({ type: "workspace_ready", sessionId, workdir });
           })
@@ -153,6 +208,7 @@ export class BridgeClient {
   }
 
   disconnect() {
+    this.stopHeartbeat();
     for (const adapter of this.adapters.values()) {
       adapter.abort();
     }

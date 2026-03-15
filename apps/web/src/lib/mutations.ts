@@ -31,3 +31,45 @@ export const TERMINATE_SESSION_MUTATION = gql`
     }
   }
 `;
+
+export const RETRY_SESSION_CONNECTION_MUTATION = gql`
+  mutation RetrySessionConnection($sessionId: ID!) {
+    retrySessionConnection(sessionId: $sessionId) {
+      id
+    }
+  }
+`;
+
+export const MOVE_SESSION_TO_RUNTIME_MUTATION = gql`
+  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {
+    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {
+      id
+    }
+  }
+`;
+
+export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
+  query AvailableSessionRuntimes($sessionId: ID!) {
+    availableSessionRuntimes(sessionId: $sessionId) {
+      id
+      label
+      hostingMode
+      supportedTools
+      connected
+      sessionCount
+    }
+  }
+`;
+
+export const AVAILABLE_RUNTIMES_QUERY = gql`
+  query AvailableRuntimes($tool: CodingTool!) {
+    availableRuntimes(tool: $tool) {
+      id
+      label
+      hostingMode
+      supportedTools
+      connected
+      sessionCount
+    }
+  }
+`;

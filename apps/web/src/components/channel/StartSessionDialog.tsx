@@ -27,6 +27,7 @@ import {
   wrapPrompt,
 } from "../session/interactionModes";
 import { getModelsForTool, getDefaultModel } from "../session/modelOptions";
+import { RuntimeSelector } from "../session/RuntimeSelector";
 import { cn } from "../../lib/utils";
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
@@ -34,7 +35,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [prompt, setPrompt] = useState("");
   const [tool, setTool] = useState<string>("claude_code");
   const [model, setModel] = useState<string | undefined>(getDefaultModel("claude_code"));
-  const [hosting, setHosting] = useState<string>("local");
+  const [runtimeInstanceId, setRuntimeInstanceId] = useState<string | undefined>(undefined);
   const [repoId, setRepoId] = useState<string | undefined>(undefined);
   const [mode, setMode] = useState<InteractionMode>("code");
   const modelOptions = getModelsForTool(tool);
@@ -62,7 +63,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
           input: {
             tool,
             model: model ?? undefined,
-            hosting,
+            runtimeInstanceId: runtimeInstanceId ?? undefined,
             channelId,
             repoId: repoId ?? undefined,
             prompt: prompt.trim(),
@@ -91,7 +92,10 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    if (!next) setRepoId(undefined);
+    if (!next) {
+      setRepoId(undefined);
+      setRuntimeInstanceId(undefined);
+    }
   };
 
   return (
@@ -142,17 +146,14 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
               )}
               <div>
                 <label className="mb-1.5 block text-sm text-muted-foreground">
-                  Hosting
+                  Runtime
                 </label>
-                <Select value={hosting} onValueChange={(v) => { if (v) setHosting(v); }}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="local">Local</SelectItem>
-                    <SelectItem value="cloud">Cloud</SelectItem>
-                  </SelectContent>
-                </Select>
+                <RuntimeSelector
+                  tool={tool}
+                  open={open}
+                  value={runtimeInstanceId}
+                  onChange={setRuntimeInstanceId}
+                />
               </div>
               {repoIds.length > 0 && (
                 <div>
@@ -212,7 +213,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={!prompt.trim() || creating}>
+            <Button type="submit" disabled={!prompt.trim() || creating || !runtimeInstanceId}>
               {creating ? "Starting..." : "Start"}
             </Button>
           </DialogFooter>

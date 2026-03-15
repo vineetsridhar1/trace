@@ -33,6 +33,20 @@ enum HostingMode {
   local
 }
 
+enum SessionConnectionState {
+  connected
+  degraded
+  disconnected
+}
+
+enum DeliveryResult {
+  delivered
+  no_runtime
+  runtime_disconnected
+  session_unbound
+  delivery_failed
+}
+
 enum CodingTool {
   claude_code
   codex
@@ -153,6 +167,7 @@ type Session {
   repo: Repo
   branch: String
   workdir: String
+  toolSessionId: String
   channel: Channel
   parentSession: Session
   childSessions: [Session!]!
@@ -217,8 +232,24 @@ type SessionEndpoints {
 }
 
 type SessionConnection {
+  state: SessionConnectionState!
+  runtimeInstanceId: String
+  runtimeLabel: String
   lastSeen: DateTime
-  bridgeVersion: String
+  lastError: String
+  lastDeliveryFailureAt: DateTime
+  retryCount: Int!
+  canRetry: Boolean!
+  canMove: Boolean!
+}
+
+type SessionRuntimeInstance {
+  id: ID!
+  label: String!
+  hostingMode: HostingMode!
+  supportedTools: [CodingTool!]!
+  connected: Boolean!
+  sessionCount: Int!
 }
 
 type Notification {
@@ -240,7 +271,8 @@ input CreateChannelInput {
 input StartSessionInput {
   tool: CodingTool!
   model: String
-  hosting: HostingMode!
+  hosting: HostingMode
+  runtimeInstanceId: ID
   repoId: ID
   branch: String
   ticketId: ID
@@ -321,6 +353,8 @@ type Query {
     after: DateTime
     limit: Int
   ): [Event!]!
+  availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
+  availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
 }
 
 # --- Mutations ---
@@ -335,6 +369,8 @@ type Mutation {
   terminateSession(id: ID!): Session!
   updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String): Session!
   sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
+  retrySessionConnection(sessionId: ID!): Session!
+  moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!
   commentOnTicket(ticketId: ID!, text: String!): Event!

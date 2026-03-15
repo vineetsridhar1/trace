@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowLeft, History, Square, Circle } from "lucide-react";
+import { ArrowLeft, History, Square, Circle, WifiOff } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
-import { statusColor, statusLabel } from "./sessionStatus";
+import { statusColor, statusLabel, isDisconnected } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 
 export function SessionHeader({
@@ -14,11 +14,13 @@ export function SessionHeader({
 }) {
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
+  const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
 
   const isActive = status === "active";
+  const disconnected = isDisconnected(connection);
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
@@ -73,12 +75,19 @@ export function SessionHeader({
           )}
         </div>
 
-        <span className={`flex items-center gap-1.5 text-xs ${statusColor[status ?? "active"]}`}>
-          <Circle size={6} className="fill-current" />
-          {statusLabel[status ?? "active"]}
-        </span>
+        {disconnected ? (
+          <span className="flex items-center gap-1.5 text-xs text-destructive">
+            <WifiOff size={12} />
+            Connection Lost
+          </span>
+        ) : (
+          <span className={`flex items-center gap-1.5 text-xs ${statusColor[status ?? "active"]}`}>
+            <Circle size={6} className="fill-current" />
+            {statusLabel[status ?? "active"]}
+          </span>
+        )}
 
-        {isActive && (
+        {isActive && !disconnected && (
           <button
             onClick={onStop}
             className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"

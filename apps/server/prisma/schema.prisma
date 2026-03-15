@@ -202,6 +202,7 @@ model Session {
   parentSession   Session?  @relation("SessionLineage", fields: [parentSessionId], references: [id])
   childSessions   Session[] @relation("SessionLineage")
   workdir         String?
+  toolSessionId   String?
   pendingRun      Json?
   endpoints       Json?
   connection      Json?

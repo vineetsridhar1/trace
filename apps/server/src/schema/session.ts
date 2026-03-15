@@ -5,6 +5,7 @@ import type {
   SessionStatus,
   StartSessionInput,
 } from "@trace/gql";
+import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
@@ -17,6 +18,12 @@ export const sessionQueries = {
   },
   mySessions: (_: unknown, args: { organizationId: string; status?: SessionStatus }, ctx: Context) => {
     return sessionService.listByUser(args.organizationId, ctx.userId, args.status ?? undefined);
+  },
+  availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    return sessionService.listAvailableRuntimes(args.sessionId, ctx.organizationId);
+  },
+  availableRuntimes: (_: unknown, args: { tool: CodingToolEnum }, ctx: Context) => {
+    return sessionService.listRuntimesForTool(args.tool, ctx.organizationId);
   },
 };
 
@@ -48,6 +55,12 @@ export const sessionMutations = {
   },
   linkSessionToTicket: (_: unknown, args: { sessionId: string; ticketId: string }, ctx: Context) => {
     return sessionService.linkToTicket(args.sessionId, args.ticketId, ctx.actorType, ctx.userId);
+  },
+  retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
+    return sessionService.retryConnection(args.sessionId, ctx.organizationId, ctx.actorType, ctx.userId);
+  },
+  moveSessionToRuntime: (_: unknown, args: { sessionId: string; runtimeInstanceId: string }, ctx: Context) => {
+    return sessionService.moveToRuntime(args.sessionId, args.runtimeInstanceId, ctx.organizationId, ctx.actorType, ctx.userId);
   },
 };
 

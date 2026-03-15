@@ -18,9 +18,14 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private cwd: string | null = null;
   private resultEmitted = false;
 
-  run({ prompt, cwd, onOutput, onComplete, interactionMode, model }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, interactionMode, model, toolSessionId }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
+
+    // Use provided toolSessionId to restore resume capability after bridge restart
+    if (toolSessionId && !this.claudeSessionId) {
+      this.claudeSessionId = toolSessionId;
+    }
 
     const permissionFlag = interactionMode === "plan"
       ? "--permission-mode"
@@ -135,6 +140,10 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (id) {
       this.claudeSessionId = id;
     }
+  }
+
+  getSessionId(): string | null {
+    return this.claudeSessionId;
   }
 
   abort() {

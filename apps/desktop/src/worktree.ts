@@ -8,27 +8,46 @@ const execFileAsync = promisify(execFile);
 
 export async function createWorktree({
   repoPath,
-  repoName,
+  repoId,
   sessionId,
   defaultBranch,
 }: {
   repoPath: string;
-  repoName: string;
+  repoId: string;
   sessionId: string;
   defaultBranch: string;
 }): Promise<{ workdir: string; branch: string }> {
-  const shortId = sessionId.slice(0, 8);
-  const branch = `trace/${shortId}`;
-  const targetPath = path.join(os.homedir(), "trace", "sessions", repoName, sessionId);
+  const branch = `trace/${sessionId}`;
+  const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
+
+  // If the worktree directory already exists, reuse it
+  if (fs.existsSync(targetPath)) {
+    return { workdir: targetPath, branch };
+  }
 
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 
-  await execFileAsync(
-    "git",
-    ["worktree", "add", "-b", branch, targetPath, defaultBranch],
+  // Check if the branch already exists (e.g. worktree was removed but branch remains)
+  const branchExists = await execFileAsync(
+    "git", ["rev-parse", "--verify", branch],
     { cwd: repoPath },
-  );
+  ).then(() => true, () => false);
+
+  if (branchExists) {
+    // Reuse existing branch without -b
+    await execFileAsync(
+      "git",
+      ["worktree", "add", targetPath, branch],
+      { cwd: repoPath },
+    );
+  } else {
+    await execFileAsync(
+      "git",
+      ["worktree", "add", "-b", branch, targetPath, defaultBranch],
+      { cwd: repoPath },
+    );
+  }
 
   return { workdir: targetPath, branch };
 }
