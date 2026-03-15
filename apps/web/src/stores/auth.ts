@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type { Organization, User } from "@trace/gql";
 import { useEntityStore } from "./entity";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "";
+
 interface AuthState {
   user: User | null;
   activeOrgId: string | null;
@@ -18,7 +20,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   fetchMe: async () => {
     try {
-      const res = await fetch("/auth/me");
+      const res = await fetch(`${API_URL}/auth/me`, { credentials: "include" });
       if (!res.ok) {
         set({ user: null, activeOrgId: null, loading: false });
         return;
@@ -41,7 +43,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
-    await fetch("/auth/logout", { method: "POST" });
+    await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
     set({ user: null, activeOrgId: null });
   },
 

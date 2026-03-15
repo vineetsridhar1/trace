@@ -13,6 +13,7 @@ const wsClient = createWSClient({
 
 export const client = createClient({
   url: `${API_URL}/graphql`,
+  fetchOptions: { credentials: "include" },
   exchanges: [
     fetchExchange,
     subscriptionExchange({
