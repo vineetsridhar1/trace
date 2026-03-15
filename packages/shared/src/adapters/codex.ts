@@ -96,10 +96,15 @@ export class CodexAdapter implements CodingToolAdapter {
 
     // command_execution completed → tool_result
     if (itemType === "command_execution") {
+      const command = item.command as string | undefined;
       const output = item.aggregated_output as string | undefined;
+      const exitCode = typeof item.exit_code === "number" ? item.exit_code : undefined;
+      const content: Record<string, unknown> = { output: output ?? "" };
+      if (command) content.command = command;
+      if (exitCode != null) content.exitCode = exitCode;
       onOutput({
         type: "assistant",
-        message: { content: [{ type: "tool_result", name: "command", content: output ?? "" }] },
+        message: { content: [{ type: "tool_result", name: "command", content }] },
       });
       return;
     }

@@ -8,6 +8,14 @@ const INVISIBLE_PAYLOAD_TYPES = new Set(["result"]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
+  | {
+    kind: "command-execution";
+    id: string;
+    command: string;
+    output?: string | Record<string, unknown>;
+    timestamp: string;
+    exitCode?: number;
+  }
   | { kind: "readglob-group"; items: ReadGlobItem[] }
   | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string };
 
@@ -58,6 +66,76 @@ function extractReadGlobInfo(
   return null;
 }
 
+function extractCommandStart(
+  payload: Record<string, unknown> | undefined,
+  timestamp: string,
+  id: string,
+): { id: string; command: string; timestamp: string } | null {
+  if (!payload || payload.type !== "assistant") return null;
+
+  const message = asRecord(payload.message);
+  const blocks = message?.content;
+  if (!Array.isArray(blocks)) return null;
+
+  let command = "";
+  for (const rawBlock of blocks) {
+    const block = asRecord(rawBlock);
+    if (!block) continue;
+    if (block.type === "text" && typeof block.text === "string" && block.text.trim()) return null;
+    if (block.type === "tool_use") {
+      const name = String(block.name ?? "").toLowerCase();
+      if (name !== "command" && name !== "bash") return null;
+      const input = asRecord(block.input);
+      if (typeof input?.command !== "string" || !input.command.trim()) return null;
+      command = input.command;
+    }
+  }
+
+  return command ? { id, command, timestamp } : null;
+}
+
+function extractCommandResult(
+  payload: Record<string, unknown> | undefined,
+  timestamp: string,
+  id: string,
+): { id: string; command?: string; output?: string | Record<string, unknown>; timestamp: string; exitCode?: number } | null {
+  if (!payload || payload.type !== "assistant") return null;
+
+  const message = asRecord(payload.message);
+  const blocks = message?.content;
+  if (!Array.isArray(blocks)) return null;
+
+  let command: string | undefined;
+  let output: string | Record<string, unknown> | undefined;
+  let exitCode: number | undefined;
+  for (const rawBlock of blocks) {
+    const block = asRecord(rawBlock);
+    if (!block) continue;
+    if (block.type === "text" && typeof block.text === "string" && block.text.trim()) return null;
+    if (block.type === "tool_result") {
+      const name = String(block.name ?? "").toLowerCase();
+      if (name !== "command" && name !== "bash") return null;
+      const content = block.content;
+      if (typeof content === "string") {
+        output = content;
+      } else {
+        const result = asRecord(content);
+        if (!result) return null;
+        if (typeof result.command === "string" && result.command.trim()) command = result.command;
+        if (typeof result.output === "string") {
+          output = result.output;
+        } else {
+          const nestedOutput = asRecord(result.output);
+          if (nestedOutput) output = nestedOutput;
+        }
+        if (typeof result.exitCode === "number") exitCode = result.exitCode;
+      }
+    }
+  }
+
+  return output != null || command != null ? { id, command, output, timestamp, exitCode } : null;
+}
+
 /** Group consecutive Read/Glob events into collapsed nodes */
 export function buildSessionNodes(
   eventIds: string[],
@@ -76,7 +154,8 @@ export function buildSessionNodes(
     bucket = [];
   };
 
-  for (const id of eventIds) {
+  for (let index = 0; index < eventIds.length; index++) {
+    const id = eventIds[index];
     const event: Event | undefined = events[id];
     if (!event) {
       flushBucket();
@@ -85,6 +164,29 @@ export function buildSessionNodes(
     }
 
     if (event.eventType === "session_output") {
+      const commandStart = extractCommandStart(event.payload, event.timestamp, id);
+      if (commandStart) {
+        const nextId = eventIds[index + 1];
+        const nextEvent = nextId ? events[nextId] : undefined;
+        const nextPayload = nextEvent?.eventType === "session_output"
+          ? asRecord(nextEvent.payload)
+          : undefined;
+        const commandResult = extractCommandResult(nextPayload, nextEvent?.timestamp ?? "", nextId ?? "");
+        if (commandResult && (!commandResult.command || commandResult.command === commandStart.command)) {
+          flushBucket();
+          result.push({
+            kind: "command-execution",
+            id: `${id}:${nextId}`,
+            command: commandStart.command,
+            output: commandResult.output,
+            timestamp: commandStart.timestamp,
+            exitCode: commandResult.exitCode,
+          });
+          index += 1;
+          continue;
+        }
+      }
+
       const info = extractReadGlobInfo(event.payload, event.timestamp, id);
       if (info) {
         bucket.push(info);

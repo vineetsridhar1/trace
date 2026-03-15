@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
-import { formatTime, serializeUnknown } from "./utils";
+import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
 
 interface ToolResultRowProps {
   name: string;
@@ -9,7 +9,21 @@ interface ToolResultRowProps {
 }
 
 export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
-  const [open, setOpen] = useState(false);
+  const commandResult = output && typeof output === "object" && typeof output.command === "string"
+    ? formatCommandLabel(output.command)
+    : null;
+  let renderedOutput: string | Record<string, unknown> | undefined = output;
+  if (output && typeof output === "object" && "output" in output) {
+    const nestedOutput = output.output;
+    if (typeof nestedOutput === "string") {
+      renderedOutput = nestedOutput;
+    } else if (nestedOutput && typeof nestedOutput === "object" && !Array.isArray(nestedOutput)) {
+      renderedOutput = nestedOutput as Record<string, unknown>;
+    } else {
+      renderedOutput = undefined;
+    }
+  }
+  const [open, setOpen] = useState(Boolean(commandResult && renderedOutput));
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyHeight, setBodyHeight] = useState(0);
 
@@ -18,6 +32,8 @@ export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
       setBodyHeight(bodyRef.current.scrollHeight);
     }
   }, [open, output]);
+
+  const label = commandResult ?? `${name} completed`;
 
   return (
     <div className="tool-cmd-row">
@@ -32,16 +48,17 @@ export function ToolResultRow({ name, output, timestamp }: ToolResultRowProps) {
         >
           <ChevronRight size={10} />
         </span>
-        <code className="tool-cmd-code">{name} completed</code>
+        <code className="tool-cmd-code">{label}</code>
         <span className="tool-cmd-time">{formatTime(timestamp)}</span>
       </button>
-      {output && (
+      {renderedOutput && (
         <div
           className="tool-cmd-body"
           style={{ maxHeight: open ? `${bodyHeight}px` : "0px" }}
         >
           <div ref={bodyRef}>
-            <pre className="tool-cmd-output">{serializeUnknown(output)}</pre>
+            {commandResult && <div className="tool-cmd-section-label">Output</div>}
+            <pre className="tool-cmd-output">{serializeUnknown(renderedOutput)}</pre>
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
-import { formatTime, serializeUnknown } from "./utils";
+import { formatCommandLabel, formatTime, serializeUnknown } from "./utils";
 
 interface ToolCallRowProps {
   name: string;
@@ -19,8 +19,11 @@ export function ToolCallRow({ name, input, timestamp }: ToolCallRowProps) {
     }
   }, [open, input]);
 
-  const isBash = name.toLowerCase() === "bash";
-  const command = isBash && typeof input?.command === "string" ? input.command : null;
+  const normalizedName = name.toLowerCase();
+  const isCommand = normalizedName === "bash" || normalizedName === "command";
+  const command = isCommand && typeof input?.command === "string"
+    ? formatCommandLabel(input.command)
+    : null;
   const label = command ?? `${name} executed`;
 
   return (

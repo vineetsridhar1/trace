@@ -253,6 +253,15 @@
   min-width: 0;
 }
 
+.tool-cmd-prefix {
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--th-faint);
+}
+
 .tool-cmd-time {
   flex-shrink: 0;
   color: var(--th-faint);
@@ -265,11 +274,20 @@
   transition: max-height 0.25s ease;
 }
 
+.tool-cmd-section-label {
+  padding: 8px 10px 0;
+  border-top: 1px solid rgba(var(--th-hover-rgb), 0.5);
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--th-faint);
+}
+
 .tool-cmd-output {
   margin: 0;
   padding: 8px 10px;
   background: var(--th-code-bg);
-  border-top: 1px solid rgba(var(--th-hover-rgb), 0.5);
   font-family: Menlo, Monaco, monospace;
   font-size: 11px;
   line-height: 1.5;
