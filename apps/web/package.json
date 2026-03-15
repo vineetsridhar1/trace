@@ -22,6 +22,7 @@
     "framer-motion": "^12.36.0",
     "graphql": "^16.10.0",
     "graphql-ws": "^5.16.2",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.577.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
