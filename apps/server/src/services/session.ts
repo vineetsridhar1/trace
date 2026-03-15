@@ -737,9 +737,9 @@ export class SessionService {
     });
   }
 
-  async retryConnection(sessionId: string, actorType: ActorType, actorId: string) {
-    const session = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
+  async retryConnection(sessionId: string, organizationId: string, actorType: ActorType, actorId: string) {
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
       include: SESSION_INCLUDE,
     });
 
@@ -887,9 +887,9 @@ export class SessionService {
     return updated;
   }
 
-  async moveToRuntime(sessionId: string, runtimeInstanceId: string, actorType: ActorType, actorId: string) {
-    const session = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
+  async moveToRuntime(sessionId: string, runtimeInstanceId: string, organizationId: string, actorType: ActorType, actorId: string) {
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
       include: { ...SESSION_INCLUDE, projects: true, tickets: true },
     });
     const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId);
@@ -918,9 +918,7 @@ export class SessionService {
         branch: session.branch ?? undefined,
         channelId: session.channelId ?? undefined,
         parentSessionId: sessionId,
-        pendingRun: session.repoId
-          ? ({ type: "run", prompt: bootstrapPrompt, interactionMode: null } satisfies PendingSessionCommand)
-          : Prisma.DbNull,
+        pendingRun: { type: "run", prompt: bootstrapPrompt, interactionMode: null } satisfies PendingSessionCommand,
         connection: connJson(defaultConnection({
           runtimeInstanceId,
           runtimeLabel: targetRuntime.label,
@@ -987,11 +985,7 @@ export class SessionService {
         await this.persistConnectionFailure(childSession.id, childSession.organizationId, prepareResult, "move_prepare");
       }
     } else {
-      const deliveryResult = await this.deliverPendingCommand(childSession.id, {
-        type: "run",
-        prompt: bootstrapPrompt,
-        interactionMode: null,
-      });
+      const deliveryResult = await this.deliverPendingCommand(childSession.id, childSession.pendingRun);
       if (deliveryResult && deliveryResult !== "delivered") {
         await this.persistConnectionFailure(childSession.id, childSession.organizationId, deliveryResult, "move_run");
       }
@@ -1033,10 +1027,22 @@ export class SessionService {
     return childSession;
   }
 
-  listRuntimesForTool(tool: string) {
+  async listRuntimesForTool(tool: string, organizationId: string) {
     const allRuntimes = sessionRouter
       .listRuntimes()
       .filter((runtime) => runtime.supportedTools.includes(tool));
+
+    const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
+    const sessions = sessionIds.length === 0
+      ? []
+      : await prisma.session.findMany({
+          where: {
+            id: { in: sessionIds },
+            organizationId,
+          },
+          select: { id: true },
+        });
+    const orgSessionIds = new Set(sessions.map((session) => session.id));
 
     return allRuntimes.map((r) => ({
       id: r.id,
@@ -1044,16 +1050,16 @@ export class SessionService {
       hostingMode: r.hostingMode,
       supportedTools: r.supportedTools,
       connected: r.ws.readyState === r.ws.OPEN,
-      sessionCount: r.boundSessions.size,
+      sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId)).length,
     }));
   }
 
-  async listAvailableRuntimes(sessionId: string) {
-    const session = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
+  async listAvailableRuntimes(sessionId: string, organizationId: string) {
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
       select: { tool: true },
     });
-    return this.listRuntimesForTool(session.tool);
+    return this.listRuntimesForTool(session.tool, organizationId);
   }
 
   // ─── Helpers ───

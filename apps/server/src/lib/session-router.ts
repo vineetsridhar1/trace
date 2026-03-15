@@ -106,10 +106,11 @@ export class SessionRouter {
   /** Send a command to the runtime that owns this session, returning a typed delivery result. */
   send(sessionId: string, command: SessionCommand): DeliveryResult {
     let runtimeId = this.sessionRuntime.get(sessionId);
+    const requiredTool = typeof command.tool === "string" ? command.tool : undefined;
 
     // Auto-bind to a default runtime if not yet bound
     if (!runtimeId) {
-      const runtime = this.getDefaultRuntime();
+      const runtime = this.getDefaultRuntime(requiredTool);
       if (!runtime) return "no_runtime";
       this.bindSession(sessionId, runtime.id);
       runtimeId = runtime.id;
@@ -118,6 +119,12 @@ export class SessionRouter {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return "session_unbound";
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
+    if (requiredTool && !runtime.supportedTools.includes(requiredTool)) {
+      const fallbackRuntime = this.getDefaultRuntime(requiredTool);
+      if (!fallbackRuntime) return "no_runtime";
+      this.bindSession(sessionId, fallbackRuntime.id);
+      return this.send(sessionId, command);
+    }
 
     try {
       runtime.ws.send(JSON.stringify(command));
@@ -127,9 +134,11 @@ export class SessionRouter {
     }
   }
 
-  getDefaultRuntime(): RuntimeInstance | undefined {
+  getDefaultRuntime(requiredTool?: string): RuntimeInstance | undefined {
     for (const runtime of this.runtimes.values()) {
-      if (runtime.ws.readyState === runtime.ws.OPEN) return runtime;
+      if (runtime.ws.readyState !== runtime.ws.OPEN) continue;
+      if (requiredTool && !runtime.supportedTools.includes(requiredTool)) continue;
+      return runtime;
     }
     return undefined;
   }
