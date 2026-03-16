@@ -22,6 +22,8 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const branch = useEntityField("sessions", sessionId, "branch") as string | null | undefined;
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
 
   const handleClearContext = useCallback(async () => {
@@ -35,6 +37,8 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
             tool: tool ?? "claude_code",
             hosting: hosting ?? "cloud",
             channelId: channel?.id,
+            repoId: repo?.id,
+            branch: branch ?? undefined,
             parentSessionId: sessionId,
             prompt,
           },
@@ -43,18 +47,13 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
-        // Dismiss the parent's plan bar so other clients see the transition
-        await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: "Plan approved — continuing in a new session.",
-        }).toPromise();
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
         setActiveSessionId(newSessionId);
       }
     } finally {
       setSending(false);
     }
-  }, [sending, planContent, tool, hosting, channel?.id, sessionId, setActiveSessionId]);
+  }, [sending, planContent, tool, hosting, channel?.id, repo?.id, branch, sessionId, setActiveSessionId]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;
