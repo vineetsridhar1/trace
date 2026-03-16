@@ -30,6 +30,15 @@ export function getModelsForTool(tool: string): ModelOption[] {
   }
 }
 
+const MODEL_LABEL_MAP = new Map<string, string>(
+  [...CLAUDE_CODE_MODELS, ...CODEX_MODELS].map((m) => [m.value, m.label]),
+);
+
+/** Convert a raw model value (e.g. "claude-opus-4-6") to a friendly label (e.g. "Opus 4.6") */
+export function getModelLabel(model: string): string {
+  return MODEL_LABEL_MAP.get(model) ?? model;
+}
+
 export function getDefaultModel(tool: string): string | undefined {
   switch (tool) {
     case "claude_code":
