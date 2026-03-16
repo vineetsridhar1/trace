@@ -514,6 +514,8 @@ export type StartSessionInput = {
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
+  runPrompt?: InputMaybe<Scalars['String']['input']>;
+  interactionMode?: InputMaybe<Scalars['String']['input']>;
   runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
   ticketId?: InputMaybe<Scalars['ID']['input']>;
   tool: CodingTool;

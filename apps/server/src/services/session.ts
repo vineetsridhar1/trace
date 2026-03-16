@@ -223,6 +223,12 @@ export class SessionService {
       }
     }
 
+    // Auto-run: only when runPrompt is explicitly provided (signals "start immediately").
+    // Omitting runPrompt leaves the session in pending — useful for draft/queued sessions.
+    if (input.runPrompt) {
+      await this.run(session.id, input.runPrompt, input.interactionMode ?? undefined);
+    }
+
     return session;
   }
 

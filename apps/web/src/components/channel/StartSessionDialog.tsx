@@ -19,7 +19,7 @@ import { Button } from "../ui/button";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
+import { START_SESSION_MUTATION } from "../../lib/mutations";
 import {
   type InteractionMode,
   MODE_CYCLE,
@@ -56,7 +56,8 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
 
     setCreating(true);
     try {
-      const wrappedPrompt = wrapPrompt(mode, prompt.trim());
+      const rawPrompt = prompt.trim();
+      const wrappedPrompt = wrapPrompt(mode, rawPrompt);
 
       const result = await client
         .mutation(START_SESSION_MUTATION, {
@@ -66,18 +67,14 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             runtimeInstanceId: runtimeInstanceId ?? undefined,
             channelId,
             repoId: repoId ?? undefined,
-            prompt: prompt.trim(),
+            prompt: rawPrompt,
+            runPrompt: wrappedPrompt,
+            interactionMode: mode === "code" ? undefined : mode,
           },
         })
         .toPromise();
 
-      const sessionId = result.data?.startSession?.id;
-      if (sessionId) {
-        await client.mutation(RUN_SESSION_MUTATION, {
-          id: sessionId,
-          prompt: wrappedPrompt,
-          interactionMode: mode === "code" ? undefined : mode,
-        }).toPromise();
+      if (result.data?.startSession?.id) {
         setPrompt("");
         setMode("code");
         setOpen(false);

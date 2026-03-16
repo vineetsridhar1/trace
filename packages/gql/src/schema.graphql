@@ -280,6 +280,9 @@ input StartSessionInput {
   projectId: ID
   parentSessionId: ID
   prompt: String
+  """Wrapped prompt for the coding tool (may differ from prompt when using plan/ask mode)."""
+  runPrompt: String
+  interactionMode: String
 }
 
 input SessionFilters {

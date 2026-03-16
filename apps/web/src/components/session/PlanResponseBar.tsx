@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { Send, X } from "lucide-react";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION, START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION, START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
@@ -31,6 +31,12 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     setSending(true);
     try {
       const prompt = `Implement the following plan:\n\n${planContent}`;
+      // Dismiss the parent's plan bar so other clients see the transition
+      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
+        sessionId,
+        text: "Plan approved — continuing in a new session.",
+      }).toPromise();
+
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
@@ -41,13 +47,13 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
             branch: branch ?? undefined,
             parentSessionId: sessionId,
             prompt,
+            runPrompt: prompt,
           },
         })
         .toPromise();
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
-        await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
         setActiveSessionId(newSessionId);
       }
     } finally {
