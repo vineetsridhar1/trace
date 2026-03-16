@@ -16,10 +16,11 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
+import { START_SESSION_MUTATION } from "../../lib/mutations";
 import {
   type InteractionMode,
   MODE_CYCLE,
@@ -38,6 +39,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [runtimeInstanceId, setRuntimeInstanceId] = useState<string | undefined>(undefined);
   const [repoId, setRepoId] = useState<string | undefined>(undefined);
   const [mode, setMode] = useState<InteractionMode>("code");
+  const [draft, setDraft] = useState(false);
   const modelOptions = getModelsForTool(tool);
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
@@ -56,7 +58,8 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
 
     setCreating(true);
     try {
-      const wrappedPrompt = wrapPrompt(mode, prompt.trim());
+      const rawPrompt = prompt.trim();
+      const wrappedPrompt = wrapPrompt(mode, rawPrompt);
 
       const result = await client
         .mutation(START_SESSION_MUTATION, {
@@ -66,18 +69,15 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             runtimeInstanceId: runtimeInstanceId ?? undefined,
             channelId,
             repoId: repoId ?? undefined,
-            prompt: prompt.trim(),
+            prompt: rawPrompt,
+            runPrompt: wrappedPrompt !== rawPrompt ? wrappedPrompt : undefined,
+            interactionMode: mode === "code" ? undefined : mode,
+            draft: draft || undefined,
           },
         })
         .toPromise();
 
-      const sessionId = result.data?.startSession?.id;
-      if (sessionId) {
-        await client.mutation(RUN_SESSION_MUTATION, {
-          id: sessionId,
-          prompt: wrappedPrompt,
-          interactionMode: mode === "code" ? undefined : mode,
-        }).toPromise();
+      if (result.data?.startSession?.id) {
         setPrompt("");
         setMode("code");
         setOpen(false);
@@ -212,9 +212,16 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={!prompt.trim() || creating || !runtimeInstanceId}>
-              {creating ? "Starting..." : "Start"}
+          <DialogFooter className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground mr-auto cursor-pointer select-none">
+              <Checkbox
+                checked={draft}
+                onCheckedChange={(v) => setDraft(v === true)}
+              />
+              Create as draft
+            </label>
+            <Button type="submit" disabled={!prompt.trim() || creating || (!draft && !runtimeInstanceId)}>
+              {creating ? "Starting..." : draft ? "Create Draft" : "Start"}
             </Button>
           </DialogFooter>
         </form>

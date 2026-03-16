@@ -280,6 +280,11 @@ input StartSessionInput {
   projectId: ID
   parentSessionId: ID
   prompt: String
+  """Wrapped prompt for the coding tool (may differ from prompt when using plan/ask mode). Always stored in pendingRun; used as the actual prompt sent to the tool."""
+  runPrompt: String
+  interactionMode: String
+  """When true, create the session in pending state without auto-running."""
+  draft: Boolean
 }
 
 input SessionFilters {

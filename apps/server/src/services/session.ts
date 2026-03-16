@@ -223,6 +223,22 @@ export class SessionService {
       }
     }
 
+    // Always store the tool-ready prompt in pendingRun so run() can retrieve it later.
+    // runPrompt is the wrapped prompt (plan/ask prefix applied); falls back to raw prompt.
+    const toolPrompt = input.runPrompt ?? input.prompt;
+    if (toolPrompt) {
+      if (input.draft) {
+        // Draft mode: store for later, don't auto-run
+        await prisma.session.update({
+          where: { id: session.id },
+          data: { pendingRun: { type: "run", prompt: toolPrompt, interactionMode: input.interactionMode ?? null } },
+        });
+      } else {
+        // Normal mode: run immediately
+        await this.run(session.id, toolPrompt, input.interactionMode ?? undefined);
+      }
+    }
+
     return session;
   }
 
@@ -247,8 +263,19 @@ export class SessionService {
       return session;
     }
 
-    // If no prompt provided, retrieve the original prompt from the session_started event
+    // If no prompt provided, check pendingRun first (preserves wrapped prompt + interactionMode),
+    // then fall back to the raw prompt from the session_started event.
     let resolvedPrompt = prompt;
+    let resolvedInteractionMode = interactionMode;
+    if (!resolvedPrompt && session.pendingRun) {
+      const pending = this.parsePendingCommand(session.pendingRun);
+      if (pending) {
+        resolvedPrompt = pending.prompt;
+        if (!resolvedInteractionMode && pending.interactionMode) {
+          resolvedInteractionMode = pending.interactionMode;
+        }
+      }
+    }
     if (!resolvedPrompt) {
       const startEvent = await prisma.event.findFirst({
         where: { scopeId: id, scopeType: "session", eventType: "session_started" },
@@ -275,7 +302,7 @@ export class SessionService {
       prompt: resolvedPrompt ?? undefined,
       tool: session.tool,
       model: session.model ?? undefined,
-      interactionMode,
+      interactionMode: resolvedInteractionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
     };
@@ -283,7 +310,7 @@ export class SessionService {
     const deliveryResult = sessionRouter.send(id, command);
 
     if (deliveryResult !== "delivered") {
-      await this.storePendingCommand(id, { type: "run", prompt: resolvedPrompt ?? null, interactionMode: interactionMode ?? null });
+      await this.storePendingCommand(id, { type: "run", prompt: resolvedPrompt ?? null, interactionMode: resolvedInteractionMode ?? null });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
