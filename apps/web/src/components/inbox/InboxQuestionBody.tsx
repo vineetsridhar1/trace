@@ -1,18 +1,9 @@
 import { useState } from "react";
 import { X, Send, ChevronLeft, ChevronRight } from "lucide-react";
+import type { Question } from "@trace/shared";
 import { cn } from "../../lib/utils";
 
-interface QuestionOption {
-  label: string;
-  description: string;
-}
-
-export interface QuestionData {
-  question: string;
-  header: string;
-  options: QuestionOption[];
-  multiSelect: boolean;
-}
+export type QuestionData = Question;
 
 interface InboxQuestionBodyProps {
   questions: QuestionData[];
