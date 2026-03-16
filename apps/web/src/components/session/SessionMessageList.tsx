@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
 import { PlanReviewCard } from "./messages/PlanReviewCard";
+import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode } from "./groupReadGlob";
 
@@ -136,6 +137,12 @@ export function SessionMessageList({
               key={node.id}
               planContent={node.planContent}
               planFilePath={node.planFilePath}
+              timestamp={node.timestamp}
+            />
+          ) : node.kind === "ask-user-question" ? (
+            <AskUserQuestionInline
+              key={node.id}
+              questions={node.questions}
               timestamp={node.timestamp}
             />
           ) : (

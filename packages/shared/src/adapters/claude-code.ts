@@ -122,7 +122,28 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       const message = data.message as Record<string, unknown> | undefined;
       const content = message?.content;
       if (Array.isArray(content)) {
-        onOutput({ type: "assistant", message: { content: content as MessageBlock[] } });
+        const normalized = content.map((block: Record<string, unknown>) => {
+          if (block.type === "tool_use" && block.name === "AskUserQuestion") {
+            const input = (block.input ?? {}) as Record<string, unknown>;
+            const questions = Array.isArray(input.questions) ? input.questions : [];
+            return {
+              type: "question" as const,
+              questions: questions.map((q: Record<string, unknown>) => ({
+                question: String(q.question ?? ""),
+                header: String(q.header ?? ""),
+                options: Array.isArray(q.options)
+                  ? q.options.map((o: Record<string, unknown>) => ({
+                      label: String(o.label ?? ""),
+                      description: String(o.description ?? ""),
+                    }))
+                  : [],
+                multiSelect: q.multiSelect === true,
+              })),
+            };
+          }
+          return block;
+        });
+        onOutput({ type: "assistant", message: { content: normalized as unknown as MessageBlock[] } });
       }
       return;
     }

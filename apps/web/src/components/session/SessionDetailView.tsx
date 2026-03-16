@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField } from "../../stores/entity";
@@ -6,9 +6,10 @@ import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
+import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { buildSessionNodes } from "./groupReadGlob";
 import { client } from "../../lib/urql";
-import { TERMINATE_SESSION_MUTATION } from "../../lib/mutations";
+import { TERMINATE_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -67,6 +68,20 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     return null;
   }, [nodes, status]);
 
+  const activeQuestion = useMemo(() => {
+    if (status !== "needs_input") return null;
+    if (activePlan) return null;
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const node = nodes[i];
+      if (node.kind === "ask-user-question") return node;
+    }
+    return null;
+  }, [nodes, status, activePlan]);
+
+  const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
+  const showQuestion = activeQuestion && activeQuestion.id !== dismissedQuestionId
+    ? activeQuestion : null;
+
   const handleStop = useCallback(async () => {
     await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
@@ -101,6 +116,19 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
           sessionId={sessionId}
           planContent={activePlan.planContent}
           onDismiss={handleDismissPlan}
+        />
+      ) : showQuestion ? (
+        <AskUserQuestionBar
+          node={showQuestion}
+          onResponse={(text) => {
+            client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
+              sessionId, text,
+            }).toPromise();
+          }}
+          onDismiss={() => {
+            setDismissedQuestionId(showQuestion.id);
+            client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+          }}
         />
       ) : (
         <SessionInput sessionId={sessionId} />

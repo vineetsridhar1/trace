@@ -1,6 +1,7 @@
 import type { StartSessionInput, ActorType } from "@trace/gql";
 import type { SessionStatus, EventType, CodingTool } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import { hasQuestionBlock } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
@@ -443,7 +444,7 @@ export class SessionService {
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true },
+      select: { organizationId: true, status: true },
     });
     if (!session) return;
 
@@ -460,6 +461,28 @@ export class SessionService {
     // If we found a title tag, update the session name
     if (extractedTitle) {
       await this.updateName(sessionId, extractedTitle);
+    }
+
+    // If this output contains a QuestionBlock, transition to needs_input immediately.
+    // Claude Code hangs waiting for stdin when AskUserQuestion fires, so complete()
+    // never runs — we detect it here instead.
+    if (session.status === "active" && hasQuestionBlock(data)) {
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { status: "needs_input" },
+      });
+
+      // Emit as session_output with a status patch — matches the workspace_ready pattern.
+      // The frontend's sessionPatchFromOutput picks up the status field.
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: { type: "question_pending", status: "needs_input" },
+        actorType: "system",
+        actorId: "system",
+      });
     }
   }
 
@@ -548,7 +571,14 @@ export class SessionService {
       });
     });
 
-    const newStatus = hasPendingPlan ? "needs_input" : "completed";
+    // Safety net for adapters that exit cleanly after emitting a question
+    // (Claude Code hangs on stdin so recordOutput handles it first, but other
+    // adapters may reach complete() with a question still pending).
+    const hasQuestion = recentEvents.some((evt) => {
+      return hasQuestionBlock(evt.payload as Record<string, unknown>);
+    });
+
+    const newStatus = (hasPendingPlan || hasQuestion) ? "needs_input" : "completed";
 
     const session = await prisma.session.update({
       where: { id },

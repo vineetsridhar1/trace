@@ -1,4 +1,5 @@
 import type { Event } from "@trace/gql";
+import type { Question } from "@trace/shared";
 import type { ReadGlobItem } from "./messages/ReadGlobGroup";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
@@ -17,7 +18,8 @@ export type SessionNode =
     exitCode?: number;
   }
   | { kind: "readglob-group"; items: ReadGlobItem[] }
-  | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string };
+  | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string }
+  | { kind: "ask-user-question"; id: string; questions: Question[]; timestamp: string };
 
 /** Safely narrow unknown to a record for property access */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -210,8 +212,9 @@ export function buildSessionNodes(
   // Deduplicate consecutive "result" events (race between readline and process close)
   const deduped = deduplicateResultEvents(result, events);
 
-  // Post-process: detect ExitPlanMode tool_use and replace with plan-review nodes
-  return detectPlanReviewNodes(deduped, events);
+  // Post-process: detect special tool calls and replace with semantic nodes
+  const withPlans = detectPlanReviewNodes(deduped, events);
+  return detectQuestionNodes(withPlans, events);
 }
 
 /** Remove duplicate consecutive "result" session_output events */
@@ -336,4 +339,43 @@ function detectPlanReviewNodes(
   }
 
   return result;
+}
+
+/** Detect QuestionBlock in assistant events and replace with ask-user-question nodes */
+function detectQuestionNodes(nodes: SessionNode[], events: Record<string, Event>): SessionNode[] {
+  return nodes.map((node) => {
+    if (node.kind !== "event") return node;
+    const event = events[node.id];
+    if (!event || event.eventType !== "session_output") return node;
+    const payload = asRecord(event.payload);
+    if (!payload || payload.type !== "assistant") return node;
+    const message = asRecord(payload.message);
+    const blocks = message?.content;
+    if (!Array.isArray(blocks)) return node;
+
+    const qBlock = blocks.find((b: unknown) => asRecord(b)?.type === "question");
+    if (!qBlock) return node;
+    const q = asRecord(qBlock)!;
+    const questions = Array.isArray(q.questions) ? q.questions : [];
+
+    return {
+      kind: "ask-user-question" as const,
+      id: node.id,
+      questions: questions.map((raw: unknown) => {
+        const r = asRecord(raw) ?? {};
+        return {
+          question: String(r.question ?? ""),
+          header: String(r.header ?? ""),
+          options: Array.isArray(r.options)
+            ? r.options.map((o: unknown) => {
+                const opt = asRecord(o) ?? {};
+                return { label: String(opt.label ?? ""), description: String(opt.description ?? "") };
+              })
+            : [],
+          multiSelect: r.multiSelect === true,
+        };
+      }),
+      timestamp: event.timestamp,
+    };
+  });
 }

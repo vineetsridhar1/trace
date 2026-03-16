@@ -21,7 +21,39 @@ export interface ToolResultBlock {
   content?: string | Record<string, unknown>;
 }
 
-export type MessageBlock = ContentBlock | ToolUseBlock | ToolResultBlock;
+export interface QuestionOption {
+  label: string;
+  description: string;
+}
+
+export interface Question {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
+export interface QuestionBlock {
+  type: "question";
+  questions: Question[];
+}
+
+export type MessageBlock = ContentBlock | ToolUseBlock | ToolResultBlock | QuestionBlock;
+
+/**
+ * Check whether a session_output payload contains a QuestionBlock.
+ * Shared between the server (recordOutput / complete) and the frontend (node detection).
+ */
+export function hasQuestionBlock(data: Record<string, unknown>): boolean {
+  if (data.type !== "assistant") return false;
+  const message = data.message as Record<string, unknown> | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((block: unknown) => {
+    const b = block as Record<string, unknown> | undefined;
+    return b?.type === "question";
+  });
+}
 
 export interface AssistantEvent {
   type: "assistant";
