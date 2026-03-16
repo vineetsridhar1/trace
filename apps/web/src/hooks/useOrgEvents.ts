@@ -5,6 +5,7 @@ import { useEntityStore } from "../stores/entity";
 import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
+import { notifyForEvent } from "../notifications/handlers";
 import type { Event, EventType, ScopeType, SessionStatus, Channel, Repo } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -218,6 +219,9 @@ export function useOrgEvents() {
           }
           patch("sessions", event.scopeId, updates);
         }
+
+        // Fire notification handlers after all store patches are applied
+        notifyForEvent(event);
       });
 
     return () => subscription.unsubscribe();
