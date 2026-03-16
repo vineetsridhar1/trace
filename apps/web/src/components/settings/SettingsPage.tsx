@@ -10,6 +10,7 @@ import { gql } from "@urql/core";
 import { Button } from "../ui/button";
 import { RepoCard } from "./RepoCard";
 import { CreateRepoDialog } from "./CreateRepoDialog";
+import { ApiTokensSection } from "./ApiTokensSection";
 
 const REPOS_QUERY = gql`
   query Repos($organizationId: ID!) {
@@ -88,6 +89,8 @@ export function SettingsPage() {
             </div>
           )}
         </section>
+
+        <ApiTokensSection />
       </div>
     </div>
   );

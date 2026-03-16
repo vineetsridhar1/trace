@@ -7,6 +7,7 @@ import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { flyAdapter } from "../lib/fly-adapter.js";
+import { apiTokenService } from "./api-token.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
@@ -240,15 +241,19 @@ export class SessionService {
     if (session.hosting === "cloud") {
       // Cloud: spin up a Fly Machine. The container-bridge handles repo clone
       // on boot via env vars, then sends workspace_ready through the existing protocol.
-      flyAdapter
-        .createMachine({
-          sessionId: session.id,
-          tool: session.tool,
-          model: session.model ?? undefined,
-          repoRemoteUrl: session.repo?.remoteUrl,
-          repoDefaultBranch: session.repo?.defaultBranch,
-          branch: input.branch ?? undefined,
-        })
+      apiTokenService
+        .getDecryptedTokens(input.createdById)
+        .then((userTokens) =>
+          flyAdapter.createMachine({
+            sessionId: session.id,
+            tool: session.tool,
+            model: session.model ?? undefined,
+            repoRemoteUrl: session.repo?.remoteUrl,
+            repoDefaultBranch: session.repo?.defaultBranch,
+            branch: input.branch ?? undefined,
+            userTokens,
+          }),
+        )
         .then(() => flyAdapter.waitForStarted(session.id))
         .catch((err: Error) => {
           console.error(`[session] failed to create cloud machine for ${session.id}:`, err.message);

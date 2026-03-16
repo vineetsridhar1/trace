@@ -82,6 +82,12 @@ enum InboxItemStatus {
   dismissed
 }
 
+enum ApiTokenProvider {
+  anthropic
+  openai
+  github
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -133,6 +139,7 @@ model User {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   createdSessions Session[] @relation("SessionCreator")
+  apiTokens       ApiToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -274,6 +281,20 @@ model SessionTicket {
   ticket    Ticket  @relation(fields: [ticketId], references: [id])
 
   @@id([sessionId, ticketId])
+}
+
+model ApiToken {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  provider       ApiTokenProvider
+  encryptedToken String
+  iv             String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
 }
 
 model Event {

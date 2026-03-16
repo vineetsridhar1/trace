@@ -102,6 +102,12 @@ enum InboxItemStatus {
   dismissed
 }
 
+enum ApiTokenProvider {
+  anthropic
+  openai
+  github
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -271,6 +277,12 @@ type SessionConnection {
   canMove: Boolean!
 }
 
+type ApiTokenStatus {
+  provider: ApiTokenProvider!
+  isSet: Boolean!
+  updatedAt: DateTime
+}
+
 type SessionRuntimeInstance {
   id: ID!
   label: String!
@@ -359,6 +371,11 @@ input ScopeInput {
   id: ID!
 }
 
+input SetApiTokenInput {
+  provider: ApiTokenProvider!
+  token: String!
+}
+
 # --- Queries ---
 
 type Query {
@@ -385,6 +402,7 @@ type Query {
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
+  myApiTokens: [ApiTokenStatus!]!
 }
 
 # --- Mutations ---
@@ -410,6 +428,8 @@ type Mutation {
   createRepo(input: CreateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
+  setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
+  deleteApiToken(provider: ApiTokenProvider!): Boolean!
 }
 
 # --- Subscriptions ---

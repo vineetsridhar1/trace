@@ -33,6 +33,18 @@ export type AgentTrustLevel =
   | 'blocked'
   | 'suggest';
 
+export type ApiTokenProvider =
+  | 'anthropic'
+  | 'github'
+  | 'openai';
+
+export type ApiTokenStatus = {
+  __typename?: 'ApiTokenStatus';
+  isSet: Scalars['Boolean']['output'];
+  provider: ApiTokenProvider;
+  updatedAt?: Maybe<Scalars['DateTime']['output']>;
+};
+
 export type Channel = {
   __typename?: 'Channel';
   id: Scalars['ID']['output'];
@@ -171,6 +183,7 @@ export type Mutation = {
   createProject: Project;
   createRepo: Repo;
   createTicket: Ticket;
+  deleteApiToken: Scalars['Boolean']['output'];
   deleteSession: Session;
   dismissInboxItem: InboxItem;
   linkEntityToProject: Project;
@@ -182,6 +195,7 @@ export type Mutation = {
   runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
+  setApiToken: ApiTokenStatus;
   startSession: Session;
   terminateSession: Session;
   updateSessionConfig: Session;
@@ -212,6 +226,11 @@ export type MutationCreateRepoArgs = {
 
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
+};
+
+
+export type MutationDeleteApiTokenArgs = {
+  provider: ApiTokenProvider;
 };
 
 
@@ -277,6 +296,11 @@ export type MutationSendSessionMessageArgs = {
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
+};
+
+
+export type MutationSetApiTokenArgs = {
+  input: SetApiTokenInput;
 };
 
 
@@ -352,6 +376,7 @@ export type Query = {
   channels: Array<Channel>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
+  myApiTokens: Array<ApiTokenStatus>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
   project?: Maybe<Project>;
@@ -550,6 +575,11 @@ export type SessionStatus =
   | 'paused'
   | 'pending'
   | 'unreachable';
+
+export type SetApiTokenInput = {
+  provider: ApiTokenProvider;
+  token: Scalars['String']['input'];
+};
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;

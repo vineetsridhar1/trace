@@ -11,6 +11,9 @@ import {
 import { client } from "../../lib/urql";
 import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
 
+/** Sentinel value for the on-demand cloud option */
+export const CLOUD_RUNTIME_ID = "__cloud__";
+
 interface RuntimeSelectorProps {
   tool: string;
   open: boolean;
@@ -32,9 +35,12 @@ export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelector
         const fetched = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
         setRuntimes(fetched);
         const connected = fetched.filter((r) => r.connected);
-        if (connected.length === 1) {
+        if (connected.length === 1 && !value) {
           onChange(connected[0].id);
-        } else if (!fetched.find((r) => r.id === value)) {
+        } else if (connected.length === 0 && !value) {
+          // Auto-select cloud when no local runtimes are available
+          onChange(CLOUD_RUNTIME_ID);
+        } else if (value && value !== CLOUD_RUNTIME_ID && !fetched.find((r) => r.id === value)) {
           onChange(undefined);
         }
       })
@@ -42,21 +48,13 @@ export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelector
   }, [open, tool]); // eslint-disable-line react-hooks/exhaustive-deps -- value is only used for stale-check, not as a trigger
 
   const connectedRuntimes = runtimes.filter((r) => r.connected);
-  const selectedRuntime = runtimes.find((r) => r.id === value);
+  const selectedRuntime = value === CLOUD_RUNTIME_ID ? null : runtimes.find((r) => r.id === value);
 
   if (loading) {
     return (
       <div className="flex h-9 items-center gap-2 rounded-md border border-border px-3">
         <Loader2 size={14} className="animate-spin text-muted-foreground" />
         <span className="text-sm text-muted-foreground">Loading...</span>
-      </div>
-    );
-  }
-
-  if (connectedRuntimes.length === 0) {
-    return (
-      <div className="flex h-9 items-center rounded-md border border-border px-3">
-        <span className="text-sm text-muted-foreground">No runtimes available</span>
       </div>
     );
   }
@@ -68,12 +66,24 @@ export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelector
     >
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select runtime...">
-          {selectedRuntime && (
+          {value === CLOUD_RUNTIME_ID ? (
+            <span className="flex items-center gap-1.5">
+              <Cloud size={12} className="shrink-0 text-blue-400" />
+              Cloud
+            </span>
+          ) : selectedRuntime ? (
             <RuntimeLabel runtime={selectedRuntime} />
-          )}
+          ) : null}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
+        <SelectItem value={CLOUD_RUNTIME_ID}>
+          <span className="flex items-center gap-1.5">
+            <Cloud size={12} className="shrink-0 text-blue-400" />
+            Cloud
+            <span className="text-xs text-muted-foreground">(on-demand)</span>
+          </span>
+        </SelectItem>
         {connectedRuntimes.map((rt) => (
           <SelectItem key={rt.id} value={rt.id}>
             <span className="flex items-center gap-1.5">

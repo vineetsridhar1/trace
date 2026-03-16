@@ -9,6 +9,7 @@ interface CreateMachineOptions {
   repoRemoteUrl?: string;
   repoDefaultBranch?: string;
   branch?: string;
+  userTokens?: Partial<Record<string, string>>;
 }
 
 const FLY_API_URL = process.env.FLY_API_URL ?? "https://api.machines.dev";
@@ -66,8 +67,12 @@ export class FlyAdapter {
     for (const session of cloudSessions) {
       const conn = session.connection as Record<string, unknown> | null;
       const machineId = conn?.machineId as string | undefined;
+      const bridgeToken = conn?.bridgeToken as string | undefined;
       if (machineId) {
         this.sessionToMachine.set(session.id, machineId);
+      }
+      if (bridgeToken) {
+        this.validBridgeTokens.add(bridgeToken);
       }
     }
 
@@ -81,7 +86,7 @@ export class FlyAdapter {
    * Returns the machineId and bridgeToken.
    */
   async createMachine(options: CreateMachineOptions): Promise<{ machineId: string; bridgeToken: string }> {
-    const { sessionId, tool, model, repoRemoteUrl, repoDefaultBranch, branch } = options;
+    const { sessionId, tool, model, repoRemoteUrl, repoDefaultBranch, branch, userTokens } = options;
     const bridgeToken = randomUUID();
 
     const bridgeUrl = TRACE_SERVER_PUBLIC_URL.replace(/^http/, "ws") + "/bridge";
@@ -92,7 +97,13 @@ export class FlyAdapter {
       BRIDGE_TOKEN: bridgeToken,
       CODING_TOOL: tool,
     };
-    if (process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+    // Inject user-provided API tokens (override server-level defaults)
+    if (userTokens?.anthropic) env.ANTHROPIC_API_KEY = userTokens.anthropic;
+    else if (process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+    if (userTokens?.openai) env.OPENAI_API_KEY = userTokens.openai;
+    if (userTokens?.github) env.GITHUB_TOKEN = userTokens.github;
+
     if (model) env.MODEL = model;
     if (repoRemoteUrl) env.REPO_REMOTE_URL = repoRemoteUrl;
     if (repoDefaultBranch) env.REPO_DEFAULT_BRANCH = repoDefaultBranch;

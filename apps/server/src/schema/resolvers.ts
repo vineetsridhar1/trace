@@ -5,6 +5,7 @@ import { sessionQueries, sessionMutations, sessionSubscriptions } from "./sessio
 import { ticketQueries, ticketMutations, ticketSubscriptions } from "./ticket.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries, inboxMutations } from "./inbox.js";
+import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
 import { prisma } from "../lib/db.js";
 
 export const resolvers = {
@@ -36,6 +37,7 @@ export const resolvers = {
     ...ticketQueries,
     ...eventQueries,
     ...inboxQueries,
+    ...apiTokenQueries,
   },
 
   Mutation: {
@@ -44,6 +46,7 @@ export const resolvers = {
     ...sessionMutations,
     ...ticketMutations,
     ...inboxMutations,
+    ...apiTokenMutations,
   },
 
   Subscription: {
