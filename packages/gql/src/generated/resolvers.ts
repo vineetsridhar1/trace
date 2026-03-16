@@ -310,6 +310,7 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
+  availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
@@ -350,6 +351,7 @@ export type QueryChannelsArgs = {
 
 export type QueryEventsArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
+  before?: InputMaybe<Scalars['DateTime']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
@@ -450,6 +452,7 @@ export type Session = {
   status: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
+  toolSessionId?: Maybe<Scalars['String']['output']>;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
 };
@@ -922,6 +925,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   status?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType>;
   tool?: Resolver<ResolversTypes['CodingTool'], ParentType, ContextType>;
+  toolSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
