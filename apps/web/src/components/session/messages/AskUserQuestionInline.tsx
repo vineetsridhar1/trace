@@ -17,8 +17,8 @@ export function AskUserQuestionInline({ questions, timestamp }: AskUserQuestionI
       </div>
 
       <div className="space-y-3">
-        {questions.map((q) => (
-          <div key={q.header || q.question}>
+        {questions.map((q, i) => (
+          <div key={`${i}-${q.header || q.question}`}>
             {q.header && (
               <div className="text-[11px] font-semibold uppercase tracking-wide text-accent">
                 {q.header}

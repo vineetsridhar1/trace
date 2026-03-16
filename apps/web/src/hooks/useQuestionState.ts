@@ -11,7 +11,7 @@ export function useQuestionState(node: QuestionNode) {
   const [selections, setSelections] = useState<Record<number, Set<string>>>({});
   const [customTexts, setCustomTexts] = useState<Record<number, string>>({});
 
-  const q = node.questions[page];
+  const q = node.questions[page] ?? { question: "", header: "", options: [], multiSelect: false };
   const currentSelected = selections[page] ?? new Set<string>();
   const currentCustom = customTexts[page] ?? "";
   const isLastPage = page === total - 1;

@@ -20,13 +20,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private claudeSessionId: string | null = null;
   private cwd: string | null = null;
   private resultEmitted = false;
-  private interactionMode: "code" | "plan" | "ask" | undefined;
   private lastPlanFilePath: string | null = null;
 
   run({ prompt, cwd, onOutput, onComplete, interactionMode, model, toolSessionId }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
-    this.interactionMode = interactionMode;
     this.lastPlanFilePath = null;
 
     // Use provided toolSessionId to restore resume capability after bridge restart

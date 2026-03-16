@@ -61,7 +61,8 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     this.process.on("close", (code) => {
-      // If in plan mode and exited cleanly with text, wrap as PlanBlock
+      // If in plan mode and exited cleanly with text, wrap as PlanBlock.
+      // Codex doesn't write plan files to disk, so filePath is omitted.
       if (this.interactionMode === "plan" && (code === 0 || code === null) && this.lastTextContent) {
         onOutput({
           type: "assistant",

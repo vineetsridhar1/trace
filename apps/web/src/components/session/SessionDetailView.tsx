@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField } from "../../stores/entity";
@@ -78,8 +78,8 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     return null;
   }, [nodes, status, activePlan]);
 
-  const dismissedQuestionIdRef = useRef<string | null>(null);
-  const showQuestion = activeQuestion && activeQuestion.id !== dismissedQuestionIdRef.current
+  const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
+  const showQuestion = activeQuestion && activeQuestion.id !== dismissedQuestionId
     ? activeQuestion : null;
 
   const handleStop = useCallback(async () => {
@@ -126,7 +126,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
             }).toPromise();
           }}
           onDismiss={() => {
-            dismissedQuestionIdRef.current = showQuestion.id;
+            setDismissedQuestionId(showQuestion.id);
             client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
           }}
         />

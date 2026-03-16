@@ -474,21 +474,23 @@ export class SessionService {
         where: { id: sessionId, status: "active" },
         data: { status: "needs_input" },
       });
-      if (updated.count === 0) return;
 
-      // Emit as session_output with a status patch — matches the workspace_ready pattern.
-      // The frontend's sessionPatchFromOutput picks up the status field.
-      // Questions take precedence — they need immediate user interaction
-      const pendingType = hasQuestionBlock(data) ? "question_pending" : "plan_pending";
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: sessionId,
-        eventType: "session_output",
-        payload: { type: pendingType, status: "needs_input" },
-        actorType: "system",
-        actorId: "system",
-      });
+      // Only emit the pending event if we won the race — avoids duplicate events
+      if (updated.count > 0) {
+        // Emit as session_output with a status patch — matches the workspace_ready pattern.
+        // The frontend's sessionPatchFromOutput picks up the status field.
+        // Questions take precedence — they need immediate user interaction
+        const pendingType = hasQuestionBlock(data) ? "question_pending" : "plan_pending";
+        await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: { type: pendingType, status: "needs_input" },
+          actorType: "system",
+          actorId: "system",
+        });
+      }
     }
   }
 
