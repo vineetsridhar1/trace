@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -7,7 +7,6 @@ import { CommandExecutionRow } from "./messages/CommandExecutionRow";
 import type { SessionNode } from "./groupReadGlob";
 
 interface SessionMessageListProps {
-  eventIds: string[];
   nodes: SessionNode[];
   hasOlder?: boolean;
   loadingOlder?: boolean;
@@ -15,7 +14,6 @@ interface SessionMessageListProps {
 }
 
 export function SessionMessageList({
-  eventIds,
   nodes,
   hasOlder,
   loadingOlder,
@@ -26,6 +24,35 @@ export function SessionMessageList({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevNodeCountRef = useRef(0);
   const isInitialLoadRef = useRef(true);
+  const wasLoadingOlderRef = useRef(false);
+  const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+
+  // Capture scroll position when older messages start loading
+  useEffect(() => {
+    if (loadingOlder && !wasLoadingOlderRef.current) {
+      const container = scrollContainerRef.current;
+      if (container) {
+        scrollSnapshotRef.current = {
+          scrollHeight: container.scrollHeight,
+          scrollTop: container.scrollTop,
+        };
+      }
+    }
+    wasLoadingOlderRef.current = !!loadingOlder;
+  }, [loadingOlder]);
+
+  // Restore scroll position after older messages are prepended
+  useEffect(() => {
+    const snapshot = scrollSnapshotRef.current;
+    const container = scrollContainerRef.current;
+    if (!snapshot || !container || loadingOlder) return;
+
+    requestAnimationFrame(() => {
+      const newScrollHeight = container.scrollHeight;
+      container.scrollTop = snapshot.scrollTop + (newScrollHeight - snapshot.scrollHeight);
+      scrollSnapshotRef.current = null;
+    });
+  }, [loadingOlder, nodes.length]);
 
   // Scroll to bottom on initial load and when new messages arrive at the end
   useEffect(() => {
@@ -33,7 +60,6 @@ export function SessionMessageList({
     if (!container) return;
 
     if (isInitialLoadRef.current) {
-      // Initial load — snap to bottom
       bottomRef.current?.scrollIntoView();
       isInitialLoadRef.current = false;
       prevNodeCountRef.current = nodes.length;
@@ -43,6 +69,8 @@ export function SessionMessageList({
     const prevCount = prevNodeCountRef.current;
     prevNodeCountRef.current = nodes.length;
 
+    // Don't auto-scroll when older messages were prepended
+    if (scrollSnapshotRef.current) return;
     if (nodes.length <= prevCount) return;
 
     // Only auto-scroll if the user is near the bottom (within 150px)
@@ -54,45 +82,24 @@ export function SessionMessageList({
   }, [nodes.length]);
 
   // IntersectionObserver on the sentinel to trigger loading older messages
-  const handleSentinel = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      const entry = entries[0];
-      if (entry.isIntersecting && hasOlder && !loadingOlder && onLoadOlder) {
-        onLoadOlder();
-      }
-    },
-    [hasOlder, loadingOlder, onLoadOlder],
-  );
-
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
-    const observer = new IntersectionObserver(handleSentinel, {
-      root: scrollContainerRef.current,
-      rootMargin: "200px 0px 0px 0px", // trigger 200px before reaching top
-    });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && onLoadOlder) {
+          onLoadOlder();
+        }
+      },
+      {
+        root: scrollContainerRef.current,
+        rootMargin: "200px 0px 0px 0px",
+      },
+    );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [handleSentinel]);
-
-  // Preserve scroll position when older messages are prepended
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || !loadingOlder) return;
-
-    // Capture scroll state before the DOM updates from new older messages
-    const prevScrollHeight = container.scrollHeight;
-    const prevScrollTop = container.scrollTop;
-
-    return () => {
-      // After render, restore relative scroll position
-      requestAnimationFrame(() => {
-        const newScrollHeight = container.scrollHeight;
-        container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
-      });
-    };
-  }, [loadingOlder, eventIds.length]);
+  }, [onLoadOlder]);
 
   return (
     <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4">

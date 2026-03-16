@@ -31,13 +31,17 @@ export function useSessionEvents(sessionId: string) {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const oldestTimestampRef = useRef<string | null>(null);
+  const loadingOlderRef = useRef(false);
+  const hasOlderRef = useRef(true);
 
   // Fetch the most recent page of events on mount
   const fetchEvents = useCallback(async () => {
     if (!activeOrgId) return;
 
+    setError(null);
     const result = await client
       .query(SESSION_EVENTS_QUERY, {
         organizationId: activeOrgId,
@@ -47,12 +51,19 @@ export function useSessionEvents(sessionId: string) {
       })
       .toPromise();
 
+    if (result.error) {
+      setError(result.error.message);
+      setLoading(false);
+      return;
+    }
+
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
       useEntityStore.getState().upsertMany("events", events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);
+        hasOlderRef.current = false;
       }
       if (events.length > 0) {
         oldestTimestampRef.current = events[0].timestamp;
@@ -67,10 +78,11 @@ export function useSessionEvents(sessionId: string) {
 
   // Load an older page of events (called when user scrolls to top)
   const fetchOlderEvents = useCallback(async () => {
-    if (!activeOrgId || !oldestTimestampRef.current || loadingOlder || !hasOlder) {
+    if (!activeOrgId || !oldestTimestampRef.current || loadingOlderRef.current || !hasOlderRef.current) {
       return;
     }
 
+    loadingOlderRef.current = true;
     setLoadingOlder(true);
 
     const result = await client
@@ -82,19 +94,27 @@ export function useSessionEvents(sessionId: string) {
       })
       .toPromise();
 
+    if (result.error) {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      return;
+    }
+
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
       useEntityStore.getState().upsertMany("events", events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);
+        hasOlderRef.current = false;
       }
       if (events.length > 0) {
         oldestTimestampRef.current = events[0].timestamp;
       }
     }
+    loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [activeOrgId, sessionId, loadingOlder, hasOlder]);
+  }, [activeOrgId, sessionId]);
 
   // Derive eventIds from the entity store — useOrgEvents already upserts
   // all incoming events, so no separate subscription is needed.
@@ -104,5 +124,5 @@ export function useSessionEvents(sessionId: string) {
     (a, b) => a.timestamp.localeCompare(b.timestamp),
   );
 
-  return { eventIds, loading, loadingOlder, hasOlder, fetchOlderEvents };
+  return { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents };
 }
