@@ -9,6 +9,7 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
+import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -37,6 +38,7 @@ export function App() {
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
   useHistorySync();
+  useVisibilityRefresh();
   const activePage = useUIStore((s) => s.activePage);
 
   return (

@@ -57,6 +57,7 @@ export function ChannelView({ channelId }: { channelId: string }) {
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [loading, setLoading] = useState(true);
   const activeSessionId = useUIStore((s) => s.activeSessionId);
+  const refreshTick = useUIStore((s) => s.refreshTick);
 
   const fetchSessions = useCallback(async () => {
     if (!activeOrgId) return;
@@ -77,7 +78,7 @@ export function ChannelView({ channelId }: { channelId: string }) {
   useEffect(() => {
     setLoading(true);
     fetchSessions();
-  }, [fetchSessions]);
+  }, [fetchSessions, refreshTick]);
 
   const sessionIds = useEntityIds(
     "sessions",

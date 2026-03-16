@@ -156,7 +156,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
           }}
           placeholder="Suggest changes to revise the plan..."
           disabled={sending}
-          className="flex-1 rounded-lg border border-border bg-surface-deep px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+          className="flex-1 rounded-lg border border-border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
         />
         <button
           type="button"

@@ -200,7 +200,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
               placeholder="e.g. Fix the login bug on the signup page..."
               autoFocus
               rows={4}
-              className="w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              className="w-full rounded-md border border-border bg-input px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && e.metaKey) {
                   handleSubmit(e);
