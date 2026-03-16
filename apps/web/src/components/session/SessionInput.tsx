@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Play, Send } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
 import {
   type InteractionMode,
   MODE_CYCLE,
@@ -21,6 +21,7 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isPending = status === "pending";
   const isActive = status === "active";
   const disconnected = isDisconnected(connection);
   const displayModel = model ?? "Claude Code";
@@ -31,6 +32,16 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
       return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
     });
   }, []);
+
+  const handleRun = useCallback(async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await client.mutation(RUN_SESSION_MUTATION, { id: sessionId }).toPromise();
+    } finally {
+      setSending(false);
+    }
+  }, [sessionId, sending]);
 
   const handleSend = useCallback(async () => {
     const text = message.trim();
@@ -53,6 +64,26 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
   // Show recovery panel instead of input when disconnected
   if (disconnected) {
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
+  }
+
+  if (isPending) {
+    return (
+      <div className="shrink-0 border-t border-border px-4 py-3">
+        <div className="flex items-center gap-3">
+          <p className="flex-1 text-sm text-muted-foreground">
+            This session is ready to run.
+          </p>
+          <button
+            onClick={handleRun}
+            disabled={sending}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
+          >
+            <Play size={14} />
+            {sending ? "Starting..." : "Run"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

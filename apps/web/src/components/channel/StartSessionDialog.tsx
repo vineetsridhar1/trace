@@ -38,6 +38,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [runtimeInstanceId, setRuntimeInstanceId] = useState<string | undefined>(undefined);
   const [repoId, setRepoId] = useState<string | undefined>(undefined);
   const [mode, setMode] = useState<InteractionMode>("code");
+  const [draft, setDraft] = useState(false);
   const modelOptions = getModelsForTool(tool);
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
@@ -68,7 +69,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             channelId,
             repoId: repoId ?? undefined,
             prompt: rawPrompt,
-            runPrompt: wrappedPrompt,
+            runPrompt: draft ? undefined : wrappedPrompt,
             interactionMode: mode === "code" ? undefined : mode,
           },
         })
@@ -209,9 +210,18 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={!prompt.trim() || creating || !runtimeInstanceId}>
-              {creating ? "Starting..." : "Start"}
+          <DialogFooter className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground mr-auto cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={draft}
+                onChange={(e) => setDraft(e.target.checked)}
+                className="rounded border-border"
+              />
+              Create as draft
+            </label>
+            <Button type="submit" disabled={!prompt.trim() || creating || (!draft && !runtimeInstanceId)}>
+              {creating ? "Starting..." : draft ? "Create Draft" : "Start"}
             </Button>
           </DialogFooter>
         </form>
