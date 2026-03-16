@@ -1,6 +1,7 @@
 import { createClient, fetchExchange, subscriptionExchange } from "@urql/core";
 import { createClient as createWSClient } from "graphql-ws";
 import { getAuthHeaders } from "../stores/auth";
+import { useConnectionStore } from "../stores/connection";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const wsBase = API_URL
@@ -13,11 +14,22 @@ const wsClient = createWSClient({
     const token = localStorage.getItem("trace_token");
     return token ? { token } : {};
   },
+  shouldRetry: () => true,
   retryAttempts: Infinity,
   retryWait: async (retries) => {
     const delay = Math.min(1000 * 2 ** retries, 30_000);
     await new Promise((resolve) => setTimeout(resolve, delay));
   },
+  on: {
+    connected: () => useConnectionStore.getState().setConnected(true),
+    closed: () => useConnectionStore.getState().setConnected(false),
+  },
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    useConnectionStore.getState().setConnected(false);
+  }
 });
 
 export const client = createClient({
