@@ -467,10 +467,13 @@ export class SessionService {
     // Claude Code hangs waiting for stdin when AskUserQuestion fires, so complete()
     // never runs — we detect it here instead.
     if (session.status === "active" && hasQuestionBlock(data)) {
-      await prisma.session.update({
-        where: { id: sessionId },
+      // Use status in the where clause to make this idempotent — if two
+      // recordOutput calls race, only the first one that sees "active" wins.
+      const updated = await prisma.session.updateMany({
+        where: { id: sessionId, status: "active" },
         data: { status: "needs_input" },
       });
+      if (updated.count === 0) return;
 
       // Emit as session_output with a status patch — matches the workspace_ready pattern.
       // The frontend's sessionPatchFromOutput picks up the status field.

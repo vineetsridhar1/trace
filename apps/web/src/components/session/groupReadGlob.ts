@@ -1,5 +1,5 @@
 import type { Event } from "@trace/gql";
-import type { Question } from "@trace/shared";
+import { parseQuestion, type Question } from "@trace/shared";
 import type { ReadGlobItem } from "./messages/ReadGlobGroup";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
@@ -361,20 +361,7 @@ function detectQuestionNodes(nodes: SessionNode[], events: Record<string, Event>
     return {
       kind: "ask-user-question" as const,
       id: node.id,
-      questions: questions.map((raw: unknown) => {
-        const r = asRecord(raw) ?? {};
-        return {
-          question: String(r.question ?? ""),
-          header: String(r.header ?? ""),
-          options: Array.isArray(r.options)
-            ? r.options.map((o: unknown) => {
-                const opt = asRecord(o) ?? {};
-                return { label: String(opt.label ?? ""), description: String(opt.description ?? "") };
-              })
-            : [],
-          multiSelect: r.multiSelect === true,
-        };
-      }),
+      questions: questions.map(parseQuestion),
       timestamp: event.timestamp,
     };
   });

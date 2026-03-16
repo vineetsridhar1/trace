@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Question } from "@trace/shared";
 
 interface QuestionNode {
@@ -17,11 +17,15 @@ export function useQuestionState(node: QuestionNode) {
   const isLastPage = page === total - 1;
   const isFirstPage = page === 0;
 
-  const hasAllAnswers = Array.from({ length: total }, (_, i) => {
-    const sel = selections[i];
-    const custom = (customTexts[i] ?? "").trim();
-    return (sel && sel.size > 0) || custom.length > 0;
-  }).every(Boolean);
+  const hasAllAnswers = useMemo(
+    () =>
+      Array.from({ length: total }, (_, i) => {
+        const sel = selections[i];
+        const custom = (customTexts[i] ?? "").trim();
+        return (sel && sel.size > 0) || custom.length > 0;
+      }).every(Boolean),
+    [total, selections, customTexts],
+  );
 
   const toggleOption = useCallback(
     (label: string) => {

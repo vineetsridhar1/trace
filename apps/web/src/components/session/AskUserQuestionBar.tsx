@@ -38,7 +38,7 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (currentCustom.trim() && hasAllAnswers) {
+      if (hasAllAnswers) {
         handleSubmit();
       }
     }

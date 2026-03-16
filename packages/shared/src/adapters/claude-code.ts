@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
+import { parseQuestion } from "./coding-tool.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
@@ -122,28 +123,37 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       const message = data.message as Record<string, unknown> | undefined;
       const content = message?.content;
       if (Array.isArray(content)) {
-        const normalized = content.map((block: Record<string, unknown>) => {
+        const normalized: MessageBlock[] = content.map((block: Record<string, unknown>): MessageBlock => {
           if (block.type === "tool_use" && block.name === "AskUserQuestion") {
             const input = (block.input ?? {}) as Record<string, unknown>;
             const questions = Array.isArray(input.questions) ? input.questions : [];
             return {
               type: "question" as const,
-              questions: questions.map((q: Record<string, unknown>) => ({
-                question: String(q.question ?? ""),
-                header: String(q.header ?? ""),
-                options: Array.isArray(q.options)
-                  ? q.options.map((o: Record<string, unknown>) => ({
-                      label: String(o.label ?? ""),
-                      description: String(o.description ?? ""),
-                    }))
-                  : [],
-                multiSelect: q.multiSelect === true,
-              })),
+              questions: questions.map(parseQuestion),
             };
           }
-          return block;
+          // Narrow known block types from the Claude Code JSON stream
+          if (block.type === "text") {
+            return { type: "text", text: String(block.text ?? "") };
+          }
+          if (block.type === "tool_use") {
+            return {
+              type: "tool_use",
+              name: String(block.name ?? ""),
+              input: block.input as Record<string, unknown> | undefined,
+            };
+          }
+          if (block.type === "tool_result") {
+            return {
+              type: "tool_result",
+              name: String(block.name ?? ""),
+              content: block.content as string | Record<string, unknown> | undefined,
+            };
+          }
+          // Fallback for unknown block types — treat as text
+          return { type: "text", text: "" };
         });
-        onOutput({ type: "assistant", message: { content: normalized as unknown as MessageBlock[] } });
+        onOutput({ type: "assistant", message: { content: normalized } });
       }
       return;
     }

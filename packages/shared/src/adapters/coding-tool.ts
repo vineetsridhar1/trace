@@ -50,9 +50,29 @@ export function hasQuestionBlock(data: Record<string, unknown>): boolean {
   const content = message?.content;
   if (!Array.isArray(content)) return false;
   return content.some((block: unknown) => {
-    const b = block as Record<string, unknown> | undefined;
-    return b?.type === "question";
+    if (block == null || typeof block !== "object") return false;
+    return (block as Record<string, unknown>).type === "question";
   });
+}
+
+/** Parse a raw unknown value into a Question, with safe defaults */
+export function parseQuestion(raw: unknown): Question {
+  const r = (raw != null && typeof raw === "object" && !Array.isArray(raw))
+    ? raw as Record<string, unknown>
+    : {} as Record<string, unknown>;
+  return {
+    question: String(r.question ?? ""),
+    header: String(r.header ?? ""),
+    options: Array.isArray(r.options)
+      ? r.options.map((o: unknown) => {
+          const opt = (o != null && typeof o === "object" && !Array.isArray(o))
+            ? o as Record<string, unknown>
+            : {} as Record<string, unknown>;
+          return { label: String(opt.label ?? ""), description: String(opt.description ?? "") };
+        })
+      : [],
+    multiSelect: r.multiSelect === true,
+  };
 }
 
 export interface AssistantEvent {

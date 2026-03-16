@@ -1,8 +1,6 @@
 ---
 name: full-review
-description: Use when user says "full review", "review PR", "review code", "code review",
-  or invokes /full-review — performs a senior staff engineer-level review of the current
-  PR against industry standards, architecture, and project plans
+description: Use when user says "full review", "review PR" "review code", "code review", or invokes /full-review — performs a senior staff engineer-level review of the current PR against industry standards, architecture, and project plans
 allowed-tools: Bash, Read, Grep, Glob, Edit, Agent, Write
 ---
 
@@ -110,6 +108,7 @@ One paragraph overall assessment. Is this PR ready to ship? What's the overall q
 Issues that would cause bugs, security vulnerabilities, data loss, or architectural violations.
 
 For each:
+
 - **File:line** — Description of the issue
 - **Why it matters**: Impact if shipped as-is
 - **Suggestion**: Specific fix or approach
