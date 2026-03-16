@@ -223,16 +223,20 @@ export class SessionService {
       }
     }
 
-    // If runPrompt is provided, start immediately. Otherwise store as pendingRun
-    // so a later `run()` call can pick it up (draft/queued sessions).
-    const runPrompt = input.runPrompt ?? input.prompt;
-    if (input.runPrompt) {
-      await this.run(session.id, input.runPrompt, input.interactionMode ?? undefined);
-    } else if (runPrompt) {
-      await prisma.session.update({
-        where: { id: session.id },
-        data: { pendingRun: { type: "run", prompt: runPrompt, interactionMode: input.interactionMode ?? null } },
-      });
+    // Always store the tool-ready prompt in pendingRun so run() can retrieve it later.
+    // runPrompt is the wrapped prompt (plan/ask prefix applied); falls back to raw prompt.
+    const toolPrompt = input.runPrompt ?? input.prompt;
+    if (toolPrompt) {
+      if (input.draft) {
+        // Draft mode: store for later, don't auto-run
+        await prisma.session.update({
+          where: { id: session.id },
+          data: { pendingRun: { type: "run", prompt: toolPrompt, interactionMode: input.interactionMode ?? null } },
+        });
+      } else {
+        // Normal mode: run immediately
+        await this.run(session.id, toolPrompt, input.interactionMode ?? undefined);
+      }
     }
 
     return session;

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -69,8 +70,9 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             channelId,
             repoId: repoId ?? undefined,
             prompt: rawPrompt,
-            runPrompt: draft ? undefined : wrappedPrompt,
+            runPrompt: wrappedPrompt !== rawPrompt ? wrappedPrompt : undefined,
             interactionMode: mode === "code" ? undefined : mode,
+            draft: draft || undefined,
           },
         })
         .toPromise();
@@ -212,11 +214,9 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
           </div>
           <DialogFooter className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-muted-foreground mr-auto cursor-pointer select-none">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={draft}
-                onChange={(e) => setDraft(e.target.checked)}
-                className="rounded border-border"
+                onCheckedChange={(v) => setDraft(v === true)}
               />
               Create as draft
             </label>
