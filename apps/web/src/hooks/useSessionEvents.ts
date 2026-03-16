@@ -5,7 +5,7 @@ import { client } from "../lib/urql";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 100;
 
 const SESSION_EVENTS_QUERY = gql`
   query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime) {
@@ -43,6 +43,7 @@ export function useSessionEvents(sessionId: string) {
         organizationId: activeOrgId,
         scope: { type: "session", id: sessionId },
         limit: PAGE_SIZE,
+        before: new Date().toISOString(),
       })
       .toPromise();
 
