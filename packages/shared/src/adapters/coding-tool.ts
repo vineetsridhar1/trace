@@ -38,7 +38,28 @@ export interface QuestionBlock {
   questions: Question[];
 }
 
-export type MessageBlock = ContentBlock | ToolUseBlock | ToolResultBlock | QuestionBlock;
+export interface PlanBlock {
+  type: "plan";
+  content: string;
+  filePath?: string;
+}
+
+export type MessageBlock = ContentBlock | ToolUseBlock | ToolResultBlock | QuestionBlock | PlanBlock;
+
+/**
+ * Check whether a session_output payload contains a PlanBlock.
+ * Shared between the server (recordOutput / complete) and the frontend (node detection).
+ */
+export function hasPlanBlock(data: Record<string, unknown>): boolean {
+  if (data.type !== "assistant") return false;
+  const message = data.message as Record<string, unknown> | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((block: unknown) => {
+    if (block == null || typeof block !== "object") return false;
+    return (block as Record<string, unknown>).type === "plan";
+  });
+}
 
 /**
  * Check whether a session_output payload contains a QuestionBlock.

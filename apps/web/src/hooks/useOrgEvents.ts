@@ -81,7 +81,7 @@ function sessionPatchFromOutput(payload: Record<string, unknown>): Partial<Sessi
   if (payload.type === "title_generated" && typeof payload.name === "string") {
     return { name: payload.name };
   }
-  if (payload.type === "question_pending") {
+  if (payload.type === "question_pending" || payload.type === "plan_pending") {
     return { status: "needs_input" as SessionStatus };
   }
   // Connection state events carry a full connection patch

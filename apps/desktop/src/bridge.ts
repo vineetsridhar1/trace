@@ -1,7 +1,8 @@
 import WebSocket from "ws";
 import { randomUUID } from "crypto";
 import os from "os";
-import { ClaudeCodeAdapter, CodexAdapter, type CodingToolAdapter } from "@trace/shared";
+import type { CodingToolAdapter } from "@trace/shared";
+import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig } from "./config.js";
 import { createWorktree } from "./worktree.js";
 

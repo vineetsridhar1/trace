@@ -1,7 +1,7 @@
 import type { StartSessionInput, ActorType } from "@trace/gql";
 import type { SessionStatus, EventType, CodingTool } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-import { hasQuestionBlock } from "@trace/shared";
+import { hasQuestionBlock, hasPlanBlock } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
@@ -463,10 +463,11 @@ export class SessionService {
       await this.updateName(sessionId, extractedTitle);
     }
 
-    // If this output contains a QuestionBlock, transition to needs_input immediately.
-    // Claude Code hangs waiting for stdin when AskUserQuestion fires, so complete()
+    // If this output contains a QuestionBlock or PlanBlock, transition to needs_input immediately.
+    // Claude Code hangs waiting for stdin when AskUserQuestion/ExitPlanMode fires, so complete()
     // never runs — we detect it here instead.
-    if (session.status === "active" && hasQuestionBlock(data)) {
+    const needsInput = hasQuestionBlock(data) || hasPlanBlock(data);
+    if (session.status === "active" && needsInput) {
       // Use status in the where clause to make this idempotent — if two
       // recordOutput calls race, only the first one that sees "active" wins.
       const updated = await prisma.session.updateMany({
@@ -477,12 +478,14 @@ export class SessionService {
 
       // Emit as session_output with a status patch — matches the workspace_ready pattern.
       // The frontend's sessionPatchFromOutput picks up the status field.
+      // Questions take precedence — they need immediate user interaction
+      const pendingType = hasQuestionBlock(data) ? "question_pending" : "plan_pending";
       await eventService.create({
         organizationId: session.organizationId,
         scopeType: "session",
         scopeId: sessionId,
         eventType: "session_output",
-        payload: { type: "question_pending", status: "needs_input" },
+        payload: { type: pendingType, status: "needs_input" },
         actorType: "system",
         actorId: "system",
       });
@@ -563,15 +566,7 @@ export class SessionService {
     });
 
     const hasPendingPlan = recentEvents.some((evt) => {
-      const payload = evt.payload as Record<string, unknown>;
-      if (payload.type !== "assistant") return false;
-      const message = payload.message as Record<string, unknown> | undefined;
-      const content = message?.content;
-      if (!Array.isArray(content)) return false;
-      return content.some((block: unknown) => {
-        const b = block as Record<string, unknown> | undefined;
-        return b?.type === "tool_use" && b?.name === "ExitPlanMode";
-      });
+      return hasPlanBlock(evt.payload as Record<string, unknown>);
     });
 
     // Safety net for adapters that exit cleanly after emitting a question
