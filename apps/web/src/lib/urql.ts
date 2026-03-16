@@ -13,6 +13,11 @@ const wsClient = createWSClient({
     const token = localStorage.getItem("trace_token");
     return token ? { token } : {};
   },
+  retryAttempts: Infinity,
+  retryWait: async (retries) => {
+    const delay = Math.min(1000 * 2 ** retries, 30_000);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  },
 });
 
 export const client = createClient({

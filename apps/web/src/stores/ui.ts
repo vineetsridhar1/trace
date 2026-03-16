@@ -9,6 +9,8 @@ interface UIState {
   setActiveChannelId: (id: string | null) => void;
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
+  refreshTick: number;
+  triggerRefresh: () => void;
   /** Internal: update state without pushing browser history (used by popstate handler) */
   _restoreNav: (channelId: string | null, sessionId: string | null, page?: ActivePage) => void;
 }
@@ -29,6 +31,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   activePage: "main",
   activeChannelId: null, // initialized from URL in useHistorySync
   activeSessionId: null,
+  refreshTick: 0,
+  triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   setActivePage: (page) => {
     set({ activePage: page });

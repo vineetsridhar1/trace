@@ -49,6 +49,7 @@ export function AppSidebar() {
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const activeChannelId = useUIStore((s) => s.activeChannelId);
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
+  const refreshTick = useUIStore((s) => s.refreshTick);
   const [peeking, setPeeking] = useState(false);
   const { state } = useSidebar();
 
@@ -74,7 +75,7 @@ export function AppSidebar() {
   useEffect(() => {
     fetchChannels();
     fetchRepos();
-  }, [fetchChannels, fetchRepos]);
+  }, [fetchChannels, fetchRepos, refreshTick]);
 
   // Close peek when sidebar gets pinned open
   useEffect(() => {
