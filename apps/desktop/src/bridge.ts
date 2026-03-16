@@ -89,6 +89,9 @@ export class BridgeClient {
   }
 
   private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string; toolSessionId?: string }) {
+    if (!cwd) {
+      console.warn(`[bridge] No cwd provided for session ${sessionId}, falling back to process.cwd()`);
+    }
     const workdir = cwd ?? process.cwd();
 
     // If tool changed, abort old adapter and create a fresh one
@@ -108,10 +111,14 @@ export class BridgeClient {
     }
     if (tool) this.sessionTools.set(sessionId, tool);
 
+    // Capture reference so stale callbacks from an aborted adapter
+    // (e.g. after a tool switch) are silently dropped.
+    const activeAdapter = adapter;
     adapter.run({
       prompt,
       cwd: workdir,
       onOutput: (output) => {
+        if (this.adapters.get(sessionId) !== activeAdapter) return;
         this.send({ type: "session_output", sessionId, data: output });
         // When the adapter discovers its tool session ID, report it to the server
         // so it can be passed back on retry/resume
@@ -124,6 +131,7 @@ export class BridgeClient {
         }
       },
       onComplete: () => {
+        if (this.adapters.get(sessionId) !== activeAdapter) return;
         this.send({ type: "session_complete", sessionId });
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
