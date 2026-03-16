@@ -1023,6 +1023,7 @@ export class SessionService {
           hosting: childSession.hosting,
           createdBy: childSession.createdBy,
           repo: childSession.repo ?? null,
+          branch: childSession.branch ?? null,
           channel: childSession.channel,
           parentSession: childSession.parentSession ?? null,
           childSessions: [],
