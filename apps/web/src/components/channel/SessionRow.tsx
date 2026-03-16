@@ -16,10 +16,10 @@ export function SessionRow({ id }: { id: string }) {
   return (
     <button
       type="button"
-      className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated/50 cursor-pointer sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_minmax(0,9rem)]"
+      className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated/50 cursor-pointer sm:grid-cols-[auto_minmax(14rem,1fr)_8rem_8rem_8rem]"
       onClick={() => setActiveSessionId(id)}
     >
-      <Circle size={8} className={`shrink-0 fill-current ${statusColor[status ?? "active"]}`} />
+      <Circle size={8} className={`mt-1 shrink-0 fill-current ${statusColor[status ?? "active"]}`} />
 
       <div className="min-w-0 flex-1">
         <span className="text-sm text-foreground truncate block">{name}</span>
@@ -36,11 +36,11 @@ export function SessionRow({ id }: { id: string }) {
         )}
       </div>
 
-      <span className={`hidden w-full min-w-0 truncate text-left text-xs sm:inline ${statusColor[status ?? "active"]}`}>
+      <span className={`hidden w-full min-w-0 self-start truncate pt-0.5 text-left text-xs sm:inline ${statusColor[status ?? "active"]}`}>
         {statusLabel[status ?? "active"]}
       </span>
 
-      <div className="hidden min-w-0 w-full items-center gap-1.5 sm:flex">
+      <div className="hidden min-w-0 w-full items-center gap-1.5 self-start pt-0.5 sm:flex">
         {createdBy?.avatarUrl ? (
           <img
             src={createdBy.avatarUrl}
@@ -51,7 +51,7 @@ export function SessionRow({ id }: { id: string }) {
         <span className="min-w-0 truncate text-left text-xs text-muted-foreground">{createdBy?.name}</span>
       </div>
 
-      <span className="w-full min-w-0 truncate text-left text-xs text-muted-foreground">
+      <span className="w-full min-w-0 self-start truncate pt-0.5 text-left text-xs text-muted-foreground">
         {updatedAt ? timeAgo(updatedAt) : ""}
       </span>
     </button>
