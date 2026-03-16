@@ -9,6 +9,7 @@
     "dev:desktop": "pnpm --filter @trace/desktop dev",
     "dev:web:prod": "VITE_API_URL=https://trace-rgsa.onrender.com pnpm --filter @trace/web dev",
     "dev:desktop:prod": "TRACE_SERVER_URL=https://trace-rgsa.onrender.com TRACE_WEB_URL=http://localhost:3000 pnpm --filter @trace/desktop dev",
+    "dev:desktop:prod-web": "TRACE_SERVER_URL=https://trace-rgsa.onrender.com TRACE_WEB_URL=https://trace-1-ptmr.onrender.com pnpm --filter @trace/desktop dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "lint:eslint": "eslint .",
