@@ -39,7 +39,7 @@ const SESSION_DETAIL_QUERY = gql`
 `;
 
 export function SessionDetailView({ sessionId }: { sessionId: string }) {
-  const { eventIds, loading } = useSessionEvents(sessionId);
+  const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(sessionId);
   const events = useEntityStore((s) => s.events);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
 
@@ -83,8 +83,17 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-muted-foreground">Loading events...</p>
         </div>
+      ) : error ? (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-destructive">Failed to load events</p>
+        </div>
       ) : (
-        <SessionMessageList eventIds={eventIds} nodes={nodes} />
+        <SessionMessageList
+          nodes={nodes}
+          hasOlder={hasOlder}
+          loadingOlder={loadingOlder}
+          onLoadOlder={fetchOlderEvents}
+        />
       )}
 
       {activePlan ? (
