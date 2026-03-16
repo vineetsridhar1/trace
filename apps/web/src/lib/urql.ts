@@ -26,11 +26,13 @@ const wsClient = createWSClient({
   },
 });
 
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    useConnectionStore.getState().setConnected(false);
-  }
-});
+// When the app regains visibility, verify the socket is still alive.
+// The graphql-ws client exposes a `dispose` method but no direct readiness check,
+// so we rely on the `connected`/`closed` callbacks above as the source of truth.
+// Previously this handler forced `setConnected(false)`, which broke desktop/Electron
+// because the socket stays open when the window loses focus — the `connected` callback
+// never re-fires, leaving the badge permanently red.
+// Now we do nothing here; the wsClient's own lifecycle callbacks keep the store accurate.
 
 export const client = createClient({
   url: `${API_URL}/graphql`,
