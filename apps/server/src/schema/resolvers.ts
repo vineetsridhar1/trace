@@ -4,6 +4,7 @@ import { channelQueries, channelMutations, channelSubscriptions } from "./channe
 import { sessionQueries, sessionMutations, sessionSubscriptions } from "./session.js";
 import { ticketQueries, ticketMutations, ticketSubscriptions } from "./ticket.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
+import { inboxQueries, inboxMutations } from "./inbox.js";
 import { prisma } from "../lib/db.js";
 
 export const resolvers = {
@@ -34,6 +35,7 @@ export const resolvers = {
     ...sessionQueries,
     ...ticketQueries,
     ...eventQueries,
+    ...inboxQueries,
   },
 
   Mutation: {
@@ -41,6 +43,7 @@ export const resolvers = {
     ...channelMutations,
     ...sessionMutations,
     ...ticketMutations,
+    ...inboxMutations,
   },
 
   Subscription: {

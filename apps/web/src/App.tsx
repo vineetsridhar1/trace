@@ -4,6 +4,7 @@ import { useUIStore } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { InboxView } from "./components/inbox/InboxView";
 import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
@@ -82,6 +83,17 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {activePage === "settings" ? (
             <SettingsPage />
+          ) : activePage === "inbox" ? (
+            <>
+              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+                <SidebarTrigger />
+                <h1 className="text-lg font-semibold text-foreground">Trace</h1>
+                <ConnectionStatus />
+              </header>
+              <main className="min-h-0 flex-1">
+                <InboxView />
+              </main>
+            </>
           ) : (
             <>
               <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Channel, Repo } from "@trace/gql";
+import type { Channel, Repo, InboxItem } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
@@ -11,6 +11,7 @@ import { UserMenu } from "./sidebar/UserMenu";
 import { ChannelItem } from "./sidebar/ChannelItem";
 import { CreateChannelDialog } from "./sidebar/CreateChannelDialog";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
+import { InboxButton } from "./sidebar/InboxButton";
 import {
   Sidebar,
   SidebarContent,
@@ -44,6 +45,24 @@ const REPOS_QUERY = gql`
   }
 `;
 
+const INBOX_ITEMS_QUERY = gql`
+  query InboxItems($organizationId: ID!) {
+    inboxItems(organizationId: $organizationId) {
+      id
+      itemType
+      status
+      title
+      summary
+      payload
+      userId
+      sourceType
+      sourceId
+      createdAt
+      resolvedAt
+    }
+  }
+`;
+
 export function AppSidebar() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
@@ -72,10 +91,20 @@ export function AppSidebar() {
     }
   }, [activeOrgId, upsertMany]);
 
+  const fetchInboxItems = useCallback(async () => {
+    if (!activeOrgId) return;
+    const result = await client.query(INBOX_ITEMS_QUERY, { organizationId: activeOrgId }).toPromise();
+
+    if (result.data?.inboxItems) {
+      upsertMany("inboxItems", result.data.inboxItems as Array<InboxItem & { id: string }>);
+    }
+  }, [activeOrgId, upsertMany]);
+
   useEffect(() => {
     fetchChannels();
     fetchRepos();
-  }, [fetchChannels, fetchRepos, refreshTick]);
+    fetchInboxItems();
+  }, [fetchChannels, fetchRepos, fetchInboxItems, refreshTick]);
 
   // Close peek when sidebar gets pinned open
   useEffect(() => {
@@ -95,6 +124,11 @@ export function AppSidebar() {
           <OrgSwitcher />
         </SidebarHeader>
         <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <InboxButton />
+            </SidebarGroupContent>
+          </SidebarGroup>
           <SidebarGroup>
             <div className="flex items-center justify-between pr-1">
               <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
