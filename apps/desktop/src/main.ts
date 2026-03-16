@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -24,6 +24,22 @@ function createWindow() {
 
   const webUrl = process.env.TRACE_WEB_URL ?? "http://localhost:3000";
   mainWindow.loadURL(webUrl);
+
+  // Open external links in the user's default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    // Allow navigation within the app, open everything else externally
+    if (!url.startsWith(webUrl)) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
 
   // Forward mouse back/forward buttons as browser-style navigation
   // On macOS, use swipe events; on Windows/Linux, use app-command
