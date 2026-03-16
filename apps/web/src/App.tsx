@@ -10,6 +10,8 @@ import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
+import { useConnectionStore } from "./stores/connection";
+import { RefreshCw } from "lucide-react";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -35,6 +37,32 @@ export function App() {
   return <AuthenticatedApp activeChannelId={activeChannelId} />;
 }
 
+function ConnectionStatus() {
+  const connected = useConnectionStore((s) => s.connected);
+  if (connected) {
+    return (
+      <span
+        className="ml-auto h-2.5 w-2.5 rounded-full bg-green-500"
+        title="Connected"
+      />
+    );
+  }
+  return (
+    <div className="ml-auto flex items-center gap-1">
+      <span className="h-2.5 w-2.5 rounded-full bg-red-500" title="Disconnected" />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+        onClick={() => window.location.reload()}
+        title="Reconnect"
+      >
+        <RefreshCw className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
   useHistorySync();
@@ -53,6 +81,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
                 <SidebarTrigger />
                 <h1 className="text-lg font-semibold text-foreground">Trace</h1>
+                <ConnectionStatus />
               </header>
               <main className="min-h-0 flex-1">
                 {activeChannelId ? (
