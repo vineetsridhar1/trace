@@ -1,7 +1,10 @@
+import { useMemo } from "react";
 import { useEntityIds } from "../../stores/entity";
 import type { InboxItemStatus } from "@trace/gql";
 import { InboxItemRow } from "./InboxItemRow";
 import { Inbox } from "lucide-react";
+
+const MAX_RESOLVED = 20;
 
 export function InboxView() {
   const activeIds = useEntityIds(
@@ -10,11 +13,13 @@ export function InboxView() {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
-  const resolvedIds = useEntityIds(
+  const allResolvedIds = useEntityIds(
     "inboxItems",
     (item) => (item.status as InboxItemStatus) !== "active",
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
+
+  const resolvedIds = useMemo(() => allResolvedIds.slice(0, MAX_RESOLVED), [allResolvedIds]);
 
   const isEmpty = activeIds.length === 0 && resolvedIds.length === 0;
 

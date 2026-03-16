@@ -230,10 +230,7 @@ export function useOrgEvents() {
         if (event.eventType === ("inbox_item_resolved" as EventType)) {
           const item = asRecord(event.payload.inboxItem);
           if (item && typeof item.id === "string") {
-            patch("inboxItems", item.id, {
-              status: item.status,
-              resolvedAt: item.resolvedAt,
-            } as Partial<InboxItem>);
+            upsert("inboxItems", item.id, item as unknown as InboxItem);
           }
         }
 

@@ -84,8 +84,10 @@ export class InboxService {
     }
   }
 
-  async dismiss(id: string, actorId: string) {
-    const item = await prisma.inboxItem.findUniqueOrThrow({ where: { id } });
+  async dismiss(id: string, actorId: string, organizationId: string) {
+    const item = await prisma.inboxItem.findFirstOrThrow({
+      where: { id, userId: actorId, organizationId },
+    });
     const existingPayload = (item.payload ?? {}) as Record<string, unknown>;
     const newPayload = { ...existingPayload, resolution: "dismissed" };
 

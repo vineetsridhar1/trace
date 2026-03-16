@@ -61,6 +61,14 @@ export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
   }
 `;
 
+export const DISMISS_INBOX_ITEM_MUTATION = gql`
+  mutation DismissInboxItem($id: ID!) {
+    dismissInboxItem(id: $id) {
+      id
+    }
+  }
+`;
+
 export const AVAILABLE_RUNTIMES_QUERY = gql`
   query AvailableRuntimes($tool: CodingTool!) {
     availableRuntimes(tool: $tool) {

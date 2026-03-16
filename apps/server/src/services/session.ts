@@ -514,39 +514,12 @@ export class SessionService {
           select: { createdById: true, name: true },
         });
 
-        const messageContent = ((data as Record<string, unknown>).message as Record<string, unknown> | undefined)
-          ?.content as Array<Record<string, unknown>> | undefined;
-
-        const isQuestion = hasQuestionBlock(data);
-        const isPlan = hasPlanBlock(data);
-
-        // Extract question data for the inbox payload
-        const questionBlock = isQuestion
-          ? messageContent?.find((b) => b.type === "question") as { questions: Array<Record<string, unknown>> } | undefined
-          : undefined;
-
-        // Extract plan content from PlanBlock (type: "plan", content: string)
-        const planBlock = isPlan
-          ? messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined
-          : undefined;
-        const planText = planBlock?.content;
-
-        const summary = isQuestion
-          ? questionBlock?.questions?.[0]?.question as string | undefined
-          : planText?.slice(0, 200);
-
-        await inboxService.createItem({
+        await this.createInboxItemFromOutput({
           orgId: session.organizationId,
           userId: fullSession.createdById,
-          itemType: isQuestion ? "question" : "plan",
-          title: fullSession.name,
-          summary,
-          payload: {
-            planContent: planText ?? null,
-            questions: questionBlock?.questions ?? null,
-          } as unknown as Prisma.InputJsonValue,
-          sourceType: "session",
-          sourceId: sessionId,
+          sessionName: fullSession.name,
+          sessionId,
+          data,
         });
       }
     }
@@ -662,35 +635,16 @@ export class SessionService {
         return hasQuestionBlock(p) || hasPlanBlock(p);
       });
       const triggerPayload = triggerEvent?.payload as Record<string, unknown> | undefined;
-      const messageContent = (triggerPayload?.message as Record<string, unknown> | undefined)
-        ?.content as Array<Record<string, unknown>> | undefined;
 
-      const isQuestionTrigger = triggerPayload ? hasQuestionBlock(triggerPayload) : false;
-      const questionBlock = isQuestionTrigger
-        ? messageContent?.find((b) => b.type === "question") as { questions: Array<Record<string, unknown>> } | undefined
-        : undefined;
-      const planBlockData = !isQuestionTrigger
-        ? messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined
-        : undefined;
-      const planText = planBlockData?.content;
-
-      const summary = isQuestionTrigger
-        ? questionBlock?.questions?.[0]?.question as string | undefined
-        : planText?.slice(0, 200);
-
-      await inboxService.createItem({
-        orgId: session.organizationId,
-        userId: session.createdById,
-        itemType: isQuestionTrigger ? "question" : "plan",
-        title: session.name,
-        summary,
-        payload: {
-          planContent: planText ?? null,
-          questions: questionBlock?.questions ?? null,
-        } as unknown as Prisma.InputJsonValue,
-        sourceType: "session",
-        sourceId: id,
-      });
+      if (triggerPayload) {
+        await this.createInboxItemFromOutput({
+          orgId: session.organizationId,
+          userId: session.createdById,
+          sessionName: session.name,
+          sessionId: id,
+          data: triggerPayload,
+        });
+      }
     }
   }
 
@@ -1259,6 +1213,50 @@ export class SessionService {
   }
 
   // ─── Helpers ───
+
+  /**
+   * Extract plan/question data from a session_output payload and create an inbox item.
+   */
+  private async createInboxItemFromOutput(params: {
+    orgId: string;
+    userId: string;
+    sessionName: string;
+    sessionId: string;
+    data: Record<string, unknown>;
+  }) {
+    const { orgId, userId, sessionName, sessionId, data } = params;
+    const messageContent = (data.message as Record<string, unknown> | undefined)
+      ?.content as Array<Record<string, unknown>> | undefined;
+
+    const isQuestion = hasQuestionBlock(data);
+
+    const questionBlock = isQuestion
+      ? messageContent?.find((b) => b.type === "question") as { questions: Array<Record<string, unknown>> } | undefined
+      : undefined;
+
+    const planBlock = !isQuestion
+      ? messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined
+      : undefined;
+    const planText = planBlock?.content;
+
+    const summary = isQuestion
+      ? questionBlock?.questions?.[0]?.question as string | undefined
+      : planText?.slice(0, 200);
+
+    await inboxService.createItem({
+      orgId,
+      userId,
+      itemType: isQuestion ? "question" : "plan",
+      title: sessionName,
+      summary,
+      payload: {
+        planContent: planText ?? null,
+        questions: questionBlock?.questions ?? null,
+      } as unknown as Prisma.InputJsonValue,
+      sourceType: "session",
+      sourceId: sessionId,
+    });
+  }
 
   private parseConnection(raw: unknown): SessionConnectionData {
     if (!raw || typeof raw !== "object") return defaultConnection();

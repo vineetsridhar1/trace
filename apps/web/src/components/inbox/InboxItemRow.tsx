@@ -1,41 +1,18 @@
 import { useState, useCallback } from "react";
-import { Play, PlayCircle, X, Send, MessageCircleQuestion, Map, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { MessageCircleQuestion, Map, Check } from "lucide-react";
 import { client } from "../../lib/urql";
-import { Markdown } from "../ui/Markdown";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
   START_SESSION_MUTATION,
   RUN_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
+  DISMISS_INBOX_ITEM_MUTATION,
 } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
-import { cn } from "../../lib/utils";
-import { gql } from "@urql/core";
-
-const DISMISS_INBOX_ITEM_MUTATION = gql`
-  mutation DismissInboxItem($id: ID!) {
-    dismissInboxItem(id: $id) {
-      id
-    }
-  }
-`;
-
-interface InboxItemRowProps {
-  id: string;
-}
-
-interface QuestionOption {
-  label: string;
-  description: string;
-}
-
-interface QuestionData {
-  question: string;
-  header: string;
-  options: QuestionOption[];
-  multiSelect: boolean;
-}
+import { InboxPlanBody } from "./InboxPlanBody";
+import { InboxQuestionBody } from "./InboxQuestionBody";
+import type { QuestionData } from "./InboxQuestionBody";
 
 function timeAgo(dateStr: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -48,7 +25,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export function InboxItemRow({ id }: InboxItemRowProps) {
+export function InboxItemRow({ id }: { id: string }) {
   const title = useEntityField("inboxItems", id, "title");
   const itemType = useEntityField("inboxItems", id, "itemType");
   const status = useEntityField("inboxItems", id, "status");
@@ -134,7 +111,6 @@ export function InboxItemRow({ id }: InboxItemRowProps) {
     setSending(true);
     try {
       await client.mutation(DISMISS_INBOX_ITEM_MUTATION, { id }).toPromise();
-      // Also terminate the session so it leaves needs_input
       if (sourceId) {
         await client.mutation(TERMINATE_SESSION_MUTATION, { id: sourceId }).toPromise();
       }
@@ -208,14 +184,14 @@ export function InboxItemRow({ id }: InboxItemRowProps) {
 
       {/* Type-specific body */}
       {isQuestion ? (
-        <QuestionBody
+        <InboxQuestionBody
           questions={questions}
           sending={sending}
           onSend={handleSendMessage}
           onDismiss={handleDismiss}
         />
       ) : (
-        <PlanBody
+        <InboxPlanBody
           planContent={planContent}
           sending={sending}
           onApproveNew={handleApproveNewSession}
@@ -224,307 +200,6 @@ export function InboxItemRow({ id }: InboxItemRowProps) {
           onDismiss={handleDismiss}
         />
       )}
-    </div>
-  );
-}
-
-// ── Plan Body ──
-
-function PlanBody({
-  planContent,
-  sending,
-  onApproveNew,
-  onApproveKeep,
-  onRevise,
-  onDismiss,
-}: {
-  planContent: string;
-  sending: boolean;
-  onApproveNew: () => void;
-  onApproveKeep: () => void;
-  onRevise: (text: string) => void;
-  onDismiss: () => void;
-}) {
-  const [reviseText, setReviseText] = useState("");
-
-  return (
-    <div className="px-4 pb-3">
-      {/* Full plan content — matches PlanReviewCard styling */}
-      {planContent && (
-        <div className="accent-dashed-container mb-2 max-h-96 overflow-y-auto px-4 py-3">
-          <Markdown>{planContent}</Markdown>
-        </div>
-      )}
-
-      {/* Action buttons */}
-      <div className="mb-2 flex items-center gap-1.5">
-        <button
-          type="button"
-          disabled={sending}
-          onClick={(e) => { e.stopPropagation(); onApproveNew(); }}
-          className={cn(
-            "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
-            "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-            sending && "opacity-50",
-          )}
-        >
-          <PlayCircle size={12} />
-          New session
-        </button>
-        <button
-          type="button"
-          disabled={sending}
-          onClick={(e) => { e.stopPropagation(); onApproveKeep(); }}
-          className={cn(
-            "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
-            "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-            sending && "opacity-50",
-          )}
-        >
-          <Play size={12} />
-          Keep context
-        </button>
-        <button
-          type="button"
-          disabled={sending}
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          className={cn(
-            "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors",
-            "text-muted-foreground hover:bg-surface-elevated hover:text-red-400",
-            sending && "opacity-50",
-          )}
-        >
-          <X size={12} />
-          Dismiss
-        </button>
-      </div>
-
-      {/* Revise input */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={reviseText}
-          onChange={(e) => setReviseText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && reviseText.trim()) {
-              e.preventDefault();
-              onRevise(reviseText.trim());
-              setReviseText("");
-            }
-          }}
-          placeholder="Suggest changes to revise the plan..."
-          disabled={sending}
-          className="flex-1 rounded-lg border border-border bg-surface-deep px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          onClick={(e) => e.stopPropagation()}
-        />
-        <button
-          type="button"
-          disabled={!reviseText.trim() || sending}
-          onClick={(e) => { e.stopPropagation(); onRevise(reviseText.trim()); setReviseText(""); }}
-          className="flex shrink-0 items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
-        >
-          <Send size={12} />
-          Revise
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Question Body ──
-
-function QuestionBody({
-  questions,
-  sending,
-  onSend,
-  onDismiss,
-}: {
-  questions: QuestionData[];
-  sending: boolean;
-  onSend: (text: string) => void;
-  onDismiss: () => void;
-}) {
-  const total = questions.length;
-  const [page, setPage] = useState(0);
-  const [selections, setSelections] = useState<Record<number, Set<string>>>({});
-  const [customTexts, setCustomTexts] = useState<Record<number, string>>({});
-
-  const q = questions[page];
-  if (!q) return null;
-
-  const currentSelected = selections[page] ?? new Set<string>();
-  const currentCustom = customTexts[page] ?? "";
-  const isLastPage = page === total - 1;
-  const isFirstPage = page === 0;
-
-  const hasAllAnswers = Array.from({ length: total }, (_, i) => {
-    const sel = selections[i];
-    const custom = (customTexts[i] ?? "").trim();
-    return (sel && sel.size > 0) || custom.length > 0;
-  }).every(Boolean);
-
-  const toggleOption = (label: string) => {
-    setSelections((prev) => {
-      const current = prev[page] ?? new Set<string>();
-      const next = new Set(current);
-      if (q.multiSelect) {
-        if (next.has(label)) next.delete(label);
-        else next.add(label);
-      } else {
-        if (next.has(label)) next.clear();
-        else { next.clear(); next.add(label); }
-      }
-      return { ...prev, [page]: next };
-    });
-  };
-
-  const setCustomText = (text: string) => {
-    setCustomTexts((prev) => ({ ...prev, [page]: text }));
-  };
-
-  const buildResponse = (): string | null => {
-    const parts: string[] = [];
-    for (let i = 0; i < total; i++) {
-      const qi = questions[i];
-      const selected = selections[i];
-      const custom = (customTexts[i] ?? "").trim();
-      if (custom) {
-        parts.push(`${qi.header}: ${custom}`);
-      } else if (selected && selected.size > 0) {
-        parts.push(`${qi.header}: ${[...selected].join(", ")}`);
-      }
-    }
-    return parts.length > 0 ? parts.join("\n") : null;
-  };
-
-  const handleSubmit = () => {
-    const response = buildResponse();
-    if (response) onSend(response);
-  };
-
-  return (
-    <div className="px-4 pb-3">
-      {/* Question header + pagination */}
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
-          {q.header}
-        </span>
-        {total > 1 && (
-          <span className="text-[11px] text-muted-foreground">
-            {page + 1}/{total}
-          </span>
-        )}
-      </div>
-
-      {/* Question text */}
-      <p className="mb-2 text-sm text-foreground">{q.question}</p>
-
-      {/* Option pills */}
-      {q.options.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {q.options.map((opt) => (
-            <button
-              key={opt.label}
-              type="button"
-              onClick={(e) => { e.stopPropagation(); toggleOption(opt.label); }}
-              disabled={sending}
-              title={opt.description}
-              className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
-                currentSelected.has(opt.label)
-                  ? "border-accent bg-accent/20 text-accent"
-                  : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-elevated",
-                sending && "opacity-50",
-              )}
-            >
-              {q.multiSelect ? (
-                <span className={cn(
-                  "flex h-3 w-3 shrink-0 items-center justify-center rounded border",
-                  currentSelected.has(opt.label) ? "border-accent bg-accent" : "border-muted-foreground",
-                )}>
-                  {currentSelected.has(opt.label) && (
-                    <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
-                      <path d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </span>
-              ) : (
-                <span className={cn(
-                  "flex h-3 w-3 shrink-0 items-center justify-center rounded-full border",
-                  currentSelected.has(opt.label) ? "border-accent" : "border-muted-foreground",
-                )}>
-                  {currentSelected.has(opt.label) && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
-                </span>
-              )}
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Input + nav + actions */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={currentCustom}
-          onChange={(e) => setCustomText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              if (hasAllAnswers) handleSubmit();
-            }
-          }}
-          placeholder="Other..."
-          disabled={sending}
-          className="min-w-0 flex-1 rounded-lg border border-border bg-surface-deep px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-          onClick={(e) => e.stopPropagation()}
-        />
-
-        {total > 1 && (
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); if (!isFirstPage) setPage((p) => p - 1); }}
-              disabled={isFirstPage}
-              className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
-            >
-              <ChevronLeft size={12} />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); if (!isLastPage) setPage((p) => p + 1); }}
-              disabled={isLastPage}
-              className="rounded-md border border-border px-1.5 py-1.5 text-foreground disabled:opacity-50"
-            >
-              <ChevronRight size={12} />
-            </button>
-          </div>
-        )}
-
-        <button
-          type="button"
-          disabled={!hasAllAnswers || sending}
-          onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
-          className="flex shrink-0 items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
-        >
-          <Send size={12} />
-          Reply
-        </button>
-
-        <button
-          type="button"
-          disabled={sending}
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          className={cn(
-            "flex items-center rounded-md border border-border px-1.5 py-1.5 text-xs transition-colors",
-            "text-muted-foreground hover:bg-surface-elevated hover:text-red-400",
-            sending && "opacity-50",
-          )}
-          title="Dismiss"
-        >
-          <X size={12} />
-        </button>
-      </div>
     </div>
   );
 }

@@ -10,6 +10,6 @@ export const inboxQueries = {
 
 export const inboxMutations = {
   dismissInboxItem: (_: unknown, args: { id: string }, ctx: Context) => {
-    return inboxService.dismiss(args.id, ctx.userId);
+    return inboxService.dismiss(args.id, ctx.userId, ctx.organizationId);
   },
 };
