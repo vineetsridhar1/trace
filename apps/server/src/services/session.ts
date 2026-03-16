@@ -53,6 +53,12 @@ function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
 
 const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true, parentSession: true, childSessions: true } as const;
 
+/** Instruction appended to the initial session prompt so the AI generates a title inline. */
+const TITLE_INSTRUCTION = `\n\nIMPORTANT: At the very beginning of your first response, output a short title (5-8 words) for this task wrapped in XML tags like this: <session-title>Your title here</session-title>. Then continue with your normal response.`;
+
+/** Regex to extract <session-title>…</session-title> from assistant output. */
+const TITLE_TAG_RE = /<session-title>([\s\S]*?)<\/session-title>/;
+
 /**
  * Build a conversation transcript from session events.
  * Includes user messages and assistant text (no tool calls).
@@ -269,6 +275,12 @@ export class SessionService {
       }
     }
 
+    // On the very first run, append instruction so the AI generates a session title inline
+    const isFirstRun = !session.toolSessionId;
+    if (isFirstRun && resolvedPrompt) {
+      resolvedPrompt = resolvedPrompt + TITLE_INSTRUCTION;
+    }
+
     const command = {
       type: "run" as const,
       sessionId: id,
@@ -426,6 +438,9 @@ export class SessionService {
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
+    // Extract and strip <session-title> tags from assistant text before persisting
+    const extractedTitle = this.extractAndStripTitle(data);
+
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: { organizationId: true },
@@ -441,6 +456,57 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
+    // If we found a title tag, update the session name
+    if (extractedTitle) {
+      await this.updateName(sessionId, extractedTitle);
+    }
+  }
+
+  async updateName(sessionId: string, name: string) {
+    const session = await prisma.session.update({
+      where: { id: sessionId },
+      data: { name },
+      select: { organizationId: true },
+    });
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: { type: "title_generated", name },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  /**
+   * Look for <session-title>…</session-title> in assistant text blocks.
+   * If found, strip the tag from the text content (mutates data in place)
+   * and return the extracted title. Returns null if no tag found.
+   */
+  private extractAndStripTitle(data: Record<string, unknown>): string | null {
+    if (data.type !== "assistant") return null;
+
+    const message = data.message as Record<string, unknown> | undefined;
+    const content = message?.content;
+    if (!Array.isArray(content)) return null;
+
+    for (const block of content) {
+      const b = block as Record<string, unknown>;
+      if (b.type !== "text" || typeof b.text !== "string") continue;
+
+      const match = TITLE_TAG_RE.exec(b.text);
+      if (match) {
+        const title = match[1].trim().slice(0, 80);
+        // Strip the tag from the text so it doesn't show in the UI
+        b.text = b.text.replace(TITLE_TAG_RE, "").trimStart();
+        return title || null;
+      }
+    }
+
+    return null;
   }
 
   async complete(id: string) {

@@ -72,10 +72,14 @@ const CONNECTION_EVENT_TYPES = new Set([
   "session_rehomed",
 ]);
 
-/** Extract session field updates from session_output subtypes (e.g. workspace_ready, connection events) */
+/** Extract session field updates from session_output subtypes (e.g. workspace_ready, connection events, title) */
 function sessionPatchFromOutput(payload: Record<string, unknown>): Partial<SessionEntity> | undefined {
   if (payload.type === "workspace_ready" && typeof payload.workdir === "string") {
     return { status: "pending" as SessionStatus, workdir: payload.workdir };
+  }
+  // LLM-generated title update
+  if (payload.type === "title_generated" && typeof payload.name === "string") {
+    return { name: payload.name };
   }
   // Connection state events carry a full connection patch
   if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {

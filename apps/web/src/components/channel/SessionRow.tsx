@@ -16,7 +16,7 @@ export function SessionRow({ id }: { id: string }) {
   return (
     <button
       type="button"
-      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated/50 cursor-pointer"
+      className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated/50 cursor-pointer sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,9rem)_minmax(0,9rem)_minmax(0,9rem)]"
       onClick={() => setActiveSessionId(id)}
     >
       <Circle size={8} className={`shrink-0 fill-current ${statusColor[status ?? "active"]}`} />
@@ -36,11 +36,11 @@ export function SessionRow({ id }: { id: string }) {
         )}
       </div>
 
-      <span className={`hidden shrink-0 text-xs sm:inline ${statusColor[status ?? "active"]}`}>
+      <span className={`hidden w-full min-w-0 truncate text-left text-xs sm:inline ${statusColor[status ?? "active"]}`}>
         {statusLabel[status ?? "active"]}
       </span>
 
-      <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+      <div className="hidden min-w-0 w-full items-center gap-1.5 sm:flex">
         {createdBy?.avatarUrl ? (
           <img
             src={createdBy.avatarUrl}
@@ -48,10 +48,10 @@ export function SessionRow({ id }: { id: string }) {
             className="h-4 w-4 rounded-full"
           />
         ) : null}
-        <span className="text-xs text-muted-foreground">{createdBy?.name}</span>
+        <span className="min-w-0 truncate text-left text-xs text-muted-foreground">{createdBy?.name}</span>
       </div>
 
-      <span className="shrink-0 text-xs text-muted-foreground">
+      <span className="w-full min-w-0 truncate text-left text-xs text-muted-foreground">
         {updatedAt ? timeAgo(updatedAt) : ""}
       </span>
     </button>
