@@ -175,6 +175,8 @@ export class BridgeClient {
         const repoName = msg.repoName as string;
         const defaultBranch = (msg.defaultBranch as string) ?? "main";
 
+        const startBranch = msg.branch as string | undefined;
+
         const config = readConfig();
         const repoPath = config.repos[repoId];
 
@@ -187,7 +189,7 @@ export class BridgeClient {
           break;
         }
 
-        createWorktree({ repoPath, repoId, sessionId, defaultBranch })
+        createWorktree({ repoPath, repoId, sessionId, defaultBranch, startBranch })
           .then(({ workdir }) => {
             this.send({ type: "workspace_ready", sessionId, workdir });
           })
