@@ -25,8 +25,13 @@ function createWindow() {
   const webUrl = process.env.TRACE_WEB_URL ?? "http://localhost:3000";
   mainWindow.loadURL(webUrl);
 
-  // Open external links in the user's default browser
+  // Open external links in the user's default browser,
+  // but allow the GitHub OAuth popup to open as an actual window
+  // so window.opener.postMessage can relay the token back.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes("/auth/github")) {
+      return { action: "allow" };
+    }
     if (url.startsWith("http://") || url.startsWith("https://")) {
       shell.openExternal(url);
     }
