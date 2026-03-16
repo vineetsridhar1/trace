@@ -19,6 +19,9 @@ const SESSION_DETAIL_QUERY = gql`
       tool
       model
       hosting
+      repo { id name }
+      branch
+      workdir
       connection {
         state
         runtimeInstanceId
@@ -43,11 +46,15 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const events = useEntityStore((s) => s.events);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
 
-  // Fetch full session with lineage data
+  // Fetch full session with lineage data — merge to avoid wiping fields set by events
   useEffect(() => {
     client.query(SESSION_DETAIL_QUERY, { id: sessionId }).toPromise().then((result) => {
       if (result.data?.session) {
-        useEntityStore.getState().upsert("sessions", sessionId, result.data.session);
+        const { upsert, sessions } = useEntityStore.getState();
+        const existing = sessions[sessionId];
+        upsert("sessions", sessionId, existing
+          ? { ...existing, ...result.data.session }
+          : result.data.session);
       }
     });
   }, [sessionId]);

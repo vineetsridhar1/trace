@@ -191,6 +191,7 @@ export class SessionService {
             hosting: session.hosting,
             createdBy: session.createdBy,
             repo: session.repo ?? null,
+            branch: session.branch ?? null,
             channel: session.channel,
             parentSession: session.parentSession ?? null,
             childSessions: session.childSessions ?? [],
