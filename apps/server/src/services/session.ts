@@ -5,6 +5,7 @@ import { hasQuestionBlock, hasPlanBlock } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
+import { inboxService } from "./inbox.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
@@ -213,6 +214,16 @@ export class SessionService {
       sessionRouter.bindSession(session.id, input.runtimeInstanceId);
     }
 
+    // If this is a child session (e.g. "Approve new session"), resolve parent's inbox item
+    if (input.parentSessionId) {
+      await inboxService.resolveBySource({
+        sourceType: "session",
+        sourceId: input.parentSessionId,
+        orgId: input.organizationId,
+        resolution: "Approved (new session)",
+      });
+    }
+
     // If repo selected, send prepare command to bridge for worktree creation
     if (needsWorkspace && session.repo) {
       const result = sessionRouter.send(session.id, {
@@ -333,6 +344,12 @@ export class SessionService {
   }
 
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id },
+      select: { organizationId: true },
+    });
+    // Resolve any inbox items when terminating (covers needs_input → failed path)
+    await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session terminated" });
     return this.transition(id, "terminate", "failed", "session_terminated", actorType, actorId);
   }
 
@@ -490,6 +507,20 @@ export class SessionService {
           actorType: "system",
           actorId: "system",
         });
+
+        // Create inbox item for the session creator
+        const fullSession = await prisma.session.findUniqueOrThrow({
+          where: { id: sessionId },
+          select: { createdById: true, name: true },
+        });
+
+        await this.createInboxItemFromOutput({
+          orgId: session.organizationId,
+          userId: fullSession.createdById,
+          sessionName: fullSession.name,
+          sessionId,
+          data,
+        });
       }
     }
   }
@@ -583,7 +614,7 @@ export class SessionService {
     const session = await prisma.session.update({
       where: { id },
       data: { status: newStatus },
-      select: { organizationId: true },
+      select: { organizationId: true, createdById: true, name: true },
     });
 
     await eventService.create({
@@ -595,6 +626,26 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+
+    // Create inbox item when complete() lands in needs_input
+    if (newStatus === "needs_input") {
+      // Find the event that triggered needs_input to extract question/plan data
+      const triggerEvent = recentEvents.find((evt) => {
+        const p = evt.payload as Record<string, unknown>;
+        return hasQuestionBlock(p) || hasPlanBlock(p);
+      });
+      const triggerPayload = triggerEvent?.payload as Record<string, unknown> | undefined;
+
+      if (triggerPayload) {
+        await this.createInboxItemFromOutput({
+          orgId: session.organizationId,
+          userId: session.createdById,
+          sessionName: session.name,
+          sessionId: id,
+          data: triggerPayload,
+        });
+      }
+    }
   }
 
   async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string, interactionMode?: string) {
@@ -660,6 +711,9 @@ export class SessionService {
         pendingRun: Prisma.DbNull,
       },
     });
+
+    // Resolve any inbox items for this session (leaving needs_input)
+    await inboxService.resolveBySource({ sourceType: "session", sourceId: sessionId, orgId: session.organizationId, resolution: text.slice(0, 200) });
 
     // Emit a resumed event so all clients see the status change
     await eventService.create({
@@ -1159,6 +1213,50 @@ export class SessionService {
   }
 
   // ─── Helpers ───
+
+  /**
+   * Extract plan/question data from a session_output payload and create an inbox item.
+   */
+  private async createInboxItemFromOutput(params: {
+    orgId: string;
+    userId: string;
+    sessionName: string;
+    sessionId: string;
+    data: Record<string, unknown>;
+  }) {
+    const { orgId, userId, sessionName, sessionId, data } = params;
+    const messageContent = (data.message as Record<string, unknown> | undefined)
+      ?.content as Array<Record<string, unknown>> | undefined;
+
+    const isQuestion = hasQuestionBlock(data);
+
+    const questionBlock = isQuestion
+      ? messageContent?.find((b) => b.type === "question") as { questions: Array<Record<string, unknown>> } | undefined
+      : undefined;
+
+    const planBlock = !isQuestion
+      ? messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined
+      : undefined;
+    const planText = planBlock?.content;
+
+    const summary = isQuestion
+      ? questionBlock?.questions?.[0]?.question as string | undefined
+      : planText?.slice(0, 200);
+
+    await inboxService.createItem({
+      orgId,
+      userId,
+      itemType: isQuestion ? "question" : "plan",
+      title: sessionName,
+      summary,
+      payload: {
+        planContent: planText ?? null,
+        questions: questionBlock?.questions ?? null,
+      } as unknown as Prisma.InputJsonValue,
+      sourceType: "session",
+      sourceId: sessionId,
+    });
+  }
 
   private parseConnection(raw: unknown): SessionConnectionData {
     if (!raw || typeof raw !== "object") return defaultConnection();

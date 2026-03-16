@@ -12,6 +12,10 @@ function parseNavFromPath(path: string): {
   if (path.startsWith("/settings")) {
     return { channelId: null, sessionId: null, page: "settings" };
   }
+  // /inbox
+  if (path.startsWith("/inbox")) {
+    return { channelId: null, sessionId: null, page: "inbox" };
+  }
   // /c/:channelId/s/:sessionId
   const sessionMatch = path.match(/^\/c\/([^/]+)\/s\/([^/]+)/);
   if (sessionMatch) {
@@ -37,12 +41,14 @@ export function useHistorySync() {
     // Initialize from URL (or fall back to localStorage)
     const { channelId, sessionId, page } = parseNavFromPath(window.location.pathname);
     const initialChannel =
-      page === "settings" ? null : (channelId ?? localStorage.getItem("trace:activeChannelId"));
+      (page === "settings" || page === "inbox") ? null : (channelId ?? localStorage.getItem("trace:activeChannelId"));
 
     // Replace current history entry with proper state
     let path: string;
     if (page === "settings") {
       path = "/settings";
+    } else if (page === "inbox") {
+      path = "/inbox";
     } else if (initialChannel && sessionId) {
       path = `/c/${initialChannel}/s/${sessionId}`;
     } else if (initialChannel) {

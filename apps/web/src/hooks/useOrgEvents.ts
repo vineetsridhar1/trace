@@ -6,7 +6,7 @@ import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
-import type { Event, EventType, ScopeType, SessionStatus, Channel, Repo } from "@trace/gql";
+import type { Event, EventType, ScopeType, SessionStatus, Channel, Repo, InboxItem } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -218,6 +218,20 @@ export function useOrgEvents() {
             updates._lastEventPreview = preview;
           }
           patch("sessions", event.scopeId, updates);
+        }
+
+        // Inbox item events
+        if (event.eventType === ("inbox_item_created" as EventType)) {
+          const item = asRecord(event.payload.inboxItem);
+          if (item && typeof item.id === "string") {
+            upsert("inboxItems", item.id, item as unknown as InboxItem);
+          }
+        }
+        if (event.eventType === ("inbox_item_resolved" as EventType)) {
+          const item = asRecord(event.payload.inboxItem);
+          if (item && typeof item.id === "string") {
+            upsert("inboxItems", item.id, item as unknown as InboxItem);
+          }
         }
 
         // Fire notification handlers after all store patches are applied

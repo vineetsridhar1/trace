@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ActivePage = "main" | "settings";
+export type ActivePage = "main" | "settings" | "inbox";
 
 interface UIState {
   activePage: ActivePage;
@@ -17,6 +17,7 @@ interface UIState {
 
 function buildPath(channelId: string | null, sessionId: string | null, page: ActivePage = "main"): string {
   if (page === "settings") return "/settings";
+  if (page === "inbox") return "/inbox";
   if (channelId && sessionId) return `/c/${channelId}/s/${sessionId}`;
   if (channelId) return `/c/${channelId}`;
   return "/";
@@ -38,6 +39,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ activePage: page });
     if (page === "settings") {
       pushNav(null, null, "settings");
+    } else if (page === "inbox") {
+      pushNav(null, null, "inbox");
     } else {
       const channelId = get().activeChannelId;
       const sessionId = get().activeSessionId;

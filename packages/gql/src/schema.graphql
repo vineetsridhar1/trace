@@ -91,6 +91,17 @@ enum AgentTrustLevel {
   blocked
 }
 
+enum InboxItemType {
+  plan
+  question
+}
+
+enum InboxItemStatus {
+  active
+  resolved
+  dismissed
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -108,6 +119,8 @@ enum EventType {
   channel_created
   member_joined
   member_left
+  inbox_item_created
+  inbox_item_resolved
 }
 
 # --- Core Types ---
@@ -203,6 +216,20 @@ type Event {
   parentId: ID
   timestamp: DateTime!
   metadata: JSON
+}
+
+type InboxItem {
+  id: ID!
+  itemType: InboxItemType!
+  status: InboxItemStatus!
+  title: String!
+  summary: String
+  payload: JSON!
+  userId: ID!
+  sourceType: String!
+  sourceId: ID!
+  createdAt: DateTime!
+  resolvedAt: DateTime
 }
 
 # --- Supporting Types ---
@@ -356,6 +383,7 @@ type Query {
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
+  inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
 }
 
 # --- Mutations ---
@@ -379,6 +407,7 @@ type Mutation {
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createRepo(input: CreateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
+  dismissInboxItem(id: ID!): InboxItem!
 }
 
 # --- Subscriptions ---

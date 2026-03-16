@@ -71,6 +71,17 @@ enum ActorType {
   system
 }
 
+enum InboxItemType {
+  plan
+  question
+}
+
+enum InboxItemStatus {
+  active
+  resolved
+  dismissed
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -88,6 +99,8 @@ enum EventType {
   channel_created
   member_joined
   member_left
+  inbox_item_created
+  inbox_item_resolved
 }
 
 model Organization {
@@ -101,7 +114,8 @@ model Organization {
   channels Channel[]
   sessions Session[]
   tickets  Ticket[]
-  events   Event[]
+  events     Event[]
+  inboxItems InboxItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -279,4 +293,25 @@ model Event {
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])
   @@index([parentId])
+}
+
+model InboxItem {
+  id             String          @id @default(uuid())
+  itemType       InboxItemType
+  status         InboxItemStatus @default(active)
+  title          String
+  summary        String?
+  payload        Json            @default("{}")
+  userId         String
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  sourceType     String
+  sourceId       String
+  createdAt      DateTime        @default(now())
+  resolvedAt     DateTime?
+  updatedAt      DateTime        @updatedAt
+
+  @@index([userId, status])
+  @@index([organizationId, userId])
+  @@index([sourceType, sourceId])
 }
