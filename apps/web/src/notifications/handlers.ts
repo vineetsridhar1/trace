@@ -1,22 +1,17 @@
 import { toast } from "sonner";
 import type { Event, EventType, SessionStatus } from "@trace/gql";
-import type { SessionEntity } from "../stores/entity";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
+import { statusLabel } from "../components/session/sessionStatus";
 
-/**
- * Notification handler for a specific event type.
- * Return `true` to indicate a notification was shown, `false` to skip.
- */
-type NotificationHandler = (event: Event) => boolean;
+/** Notification handler for a specific event type. */
+type NotificationHandler = (event: Event) => void;
 
 const handlers = new Map<EventType, NotificationHandler[]>();
 
 /** Register a notification handler for a given event type. */
 export function registerHandler(eventType: EventType, handler: NotificationHandler) {
-  const existing = handlers.get(eventType) ?? [];
-  existing.push(handler);
-  handlers.set(eventType, existing);
+  handlers.set(eventType, [...(handlers.get(eventType) ?? []), handler]);
 }
 
 /** Run all registered handlers for an event. Called from useOrgEvents. */
@@ -32,47 +27,41 @@ export function notifyForEvent(event: Event) {
 // Built-in handler: Session status changes for sessions you own
 // ---------------------------------------------------------------------------
 
-const STATUS_LABELS: Partial<Record<SessionStatus, string>> = {
-  active: "Active",
-  paused: "Paused",
-  completed: "Completed",
-  failed: "Failed",
-  needs_input: "Needs Input",
-  pending: "Pending",
-  creating: "Creating",
-  unreachable: "Unreachable",
-};
+/** Tracks recent toasts per session to prevent flooding during reconnection replays. */
+const recentToasts = new Map<string, number>();
+const DEBOUNCE_MS = 5000;
 
-function handleSessionStatusChange(event: Event): boolean {
+function handleSessionStatusChange(event: Event): void {
   const currentUserId = useAuthStore.getState().user?.id;
-  if (!currentUserId) return false;
+  if (!currentUserId) return;
 
-  const payload = event.payload as Record<string, unknown>;
-  const newStatus = payload.status as SessionStatus | undefined;
-  if (!newStatus) return false;
+  // Don't notify for your own actions
+  if (event.actor.id === currentUserId) return;
+
+  const newStatus = (event.payload as Record<string, unknown>).status as SessionStatus | undefined;
+  if (!newStatus) return;
 
   // Look up the session to check ownership and get the name
-  const session = useEntityStore.getState().sessions[event.scopeId] as SessionEntity | undefined;
-  if (!session) return false;
+  const session = useEntityStore.getState().sessions[event.scopeId];
+  if (!session) return;
 
   // Only notify for sessions the current user owns
-  const ownerId =
-    typeof session.createdBy === "object" && session.createdBy !== null
-      ? (session.createdBy as { id: string }).id
-      : undefined;
-  if (ownerId !== currentUserId) return false;
+  if (session.createdBy?.id !== currentUserId) return;
+
+  // Debounce per session to avoid toast flooding on reconnection replays
+  const now = Date.now();
+  const lastToast = recentToasts.get(event.scopeId);
+  if (lastToast && now - lastToast < DEBOUNCE_MS) return;
+  recentToasts.set(event.scopeId, now);
 
   const sessionName = session.name || "Untitled session";
-  const statusLabel = STATUS_LABELS[newStatus] ?? newStatus;
+  const label = statusLabel[newStatus] ?? newStatus;
 
-  toast(`"${sessionName}" moved to "${statusLabel}"`, {
-    dismissible: true,
-  });
-
-  return true;
+  toast(`"${sessionName}" moved to "${label}"`);
 }
 
 // Register the built-in handlers
-for (const eventType of ["session_paused", "session_resumed", "session_terminated"] as EventType[]) {
+const sessionStatusEventTypes: EventType[] = ["session_paused", "session_resumed", "session_terminated"];
+for (const eventType of sessionStatusEventTypes) {
   registerHandler(eventType, handleSessionStatusChange);
 }

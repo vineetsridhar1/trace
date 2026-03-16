@@ -141,9 +141,6 @@ export function useOrgEvents() {
         // Always upsert the raw event
         upsert("events", event.id, event);
 
-        // Fire any registered notification handlers
-        notifyForEvent(event);
-
         // New repo — upsert directly from payload
         if (event.eventType === "repo_created") {
           const repo = asRecord(event.payload.repo);
@@ -219,6 +216,9 @@ export function useOrgEvents() {
           }
           patch("sessions", event.scopeId, updates);
         }
+
+        // Fire notification handlers after all store patches are applied
+        notifyForEvent(event);
       });
 
     return () => subscription.unsubscribe();
