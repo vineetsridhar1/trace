@@ -351,6 +351,7 @@ type Query {
     scope: ScopeInput
     types: [String!]
     after: DateTime
+    before: DateTime
     limit: Int
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!

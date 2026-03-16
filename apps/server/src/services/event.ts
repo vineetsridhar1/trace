@@ -20,6 +20,7 @@ export interface EventQueryOpts {
   scopeId?: string;
   types?: EventType[];
   after?: Date;
+  before?: Date;
   limit?: number;
 }
 
@@ -69,13 +70,23 @@ export class EventService {
     if (opts.scopeType) where.scopeType = opts.scopeType;
     if (opts.scopeId) where.scopeId = opts.scopeId;
     if (opts.types?.length) where.eventType = { in: opts.types };
-    if (opts.after) where.timestamp = { gt: opts.after };
+    const timestampFilter: Record<string, Date> = {};
+    if (opts.after) timestampFilter.gt = opts.after;
+    if (opts.before) timestampFilter.lt = opts.before;
+    if (Object.keys(timestampFilter).length > 0) where.timestamp = timestampFilter;
 
-    return prisma.event.findMany({
+    // When paginating backwards (before cursor), fetch in desc order then reverse
+    // so the caller always gets events in ascending chronological order.
+    const isBefore = !!opts.before && !opts.after;
+    const limit = opts.limit ?? 200;
+
+    const events = await prisma.event.findMany({
       where,
-      orderBy: { timestamp: "asc" },
-      take: opts.limit ?? 200,
+      orderBy: { timestamp: isBefore ? "desc" : "asc" },
+      take: limit,
     });
+
+    return isBefore ? events.reverse() : events;
   }
 }
 

@@ -4,12 +4,13 @@ import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
 export const eventQueries = {
-  events: (_: unknown, args: { organizationId: string; scope?: ScopeInput; types?: EventType[]; after?: Date; limit?: number }, _ctx: Context) => {
+  events: (_: unknown, args: { organizationId: string; scope?: ScopeInput; types?: EventType[]; after?: Date; before?: Date; limit?: number }, _ctx: Context) => {
     return eventService.query(args.organizationId, {
       scopeType: args.scope?.type,
       scopeId: args.scope?.id,
       types: args.types,
       after: args.after,
+      before: args.before,
       limit: args.limit,
     });
   },
