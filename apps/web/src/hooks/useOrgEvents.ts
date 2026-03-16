@@ -5,6 +5,7 @@ import { useEntityStore } from "../stores/entity";
 import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
+import { notifyForEvent } from "../notifications/handlers";
 import type { Event, EventType, ScopeType, SessionStatus, Channel, Repo } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -139,6 +140,9 @@ export function useOrgEvents() {
 
         // Always upsert the raw event
         upsert("events", event.id, event);
+
+        // Fire any registered notification handlers
+        notifyForEvent(event);
 
         // New repo — upsert directly from payload
         if (event.eventType === "repo_created") {

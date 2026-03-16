@@ -12,6 +12,7 @@ import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
 import { useConnectionStore } from "./stores/connection";
 import { RefreshCw } from "lucide-react";
+import { Toaster } from "./components/ui/sonner";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -34,7 +35,12 @@ export function App() {
     return <LoginPage />;
   }
 
-  return <AuthenticatedApp activeChannelId={activeChannelId} />;
+  return (
+    <>
+      <AuthenticatedApp activeChannelId={activeChannelId} />
+      <Toaster position="top-right" />
+    </>
+  );
 }
 
 function ConnectionStatus() {
