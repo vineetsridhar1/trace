@@ -1,4 +1,5 @@
 import type { Event } from "@trace/gql";
+import { parseQuestion, type Question } from "@trace/shared";
 import type { ReadGlobItem } from "./messages/ReadGlobGroup";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
@@ -17,7 +18,8 @@ export type SessionNode =
     exitCode?: number;
   }
   | { kind: "readglob-group"; items: ReadGlobItem[] }
-  | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string };
+  | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string }
+  | { kind: "ask-user-question"; id: string; questions: Question[]; timestamp: string };
 
 /** Safely narrow unknown to a record for property access */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -210,8 +212,11 @@ export function buildSessionNodes(
   // Deduplicate consecutive "result" events (race between readline and process close)
   const deduped = deduplicateResultEvents(result, events);
 
-  // Post-process: detect ExitPlanMode tool_use and replace with plan-review nodes
-  return detectPlanReviewNodes(deduped, events);
+  // Post-process: detect special blocks and replace with semantic nodes.
+  // Questions run first — they need immediate interaction and take precedence
+  // if both a QuestionBlock and PlanBlock appear in the same event.
+  const withQuestions = detectQuestionNodes(deduped, events);
+  return detectPlanReviewNodes(withQuestions, events);
 }
 
 /** Remove duplicate consecutive "result" session_output events */
@@ -241,99 +246,57 @@ function deduplicateResultEvents(
   return result;
 }
 
-/** Walk backwards through nodes to find ExitPlanMode tool calls and replace them with plan-review nodes */
+/** Detect PlanBlock in assistant events and replace with plan-review nodes */
 function detectPlanReviewNodes(
   nodes: SessionNode[],
   events: Record<string, Event>,
 ): SessionNode[] {
-  const result: SessionNode[] = [...nodes];
-
-  for (let i = result.length - 1; i >= 0; i--) {
-    const node = result[i];
-    if (node.kind !== "event") continue;
-
+  return nodes.map((node) => {
+    if (node.kind !== "event") return node;
     const event = events[node.id];
-    if (!event || event.eventType !== "session_output") continue;
-
+    if (!event || event.eventType !== "session_output") return node;
     const payload = asRecord(event.payload);
-    if (!payload || payload.type !== "assistant") continue;
-
+    if (!payload || payload.type !== "assistant") return node;
     const message = asRecord(payload.message);
     const blocks = message?.content;
-    if (!Array.isArray(blocks)) continue;
+    if (!Array.isArray(blocks)) return node;
 
-    // Check if this event contains an ExitPlanMode tool_use
-    const hasExitPlanMode = blocks.some((rawBlock: unknown) => {
-      const block = asRecord(rawBlock);
-      return block?.type === "tool_use" && block?.name === "ExitPlanMode";
-    });
-    if (!hasExitPlanMode) continue;
+    const planBlock = blocks.find((b: unknown) => asRecord(b)?.type === "plan");
+    if (!planBlock) return node;
+    const p = asRecord(planBlock)!;
 
-    // Look backwards for Write/Edit to a .claude/plans/ .md file
-    let planContent = "";
-    let planFilePath = "";
-    let planEventIndex = -1;
-    let fallbackText = "";
+    return {
+      kind: "plan-review" as const,
+      id: node.id,
+      planContent: String(p.content ?? ""),
+      planFilePath: String(p.filePath ?? ""),
+      timestamp: event.timestamp,
+    };
+  });
+}
 
-    for (let j = i - 1; j >= 0; j--) {
-      const prevNode = result[j];
-      if (prevNode.kind !== "event") continue;
+/** Detect QuestionBlock in assistant events and replace with ask-user-question nodes */
+function detectQuestionNodes(nodes: SessionNode[], events: Record<string, Event>): SessionNode[] {
+  return nodes.map((node) => {
+    if (node.kind !== "event") return node;
+    const event = events[node.id];
+    if (!event || event.eventType !== "session_output") return node;
+    const payload = asRecord(event.payload);
+    if (!payload || payload.type !== "assistant") return node;
+    const message = asRecord(payload.message);
+    const blocks = message?.content;
+    if (!Array.isArray(blocks)) return node;
 
-      const prevEvent = events[prevNode.id];
-      if (!prevEvent || prevEvent.eventType !== "session_output") continue;
+    const qBlock = blocks.find((b: unknown) => asRecord(b)?.type === "question");
+    if (!qBlock) return node;
+    const q = asRecord(qBlock)!;
+    const questions = Array.isArray(q.questions) ? q.questions : [];
 
-      const prevPayload = asRecord(prevEvent.payload);
-      if (!prevPayload || prevPayload.type !== "assistant") continue;
-
-      const prevMessage = asRecord(prevPayload.message);
-      const prevBlocks = prevMessage?.content;
-      if (!Array.isArray(prevBlocks)) continue;
-
-      for (const rawBlock of prevBlocks) {
-        const block = asRecord(rawBlock);
-        if (!block) continue;
-
-        // Collect fallback text
-        if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
-          fallbackText = block.text;
-        }
-
-        if (block.type === "tool_use" && (block.name === "Write" || block.name === "Edit")) {
-          const input = asRecord(block.input);
-          if (!input) continue;
-          const fp = String(input.file_path ?? "");
-          if (fp.includes(".claude/plans/") && fp.endsWith(".md")) {
-            planContent = String(input.content ?? "");
-            planFilePath = fp;
-            planEventIndex = j;
-            break;
-          }
-        }
-      }
-
-      if (planContent) break;
-    }
-
-    if (!planContent && fallbackText) {
-      planContent = fallbackText;
-    }
-
-    if (planContent) {
-      // Replace the ExitPlanMode event with a plan-review node
-      result[i] = {
-        kind: "plan-review",
-        id: node.id,
-        planContent,
-        planFilePath,
-        timestamp: event.timestamp,
-      };
-
-      // Remove the Write/Edit event that wrote the plan (if found)
-      if (planEventIndex >= 0) {
-        result.splice(planEventIndex, 1);
-      }
-    }
-  }
-
-  return result;
+    return {
+      kind: "ask-user-question" as const,
+      id: node.id,
+      questions: questions.map(parseQuestion),
+      timestamp: event.timestamp,
+    };
+  });
 }

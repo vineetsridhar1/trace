@@ -8,6 +8,15 @@
     ".": {
       "import": "./dist/index.js",
       "require": "./dist/cjs/index.js"
+    },
+    "./adapters": {
+      "import": "./dist/adapters.js",
+      "require": "./dist/cjs/adapters.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "adapters": ["dist/adapters.d.ts"]
     }
   },
   "scripts": {

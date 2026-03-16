@@ -14,10 +14,14 @@ export class CodexAdapter implements CodingToolAdapter {
   private cwd: string | null = null;
   private threadId: string | null = null;
   private resultEmitted = false;
+  private interactionMode: "code" | "plan" | "ask" | undefined;
+  private lastTextContent: string | null = null;
 
-  run({ prompt, cwd, onOutput, onComplete, model, toolSessionId }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, model, toolSessionId, interactionMode }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
+    this.interactionMode = interactionMode;
+    this.lastTextContent = null;
 
     if (toolSessionId && !this.threadId) {
       this.threadId = toolSessionId;
@@ -57,6 +61,14 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     this.process.on("close", (code) => {
+      // If in plan mode and exited cleanly with text, wrap as PlanBlock.
+      // Codex doesn't write plan files to disk, so filePath is omitted.
+      if (this.interactionMode === "plan" && (code === 0 || code === null) && this.lastTextContent) {
+        onOutput({
+          type: "assistant",
+          message: { content: [{ type: "plan", content: this.lastTextContent }] },
+        });
+      }
       if (!this.resultEmitted) {
         onOutput({ type: "result", subtype: code === 0 || code === null ? "success" : "error" });
       }
@@ -117,6 +129,7 @@ export class CodexAdapter implements CodingToolAdapter {
     if (itemType === "agent_message") {
       const text = item.text as string | undefined;
       if (text) {
+        this.lastTextContent = text;
         onOutput({
           type: "assistant",
           message: { content: [{ type: "text", text }] },
