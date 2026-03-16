@@ -23,11 +23,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
-  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-
-  // Use the parent's worktree branch so the child gets the parent's changes
-  const parentWorktreeBranch = workdir ? `trace/${sessionId}` : undefined;
 
   const handleClearContext = useCallback(async () => {
     if (sending) return;
@@ -41,7 +37,6 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
             hosting: hosting ?? "cloud",
             channelId: channel?.id,
             repoId: repo?.id,
-            branch: parentWorktreeBranch,
             parentSessionId: sessionId,
             prompt,
           },
@@ -56,7 +51,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     } finally {
       setSending(false);
     }
-  }, [sending, planContent, tool, hosting, channel?.id, repo?.id, parentWorktreeBranch, sessionId, setActiveSessionId]);
+  }, [sending, planContent, tool, hosting, channel?.id, repo?.id, sessionId, setActiveSessionId]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;
