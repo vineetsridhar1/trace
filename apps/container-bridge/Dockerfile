@@ -1,17 +1,28 @@
-FROM node:20-slim
+FROM node:22-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Install coding tool CLIs
+RUN npm install -g @anthropic-ai/claude-code @openai/codex
 
 WORKDIR /app
 
-# Copy built bridge (assumes `pnpm build` ran before `docker build`)
-COPY dist/ dist/
-COPY package.json .
-COPY node_modules/ node_modules/
+# Install runtime dependency directly (avoids workspace: protocol issue)
+RUN npm init -y && npm install ws
+
+# Copy pre-built shared package as a node_modules dependency
+COPY packages/shared/dist/ ./node_modules/@trace/shared/dist/
+COPY packages/shared/package.json ./node_modules/@trace/shared/
+
+# Copy pre-built container-bridge
+COPY apps/container-bridge/dist/ ./dist/
+
+# Create non-root user — Claude Code refuses --dangerously-skip-permissions as root
+RUN useradd -m -s /bin/bash coder && \
+    mkdir -p /workspace /repos /workspaces && \
+    chown -R coder:coder /workspace /repos /workspaces /app
+USER coder
 
 CMD ["node", "dist/index.js"]

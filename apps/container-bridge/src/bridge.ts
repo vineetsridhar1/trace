@@ -1,22 +1,28 @@
 import WebSocket from "ws";
-import { ClaudeCodeAdapter, CodexAdapter, type CodingToolAdapter } from "@trace/shared";
+import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
+import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
+import { ensureRepo, createWorktree, removeWorktree } from "./workspace.js";
 
 /**
- * Container bridge — runs inside a Fly Machine.
- * Same protocol as the desktop BridgeClient but without Electron dependencies.
- * Connects to the server's /bridge WebSocket and handles session commands.
+ * Multi-session container bridge — runs inside a Fly Machine (one per user per org).
+ * Mirrors the desktop BridgeClient pattern: Map-based adapters, dynamic session binding.
+ * Handles prepare/delete commands for repo cloning and worktree management.
  */
-export class ContainerBridge {
+export class ContainerBridge implements IBridgeClient {
   private ws: WebSocket | null = null;
-  private adapter: CodingToolAdapter | null = null;
+  private adapters = new Map<string, CodingToolAdapter>();
+  private sessionTools = new Map<string, string>();
+  private reportedToolSessionIds = new Map<string, string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private connected = false;
+  private connectedCallbacks: Array<() => void> = [];
 
   constructor(
     private readonly serverUrl: string,
-    private readonly sessionId: string,
     private readonly token: string,
-    private readonly tool: string,
-    private readonly model?: string,
+    private readonly machineId: string,
+    private readonly defaultTool: string,
   ) {}
 
   connect(): void {
@@ -25,14 +31,26 @@ export class ContainerBridge {
 
     this.ws.on("open", () => {
       console.log("[container-bridge] connected to server");
-      // Register this bridge for the session immediately
-      this.send({ type: "register_session", sessionId: this.sessionId });
+      // Announce as a cloud runtime — machineId is the stable instanceId
+      this.send({
+        type: "runtime_hello",
+        instanceId: `cloud-machine-${this.machineId}`,
+        label: `cloud-machine-${this.machineId}`,
+        hostingMode: "cloud",
+        supportedTools: [this.defaultTool],
+      });
+
+      this.startHeartbeat();
+
+      this.connected = true;
+      for (const cb of this.connectedCallbacks) cb();
+      this.connectedCallbacks = [];
     });
 
     this.ws.on("message", (data) => {
       try {
-        const msg = JSON.parse(data.toString());
-        this.handleMessage(msg);
+        const msg = JSON.parse(data.toString()) as BridgeCommand;
+        this.handleCommand(msg);
       } catch (err) {
         console.error("[container-bridge] error parsing message:", err);
       }
@@ -40,12 +58,42 @@ export class ContainerBridge {
 
     this.ws.on("close", () => {
       console.log("[container-bridge] disconnected, reconnecting in 3s...");
+      this.stopHeartbeat();
       this.scheduleReconnect();
     });
 
     this.ws.on("error", (err) => {
       console.error("[container-bridge] error:", err.message);
     });
+  }
+
+  disconnect(): void {
+    this.stopHeartbeat();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    for (const adapter of this.adapters.values()) {
+      adapter.abort();
+    }
+    this.adapters.clear();
+    this.ws?.close();
+    this.ws = null;
+  }
+
+  send(data: BridgeMessage): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  /** Run a callback once the WebSocket is connected (or immediately if already connected). */
+  onConnected(cb: () => void): void {
+    if (this.connected) {
+      cb();
+    } else {
+      this.connectedCallbacks.push(cb);
+    }
   }
 
   private scheduleReconnect(): void {
@@ -56,8 +104,23 @@ export class ContainerBridge {
     }, 3000);
   }
 
-  private createAdapter(): CodingToolAdapter {
-    switch (this.tool) {
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      this.send({ type: "runtime_heartbeat", instanceId: `cloud-machine-${this.machineId}` });
+    }, 10_000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private createAdapter(tool?: string): CodingToolAdapter {
+    const resolvedTool = tool ?? this.defaultTool;
+    switch (resolvedTool) {
       case "codex":
         return new CodexAdapter();
       case "claude_code":
@@ -66,95 +129,127 @@ export class ContainerBridge {
     }
   }
 
-  private handleMessage(msg: { type: string; sessionId?: string; prompt?: string; [key: string]: unknown }): void {
-    switch (msg.type) {
+  private handleCommand(cmd: BridgeCommand): void {
+    switch (cmd.type) {
       case "run":
       case "send": {
-        if (!msg.sessionId) return;
         this.runPrompt({
-          prompt: (msg.prompt as string) ?? "",
-          cwd: (msg.cwd as string) ?? process.cwd(),
-          model: (msg.model as string) ?? this.model,
-          interactionMode: msg.interactionMode as string | undefined,
+          sessionId: cmd.sessionId,
+          prompt: cmd.prompt ?? "",
+          cwd: cmd.cwd ?? "/workspace",
+          tool: cmd.tool,
+          model: cmd.model,
+          interactionMode: cmd.interactionMode,
+          toolSessionId: cmd.toolSessionId,
         });
         break;
       }
+
       case "prepare": {
-        // Cloud sessions handle repo clone at startup, not via prepare command.
-        // If we get a prepare command anyway, just acknowledge the workspace.
-        console.log("[container-bridge] ignoring prepare command (repo cloned at startup)");
+        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
+
+        // Ensure repo is cloned, then create worktree for this session
+        (async () => {
+          try {
+            await ensureRepo(repoId, repoRemoteUrl);
+            const { workdir } = await createWorktree(repoId, sessionId, defaultBranch, branch);
+            // Register this session with the server
+            this.send({ type: "register_session", sessionId });
+            this.send({ type: "workspace_ready", sessionId, workdir });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[container-bridge] workspace failed for ${sessionId}:`, message);
+            this.send({ type: "workspace_failed", sessionId, error: message });
+          }
+        })();
         break;
       }
+
       case "terminate": {
-        if (this.adapter) {
-          this.adapter.abort();
-        }
+        const adapter = this.adapters.get(cmd.sessionId);
+        if (adapter) adapter.abort();
         break;
       }
+
       case "pause": {
-        if (this.adapter) {
-          this.adapter.abort();
-        }
+        const adapter = this.adapters.get(cmd.sessionId);
+        if (adapter) adapter.abort();
         break;
       }
+
       case "resume": {
-        // Nothing to do — the adapter will be re-created on next run/send
+        // Nothing to do — adapter reused on next run/send
+        break;
+      }
+
+      case "delete": {
+        const adapter = this.adapters.get(cmd.sessionId);
+        if (adapter) {
+          adapter.abort();
+          this.adapters.delete(cmd.sessionId);
+        }
+        this.sessionTools.delete(cmd.sessionId);
+        this.reportedToolSessionIds.delete(cmd.sessionId);
+
+        // Clean up worktree for this session only — keep the machine and bare repo
+        if (cmd.workdir && cmd.repoId) {
+          removeWorktree(cmd.repoId, cmd.workdir).catch((err: Error) => {
+            console.warn(`[container-bridge] failed to remove worktree ${cmd.workdir}:`, err.message);
+          });
+        }
         break;
       }
     }
   }
 
-  private runPrompt({ prompt, cwd, model, interactionMode }: {
+  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: {
+    sessionId: string;
     prompt: string;
     cwd: string;
+    tool?: string;
     model?: string;
     interactionMode?: string;
+    toolSessionId?: string;
   }): void {
-    // Reuse adapter for session continuity (--resume)
-    if (!this.adapter) {
-      this.adapter = this.createAdapter();
+    // If tool changed, abort old adapter and create a fresh one
+    const prevTool = this.sessionTools.get(sessionId);
+    if (tool && prevTool && prevTool !== tool) {
+      const oldAdapter = this.adapters.get(sessionId);
+      if (oldAdapter) oldAdapter.abort();
+      this.adapters.delete(sessionId);
     }
 
-    this.adapter.run({
+    // Reuse existing adapter for session continuity (--resume)
+    let adapter = this.adapters.get(sessionId);
+    if (!adapter) {
+      adapter = this.createAdapter(tool);
+      this.adapters.set(sessionId, adapter);
+      this.send({ type: "register_session", sessionId });
+    }
+    if (tool) this.sessionTools.set(sessionId, tool);
+
+    const activeAdapter = adapter;
+    adapter.run({
       prompt,
       cwd,
       onOutput: (output) => {
-        this.send({ type: "session_output", sessionId: this.sessionId, data: output });
+        if (this.adapters.get(sessionId) !== activeAdapter) return;
+        this.send({ type: "session_output", sessionId, data: output });
+        if (adapter.getSessionId) {
+          const sid = adapter.getSessionId();
+          if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {
+            this.reportedToolSessionIds.set(sessionId, sid);
+            this.send({ type: "tool_session_id", sessionId, toolSessionId: sid });
+          }
+        }
       },
       onComplete: () => {
-        this.send({ type: "session_complete", sessionId: this.sessionId });
+        if (this.adapters.get(sessionId) !== activeAdapter) return;
+        this.send({ type: "session_complete", sessionId });
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,
+      toolSessionId,
     });
-  }
-
-  /** Notify the server that workspace is ready */
-  sendWorkspaceReady(workdir: string): void {
-    this.send({ type: "workspace_ready", sessionId: this.sessionId, workdir });
-  }
-
-  /** Notify the server that workspace preparation failed */
-  sendWorkspaceFailed(error: string): void {
-    this.send({ type: "workspace_failed", sessionId: this.sessionId, error });
-  }
-
-  send(data: unknown): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
-    }
-  }
-
-  disconnect(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.adapter) {
-      this.adapter.abort();
-      this.adapter = null;
-    }
-    this.ws?.close();
-    this.ws = null;
   }
 }

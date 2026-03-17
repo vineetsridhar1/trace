@@ -59,7 +59,7 @@ export class FlyAdapter {
     const cloudSessions = await prisma.session.findMany({
       where: {
         hosting: "cloud",
-        status: { in: ["creating", "pending", "active", "paused", "needs_input"] },
+        status: { in: ["creating", "pending", "active", "paused", "needs_input", "completed", "failed"] },
       },
       select: { id: true, connection: true },
     });
@@ -103,6 +103,7 @@ export class FlyAdapter {
     else if (process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     if (userTokens?.openai) env.OPENAI_API_KEY = userTokens.openai;
     if (userTokens?.github) env.GITHUB_TOKEN = userTokens.github;
+    else if (process.env.GITHUB_TOKEN) env.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
     if (model) env.MODEL = model;
     if (repoRemoteUrl) env.REPO_REMOTE_URL = repoRemoteUrl;
@@ -127,11 +128,21 @@ export class FlyAdapter {
     this.sessionToMachine.set(sessionId, machine.id);
     this.validBridgeTokens.add(bridgeToken);
 
-    // Persist machineId in session's connection JSON for durability
+    // Persist machineId and cloud runtime identity in session's connection JSON.
+    // runtimeInstanceId matches what the container-bridge sends in runtime_hello,
+    // so restoreSessionsForRuntime can rebind on reconnect.
     await prisma.session.update({
       where: { id: sessionId },
       data: {
-        connection: { machineId: machine.id, bridgeToken } satisfies Prisma.InputJsonValue,
+        connection: {
+          state: "connected",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+          machineId: machine.id,
+          bridgeToken,
+          runtimeInstanceId: `cloud-${sessionId}`,
+        } satisfies Prisma.InputJsonValue,
       },
     });
 
@@ -166,20 +177,42 @@ export class FlyAdapter {
 
   /**
    * Destroy a machine permanently (for terminate/cleanup).
+   * Pass `connectionData` if the session row may be deleted after this call.
    */
-  async destroyMachine(sessionId: string): Promise<void> {
-    const machineId = this.getMachineId(sessionId);
+  async destroyMachine(sessionId: string, connectionData?: Record<string, unknown> | null): Promise<void> {
+    // Try in-memory map first, then fall back to provided connection data or DB lookup
+    let machineId = this.sessionToMachine.get(sessionId);
+    let conn = connectionData ?? null;
+
+    if (!machineId) {
+      if (!conn) {
+        const session = await prisma.session.findUnique({
+          where: { id: sessionId },
+          select: { connection: true },
+        });
+        conn = session?.connection as Record<string, unknown> | null;
+      }
+      machineId = conn?.machineId as string | undefined;
+    }
+
+    if (!machineId) {
+      console.warn(`[fly-adapter] no machine ID found for session ${sessionId}, skipping destroy`);
+      return;
+    }
 
     // Clean up bridge token
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { connection: true },
-    });
-    const conn = session?.connection as Record<string, unknown> | null;
-    const bridgeToken = conn?.bridgeToken as string | undefined;
+    const bridgeToken = (conn?.bridgeToken ?? connectionData?.bridgeToken) as string | undefined;
     if (bridgeToken) {
       this.validBridgeTokens.delete(bridgeToken);
     }
+
+    // Stop the machine first — Fly requires it to be stopped before deletion
+    await flyFetch(`${machineUrl(machineId)}/stop`, { method: "POST" }).catch(() => {
+      // May already be stopped — ignore errors
+    });
+    await flyFetch(`${machineUrl(machineId)}/wait?state=stopped&timeout=30`, { method: "GET" }).catch(() => {
+      // Timeout or already stopped — proceed with delete
+    });
 
     await flyFetch(machineUrl(machineId), {
       method: "DELETE",
@@ -191,9 +224,35 @@ export class FlyAdapter {
 
   /**
    * Validate a bridge token for cloud connections.
+   * Checks in-memory cache first, falls back to DB lookup
+   * (handles server restarts where restoreFromDb hasn't completed yet).
    */
-  isValidBridgeToken(token: string): boolean {
-    return this.validBridgeTokens.has(token);
+  async isValidBridgeToken(token: string): Promise<boolean> {
+    if (this.validBridgeTokens.has(token)) return true;
+
+    // DB fallback — the token may not be in memory yet after a server restart.
+    // Include completed/failed: the machine may still be running and need to reconnect
+    // for cleanup commands (delete/terminate).
+    const session = await prisma.session.findFirst({
+      where: {
+        hosting: "cloud",
+        connection: { path: ["bridgeToken"], equals: token },
+      },
+      select: { id: true, connection: true },
+    });
+
+    if (session) {
+      // Populate caches so subsequent checks are fast
+      this.validBridgeTokens.add(token);
+      const conn = session.connection as Record<string, unknown> | null;
+      const machineId = conn?.machineId as string | undefined;
+      if (machineId) {
+        this.sessionToMachine.set(session.id, machineId);
+      }
+      return true;
+    }
+
+    return false;
   }
 
   private getMachineId(sessionId: string): string {
