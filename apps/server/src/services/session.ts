@@ -165,7 +165,7 @@ export class SessionService {
       }
     }
 
-    // Cloud sessions always start as "creating" — the Fly Machine needs time to boot
+    // Cloud sessions always start as "creating" — the VM needs time to boot
     const initialStatus = (needsWorkspace || hosting === "cloud") ? "creating" : "pending";
 
     const [session] = await prisma.$transaction(async (tx) => {
@@ -375,7 +375,7 @@ export class SessionService {
     // Resolve any pending inbox items (plans/questions awaiting input)
     await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session deleted" });
 
-    // Clean up runtime (bridge + Fly Machine for cloud, bridge + worktree for local)
+    // Clean up runtime (bridge + cloud VM for cloud, bridge + worktree for local)
     await sessionRouter.destroyRuntime(id, session);
 
     // Orphan children, delete junctions, delete session — all in one transaction

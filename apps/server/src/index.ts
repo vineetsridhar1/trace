@@ -29,7 +29,7 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
 
   // Initialize cloud machine service and inject into session router
-  const cloudMachineService = new CloudMachineService(flyProvider);
+  const cloudMachineService = new CloudMachineService(flyProvider, "fly");
   sessionRouter.setCloudMachineService(cloudMachineService);
 
   app.use(cors({

@@ -25,7 +25,7 @@ export class CloudMachineService {
 
   constructor(
     private readonly provider: CloudMachineProvider,
-    private readonly providerName: string = "fly",
+    private readonly providerName: string,
   ) {}
 
   /**
