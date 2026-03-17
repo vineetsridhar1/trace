@@ -119,7 +119,9 @@ export function ChannelView({ channelId }: { channelId: string }) {
         ) : (
           <div className="divide-y divide-border">
             {sessionIds.map((id) => (
-              <SessionRow key={id} id={id} />
+              <div key={id} className="group/session-row">
+                <SessionRow id={id} />
+              </div>
             ))}
           </div>
         )}

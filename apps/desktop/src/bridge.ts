@@ -3,7 +3,7 @@ import os from "os";
 import type { CodingToolAdapter } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
-import { createWorktree } from "./worktree.js";
+import { createWorktree, removeWorktree } from "./worktree.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
@@ -201,6 +201,30 @@ export class BridgeClient {
           // Abort the running process but keep the adapter so it retains
           // the Claude Code session ID for --resume on subsequent messages.
           adapter.abort();
+        }
+        break;
+      }
+      case "delete": {
+        if (!msg.sessionId) return;
+        const deleteAdapter = this.adapters.get(msg.sessionId);
+        if (deleteAdapter) {
+          deleteAdapter.abort();
+          this.adapters.delete(msg.sessionId);
+        }
+        this.sessionTools.delete(msg.sessionId);
+        this.reportedToolSessionIds.delete(msg.sessionId);
+
+        // Clean up worktree if one exists
+        const workdir = msg.workdir as string | undefined;
+        const repoId = msg.repoId as string | undefined;
+        if (workdir && repoId) {
+          const config = readConfig();
+          const repoPath = config.repos[repoId];
+          if (repoPath) {
+            removeWorktree({ repoPath, worktreePath: workdir }).catch((err: Error) => {
+              console.warn(`[bridge] failed to remove worktree ${workdir}:`, err.message);
+            });
+          }
         }
         break;
       }

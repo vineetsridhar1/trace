@@ -126,6 +126,7 @@ export type EventType =
   | 'message_edited'
   | 'message_sent'
   | 'repo_created'
+  | 'session_deleted'
   | 'session_output'
   | 'session_paused'
   | 'session_resumed'
@@ -170,6 +171,7 @@ export type Mutation = {
   createProject: Project;
   createRepo: Repo;
   createTicket: Ticket;
+  deleteSession: Session;
   dismissInboxItem: InboxItem;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
@@ -210,6 +212,11 @@ export type MutationCreateRepoArgs = {
 
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
+};
+
+
+export type MutationDeleteSessionArgs = {
+  id: Scalars['ID']['input'];
 };
 
 

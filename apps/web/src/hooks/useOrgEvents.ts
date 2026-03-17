@@ -139,7 +139,7 @@ export function useOrgEvents() {
         if (!result.data?.orgEvents) return;
 
         const event = result.data.orgEvents as Event;
-        const { upsert, patch } = useEntityStore.getState();
+        const { upsert, patch, remove } = useEntityStore.getState();
 
         // Always upsert the raw event
         upsert("events", event.id, event);
@@ -181,6 +181,16 @@ export function useOrgEvents() {
                 }
               }
             }
+          }
+        }
+
+        // Session deleted — remove from store and navigate away if active
+        if (event.eventType === "session_deleted" && event.scopeType === ("session" satisfies ScopeType)) {
+          const deletedId = event.scopeId;
+          remove("sessions", deletedId);
+          const activeSessionId = useUIStore.getState().activeSessionId;
+          if (activeSessionId === deletedId) {
+            useUIStore.getState().setActiveSessionId(null);
           }
         }
 

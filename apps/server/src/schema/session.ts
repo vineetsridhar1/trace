@@ -47,6 +47,9 @@ export const sessionMutations = {
   terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
   },
+  deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.delete(args.id, ctx.actorType, ctx.userId);
+  },
   updateSessionConfig: (_: unknown, args: { sessionId: string; tool?: CodingTool | null; model?: string | null }, ctx: Context) => {
     return sessionService.updateConfig(args.sessionId, { tool: args.tool ?? undefined, model: args.model ?? undefined }, ctx.actorType, ctx.userId);
   },

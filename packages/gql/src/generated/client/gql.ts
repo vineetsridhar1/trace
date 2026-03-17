@@ -16,9 +16,8 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
 type Documents = {
     "\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n    }\n  }\n": typeof types.ChannelsDocument,
     "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n    }\n  }\n": typeof types.ReposDocument,
-    "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId, status: active) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n": typeof types.InboxItemsDocument,
+    "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n": typeof types.InboxItemsDocument,
     "\n  query Sessions($organizationId: ID!, $filters: SessionFilters) {\n    sessions(organizationId: $organizationId, filters: $filters) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      channel {\n        id\n      }\n      parentSession {\n        id\n        name\n      }\n      childSessions {\n        id\n        name\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SessionsDocument,
-    "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": typeof types.DismissInboxItemDocument,
     "\n  query SessionDetail($id: ID!) {\n    session(id: $id) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy { id name avatarUrl }\n      channel { id }\n      parentSession { id name status }\n      childSessions { id name status }\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SessionDetailDocument,
     "\n  mutation UpdateSessionConfig($sessionId: ID!, $tool: CodingTool, $model: String) {\n    updateSessionConfig(sessionId: $sessionId, tool: $tool, model: $model) {\n      id\n      tool\n      model\n    }\n  }\n": typeof types.UpdateSessionConfigDocument,
     "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateRepoDocument,
@@ -31,15 +30,16 @@ type Documents = {
     "\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n": typeof types.TerminateSessionDocument,
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": typeof types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": typeof types.MoveSessionToRuntimeDocument,
+    "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": typeof types.DeleteSessionDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": typeof types.AvailableSessionRuntimesDocument,
+    "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": typeof types.DismissInboxItemDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": typeof types.AvailableRuntimesDocument,
 };
 const documents: Documents = {
     "\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n    }\n  }\n": types.ChannelsDocument,
     "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n    }\n  }\n": types.ReposDocument,
-    "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId, status: active) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n": types.InboxItemsDocument,
+    "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n": types.InboxItemsDocument,
     "\n  query Sessions($organizationId: ID!, $filters: SessionFilters) {\n    sessions(organizationId: $organizationId, filters: $filters) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      channel {\n        id\n      }\n      parentSession {\n        id\n        name\n      }\n      childSessions {\n        id\n        name\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": types.SessionsDocument,
-    "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": types.DismissInboxItemDocument,
     "\n  query SessionDetail($id: ID!) {\n    session(id: $id) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy { id name avatarUrl }\n      channel { id }\n      parentSession { id name status }\n      childSessions { id name status }\n      createdAt\n      updatedAt\n    }\n  }\n": types.SessionDetailDocument,
     "\n  mutation UpdateSessionConfig($sessionId: ID!, $tool: CodingTool, $model: String) {\n    updateSessionConfig(sessionId: $sessionId, tool: $tool, model: $model) {\n      id\n      tool\n      model\n    }\n  }\n": types.UpdateSessionConfigDocument,
     "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": types.CreateRepoDocument,
@@ -52,7 +52,9 @@ const documents: Documents = {
     "\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n": types.TerminateSessionDocument,
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": types.MoveSessionToRuntimeDocument,
+    "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": types.DeleteSessionDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": types.AvailableSessionRuntimesDocument,
+    "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": types.DismissInboxItemDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": types.AvailableRuntimesDocument,
 };
 
@@ -81,15 +83,11 @@ export function graphql(source: "\n  query Repos($organizationId: ID!) {\n    re
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId, status: active) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n"): (typeof documents)["\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId, status: active) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n"];
+export function graphql(source: "\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n"): (typeof documents)["\n  query InboxItems($organizationId: ID!) {\n    inboxItems(organizationId: $organizationId) {\n      id\n      itemType\n      status\n      title\n      summary\n      payload\n      userId\n      sourceType\n      sourceId\n      createdAt\n      resolvedAt\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query Sessions($organizationId: ID!, $filters: SessionFilters) {\n    sessions(organizationId: $organizationId, filters: $filters) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      channel {\n        id\n      }\n      parentSession {\n        id\n        name\n      }\n      childSessions {\n        id\n        name\n      }\n      createdAt\n      updatedAt\n    }\n  }\n"): (typeof documents)["\n  query Sessions($organizationId: ID!, $filters: SessionFilters) {\n    sessions(organizationId: $organizationId, filters: $filters) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      channel {\n        id\n      }\n      parentSession {\n        id\n        name\n      }\n      childSessions {\n        id\n        name\n      }\n      createdAt\n      updatedAt\n    }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -141,7 +139,15 @@ export function graphql(source: "\n  mutation MoveSessionToRuntime($sessionId: I
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function graphql(source: "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function graphql(source: "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n"): (typeof documents)["\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

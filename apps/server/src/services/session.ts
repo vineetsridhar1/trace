@@ -353,6 +353,50 @@ export class SessionService {
     return this.transition(id, "terminate", "failed", "session_terminated", actorType, actorId);
   }
 
+  async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: SESSION_INCLUDE,
+    });
+    if (!session) throw new Error("Session not found or already deleted");
+
+    // Resolve any pending inbox items (plans/questions awaiting input)
+    await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session deleted" });
+
+    // Tell the bridge to clean up (abort adapter, remove worktree)
+    const deliveryResult = sessionRouter.send(id, { type: "delete", sessionId: id, workdir: session.workdir, repoId: session.repoId });
+    if (deliveryResult !== "delivered") {
+      console.warn(`[session.delete] bridge did not receive delete for ${id}: ${deliveryResult} — worktree may be orphaned`);
+    }
+
+    // Unbind from the runtime
+    sessionRouter.unbindSession(id);
+
+    // Orphan children, delete junctions, delete session — all in one transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.session.updateMany({
+        where: { parentSessionId: id },
+        data: { parentSessionId: null },
+      });
+      await tx.sessionProject.deleteMany({ where: { sessionId: id } });
+      await tx.sessionTicket.deleteMany({ where: { sessionId: id } });
+      await tx.session.delete({ where: { id } });
+    });
+
+    // Broadcast the deletion event (events are kept for audit trail)
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: id,
+      eventType: "session_deleted",
+      payload: { sessionId: id, name: session.name },
+      actorType,
+      actorId,
+    });
+
+    return session;
+  }
+
   private async transition(
     id: string,
     command: "pause" | "resume" | "terminate",

@@ -110,6 +110,7 @@ enum EventType {
   session_paused
   session_resumed
   session_terminated
+  session_deleted
   session_output
   ticket_created
   ticket_updated
@@ -396,6 +397,7 @@ type Mutation {
   resumeSession(id: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!
+  deleteSession(id: ID!): Session!
   updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String): Session!
   sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
   retrySessionConnection(sessionId: ID!): Session!
