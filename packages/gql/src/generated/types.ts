@@ -118,6 +118,8 @@ export type Event = {
 export type EventType =
   | 'channel_created'
   | 'entity_linked'
+  | 'inbox_item_created'
+  | 'inbox_item_resolved'
   | 'member_joined'
   | 'member_left'
   | 'message_deleted'
@@ -138,6 +140,30 @@ export type HostingMode =
   | 'cloud'
   | 'local';
 
+export type InboxItem = {
+  __typename?: 'InboxItem';
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  itemType: InboxItemType;
+  payload: Scalars['JSON']['output'];
+  resolvedAt?: Maybe<Scalars['DateTime']['output']>;
+  sourceId: Scalars['ID']['output'];
+  sourceType: Scalars['String']['output'];
+  status: InboxItemStatus;
+  summary?: Maybe<Scalars['String']['output']>;
+  title: Scalars['String']['output'];
+  userId: Scalars['ID']['output'];
+};
+
+export type InboxItemStatus =
+  | 'active'
+  | 'dismissed'
+  | 'resolved';
+
+export type InboxItemType =
+  | 'plan'
+  | 'question';
+
 export type Mutation = {
   __typename?: 'Mutation';
   commentOnTicket: Event;
@@ -146,6 +172,7 @@ export type Mutation = {
   createRepo: Repo;
   createTicket: Ticket;
   deleteSession: Session;
+  dismissInboxItem: InboxItem;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
   moveSessionToRuntime: Session;
@@ -189,6 +216,11 @@ export type MutationCreateTicketArgs = {
 
 
 export type MutationDeleteSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDismissInboxItemArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -319,6 +351,7 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   events: Array<Event>;
+  inboxItems: Array<InboxItem>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
   project?: Maybe<Project>;
@@ -360,6 +393,12 @@ export type QueryEventsArgs = {
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type QueryInboxItemsArgs = {
+  organizationId: Scalars['ID']['input'];
+  status?: InputMaybe<InboxItemStatus>;
 };
 
 
