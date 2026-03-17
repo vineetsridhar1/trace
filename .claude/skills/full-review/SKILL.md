@@ -39,7 +39,20 @@ If `plan.md` exists, evaluate:
 - **Deviations**: Does the implementation deviate from the planned approach? Are deviations justified?
 - **Ordering**: Were dependencies respected? Were things built in the right order?
 
-## Step 3: Architecture & Design Review
+## Step 3: "Is This the Right Approach?" Review
+
+Before reviewing code quality, step back and challenge the fundamental design. This is the most important step — catching a correct implementation of the wrong approach is more valuable than catching bugs in the right approach.
+
+Ask these questions:
+
+- **Source of truth**: Is there exactly one source of truth for each piece of state? If the same data is tracked in multiple places (DB, in-memory cache, client-side file, etc.), flag it. Redundant state that must be kept in sync is a design smell — the fix is usually to derive the secondary copies from the primary source, not to add sync logic.
+- **Could this be simpler?**: Is there a simpler approach that achieves the same goal with fewer moving parts, fewer code paths, or less state to manage? If you can describe a simpler alternative that a senior engineer would prefer, flag the current approach as a Major Issue and describe the alternative.
+- **Does it scale?**: Will this approach work at 10x the current load? Are there unbounded queries, O(n) scans, or growing-without-bound collections that will become problems?
+- **Would a senior engineer build it this way?**: Imagine handing this code to a principal engineer for review. Would they approve the approach, or would they push back on the fundamental design before even looking at the implementation details?
+
+If the approach itself is wrong, flag it as a **Critical Issue** — no amount of polish on the implementation will fix a flawed design. Suggest the better approach concretely.
+
+## Step 4: Architecture & Design Review
 
 Evaluate against CLAUDE.md principles and industry best practices:
 
@@ -56,7 +69,7 @@ Evaluate against CLAUDE.md principles and industry best practices:
 - **Error handling**: Are failure modes handled gracefully? No swallowed errors?
 - **Extensibility**: Will this be painful to extend? Does it paint us into a corner?
 
-## Step 4: Code Quality Review
+## Step 5: Code Quality Review
 
 Apply industry-standard code quality checks:
 
@@ -69,7 +82,7 @@ Apply industry-standard code quality checks:
 - **Complexity**: Functions doing too much? Deep nesting? Long parameter lists?
 - **Constants**: Magic numbers or strings that should be named constants?
 
-## Step 5: Security Review
+## Step 6: Security Review
 
 Check for common vulnerabilities (OWASP Top 10 and beyond):
 
@@ -80,7 +93,7 @@ Check for common vulnerabilities (OWASP Top 10 and beyond):
 - **Secrets**: Hardcoded credentials, API keys, tokens
 - **Dependencies**: Known vulnerable packages
 
-## Step 6: Performance Review
+## Step 7: Performance Review
 
 - **Query efficiency**: N+1 queries, missing indexes, unbounded queries
 - **Memory**: Unbounded collections, memory leaks, large object retention
@@ -88,14 +101,14 @@ Check for common vulnerabilities (OWASP Top 10 and beyond):
 - **Bundle size**: Unnecessarily large imports, tree-shaking blockers
 - **Concurrency**: Race conditions, missing locks, deadlock potential
 
-## Step 7: Testing Review
+## Step 8: Testing Review
 
 - **Coverage**: Are critical paths tested? Are edge cases covered?
 - **Test quality**: Do tests actually verify behavior or just exercise code?
 - **Test isolation**: Are tests independent? No shared mutable state?
 - **Naming**: Do test names describe the scenario and expected outcome?
 
-## Step 8: Compile the Review
+## Step 9: Compile the Review
 
 Present your findings in this structured format:
 
@@ -103,9 +116,13 @@ Present your findings in this structured format:
 
 One paragraph overall assessment. Is this PR ready to ship? What's the overall quality level?
 
+### Approach Review
+
+Is the fundamental design sound? Is there a simpler way? Are there multiple sources of truth that should be collapsed? If the approach is wrong, say so directly and describe the better alternative — this takes priority over everything else in the review.
+
 ### Critical Issues (must fix before merge)
 
-Issues that would cause bugs, security vulnerabilities, data loss, or architectural violations.
+Issues that would cause bugs, security vulnerabilities, data loss, or architectural violations. **A flawed fundamental approach counts as a critical issue** — if the design is wrong, flag it here even if the implementation is technically correct.
 
 For each:
 
@@ -135,7 +152,7 @@ Summary of how well the implementation matches plan.md. Note any gaps or deviati
 
 Summary of how well the code follows CLAUDE.md principles. Note any drift.
 
-## Step 9: Update Project Files (if needed)
+## Step 10: Update Project Files (if needed)
 
 Only if the review reveals **drastic findings** that affect the project going forward:
 

@@ -1,9 +1,8 @@
 import WebSocket from "ws";
-import { randomUUID } from "crypto";
 import os from "os";
 import type { CodingToolAdapter } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
-import { readConfig } from "./config.js";
+import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree } from "./worktree.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
@@ -19,8 +18,7 @@ export class BridgeClient {
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
-    // Stable instance ID persisted for the lifetime of this bridge process
-    this.instanceId = randomUUID();
+    this.instanceId = getOrCreateInstanceId();
   }
 
   connect() {
@@ -53,15 +51,14 @@ export class BridgeClient {
   }
 
   private sendRuntimeHello() {
-    // Announce identity so the server can track this runtime instance
-    const ownedSessionIds = [...this.adapters.keys()];
+    // Announce identity — the server restores session bindings from the DB
+    // using our stable instanceId, so we don't need to report session lists.
     this.send({
       type: "runtime_hello",
       instanceId: this.instanceId,
       label: os.hostname(),
       hostingMode: "local",
       supportedTools: ["claude_code", "codex", "custom"],
-      sessionIds: ownedSessionIds,
     });
   }
 
