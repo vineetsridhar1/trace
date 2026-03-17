@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Circle, GitBranch, MoreHorizontal, Trash2 } from "lucide-react";
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from "framer-motion";
 import { useEntityField } from "../../stores/entity";
@@ -23,16 +23,25 @@ export function SessionRow({ id }: { id: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Track whether a drag happened so we can suppress the click
+  const didDrag = useRef(false);
+
   // Swipe-to-delete (mobile)
   const x = useMotionValue(0);
   const controls = useAnimation();
   const trashOpacity = useTransform(x, [-80, -40, 0], [1, 0.5, 0]);
+
+  const handleDragStart = useCallback(() => {
+    didDrag.current = true;
+  }, []);
 
   const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.x < SWIPE_THRESHOLD) {
       controls.start({ x: SWIPE_THRESHOLD });
     } else {
       controls.start({ x: 0 });
+      // Reset drag flag after animation settles so next tap isn't suppressed
+      requestAnimationFrame(() => { didDrag.current = false; });
     }
   }, [controls]);
 
@@ -41,12 +50,102 @@ export function SessionRow({ id }: { id: string }) {
     controls.start({ x: 0 });
   }, [controls]);
 
+  const handleRowClick = useCallback(() => {
+    if (didDrag.current) {
+      didDrag.current = false;
+      return;
+    }
+    setActiveSessionId(id);
+  }, [id, setActiveSessionId]);
+
+  const rowContent = (
+    <button
+      type="button"
+      className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated/50 cursor-pointer sm:grid-cols-[auto_minmax(14rem,1fr)_8rem_8rem_8rem_2rem]"
+      onClick={handleRowClick}
+    >
+      <Circle size={8} className={`mt-1 shrink-0 fill-current ${statusColor[status ?? "active"]}`} />
+
+      <div className="min-w-0 flex-1">
+        <span className="text-sm text-foreground truncate block">{name}</span>
+        {parentSession && (
+          <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <GitBranch size={10} className="shrink-0" />
+            <span className="truncate">from {parentSession.name}</span>
+          </span>
+        )}
+        {lastEventPreview && !parentSession && (
+          <span className="mt-0.5 truncate block border-l-2 border-muted-foreground/30 pl-2 text-xs text-muted-foreground italic">
+            {lastEventPreview}
+          </span>
+        )}
+      </div>
+
+      <span className={`hidden w-full min-w-0 self-start truncate pt-0.5 text-left text-xs sm:inline ${statusColor[status ?? "active"]}`}>
+        {statusLabel[status ?? "active"]}
+      </span>
+
+      <div className="hidden min-w-0 w-full items-center gap-1.5 self-start pt-0.5 sm:flex">
+        {createdBy?.avatarUrl ? (
+          <img
+            src={createdBy.avatarUrl}
+            alt={createdBy.name}
+            className="h-4 w-4 rounded-full"
+          />
+        ) : null}
+        <span className="min-w-0 truncate text-left text-xs text-muted-foreground">{createdBy?.name}</span>
+      </div>
+
+      <span className="w-full min-w-0 self-start truncate pt-0.5 text-left text-xs text-muted-foreground">
+        {updatedAt ? timeAgo(updatedAt) : ""}
+      </span>
+
+      {/* Spacer for three-dot column on desktop */}
+      <span className="hidden sm:block" />
+    </button>
+  );
+
   return (
     <>
-      <div className="relative overflow-hidden">
-        {/* Trash reveal behind the row (mobile only) */}
+      {/* Desktop: no drag, just the row + three-dot menu */}
+      <div className="hidden sm:block relative">
+        {rowContent}
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="opacity-0 group-hover/session-row:opacity-100 data-[popup-open]:opacity-100"
+                />
+              }
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            >
+              <MoreHorizontal size={14} />
+            </PopoverTrigger>
+            <PopoverContent align="end" side="bottom" className="w-36 p-1">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  setDeleteOpen(true);
+                }}
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      {/* Mobile: swipe-to-delete with drag */}
+      <div className="sm:hidden relative overflow-hidden">
         <motion.div
-          className="absolute inset-y-0 right-0 flex items-center justify-center w-20 bg-destructive/10 sm:hidden"
+          className="absolute inset-y-0 right-0 flex items-center justify-center w-20 bg-destructive/10"
           style={{ opacity: trashOpacity }}
         >
           <button type="button" onClick={handleTrashClick} className="p-2 text-destructive">
@@ -61,85 +160,11 @@ export function SessionRow({ id }: { id: string }) {
           dragElastic={0.1}
           style={{ x }}
           animate={controls}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          className="relative bg-background sm:!transform-none"
+          className="relative bg-background"
         >
-          <button
-            type="button"
-            className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-1 px-3 py-2.5 text-left transition-colors hover:bg-surface-elevated/50 cursor-pointer sm:grid-cols-[auto_minmax(14rem,1fr)_8rem_8rem_8rem_2rem]"
-            onClick={() => setActiveSessionId(id)}
-          >
-            <Circle size={8} className={`mt-1 shrink-0 fill-current ${statusColor[status ?? "active"]}`} />
-
-            <div className="min-w-0 flex-1">
-              <span className="text-sm text-foreground truncate block">{name}</span>
-              {parentSession && (
-                <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <GitBranch size={10} className="shrink-0" />
-                  <span className="truncate">from {parentSession.name}</span>
-                </span>
-              )}
-              {lastEventPreview && !parentSession && (
-                <span className="mt-0.5 truncate block border-l-2 border-muted-foreground/30 pl-2 text-xs text-muted-foreground italic">
-                  {lastEventPreview}
-                </span>
-              )}
-            </div>
-
-            <span className={`hidden w-full min-w-0 self-start truncate pt-0.5 text-left text-xs sm:inline ${statusColor[status ?? "active"]}`}>
-              {statusLabel[status ?? "active"]}
-            </span>
-
-            <div className="hidden min-w-0 w-full items-center gap-1.5 self-start pt-0.5 sm:flex">
-              {createdBy?.avatarUrl ? (
-                <img
-                  src={createdBy.avatarUrl}
-                  alt={createdBy.name}
-                  className="h-4 w-4 rounded-full"
-                />
-              ) : null}
-              <span className="min-w-0 truncate text-left text-xs text-muted-foreground">{createdBy?.name}</span>
-            </div>
-
-            <span className="w-full min-w-0 self-start truncate pt-0.5 text-left text-xs text-muted-foreground">
-              {updatedAt ? timeAgo(updatedAt) : ""}
-            </span>
-
-            {/* Spacer for three-dot column on desktop — actual button is positioned outside to avoid nesting */}
-            <span className="hidden sm:block" />
-          </button>
-
-          {/* Three-dot menu (desktop only) */}
-          <div className="hidden sm:flex absolute right-1 top-1/2 -translate-y-1/2 items-center">
-            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-              <PopoverTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="opacity-0 group-hover/session-row:opacity-100 data-[popup-open]:opacity-100"
-                  />
-                }
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              >
-                <MoreHorizontal size={14} />
-              </PopoverTrigger>
-              <PopoverContent align="end" side="bottom" className="w-36 p-1">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen(false);
-                    setDeleteOpen(true);
-                  }}
-                >
-                  <Trash2 size={14} />
-                  Delete
-                </button>
-              </PopoverContent>
-            </Popover>
-          </div>
+          {rowContent}
         </motion.div>
       </div>
 
