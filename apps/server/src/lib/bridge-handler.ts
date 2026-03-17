@@ -2,11 +2,14 @@ import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
 import { sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
+import { runtimeDebug } from "./runtime-debug.js";
 
 export function handleBridgeConnection(ws: WebSocket) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
   let registered = false;
+
+  runtimeDebug("bridge websocket connected", { provisionalRuntimeId: runtimeId });
 
   // Register with defaults until runtime_hello arrives
   sessionRouter.registerBridge(runtimeId, ws);
@@ -29,6 +32,14 @@ export function handleBridgeConnection(ws: WebSocket) {
         // Bridge is announcing its identity. Re-register with the real info.
         const oldId = runtimeId;
         const newId = (msg.instanceId as string) ?? runtimeId;
+        runtimeDebug("received runtime_hello", {
+          oldId,
+          newId,
+          label: msg.label,
+          hostingMode: msg.hostingMode,
+          supportedTools: msg.supportedTools,
+          registeredRepoIds: msg.registeredRepoIds,
+        });
 
         if (registered) {
           sessionRouter.unregisterRuntime(oldId);
@@ -48,6 +59,7 @@ export function handleBridgeConnection(ws: WebSocket) {
         // Restore all sessions owned by this runtime from the DB.
         // The DB (connection.runtimeInstanceId) is the single source of truth —
         // the bridge doesn't need to report session lists.
+        runtimeDebug("restoring sessions for runtime after hello", { runtimeId });
         sessionService.restoreSessionsForRuntime(runtimeId).catch((err) => {
           console.error("[bridge] error restoring sessions for runtime:", err);
         });
@@ -84,6 +96,7 @@ export function handleBridgeConnection(ws: WebSocket) {
           await sessionService.workspaceFailed(msg.sessionId, (msg.error as string) ?? "Unknown error");
         });
       } else if (msg.type === "register_session" && msg.sessionId) {
+        runtimeDebug("received register_session", { runtimeId, sessionId: msg.sessionId });
         sessionRouter.bindSession(msg.sessionId, runtimeId);
       } else if (msg.type === "tool_session_id" && msg.sessionId && msg.toolSessionId) {
         enqueueEvent(msg.sessionId, async () => {
@@ -99,7 +112,9 @@ export function handleBridgeConnection(ws: WebSocket) {
   });
 
   ws.on("close", () => {
+    runtimeDebug("bridge websocket closed", { runtimeId });
     const affectedSessions = sessionRouter.unregisterRuntime(runtimeId);
+    runtimeDebug("bridge close affected sessions", { runtimeId, affectedSessions });
 
     // Mark all bound sessions as disconnected through the service layer
     for (const sessionId of affectedSessions) {

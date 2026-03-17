@@ -19,6 +19,7 @@ import { sessionRouter } from "./lib/session-router.js";
 import { sessionService } from "./services/session.js";
 import { CloudMachineService } from "./lib/cloud-machine-service.js";
 import { flyProvider } from "./lib/fly-provider.js";
+import { runtimeDebug } from "./lib/runtime-debug.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -63,8 +64,16 @@ async function main() {
   const staleRuntimeMonitor = setInterval(() => {
     const staleRuntimes = sessionRouter.checkStaleRuntimes();
     for (const stale of staleRuntimes) {
+      runtimeDebug("stale runtime monitor evicting runtime", {
+        runtimeId: stale.runtimeId,
+        sessionIds: stale.sessionIds,
+      });
       const affectedSessions = sessionRouter.unregisterRuntime(stale.runtimeId);
       for (const sessionId of affectedSessions) {
+        runtimeDebug("marking session disconnected after stale runtime eviction", {
+          runtimeId: stale.runtimeId,
+          sessionId,
+        });
         void sessionService.markConnectionLost(sessionId, "runtime_heartbeat_timeout", stale.runtimeId);
       }
     }

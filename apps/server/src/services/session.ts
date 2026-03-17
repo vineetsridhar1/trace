@@ -6,6 +6,7 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
+import { runtimeDebug } from "../lib/runtime-debug.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
@@ -161,6 +162,12 @@ export class SessionService {
     let runtimeLabel: string | undefined;
     if (input.runtimeInstanceId) {
       const runtime = sessionRouter.getRuntime(input.runtimeInstanceId);
+      runtimeDebug("startSession resolving requested runtime", {
+        sessionId: "pending",
+        runtimeInstanceId: input.runtimeInstanceId,
+        requestedHosting: input.hosting ?? null,
+        runtimeFoundInRouter: !!runtime,
+      });
       if (runtime) {
         hosting = runtime.hostingMode;
         runtimeLabel = runtime.label;
@@ -959,6 +966,7 @@ export class SessionService {
   async restoreSessionsForRuntime(runtimeId: string) {
     const runtime = sessionRouter.getRuntime(runtimeId);
     if (!runtime) return;
+    runtimeDebug("restoreSessionsForRuntime begin", { runtimeId, runtimeLabel: runtime.label });
 
     const sessions = await prisma.session.findMany({
       where: {
@@ -966,6 +974,11 @@ export class SessionService {
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
       select: { id: true, connection: true },
+    });
+
+    runtimeDebug("restoreSessionsForRuntime loaded sessions", {
+      runtimeId,
+      sessionIds: sessions.map((session) => session.id),
     });
 
     for (const session of sessions) {
@@ -1281,6 +1294,13 @@ export class SessionService {
     // Only return local runtimes — cloud is always offered as a single
     // "Cloud" option by the UI, and the adapter auto-provisions the
     // user's own cloud machine on demand.
+    const diagnostics = sessionRouter.getRuntimeDiagnostics();
+    runtimeDebug("availableRuntimes query received", {
+      tool,
+      organizationId,
+      runtimeDiagnostics: diagnostics,
+    });
+
     const allRuntimes = sessionRouter
       .listRuntimes()
       .filter((runtime) => runtime.hostingMode === "local" && runtime.supportedTools.includes(tool));
@@ -1297,7 +1317,7 @@ export class SessionService {
         });
     const orgSessionIds = new Set(sessions.map((session) => session.id));
 
-    return allRuntimes.map((r) => ({
+    const result = allRuntimes.map((r) => ({
       id: r.id,
       label: r.label,
       hostingMode: r.hostingMode,
@@ -1306,6 +1326,14 @@ export class SessionService {
       sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId)).length,
       registeredRepoIds: r.registeredRepoIds,
     }));
+
+    runtimeDebug("availableRuntimes query resolved", {
+      tool,
+      organizationId,
+      result,
+    });
+
+    return result;
   }
 
   async listAvailableRuntimes(sessionId: string, organizationId: string) {

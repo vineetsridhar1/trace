@@ -4,6 +4,7 @@ import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, Codin
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
+import { runtimeDebug } from "./runtime-debug.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
@@ -27,10 +28,12 @@ export class BridgeClient implements IBridgeClient {
 
   connect() {
     this.setStatus("connecting");
+    runtimeDebug("desktop bridge connecting", { serverUrl: this.serverUrl, instanceId: this.instanceId });
     this.ws = new WebSocket(`${this.serverUrl}/bridge`);
 
     this.ws.on("open", () => {
       console.log("[bridge] connected to server");
+      runtimeDebug("desktop bridge websocket open", { instanceId: this.instanceId });
       this.setStatus("connected");
       this.sendRuntimeHello();
       this.startHeartbeat();
@@ -48,12 +51,14 @@ export class BridgeClient implements IBridgeClient {
     this.ws.on("close", () => {
       console.log("[bridge] disconnected, reconnecting in 3s...");
       this.stopHeartbeat();
+      runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId });
       this.setStatus("disconnected");
       setTimeout(() => this.connect(), 3000);
     });
 
     this.ws.on("error", (err) => {
       console.error("[bridge] error:", err.message);
+      runtimeDebug("desktop bridge websocket error", { instanceId: this.instanceId, error: err.message });
     });
   }
 
@@ -90,6 +95,12 @@ export class BridgeClient implements IBridgeClient {
     // Announce identity — the server restores session bindings from the DB
     // using our stable instanceId, so we don't need to report session lists.
     const config = readConfig();
+    runtimeDebug("desktop bridge sending runtime_hello", {
+      instanceId: this.instanceId,
+      label: os.hostname(),
+      supportedTools: ["claude_code", "codex", "custom"],
+      registeredRepoIds: Object.keys(config.repos),
+    });
     this.send({
       type: "runtime_hello",
       instanceId: this.instanceId,
@@ -103,6 +114,7 @@ export class BridgeClient implements IBridgeClient {
   private startHeartbeat() {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
+      runtimeDebug("desktop bridge sending runtime_heartbeat", { instanceId: this.instanceId });
       this.send({ type: "runtime_heartbeat", instanceId: this.instanceId });
     }, HEARTBEAT_INTERVAL_MS);
   }
@@ -116,6 +128,7 @@ export class BridgeClient implements IBridgeClient {
 
   private setStatus(status: BridgeConnectionStatus) {
     if (this.status === status) return;
+    runtimeDebug("desktop bridge status changed", { instanceId: this.instanceId, from: this.status, to: status });
     this.status = status;
     for (const listener of this.statusListeners) {
       listener(status);

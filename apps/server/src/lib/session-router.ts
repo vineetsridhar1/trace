@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
+import { runtimeDebug } from "./runtime-debug.js";
 
 export interface SessionCommand {
   type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete";
@@ -238,22 +239,48 @@ export class SessionRouter {
       lastHeartbeat: Date.now(),
       boundSessions: new Set(),
     });
+    runtimeDebug("registered runtime", {
+      runtimeId: runtime.id,
+      label: runtime.label,
+      hostingMode: runtime.hostingMode,
+      supportedTools: runtime.supportedTools,
+      registeredRepoIds: runtime.registeredRepoIds ?? [],
+      totalRuntimes: this.runtimes.size,
+      runtimeIds: [...this.runtimes.keys()],
+    });
   }
 
   recordHeartbeat(runtimeId: string): boolean {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return false;
+    const ageMs = Date.now() - runtime.lastHeartbeat;
     runtime.lastHeartbeat = Date.now();
+    runtimeDebug("recorded runtime heartbeat", {
+      runtimeId,
+      label: runtime.label,
+      ageMs,
+      readyState: runtime.ws.readyState,
+    });
     return true;
   }
 
   /** Add a newly linked repo to a runtime's registeredRepoIds (called when bridge sends repo_linked). */
   addRegisteredRepo(runtimeId: string, repoId: string): void {
     const runtime = this.runtimes.get(runtimeId);
-    if (!runtime) return;
+    if (!runtime) {
+      runtimeDebug("repo_linked ignored for missing runtime", { runtimeId, repoId });
+      return;
+    }
     if (!runtime.registeredRepoIds.includes(repoId)) {
       runtime.registeredRepoIds.push(repoId);
+      runtimeDebug("registered repo on runtime", {
+        runtimeId,
+        repoId,
+        registeredRepoIds: runtime.registeredRepoIds,
+      });
+      return;
     }
+    runtimeDebug("repo already registered on runtime", { runtimeId, repoId });
   }
 
   /**
@@ -308,6 +335,13 @@ export class SessionRouter {
       this.sessionRuntime.delete(sessionId);
     }
     this.runtimes.delete(runtimeId);
+    runtimeDebug("unregistered runtime", {
+      runtimeId,
+      label: runtime.label,
+      affectedSessions,
+      totalRuntimes: this.runtimes.size,
+      remainingRuntimeIds: [...this.runtimes.keys()],
+    });
     return affectedSessions;
   }
 
@@ -322,6 +356,12 @@ export class SessionRouter {
     if (runtime) {
       runtime.boundSessions.add(sessionId);
     }
+    runtimeDebug("bound session to runtime", {
+      sessionId,
+      runtimeId,
+      previousRuntimeId,
+      boundSessions: runtime ? [...runtime.boundSessions] : [],
+    });
 
     // Resolve any pending waitForBridge promise
     const pending = this.pendingWaits.get(sessionId);
@@ -336,6 +376,11 @@ export class SessionRouter {
     if (runtimeId) {
       const runtime = this.runtimes.get(runtimeId);
       if (runtime) runtime.boundSessions.delete(sessionId);
+      runtimeDebug("unbound session from runtime", {
+        sessionId,
+        runtimeId,
+        remainingBoundSessions: runtime ? [...runtime.boundSessions] : [],
+      });
     }
     this.sessionRuntime.delete(sessionId);
   }
@@ -407,10 +452,31 @@ export class SessionRouter {
     const stale: Array<{ runtimeId: string; sessionIds: string[] }> = [];
     for (const [runtimeId, runtime] of this.runtimes) {
       if (now - runtime.lastHeartbeat > SessionRouter.HEARTBEAT_TIMEOUT_MS) {
+        runtimeDebug("detected stale runtime", {
+          runtimeId,
+          label: runtime.label,
+          ageMs: now - runtime.lastHeartbeat,
+          readyState: runtime.ws.readyState,
+          boundSessions: [...runtime.boundSessions],
+        });
         stale.push({ runtimeId, sessionIds: [...runtime.boundSessions] });
       }
     }
     return stale;
+  }
+
+  getRuntimeDiagnostics(): Array<Record<string, unknown>> {
+    const now = Date.now();
+    return [...this.runtimes.values()].map((runtime) => ({
+      id: runtime.id,
+      label: runtime.label,
+      hostingMode: runtime.hostingMode,
+      supportedTools: runtime.supportedTools,
+      registeredRepoIds: runtime.registeredRepoIds,
+      readyState: runtime.ws.readyState,
+      lastHeartbeatAgeMs: now - runtime.lastHeartbeat,
+      boundSessions: [...runtime.boundSessions],
+    }));
   }
 
   // --- Adapter-dispatched lifecycle methods ---
