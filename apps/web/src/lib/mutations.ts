@@ -48,6 +48,14 @@ export const MOVE_SESSION_TO_RUNTIME_MUTATION = gql`
   }
 `;
 
+export const DELETE_SESSION_MUTATION = gql`
+  mutation DeleteSession($id: ID!) {
+    deleteSession(id: $id) {
+      id
+    }
+  }
+`;
+
 export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
   query AvailableSessionRuntimes($sessionId: ID!) {
     availableSessionRuntimes(sessionId: $sessionId) {

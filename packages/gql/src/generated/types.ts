@@ -118,14 +118,13 @@ export type Event = {
 export type EventType =
   | 'channel_created'
   | 'entity_linked'
-  | 'inbox_item_created'
-  | 'inbox_item_resolved'
   | 'member_joined'
   | 'member_left'
   | 'message_deleted'
   | 'message_edited'
   | 'message_sent'
   | 'repo_created'
+  | 'session_deleted'
   | 'session_output'
   | 'session_paused'
   | 'session_resumed'
@@ -139,30 +138,6 @@ export type HostingMode =
   | 'cloud'
   | 'local';
 
-export type InboxItem = {
-  __typename?: 'InboxItem';
-  createdAt: Scalars['DateTime']['output'];
-  id: Scalars['ID']['output'];
-  itemType: InboxItemType;
-  payload: Scalars['JSON']['output'];
-  resolvedAt?: Maybe<Scalars['DateTime']['output']>;
-  sourceId: Scalars['ID']['output'];
-  sourceType: Scalars['String']['output'];
-  status: InboxItemStatus;
-  summary?: Maybe<Scalars['String']['output']>;
-  title: Scalars['String']['output'];
-  userId: Scalars['ID']['output'];
-};
-
-export type InboxItemStatus =
-  | 'active'
-  | 'dismissed'
-  | 'resolved';
-
-export type InboxItemType =
-  | 'plan'
-  | 'question';
-
 export type Mutation = {
   __typename?: 'Mutation';
   commentOnTicket: Event;
@@ -170,7 +145,7 @@ export type Mutation = {
   createProject: Project;
   createRepo: Repo;
   createTicket: Ticket;
-  dismissInboxItem: InboxItem;
+  deleteSession: Session;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
   moveSessionToRuntime: Session;
@@ -213,7 +188,7 @@ export type MutationCreateTicketArgs = {
 };
 
 
-export type MutationDismissInboxItemArgs = {
+export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -344,7 +319,6 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   events: Array<Event>;
-  inboxItems: Array<InboxItem>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
   project?: Maybe<Project>;
@@ -386,12 +360,6 @@ export type QueryEventsArgs = {
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryInboxItemsArgs = {
-  organizationId: Scalars['ID']['input'];
-  status?: InputMaybe<InboxItemStatus>;
 };
 
 

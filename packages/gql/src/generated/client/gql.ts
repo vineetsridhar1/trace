@@ -31,6 +31,7 @@ type Documents = {
     "\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n": typeof types.TerminateSessionDocument,
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": typeof types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": typeof types.MoveSessionToRuntimeDocument,
+    "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": typeof types.DeleteSessionDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": typeof types.AvailableSessionRuntimesDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": typeof types.AvailableRuntimesDocument,
 };
@@ -52,6 +53,7 @@ const documents: Documents = {
     "\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n": types.TerminateSessionDocument,
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": types.MoveSessionToRuntimeDocument,
+    "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": types.DeleteSessionDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": types.AvailableSessionRuntimesDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": types.AvailableRuntimesDocument,
 };
@@ -138,6 +140,10 @@ export function graphql(source: "\n  mutation RetrySessionConnection($sessionId:
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

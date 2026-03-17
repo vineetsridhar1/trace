@@ -90,6 +90,7 @@ enum EventType {
   session_paused
   session_resumed
   session_terminated
+  session_deleted
   session_output
   ticket_created
   ticket_updated

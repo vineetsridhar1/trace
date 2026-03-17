@@ -121,14 +121,13 @@ export type Event = {
 export type EventType =
   | 'channel_created'
   | 'entity_linked'
-  | 'inbox_item_created'
-  | 'inbox_item_resolved'
   | 'member_joined'
   | 'member_left'
   | 'message_deleted'
   | 'message_edited'
   | 'message_sent'
   | 'repo_created'
+  | 'session_deleted'
   | 'session_output'
   | 'session_paused'
   | 'session_resumed'
@@ -142,30 +141,6 @@ export type HostingMode =
   | 'cloud'
   | 'local';
 
-export type InboxItem = {
-  __typename?: 'InboxItem';
-  createdAt: Scalars['DateTime']['output'];
-  id: Scalars['ID']['output'];
-  itemType: InboxItemType;
-  payload: Scalars['JSON']['output'];
-  resolvedAt?: Maybe<Scalars['DateTime']['output']>;
-  sourceId: Scalars['ID']['output'];
-  sourceType: Scalars['String']['output'];
-  status: InboxItemStatus;
-  summary?: Maybe<Scalars['String']['output']>;
-  title: Scalars['String']['output'];
-  userId: Scalars['ID']['output'];
-};
-
-export type InboxItemStatus =
-  | 'active'
-  | 'dismissed'
-  | 'resolved';
-
-export type InboxItemType =
-  | 'plan'
-  | 'question';
-
 export type Mutation = {
   __typename?: 'Mutation';
   commentOnTicket: Event;
@@ -173,7 +148,7 @@ export type Mutation = {
   createProject: Project;
   createRepo: Repo;
   createTicket: Ticket;
-  dismissInboxItem: InboxItem;
+  deleteSession: Session;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
   moveSessionToRuntime: Session;
@@ -216,7 +191,7 @@ export type MutationCreateTicketArgs = {
 };
 
 
-export type MutationDismissInboxItemArgs = {
+export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -347,7 +322,6 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   events: Array<Event>;
-  inboxItems: Array<InboxItem>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
   project?: Maybe<Project>;
@@ -389,12 +363,6 @@ export type QueryEventsArgs = {
   organizationId: Scalars['ID']['input'];
   scope?: InputMaybe<ScopeInput>;
   types?: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryInboxItemsArgs = {
-  organizationId: Scalars['ID']['input'];
-  status?: InputMaybe<InboxItemStatus>;
 };
 
 
@@ -755,9 +723,6 @@ export type ResolversTypes = ResolversObject<{
   EventType: EventType;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
-  InboxItem: ResolverTypeWrapper<InboxItem>;
-  InboxItemStatus: InboxItemStatus;
-  InboxItemType: InboxItemType;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   Mutation: ResolverTypeWrapper<{}>;
@@ -801,7 +766,6 @@ export type ResolversParentTypes = ResolversObject<{
   DateTime: Scalars['DateTime']['output'];
   Event: Event;
   ID: Scalars['ID']['output'];
-  InboxItem: InboxItem;
   Int: Scalars['Int']['output'];
   JSON: Scalars['JSON']['output'];
   Mutation: {};
@@ -861,21 +825,6 @@ export type EventResolvers<ContextType = Context, ParentType extends ResolversPa
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
-export type InboxItemResolvers<ContextType = Context, ParentType extends ResolversParentTypes['InboxItem'] = ResolversParentTypes['InboxItem']> = ResolversObject<{
-  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
-  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  itemType?: Resolver<ResolversTypes['InboxItemType'], ParentType, ContextType>;
-  payload?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
-  resolvedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
-  sourceId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  sourceType?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  status?: Resolver<ResolversTypes['InboxItemStatus'], ParentType, ContextType>;
-  summary?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  userId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
 export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['JSON'], any> {
   name: 'JSON';
 }
@@ -886,7 +835,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationCreateProjectArgs, 'input'>>;
   createRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationCreateRepoArgs, 'input'>>;
   createTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationCreateTicketArgs, 'input'>>;
-  dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
+  deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
   moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
@@ -944,7 +893,6 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
-  inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
   mySessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QueryMySessionsArgs, 'organizationId'>>;
   organization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<QueryOrganizationArgs, 'id'>>;
   project?: Resolver<Maybe<ResolversTypes['Project']>, ParentType, ContextType, RequireFields<QueryProjectArgs, 'id'>>;
@@ -1065,7 +1013,6 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Channel?: ChannelResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;
-  InboxItem?: InboxItemResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;

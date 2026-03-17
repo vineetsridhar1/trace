@@ -353,6 +353,43 @@ export class SessionService {
     return this.transition(id, "terminate", "failed", "session_terminated", actorType, actorId);
   }
 
+  async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    const session = await prisma.session.findUniqueOrThrow({
+      where: { id },
+      include: SESSION_INCLUDE,
+    });
+
+    // Tell the bridge to clean up (abort adapter, remove worktree)
+    sessionRouter.send(id, { type: "delete", sessionId: id, workdir: session.workdir });
+
+    // Unbind from the runtime
+    sessionRouter.unbindSession(id);
+
+    // Orphan child sessions
+    await prisma.session.updateMany({
+      where: { parentSessionId: id },
+      data: { parentSessionId: null },
+    });
+
+    // Delete junction records, then the session itself
+    await prisma.sessionProject.deleteMany({ where: { sessionId: id } });
+    await prisma.sessionTicket.deleteMany({ where: { sessionId: id } });
+    await prisma.session.delete({ where: { id } });
+
+    // Broadcast the deletion event (events are kept for audit trail)
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: id,
+      eventType: "session_deleted",
+      payload: { sessionId: id, name: session.name },
+      actorType,
+      actorId,
+    });
+
+    return session;
+  }
+
   private async transition(
     id: string,
     command: "pause" | "resume" | "terminate",
