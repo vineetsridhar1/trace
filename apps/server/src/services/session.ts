@@ -158,10 +158,12 @@ export class SessionService {
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
     let hosting = input.hosting ?? "cloud";
+    let runtimeLabel: string | undefined;
     if (input.runtimeInstanceId) {
       const runtime = sessionRouter.getRuntime(input.runtimeInstanceId);
       if (runtime) {
         hosting = runtime.hostingMode;
+        runtimeLabel = runtime.label;
       }
     }
 
@@ -183,7 +185,10 @@ export class SessionService {
           workdir: parentWorkdir ?? undefined,
           channelId: input.channelId ?? undefined,
           parentSessionId: input.parentSessionId ?? undefined,
-          connection: connJson(defaultConnection()),
+          connection: connJson(defaultConnection({
+            ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
+            ...(runtimeLabel && { runtimeLabel }),
+          })),
           ...(input.projectId && {
             projects: { create: { projectId: input.projectId } },
           }),
@@ -325,11 +330,17 @@ export class SessionService {
     }
 
     // Only transition to active after successful delivery
+    // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
+    const boundRuntime = sessionRouter.getRuntimeForSession(id);
     const updated = await prisma.session.update({
       where: { id },
       data: {
         status: "active",
-        connection: this.mergeConnection(session.connection, { state: "connected", lastSeen: new Date().toISOString() }),
+        connection: this.mergeConnection(session.connection, {
+          state: "connected",
+          lastSeen: new Date().toISOString(),
+          ...(boundRuntime && { runtimeInstanceId: boundRuntime.id, runtimeLabel: boundRuntime.label }),
+        }),
       },
       include: SESSION_INCLUDE,
     });
@@ -757,11 +768,17 @@ export class SessionService {
     }
 
     // Only mark active after successful delivery
+    // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
+    const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
     await prisma.session.update({
       where: { id: sessionId },
       data: {
         status: "active",
-        connection: this.mergeConnection(session.connection, { state: "connected", lastSeen: new Date().toISOString() }),
+        connection: this.mergeConnection(session.connection, {
+          state: "connected",
+          lastSeen: new Date().toISOString(),
+          ...(boundRuntime && { runtimeInstanceId: boundRuntime.id, runtimeLabel: boundRuntime.label }),
+        }),
         pendingRun: Prisma.DbNull,
       },
     });
@@ -1433,6 +1450,7 @@ export class SessionService {
       return deliveryResult;
     }
 
+    const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
     await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -1442,6 +1460,7 @@ export class SessionService {
           state: "connected",
           lastSeen: new Date().toISOString(),
           lastError: undefined,
+          ...(boundRuntime && { runtimeInstanceId: boundRuntime.id, runtimeLabel: boundRuntime.label }),
         }),
       },
     });
