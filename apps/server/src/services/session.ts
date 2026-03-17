@@ -360,8 +360,14 @@ export class SessionService {
     });
     if (!session) throw new Error("Session not found or already deleted");
 
+    // Resolve any pending inbox items (plans/questions awaiting input)
+    await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session deleted" });
+
     // Tell the bridge to clean up (abort adapter, remove worktree)
-    sessionRouter.send(id, { type: "delete", sessionId: id, workdir: session.workdir, repoId: session.repoId });
+    const deliveryResult = sessionRouter.send(id, { type: "delete", sessionId: id, workdir: session.workdir, repoId: session.repoId });
+    if (deliveryResult !== "delivered") {
+      console.warn(`[session.delete] bridge did not receive delete for ${id}: ${deliveryResult} — worktree may be orphaned`);
+    }
 
     // Unbind from the runtime
     sessionRouter.unbindSession(id);

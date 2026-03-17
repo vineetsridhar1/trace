@@ -26,6 +26,11 @@ export function DeleteSessionDialog({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handleOpenChange = (next: boolean) => {
+    if (next) setError(null);
+    onOpenChange(next);
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     setError(null);
@@ -35,7 +40,7 @@ export function DeleteSessionDialog({
         setError(result.error.message);
         return;
       }
-      onOpenChange(false);
+      handleOpenChange(false);
     } catch {
       setError("Failed to delete session. Please try again.");
     } finally {
@@ -44,7 +49,7 @@ export function DeleteSessionDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Delete session</DialogTitle>
