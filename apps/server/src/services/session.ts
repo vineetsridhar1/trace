@@ -143,8 +143,18 @@ export class SessionService {
       ? input.prompt.slice(0, 80)
       : `Session ${new Date().toLocaleString()}`;
 
-    // If a repo is selected, start in "creating" status to prepare workspace
-    const needsWorkspace = !!input.repoId;
+    // If a parent session has a workdir, reuse it instead of creating a new worktree
+    let parentWorkdir: string | null = null;
+    if (input.parentSessionId) {
+      const parent = await prisma.session.findUnique({
+        where: { id: input.parentSessionId },
+        select: { workdir: true },
+      });
+      parentWorkdir = parent?.workdir ?? null;
+    }
+
+    // Only need workspace creation if repo is selected and parent doesn't already have a workdir
+    const needsWorkspace = !!input.repoId && !parentWorkdir;
     const initialStatus = needsWorkspace ? "creating" : "pending";
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
@@ -168,6 +178,7 @@ export class SessionService {
           createdById: input.createdById,
           repoId: input.repoId ?? undefined,
           branch: input.branch ?? undefined,
+          workdir: parentWorkdir ?? undefined,
           channelId: input.channelId ?? undefined,
           parentSessionId: input.parentSessionId ?? undefined,
           connection: connJson(defaultConnection()),
@@ -193,6 +204,7 @@ export class SessionService {
             hosting: session.hosting,
             createdBy: session.createdBy,
             repo: session.repo ?? null,
+            branch: session.branch ?? null,
             channel: session.channel,
             parentSession: session.parentSession ?? null,
             childSessions: session.childSessions ?? [],
@@ -1178,6 +1190,7 @@ export class SessionService {
           hosting: childSession.hosting,
           createdBy: childSession.createdBy,
           repo: childSession.repo ?? null,
+          branch: childSession.branch ?? null,
           channel: childSession.channel,
           parentSession: childSession.parentSession ?? null,
           childSessions: [],

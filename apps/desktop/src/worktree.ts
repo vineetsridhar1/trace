@@ -11,13 +11,17 @@ export async function createWorktree({
   repoId,
   sessionId,
   defaultBranch,
+  startBranch,
 }: {
   repoPath: string;
   repoId: string;
   sessionId: string;
   defaultBranch: string;
+  /** Branch to base the new worktree on (e.g. from the parent session). Falls back to defaultBranch. */
+  startBranch?: string;
 }): Promise<{ workdir: string; branch: string }> {
   const branch = `trace/${sessionId}`;
+  const baseBranch = startBranch ?? defaultBranch;
   const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
 
   // If the worktree directory already exists, reuse it
@@ -44,7 +48,7 @@ export async function createWorktree({
   } else {
     await execFileAsync(
       "git",
-      ["worktree", "add", "-b", branch, targetPath, defaultBranch],
+      ["worktree", "add", "-b", branch, targetPath, baseBranch],
       { cwd: repoPath },
     );
   }
