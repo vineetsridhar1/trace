@@ -1,36 +1,15 @@
 import { useCallback, useState } from "react";
-import { Plus, AlertTriangle, FolderOpen } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "../ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { useAuthStore } from "../../stores/auth";
-import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
-import {
-  type InteractionMode,
-  MODE_CYCLE,
-  MODE_CONFIG,
-  wrapPrompt,
-} from "../session/interactionModes";
-import { getModelsForTool, getDefaultModel } from "../session/modelOptions";
-import { RuntimeSelector, CLOUD_RUNTIME_ID } from "../session/RuntimeSelector";
+import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "../session/interactionModes";
+import { getDefaultModel } from "../session/modelOptions";
+import { CLOUD_RUNTIME_ID } from "../session/RuntimeSelector";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
-import { cn } from "../../lib/utils";
+import { SessionFormFields } from "./SessionFormFields";
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [open, setOpen] = useState(false);
@@ -42,25 +21,34 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [repoId, setRepoId] = useState<string | undefined>(undefined);
   const [branch, setBranch] = useState("");
   const [mode, setMode] = useState<InteractionMode>("code");
-  const modelOptions = getModelsForTool(tool);
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const repoIds = useEntityIds("repos");
 
   const cycleMode = useCallback(() => {
-    setMode((prev) => {
-      const idx = MODE_CYCLE.indexOf(prev);
-      return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
-    });
+    setMode((prev) => MODE_CYCLE[(MODE_CYCLE.indexOf(prev) + 1) % MODE_CYCLE.length]);
+  }, []);
+
+  const handleToolChange = useCallback((v: string) => {
+    setTool(v);
+    setModel(getDefaultModel(v));
   }, []);
 
   const handleRuntimeChange = useCallback((id: string | undefined, info: RuntimeInfo | null) => {
     setRuntimeInstanceId(id);
     setRuntimeInfo(info);
-    // Reset repo selection when runtime changes — availability may differ
     setRepoId(undefined);
     setBranch("");
   }, []);
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setRepoId(undefined);
+      setBranch("");
+      setRuntimeInstanceId(undefined);
+      setRuntimeInfo(null);
+    }
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,7 +57,6 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     setCreating(true);
     try {
       const wrappedPrompt = wrapPrompt(mode, prompt.trim());
-
       const isCloud = runtimeInstanceId === CLOUD_RUNTIME_ID;
       const result = await client
         .mutation(START_SESSION_MUTATION, {
@@ -103,22 +90,6 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     }
   }
 
-  const modeConfig = MODE_CONFIG[mode];
-  const ModeIcon = modeConfig.icon;
-
-  const handleOpenChange = (next: boolean) => {
-    setOpen(next);
-    if (!next) {
-      setRepoId(undefined);
-      setBranch("");
-      setRuntimeInstanceId(undefined);
-      setRuntimeInfo(null);
-    }
-  };
-
-  // Determine if the selected runtime is a device bridge (local)
-  const isDeviceBridge = runtimeInfo?.hostingMode === "local";
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
@@ -133,130 +104,37 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             <DialogTitle>Start Session</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">
-                  Coding tool
-                </label>
-                <Select value={tool} onValueChange={(v) => { if (v) { setTool(v); setModel(getDefaultModel(v)); } }}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="claude_code">Claude Code</SelectItem>
-                    <SelectItem value="codex">Codex</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {modelOptions.length > 0 && (
-                <div>
-                  <label className="mb-1.5 block text-sm text-muted-foreground">
-                    Model
-                  </label>
-                  <Select value={model ?? ""} onValueChange={(v) => { if (v) setModel(v); }}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modelOptions.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">
-                  Runtime
-                </label>
-                <RuntimeSelector
-                  tool={tool}
-                  open={open}
-                  value={runtimeInstanceId}
-                  onChange={handleRuntimeChange}
-                />
-              </div>
-              {repoIds.length > 0 && (
-                <div>
-                  <label className="mb-1.5 block text-sm text-muted-foreground">
-                    Repository
-                  </label>
-                  <Select value={repoId ?? "__none__"} onValueChange={(v) => { if (v) { setRepoId(v === "__none__" ? undefined : v); setBranch(""); } }}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No repo</SelectItem>
-                      {repoIds.map((id) => (
-                        <RepoOption
-                          key={id}
-                          id={id}
-                          isDeviceBridge={isDeviceBridge}
-                          registeredRepoIds={runtimeInfo?.registeredRepoIds}
-                        />
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">
-                  Mode
-                </label>
-                <button
-                  type="button"
-                  onClick={cycleMode}
-                  className={cn(
-                    "flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors",
-                    modeConfig.style,
-                  )}
-                >
-                  <ModeIcon size={14} className="shrink-0" />
-                  {modeConfig.label}
-                </button>
-              </div>
-            </div>
-
-            {/* Branch selector — shown when a repo is selected */}
-            {repoId && (
-              <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">
-                  Branch
-                </label>
-                <BranchInput repoId={repoId} value={branch} onChange={setBranch} />
-              </div>
-            )}
-
-            {/* Warning when repo is not linked on device bridge */}
-            {repoId && isDeviceBridge && runtimeInfo?.registeredRepoIds && !runtimeInfo.registeredRepoIds.includes(repoId) && (
-              <RepoNotLinkedWarning repoId={repoId} onLinked={() => {
-                // Optimistically add the repo to the runtime's registered list
-                if (runtimeInfo) {
-                  setRuntimeInfo({ ...runtimeInfo, registeredRepoIds: [...runtimeInfo.registeredRepoIds, repoId] });
-                }
-              }} />
-            )}
-
-            <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">
-              What should the agent work on?
-            </label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. Fix the login bug on the signup page..."
-              autoFocus
-              rows={4}
-              className="w-full rounded-md border border-border bg-input px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.metaKey) {
-                  handleSubmit(e);
-                }
-              }}
+            <SessionFormFields
+              tool={tool}
+              model={model}
+              runtimeInstanceId={runtimeInstanceId}
+              runtimeInfo={runtimeInfo}
+              repoId={repoId}
+              branch={branch}
+              mode={mode}
+              dialogOpen={open}
+              onToolChange={handleToolChange}
+              onModelChange={setModel}
+              onRuntimeChange={handleRuntimeChange}
+              onRepoChange={setRepoId}
+              onBranchChange={setBranch}
+              onRuntimeInfoChange={setRuntimeInfo}
+              onModeChange={cycleMode}
             />
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Press {navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to submit
-            </p>
+            <div>
+              <label className="mb-1.5 block text-sm text-muted-foreground">What should the agent work on?</label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g. Fix the login bug on the signup page..."
+                autoFocus
+                rows={4}
+                className="w-full rounded-md border border-border bg-input px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(e); }}
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Press {navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to submit
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -267,90 +145,5 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function RepoOption({ id, isDeviceBridge, registeredRepoIds }: { id: string; isDeviceBridge: boolean; registeredRepoIds?: string[] }) {
-  const name = useEntityField("repos", id, "name");
-  const isLinked = !isDeviceBridge || !registeredRepoIds || registeredRepoIds.includes(id);
-
-  return (
-    <SelectItem value={id}>
-      <span className="flex items-center gap-1.5">
-        {name ?? id}
-        {!isLinked && (
-          <span className="flex items-center gap-0.5 text-xs text-amber-500">
-            <AlertTriangle size={10} />
-            not linked
-          </span>
-        )}
-      </span>
-    </SelectItem>
-  );
-}
-
-function BranchInput({ repoId, value, onChange }: { repoId: string; value: string; onChange: (v: string) => void }) {
-  const defaultBranch = useEntityField("repos", repoId, "defaultBranch");
-
-  return (
-    <Input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={defaultBranch ?? "main"}
-    />
-  );
-}
-
-function RepoNotLinkedWarning({ repoId, onLinked }: { repoId: string; onLinked: () => void }) {
-  const name = useEntityField("repos", repoId, "name");
-  const remoteUrl = useEntityField("repos", repoId, "remoteUrl");
-  const isElectron = typeof window.trace?.pickFolder === "function";
-  const [error, setError] = useState<string | null>(null);
-
-  const handleLink = async () => {
-    if (!window.trace?.pickFolder || !window.trace?.saveRepoPath || !window.trace?.getGitInfo) return;
-    setError(null);
-    const folderPath = await window.trace.pickFolder();
-    if (!folderPath) return;
-
-    // Validate the folder is a git repo with matching remote
-    const gitInfo = await window.trace.getGitInfo(folderPath);
-    if ("error" in gitInfo) {
-      setError(gitInfo.error as string);
-      return;
-    }
-    if (remoteUrl && gitInfo.remoteUrl !== remoteUrl) {
-      setError(`Remote URL mismatch: expected ${remoteUrl}, got ${gitInfo.remoteUrl}`);
-      return;
-    }
-
-    await window.trace.saveRepoPath(repoId, folderPath);
-    onLinked();
-  };
-
-  return (
-    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-      <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-amber-600 dark:text-amber-200">
-          <span className="font-medium">{name}</span> is not linked on this device.
-        </p>
-        {error && (
-          <p className="mt-1 text-xs text-destructive">{error}</p>
-        )}
-        {isElectron && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-2 gap-1.5"
-            onClick={handleLink}
-          >
-            <FolderOpen size={12} />
-            Choose folder to link
-          </Button>
-        )}
-      </div>
-    </div>
   );
 }
