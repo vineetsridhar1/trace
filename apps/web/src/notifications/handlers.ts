@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import type { Event, EventType, SessionStatus } from "@trace/gql";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
+import { useUIStore } from "../stores/ui";
 import { statusLabel } from "../components/session/sessionStatus";
 
 /** Notification handler for a specific event type. */
@@ -56,8 +57,47 @@ function handleSessionStatusChange(event: Event): void {
 
   const sessionName = session.name || "Untitled session";
   const label = statusLabel[newStatus] ?? newStatus;
+  const channelId = (session.channel as { id: string } | null)?.id ?? null;
+  const sessionId = event.scopeId;
 
-  toast(`"${sessionName}" moved to "${label}"`);
+  toast(`"${sessionName}" moved to "${label}"`, {
+    action: {
+      label: "View",
+      onClick: () => {
+        const { setActiveChannelId, setActiveSessionId, setActivePage } = useUIStore.getState();
+        if (channelId) setActiveChannelId(channelId);
+        setActiveSessionId(sessionId);
+        setActivePage("main");
+      },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Built-in handler: New inbox items (plans / questions)
+// ---------------------------------------------------------------------------
+
+function handleInboxItemCreated(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  const item = event.payload.inboxItem as Record<string, unknown> | undefined;
+  if (!item) return;
+
+  // Only notify for items assigned to the current user
+  if (item.userId !== currentUserId) return;
+
+  const itemType = item.itemType === "question" ? "Question" : "Plan";
+  const title = (item.title as string) || "New item";
+
+  toast(`${itemType}: ${title}`, {
+    action: {
+      label: "View",
+      onClick: () => {
+        useUIStore.getState().setActivePage("inbox");
+      },
+    },
+  });
 }
 
 // Register the built-in handlers
@@ -65,3 +105,4 @@ const sessionStatusEventTypes: EventType[] = ["session_paused", "session_resumed
 for (const eventType of sessionStatusEventTypes) {
   registerHandler(eventType, handleSessionStatusChange);
 }
+registerHandler("inbox_item_created" as EventType, handleInboxItemCreated);

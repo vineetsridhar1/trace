@@ -51,14 +51,22 @@ export function InboxItemRow({ id }: { id: string }) {
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
   const resolution = (payload?.resolution as string) ?? "";
 
+  const restoreNav = useUIStore((s) => s._restoreNav);
+
   const handleNavigate = useCallback(() => {
     if (!sourceId) return;
-    if (sessionChannel?.id) {
-      setActiveChannelId(sessionChannel.id);
+    const channelId = sessionChannel?.id ?? null;
+    if (channelId) {
+      localStorage.setItem("trace:activeChannelId", channelId);
     }
-    setActiveSessionId(sourceId);
-    setActivePage("main");
-  }, [sourceId, sessionChannel?.id, setActiveChannelId, setActiveSessionId, setActivePage]);
+    restoreNav(channelId, sourceId, "main");
+    // Push a single history entry for the final destination
+    history.pushState(
+      { channelId, sessionId: sourceId, page: "main" },
+      "",
+      channelId ? `/c/${channelId}/s/${sourceId}` : "/",
+    );
+  }, [sourceId, sessionChannel?.id, restoreNav]);
 
   const handleApproveNewSession = useCallback(async () => {
     if (sending || !sourceId) return;
