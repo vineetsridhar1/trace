@@ -59,6 +59,11 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
+      if (msg.type === "repo_linked" && msg.repoId) {
+        sessionRouter.addRegisteredRepo(runtimeId, msg.repoId as string);
+        return;
+      }
+
       if (msg.type === "session_output" && msg.sessionId) {
         const sessionId = msg.sessionId as string;
         const data = (msg.data ?? {}) as Record<string, unknown>;

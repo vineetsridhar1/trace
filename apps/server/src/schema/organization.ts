@@ -48,7 +48,7 @@ export const organizationMutations = {
     return organizationService.createRepo(args.input, ctx.actorType, ctx.userId);
   },
   updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
-    return organizationService.updateRepo(args.id, args.input, ctx.actorType, ctx.userId);
+    return organizationService.updateRepo(args.id, ctx.organizationId, args.input, ctx.actorType, ctx.userId);
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);

@@ -247,6 +247,15 @@ export class SessionRouter {
     return true;
   }
 
+  /** Add a newly linked repo to a runtime's registeredRepoIds (called when bridge sends repo_linked). */
+  addRegisteredRepo(runtimeId: string, repoId: string): void {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return;
+    if (!runtime.registeredRepoIds.includes(repoId)) {
+      runtime.registeredRepoIds.push(repoId);
+    }
+  }
+
   /**
    * Wait for a bridge/runtime to register for the given session.
    * Used by cloud sessions where there's a timing gap between

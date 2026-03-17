@@ -58,8 +58,14 @@ export class OrganizationService {
     return repo;
   }
 
-  async updateRepo(id: string, input: UpdateRepoInput, actorType: ActorType, actorId: string) {
+  async updateRepo(id: string, organizationId: string, input: UpdateRepoInput, actorType: ActorType, actorId: string) {
     const [repo] = await prisma.$transaction(async (tx) => {
+      // Verify repo belongs to caller's org before updating
+      await tx.repo.findFirstOrThrow({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+
       const repo = await tx.repo.update({
         where: { id },
         data: {

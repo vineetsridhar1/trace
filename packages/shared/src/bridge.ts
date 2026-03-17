@@ -119,6 +119,12 @@ export interface BridgeToolSessionId {
   toolSessionId: string;
 }
 
+/** Sent when a device bridge links a new repo (e.g. via saveRepoPath). Updates server-side registeredRepoIds. */
+export interface BridgeRepoLinked {
+  type: "repo_linked";
+  repoId: string;
+}
+
 export type BridgeMessage =
   | BridgeRuntimeHello
   | BridgeRuntimeHeartbeat
@@ -127,7 +133,8 @@ export type BridgeMessage =
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
-  | BridgeToolSessionId;
+  | BridgeToolSessionId
+  | BridgeRepoLinked;
 
 // --- Bridge client interface ---
 

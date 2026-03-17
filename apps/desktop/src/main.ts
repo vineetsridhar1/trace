@@ -89,6 +89,8 @@ ipcMain.handle("save-repo-path", (_event, repoId: string, localPath: string) => 
   const config = readConfig();
   config.repos[repoId] = localPath;
   writeConfig(config);
+  // Notify the server that this bridge now has this repo registered
+  bridge.send({ type: "repo_linked", repoId });
 });
 
 ipcMain.handle("get-repo-path", (_event, repoId: string) => {
