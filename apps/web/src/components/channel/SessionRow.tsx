@@ -39,7 +39,6 @@ export function SessionRow({ id }: { id: string }) {
   const handleTrashClick = useCallback(() => {
     setDeleteOpen(true);
     controls.start({ x: 0 });
-    setSwiped(false);
   }, [controls]);
 
   return (

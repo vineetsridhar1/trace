@@ -366,16 +366,16 @@ export class SessionService {
     // Unbind from the runtime
     sessionRouter.unbindSession(id);
 
-    // Orphan child sessions
-    await prisma.session.updateMany({
-      where: { parentSessionId: id },
-      data: { parentSessionId: null },
+    // Orphan children, delete junctions, delete session — all in one transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.session.updateMany({
+        where: { parentSessionId: id },
+        data: { parentSessionId: null },
+      });
+      await tx.sessionProject.deleteMany({ where: { sessionId: id } });
+      await tx.sessionTicket.deleteMany({ where: { sessionId: id } });
+      await tx.session.delete({ where: { id } });
     });
-
-    // Delete junction records, then the session itself
-    await prisma.sessionProject.deleteMany({ where: { sessionId: id } });
-    await prisma.sessionTicket.deleteMany({ where: { sessionId: id } });
-    await prisma.session.delete({ where: { id } });
 
     // Broadcast the deletion event (events are kept for audit trail)
     await eventService.create({

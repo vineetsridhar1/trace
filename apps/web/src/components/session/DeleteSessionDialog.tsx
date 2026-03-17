@@ -24,12 +24,20 @@ export function DeleteSessionDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDelete = async () => {
     setDeleting(true);
+    setError(null);
     try {
-      await client.mutation(DELETE_SESSION_MUTATION, { id: sessionId }).toPromise();
+      const result = await client.mutation(DELETE_SESSION_MUTATION, { id: sessionId }).toPromise();
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
       onOpenChange(false);
+    } catch {
+      setError("Failed to delete session. Please try again.");
     } finally {
       setDeleting(false);
     }
@@ -45,6 +53,9 @@ export function DeleteSessionDialog({
             terminate the session, remove its worktree, and cannot be undone.
           </DialogDescription>
         </DialogHeader>
+        {error && (
+          <p className="text-sm text-destructive">{error}</p>
+        )}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
