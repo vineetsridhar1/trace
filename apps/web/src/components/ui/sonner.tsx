@@ -24,6 +24,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       icons={icons}
       style={toasterStyle}
+      closeButton
       {...props}
     />
   )
