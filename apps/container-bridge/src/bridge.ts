@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree } from "./workspace.js";
+import { ensureToolReady } from "./tool-auth.js";
 
 /**
  * Multi-session container bridge — runs inside a Fly Machine (one per user per org).
@@ -35,7 +36,7 @@ export class ContainerBridge implements IBridgeClient {
         instanceId: `cloud-machine-${this.machineId}`,
         label: `cloud-machine-${this.machineId}`,
         hostingMode: "cloud",
-        supportedTools: [this.defaultTool],
+        supportedTools: ["claude_code", "codex"],
         registeredRepoIds: [], // Cloud bridges clone on-demand — all repos supported
       });
 
@@ -119,7 +120,7 @@ export class ContainerBridge implements IBridgeClient {
     switch (cmd.type) {
       case "run":
       case "send": {
-        this.runPrompt({
+        void this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt ?? "",
           cwd: cmd.cwd ?? "/workspace",
@@ -188,7 +189,7 @@ export class ContainerBridge implements IBridgeClient {
     }
   }
 
-  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: {
+  private async runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: {
     sessionId: string;
     prompt: string;
     cwd: string;
@@ -196,10 +197,13 @@ export class ContainerBridge implements IBridgeClient {
     model?: string;
     interactionMode?: string;
     toolSessionId?: string;
-  }): void {
+  }): Promise<void> {
+    const resolvedTool = tool ?? this.defaultTool;
+    await ensureToolReady(resolvedTool);
+
     // If tool changed, abort old adapter and create a fresh one
     const prevTool = this.sessionTools.get(sessionId);
-    if (tool && prevTool && prevTool !== tool) {
+    if (resolvedTool && prevTool && prevTool !== resolvedTool) {
       const oldAdapter = this.adapters.get(sessionId);
       if (oldAdapter) oldAdapter.abort();
       this.adapters.delete(sessionId);
@@ -208,11 +212,11 @@ export class ContainerBridge implements IBridgeClient {
     // Reuse existing adapter for session continuity (--resume)
     let adapter = this.adapters.get(sessionId);
     if (!adapter) {
-      adapter = this.createAdapter(tool);
+      adapter = this.createAdapter(resolvedTool);
       this.adapters.set(sessionId, adapter);
       this.send({ type: "register_session", sessionId });
     }
-    if (tool) this.sessionTools.set(sessionId, tool);
+    this.sessionTools.set(sessionId, resolvedTool);
 
     const activeAdapter = adapter;
     adapter.run({

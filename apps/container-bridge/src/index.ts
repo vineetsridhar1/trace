@@ -1,21 +1,5 @@
-import { spawn } from "child_process";
 import { ContainerBridge } from "./bridge.js";
-
-/** Pre-authenticate coding tool CLIs using env vars. */
-async function loginTools(tool: string): Promise<void> {
-  if (tool === "codex" && process.env.OPENAI_API_KEY) {
-    console.log("[container-bridge] logging in to codex...");
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn("sh", ["-c", 'echo "$OPENAI_API_KEY" | codex login --with-api-key'], {
-        env: { ...process.env },
-        stdio: ["inherit", "pipe", "pipe"],
-      });
-      child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`codex login exited ${code}`)));
-      child.on("error", reject);
-    });
-    console.log("[container-bridge] codex login complete");
-  }
-}
+import { loginAvailableTools } from "./tool-auth.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -32,8 +16,8 @@ async function main(): Promise<void> {
   const machineId = requireEnv("CLOUD_MACHINE_ID");
   const tool = process.env.CODING_TOOL ?? "claude_code";
 
-  // Pre-authenticate tool CLIs before starting
-  await loginTools(tool);
+  // Pre-authenticate whatever tools we have credentials for.
+  await loginAvailableTools();
 
   // Connect to server — sessions register dynamically via prepare commands
   const bridge = new ContainerBridge(bridgeUrl, bridgeToken, machineId, tool);
