@@ -218,7 +218,7 @@ Sessions support two hosting modes. **Cloud sessions** run in Fly Machines conta
 - `completed` — coding tool finished its task; session is still interactive (user can send follow-up messages)
 - `failed` — session encountered an unrecoverable error; terminal state
 - `unreachable` — specific to local sessions; events stopped arriving but the session wasn't explicitly terminated
-- `merged` — **(future)** terminal state indicating the session's work has been merged. A merged session is fully unloaded: worktree deleted, removed from the bridge's known sessions list, and excluded from reconnection recovery. Unlike `completed`, a merged session cannot receive follow-up messages.
+- `merged` — **(future)** terminal state indicating the session's work has been merged. A merged session is fully unloaded: worktree deleted, excluded from reconnection recovery. Unlike `completed`, a merged session cannot receive follow-up messages.
 
 The `unreachable` status is specific to local sessions — it means events have stopped arriving but the session wasn't explicitly terminated. The UI shows this distinctly from "paused" or "failed."
 

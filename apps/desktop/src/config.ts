@@ -27,7 +27,7 @@ export function writeConfig(config: RepoPathConfig): void {
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
 }
 
-/** Directory for persistent bridge state (instance ID, known sessions). */
+/** Directory for persistent bridge state (instance ID). */
 function getBridgeStatePath(): string {
   return path.join(app.getPath("userData"), "bridge");
 }
