@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import type { Event, EventType, SessionStatus } from "@trace/gql";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
-import { useUIStore } from "../stores/ui";
+import { useUIStore, navigateToSession } from "../stores/ui";
 import { statusLabel } from "../components/session/sessionStatus";
 
 /** Notification handler for a specific event type. */
@@ -63,12 +63,7 @@ function handleSessionStatusChange(event: Event): void {
   toast(`"${sessionName}" moved to "${label}"`, {
     action: {
       label: "View",
-      onClick: () => {
-        const { setActiveChannelId, setActiveSessionId, setActivePage } = useUIStore.getState();
-        if (channelId) setActiveChannelId(channelId);
-        setActiveSessionId(sessionId);
-        setActivePage("main");
-      },
+      onClick: () => navigateToSession(channelId, sessionId),
     },
   });
 }
@@ -105,4 +100,4 @@ const sessionStatusEventTypes: EventType[] = ["session_paused", "session_resumed
 for (const eventType of sessionStatusEventTypes) {
   registerHandler(eventType, handleSessionStatusChange);
 }
-registerHandler("inbox_item_created" as EventType, handleInboxItemCreated);
+registerHandler("inbox_item_created", handleInboxItemCreated);

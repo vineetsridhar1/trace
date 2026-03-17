@@ -9,7 +9,7 @@ import {
   DISMISS_INBOX_ITEM_MUTATION,
 } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
+import { navigateToSession } from "../../stores/ui";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
 import type { QuestionData } from "./InboxQuestionBody";
@@ -39,10 +39,6 @@ export function InboxItemRow({ id }: { id: string }) {
   const sessionRepo = useEntityField("sessions", sourceId ?? "", "repo") as { id: string } | null | undefined;
   const sessionBranch = useEntityField("sessions", sourceId ?? "", "branch") as string | null | undefined;
 
-  const setActivePage = useUIStore((s) => s.setActivePage);
-  const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-
   const [sending, setSending] = useState(false);
 
   const isQuestion = itemType === "question";
@@ -51,22 +47,10 @@ export function InboxItemRow({ id }: { id: string }) {
   const questions = (payload?.questions as QuestionData[] | undefined) ?? [];
   const resolution = (payload?.resolution as string) ?? "";
 
-  const restoreNav = useUIStore((s) => s._restoreNav);
-
   const handleNavigate = useCallback(() => {
     if (!sourceId) return;
-    const channelId = sessionChannel?.id ?? null;
-    if (channelId) {
-      localStorage.setItem("trace:activeChannelId", channelId);
-    }
-    restoreNav(channelId, sourceId, "main");
-    // Push a single history entry for the final destination
-    history.pushState(
-      { channelId, sessionId: sourceId, page: "main" },
-      "",
-      channelId ? `/c/${channelId}/s/${sourceId}` : "/",
-    );
-  }, [sourceId, sessionChannel?.id, restoreNav]);
+    navigateToSession(sessionChannel?.id ?? null, sourceId);
+  }, [sourceId, sessionChannel?.id]);
 
   const handleApproveNewSession = useCallback(async () => {
     if (sending || !sourceId) return;
@@ -92,14 +76,12 @@ export function InboxItemRow({ id }: { id: string }) {
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
-        if (sessionChannel?.id) setActiveChannelId(sessionChannel.id);
-        setActiveSessionId(newSessionId);
-        setActivePage("main");
+        navigateToSession(sessionChannel?.id ?? null, newSessionId);
       }
     } finally {
       setSending(false);
     }
-  }, [sending, sourceId, planContent, sessionTool, sessionHosting, sessionChannel?.id, sessionRepo?.id, sessionBranch, setActiveChannelId, setActiveSessionId, setActivePage]);
+  }, [sending, sourceId, planContent, sessionTool, sessionHosting, sessionChannel?.id, sessionRepo?.id, sessionBranch]);
 
   const handleApproveKeepContext = useCallback(async () => {
     if (sending || !sourceId) return;
