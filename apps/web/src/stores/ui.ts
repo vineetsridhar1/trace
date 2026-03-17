@@ -15,7 +15,7 @@ interface UIState {
   _restoreNav: (channelId: string | null, sessionId: string | null, page?: ActivePage) => void;
 }
 
-function buildPath(channelId: string | null, sessionId: string | null, page: ActivePage = "main"): string {
+export function buildPath(channelId: string | null, sessionId: string | null, page: ActivePage = "main"): string {
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
   if (channelId && sessionId) return `/c/${channelId}/s/${sessionId}`;
@@ -72,3 +72,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ activePage: page ?? "main", activeChannelId: channelId, activeSessionId: sessionId });
   },
 }));
+
+/** Navigate to a session atomically — single state update, single history entry. */
+export function navigateToSession(channelId: string | null, sessionId: string): void {
+  useUIStore.getState()._restoreNav(channelId, sessionId, "main");
+  const path = buildPath(channelId, sessionId, "main");
+  history.pushState({ channelId, sessionId, page: "main" }, "", path);
+}
