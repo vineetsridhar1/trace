@@ -20,7 +20,13 @@ export class CloudMachineService {
   /** Valid bridge tokens for fast auth checks */
   private validBridgeTokens = new Set<string>();
 
-  constructor(private readonly provider: CloudMachineProvider) {}
+  /** In-flight waitForStarted promises — keyed by cloudMachineId */
+  private startupPromises = new Map<string, Promise<void>>();
+
+  constructor(
+    private readonly provider: CloudMachineProvider,
+    private readonly providerName: string = "fly",
+  ) {}
 
   /**
    * Get or create a machine for a user+org. Handles all states:
@@ -67,13 +73,15 @@ export class CloudMachineService {
     if (existingMachine) {
       this.cancelIdleTimer(existingMachine.id);
 
-      // For non-destroyed machines, verify the actual VM is alive
+      // DB status is a cache — verify against provider unless recently updated.
+      // Skip the network round-trip if the machine was touched in the last 30s.
       if (existingMachine.status !== "destroyed") {
-        const vmState = await this.provider.getVMState(existingMachine.providerMachineId);
+        const recentlyUpdated = Date.now() - existingMachine.updatedAt.getTime() < 30_000;
+        const vmState = recentlyUpdated ? null : await this.provider.getVMState(existingMachine.providerMachineId);
 
-        // VM doesn't exist or is in a terminal state — clean up and recreate
-        if (!vmState || vmState === "destroyed" || vmState === "failed") {
-          console.log(`[cloud-machine-service] machine ${existingMachine.id} VM is ${vmState ?? "gone"} (DB says ${existingMachine.status}), replacing`);
+        // If we checked and the VM is gone/terminal — clean up and recreate
+        if (vmState && (vmState === "destroyed" || vmState === "failed")) {
+          console.log(`[cloud-machine-service] machine ${existingMachine.id} VM is ${vmState} (DB says ${existingMachine.status}), replacing`);
           await this.cleanupStaleRecord(existingMachine.id, existingMachine.providerMachineId, existingMachine.bridgeToken);
           return this.createMachine({ userId, orgId, defaultTool, userTokens });
         }
@@ -81,8 +89,7 @@ export class CloudMachineService {
         switch (existingMachine.status) {
           case "started":
           case "creating": {
-            // VM exists and is running or starting — reuse it
-            // Sync DB status with actual VM state if needed
+            // Sync DB status with actual VM state if provider says stopped
             if (vmState === "stopped") {
               await this.provider.startVM(existingMachine.providerMachineId);
               return prisma.cloudMachine.update({
@@ -154,7 +161,7 @@ export class CloudMachineService {
     const machine = await prisma.cloudMachine.create({
       data: {
         id: cloudMachineId,
-        provider: "fly",
+        provider: this.providerName,
         providerMachineId,
         userId,
         organizationId: orgId,
@@ -166,23 +173,34 @@ export class CloudMachineService {
 
     this.validBridgeTokens.add(bridgeToken);
 
-    // Wait for VM to start, then update status
-    this.provider.waitForStarted(providerMachineId).then(async () => {
+    // Track the startup promise so callers can fail fast if the VM dies
+    const startupPromise = this.provider.waitForStarted(providerMachineId).then(async () => {
       await prisma.cloudMachine.update({
         where: { id: machine.id },
         data: { status: "started" },
       });
     }).catch(async (err) => {
       console.error(`[cloud-machine-service] VM ${machine.id} failed to start:`, err);
-      // Mark as destroyed so next attempt creates a fresh machine
       await prisma.cloudMachine.update({
         where: { id: machine.id },
         data: { status: "destroyed" },
       }).catch(() => {});
       this.validBridgeTokens.delete(bridgeToken);
+      throw err; // Re-throw so awaiters see the failure
+    }).finally(() => {
+      this.startupPromises.delete(cloudMachineId);
     });
+    this.startupPromises.set(cloudMachineId, startupPromise);
 
     return machine;
+  }
+
+  /**
+   * Get the in-flight startup promise for a machine, if one exists.
+   * Callers can race this against their own timeout to fail fast on VM boot failure.
+   */
+  getStartupPromise(cloudMachineId: string): Promise<void> | undefined {
+    return this.startupPromises.get(cloudMachineId);
   }
 
   /**

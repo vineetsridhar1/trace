@@ -15,8 +15,6 @@ export class ContainerBridge implements IBridgeClient {
   private reportedToolSessionIds = new Map<string, string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private connected = false;
-  private connectedCallbacks: Array<() => void> = [];
 
   constructor(
     private readonly serverUrl: string,
@@ -41,10 +39,6 @@ export class ContainerBridge implements IBridgeClient {
       });
 
       this.startHeartbeat();
-
-      this.connected = true;
-      for (const cb of this.connectedCallbacks) cb();
-      this.connectedCallbacks = [];
     });
 
     this.ws.on("message", (data) => {
@@ -84,15 +78,6 @@ export class ContainerBridge implements IBridgeClient {
   send(data: BridgeMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
-    }
-  }
-
-  /** Run a callback once the WebSocket is connected (or immediately if already connected). */
-  onConnected(cb: () => void): void {
-    if (this.connected) {
-      cb();
-    } else {
-      this.connectedCallbacks.push(cb);
     }
   }
 

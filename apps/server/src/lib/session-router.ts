@@ -140,9 +140,26 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
           ctx.send({ type: command, sessionId });
           break;
         case "resume": {
-          // If machine is stopped, restart it
-          // The session's connection data has the cloudMachineId
-          // For now, just send resume — the bridge handles adapter re-creation
+          // Look up machine from session connection — restart if stopped
+          const session = await prisma.session.findUnique({
+            where: { id: sessionId },
+            select: { connection: true, createdById: true, organizationId: true, tool: true },
+          });
+          const conn = session?.connection as Record<string, unknown> | null;
+          const cloudMachineId = conn?.cloudMachineId as string | undefined;
+
+          if (cloudMachineId && session) {
+            const userTokens = await apiTokenService.getDecryptedTokens(session.createdById);
+            // getOrCreateMachine handles stopped→restart transparently
+            await cloudMachineService.getOrCreateMachine({
+              userId: session.createdById,
+              orgId: session.organizationId,
+              defaultTool: session.tool,
+              userTokens,
+            });
+            const runtimeId = conn?.runtimeInstanceId as string | undefined;
+            await ctx.waitForBridge(sessionId, 120_000, runtimeId);
+          }
           ctx.send({ type: "resume", sessionId });
           break;
         }
@@ -182,8 +199,6 @@ const localAdapter: SessionAdapter = {
     return ctx.send({ type: command, sessionId });
   },
 };
-
-// getAdapter is now a method on SessionRouter (needs access to this.cloudAdapter)
 
 /**
  * Runtime-aware registry that tracks runtime instances, their capabilities,
