@@ -1261,9 +1261,12 @@ export class SessionService {
   }
 
   async listRuntimesForTool(tool: string, organizationId: string) {
+    // Only return local runtimes — cloud is always offered as a single
+    // "Cloud" option by the UI, and the adapter auto-provisions the
+    // user's own cloud machine on demand.
     const allRuntimes = sessionRouter
       .listRuntimes()
-      .filter((runtime) => runtime.supportedTools.includes(tool));
+      .filter((runtime) => runtime.hostingMode === "local" && runtime.supportedTools.includes(tool));
 
     const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
     const sessions = sessionIds.length === 0
