@@ -69,12 +69,14 @@ export class BridgeClient implements IBridgeClient {
   private sendRuntimeHello() {
     // Announce identity — the server restores session bindings from the DB
     // using our stable instanceId, so we don't need to report session lists.
+    const config = readConfig();
     this.send({
       type: "runtime_hello",
       instanceId: this.instanceId,
       label: os.hostname(),
       hostingMode: "local",
       supportedTools: ["claude_code", "codex", "custom"],
+      registeredRepoIds: Object.keys(config.repos),
     });
   }
 

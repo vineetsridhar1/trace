@@ -41,6 +41,7 @@ export function handleBridgeConnection(ws: WebSocket) {
           ws,
           hostingMode: (msg.hostingMode as "cloud" | "local") ?? "local",
           supportedTools: (msg.supportedTools as string[]) ?? ["claude_code", "codex", "custom"],
+          registeredRepoIds: (msg.registeredRepoIds as string[]) ?? [],
         });
         registered = true;
 
@@ -55,6 +56,11 @@ export function handleBridgeConnection(ws: WebSocket) {
 
       if (msg.type === "runtime_heartbeat") {
         sessionRouter.recordHeartbeat(runtimeId);
+        return;
+      }
+
+      if (msg.type === "repo_linked" && msg.repoId) {
+        sessionRouter.addRegisteredRepo(runtimeId, msg.repoId as string);
         return;
       }
 

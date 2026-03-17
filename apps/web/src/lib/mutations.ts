@@ -65,6 +65,7 @@ export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
       supportedTools
       connected
       sessionCount
+      registeredRepoIds
     }
   }
 `;
@@ -86,6 +87,15 @@ export const AVAILABLE_RUNTIMES_QUERY = gql`
       supportedTools
       connected
       sessionCount
+      registeredRepoIds
+    }
+  }
+`;
+
+export const UPDATE_REPO_MUTATION = gql`
+  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {
+    updateRepo(id: $id, input: $input) {
+      id
     }
   }
 `;

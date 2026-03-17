@@ -1,5 +1,5 @@
 import type { Context } from "../context.js";
-import type { CreateRepoInput, CreateProjectInput, EntityType } from "@trace/gql";
+import type { CreateRepoInput, UpdateRepoInput, CreateProjectInput, EntityType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { organizationService } from "../services/organization.js";
 
@@ -46,6 +46,9 @@ export const organizationQueries = {
 export const organizationMutations = {
   createRepo: (_: unknown, args: { input: CreateRepoInput }, ctx: Context) => {
     return organizationService.createRepo(args.input, ctx.actorType, ctx.userId);
+  },
+  updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
+    return organizationService.updateRepo(args.id, ctx.organizationId, args.input, ctx.actorType, ctx.userId);
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);

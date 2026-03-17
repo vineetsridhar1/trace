@@ -141,6 +141,7 @@ export type EventType =
   | 'message_edited'
   | 'message_sent'
   | 'repo_created'
+  | 'repo_updated'
   | 'session_deleted'
   | 'session_output'
   | 'session_paused'
@@ -201,6 +202,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   terminateSession: Session;
+  updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
 };
@@ -314,6 +316,12 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateRepoArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateRepoInput;
 };
 
 
@@ -565,6 +573,7 @@ export type SessionRuntimeInstance = {
   hostingMode: HostingMode;
   id: Scalars['ID']['output'];
   label: Scalars['String']['output'];
+  registeredRepoIds: Array<Scalars['ID']['output']>;
   sessionCount: Scalars['Int']['output'];
   supportedTools: Array<CodingTool>;
 };
@@ -679,6 +688,11 @@ export type TicketStatus =
   | 'in_progress'
   | 'in_review'
   | 'todo';
+
+export type UpdateRepoInput = {
+  defaultBranch?: InputMaybe<Scalars['String']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+};
 
 export type UpdateTicketInput = {
   description?: InputMaybe<Scalars['String']['input']>;
@@ -824,6 +838,7 @@ export type ResolversTypes = ResolversObject<{
   Ticket: ResolverTypeWrapper<Ticket>;
   TicketFilters: TicketFilters;
   TicketStatus: TicketStatus;
+  UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
   UserRole: UserRole;
@@ -865,6 +880,7 @@ export type ResolversParentTypes = ResolversObject<{
   TerminalEndpoint: TerminalEndpoint;
   Ticket: Ticket;
   TicketFilters: TicketFilters;
+  UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
 }>;
@@ -950,6 +966,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
+  updateRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUpdateRepoArgs, 'id' | 'input'>>;
   updateSessionConfig?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionConfigArgs, 'sessionId'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
 }>;
@@ -1068,6 +1085,7 @@ export type SessionRuntimeInstanceResolvers<ContextType = Context, ParentType ex
   hostingMode?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   label?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  registeredRepoIds?: Resolver<Array<ResolversTypes['ID']>, ParentType, ContextType>;
   sessionCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   supportedTools?: Resolver<Array<ResolversTypes['CodingTool']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;

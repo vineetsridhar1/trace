@@ -123,6 +123,7 @@ enum EventType {
   ticket_commented
   entity_linked
   repo_created
+  repo_updated
   channel_created
   member_joined
   member_left
@@ -290,6 +291,7 @@ type SessionRuntimeInstance {
   supportedTools: [CodingTool!]!
   connected: Boolean!
   sessionCount: Int!
+  registeredRepoIds: [ID!]!
 }
 
 type Notification {
@@ -360,6 +362,11 @@ input CreateRepoInput {
   defaultBranch: String
 }
 
+input UpdateRepoInput {
+  name: String
+  defaultBranch: String
+}
+
 input CreateProjectInput {
   organizationId: ID!
   name: String!
@@ -426,6 +433,7 @@ type Mutation {
   linkSessionToTicket(sessionId: ID!, ticketId: ID!): Session!
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createRepo(input: CreateRepoInput!): Repo!
+  updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!

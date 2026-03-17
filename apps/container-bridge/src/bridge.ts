@@ -36,6 +36,7 @@ export class ContainerBridge implements IBridgeClient {
         label: `cloud-machine-${this.machineId}`,
         hostingMode: "cloud",
         supportedTools: [this.defaultTool],
+        registeredRepoIds: [], // Cloud bridges clone on-demand — all repos supported
       });
 
       this.startHeartbeat();
