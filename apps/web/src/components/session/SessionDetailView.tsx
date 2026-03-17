@@ -7,6 +7,7 @@ import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { buildSessionNodes } from "./groupReadGlob";
+import { isDisconnected } from "./sessionStatus";
 import { client } from "../../lib/urql";
 import { TERMINATE_SESSION_MUTATION } from "../../lib/mutations";
 
@@ -42,6 +43,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(sessionId);
   const events = useEntityStore((s) => s.events);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
 
   // Fetch full session with lineage data
   useEffect(() => {
@@ -58,14 +60,16 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   );
 
   // Find plan content when server says session needs input
+  // Don't show plan bar if connection is lost — show recovery panel instead
+  const disconnected = isDisconnected(connection);
   const activePlan = useMemo(() => {
-    if (status !== "needs_input") return null;
+    if (status !== "needs_input" || disconnected) return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
       if (node.kind === "plan-review") return node;
     }
     return null;
-  }, [nodes, status]);
+  }, [nodes, status, disconnected]);
 
   const handleStop = useCallback(async () => {
     await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
