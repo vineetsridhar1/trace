@@ -32,6 +32,7 @@ export function handleBridgeConnection(ws: WebSocket) {
         // Bridge is announcing its identity. Re-register with the real info.
         const oldId = runtimeId;
         const newId = (msg.instanceId as string) ?? runtimeId;
+        const existingRuntime = sessionRouter.getRuntime(newId);
         runtimeDebug("received runtime_hello", {
           oldId,
           newId,
@@ -41,8 +42,8 @@ export function handleBridgeConnection(ws: WebSocket) {
           registeredRepoIds: msg.registeredRepoIds,
         });
 
-        if (registered) {
-          sessionRouter.unregisterRuntime(oldId);
+        if (registered && oldId !== newId) {
+          sessionRouter.unregisterRuntime(oldId, ws);
         }
 
         runtimeId = newId;
@@ -56,6 +57,15 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
         registered = true;
 
+        if (existingRuntime && existingRuntime.ws !== ws) {
+          runtimeDebug("closing superseded websocket for runtime", {
+            runtimeId: newId,
+            previousLabel: existingRuntime.label,
+            previousReadyState: existingRuntime.ws.readyState,
+          });
+          existingRuntime.ws.close();
+        }
+
         // Restore all sessions owned by this runtime from the DB.
         // The DB (connection.runtimeInstanceId) is the single source of truth —
         // the bridge doesn't need to report session lists.
@@ -67,12 +77,12 @@ export function handleBridgeConnection(ws: WebSocket) {
       }
 
       if (msg.type === "runtime_heartbeat") {
-        sessionRouter.recordHeartbeat(runtimeId);
+        sessionRouter.recordHeartbeat(runtimeId, ws);
         return;
       }
 
       if (msg.type === "repo_linked" && msg.repoId) {
-        sessionRouter.addRegisteredRepo(runtimeId, msg.repoId as string);
+        sessionRouter.addRegisteredRepo(runtimeId, msg.repoId as string, ws);
         return;
       }
 
@@ -113,7 +123,7 @@ export function handleBridgeConnection(ws: WebSocket) {
 
   ws.on("close", () => {
     runtimeDebug("bridge websocket closed", { runtimeId });
-    const affectedSessions = sessionRouter.unregisterRuntime(runtimeId);
+    const affectedSessions = sessionRouter.unregisterRuntime(runtimeId, ws);
     runtimeDebug("bridge close affected sessions", { runtimeId, affectedSessions });
 
     // Mark all bound sessions as disconnected through the service layer

@@ -233,11 +233,21 @@ export class SessionRouter {
     supportedTools: string[];
     registeredRepoIds?: string[];
   }) {
+    const existing = this.runtimes.get(runtime.id);
+    const boundSessions = existing?.boundSessions ?? new Set<string>();
+    if (existing && existing.ws !== runtime.ws) {
+      runtimeDebug("replacing runtime websocket", {
+        runtimeId: runtime.id,
+        previousLabel: existing.label,
+        previousReadyState: existing.ws.readyState,
+        preservedBoundSessions: [...boundSessions],
+      });
+    }
     this.runtimes.set(runtime.id, {
       ...runtime,
-      registeredRepoIds: runtime.registeredRepoIds ?? [],
+      registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
       lastHeartbeat: Date.now(),
-      boundSessions: new Set(),
+      boundSessions,
     });
     runtimeDebug("registered runtime", {
       runtimeId: runtime.id,
@@ -250,25 +260,30 @@ export class SessionRouter {
     });
   }
 
-  recordHeartbeat(runtimeId: string): boolean {
+  recordHeartbeat(runtimeId: string, ws?: WebSocket): boolean {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return false;
-    const ageMs = Date.now() - runtime.lastHeartbeat;
+    if (ws && runtime.ws !== ws) {
+      runtimeDebug("ignored heartbeat from stale websocket", {
+        runtimeId,
+        activeReadyState: runtime.ws.readyState,
+        staleReadyState: ws.readyState,
+      });
+      return false;
+    }
     runtime.lastHeartbeat = Date.now();
-    runtimeDebug("recorded runtime heartbeat", {
-      runtimeId,
-      label: runtime.label,
-      ageMs,
-      readyState: runtime.ws.readyState,
-    });
     return true;
   }
 
   /** Add a newly linked repo to a runtime's registeredRepoIds (called when bridge sends repo_linked). */
-  addRegisteredRepo(runtimeId: string, repoId: string): void {
+  addRegisteredRepo(runtimeId: string, repoId: string, ws?: WebSocket): void {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) {
       runtimeDebug("repo_linked ignored for missing runtime", { runtimeId, repoId });
+      return;
+    }
+    if (ws && runtime.ws !== ws) {
+      runtimeDebug("repo_linked ignored for stale websocket", { runtimeId, repoId });
       return;
     }
     if (!runtime.registeredRepoIds.includes(repoId)) {
@@ -327,9 +342,18 @@ export class SessionRouter {
   /**
    * Unregister a runtime and return the session IDs that were bound to it.
    */
-  unregisterRuntime(runtimeId: string): string[] {
+  unregisterRuntime(runtimeId: string, ws?: WebSocket): string[] {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return [];
+    if (ws && runtime.ws !== ws) {
+      runtimeDebug("skipped runtime unregister for stale websocket", {
+        runtimeId,
+        activeLabel: runtime.label,
+        activeReadyState: runtime.ws.readyState,
+        staleReadyState: ws.readyState,
+      });
+      return [];
+    }
     const affectedSessions = [...runtime.boundSessions];
     for (const sessionId of affectedSessions) {
       this.sessionRuntime.delete(sessionId);
