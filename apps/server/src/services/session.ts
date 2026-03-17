@@ -354,13 +354,14 @@ export class SessionService {
   }
 
   async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    const session = await prisma.session.findUniqueOrThrow({
+    const session = await prisma.session.findUnique({
       where: { id },
       include: SESSION_INCLUDE,
     });
+    if (!session) throw new Error("Session not found or already deleted");
 
     // Tell the bridge to clean up (abort adapter, remove worktree)
-    sessionRouter.send(id, { type: "delete", sessionId: id, workdir: session.workdir });
+    sessionRouter.send(id, { type: "delete", sessionId: id, workdir: session.workdir, repoId: session.repoId });
 
     // Unbind from the runtime
     sessionRouter.unbindSession(id);

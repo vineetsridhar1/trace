@@ -216,10 +216,11 @@ export class BridgeClient {
 
         // Clean up worktree if one exists
         const workdir = msg.workdir as string | undefined;
-        if (workdir) {
+        const repoId = msg.repoId as string | undefined;
+        if (workdir && repoId) {
           const config = readConfig();
-          // Find repo path for this worktree — iterate configured repos
-          for (const repoPath of Object.values(config.repos)) {
+          const repoPath = config.repos[repoId];
+          if (repoPath) {
             removeWorktree({ repoPath, worktreePath: workdir }).catch((err: Error) => {
               console.warn(`[bridge] failed to remove worktree ${workdir}:`, err.message);
             });

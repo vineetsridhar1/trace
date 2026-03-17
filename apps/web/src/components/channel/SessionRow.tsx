@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Circle, GitBranch, MoreHorizontal, Trash2 } from "lucide-react";
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from "framer-motion";
 import { useEntityField } from "../../stores/entity";
@@ -22,7 +22,6 @@ export function SessionRow({ id }: { id: string }) {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [swiped, setSwiped] = useState(false);
 
   // Swipe-to-delete (mobile)
   const x = useMotionValue(0);
@@ -32,10 +31,8 @@ export function SessionRow({ id }: { id: string }) {
   const handleDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.x < SWIPE_THRESHOLD) {
       controls.start({ x: SWIPE_THRESHOLD });
-      setSwiped(true);
     } else {
       controls.start({ x: 0 });
-      setSwiped(false);
     }
   }, [controls]);
 
