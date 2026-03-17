@@ -24,7 +24,6 @@ export function handleBridgeConnection(ws: WebSocket) {
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
-      console.log(`[bridge] msg from runtime=${runtimeId}: type=${msg.type} sessionId=${msg.sessionId ?? "n/a"}`);
 
       if (msg.type === "runtime_hello") {
         // Bridge is announcing its identity. Re-register with the real info.
@@ -62,7 +61,6 @@ export function handleBridgeConnection(ws: WebSocket) {
       if (msg.type === "session_output" && msg.sessionId) {
         const sessionId = msg.sessionId as string;
         const data = (msg.data ?? {}) as Record<string, unknown>;
-        console.log(`[bridge] output for ${sessionId}:`, JSON.stringify(data).slice(0, 300));
 
         enqueueEvent(sessionId, async () => {
           await sessionService.recordOutput(sessionId, data);

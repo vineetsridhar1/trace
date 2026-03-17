@@ -316,11 +316,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
     };
 
-    const runtime = sessionRouter.getRuntimeForSession(id);
-    console.log(`[session.run] session=${id} status=${session.status} hosting=${session.hosting} boundRuntime=${runtime?.id ?? "none"} hostingMode=${runtime?.hostingMode ?? "none"}`);
-
     const deliveryResult = sessionRouter.send(id, command);
-    console.log(`[session.run] delivery=${deliveryResult} for session=${id}`);
 
     if (deliveryResult !== "delivered") {
       await this.storePendingCommand(id, { type: "run", prompt: resolvedPrompt ?? null, interactionMode: interactionMode ?? null });
