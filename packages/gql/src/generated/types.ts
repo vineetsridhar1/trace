@@ -138,6 +138,7 @@ export type EventType =
   | 'message_edited'
   | 'message_sent'
   | 'repo_created'
+  | 'repo_updated'
   | 'session_deleted'
   | 'session_output'
   | 'session_paused'
@@ -198,6 +199,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   terminateSession: Session;
+  updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
 };
@@ -311,6 +313,12 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateRepoArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateRepoInput;
 };
 
 
@@ -562,6 +570,7 @@ export type SessionRuntimeInstance = {
   hostingMode: HostingMode;
   id: Scalars['ID']['output'];
   label: Scalars['String']['output'];
+  registeredRepoIds: Array<Scalars['ID']['output']>;
   sessionCount: Scalars['Int']['output'];
   supportedTools: Array<CodingTool>;
 };
@@ -676,6 +685,11 @@ export type TicketStatus =
   | 'in_progress'
   | 'in_review'
   | 'todo';
+
+export type UpdateRepoInput = {
+  defaultBranch?: InputMaybe<Scalars['String']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+};
 
 export type UpdateTicketInput = {
   description?: InputMaybe<Scalars['String']['input']>;

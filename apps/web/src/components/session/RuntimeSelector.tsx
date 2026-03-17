@@ -14,11 +14,17 @@ import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
 /** Sentinel value for the on-demand cloud option */
 export const CLOUD_RUNTIME_ID = "__cloud__";
 
+/** Subset of runtime info exposed to consumers for bridge-aware decisions */
+export interface RuntimeInfo {
+  hostingMode: "cloud" | "local";
+  registeredRepoIds: string[];
+}
+
 interface RuntimeSelectorProps {
   tool: string;
   open: boolean;
   value: string | undefined;
-  onChange: (runtimeId: string | undefined) => void;
+  onChange: (runtimeId: string | undefined, info: RuntimeInfo | null) => void;
 }
 
 export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelectorProps) {
@@ -36,12 +42,13 @@ export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelector
         setRuntimes(fetched);
         const connected = fetched.filter((r) => r.connected);
         if (connected.length === 1 && !value) {
-          onChange(connected[0].id);
+          const rt = connected[0];
+          onChange(rt.id, { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds });
         } else if (connected.length === 0 && !value) {
           // Auto-select cloud when no local runtimes are available
-          onChange(CLOUD_RUNTIME_ID);
+          onChange(CLOUD_RUNTIME_ID, { hostingMode: "cloud", registeredRepoIds: [] });
         } else if (value && value !== CLOUD_RUNTIME_ID && !fetched.find((r) => r.id === value)) {
-          onChange(undefined);
+          onChange(undefined, null);
         }
       })
       .finally(() => setLoading(false));
@@ -62,7 +69,15 @@ export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelector
   return (
     <Select
       value={value ?? ""}
-      onValueChange={(v) => { if (v) onChange(v); }}
+      onValueChange={(v) => {
+        if (!v) return;
+        if (v === CLOUD_RUNTIME_ID) {
+          onChange(v, { hostingMode: "cloud", registeredRepoIds: [] });
+        } else {
+          const rt = runtimes.find((r) => r.id === v);
+          onChange(v, rt ? { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds } : null);
+        }
+      }}
     >
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select runtime...">

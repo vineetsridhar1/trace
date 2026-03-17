@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, AlertTriangle, FolderOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -28,6 +29,7 @@ import {
 } from "../session/interactionModes";
 import { getModelsForTool, getDefaultModel } from "../session/modelOptions";
 import { RuntimeSelector, CLOUD_RUNTIME_ID } from "../session/RuntimeSelector";
+import type { RuntimeInfo } from "../session/RuntimeSelector";
 import { cn } from "../../lib/utils";
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
@@ -36,7 +38,9 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [tool, setTool] = useState<string>("claude_code");
   const [model, setModel] = useState<string | undefined>(getDefaultModel("claude_code"));
   const [runtimeInstanceId, setRuntimeInstanceId] = useState<string | undefined>(undefined);
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
   const [repoId, setRepoId] = useState<string | undefined>(undefined);
+  const [branch, setBranch] = useState("");
   const [mode, setMode] = useState<InteractionMode>("code");
   const modelOptions = getModelsForTool(tool);
   const [creating, setCreating] = useState(false);
@@ -48,6 +52,14 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
       const idx = MODE_CYCLE.indexOf(prev);
       return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
     });
+  }, []);
+
+  const handleRuntimeChange = useCallback((id: string | undefined, info: RuntimeInfo | null) => {
+    setRuntimeInstanceId(id);
+    setRuntimeInfo(info);
+    // Reset repo selection when runtime changes — availability may differ
+    setRepoId(undefined);
+    setBranch("");
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -68,6 +80,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             runtimeInstanceId: isCloud ? undefined : (runtimeInstanceId ?? undefined),
             channelId,
             repoId: repoId ?? undefined,
+            branch: branch.trim() || undefined,
             prompt: prompt.trim(),
           },
         })
@@ -82,6 +95,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
         }).toPromise();
         setPrompt("");
         setMode("code");
+        setBranch("");
         setOpen(false);
       }
     } finally {
@@ -96,9 +110,15 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     setOpen(next);
     if (!next) {
       setRepoId(undefined);
+      setBranch("");
       setRuntimeInstanceId(undefined);
+      setRuntimeInfo(null);
     }
   };
+
+  // Determine if the selected runtime is a device bridge (local)
+  const isDeviceBridge = runtimeInfo?.hostingMode === "local";
+  const isCloud = !runtimeInstanceId || runtimeInstanceId === CLOUD_RUNTIME_ID;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -154,7 +174,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
                   tool={tool}
                   open={open}
                   value={runtimeInstanceId}
-                  onChange={setRuntimeInstanceId}
+                  onChange={handleRuntimeChange}
                 />
               </div>
               {repoIds.length > 0 && (
@@ -162,14 +182,19 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
                   <label className="mb-1.5 block text-sm text-muted-foreground">
                     Repository
                   </label>
-                  <Select value={repoId ?? "__none__"} onValueChange={(v) => { if (v) setRepoId(v === "__none__" ? undefined : v); }}>
+                  <Select value={repoId ?? "__none__"} onValueChange={(v) => { if (v) { setRepoId(v === "__none__" ? undefined : v); setBranch(""); } }}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">No repo</SelectItem>
                       {repoIds.map((id) => (
-                        <RepoOption key={id} id={id} />
+                        <RepoOption
+                          key={id}
+                          id={id}
+                          isDeviceBridge={isDeviceBridge}
+                          registeredRepoIds={runtimeInfo?.registeredRepoIds}
+                        />
                       ))}
                     </SelectContent>
                   </Select>
@@ -192,6 +217,22 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
                 </button>
               </div>
             </div>
+
+            {/* Branch selector — shown when a repo is selected */}
+            {repoId && (
+              <div>
+                <label className="mb-1.5 block text-sm text-muted-foreground">
+                  Branch
+                </label>
+                <BranchInput repoId={repoId} value={branch} onChange={setBranch} />
+              </div>
+            )}
+
+            {/* Warning when repo is not linked on device bridge */}
+            {repoId && isDeviceBridge && runtimeInfo?.registeredRepoIds && !runtimeInfo.registeredRepoIds.includes(repoId) && (
+              <RepoNotLinkedWarning repoId={repoId} />
+            )}
+
             <div>
             <label className="mb-1.5 block text-sm text-muted-foreground">
               What should the agent work on?
@@ -225,7 +266,68 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   );
 }
 
-function RepoOption({ id }: { id: string }) {
+function RepoOption({ id, isDeviceBridge, registeredRepoIds }: { id: string; isDeviceBridge: boolean; registeredRepoIds?: string[] }) {
   const name = useEntityField("repos", id, "name");
-  return <SelectItem value={id}>{name ?? id}</SelectItem>;
+  const isLinked = !isDeviceBridge || !registeredRepoIds || registeredRepoIds.includes(id);
+
+  return (
+    <SelectItem value={id}>
+      <span className="flex items-center gap-1.5">
+        {name ?? id}
+        {!isLinked && (
+          <span className="flex items-center gap-0.5 text-xs text-amber-500">
+            <AlertTriangle size={10} />
+            not linked
+          </span>
+        )}
+      </span>
+    </SelectItem>
+  );
+}
+
+function BranchInput({ repoId, value, onChange }: { repoId: string; value: string; onChange: (v: string) => void }) {
+  const defaultBranch = useEntityField("repos", repoId, "defaultBranch");
+
+  return (
+    <Input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={defaultBranch ?? "main"}
+    />
+  );
+}
+
+function RepoNotLinkedWarning({ repoId }: { repoId: string }) {
+  const name = useEntityField("repos", repoId, "name");
+  const isElectron = typeof window.trace?.pickFolder === "function";
+
+  const handleLink = async () => {
+    if (!window.trace?.pickFolder || !window.trace?.saveRepoPath) return;
+    const folderPath = await window.trace.pickFolder();
+    if (!folderPath) return;
+    await window.trace.saveRepoPath(repoId, folderPath);
+  };
+
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+      <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-amber-200">
+          <span className="font-medium">{name}</span> is not linked on this device.
+        </p>
+        {isElectron && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 gap-1.5"
+            onClick={handleLink}
+          >
+            <FolderOpen size={12} />
+            Choose folder to link
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }

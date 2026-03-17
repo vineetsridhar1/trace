@@ -144,8 +144,8 @@ export function useOrgEvents() {
         // Always upsert the raw event
         upsert("events", event.id, event);
 
-        // New repo — upsert directly from payload
-        if (event.eventType === "repo_created") {
+        // Repo created or updated — upsert directly from payload
+        if (event.eventType === "repo_created" || event.eventType === "repo_updated") {
           const repo = asRecord(event.payload.repo);
           if (repo && typeof repo.id === "string") {
             upsert("repos", repo.id, repo as unknown as Repo);

@@ -41,6 +41,7 @@ export function handleBridgeConnection(ws: WebSocket) {
           ws,
           hostingMode: (msg.hostingMode as "cloud" | "local") ?? "local",
           supportedTools: (msg.supportedTools as string[]) ?? ["claude_code", "codex", "custom"],
+          registeredRepoIds: (msg.registeredRepoIds as string[]) ?? [],
         });
         registered = true;
 

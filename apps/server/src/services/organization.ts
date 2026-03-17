@@ -1,4 +1,4 @@
-import type { CreateRepoInput, CreateProjectInput, EntityType, ActorType } from "@trace/gql";
+import type { CreateRepoInput, UpdateRepoInput, CreateProjectInput, EntityType, ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
@@ -40,6 +40,40 @@ export class OrganizationService {
         scopeType: "system",
         scopeId: repo.id,
         eventType: "repo_created",
+        payload: {
+          repo: {
+            id: repo.id,
+            name: repo.name,
+            remoteUrl: repo.remoteUrl,
+            defaultBranch: repo.defaultBranch,
+          },
+        },
+        actorType,
+        actorId,
+      }, tx);
+
+      return [repo, event] as const;
+    });
+
+    return repo;
+  }
+
+  async updateRepo(id: string, input: UpdateRepoInput, actorType: ActorType, actorId: string) {
+    const [repo] = await prisma.$transaction(async (tx) => {
+      const repo = await tx.repo.update({
+        where: { id },
+        data: {
+          ...(input.name != null && { name: input.name }),
+          ...(input.defaultBranch != null && { defaultBranch: input.defaultBranch }),
+        },
+        include: { projects: true, sessions: true },
+      });
+
+      const event = await eventService.create({
+        organizationId: repo.organizationId,
+        scopeType: "system",
+        scopeId: repo.id,
+        eventType: "repo_updated",
         payload: {
           repo: {
             id: repo.id,

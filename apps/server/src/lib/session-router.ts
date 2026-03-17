@@ -24,6 +24,8 @@ export interface RuntimeInstance {
   ws: WebSocket;
   hostingMode: "cloud" | "local";
   supportedTools: string[];
+  /** Repo IDs this runtime has locally registered. Cloud runtimes use empty (supports all). */
+  registeredRepoIds: string[];
   lastHeartbeat: number;
   boundSessions: Set<string>;
 }
@@ -228,9 +230,11 @@ export class SessionRouter {
     ws: WebSocket;
     hostingMode: "cloud" | "local";
     supportedTools: string[];
+    registeredRepoIds?: string[];
   }) {
     this.runtimes.set(runtime.id, {
       ...runtime,
+      registeredRepoIds: runtime.registeredRepoIds ?? [],
       lastHeartbeat: Date.now(),
       boundSessions: new Set(),
     });

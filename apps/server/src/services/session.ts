@@ -1284,6 +1284,7 @@ export class SessionService {
       supportedTools: r.supportedTools,
       connected: r.ws.readyState === r.ws.OPEN,
       sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId)).length,
+      registeredRepoIds: r.registeredRepoIds,
     }));
   }
 

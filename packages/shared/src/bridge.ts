@@ -76,6 +76,8 @@ export interface BridgeRuntimeHello {
   label: string;
   hostingMode: "cloud" | "local";
   supportedTools: string[];
+  /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
+  registeredRepoIds: string[];
 }
 
 export interface BridgeRuntimeHeartbeat {
