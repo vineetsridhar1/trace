@@ -171,7 +171,7 @@ Session {
   id:                UUID
   organization_id:   UUID
   name:              string
-  status:            "active" | "paused" | "completed" | "failed" | "unreachable"
+  status:            "creating" | "pending" | "active" | "paused" | "needs_input" | "completed" | "failed" | "unreachable" | "merged"
   tool:              "claude-code" | "cursor" | "custom" | ...
   hosting:           "cloud" | "local"
   created_by:        UUID            // user who started it
@@ -193,13 +193,32 @@ Session {
 
   // Connection info (for local sessions)
   connection: {
-    last_seen:         timestamp     // last event received from bridge
-    bridge_version:    string
+    state:                "connected" | "degraded" | "disconnected"
+    runtimeInstanceId:    UUID | null    // stable ID of the runtime (persisted on the bridge machine)
+    runtimeLabel:         string | null  // hostname of the bridge machine
+    lastSeen:             timestamp      // last event received from bridge
+    lastError:            string | null
+    lastDeliveryFailureAt: timestamp | null
+    retryCount:           number
+    canRetry:             boolean
+    canMove:              boolean
   }
 }
 ```
 
 Sessions support two hosting modes. **Cloud sessions** run in Fly Machines containers provisioned and managed by Trace — including shell access, port forwarding, and the full dev environment (see Section 8.3). **Local sessions** run on a developer's own machine, with a lightweight bridge process pushing events up to Trace's API. Both modes produce identical event streams; the rest of the platform doesn't know the difference.
+
+**Session status lifecycle:**
+
+- `creating` — workspace is being prepared (worktree creation, repo clone)
+- `pending` — workspace is ready, waiting for the coding tool to start or for the first prompt
+- `active` — coding tool is running and producing output
+- `paused` — explicitly paused by user or agent; can be resumed
+- `needs_input` — coding tool is waiting for user input (e.g. a question, permission grant)
+- `completed` — coding tool finished its task; session is still interactive (user can send follow-up messages)
+- `failed` — session encountered an unrecoverable error; terminal state
+- `unreachable` — specific to local sessions; events stopped arriving but the session wasn't explicitly terminated
+- `merged` — **(future)** terminal state indicating the session's work has been merged. A merged session is fully unloaded: worktree deleted, removed from the bridge's known sessions list, and excluded from reconnection recovery. Unlike `completed`, a merged session cannot receive follow-up messages.
 
 The `unreachable` status is specific to local sessions — it means events have stopped arriving but the session wasn't explicitly terminated. The UI shows this distinctly from "paused" or "failed."
 
@@ -943,6 +962,36 @@ Any user/agent sends a message to session
 ```
 
 The owner of a local session also receives their own messages back through the event stream, just like everyone else. The Electron frontend can optimistically render the owner's messages immediately for perceived responsiveness, then reconcile when the event comes back from Trace.
+
+**Runtime identity and reconnection.** Each bridge has a stable runtime instance ID, persisted to disk in Electron's `userData` directory. This ID survives app restarts so the server can recognize the same machine reconnecting. When the bridge connects (or reconnects), it sends a `runtime_hello` message containing its instance ID, hostname label, and supported tools. The bridge is stateless with respect to session ownership — it does not track or report which sessions it owns.
+
+**The DB is the single source of truth for session-to-runtime binding.** Every session's `connection.runtimeInstanceId` records which runtime owns it. When a runtime connects, the server queries the DB for all non-terminal sessions with that `runtimeInstanceId` and restores their bindings in memory. This is the only code path for session restoration — there is no separate "bridge-reported" vs "orphan recovery" distinction.
+
+**Reconnection flow:**
+
+```
+1. Bridge WebSocket drops
+   → Server marks all bound sessions as disconnected
+   → Frontend shows "Connection Lost" via event subscription
+
+2. Bridge auto-reconnects (3s delay)
+   → Server registers a temporary runtime with a random ID
+
+3. Bridge sends runtime_hello (instanceId + label only, no session list)
+   → Server replaces temporary runtime with the real one (stable instance ID)
+   → Server queries DB: all non-terminal sessions where runtimeInstanceId = this ID
+   → Each session is bound in memory; disconnected ones get markConnectionRestored
+
+4. Frontend receives connection_restored events
+   → UI updates from "Connection Lost" to normal status
+```
+
+**Session unloading.** When a session reaches a terminal state that indicates full completion (currently `failed`; in the future, `merged`), it should be fully unloaded:
+
+- Worktree deleted (`git worktree remove`)
+- Excluded from reconnection recovery (the `restoreSessionsForRuntime` query filters by status)
+
+The `completed` status is explicitly _not_ terminal in this sense — completed sessions remain interactive and must stay recoverable. The future `merged` status is terminal: worktree deleted, excluded from recovery, no follow-up messages allowed.
 
 **Electron as dual-role client.** The Electron app is both a frontend and a bridge simultaneously. The frontend side renders the UI and subscribes to session events via the normal real-time stream — identical to the web or mobile client. The bridge side manages local coding tool processes and maintains the bridge WebSocket. These are logically separate concerns running in the same application. The bridge side could theoretically be extracted into a standalone CLI process, but bundling it in Electron keeps the setup simple for users.
 

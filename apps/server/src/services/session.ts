@@ -880,6 +880,34 @@ export class SessionService {
     });
   }
 
+  /**
+   * When a runtime connects, restore all non-terminal sessions it previously owned.
+   * The DB (connection.runtimeInstanceId) is the single source of truth for ownership.
+   * Excludes terminal statuses (failed, and in the future, merged).
+   */
+  async restoreSessionsForRuntime(runtimeId: string) {
+    const runtime = sessionRouter.getRuntime(runtimeId);
+    if (!runtime) return;
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        status: { notIn: ["failed"] },
+        connection: { path: ["runtimeInstanceId"], equals: runtimeId },
+      },
+      select: { id: true, connection: true },
+    });
+
+    for (const session of sessions) {
+      sessionRouter.bindSession(session.id, runtimeId);
+
+      // Only emit connection_restored for sessions that were disconnected
+      const conn = this.parseConnection(session.connection);
+      if (conn.state === "disconnected") {
+        await this.markConnectionRestored(session.id, runtimeId);
+      }
+    }
+  }
+
   async storeToolSessionId(sessionId: string, toolSessionId: string) {
     await prisma.session.update({
       where: { id: sessionId },

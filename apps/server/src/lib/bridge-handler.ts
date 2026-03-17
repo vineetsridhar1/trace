@@ -44,16 +44,12 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
         registered = true;
 
-        // Re-register any sessions the bridge still owns (reconnect scenario)
-        const sessionIds = msg.sessionIds as string[] | undefined;
-        if (sessionIds) {
-          for (const sid of sessionIds) {
-            sessionRouter.bindSession(sid, runtimeId);
-            enqueueEvent(sid, async () => {
-              await sessionService.markConnectionRestored(sid, runtimeId);
-            });
-          }
-        }
+        // Restore all sessions owned by this runtime from the DB.
+        // The DB (connection.runtimeInstanceId) is the single source of truth —
+        // the bridge doesn't need to report session lists.
+        sessionService.restoreSessionsForRuntime(runtimeId).catch((err) => {
+          console.error("[bridge] error restoring sessions for runtime:", err);
+        });
         return;
       }
 
