@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { BridgeClient } from "./bridge.js";
+import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
 import { readConfig, writeConfig } from "./config.js";
 
 const execFileAsync = promisify(execFile);
@@ -10,6 +10,11 @@ const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
 const serverUrl = process.env.TRACE_SERVER_URL ?? "http://localhost:4000";
 const bridge = new BridgeClient(serverUrl);
+
+function publishBridgeStatus(status: BridgeConnectionStatus) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("bridge-status", status);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -98,7 +103,12 @@ ipcMain.handle("get-repo-path", (_event, repoId: string) => {
   return config.repos[repoId] ?? null;
 });
 
+ipcMain.handle("get-bridge-status", () => bridge.getStatus());
+
 app.whenReady().then(() => {
+  bridge.onStatusChange((status) => {
+    publishBridgeStatus(status);
+  });
   bridge.connect();
   createWindow();
 });

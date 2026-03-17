@@ -10,4 +10,10 @@ contextBridge.exposeInMainWorld("trace", {
   getGitInfo: (folderPath: string) => ipcRenderer.invoke("get-git-info", folderPath),
   saveRepoPath: (repoId: string, localPath: string) => ipcRenderer.invoke("save-repo-path", repoId, localPath),
   getRepoPath: (repoId: string) => ipcRenderer.invoke("get-repo-path", repoId),
+  getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
+  onBridgeStatus: (callback: (status: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status);
+    ipcRenderer.on("bridge-status", listener);
+    return () => ipcRenderer.removeListener("bridge-status", listener);
+  },
 });

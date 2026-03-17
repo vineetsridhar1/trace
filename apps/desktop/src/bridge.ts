@@ -7,6 +7,8 @@ import { createWorktree, removeWorktree } from "./worktree.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
+export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
+
 export class BridgeClient implements IBridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
@@ -15,6 +17,8 @@ export class BridgeClient implements IBridgeClient {
   private reportedToolSessionIds = new Map<string, string>();
   private instanceId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private status: BridgeConnectionStatus = "disconnected";
+  private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
@@ -22,10 +26,12 @@ export class BridgeClient implements IBridgeClient {
   }
 
   connect() {
+    this.setStatus("connecting");
     this.ws = new WebSocket(`${this.serverUrl}/bridge`);
 
     this.ws.on("open", () => {
       console.log("[bridge] connected to server");
+      this.setStatus("connected");
       this.sendRuntimeHello();
       this.startHeartbeat();
     });
@@ -42,6 +48,7 @@ export class BridgeClient implements IBridgeClient {
     this.ws.on("close", () => {
       console.log("[bridge] disconnected, reconnecting in 3s...");
       this.stopHeartbeat();
+      this.setStatus("disconnected");
       setTimeout(() => this.connect(), 3000);
     });
 
@@ -64,6 +71,19 @@ export class BridgeClient implements IBridgeClient {
     this.adapters.clear();
     this.ws?.close();
     this.ws = null;
+    this.setStatus("disconnected");
+  }
+
+  getStatus(): BridgeConnectionStatus {
+    return this.status;
+  }
+
+  onStatusChange(listener: (status: BridgeConnectionStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    listener(this.status);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
   }
 
   private sendRuntimeHello() {
@@ -91,6 +111,14 @@ export class BridgeClient implements IBridgeClient {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+  }
+
+  private setStatus(status: BridgeConnectionStatus) {
+    if (this.status === status) return;
+    this.status = status;
+    for (const listener of this.statusListeners) {
+      listener(status);
     }
   }
 
