@@ -82,6 +82,19 @@ enum InboxItemStatus {
   dismissed
 }
 
+enum ApiTokenProvider {
+  anthropic
+  openai
+  github
+}
+
+enum CloudMachineStatus {
+  creating
+  started
+  stopped
+  destroyed
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -115,8 +128,9 @@ model Organization {
   channels Channel[]
   sessions Session[]
   tickets  Ticket[]
-  events     Event[]
-  inboxItems InboxItem[]
+  events        Event[]
+  inboxItems    InboxItem[]
+  cloudMachines CloudMachine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -133,6 +147,8 @@ model User {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   createdSessions Session[] @relation("SessionCreator")
+  apiTokens       ApiToken[]
+  cloudMachines   CloudMachine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -276,6 +292,20 @@ model SessionTicket {
   @@id([sessionId, ticketId])
 }
 
+model ApiToken {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  provider       ApiTokenProvider
+  encryptedToken String
+  iv             String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
+}
+
 model Event {
   id             String       @id @default(uuid())
   scopeType      ScopeType
@@ -294,6 +324,25 @@ model Event {
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])
   @@index([parentId])
+}
+
+model CloudMachine {
+  id                String             @id @default(uuid())
+  provider          String             // "fly", "aws", etc.
+  providerMachineId String
+  userId            String
+  user              User               @relation(fields: [userId], references: [id])
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  status            CloudMachineStatus @default(creating)
+  bridgeToken       String             @unique
+  runtimeInstanceId String             @unique
+  providerMetadata  Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([status])
 }
 
 model InboxItem {

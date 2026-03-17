@@ -53,10 +53,11 @@ export class CodexAdapter implements CodingToolAdapter {
       });
     }
 
+    const stderrChunks: string[] = [];
     if (this.process.stderr) {
       const rl = createInterface({ input: this.process.stderr });
-      rl.on("line", () => {
-        // stderr dropped
+      rl.on("line", (line) => {
+        stderrChunks.push(line);
       });
     }
 
@@ -70,7 +71,11 @@ export class CodexAdapter implements CodingToolAdapter {
         });
       }
       if (!this.resultEmitted) {
-        onOutput({ type: "result", subtype: code === 0 || code === null ? "success" : "error" });
+        const isError = code !== 0 && code !== null;
+        if (isError && stderrChunks.length > 0) {
+          onOutput({ type: "error", message: stderrChunks.join("\n") });
+        }
+        onOutput({ type: "result", subtype: isError ? "error" : "success" });
       }
       onComplete();
       this.process = null;

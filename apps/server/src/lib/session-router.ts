@@ -1,4 +1,8 @@
 import type WebSocket from "ws";
+import { Prisma } from "@prisma/client";
+import type { CloudMachineService } from "./cloud-machine-service.js";
+import { prisma } from "./db.js";
+import { apiTokenService } from "../services/api-token.js";
 
 export interface SessionCommand {
   type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete";
@@ -24,6 +28,178 @@ export interface RuntimeInstance {
   boundSessions: Set<string>;
 }
 
+// --- SessionAdapter interface ---
+// Each hosting mode implements this. The router dispatches through it.
+
+export interface SessionAdapterCreateOptions {
+  sessionId: string;
+  tool: string;
+  model?: string;
+  repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
+  branch?: string;
+  createdById: string;
+  organizationId: string;
+}
+
+export interface SessionAdapterDestroyOptions {
+  sessionId: string;
+  workdir?: string | null;
+  repoId?: string | null;
+  connection?: unknown;
+}
+
+interface SessionAdapterCreateCtx {
+  send: (cmd: SessionCommand) => DeliveryResult;
+  onFailed: (error: string) => void;
+  onWorkspaceReady: (workdir: string) => void;
+  waitForBridge: (sessionId: string, timeoutMs?: number, runtimeId?: string) => Promise<void>;
+}
+
+interface SessionAdapter {
+  create(options: SessionAdapterCreateOptions, ctx: SessionAdapterCreateCtx): void;
+  destroy(options: SessionAdapterDestroyOptions, ctx: { send: (cmd: SessionCommand) => DeliveryResult }): Promise<void>;
+  transition(sessionId: string, command: "pause" | "resume" | "terminate", ctx: { send: (cmd: SessionCommand) => DeliveryResult; waitForBridge: (sessionId: string, timeoutMs?: number, runtimeId?: string) => Promise<void> }): Promise<DeliveryResult>;
+}
+
+// --- Cloud adapter factory ---
+
+function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAdapter {
+  return {
+    create(options, ctx) {
+      apiTokenService.getDecryptedTokens(options.createdById).then(async (userTokens) => {
+        try {
+          const machine = await cloudMachineService.getOrCreateMachine({
+            userId: options.createdById,
+            orgId: options.organizationId,
+            defaultTool: options.tool,
+            userTokens,
+          });
+
+          // Store cloudMachineId and runtimeInstanceId in session connection
+          await prisma.session.update({
+            where: { id: options.sessionId },
+            data: {
+              connection: {
+                state: "connected",
+                retryCount: 0,
+                canRetry: true,
+                canMove: true,
+                cloudMachineId: machine.id,
+                runtimeInstanceId: machine.runtimeInstanceId,
+              } satisfies Prisma.InputJsonValue,
+            },
+          });
+
+          // Wait for bridge to connect. Pass runtimeId so if the bridge already
+          // connected (race: restoreSessionsForRuntime ran before we wrote connection),
+          // we immediately bind and proceed.
+          await ctx.waitForBridge(options.sessionId, 120_000, machine.runtimeInstanceId);
+
+          // Send prepare if there's a repo to set up
+          if (options.repo) {
+            ctx.send({
+              type: "prepare",
+              sessionId: options.sessionId,
+              repoId: options.repo.id,
+              repoName: options.repo.name,
+              repoRemoteUrl: options.repo.remoteUrl,
+              defaultBranch: options.repo.defaultBranch,
+              branch: options.branch,
+            });
+          } else {
+            // No repo — signal workspace_ready so session transitions to pending
+            ctx.onWorkspaceReady("/workspace");
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[cloud-adapter] failed to provision for ${options.sessionId}:`, message);
+          ctx.onFailed(`Cloud machine failed: ${message}`);
+        }
+      });
+    },
+
+    async destroy(options, ctx) {
+      // Send delete to bridge — cleans up worktree + adapter for this session only
+      ctx.send({ type: "delete", sessionId: options.sessionId, workdir: options.workdir, repoId: options.repoId });
+
+      // Notify cloud machine service that a session ended (schedules idle check)
+      const conn = options.connection as Record<string, unknown> | null;
+      const cloudMachineId = conn?.cloudMachineId as string | undefined;
+      if (cloudMachineId) {
+        await cloudMachineService.sessionEnded(cloudMachineId).catch((err: Error) => {
+          console.warn(`[cloud-adapter] sessionEnded failed for machine ${cloudMachineId}:`, err.message);
+        });
+      }
+    },
+
+    async transition(sessionId, command, ctx) {
+      switch (command) {
+        case "pause":
+        case "terminate":
+          // Send command to bridge for this session only — don't stop/destroy the machine
+          ctx.send({ type: command, sessionId });
+          break;
+        case "resume": {
+          // Look up machine from session connection — restart if stopped
+          const session = await prisma.session.findUnique({
+            where: { id: sessionId },
+            select: { connection: true, createdById: true, organizationId: true, tool: true },
+          });
+          const conn = session?.connection as Record<string, unknown> | null;
+          const cloudMachineId = conn?.cloudMachineId as string | undefined;
+
+          if (cloudMachineId && session) {
+            const userTokens = await apiTokenService.getDecryptedTokens(session.createdById);
+            // getOrCreateMachine handles stopped→restart transparently
+            await cloudMachineService.getOrCreateMachine({
+              userId: session.createdById,
+              orgId: session.organizationId,
+              defaultTool: session.tool,
+              userTokens,
+            });
+            const runtimeId = conn?.runtimeInstanceId as string | undefined;
+            await ctx.waitForBridge(sessionId, 120_000, runtimeId);
+          }
+          ctx.send({ type: "resume", sessionId });
+          break;
+        }
+      }
+      return "delivered";
+    },
+  };
+}
+
+// --- Local adapter (Electron bridge via WebSocket) ---
+
+const localAdapter: SessionAdapter = {
+  create(options, ctx) {
+    if (!options.repo) return;
+    const result = ctx.send({
+      type: "prepare",
+      sessionId: options.sessionId,
+      repoId: options.repo.id,
+      repoName: options.repo.name,
+      repoRemoteUrl: options.repo.remoteUrl,
+      defaultBranch: options.repo.defaultBranch,
+      branch: options.branch,
+    });
+    if (result !== "delivered") {
+      ctx.onFailed(`prepare: ${result}`);
+    }
+  },
+
+  async destroy(options, ctx) {
+    const result = ctx.send({ type: "delete", sessionId: options.sessionId, workdir: options.workdir, repoId: options.repoId });
+    if (result !== "delivered") {
+      console.warn(`[local-adapter] bridge did not receive delete for ${options.sessionId}: ${result}`);
+    }
+  },
+
+  async transition(sessionId, command, ctx) {
+    return ctx.send({ type: command, sessionId });
+  },
+};
+
 /**
  * Runtime-aware registry that tracks runtime instances, their capabilities,
  * and which sessions they own. Replaces the old bridge-only socket map.
@@ -32,9 +208,19 @@ export class SessionRouter {
   private runtimes = new Map<string, RuntimeInstance>();
   /** Maps sessionId → runtimeId */
   private sessionRuntime = new Map<string, string>();
+  /** Pending waitForBridge promises for cloud sessions */
+  private pendingWaits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
+
+  /** Cloud adapter instance, initialized once CloudMachineService is available */
+  private cloudAdapter: SessionAdapter | null = null;
 
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
+
+  /** Inject the CloudMachineService to create the cloud adapter. Call once at startup. */
+  setCloudMachineService(service: CloudMachineService): void {
+    this.cloudAdapter = createCloudAdapter(service);
+  }
 
   registerRuntime(runtime: {
     id: string;
@@ -55,6 +241,47 @@ export class SessionRouter {
     if (!runtime) return false;
     runtime.lastHeartbeat = Date.now();
     return true;
+  }
+
+  /**
+   * Wait for a bridge/runtime to register for the given session.
+   * Used by cloud sessions where there's a timing gap between
+   * Machine creation and bridge connection.
+   *
+   * If runtimeId is provided and that runtime is already connected,
+   * immediately binds the session (handles race where the runtime
+   * connected before the session's connection data was written to DB).
+   */
+  waitForBridge(sessionId: string, timeoutMs = 60_000, runtimeId?: string): Promise<void> {
+    // Already bound
+    if (this.sessionRuntime.has(sessionId)) return Promise.resolve();
+
+    // If runtime is already connected, bind immediately (fixes race condition)
+    if (runtimeId) {
+      const runtime = this.runtimes.get(runtimeId);
+      if (runtime && runtime.ws.readyState === runtime.ws.OPEN) {
+        this.bindSession(sessionId, runtimeId);
+        return Promise.resolve();
+      }
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingWaits.delete(sessionId);
+        reject(new Error(`Bridge for session ${sessionId} did not connect within ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      this.pendingWaits.set(sessionId, {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (err: Error) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
   }
 
   /**
@@ -81,6 +308,13 @@ export class SessionRouter {
     const runtime = this.runtimes.get(runtimeId);
     if (runtime) {
       runtime.boundSessions.add(sessionId);
+    }
+
+    // Resolve any pending waitForBridge promise
+    const pending = this.pendingWaits.get(sessionId);
+    if (pending) {
+      this.pendingWaits.delete(sessionId);
+      pending.resolve();
     }
   }
 
@@ -164,6 +398,53 @@ export class SessionRouter {
       }
     }
     return stale;
+  }
+
+  // --- Adapter-dispatched lifecycle methods ---
+
+  private getAdapter(hosting: string): SessionAdapter {
+    if (hosting === "cloud") {
+      if (!this.cloudAdapter) throw new Error("CloudMachineService not initialized — call setCloudMachineService() first");
+      return this.cloudAdapter;
+    }
+    return localAdapter;
+  }
+
+  /**
+   * Provision the runtime for a session. Delegates to the correct adapter.
+   */
+  createRuntime(options: SessionAdapterCreateOptions & { hosting: string; onFailed: (error: string) => void; onWorkspaceReady?: (workdir: string) => void }): void {
+    const { hosting, onFailed, onWorkspaceReady, ...adapterOptions } = options;
+    const adapter = this.getAdapter(hosting);
+    adapter.create(adapterOptions, {
+      send: (cmd) => this.send(options.sessionId, cmd),
+      onFailed,
+      onWorkspaceReady: onWorkspaceReady ?? (() => {}),
+      waitForBridge: (sid, timeoutMs?, runtimeId?) => this.waitForBridge(sid, timeoutMs, runtimeId),
+    });
+  }
+
+  /**
+   * Destroy a session's runtime. Delegates to the correct adapter.
+   */
+  async destroyRuntime(sessionId: string, session: { hosting: string; workdir?: string | null; repoId?: string | null; connection?: unknown }): Promise<void> {
+    const adapter = this.getAdapter(session.hosting);
+    await adapter.destroy(
+      { sessionId, workdir: session.workdir, repoId: session.repoId, connection: session.connection },
+      { send: (cmd) => this.send(sessionId, cmd) },
+    );
+    this.unbindSession(sessionId);
+  }
+
+  /**
+   * Transition a session's runtime (pause/resume/terminate). Delegates to the correct adapter.
+   */
+  async transitionRuntime(sessionId: string, hosting: string, command: "pause" | "resume" | "terminate"): Promise<DeliveryResult> {
+    const adapter = this.getAdapter(hosting);
+    return adapter.transition(sessionId, command, {
+      send: (cmd) => this.send(sessionId, cmd),
+      waitForBridge: (sid, timeoutMs?, runtimeId?) => this.waitForBridge(sid, timeoutMs, runtimeId),
+    });
   }
 
   // Backwards-compatible aliases for bridge-handler migration

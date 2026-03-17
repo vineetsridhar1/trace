@@ -95,15 +95,19 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       rlClosed = true;
     }
 
+    const stderrChunks: string[] = [];
     if (this.process.stderr) {
       const rl = createInterface({ input: this.process.stderr });
-      rl.on("line", () => {
-        // stderr is dropped — not part of the normalized schema
+      rl.on("line", (line) => {
+        stderrChunks.push(line);
       });
     }
 
     this.process.on("close", (code) => {
       exitCode = code;
+      if (code !== 0 && code !== null && stderrChunks.length > 0) {
+        onOutput({ type: "error", message: stderrChunks.join("\n") });
+      }
       processClosed = true;
       maybeFinish();
     });

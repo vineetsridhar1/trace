@@ -27,7 +27,7 @@ import {
   wrapPrompt,
 } from "../session/interactionModes";
 import { getModelsForTool, getDefaultModel } from "../session/modelOptions";
-import { RuntimeSelector } from "../session/RuntimeSelector";
+import { RuntimeSelector, CLOUD_RUNTIME_ID } from "../session/RuntimeSelector";
 import { cn } from "../../lib/utils";
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
@@ -58,12 +58,14 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     try {
       const wrappedPrompt = wrapPrompt(mode, prompt.trim());
 
+      const isCloud = runtimeInstanceId === CLOUD_RUNTIME_ID;
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
             tool,
             model: model ?? undefined,
-            runtimeInstanceId: runtimeInstanceId ?? undefined,
+            hosting: isCloud ? "cloud" : undefined,
+            runtimeInstanceId: isCloud ? undefined : (runtimeInstanceId ?? undefined),
             channelId,
             repoId: repoId ?? undefined,
             prompt: prompt.trim(),
@@ -213,7 +215,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={!prompt.trim() || creating || !runtimeInstanceId}>
+            <Button type="submit" disabled={!prompt.trim() || creating}>
               {creating ? "Starting..." : "Start"}
             </Button>
           </DialogFooter>

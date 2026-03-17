@@ -1,13 +1,13 @@
 import WebSocket from "ws";
 import os from "os";
-import type { CodingToolAdapter } from "@trace/shared";
+import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
-export class BridgeClient {
+export class BridgeClient implements IBridgeClient {
   private ws: WebSocket | null = null;
   private serverUrl: string;
   private adapters = new Map<string, CodingToolAdapter>();
@@ -32,8 +32,8 @@ export class BridgeClient {
 
     this.ws.on("message", (data) => {
       try {
-        const msg = JSON.parse(data.toString());
-        this.handleMessage(msg);
+        const msg = JSON.parse(data.toString()) as BridgeCommand;
+        this.handleCommand(msg);
       } catch (err) {
         console.error("[bridge] failed to parse message:", err);
       }
@@ -48,6 +48,22 @@ export class BridgeClient {
     this.ws.on("error", (err) => {
       console.error("[bridge] error:", err.message);
     });
+  }
+
+  send(data: BridgeMessage) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  disconnect() {
+    this.stopHeartbeat();
+    for (const adapter of this.adapters.values()) {
+      adapter.abort();
+    }
+    this.adapters.clear();
+    this.ws?.close();
+    this.ws = null;
   }
 
   private sendRuntimeHello() {
@@ -138,42 +154,34 @@ export class BridgeClient {
     });
   }
 
-  private handleMessage(msg: { type: string; sessionId?: string; prompt?: string; [key: string]: unknown }) {
-    switch (msg.type) {
+  private handleCommand(cmd: BridgeCommand) {
+    switch (cmd.type) {
       case "run": {
-        if (!msg.sessionId) return;
         this.runPrompt({
-          sessionId: msg.sessionId,
-          prompt: msg.prompt as string ?? "",
-          cwd: msg.cwd as string | undefined,
-          tool: msg.tool as string | undefined,
-          model: msg.model as string | undefined,
-          interactionMode: msg.interactionMode as string | undefined,
-          toolSessionId: msg.toolSessionId as string | undefined,
+          sessionId: cmd.sessionId,
+          prompt: cmd.prompt ?? "",
+          cwd: cmd.cwd,
+          tool: cmd.tool,
+          model: cmd.model,
+          interactionMode: cmd.interactionMode,
+          toolSessionId: cmd.toolSessionId,
         });
         break;
       }
       case "send": {
-        if (!msg.sessionId || !msg.prompt) return;
         this.runPrompt({
-          sessionId: msg.sessionId,
-          prompt: msg.prompt as string,
-          cwd: msg.cwd as string | undefined,
-          tool: msg.tool as string | undefined,
-          model: msg.model as string | undefined,
-          interactionMode: msg.interactionMode as string | undefined,
-          toolSessionId: msg.toolSessionId as string | undefined,
+          sessionId: cmd.sessionId,
+          prompt: cmd.prompt,
+          cwd: cmd.cwd,
+          tool: cmd.tool,
+          model: cmd.model,
+          interactionMode: cmd.interactionMode,
+          toolSessionId: cmd.toolSessionId,
         });
         break;
       }
       case "prepare": {
-        if (!msg.sessionId) return;
-        const sessionId = msg.sessionId;
-        const repoId = msg.repoId as string;
-        const repoName = msg.repoName as string;
-        const defaultBranch = (msg.defaultBranch as string) ?? "main";
-
-        const startBranch = msg.branch as string | undefined;
+        const { sessionId, repoId, repoName, defaultBranch, branch } = cmd;
 
         const config = readConfig();
         const repoPath = config.repos[repoId];
@@ -187,7 +195,7 @@ export class BridgeClient {
           break;
         }
 
-        createWorktree({ repoPath, repoId, sessionId, defaultBranch, startBranch })
+        createWorktree({ repoPath, repoId, sessionId, defaultBranch, startBranch: branch })
           .then(({ workdir }) => {
             this.send({ type: "workspace_ready", sessionId, workdir });
           })
@@ -197,8 +205,7 @@ export class BridgeClient {
         break;
       }
       case "terminate": {
-        if (!msg.sessionId) return;
-        const adapter = this.adapters.get(msg.sessionId);
+        const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           // Abort the running process but keep the adapter so it retains
           // the Claude Code session ID for --resume on subsequent messages.
@@ -206,46 +213,38 @@ export class BridgeClient {
         }
         break;
       }
+      case "pause": {
+        const pauseAdapter = this.adapters.get(cmd.sessionId);
+        if (pauseAdapter) {
+          pauseAdapter.abort();
+        }
+        break;
+      }
+      case "resume": {
+        // Nothing to do — the adapter is kept and will be reused on next run/send
+        break;
+      }
       case "delete": {
-        if (!msg.sessionId) return;
-        const deleteAdapter = this.adapters.get(msg.sessionId);
+        const deleteAdapter = this.adapters.get(cmd.sessionId);
         if (deleteAdapter) {
           deleteAdapter.abort();
-          this.adapters.delete(msg.sessionId);
+          this.adapters.delete(cmd.sessionId);
         }
-        this.sessionTools.delete(msg.sessionId);
-        this.reportedToolSessionIds.delete(msg.sessionId);
+        this.sessionTools.delete(cmd.sessionId);
+        this.reportedToolSessionIds.delete(cmd.sessionId);
 
         // Clean up worktree if one exists
-        const workdir = msg.workdir as string | undefined;
-        const repoId = msg.repoId as string | undefined;
-        if (workdir && repoId) {
+        if (cmd.workdir && cmd.repoId) {
           const config = readConfig();
-          const repoPath = config.repos[repoId];
+          const repoPath = config.repos[cmd.repoId];
           if (repoPath) {
-            removeWorktree({ repoPath, worktreePath: workdir }).catch((err: Error) => {
-              console.warn(`[bridge] failed to remove worktree ${workdir}:`, err.message);
+            removeWorktree({ repoPath, worktreePath: cmd.workdir }).catch((err: Error) => {
+              console.warn(`[bridge] failed to remove worktree ${cmd.workdir}:`, err.message);
             });
           }
         }
         break;
       }
     }
-  }
-
-  send(data: unknown) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
-    }
-  }
-
-  disconnect() {
-    this.stopHeartbeat();
-    for (const adapter of this.adapters.values()) {
-      adapter.abort();
-    }
-    this.adapters.clear();
-    this.ws?.close();
-    this.ws = null;
   }
 }

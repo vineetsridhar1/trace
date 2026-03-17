@@ -17,6 +17,8 @@ import { buildContext, buildWsContext } from "./lib/auth.js";
 import { handleBridgeConnection } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
 import { sessionService } from "./services/session.js";
+import { CloudMachineService } from "./lib/cloud-machine-service.js";
+import { flyProvider } from "./lib/fly-provider.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -25,6 +27,10 @@ async function main() {
   const app = express();
   const httpServer = createServer(app);
   const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+  // Initialize cloud machine service and inject into session router
+  const cloudMachineService = new CloudMachineService(flyProvider, "fly");
+  sessionRouter.setCloudMachineService(cloudMachineService);
 
   app.use(cors({
     origin: process.env.CORS_ALLOWED_ORIGINS
@@ -73,9 +79,22 @@ async function main() {
         wsServer.emit("connection", ws, req);
       });
     } else if (pathname === "/bridge") {
-      bridgeWss.handleUpgrade(req, socket, head, (ws) => {
-        bridgeWss.emit("connection", ws, req);
-      });
+      // Cloud bridges must provide a valid token; local bridges (no token) are allowed
+      const url = new URL(req.url ?? "", "http://localhost");
+      const token = url.searchParams.get("token");
+
+      const validateAndUpgrade = async () => {
+        if (token && !(await cloudMachineService.isValidBridgeToken(token))) {
+          socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+
+        bridgeWss.handleUpgrade(req, socket, head, (ws) => {
+          bridgeWss.emit("connection", ws, req);
+        });
+      };
+      validateAndUpgrade().catch(() => socket.destroy());
     } else {
       socket.destroy();
     }
@@ -102,6 +121,9 @@ async function main() {
 
   await apollo.start();
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
+
+  // Restore cloud machine state from DB
+  await cloudMachineService.restoreFromDb();
 
   const PORT = process.env.PORT ?? 4000;
   httpServer.listen(PORT, () => {

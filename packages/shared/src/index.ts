@@ -1,2 +1,3 @@
 export type { CodingToolAdapter, OutputCallback, RunOptions, ToolOutput, AssistantEvent, ResultEvent, ErrorEvent, MessageBlock, ContentBlock, ToolUseBlock, ToolResultBlock, QuestionOption, Question, QuestionBlock, PlanBlock } from "./adapters/coding-tool.js";
 export { hasPlanBlock, hasQuestionBlock, parseQuestion } from "./adapters/coding-tool.js";
+export type { BridgeClient, BridgeCommand, BridgeMessage, BridgeRunCommand, BridgeSendCommand, BridgePrepareCommand, BridgeTerminateCommand, BridgePauseCommand, BridgeResumeCommand, BridgeDeleteCommand, BridgeRuntimeHello, BridgeRuntimeHeartbeat, BridgeRegisterSession, BridgeSessionOutput, BridgeSessionComplete, BridgeWorkspaceReady, BridgeWorkspaceFailed, BridgeToolSessionId } from "./bridge.js";

@@ -1,0 +1,82 @@
+import { execFile } from "child_process";
+import { promisify } from "util";
+import fs from "fs";
+
+const execFileAsync = promisify(execFile);
+
+const REPOS_DIR = "/repos";
+const WORKSPACES_DIR = "/workspaces";
+
+/**
+ * Ensure a bare repo exists at /repos/{repoId}.
+ * Clones if missing, fetches if already present.
+ */
+export async function ensureRepo(repoId: string, remoteUrl: string): Promise<string> {
+  const repoPath = `${REPOS_DIR}/${repoId}`;
+
+  // Inject GitHub token into HTTPS URL for private repo access
+  let authUrl = remoteUrl;
+  const githubToken = process.env.GITHUB_TOKEN;
+  if (githubToken && remoteUrl.startsWith("https://github.com")) {
+    authUrl = remoteUrl.replace("https://github.com", `https://x-access-token:${githubToken}@github.com`);
+  }
+
+  if (fs.existsSync(repoPath)) {
+    // Repo already cloned — fetch latest
+    console.log(`[workspace] fetching latest for repo ${repoId}`);
+    await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+    return repoPath;
+  }
+
+  // Clone the repo (bare-ish: we use worktrees for actual working copies)
+  fs.mkdirSync(REPOS_DIR, { recursive: true });
+  console.log(`[workspace] cloning ${remoteUrl} into ${repoPath}`);
+  await execFileAsync("git", ["clone", authUrl, repoPath]);
+  return repoPath;
+}
+
+/**
+ * Create a worktree at /workspaces/{sessionId} from the repo at /repos/{repoId}.
+ */
+export async function createWorktree(
+  repoId: string,
+  sessionId: string,
+  defaultBranch: string,
+  branch?: string,
+): Promise<{ workdir: string }> {
+  const repoPath = `${REPOS_DIR}/${repoId}`;
+  const worktreePath = `${WORKSPACES_DIR}/${sessionId}`;
+
+  // If worktree already exists, reuse it
+  if (fs.existsSync(worktreePath)) {
+    return { workdir: worktreePath };
+  }
+
+  fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
+
+  const branchName = `trace/${sessionId}`;
+  const baseBranch = branch ?? defaultBranch;
+
+  // Check if the branch already exists
+  const branchExists = await execFileAsync(
+    "git", ["rev-parse", "--verify", branchName],
+    { cwd: repoPath },
+  ).then(() => true, () => false);
+
+  if (branchExists) {
+    await execFileAsync("git", ["worktree", "add", worktreePath, branchName], { cwd: repoPath });
+  } else {
+    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseBranch], { cwd: repoPath });
+  }
+
+  return { workdir: worktreePath };
+}
+
+/**
+ * Remove a worktree for a deleted session.
+ */
+export async function removeWorktree(repoId: string, worktreePath: string): Promise<void> {
+  const repoPath = `${REPOS_DIR}/${repoId}`;
+  if (!fs.existsSync(repoPath)) return;
+  await execFileAsync("git", ["worktree", "remove", worktreePath, "--force"], { cwd: repoPath });
+}

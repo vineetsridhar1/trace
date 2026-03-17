@@ -1,0 +1,21 @@
+{
+  "name": "@trace/container-bridge",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "start": "node dist/index.js",
+    "lint": "tsc -b"
+  },
+  "dependencies": {
+    "@trace/shared": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.0"
+  }
+}

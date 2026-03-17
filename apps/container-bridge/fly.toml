@@ -1,0 +1,4 @@
+app = "trace-sessions"
+
+[build]
+  dockerfile = "Dockerfile"

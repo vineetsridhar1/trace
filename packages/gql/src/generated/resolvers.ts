@@ -36,6 +36,18 @@ export type AgentTrustLevel =
   | 'blocked'
   | 'suggest';
 
+export type ApiTokenProvider =
+  | 'anthropic'
+  | 'github'
+  | 'openai';
+
+export type ApiTokenStatus = {
+  __typename?: 'ApiTokenStatus';
+  isSet: Scalars['Boolean']['output'];
+  provider: ApiTokenProvider;
+  updatedAt?: Maybe<Scalars['DateTime']['output']>;
+};
+
 export type Channel = {
   __typename?: 'Channel';
   id: Scalars['ID']['output'];
@@ -174,6 +186,7 @@ export type Mutation = {
   createProject: Project;
   createRepo: Repo;
   createTicket: Ticket;
+  deleteApiToken: Scalars['Boolean']['output'];
   deleteSession: Session;
   dismissInboxItem: InboxItem;
   linkEntityToProject: Project;
@@ -185,6 +198,7 @@ export type Mutation = {
   runSession: Session;
   sendMessage: Event;
   sendSessionMessage: Event;
+  setApiToken: ApiTokenStatus;
   startSession: Session;
   terminateSession: Session;
   updateSessionConfig: Session;
@@ -215,6 +229,11 @@ export type MutationCreateRepoArgs = {
 
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
+};
+
+
+export type MutationDeleteApiTokenArgs = {
+  provider: ApiTokenProvider;
 };
 
 
@@ -280,6 +299,11 @@ export type MutationSendSessionMessageArgs = {
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
   text: Scalars['String']['input'];
+};
+
+
+export type MutationSetApiTokenArgs = {
+  input: SetApiTokenInput;
 };
 
 
@@ -355,6 +379,7 @@ export type Query = {
   channels: Array<Channel>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
+  myApiTokens: Array<ApiTokenStatus>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
   project?: Maybe<Project>;
@@ -554,6 +579,11 @@ export type SessionStatus =
   | 'pending'
   | 'unreachable';
 
+export type SetApiTokenInput = {
+  provider: ApiTokenProvider;
+  token: Scalars['String']['input'];
+};
+
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars['String']['input']>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
@@ -747,6 +777,8 @@ export type ResolversTypes = ResolversObject<{
   Actor: ResolverTypeWrapper<Actor>;
   ActorType: ActorType;
   AgentTrustLevel: AgentTrustLevel;
+  ApiTokenProvider: ApiTokenProvider;
+  ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelType: ChannelType;
@@ -784,6 +816,7 @@ export type ResolversTypes = ResolversObject<{
   SessionFilters: SessionFilters;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionStatus: SessionStatus;
+  SetApiTokenInput: SetApiTokenInput;
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   Subscription: ResolverTypeWrapper<{}>;
@@ -799,6 +832,7 @@ export type ResolversTypes = ResolversObject<{
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = ResolversObject<{
   Actor: Actor;
+  ApiTokenStatus: ApiTokenStatus;
   Boolean: Scalars['Boolean']['output'];
   Channel: Channel;
   CreateChannelInput: CreateChannelInput;
@@ -824,6 +858,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionRuntimeInstance: SessionRuntimeInstance;
+  SetApiTokenInput: SetApiTokenInput;
   StartSessionInput: StartSessionInput;
   String: Scalars['String']['output'];
   Subscription: {};
@@ -838,6 +873,13 @@ export type ActorResolvers<ContextType = Context, ParentType extends ResolversPa
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['ActorType'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ApiTokenStatusResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ApiTokenStatus'] = ResolversParentTypes['ApiTokenStatus']> = ResolversObject<{
+  isSet?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  provider?: Resolver<ResolversTypes['ApiTokenProvider'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -893,6 +935,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationCreateProjectArgs, 'input'>>;
   createRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationCreateRepoArgs, 'input'>>;
   createTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationCreateTicketArgs, 'input'>>;
+  deleteApiToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteApiTokenArgs, 'provider'>>;
   deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
@@ -904,6 +947,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
+  setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
   updateSessionConfig?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionConfigArgs, 'sessionId'>>;
@@ -953,6 +997,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
   inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
+  myApiTokens?: Resolver<Array<ResolversTypes['ApiTokenStatus']>, ParentType, ContextType>;
   mySessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QueryMySessionsArgs, 'organizationId'>>;
   organization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<QueryOrganizationArgs, 'id'>>;
   project?: Resolver<Maybe<ResolversTypes['Project']>, ParentType, ContextType, RequireFields<QueryProjectArgs, 'id'>>;
@@ -1070,6 +1115,7 @@ export type UserResolvers<ContextType = Context, ParentType extends ResolversPar
 
 export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
+  ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;

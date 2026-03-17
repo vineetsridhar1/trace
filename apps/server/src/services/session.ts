@@ -155,7 +155,6 @@ export class SessionService {
 
     // Only need workspace creation if repo is selected and parent doesn't already have a workdir
     const needsWorkspace = !!input.repoId && !parentWorkdir;
-    const initialStatus = needsWorkspace ? "creating" : "pending";
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
     let hosting = input.hosting ?? "cloud";
@@ -165,6 +164,9 @@ export class SessionService {
         hosting = runtime.hostingMode;
       }
     }
+
+    // Cloud sessions always start as "creating" — the VM needs time to boot
+    const initialStatus = (needsWorkspace || hosting === "cloud") ? "creating" : "pending";
 
     const [session] = await prisma.$transaction(async (tx) => {
       const session = await tx.session.create({
@@ -236,21 +238,19 @@ export class SessionService {
       });
     }
 
-    // If repo selected, send prepare command to bridge for worktree creation
-    if (needsWorkspace && session.repo) {
-      const result = sessionRouter.send(session.id, {
-        type: "prepare",
+    if (needsWorkspace || session.hosting === "cloud") {
+      sessionRouter.createRuntime({
         sessionId: session.id,
-        repoId: session.repo.id,
-        repoName: session.repo.name,
-        repoRemoteUrl: session.repo.remoteUrl,
-        defaultBranch: session.repo.defaultBranch,
+        hosting: session.hosting as "cloud" | "local",
+        tool: session.tool,
+        model: session.model ?? undefined,
+        repo: session.repo ? { id: session.repo.id, name: session.repo.name, remoteUrl: session.repo.remoteUrl, defaultBranch: session.repo.defaultBranch } : null,
         branch: input.branch ?? undefined,
+        createdById: input.createdById,
+        organizationId: input.organizationId,
+        onFailed: (error) => this.workspaceFailed(session.id, error),
+        onWorkspaceReady: (workdir) => this.workspaceReady(session.id, workdir),
       });
-
-      if (result !== "delivered") {
-        await this.persistConnectionFailure(session.id, session.organizationId, result, "prepare");
-      }
     }
 
     return session;
@@ -375,14 +375,8 @@ export class SessionService {
     // Resolve any pending inbox items (plans/questions awaiting input)
     await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session deleted" });
 
-    // Tell the bridge to clean up (abort adapter, remove worktree)
-    const deliveryResult = sessionRouter.send(id, { type: "delete", sessionId: id, workdir: session.workdir, repoId: session.repoId });
-    if (deliveryResult !== "delivered") {
-      console.warn(`[session.delete] bridge did not receive delete for ${id}: ${deliveryResult} — worktree may be orphaned`);
-    }
-
-    // Unbind from the runtime
-    sessionRouter.unbindSession(id);
+    // Clean up runtime (bridge + cloud VM for cloud, bridge + worktree for local)
+    await sessionRouter.destroyRuntime(id, session);
 
     // Orphan children, delete junctions, delete session — all in one transaction
     await prisma.$transaction(async (tx) => {
@@ -417,13 +411,17 @@ export class SessionService {
     actorType: ActorType,
     actorId: string,
   ) {
-    const deliveryResult = sessionRouter.send(id, { type: command, sessionId: id });
+    const current = await prisma.session.findUniqueOrThrow({
+      where: { id },
+      select: { hosting: true, organizationId: true },
+    });
+
+    const deliveryResult = await sessionRouter.transitionRuntime(id, current.hosting, command);
 
     // For terminate, proceed regardless — we want the session marked as terminated
     // For pause/resume, only proceed if delivered or if terminating
     if (command !== "terminate" && deliveryResult !== "delivered") {
-      const session = await prisma.session.findUniqueOrThrow({ where: { id }, select: { organizationId: true } });
-      await this.persistConnectionFailure(id, session.organizationId, deliveryResult, command);
+      await this.persistConnectionFailure(id, current.organizationId, deliveryResult, command);
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
 
@@ -1205,20 +1203,20 @@ export class SessionService {
       actorId,
     });
 
-    // Start workspace preparation on the target runtime if needed
-    if (childSession.repo) {
-      const prepareResult = sessionRouter.send(childSession.id, {
-        type: "prepare",
+    // Provision the runtime on the target
+    if (childSession.repo || targetRuntime.hostingMode === "cloud") {
+      sessionRouter.createRuntime({
         sessionId: childSession.id,
-        repoId: childSession.repo.id,
-        repoName: childSession.repo.name,
-        repoRemoteUrl: childSession.repo.remoteUrl,
-        defaultBranch: childSession.repo.defaultBranch,
+        hosting: targetRuntime.hostingMode,
+        tool: childSession.tool,
+        model: childSession.model ?? undefined,
+        repo: childSession.repo ? { id: childSession.repo.id, name: childSession.repo.name, remoteUrl: childSession.repo.remoteUrl, defaultBranch: childSession.repo.defaultBranch } : null,
         branch: childSession.branch ?? undefined,
+        createdById: actorId,
+        organizationId: childSession.organizationId,
+        onFailed: (error) => this.workspaceFailed(childSession.id, error),
+        onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
       });
-      if (prepareResult !== "delivered") {
-        await this.persistConnectionFailure(childSession.id, childSession.organizationId, prepareResult, "move_prepare");
-      }
     } else {
       const deliveryResult = await this.deliverPendingCommand(childSession.id, childSession.pendingRun);
       if (deliveryResult && deliveryResult !== "delivered") {
