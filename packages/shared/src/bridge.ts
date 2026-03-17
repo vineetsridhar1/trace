@@ -59,6 +59,12 @@ export interface BridgeDeleteCommand {
   repoId?: string;
 }
 
+export interface BridgeListBranchesCommand {
+  type: "list_branches";
+  requestId: string;
+  repoId: string;
+}
+
 export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
@@ -66,7 +72,8 @@ export type BridgeCommand =
   | BridgeTerminateCommand
   | BridgePauseCommand
   | BridgeResumeCommand
-  | BridgeDeleteCommand;
+  | BridgeDeleteCommand
+  | BridgeListBranchesCommand;
 
 // --- Bridge → Server messages ---
 
@@ -125,6 +132,13 @@ export interface BridgeRepoLinked {
   repoId: string;
 }
 
+export interface BridgeBranchesResult {
+  type: "branches_result";
+  requestId: string;
+  branches: string[];
+  error?: string;
+}
+
 export type BridgeMessage =
   | BridgeRuntimeHello
   | BridgeRuntimeHeartbeat
@@ -134,7 +148,8 @@ export type BridgeMessage =
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
   | BridgeToolSessionId
-  | BridgeRepoLinked;
+  | BridgeRepoLinked
+  | BridgeBranchesResult;
 
 // --- Bridge client interface ---
 

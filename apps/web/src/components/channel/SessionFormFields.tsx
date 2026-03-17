@@ -20,14 +20,13 @@ interface SessionFormFieldsProps {
   onRuntimeChange: (id: string | undefined, info: RuntimeInfo | null) => void;
   onRepoChange: (repoId: string | undefined) => void;
   onBranchChange: (branch: string) => void;
-  onRuntimeInfoChange: (info: RuntimeInfo) => void;
   onModeChange: () => void;
 }
 
 export function SessionFormFields({
   tool, model, runtimeInstanceId, runtimeInfo, repoId, branch, mode, dialogOpen,
   onToolChange, onModelChange, onRuntimeChange, onRepoChange, onBranchChange,
-  onRuntimeInfoChange, onModeChange,
+  onModeChange,
 }: SessionFormFieldsProps) {
   const modelOptions = getModelsForTool(tool);
   const modeConfig = MODE_CONFIG[mode];
@@ -66,9 +65,9 @@ export function SessionFormFields({
         repoId={repoId}
         branch={branch}
         runtimeInfo={runtimeInfo}
+        runtimeInstanceId={runtimeInstanceId}
         onRepoChange={onRepoChange}
         onBranchChange={onBranchChange}
-        onRuntimeInfoChange={onRuntimeInfoChange}
       />
       <div>
         <label className="mb-1.5 block text-sm text-muted-foreground">Mode</label>

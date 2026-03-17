@@ -86,6 +86,15 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
+      if (msg.type === "branches_result" && msg.requestId) {
+        sessionRouter.resolveBranchRequest(
+          msg.requestId as string,
+          (msg.branches as string[]) ?? [],
+          msg.error as string | undefined,
+        );
+        return;
+      }
+
       if (msg.type === "session_output" && msg.sessionId) {
         const sessionId = msg.sessionId as string;
         const data = (msg.data ?? {}) as Record<string, unknown>;

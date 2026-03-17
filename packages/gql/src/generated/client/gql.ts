@@ -34,9 +34,10 @@ type Documents = {
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": typeof types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": typeof types.MoveSessionToRuntimeDocument,
     "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": typeof types.DeleteSessionDocument,
-    "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": typeof types.AvailableSessionRuntimesDocument,
+    "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": typeof types.AvailableSessionRuntimesDocument,
     "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": typeof types.DismissInboxItemDocument,
-    "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": typeof types.AvailableRuntimesDocument,
+    "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": typeof types.AvailableRuntimesDocument,
+    "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateRepoDocument,
 };
 const documents: Documents = {
     "\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n    }\n  }\n": types.ChannelsDocument,
@@ -59,9 +60,10 @@ const documents: Documents = {
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": types.MoveSessionToRuntimeDocument,
     "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": types.DeleteSessionDocument,
-    "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": types.AvailableSessionRuntimesDocument,
+    "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": types.AvailableSessionRuntimesDocument,
     "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": types.DismissInboxItemDocument,
-    "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n": types.AvailableRuntimesDocument,
+    "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": types.AvailableRuntimesDocument,
+    "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateRepoDocument,
 };
 
 /**
@@ -161,7 +163,7 @@ export function graphql(source: "\n  mutation DeleteSession($id: ID!) {\n    del
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n"): (typeof documents)["\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n"];
+export function graphql(source: "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n"): (typeof documents)["\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -169,7 +171,11 @@ export function graphql(source: "\n  mutation DismissInboxItem($id: ID!) {\n    
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n"): (typeof documents)["\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n    }\n  }\n"];
+export function graphql(source: "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n"): (typeof documents)["\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

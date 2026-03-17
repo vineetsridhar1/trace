@@ -1,7 +1,8 @@
 import WebSocket from "ws";
+import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
-import { ensureRepo, createWorktree, removeWorktree } from "./workspace.js";
+import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 
 /**
@@ -184,6 +185,32 @@ export class ContainerBridge implements IBridgeClient {
             console.warn(`[container-bridge] failed to remove worktree ${cmd.workdir}:`, err.message);
           });
         }
+        break;
+      }
+
+      case "list_branches": {
+        const { requestId, repoId } = cmd;
+        const repoPath = getRepoPath(repoId);
+
+        if (!repoPath) {
+          this.send({ type: "branches_result", requestId, branches: [], error: "Repo not cloned" });
+          break;
+        }
+
+        execFile("git", ["branch", "-a", "--format=%(refname:short)"], { cwd: repoPath }, (err, stdout) => {
+          if (err) {
+            this.send({ type: "branches_result", requestId, branches: [], error: err.message });
+            return;
+          }
+          const branches = stdout
+            .split("\n")
+            .map((b) => b.trim())
+            .filter(Boolean)
+            .map((b) => b.replace(/^origin\//, ""))
+            .filter((b) => b !== "HEAD" && !b.includes(" -> "));
+          const unique = [...new Set(branches)];
+          this.send({ type: "branches_result", requestId, branches: unique });
+        });
         break;
       }
     }

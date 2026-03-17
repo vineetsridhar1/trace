@@ -1,4 +1,5 @@
 import type WebSocket from "ws";
+import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
 import { prisma } from "./db.js";
@@ -213,6 +214,8 @@ export class SessionRouter {
   private sessionRuntime = new Map<string, string>();
   /** Pending waitForBridge promises for cloud sessions */
   private pendingWaits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
+  /** Pending branch list requests: requestId → resolve/reject */
+  private pendingBranchRequests = new Map<string, { resolve: (branches: string[]) => void; reject: (err: Error) => void }>();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -501,6 +504,44 @@ export class SessionRouter {
       lastHeartbeatAgeMs: now - runtime.lastHeartbeat,
       boundSessions: [...runtime.boundSessions],
     }));
+  }
+
+  /**
+   * Ask a runtime to list branches for a given repo.
+   * Returns a promise that resolves when the bridge responds with branches_result.
+   */
+  listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
+      return Promise.reject(new Error("Runtime not connected"));
+    }
+
+    const requestId = randomUUID();
+    return new Promise<string[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingBranchRequests.delete(requestId);
+        reject(new Error("Branch list request timed out"));
+      }, timeoutMs);
+
+      this.pendingBranchRequests.set(requestId, {
+        resolve: (branches) => { clearTimeout(timer); resolve(branches); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+
+      runtime.ws.send(JSON.stringify({ type: "list_branches", requestId, repoId }));
+    });
+  }
+
+  /** Resolve a pending branch list request (called from bridge handler). */
+  resolveBranchRequest(requestId: string, branches: string[], error?: string): void {
+    const pending = this.pendingBranchRequests.get(requestId);
+    if (!pending) return;
+    this.pendingBranchRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(branches);
+    }
   }
 
   // --- Adapter-dispatched lifecycle methods ---

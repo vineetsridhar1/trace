@@ -7,6 +7,7 @@ import type {
 } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { sessionRouter } from "../lib/session-router.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
 export const sessionQueries = {
@@ -24,6 +25,9 @@ export const sessionQueries = {
   },
   availableRuntimes: (_: unknown, args: { tool: CodingToolEnum }, ctx: Context) => {
     return sessionService.listRuntimesForTool(args.tool, ctx.organizationId);
+  },
+  repoBranches: (_: unknown, args: { runtimeInstanceId: string; repoId: string }) => {
+    return sessionRouter.listBranches(args.runtimeInstanceId, args.repoId);
   },
 };
 

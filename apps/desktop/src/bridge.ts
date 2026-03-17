@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import os from "os";
+import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
@@ -285,6 +286,34 @@ export class BridgeClient implements IBridgeClient {
             });
           }
         }
+        break;
+      }
+      case "list_branches": {
+        const { requestId, repoId } = cmd;
+        const config = readConfig();
+        const repoPath = config.repos[repoId];
+
+        if (!repoPath) {
+          this.send({ type: "branches_result", requestId, branches: [], error: "Repo not linked" });
+          break;
+        }
+
+        execFile("git", ["branch", "-a", "--format=%(refname:short)"], { cwd: repoPath }, (err, stdout) => {
+          if (err) {
+            this.send({ type: "branches_result", requestId, branches: [], error: err.message });
+            return;
+          }
+          const branches = stdout
+            .split("\n")
+            .map((b) => b.trim())
+            .filter(Boolean)
+            // Normalize remote branches: "origin/foo" → "foo", skip HEAD pointer
+            .map((b) => b.replace(/^origin\//, ""))
+            .filter((b) => b !== "HEAD" && !b.includes(" -> "));
+          // Deduplicate (local + remote may overlap)
+          const unique = [...new Set(branches)];
+          this.send({ type: "branches_result", requestId, branches: unique });
+        });
         break;
       }
     }
