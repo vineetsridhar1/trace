@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowLeft, History, Square, Circle, WifiOff } from "lucide-react";
+import { ArrowLeft, History, Square, Circle, WifiOff, TerminalSquare } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel, isDisconnected } from "./sessionStatus";
@@ -8,9 +8,13 @@ import { SessionHistory } from "./SessionHistory";
 export function SessionHeader({
   sessionId,
   onStop,
+  onToggleTerminal,
+  terminalOpen,
 }: {
   sessionId: string;
   onStop: () => void;
+  onToggleTerminal?: () => void;
+  terminalOpen?: boolean;
 }) {
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
@@ -59,6 +63,21 @@ export function SessionHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        {onToggleTerminal && (
+          <button
+            onClick={onToggleTerminal}
+            className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors ${
+              terminalOpen
+                ? "bg-surface-elevated text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
+            }`}
+            title="Toggle terminal"
+          >
+            <TerminalSquare size={14} />
+            <span className="hidden sm:inline">Terminal</span>
+          </button>
+        )}
+
         <div className="relative" ref={historyRef}>
           <button
             onClick={() => setShowHistory(!showHistory)}

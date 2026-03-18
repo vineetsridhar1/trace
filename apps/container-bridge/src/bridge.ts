@@ -5,6 +5,7 @@ import { parseBranchOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
+import { TerminalManager } from "./terminal-manager.js";
 
 /**
  * Multi-session container bridge — runs inside a Fly Machine (one per user per org).
@@ -18,13 +19,26 @@ export class ContainerBridge implements IBridgeClient {
   private reportedToolSessionIds = new Map<string, string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private sessionWorkdirs = new Map<string, string>();
+  private terminalSessions = new Map<string, string>();
+  private terminalManager: TerminalManager;
 
   constructor(
     private readonly serverUrl: string,
     private readonly token: string,
     private readonly machineId: string,
     private readonly defaultTool: string,
-  ) {}
+  ) {
+    this.terminalManager = new TerminalManager({
+      onOutput: (terminalId, data) => {
+        this.send({ type: "terminal_output", terminalId, data });
+      },
+      onExit: (terminalId, exitCode) => {
+        this.terminalSessions.delete(terminalId);
+        this.send({ type: "terminal_exit", terminalId, exitCode });
+      },
+    });
+  }
 
   connect(): void {
     const url = `${this.serverUrl}?token=${encodeURIComponent(this.token)}`;
@@ -67,6 +81,8 @@ export class ContainerBridge implements IBridgeClient {
 
   disconnect(): void {
     this.stopHeartbeat();
+    this.terminalManager.destroyAll();
+    this.terminalSessions.clear();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -142,6 +158,7 @@ export class ContainerBridge implements IBridgeClient {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
             const { workdir } = await createWorktree(repoId, sessionId, defaultBranch, branch);
+            this.sessionWorkdirs.set(sessionId, workdir);
             // Register this session with the server
             this.send({ type: "register_session", sessionId });
             this.send({ type: "workspace_ready", sessionId, workdir });
@@ -179,6 +196,11 @@ export class ContainerBridge implements IBridgeClient {
         }
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
+        this.sessionWorkdirs.delete(cmd.sessionId);
+        this.terminalManager.destroyForSession(cmd.sessionId, this.terminalSessions);
+        for (const [tid, sid] of this.terminalSessions) {
+          if (sid === cmd.sessionId) this.terminalSessions.delete(tid);
+        }
 
         // Clean up worktree for this session only — keep the machine and bare repo
         if (cmd.workdir && cmd.repoId) {
@@ -205,6 +227,33 @@ export class ContainerBridge implements IBridgeClient {
           }
           this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
         });
+        break;
+      }
+
+      case "terminal_create": {
+        const { terminalId, sessionId, cols, rows, cwd } = cmd;
+        const workdir = cwd || this.sessionWorkdirs.get(sessionId) || "/workspace";
+        try {
+          this.terminalManager.create(terminalId, workdir, cols, rows);
+          this.terminalSessions.set(terminalId, sessionId);
+          this.send({ type: "terminal_ready", terminalId });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.send({ type: "terminal_error", terminalId, error: message });
+        }
+        break;
+      }
+      case "terminal_input": {
+        this.terminalManager.write(cmd.terminalId, cmd.data);
+        break;
+      }
+      case "terminal_resize": {
+        this.terminalManager.resize(cmd.terminalId, cmd.cols, cmd.rows);
+        break;
+      }
+      case "terminal_destroy": {
+        this.terminalManager.destroy(cmd.terminalId);
+        this.terminalSessions.delete(cmd.terminalId);
         break;
       }
     }

@@ -186,9 +186,11 @@ export type Mutation = {
   createChannel: Channel;
   createProject: Project;
   createRepo: Repo;
+  createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
   deleteSession: Session;
+  destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
@@ -229,6 +231,13 @@ export type MutationCreateRepoArgs = {
 };
 
 
+export type MutationCreateTerminalArgs = {
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
+  sessionId: Scalars['ID']['input'];
+};
+
+
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
@@ -241,6 +250,11 @@ export type MutationDeleteApiTokenArgs = {
 
 export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationDestroyTerminalArgs = {
+  terminalId: Scalars['ID']['input'];
 };
 
 
@@ -660,6 +674,12 @@ export type SubscriptionUserNotificationsArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
+export type Terminal = {
+  __typename?: 'Terminal';
+  id: Scalars['ID']['output'];
+  sessionId: Scalars['ID']['output'];
+};
+
 export type TerminalEndpoint = {
   __typename?: 'TerminalEndpoint';
   id: Scalars['String']['output'];
@@ -841,6 +861,7 @@ export type ResolversTypes = ResolversObject<{
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   Subscription: ResolverTypeWrapper<{}>;
+  Terminal: ResolverTypeWrapper<Terminal>;
   TerminalEndpoint: ResolverTypeWrapper<TerminalEndpoint>;
   Ticket: ResolverTypeWrapper<Ticket>;
   TicketFilters: TicketFilters;
@@ -884,6 +905,7 @@ export type ResolversParentTypes = ResolversObject<{
   StartSessionInput: StartSessionInput;
   String: Scalars['String']['output'];
   Subscription: {};
+  Terminal: Terminal;
   TerminalEndpoint: TerminalEndpoint;
   Ticket: Ticket;
   TicketFilters: TicketFilters;
@@ -957,9 +979,11 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
   createProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationCreateProjectArgs, 'input'>>;
   createRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationCreateRepoArgs, 'input'>>;
+  createTerminal?: Resolver<ResolversTypes['Terminal'], ParentType, ContextType, RequireFields<MutationCreateTerminalArgs, 'cols' | 'rows' | 'sessionId'>>;
   createTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationCreateTicketArgs, 'input'>>;
   deleteApiToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteApiTokenArgs, 'provider'>>;
   deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
+  destroyTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDestroyTerminalArgs, 'terminalId'>>;
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
@@ -1108,6 +1132,12 @@ export type SubscriptionResolvers<ContextType = Context, ParentType extends Reso
   userNotifications?: SubscriptionResolver<ResolversTypes['Notification'], "userNotifications", ParentType, ContextType, RequireFields<SubscriptionUserNotificationsArgs, 'organizationId'>>;
 }>;
 
+export type TerminalResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Terminal'] = ResolversParentTypes['Terminal']> = ResolversObject<{
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type TerminalEndpointResolvers<ContextType = Context, ParentType extends ResolversParentTypes['TerminalEndpoint'] = ResolversParentTypes['TerminalEndpoint']> = ResolversObject<{
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1159,6 +1189,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
+  Terminal?: TerminalResolvers<ContextType>;
   TerminalEndpoint?: TerminalEndpointResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
   User?: UserResolvers<ContextType>;

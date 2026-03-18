@@ -105,3 +105,18 @@ export const REPO_BRANCHES_QUERY = gql`
     repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)
   }
 `;
+
+export const CREATE_TERMINAL_MUTATION = gql`
+  mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
+    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
+      id
+      sessionId
+    }
+  }
+`;
+
+export const DESTROY_TERMINAL_MUTATION = gql`
+  mutation DestroyTerminal($terminalId: ID!) {
+    destroyTerminal(terminalId: $terminalId)
+  }
+`;
