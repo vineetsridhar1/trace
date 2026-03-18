@@ -25,6 +25,9 @@ export const sessionQueries = {
   availableRuntimes: (_: unknown, args: { tool: CodingToolEnum }, ctx: Context) => {
     return sessionService.listRuntimesForTool(args.tool, ctx.organizationId);
   },
+  repoBranches: (_: unknown, args: { repoId: string; runtimeInstanceId?: string | null }, ctx: Context) => {
+    return sessionService.listBranches(args.repoId, ctx.organizationId, args.runtimeInstanceId ?? undefined);
+  },
 };
 
 export const sessionMutations = {

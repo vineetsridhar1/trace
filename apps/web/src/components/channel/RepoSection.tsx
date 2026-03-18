@@ -6,32 +6,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Input } from "../ui/input";
 import { useEntityIds, useEntityField } from "../../stores/entity";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
-import { RepoNotLinkedWarning } from "./RepoNotLinkedWarning";
+import { BranchCombobox } from "./BranchCombobox";
 
 interface RepoSectionProps {
   repoId: string | undefined;
   branch: string;
   runtimeInfo: RuntimeInfo | null;
+  runtimeInstanceId: string | undefined;
   onRepoChange: (repoId: string | undefined) => void;
   onBranchChange: (branch: string) => void;
-  onRuntimeInfoChange: (info: RuntimeInfo) => void;
 }
 
 export function RepoSection({
   repoId,
   branch,
   runtimeInfo,
+  runtimeInstanceId,
   onRepoChange,
   onBranchChange,
-  onRuntimeInfoChange,
 }: RepoSectionProps) {
   const repoIds = useEntityIds("repos");
   const isDeviceBridge = runtimeInfo?.hostingMode === "local";
-  const isUnlinked = repoId && isDeviceBridge && runtimeInfo?.registeredRepoIds
-    && !runtimeInfo.registeredRepoIds.includes(repoId);
 
   if (repoIds.length === 0) return null;
 
@@ -72,22 +69,11 @@ export function RepoSection({
           <label className="mb-1.5 block text-sm text-muted-foreground">
             Branch
           </label>
-          <BranchInput repoId={repoId} value={branch} onChange={onBranchChange} />
-        </div>
-      )}
-
-      {isUnlinked && repoId && (
-        <div className="col-span-2">
-          <RepoNotLinkedWarning
+          <BranchCombobox
             repoId={repoId}
-            onLinked={() => {
-              if (runtimeInfo) {
-                onRuntimeInfoChange({
-                  ...runtimeInfo,
-                  registeredRepoIds: [...runtimeInfo.registeredRepoIds, repoId],
-                });
-              }
-            }}
+            runtimeInstanceId={runtimeInstanceId}
+            value={branch}
+            onChange={onBranchChange}
           />
         </div>
       )}
@@ -95,7 +81,7 @@ export function RepoSection({
   );
 }
 
-/** Select option for a single repo — shows "not linked" badge when needed */
+/** Select option for a single repo — disabled when not linked to the device bridge */
 function RepoOption({ id, isDeviceBridge, registeredRepoIds }: {
   id: string;
   isDeviceBridge: boolean;
@@ -105,7 +91,7 @@ function RepoOption({ id, isDeviceBridge, registeredRepoIds }: {
   const isLinked = !isDeviceBridge || !registeredRepoIds || registeredRepoIds.includes(id);
 
   return (
-    <SelectItem value={id}>
+    <SelectItem value={id} disabled={!isLinked}>
       <span className="flex items-center gap-1.5">
         {name ?? id}
         {!isLinked && (
@@ -116,22 +102,5 @@ function RepoOption({ id, isDeviceBridge, registeredRepoIds }: {
         )}
       </span>
     </SelectItem>
-  );
-}
-
-/** Text input for branch name with default branch as placeholder */
-function BranchInput({ repoId, value, onChange }: {
-  repoId: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const defaultBranch = useEntityField("repos", repoId, "defaultBranch");
-
-  return (
-    <Input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={defaultBranch ?? "main"}
-    />
   );
 }

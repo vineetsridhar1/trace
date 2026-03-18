@@ -390,6 +390,7 @@ export type Query = {
   project?: Maybe<Project>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
+  repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   session?: Maybe<Session>;
   sessions: Array<Session>;
@@ -459,6 +460,12 @@ export type QueryProjectsArgs = {
 
 export type QueryRepoArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryRepoBranchesArgs = {
+  repoId: Scalars['ID']['input'];
+  runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 

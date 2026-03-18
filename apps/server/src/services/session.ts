@@ -1344,6 +1344,18 @@ export class SessionService {
     return this.listRuntimesForTool(session.tool, organizationId);
   }
 
+  /** List branches for a repo by delegating to the bridge runtime. */
+  async listBranches(repoId: string, organizationId: string, runtimeInstanceId?: string): Promise<string[]> {
+    const repo = await prisma.repo.findFirst({
+      where: { id: repoId, organizationId },
+      select: { id: true },
+    });
+    if (!repo) throw new Error("Repo not found");
+    const runtimeId = runtimeInstanceId ?? sessionRouter.getRuntimeForRepo(repoId)?.id;
+    if (!runtimeId) throw new Error("No connected runtime available for this repo");
+    return sessionRouter.listBranches(runtimeId, repoId);
+  }
+
   // ─── Helpers ───
 
   /**

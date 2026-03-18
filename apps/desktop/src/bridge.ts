@@ -1,6 +1,8 @@
 import WebSocket from "ws";
 import os from "os";
+import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
+import { parseBranchOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
@@ -285,6 +287,25 @@ export class BridgeClient implements IBridgeClient {
             });
           }
         }
+        break;
+      }
+      case "list_branches": {
+        const { requestId, repoId } = cmd;
+        const config = readConfig();
+        const repoPath = config.repos[repoId];
+
+        if (!repoPath) {
+          this.send({ type: "branches_result", requestId, branches: [], error: "Repo not linked" });
+          break;
+        }
+
+        execFile("git", ["branch", "-a", "--format=%(refname:short)"], { cwd: repoPath }, (err, stdout) => {
+          if (err) {
+            this.send({ type: "branches_result", requestId, branches: [], error: err.message });
+            return;
+          }
+          this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
+        });
         break;
       }
     }

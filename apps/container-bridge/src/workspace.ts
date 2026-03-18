@@ -7,6 +7,12 @@ const execFileAsync = promisify(execFile);
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = "/workspaces";
 
+/** Get the local path for a repo by ID. Returns undefined if not cloned yet. */
+export function getRepoPath(repoId: string): string | undefined {
+  const p = `${REPOS_DIR}/${repoId}`;
+  return fs.existsSync(p) ? p : undefined;
+}
+
 /**
  * Ensure a bare repo exists at /repos/{repoId}.
  * Clones if missing, fetches if already present.

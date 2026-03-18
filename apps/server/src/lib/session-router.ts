@@ -1,4 +1,5 @@
 import type WebSocket from "ws";
+import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
 import { prisma } from "./db.js";
@@ -6,7 +7,7 @@ import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
 export interface SessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete";
+  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches";
   sessionId: string;
   prompt?: string;
   [key: string]: unknown;
@@ -213,6 +214,8 @@ export class SessionRouter {
   private sessionRuntime = new Map<string, string>();
   /** Pending waitForBridge promises for cloud sessions */
   private pendingWaits = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
+  /** Pending branch list requests: requestId → resolve/reject */
+  private pendingBranchRequests = new Map<string, { resolve: (branches: string[]) => void; reject: (err: Error) => void }>();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -459,6 +462,18 @@ export class SessionRouter {
     return undefined;
   }
 
+  /** Find a connected runtime that has a given repo registered (or any cloud runtime). */
+  getRuntimeForRepo(repoId: string): RuntimeInstance | undefined {
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.ws.readyState !== runtime.ws.OPEN) continue;
+      // Cloud runtimes support all repos; local runtimes must have the repo registered
+      if (runtime.hostingMode === "cloud" || runtime.registeredRepoIds.includes(repoId)) {
+        return runtime;
+      }
+    }
+    return undefined;
+  }
+
   /** List all connected runtimes, optionally filtered by hosting mode. */
   listRuntimes(filter?: { hostingMode?: string }): RuntimeInstance[] {
     const results: RuntimeInstance[] = [];
@@ -501,6 +516,55 @@ export class SessionRouter {
       lastHeartbeatAgeMs: now - runtime.lastHeartbeat,
       boundSessions: [...runtime.boundSessions],
     }));
+  }
+
+  /** Send a command directly to a runtime (not session-scoped). */
+  private sendToRuntime(runtimeId: string, command: Record<string, unknown>): DeliveryResult {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return "no_runtime";
+    if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
+    try {
+      runtime.ws.send(JSON.stringify(command));
+      return "delivered";
+    } catch {
+      return "delivery_failed";
+    }
+  }
+
+  /**
+   * Ask a runtime to list branches for a given repo.
+   * Returns a promise that resolves when the bridge responds with branches_result.
+   */
+  listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, { type: "list_branches", requestId, repoId });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<string[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingBranchRequests.delete(requestId);
+        reject(new Error("Branch list request timed out"));
+      }, timeoutMs);
+
+      this.pendingBranchRequests.set(requestId, {
+        resolve: (branches) => { clearTimeout(timer); resolve(branches); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+    });
+  }
+
+  /** Resolve a pending branch list request (called from bridge handler). */
+  resolveBranchRequest(requestId: string, branches: string[], error?: string): void {
+    const pending = this.pendingBranchRequests.get(requestId);
+    if (!pending) return;
+    this.pendingBranchRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(branches);
+    }
   }
 
   // --- Adapter-dispatched lifecycle methods ---

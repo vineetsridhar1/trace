@@ -118,7 +118,6 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
               onRuntimeChange={handleRuntimeChange}
               onRepoChange={setRepoId}
               onBranchChange={setBranch}
-              onRuntimeInfoChange={setRuntimeInfo}
               onModeChange={cycleMode}
             />
             <div>
