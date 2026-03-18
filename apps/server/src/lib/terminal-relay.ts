@@ -19,6 +19,9 @@ interface TerminalEntry {
  * No persistence — terminal data is ephemeral and never hits the event store.
  */
 class TerminalRelay {
+  /** If no frontend attaches within this window, kill the orphaned terminal. */
+  private static ORPHAN_TIMEOUT_MS = 5 * 60 * 1000;
+
   private terminals = new Map<string, TerminalEntry>();
   /** Reverse index: sessionId → Set<terminalId> for bulk cleanup */
   private sessionTerminals = new Map<string, Set<string>>();
@@ -207,6 +210,7 @@ class TerminalRelay {
       if (entry?.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
+      this.cancelOrphanCleanup(terminalId);
       this.terminals.delete(terminalId);
     }
     this.sessionTerminals.delete(sessionId);
@@ -217,12 +221,10 @@ class TerminalRelay {
     for (const [terminalId, entry] of this.terminals) {
       if (entry.frontendWs === ws) {
         entry.frontendWs = null;
+        this.scheduleOrphanCleanup(terminalId);
       }
     }
   }
-
-  /** 5 minutes — if no frontend attaches, kill the orphaned terminal. */
-  private static ORPHAN_TIMEOUT_MS = 5 * 60 * 1000;
 
   private scheduleOrphanCleanup(terminalId: string): void {
     const entry = this.terminals.get(terminalId);

@@ -5,6 +5,7 @@ import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, CREATE_TERMINAL_MUTATION, DESTROY_TERMINAL_MUTATION } from "../../lib/mutations";
 import { cn } from "../../lib/utils";
+import type { Terminal } from "@trace/gql";
 
 export function TerminalPanel({
   sessionId,
@@ -57,7 +58,11 @@ export function TerminalPanel({
         .query(SESSION_TERMINALS_QUERY, { sessionId })
         .toPromise();
 
-      const existing = result.data?.sessionTerminals as Array<{ id: string; sessionId: string }> | undefined;
+      if (result.error) {
+        console.warn("[terminal] failed to query existing terminals:", result.error.message);
+      }
+
+      const existing = result.data?.sessionTerminals as Terminal[] | undefined;
       if (existing && existing.length > 0) {
         for (const t of existing) {
           // Only add if not already in store (idempotent)
