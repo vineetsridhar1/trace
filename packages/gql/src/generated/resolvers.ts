@@ -39,7 +39,8 @@ export type AgentTrustLevel =
 export type ApiTokenProvider =
   | 'anthropic'
   | 'github'
-  | 'openai';
+  | 'openai'
+  | 'ssh_key';
 
 export type ApiTokenStatus = {
   __typename?: 'ApiTokenStatus';

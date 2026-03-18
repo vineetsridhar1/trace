@@ -34,7 +34,7 @@ function decrypt(encryptedWithTag: string, ivHex: string): string {
   return decrypted;
 }
 
-const ALL_PROVIDERS: ApiTokenProvider[] = ["anthropic", "openai", "github"];
+const ALL_PROVIDERS: ApiTokenProvider[] = ["anthropic", "openai", "github", "ssh_key"];
 
 export class ApiTokenService {
   async list(userId: string) {

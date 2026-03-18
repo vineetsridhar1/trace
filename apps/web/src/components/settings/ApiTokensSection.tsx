@@ -5,6 +5,7 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
 
 const API_TOKENS_QUERY = gql`
   query MyApiTokens {
@@ -54,6 +55,11 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
     placeholder: "ghp_...",
     description: "Used for repository access in cloud sessions",
   },
+  ssh_key: {
+    label: "SSH Key",
+    placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----",
+    description: "Used for SSH-based repository access in cloud sessions",
+  },
 };
 
 export function ApiTokensSection() {
@@ -80,7 +86,7 @@ export function ApiTokensSection() {
     if (!inputValue.trim()) return;
     setSaving(true);
     const result = await client
-      .mutation(SET_API_TOKEN, { input: { provider, token: inputValue.trim() } })
+      .mutation(SET_API_TOKEN, { input: { provider, token: provider === "ssh_key" ? inputValue : inputValue.trim() } })
       .toPromise();
     setSaving(false);
 
@@ -176,47 +182,65 @@ export function ApiTokensSection() {
               </div>
 
               {isEditing && (
-                <div className="mt-3 flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Input
-                      type={showInput ? "text" : "password"}
+                <div className="mt-3 space-y-2">
+                  {token.provider === "ssh_key" ? (
+                    <Textarea
                       placeholder={meta.placeholder}
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSave(token.provider);
                         if (e.key === "Escape") {
                           setEditing(null);
                           setInputValue("");
                         }
                       }}
+                      className="font-mono text-xs min-h-[120px]"
                       autoFocus
                     />
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowInput(!showInput)}
+                  ) : (
+                    <div className="relative">
+                      <Input
+                        type={showInput ? "text" : "password"}
+                        placeholder={meta.placeholder}
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSave(token.provider);
+                          if (e.key === "Escape") {
+                            setEditing(null);
+                            setInputValue("");
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowInput(!showInput)}
+                      >
+                        {showInput ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleSave(token.provider)}
+                      disabled={!inputValue.trim() || saving}
                     >
-                      {showInput ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                      {saving ? "Saving..." : "Save"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditing(null);
+                        setInputValue("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => handleSave(token.provider)}
-                    disabled={!inputValue.trim() || saving}
-                  >
-                    {saving ? "Saving..." : "Save"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditing(null);
-                      setInputValue("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
                 </div>
               )}
             </div>

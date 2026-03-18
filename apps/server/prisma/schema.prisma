@@ -86,6 +86,7 @@ enum ApiTokenProvider {
   anthropic
   openai
   github
+  ssh_key
 }
 
 enum CloudMachineStatus {
