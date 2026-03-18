@@ -25,8 +25,6 @@ export class BridgeClient implements IBridgeClient {
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
-  /** Maps terminalId → sessionId for cleanup */
-  private terminalSessions = new Map<string, string>();
   private terminalManager: TerminalManager;
 
   constructor(serverUrl: string) {
@@ -37,7 +35,6 @@ export class BridgeClient implements IBridgeClient {
         this.send({ type: "terminal_output", terminalId, data });
       },
       onExit: (terminalId, exitCode) => {
-        this.terminalSessions.delete(terminalId);
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
@@ -88,7 +85,6 @@ export class BridgeClient implements IBridgeClient {
   disconnect() {
     this.stopHeartbeat();
     this.terminalManager.destroyAll();
-    this.terminalSessions.clear();
     for (const adapter of this.adapters.values()) {
       adapter.abort();
     }
@@ -295,11 +291,7 @@ export class BridgeClient implements IBridgeClient {
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
-        this.terminalManager.destroyForSession(cmd.sessionId, this.terminalSessions);
-        // Clean up terminalSessions entries
-        for (const [tid, sid] of this.terminalSessions) {
-          if (sid === cmd.sessionId) this.terminalSessions.delete(tid);
-        }
+        this.terminalManager.destroyForSession(cmd.sessionId);
 
         // Clean up worktree if one exists
         if (cmd.workdir && cmd.repoId) {
@@ -336,8 +328,7 @@ export class BridgeClient implements IBridgeClient {
         const { terminalId, sessionId, cols, rows, cwd } = cmd;
         const workdir = cwd || this.sessionWorkdirs.get(sessionId) || process.cwd();
         try {
-          this.terminalManager.create(terminalId, workdir, cols, rows);
-          this.terminalSessions.set(terminalId, sessionId);
+          this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
           this.send({ type: "terminal_ready", terminalId });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -355,7 +346,6 @@ export class BridgeClient implements IBridgeClient {
       }
       case "terminal_destroy": {
         this.terminalManager.destroy(cmd.terminalId);
-        this.terminalSessions.delete(cmd.terminalId);
         break;
       }
     }

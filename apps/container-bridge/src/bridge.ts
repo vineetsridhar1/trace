@@ -23,7 +23,6 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
-  private terminalSessions = new Map<string, string>();
   private terminalManager: TerminalManager;
   private lastActivity = Date.now();
   private idleCheckTimer: ReturnType<typeof setInterval> | null = null;
@@ -41,7 +40,6 @@ export class ContainerBridge implements IBridgeClient {
         this.send({ type: "terminal_output", terminalId, data });
       },
       onExit: (terminalId, exitCode) => {
-        this.terminalSessions.delete(terminalId);
         this.send({ type: "terminal_exit", terminalId, exitCode });
       },
     });
@@ -90,7 +88,6 @@ export class ContainerBridge implements IBridgeClient {
   disconnect(): void {
     this.stopHeartbeat();
     this.terminalManager.destroyAll();
-    this.terminalSessions.clear();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -140,7 +137,7 @@ export class ContainerBridge implements IBridgeClient {
 
   /** Returns true if there are active sessions or terminals. */
   private hasActiveWork(): boolean {
-    return this.adapters.size > 0 || this.terminalSessions.size > 0;
+    return this.adapters.size > 0 || this.terminalManager.hasTerminals();
   }
 
   startIdleWatch(): void {
@@ -248,10 +245,7 @@ export class ContainerBridge implements IBridgeClient {
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
-        this.terminalManager.destroyForSession(cmd.sessionId, this.terminalSessions);
-        for (const [tid, sid] of this.terminalSessions) {
-          if (sid === cmd.sessionId) this.terminalSessions.delete(tid);
-        }
+        this.terminalManager.destroyForSession(cmd.sessionId);
 
         // Clean up worktree for this session only — keep the machine and bare repo
         if (cmd.workdir && cmd.repoId) {
@@ -285,8 +279,7 @@ export class ContainerBridge implements IBridgeClient {
         const { terminalId, sessionId, cols, rows, cwd } = cmd;
         const workdir = cwd || this.sessionWorkdirs.get(sessionId) || "/workspace";
         try {
-          this.terminalManager.create(terminalId, workdir, cols, rows);
-          this.terminalSessions.set(terminalId, sessionId);
+          this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
           this.send({ type: "terminal_ready", terminalId });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -304,7 +297,6 @@ export class ContainerBridge implements IBridgeClient {
       }
       case "terminal_destroy": {
         this.terminalManager.destroy(cmd.terminalId);
-        this.terminalSessions.delete(cmd.terminalId);
         break;
       }
     }

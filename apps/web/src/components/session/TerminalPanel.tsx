@@ -28,6 +28,8 @@ export function TerminalPanel({
       return;
     }
     if (result.data?.createTerminal) {
+      // Terminal state is ephemeral (not event-sourced), so we read the mutation
+      // result directly rather than waiting for an event stream update.
       const { id } = result.data.createTerminal as { id: string };
       addTerminal(id, sessionId);
     }

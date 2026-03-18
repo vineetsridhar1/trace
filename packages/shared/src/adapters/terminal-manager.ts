@@ -14,6 +14,8 @@ export interface TerminalManagerOptions {
 
 export class TerminalManager {
   private terminals = new Map<string, pty.IPty>();
+  /** Maps terminalId → sessionId for session-scoped cleanup */
+  private terminalSessions = new Map<string, string>();
   private defaultShell: string;
 
   constructor(
@@ -25,7 +27,7 @@ export class TerminalManager {
       ?? (os.platform() === "win32" ? "powershell.exe" : "/bin/bash");
   }
 
-  create(terminalId: string, cwd: string, cols: number, rows: number): void {
+  create(terminalId: string, sessionId: string, cwd: string, cols: number, rows: number): void {
     if (this.terminals.has(terminalId)) {
       this.destroy(terminalId);
     }
@@ -51,10 +53,12 @@ export class TerminalManager {
 
     terminal.onExit(({ exitCode }) => {
       this.terminals.delete(terminalId);
+      this.terminalSessions.delete(terminalId);
       this.callbacks.onExit(terminalId, exitCode);
     });
 
     this.terminals.set(terminalId, terminal);
+    this.terminalSessions.set(terminalId, sessionId);
   }
 
   write(terminalId: string, data: string): void {
@@ -77,6 +81,7 @@ export class TerminalManager {
       terminal.kill();
       this.terminals.delete(terminalId);
     }
+    this.terminalSessions.delete(terminalId);
   }
 
   destroyAll(): void {
@@ -85,11 +90,20 @@ export class TerminalManager {
     }
   }
 
-  destroyForSession(sessionId: string, terminalSessionMap: Map<string, string>): void {
-    for (const [terminalId, sid] of terminalSessionMap) {
-      if (sid === sessionId && this.terminals.has(terminalId)) {
+  /** Returns true if any terminals are active. */
+  hasTerminals(): boolean {
+    return this.terminals.size > 0;
+  }
+
+  /** Destroy all terminals belonging to a session and return the destroyed terminal IDs. */
+  destroyForSession(sessionId: string): string[] {
+    const destroyed: string[] = [];
+    for (const [terminalId, sid] of this.terminalSessions) {
+      if (sid === sessionId) {
+        destroyed.push(terminalId);
         this.destroy(terminalId);
       }
     }
+    return destroyed;
   }
 }
