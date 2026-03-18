@@ -5,6 +5,9 @@ import { sessionRouter } from "./session-router.js";
 interface TerminalEntry {
   sessionId: string;
   frontendWs: WebSocket | null;
+  ready: boolean;
+  /** Messages buffered before the frontend attaches */
+  buffer: string[];
 }
 
 /**
@@ -23,7 +26,7 @@ class TerminalRelay {
   createTerminal(sessionId: string, cols: number, rows: number, cwd?: string): string {
     const terminalId = randomUUID();
 
-    this.terminals.set(terminalId, { sessionId, frontendWs: null });
+    this.terminals.set(terminalId, { sessionId, frontendWs: null, ready: false, buffer: [] });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
     this.sessionTerminals.set(sessionId, ids);
@@ -41,11 +44,18 @@ class TerminalRelay {
     return terminalId;
   }
 
-  /** Attach a frontend WebSocket to an existing terminal. */
+  /** Attach a frontend WebSocket to an existing terminal. Flushes any buffered messages. */
   attachFrontend(terminalId: string, ws: WebSocket): boolean {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
     entry.frontendWs = ws;
+
+    // Flush buffered messages (e.g. terminal_ready that arrived before attach)
+    for (const msg of entry.buffer) {
+      ws.send(msg);
+    }
+    entry.buffer.length = 0;
+
     return true;
   }
 
@@ -65,17 +75,31 @@ class TerminalRelay {
   /** Forward a message from the bridge to the attached frontend WebSocket. */
   relayFromBridge(msg: { type: string; terminalId: string; [key: string]: unknown }): void {
     const entry = this.terminals.get(msg.terminalId);
-    if (!entry?.frontendWs || entry.frontendWs.readyState !== entry.frontendWs.OPEN) return;
+    if (!entry) return;
 
+    let serialized: string | null = null;
     if (msg.type === "terminal_output") {
-      entry.frontendWs.send(JSON.stringify({ type: "output", data: msg.data }));
+      serialized = JSON.stringify({ type: "output", data: msg.data });
     } else if (msg.type === "terminal_exit") {
-      entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: msg.exitCode }));
-      this.removeTerminal(msg.terminalId);
+      serialized = JSON.stringify({ type: "exit", exitCode: msg.exitCode });
     } else if (msg.type === "terminal_ready") {
-      entry.frontendWs.send(JSON.stringify({ type: "ready" }));
+      entry.ready = true;
+      serialized = JSON.stringify({ type: "ready" });
     } else if (msg.type === "terminal_error") {
-      entry.frontendWs.send(JSON.stringify({ type: "error", message: msg.error }));
+      serialized = JSON.stringify({ type: "error", message: msg.error });
+    }
+
+    if (!serialized) return;
+
+    if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
+      entry.frontendWs.send(serialized);
+    } else {
+      // Buffer until frontend attaches (e.g. terminal_ready arrives before WS connect)
+      entry.buffer.push(serialized);
+    }
+
+    // Clean up after terminal exit/error
+    if (msg.type === "terminal_exit" || msg.type === "terminal_error") {
       this.removeTerminal(msg.terminalId);
     }
   }

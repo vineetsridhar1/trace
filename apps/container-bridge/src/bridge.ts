@@ -5,7 +5,7 @@ import { parseBranchOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
-import { TerminalManager } from "./terminal-manager.js";
+import { TerminalManager } from "@trace/shared/adapters";
 
 /**
  * Multi-session container bridge — runs inside a Fly Machine (one per user per org).

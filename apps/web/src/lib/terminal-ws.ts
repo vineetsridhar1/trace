@@ -8,7 +8,8 @@ export type TerminalSocketEvent =
   | { type: "ready" }
   | { type: "output"; data: string }
   | { type: "exit"; exitCode: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "disconnected" };
 
 /**
  * WebSocket client for a single terminal session.
@@ -39,7 +40,7 @@ export class TerminalSocket {
     };
 
     this.ws.onclose = () => {
-      this.emit({ type: "exit", exitCode: -1 });
+      this.emit({ type: "disconnected" });
     };
   }
 

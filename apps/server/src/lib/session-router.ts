@@ -6,13 +6,20 @@ import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
-export interface SessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches"
-    | "terminal_create" | "terminal_input" | "terminal_resize" | "terminal_destroy";
-  sessionId?: string;
+interface BaseSessionCommand {
+  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches";
+  sessionId: string;
   prompt?: string;
   [key: string]: unknown;
 }
+
+interface TerminalCommand {
+  type: "terminal_create" | "terminal_input" | "terminal_resize" | "terminal_destroy";
+  terminalId: string;
+  [key: string]: unknown;
+}
+
+export type SessionCommand = BaseSessionCommand | TerminalCommand;
 
 export type DeliveryResult =
   | "delivered"

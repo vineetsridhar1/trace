@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 
 export type TerminalStatus = "connecting" | "active" | "exited";
 
@@ -18,7 +19,6 @@ interface TerminalState {
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   removeTerminal: (id: string) => void;
   setActiveTerminal: (sessionId: string, terminalId: string) => void;
-  getTerminalsForSession: (sessionId: string) => TerminalEntry[];
 }
 
 export const useTerminalStore = create<TerminalState>((set, get) => ({
@@ -58,8 +58,13 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     set((state) => ({
       activeTerminalId: { ...state.activeTerminalId, [sessionId]: terminalId },
     })),
-
-  getTerminalsForSession: (sessionId) => {
-    return Object.values(get().terminals).filter((t) => t.sessionId === sessionId);
-  },
 }));
+
+/** Memoized selector: returns stable array of terminal entries for a session. */
+export function useSessionTerminals(sessionId: string): TerminalEntry[] {
+  return useTerminalStore(
+    useShallow((s) =>
+      Object.values(s.terminals).filter((t) => t.sessionId === sessionId),
+    ),
+  );
+}
