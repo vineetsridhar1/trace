@@ -408,7 +408,7 @@ type Query {
   ): [Event!]!
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
-  repoBranches(runtimeInstanceId: ID!, repoId: ID!): [String!]!
+  repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   myApiTokens: [ApiTokenStatus!]!
 }

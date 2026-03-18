@@ -8,6 +8,7 @@ import type {
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
 export const sessionQueries = {
@@ -26,8 +27,16 @@ export const sessionQueries = {
   availableRuntimes: (_: unknown, args: { tool: CodingToolEnum }, ctx: Context) => {
     return sessionService.listRuntimesForTool(args.tool, ctx.organizationId);
   },
-  repoBranches: (_: unknown, args: { runtimeInstanceId: string; repoId: string }) => {
-    return sessionRouter.listBranches(args.runtimeInstanceId, args.repoId);
+  repoBranches: async (_: unknown, args: { repoId: string; runtimeInstanceId?: string | null }, ctx: Context) => {
+    // Verify the repo belongs to the caller's org before listing branches
+    const repo = await prisma.repo.findFirst({
+      where: { id: args.repoId, organizationId: ctx.organizationId },
+      select: { id: true },
+    });
+    if (!repo) throw new Error("Repo not found");
+    const runtimeId = args.runtimeInstanceId ?? sessionRouter.getRuntimeForRepo(args.repoId)?.id;
+    if (!runtimeId) throw new Error("No connected runtime available for this repo");
+    return sessionRouter.listBranches(runtimeId, args.repoId);
   },
 };
 

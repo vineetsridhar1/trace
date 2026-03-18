@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useEntityField } from "../../stores/entity";
@@ -8,7 +8,8 @@ import { cn } from "../../lib/utils";
 
 interface BranchComboboxProps {
   repoId: string;
-  runtimeInstanceId: string | undefined;
+  /** Optional — if omitted, the server picks an available runtime for the repo. */
+  runtimeInstanceId?: string;
   value: string;
   onChange: (branch: string) => void;
 }
@@ -19,13 +20,15 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
   const [search, setSearch] = useState("");
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useCallback((node: HTMLInputElement | null) => {
+    if (node) node.focus();
+  }, []);
 
   useEffect(() => {
-    if (!open || !runtimeInstanceId) return;
+    if (!open) { setSearch(""); return; }
     setLoading(true);
     client
-      .query(REPO_BRANCHES_QUERY, { runtimeInstanceId, repoId })
+      .query(REPO_BRANCHES_QUERY, { repoId, runtimeInstanceId: runtimeInstanceId ?? null })
       .toPromise()
       .then((result) => {
         setBranches((result.data?.repoBranches as string[]) ?? []);
@@ -35,15 +38,6 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
       })
       .finally(() => setLoading(false));
   }, [open, runtimeInstanceId, repoId]);
-
-  useEffect(() => {
-    if (open) {
-      // Focus search input when popover opens
-      setTimeout(() => inputRef.current?.focus(), 0);
-    } else {
-      setSearch("");
-    }
-  }, [open]);
 
   const filtered = search
     ? branches.filter((b) => b.toLowerCase().includes(search.toLowerCase()))
@@ -77,7 +71,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
         <div className="max-h-48 overflow-y-auto p-1">
           {!loading && filtered.length === 0 && (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              {!runtimeInstanceId ? "Select a runtime first" : branches.length === 0 ? "No branches found" : "No matches"}
+              {branches.length === 0 ? "No branches found" : "No matches"}
             </p>
           )}
           {filtered.map((branch) => (

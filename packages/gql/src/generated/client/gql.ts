@@ -38,6 +38,7 @@ type Documents = {
     "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": typeof types.DismissInboxItemDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": typeof types.AvailableRuntimesDocument,
     "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateRepoDocument,
+    "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n": typeof types.RepoBranchesDocument,
 };
 const documents: Documents = {
     "\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n    }\n  }\n": types.ChannelsDocument,
@@ -64,6 +65,7 @@ const documents: Documents = {
     "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": types.DismissInboxItemDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": types.AvailableRuntimesDocument,
     "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateRepoDocument,
+    "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n": types.RepoBranchesDocument,
 };
 
 /**
@@ -176,6 +178,10 @@ export function graphql(source: "\n  query AvailableRuntimes($tool: CodingTool!)
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n"): (typeof documents)["\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

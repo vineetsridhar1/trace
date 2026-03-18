@@ -7,7 +7,7 @@ import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
 export interface SessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete";
+  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches";
   sessionId: string;
   prompt?: string;
   [key: string]: unknown;
@@ -462,6 +462,18 @@ export class SessionRouter {
     return undefined;
   }
 
+  /** Find a connected runtime that has a given repo registered (or any cloud runtime). */
+  getRuntimeForRepo(repoId: string): RuntimeInstance | undefined {
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.ws.readyState !== runtime.ws.OPEN) continue;
+      // Cloud runtimes support all repos; local runtimes must have the repo registered
+      if (runtime.hostingMode === "cloud" || runtime.registeredRepoIds.includes(repoId)) {
+        return runtime;
+      }
+    }
+    return undefined;
+  }
+
   /** List all connected runtimes, optionally filtered by hosting mode. */
   listRuntimes(filter?: { hostingMode?: string }): RuntimeInstance[] {
     const results: RuntimeInstance[] = [];
@@ -506,17 +518,30 @@ export class SessionRouter {
     }));
   }
 
+  /** Send a command directly to a runtime (not session-scoped). */
+  private sendToRuntime(runtimeId: string, command: SessionCommand): DeliveryResult {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime) return "no_runtime";
+    if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
+    try {
+      runtime.ws.send(JSON.stringify(command));
+      return "delivered";
+    } catch {
+      return "delivery_failed";
+    }
+  }
+
   /**
    * Ask a runtime to list branches for a given repo.
    * Returns a promise that resolves when the bridge responds with branches_result.
    */
   listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
-    const runtime = this.runtimes.get(runtimeId);
-    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
-      return Promise.reject(new Error("Runtime not connected"));
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, { type: "list_branches", sessionId: "", requestId, repoId });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
 
-    const requestId = randomUUID();
     return new Promise<string[]>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingBranchRequests.delete(requestId);
@@ -527,8 +552,6 @@ export class SessionRouter {
         resolve: (branches) => { clearTimeout(timer); resolve(branches); },
         reject: (err) => { clearTimeout(timer); reject(err); },
       });
-
-      runtime.ws.send(JSON.stringify({ type: "list_branches", requestId, repoId }));
     });
   }
 

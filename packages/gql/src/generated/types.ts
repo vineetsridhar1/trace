@@ -465,7 +465,7 @@ export type QueryRepoArgs = {
 
 export type QueryRepoBranchesArgs = {
   repoId: Scalars['ID']['input'];
-  runtimeInstanceId: Scalars['ID']['input'];
+  runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 

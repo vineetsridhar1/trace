@@ -3,8 +3,8 @@ import { GitBranch, Pencil, Check, X } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { UPDATE_REPO_MUTATION } from "../../lib/mutations";
-import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { BranchCombobox } from "../channel/BranchCombobox";
 
 export function RepoCard({ id }: { id: string }) {
   const name = useEntityField("repos", id, "name");
@@ -55,16 +55,13 @@ export function RepoCard({ id }: { id: string }) {
             {editing ? (
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">Default branch:</span>
-                <Input
-                  value={editBranch}
-                  onChange={(e) => setEditBranch(e.target.value)}
-                  className="h-6 w-32 text-xs"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveBranch();
-                    if (e.key === "Escape") cancelEditing();
-                  }}
-                />
+                <div className="w-48">
+                  <BranchCombobox
+                    repoId={id}
+                    value={editBranch}
+                    onChange={setEditBranch}
+                  />
+                </div>
                 <Button
                   variant="ghost"
                   size="icon"

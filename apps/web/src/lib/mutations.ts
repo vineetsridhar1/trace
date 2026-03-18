@@ -101,7 +101,7 @@ export const UPDATE_REPO_MUTATION = gql`
 `;
 
 export const REPO_BRANCHES_QUERY = gql`
-  query RepoBranches($runtimeInstanceId: ID!, $repoId: ID!) {
-    repoBranches(runtimeInstanceId: $runtimeInstanceId, repoId: $repoId)
+  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {
+    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)
   }
 `;

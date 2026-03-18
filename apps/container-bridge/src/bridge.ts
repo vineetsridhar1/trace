@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
+import { parseBranchOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
@@ -202,14 +203,7 @@ export class ContainerBridge implements IBridgeClient {
             this.send({ type: "branches_result", requestId, branches: [], error: err.message });
             return;
           }
-          const branches = stdout
-            .split("\n")
-            .map((b) => b.trim())
-            .filter(Boolean)
-            .map((b) => b.replace(/^origin\//, ""))
-            .filter((b) => b !== "HEAD" && !b.includes(" -> "));
-          const unique = [...new Set(branches)];
-          this.send({ type: "branches_result", requestId, branches: unique });
+          this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
         });
         break;
       }
