@@ -47,6 +47,8 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(sessionId);
   const events = useEntityStore((s) => s.events);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const isCloud = hosting === "cloud";
 
   // Fetch full session with lineage data — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -105,7 +107,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       <SessionHeader
         sessionId={sessionId}
         onStop={handleStop}
-        onToggleTerminal={() => setShowTerminal((v) => !v)}
+        onToggleTerminal={isCloud ? () => setShowTerminal((v) => !v) : undefined}
         terminalOpen={showTerminal}
       />
 
@@ -129,7 +131,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
           )}
         </div>
 
-        {showTerminal && (
+        {showTerminal && isCloud && (
           <TerminalPanel
             sessionId={sessionId}
             onClose={() => setShowTerminal(false)}

@@ -324,30 +324,35 @@ export class BridgeClient implements IBridgeClient {
         });
         break;
       }
-      case "terminal_create": {
-        const { terminalId, sessionId, cols, rows, cwd } = cmd;
-        const workdir = cwd || this.sessionWorkdirs.get(sessionId) || process.cwd();
-        try {
-          this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
-          this.send({ type: "terminal_ready", terminalId });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.send({ type: "terminal_error", terminalId, error: message });
-        }
-        break;
-      }
-      case "terminal_input": {
-        this.terminalManager.write(cmd.terminalId, cmd.data);
-        break;
-      }
-      case "terminal_resize": {
-        this.terminalManager.resize(cmd.terminalId, cmd.cols, cmd.rows);
-        break;
-      }
-      case "terminal_destroy": {
-        this.terminalManager.destroy(cmd.terminalId);
-        break;
-      }
+      // Terminal access on local machines is disabled for security reasons.
+      // The frontend hides the terminal button for local sessions.
+      // Cloud sessions still handle terminals via the cloud adapter.
+      // To re-enable, uncomment the cases below.
+      //
+      // case "terminal_create": {
+      //   const { terminalId, sessionId, cols, rows, cwd } = cmd;
+      //   const workdir = cwd || this.sessionWorkdirs.get(sessionId) || process.cwd();
+      //   try {
+      //     this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
+      //     this.send({ type: "terminal_ready", terminalId });
+      //   } catch (err) {
+      //     const message = err instanceof Error ? err.message : String(err);
+      //     this.send({ type: "terminal_error", terminalId, error: message });
+      //   }
+      //   break;
+      // }
+      // case "terminal_input": {
+      //   this.terminalManager.write(cmd.terminalId, cmd.data);
+      //   break;
+      // }
+      // case "terminal_resize": {
+      //   this.terminalManager.resize(cmd.terminalId, cmd.cols, cmd.rows);
+      //   break;
+      // }
+      // case "terminal_destroy": {
+      //   this.terminalManager.destroy(cmd.terminalId);
+      //   break;
+      // }
     }
   }
 }
