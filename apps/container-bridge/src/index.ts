@@ -15,6 +15,8 @@ function setupSshKey(): void {
   const keyPath = `${sshDir}/id_rsa`;
   const knownHostsPath = `${sshDir}/known_hosts`;
 
+  fs.mkdirSync(sshDir, { mode: 0o700, recursive: true });
+
   // Decode base64 key and write with correct permissions
   const keyContent = Buffer.from(b64Key, "base64").toString("utf8");
   fs.writeFileSync(keyPath, keyContent, { mode: 0o600 });
