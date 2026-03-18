@@ -1,7 +1,7 @@
 FROM node:22-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git ca-certificates curl && \
+    apt-get install -y --no-install-recommends git ca-certificates curl openssh-client && \
     rm -rf /var/lib/apt/lists/*
 
 # Install coding tool CLIs
@@ -24,5 +24,6 @@ RUN useradd -m -s /bin/bash coder && \
     mkdir -p /workspace /repos /workspaces && \
     chown -R coder:coder /workspace /repos /workspaces /app
 USER coder
+RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 
 CMD ["node", "dist/index.js"]

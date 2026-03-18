@@ -149,6 +149,7 @@ export class CloudMachineService {
     if (userTokens.openai) env.OPENAI_API_KEY = userTokens.openai;
     if (userTokens.github) env.GITHUB_TOKEN = userTokens.github;
     else if (process.env.GITHUB_TOKEN) env.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    if (userTokens.ssh_key) env.SSH_PRIVATE_KEY = Buffer.from(userTokens.ssh_key).toString("base64");
 
     const { providerMachineId } = await this.provider.createVM({
       cloudMachineId,

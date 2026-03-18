@@ -89,7 +89,7 @@ importers:
         specifier: ^10.0.14
         version: 10.0.31(graphql@16.13.1)
       '@prisma/client':
-        specifier: ^6.2.1
+        specifier: ^6.19.2
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
       '@trace/gql':
         specifier: workspace:*
@@ -135,7 +135,7 @@ importers:
         specifier: ^8.5.13
         version: 8.18.1
       prisma:
-        specifier: ^6.2.1
+        specifier: ^6.19.2
         version: 6.19.2(typescript@5.9.3)
       tsx:
         specifier: ^4.19.2
