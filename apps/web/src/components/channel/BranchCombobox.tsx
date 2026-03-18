@@ -20,21 +20,29 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
   const [search, setSearch] = useState("");
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useCallback((node: HTMLInputElement | null) => {
     if (node) node.focus();
   }, []);
 
   useEffect(() => {
-    if (!open) { setSearch(""); return; }
+    if (!open) { setSearch(""); setError(null); return; }
     setLoading(true);
+    setError(null);
     client
       .query(REPO_BRANCHES_QUERY, { repoId, runtimeInstanceId: runtimeInstanceId ?? null })
       .toPromise()
       .then((result) => {
-        setBranches(result.data?.repoBranches ?? []);
+        if (result.error) {
+          setBranches([]);
+          setError("Could not load branches");
+        } else {
+          setBranches(result.data?.repoBranches ?? []);
+        }
       })
       .catch(() => {
         setBranches([]);
+        setError("Could not load branches");
       })
       .finally(() => setLoading(false));
   }, [open, runtimeInstanceId, repoId]);
@@ -69,7 +77,10 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
           {loading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
         </div>
         <div className="max-h-48 overflow-y-auto p-1">
-          {!loading && filtered.length === 0 && (
+          {!loading && error && (
+            <p className="px-2 py-1.5 text-xs text-destructive">{error}</p>
+          )}
+          {!loading && !error && filtered.length === 0 && (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">
               {branches.length === 0 ? "No branches found" : "No matches"}
             </p>
@@ -84,7 +95,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
                 value === branch && "bg-accent/50",
               )}
               onClick={() => {
-                onChange(value === branch ? "" : branch);
+                onChange(branch);
                 setOpen(false);
               }}
             >

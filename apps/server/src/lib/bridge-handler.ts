@@ -87,9 +87,10 @@ export function handleBridgeConnection(ws: WebSocket) {
       }
 
       if (msg.type === "branches_result" && typeof msg.requestId === "string" && Array.isArray(msg.branches)) {
+        const branches = (msg.branches as unknown[]).filter((b): b is string => typeof b === "string");
         sessionRouter.resolveBranchRequest(
           msg.requestId,
-          msg.branches as string[],
+          branches,
           typeof msg.error === "string" ? msg.error : undefined,
         );
         return;
