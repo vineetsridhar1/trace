@@ -21,7 +21,10 @@ const SESSION_DETAIL_QUERY = gql`
       tool
       model
       hosting
-      repo { id name }
+      repo {
+        id
+        name
+      }
       branch
       workdir
       connection {
@@ -33,10 +36,24 @@ const SESSION_DETAIL_QUERY = gql`
         canRetry
         canMove
       }
-      createdBy { id name avatarUrl }
-      channel { id }
-      parentSession { id name status }
-      childSessions { id name status }
+      createdBy {
+        id
+        name
+        avatarUrl
+      }
+      channel {
+        id
+      }
+      parentSession {
+        id
+        name
+        status
+      }
+      childSessions {
+        id
+        name
+        status
+      }
       createdAt
       updatedAt
     }
@@ -44,7 +61,8 @@ const SESSION_DETAIL_QUERY = gql`
 `;
 
 export function SessionDetailView({ sessionId }: { sessionId: string }) {
-  const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } = useSessionEvents(sessionId);
+  const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
+    useSessionEvents(sessionId);
   const events = useEntityStore((s) => s.events);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
@@ -52,21 +70,23 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
 
   // Fetch full session with lineage data — merge to avoid wiping fields set by events
   useEffect(() => {
-    client.query(SESSION_DETAIL_QUERY, { id: sessionId }).toPromise().then((result) => {
-      if (result.data?.session) {
-        const { upsert, sessions } = useEntityStore.getState();
-        const existing = sessions[sessionId];
-        upsert("sessions", sessionId, existing
-          ? { ...existing, ...result.data.session }
-          : result.data.session);
-      }
-    });
+    client
+      .query(SESSION_DETAIL_QUERY, { id: sessionId })
+      .toPromise()
+      .then((result) => {
+        if (result.data?.session) {
+          const { upsert, sessions } = useEntityStore.getState();
+          const existing = sessions[sessionId];
+          upsert(
+            "sessions",
+            sessionId,
+            existing ? { ...existing, ...result.data.session } : result.data.session,
+          );
+        }
+      });
   }, [sessionId]);
 
-  const nodes = useMemo(
-    () => buildSessionNodes(eventIds, events),
-    [eventIds, events],
-  );
+  const nodes = useMemo(() => buildSessionNodes(eventIds, events), [eventIds, events]);
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -89,8 +109,8 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   }, [nodes, status, activePlan]);
 
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
-  const showQuestion = activeQuestion && activeQuestion.id !== dismissedQuestionId
-    ? activeQuestion : null;
+  const showQuestion =
+    activeQuestion && activeQuestion.id !== dismissedQuestionId ? activeQuestion : null;
 
   const [showTerminal, setShowTerminal] = useState(false);
 
@@ -112,7 +132,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-auto">
           {loading ? (
             <div className="flex h-full items-center justify-center">
               <p className="text-sm text-muted-foreground">Loading events...</p>
@@ -132,10 +152,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
         </div>
 
         {showTerminal && isCloud && (
-          <TerminalPanel
-            sessionId={sessionId}
-            onClose={() => setShowTerminal(false)}
-          />
+          <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
         )}
       </div>
 
@@ -149,9 +166,12 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
         <AskUserQuestionBar
           node={showQuestion}
           onResponse={(text) => {
-            client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
-              sessionId, text,
-            }).toPromise();
+            client
+              .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                sessionId,
+                text,
+              })
+              .toPromise();
           }}
           onDismiss={() => {
             setDismissedQuestionId(showQuestion.id);
