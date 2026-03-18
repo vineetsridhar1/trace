@@ -2,9 +2,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { RuntimeSelector } from "../session/RuntimeSelector";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
 import { type InteractionMode, MODE_CONFIG } from "../session/interactionModes";
-import { getModelsForTool, getDefaultModel } from "../session/modelOptions";
+import { getModelsForTool, getDefaultModel, getModelLabel } from "../session/modelOptions";
 import { RepoSection } from "./RepoSection";
 import { cn } from "../../lib/utils";
+
+/** Must stay in sync with SelectItem labels below */
+const TOOL_LABELS: Record<string, string> = {
+  claude_code: "Claude Code",
+  codex: "Codex",
+};
 
 interface SessionFormFieldsProps {
   tool: string;
@@ -37,7 +43,7 @@ export function SessionFormFields({
       <div>
         <label className="mb-1.5 block text-sm text-muted-foreground">Coding tool</label>
         <Select value={tool} onValueChange={(v) => { if (v) onToolChange(v); }}>
-          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full"><SelectValue>{TOOL_LABELS[tool] ?? tool}</SelectValue></SelectTrigger>
           <SelectContent>
             <SelectItem value="claude_code">Claude Code</SelectItem>
             <SelectItem value="codex">Codex</SelectItem>
@@ -48,7 +54,7 @@ export function SessionFormFields({
         <div>
           <label className="mb-1.5 block text-sm text-muted-foreground">Model</label>
           <Select value={model ?? ""} onValueChange={(v) => { if (v) onModelChange(v); }}>
-            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue>{model ? getModelLabel(model) : ""}</SelectValue></SelectTrigger>
             <SelectContent>
               {modelOptions.map((m) => (
                 <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>

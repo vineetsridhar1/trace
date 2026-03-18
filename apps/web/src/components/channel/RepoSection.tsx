@@ -28,9 +28,13 @@ export function RepoSection({
   onBranchChange,
 }: RepoSectionProps) {
   const repoIds = useEntityIds("repos");
+  // Called unconditionally (rules of hooks); returns undefined when repoId is absent
+  const selectedRepoName = useEntityField("repos", repoId ?? "", "name");
   const isDeviceBridge = runtimeInfo?.hostingMode === "local";
 
   if (repoIds.length === 0) return null;
+
+  const triggerLabel = repoId ? (selectedRepoName ?? repoId) : "No repo";
 
   return (
     <>
@@ -48,7 +52,7 @@ export function RepoSection({
           }}
         >
           <SelectTrigger className="w-full">
-            <SelectValue />
+            <SelectValue>{triggerLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">No repo</SelectItem>
