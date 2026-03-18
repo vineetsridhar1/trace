@@ -1,6 +1,13 @@
 import { useCallback, useState } from "react";
 import { Plus } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "../ui/dialog";
+import {
+  ResponsiveDialog as Dialog,
+  ResponsiveDialogContent as DialogContent,
+  ResponsiveDialogHeader as DialogHeader,
+  ResponsiveDialogTitle as DialogTitle,
+  ResponsiveDialogFooter as DialogFooter,
+  ResponsiveDialogTrigger as DialogTrigger,
+} from "../ui/responsive-dialog";
 import { Button } from "../ui/button";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
