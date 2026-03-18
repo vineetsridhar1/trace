@@ -85,6 +85,10 @@ export class BridgeClient implements IBridgeClient {
     return this.status;
   }
 
+  getInstanceId(): string {
+    return this.instanceId;
+  }
+
   onStatusChange(listener: (status: BridgeConnectionStatus) => void): () => void {
     this.statusListeners.add(listener);
     listener(this.status);
