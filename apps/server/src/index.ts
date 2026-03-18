@@ -20,6 +20,7 @@ import { sessionService } from "./services/session.js";
 import { CloudMachineService } from "./lib/cloud-machine-service.js";
 import { flyProvider } from "./lib/fly-provider.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
+import { handleTerminalConnection } from "./lib/terminal-handler.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -60,6 +61,10 @@ async function main() {
   // Bridge for Electron/desktop session control
   const bridgeWss = new WebSocketServer({ noServer: true });
   bridgeWss.on("connection", handleBridgeConnection);
+
+  // Terminal relay for frontend terminal sessions
+  const terminalWss = new WebSocketServer({ noServer: true });
+  terminalWss.on("connection", handleTerminalConnection);
 
   const staleRuntimeMonitor = setInterval(() => {
     const staleRuntimes = sessionRouter.checkStaleRuntimes();
@@ -104,6 +109,10 @@ async function main() {
         });
       };
       validateAndUpgrade().catch(() => socket.destroy());
+    } else if (pathname === "/terminal") {
+      terminalWss.handleUpgrade(req, socket, head, (ws) => {
+        terminalWss.emit("connection", ws, req);
+      });
     } else {
       socket.destroy();
     }
@@ -121,6 +130,7 @@ async function main() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
               bridgeWss.close();
+              terminalWss.close();
             },
           };
         },

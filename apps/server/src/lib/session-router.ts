@@ -7,8 +7,9 @@ import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
 export interface SessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches";
-  sessionId: string;
+  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches"
+    | "terminal_create" | "terminal_input" | "terminal_resize" | "terminal_destroy";
+  sessionId?: string;
   prompt?: string;
   [key: string]: unknown;
 }

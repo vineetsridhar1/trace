@@ -186,9 +186,11 @@ export type Mutation = {
   createChannel: Channel;
   createProject: Project;
   createRepo: Repo;
+  createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
   deleteSession: Session;
+  destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
@@ -229,6 +231,13 @@ export type MutationCreateRepoArgs = {
 };
 
 
+export type MutationCreateTerminalArgs = {
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
+  sessionId: Scalars['ID']['input'];
+};
+
+
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
@@ -241,6 +250,11 @@ export type MutationDeleteApiTokenArgs = {
 
 export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationDestroyTerminalArgs = {
+  terminalId: Scalars['ID']['input'];
 };
 
 
@@ -658,6 +672,12 @@ export type SubscriptionTicketEventsArgs = {
 
 export type SubscriptionUserNotificationsArgs = {
   organizationId: Scalars['ID']['input'];
+};
+
+export type Terminal = {
+  __typename?: 'Terminal';
+  id: Scalars['ID']['output'];
+  sessionId: Scalars['ID']['output'];
 };
 
 export type TerminalEndpoint = {

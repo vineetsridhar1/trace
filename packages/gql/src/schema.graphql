@@ -414,6 +414,11 @@ type Query {
   myApiTokens: [ApiTokenStatus!]!
 }
 
+type Terminal {
+  id: ID!
+  sessionId: ID!
+}
+
 # --- Mutations ---
 
 type Mutation {
@@ -440,6 +445,8 @@ type Mutation {
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
+  createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
+  destroyTerminal(terminalId: ID!): Boolean!
 }
 
 # --- Subscriptions ---

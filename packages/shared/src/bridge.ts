@@ -65,6 +65,35 @@ export interface BridgeListBranchesCommand {
   repoId: string;
 }
 
+// --- Terminal commands (Server → Bridge) ---
+
+export interface BridgeTerminalCreateCommand {
+  type: "terminal_create";
+  terminalId: string;
+  sessionId: string;
+  cols: number;
+  rows: number;
+  cwd: string;
+}
+
+export interface BridgeTerminalInputCommand {
+  type: "terminal_input";
+  terminalId: string;
+  data: string;
+}
+
+export interface BridgeTerminalResizeCommand {
+  type: "terminal_resize";
+  terminalId: string;
+  cols: number;
+  rows: number;
+}
+
+export interface BridgeTerminalDestroyCommand {
+  type: "terminal_destroy";
+  terminalId: string;
+}
+
 export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
@@ -73,7 +102,11 @@ export type BridgeCommand =
   | BridgePauseCommand
   | BridgeResumeCommand
   | BridgeDeleteCommand
-  | BridgeListBranchesCommand;
+  | BridgeListBranchesCommand
+  | BridgeTerminalCreateCommand
+  | BridgeTerminalInputCommand
+  | BridgeTerminalResizeCommand
+  | BridgeTerminalDestroyCommand;
 
 // --- Bridge → Server messages ---
 
@@ -139,6 +172,31 @@ export interface BridgeBranchesResult {
   error?: string;
 }
 
+// --- Terminal messages (Bridge → Server) ---
+
+export interface BridgeTerminalReady {
+  type: "terminal_ready";
+  terminalId: string;
+}
+
+export interface BridgeTerminalOutput {
+  type: "terminal_output";
+  terminalId: string;
+  data: string;
+}
+
+export interface BridgeTerminalExit {
+  type: "terminal_exit";
+  terminalId: string;
+  exitCode: number;
+}
+
+export interface BridgeTerminalError {
+  type: "terminal_error";
+  terminalId: string;
+  error: string;
+}
+
 export type BridgeMessage =
   | BridgeRuntimeHello
   | BridgeRuntimeHeartbeat
@@ -149,7 +207,11 @@ export type BridgeMessage =
   | BridgeWorkspaceFailed
   | BridgeToolSessionId
   | BridgeRepoLinked
-  | BridgeBranchesResult;
+  | BridgeBranchesResult
+  | BridgeTerminalReady
+  | BridgeTerminalOutput
+  | BridgeTerminalExit
+  | BridgeTerminalError;
 
 // --- Utilities ---
 

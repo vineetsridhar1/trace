@@ -7,6 +7,7 @@ import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
+import { TerminalPanel } from "./TerminalPanel";
 import { buildSessionNodes } from "./groupReadGlob";
 import { client } from "../../lib/urql";
 import { TERMINATE_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
@@ -89,6 +90,8 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const showQuestion = activeQuestion && activeQuestion.id !== dismissedQuestionId
     ? activeQuestion : null;
 
+  const [showTerminal, setShowTerminal] = useState(false);
+
   const handleStop = useCallback(async () => {
     await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
@@ -99,24 +102,40 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <SessionHeader sessionId={sessionId} onStop={handleStop} />
+      <SessionHeader
+        sessionId={sessionId}
+        onStop={handleStop}
+        onToggleTerminal={() => setShowTerminal((v) => !v)}
+        terminalOpen={showTerminal}
+      />
 
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground">Loading events...</p>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex-1 overflow-hidden">
+          {loading ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">Loading events...</p>
+            </div>
+          ) : error ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-destructive">Failed to load events</p>
+            </div>
+          ) : (
+            <SessionMessageList
+              nodes={nodes}
+              hasOlder={hasOlder}
+              loadingOlder={loadingOlder}
+              onLoadOlder={fetchOlderEvents}
+            />
+          )}
         </div>
-      ) : error ? (
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-destructive">Failed to load events</p>
-        </div>
-      ) : (
-        <SessionMessageList
-          nodes={nodes}
-          hasOlder={hasOlder}
-          loadingOlder={loadingOlder}
-          onLoadOlder={fetchOlderEvents}
-        />
-      )}
+
+        {showTerminal && (
+          <TerminalPanel
+            sessionId={sessionId}
+            onClose={() => setShowTerminal(false)}
+          />
+        )}
+      </div>
 
       {activePlan ? (
         <PlanResponseBar

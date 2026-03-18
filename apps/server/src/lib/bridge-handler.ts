@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
+import { terminalRelay } from "./terminal-relay.js";
 
 export function handleBridgeConnection(ws: WebSocket) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
@@ -93,6 +94,13 @@ export function handleBridgeConnection(ws: WebSocket) {
           branches,
           typeof msg.error === "string" ? msg.error : undefined,
         );
+        return;
+      }
+
+      // Terminal messages — relay directly to frontend, no event store
+      if (msg.type === "terminal_ready" || msg.type === "terminal_output" ||
+          msg.type === "terminal_exit" || msg.type === "terminal_error") {
+        terminalRelay.relayFromBridge(msg as { type: string; terminalId: string; [key: string]: unknown });
         return;
       }
 
