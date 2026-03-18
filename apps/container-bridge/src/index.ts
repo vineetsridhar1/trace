@@ -34,6 +34,10 @@ function setupSshKey(): void {
     );
   }
 
+  // Clear the env var — the key is on disk where SSH needs it,
+  // no reason to keep it in memory where child processes could leak it.
+  delete process.env.SSH_PRIVATE_KEY;
+
   console.log("[container-bridge] SSH key configured");
 }
 

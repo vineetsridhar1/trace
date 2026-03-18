@@ -86,7 +86,7 @@ export function ApiTokensSection() {
     if (!inputValue.trim()) return;
     setSaving(true);
     const result = await client
-      .mutation(SET_API_TOKEN, { input: { provider, token: inputValue.trim() } })
+      .mutation(SET_API_TOKEN, { input: { provider, token: provider === "ssh_key" ? inputValue : inputValue.trim() } })
       .toPromise();
     setSaving(false);
 
