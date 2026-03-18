@@ -25,7 +25,6 @@ export function TerminalInstance({ terminalId }: { terminalId: string }) {
         cursor: "#e4e4e7",
         selectionBackground: "#27272a",
       },
-      convertEol: true,
     });
 
     const fitAddon = new FitAddon();

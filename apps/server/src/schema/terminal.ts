@@ -36,13 +36,13 @@ export const terminalMutations = {
 
     // Verify the terminal belongs to a session in the user's org
     const sessionId = terminalRelay.getSessionId(args.terminalId);
-    if (sessionId) {
-      const session = await prisma.session.findFirst({
-        where: { id: sessionId, organizationId: ctx.organizationId },
-        select: { id: true },
-      });
-      if (!session) throw new Error("Terminal not found");
-    }
+    if (!sessionId) return true; // Already gone — no-op
+
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId: ctx.organizationId },
+      select: { id: true },
+    });
+    if (!session) throw new Error("Terminal not found");
 
     terminalRelay.destroyTerminal(args.terminalId);
     return true;

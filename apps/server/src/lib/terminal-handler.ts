@@ -81,7 +81,8 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
               }
               attachedTerminalId = terminalId;
             });
-          }).catch(() => {
+          }).catch((err: unknown) => {
+            console.error("[terminal-handler] authorization check failed:", err);
             ws.send(JSON.stringify({ type: "error", message: "Authorization check failed" }));
           });
           break;

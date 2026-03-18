@@ -6,6 +6,8 @@ interface TerminalEntry {
   sessionId: string;
   frontendWs: WebSocket | null;
   ready: boolean;
+  /** True once the bridge has sent terminal_exit or terminal_error */
+  terminated: boolean;
   /** Messages buffered before the frontend attaches */
   buffer: string[];
 }
@@ -26,7 +28,7 @@ class TerminalRelay {
   createTerminal(sessionId: string, cols: number, rows: number, cwd?: string): string {
     const terminalId = randomUUID();
 
-    this.terminals.set(terminalId, { sessionId, frontendWs: null, ready: false, buffer: [] });
+    this.terminals.set(terminalId, { sessionId, frontendWs: null, ready: false, terminated: false, buffer: [] });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
     this.sessionTerminals.set(sessionId, ids);
@@ -58,16 +60,13 @@ class TerminalRelay {
     entry.frontendWs = ws;
 
     // Flush buffered messages (e.g. terminal_ready that arrived before attach)
-    const hasTerminalEnd = entry.buffer.some(
-      (m) => m.includes('"type":"exit"') || m.includes('"type":"error"'),
-    );
     for (const msg of entry.buffer) {
       ws.send(msg);
     }
     entry.buffer.length = 0;
 
     // If the terminal already exited/errored while buffered, clean up now
-    if (hasTerminalEnd) {
+    if (entry.terminated) {
       this.removeTerminal(terminalId);
     }
 
@@ -106,22 +105,18 @@ class TerminalRelay {
 
     if (!serialized) return;
 
+    const isTerminalEnd = msg.type === "terminal_exit" || msg.type === "terminal_error";
+    if (isTerminalEnd) entry.terminated = true;
+
     if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
       entry.frontendWs.send(serialized);
-      // Clean up after delivering exit/error to the attached frontend
-      if (msg.type === "terminal_exit" || msg.type === "terminal_error") {
-        this.removeTerminal(msg.terminalId);
-      }
+      if (isTerminalEnd) this.removeTerminal(msg.terminalId);
     } else {
       // Buffer until frontend attaches (e.g. terminal_ready arrives before WS connect)
       entry.buffer.push(serialized);
-      // If terminal exited/errored before frontend attached, keep the entry
-      // so the frontend can still attach and receive the buffered messages.
-      // Schedule cleanup after a timeout to avoid leaking entries.
-      if (msg.type === "terminal_exit" || msg.type === "terminal_error") {
-        setTimeout(() => {
-          this.removeTerminal(msg.terminalId);
-        }, 30_000);
+      // Schedule cleanup so the entry doesn't leak if frontend never attaches
+      if (isTerminalEnd) {
+        setTimeout(() => this.removeTerminal(msg.terminalId), 30_000);
       }
     }
   }

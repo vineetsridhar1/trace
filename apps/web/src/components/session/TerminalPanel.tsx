@@ -23,6 +23,10 @@ export function TerminalPanel({
     const result = await client
       .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
       .toPromise();
+    if (result.error) {
+      console.error("[terminal] failed to create terminal:", result.error.message);
+      return;
+    }
     if (result.data?.createTerminal) {
       const { id } = result.data.createTerminal as { id: string };
       addTerminal(id, sessionId);
@@ -31,8 +35,11 @@ export function TerminalPanel({
 
   const destroyTerminal = useCallback(
     async (terminalId: string) => {
-      await client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
       removeTerminal(terminalId);
+      const result = await client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
+      if (result.error) {
+        console.error("[terminal] failed to destroy terminal:", result.error.message);
+      }
     },
     [removeTerminal],
   );

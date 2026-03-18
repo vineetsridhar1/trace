@@ -31,7 +31,11 @@ export class TerminalManager {
     }
 
     // Fall back to home dir if the requested cwd doesn't exist
-    const safeCwd = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
+    const cwdExists = cwd && fs.existsSync(cwd);
+    if (!cwdExists && cwd) {
+      console.warn(`[terminal-manager] cwd "${cwd}" does not exist, falling back to home dir`);
+    }
+    const safeCwd = cwdExists ? cwd : os.homedir();
 
     const terminal = pty.spawn(this.defaultShell, [], {
       name: "xterm-256color",
