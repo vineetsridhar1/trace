@@ -6,7 +6,7 @@ import { ticketQueries, ticketMutations, ticketSubscriptions } from "./ticket.js
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries, inboxMutations } from "./inbox.js";
 import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
-import { terminalMutations } from "./terminal.js";
+import { terminalQueries, terminalMutations } from "./terminal.js";
 import { prisma } from "../lib/db.js";
 
 export const resolvers = {
@@ -39,6 +39,7 @@ export const resolvers = {
     ...eventQueries,
     ...inboxQueries,
     ...apiTokenQueries,
+    ...terminalQueries,
   },
 
   Mutation: {

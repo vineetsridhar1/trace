@@ -10,6 +10,8 @@ interface TerminalEntry {
   terminated: boolean;
   /** Messages buffered before the frontend attaches */
   buffer: string[];
+  /** Timer to kill orphaned terminals that no frontend attaches to */
+  orphanTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /**
@@ -17,6 +19,9 @@ interface TerminalEntry {
  * No persistence — terminal data is ephemeral and never hits the event store.
  */
 class TerminalRelay {
+  /** If no frontend attaches within this window, kill the orphaned terminal. */
+  private static ORPHAN_TIMEOUT_MS = 5 * 60 * 1000;
+
   private terminals = new Map<string, TerminalEntry>();
   /** Reverse index: sessionId → Set<terminalId> for bulk cleanup */
   private sessionTerminals = new Map<string, Set<string>>();
@@ -28,7 +33,7 @@ class TerminalRelay {
   createTerminal(sessionId: string, cols: number, rows: number, cwd?: string): string {
     const terminalId = randomUUID();
 
-    this.terminals.set(terminalId, { sessionId, frontendWs: null, ready: false, terminated: false, buffer: [] });
+    this.terminals.set(terminalId, { sessionId, frontendWs: null, ready: false, terminated: false, buffer: [], orphanTimer: null });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
     this.sessionTerminals.set(sessionId, ids);
@@ -53,11 +58,51 @@ class TerminalRelay {
     return terminalId;
   }
 
+  /**
+   * Rebuild relay entries from bridge-reported active terminals (on reconnect).
+   * Skips entries that already exist. Starts orphan cleanup timer for each restored entry.
+   */
+  restoreTerminals(terminals: Array<{ terminalId: string; sessionId: string }>): void {
+    for (const { terminalId, sessionId } of terminals) {
+      if (this.terminals.has(terminalId)) continue;
+
+      this.terminals.set(terminalId, {
+        sessionId,
+        frontendWs: null,
+        ready: true, // Bridge says it's alive, so it's ready
+        terminated: false,
+        buffer: [],
+        orphanTimer: null,
+      });
+
+      const ids = this.sessionTerminals.get(sessionId) ?? new Set();
+      ids.add(terminalId);
+      this.sessionTerminals.set(sessionId, ids);
+
+      this.scheduleOrphanCleanup(terminalId);
+    }
+  }
+
+  /** Returns non-terminated terminal IDs for a session. */
+  getTerminalsForSession(sessionId: string): string[] {
+    const ids = this.sessionTerminals.get(sessionId);
+    if (!ids) return [];
+    const result: string[] = [];
+    for (const id of ids) {
+      const entry = this.terminals.get(id);
+      if (entry && !entry.terminated) result.push(id);
+    }
+    return result;
+  }
+
   /** Attach a frontend WebSocket to an existing terminal. Flushes any buffered messages. */
   attachFrontend(terminalId: string, ws: WebSocket): boolean {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
     entry.frontendWs = ws;
+
+    // Cancel orphan cleanup — a frontend has attached
+    this.cancelOrphanCleanup(terminalId);
 
     // Flush buffered messages (e.g. terminal_ready that arrived before attach)
     for (const msg of entry.buffer) {
@@ -78,6 +123,7 @@ class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (entry) {
       entry.frontendWs = null;
+      this.scheduleOrphanCleanup(terminalId);
     }
   }
 
@@ -164,6 +210,7 @@ class TerminalRelay {
       if (entry?.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
+      this.cancelOrphanCleanup(terminalId);
       this.terminals.delete(terminalId);
     }
     this.sessionTerminals.delete(sessionId);
@@ -174,13 +221,41 @@ class TerminalRelay {
     for (const [terminalId, entry] of this.terminals) {
       if (entry.frontendWs === ws) {
         entry.frontendWs = null;
+        this.scheduleOrphanCleanup(terminalId);
       }
+    }
+  }
+
+  private scheduleOrphanCleanup(terminalId: string): void {
+    const entry = this.terminals.get(terminalId);
+    if (!entry || entry.terminated) return;
+
+    // Don't schedule if a frontend is already attached
+    if (entry.frontendWs) return;
+
+    this.cancelOrphanCleanup(terminalId);
+    entry.orphanTimer = setTimeout(() => {
+      entry.orphanTimer = null;
+      // If still no frontend attached, destroy the terminal
+      if (!entry.frontendWs && !entry.terminated) {
+        console.log(`[terminal-relay] orphan cleanup: destroying terminal ${terminalId}`);
+        this.destroyTerminal(terminalId);
+      }
+    }, TerminalRelay.ORPHAN_TIMEOUT_MS);
+  }
+
+  private cancelOrphanCleanup(terminalId: string): void {
+    const entry = this.terminals.get(terminalId);
+    if (entry?.orphanTimer) {
+      clearTimeout(entry.orphanTimer);
+      entry.orphanTimer = null;
     }
   }
 
   private removeTerminal(terminalId: string): void {
     const entry = this.terminals.get(terminalId);
     if (entry) {
+      this.cancelOrphanCleanup(terminalId);
       const ids = this.sessionTerminals.get(entry.sessionId);
       if (ids) {
         ids.delete(terminalId);

@@ -106,6 +106,15 @@ export const REPO_BRANCHES_QUERY = gql`
   }
 `;
 
+export const SESSION_TERMINALS_QUERY = gql`
+  query SessionTerminals($sessionId: ID!) {
+    sessionTerminals(sessionId: $sessionId) {
+      id
+      sessionId
+    }
+  }
+`;
+
 export const CREATE_TERMINAL_MUTATION = gql`
   mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
     createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {

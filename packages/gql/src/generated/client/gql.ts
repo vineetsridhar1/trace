@@ -39,6 +39,7 @@ type Documents = {
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": typeof types.AvailableRuntimesDocument,
     "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateRepoDocument,
     "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n": typeof types.RepoBranchesDocument,
+    "\n  query SessionTerminals($sessionId: ID!) {\n    sessionTerminals(sessionId: $sessionId) {\n      id\n      sessionId\n    }\n  }\n": typeof types.SessionTerminalsDocument,
     "\n  mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {\n    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {\n      id\n      sessionId\n    }\n  }\n": typeof types.CreateTerminalDocument,
     "\n  mutation DestroyTerminal($terminalId: ID!) {\n    destroyTerminal(terminalId: $terminalId)\n  }\n": typeof types.DestroyTerminalDocument,
 };
@@ -68,6 +69,7 @@ const documents: Documents = {
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": types.AvailableRuntimesDocument,
     "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateRepoDocument,
     "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n": types.RepoBranchesDocument,
+    "\n  query SessionTerminals($sessionId: ID!) {\n    sessionTerminals(sessionId: $sessionId) {\n      id\n      sessionId\n    }\n  }\n": types.SessionTerminalsDocument,
     "\n  mutation CreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {\n    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {\n      id\n      sessionId\n    }\n  }\n": types.CreateTerminalDocument,
     "\n  mutation DestroyTerminal($terminalId: ID!) {\n    destroyTerminal(terminalId: $terminalId)\n  }\n": types.DestroyTerminalDocument,
 };
@@ -186,6 +188,10 @@ export function graphql(source: "\n  mutation UpdateRepo($id: ID!, $input: Updat
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n"): (typeof documents)["\n  query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {\n    repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query SessionTerminals($sessionId: ID!) {\n    sessionTerminals(sessionId: $sessionId) {\n      id\n      sessionId\n    }\n  }\n"): (typeof documents)["\n  query SessionTerminals($sessionId: ID!) {\n    sessionTerminals(sessionId: $sessionId) {\n      id\n      sessionId\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

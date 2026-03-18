@@ -28,6 +28,23 @@ class TerminalService {
     return { id: terminalId, sessionId };
   }
 
+  async listForSession({
+    sessionId,
+    organizationId,
+  }: {
+    sessionId: string;
+    organizationId: string;
+  }): Promise<Array<{ id: string; sessionId: string }>> {
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { id: true },
+    });
+    if (!session) throw new Error("Session not found");
+
+    const terminalIds = terminalRelay.getTerminalsForSession(sessionId);
+    return terminalIds.map((id) => ({ id, sessionId }));
+  }
+
   async destroy({
     terminalId,
     organizationId,

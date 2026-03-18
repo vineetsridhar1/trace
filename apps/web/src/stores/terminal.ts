@@ -15,7 +15,7 @@ interface TerminalState {
   /** sessionId → active terminalId */
   activeTerminalId: Record<string, string>;
 
-  addTerminal: (id: string, sessionId: string) => void;
+  addTerminal: (id: string, sessionId: string, status?: TerminalStatus) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   removeTerminal: (id: string) => void;
   setActiveTerminal: (sessionId: string, terminalId: string) => void;
@@ -25,9 +25,9 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   terminals: {},
   activeTerminalId: {},
 
-  addTerminal: (id, sessionId) =>
+  addTerminal: (id, sessionId, status) =>
     set((state) => ({
-      terminals: { ...state.terminals, [id]: { id, sessionId, status: "connecting" } },
+      terminals: { ...state.terminals, [id]: { id, sessionId, status: status ?? "connecting" } },
       activeTerminalId: { ...state.activeTerminalId, [sessionId]: id },
     })),
 

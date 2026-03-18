@@ -118,6 +118,8 @@ export interface BridgeRuntimeHello {
   supportedTools: string[];
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];
+  /** Active terminal ptys still running on this bridge (reported on reconnect). */
+  activeTerminals?: Array<{ terminalId: string; sessionId: string }>;
 }
 
 export interface BridgeRuntimeHeartbeat {
