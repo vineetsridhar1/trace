@@ -1,22 +1,35 @@
 import * as pty from "node-pty";
+import os from "os";
 
 export interface TerminalCallbacks {
   onOutput: (terminalId: string, data: string) => void;
   onExit: (terminalId: string, exitCode: number) => void;
 }
 
+export interface TerminalManagerOptions {
+  /** Default shell. Falls back to $SHELL, then platform-appropriate default. */
+  defaultShell?: string;
+}
+
 export class TerminalManager {
   private terminals = new Map<string, pty.IPty>();
+  private defaultShell: string;
 
-  constructor(private callbacks: TerminalCallbacks) {}
+  constructor(
+    private callbacks: TerminalCallbacks,
+    options?: TerminalManagerOptions,
+  ) {
+    this.defaultShell = options?.defaultShell
+      ?? process.env.SHELL
+      ?? (os.platform() === "win32" ? "powershell.exe" : "/bin/bash");
+  }
 
   create(terminalId: string, cwd: string, cols: number, rows: number): void {
     if (this.terminals.has(terminalId)) {
       this.destroy(terminalId);
     }
 
-    const shell = process.env.SHELL || "/bin/bash";
-    const terminal = pty.spawn(shell, [], {
+    const terminal = pty.spawn(this.defaultShell, [], {
       name: "xterm-256color",
       cols,
       rows,

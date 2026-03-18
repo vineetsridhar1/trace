@@ -64,19 +64,28 @@ export function TerminalInstance({ terminalId }: { terminalId: string }) {
           setTerminalStatus(terminalId, "exited");
           term.write(`\r\n\x1b[31m[Error: ${event.message}]\x1b[0m\r\n`);
           break;
+        case "disconnected":
+          setTerminalStatus(terminalId, "exited");
+          term.write("\r\n\x1b[33m[Connection lost]\x1b[0m\r\n");
+          break;
       }
     });
 
     socket.connect();
 
-    // Handle resize
+    // Handle resize (debounced to avoid flooding bridge during drag)
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
-      socket.resize(term.cols, term.rows);
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        fitAddon.fit();
+        socket.resize(term.cols, term.rows);
+      }, 100);
     });
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       socket.close();
       term.dispose();

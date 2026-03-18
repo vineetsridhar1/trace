@@ -7,7 +7,7 @@ import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
-import { TerminalManager } from "./terminal-manager.js";
+import { TerminalManager } from "@trace/shared/adapters";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 

@@ -1,6 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Plus, X, TerminalSquare } from "lucide-react";
-import { useTerminalStore } from "../../stores/terminal";
+import { useTerminalStore, useSessionTerminals } from "../../stores/terminal";
 import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
 import { CREATE_TERMINAL_MUTATION, DESTROY_TERMINAL_MUTATION } from "../../lib/mutations";
@@ -13,7 +13,7 @@ export function TerminalPanel({
   sessionId: string;
   onClose: () => void;
 }) {
-  const terminals = useTerminalStore((s) => s.getTerminalsForSession(sessionId));
+  const terminals = useSessionTerminals(sessionId);
   const activeTerminalId = useTerminalStore((s) => s.activeTerminalId[sessionId]);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
@@ -38,15 +38,13 @@ export function TerminalPanel({
   );
 
   // Auto-create first terminal on mount
-  const hasCreatedRef = useTerminalStore((s) => {
-    const sessionTerminals = Object.values(s.terminals).filter((t) => t.sessionId === sessionId);
-    return sessionTerminals.length > 0;
-  });
-
-  if (!hasCreatedRef) {
-    // Trigger creation on next tick to avoid calling during render
-    queueMicrotask(() => createNewTerminal());
-  }
+  const hasTriggeredCreate = useRef(false);
+  useEffect(() => {
+    if (!hasTriggeredCreate.current && terminals.length === 0) {
+      hasTriggeredCreate.current = true;
+      createNewTerminal();
+    }
+  }, [terminals.length, createNewTerminal]);
 
   return (
     <div className="flex flex-col border-t border-border bg-[#0a0a0a]" style={{ height: 300 }}>

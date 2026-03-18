@@ -1,9 +1,7 @@
 import type { WebSocket } from "ws";
-import { parseCookieToken } from "./auth.js";
+import { parseCookieToken, verifyToken } from "./auth.js";
 import { terminalRelay } from "./terminal-relay.js";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+import { prisma } from "./db.js";
 
 /**
  * Handles frontend WebSocket connections to /terminal.
@@ -31,9 +29,8 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     return;
   }
 
-  try {
-    jwt.verify(token, JWT_SECRET);
-  } catch {
+  const userId = verifyToken(token);
+  if (!userId) {
     ws.send(JSON.stringify({ type: "error", message: "Invalid token" }));
     ws.close();
     return;
@@ -50,12 +47,31 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
             ws.send(JSON.stringify({ type: "error", message: "Missing terminalId" }));
             return;
           }
-          const attached = terminalRelay.attachFrontend(terminalId, ws);
-          if (!attached) {
+
+          // Verify the user has access to the terminal's session
+          const sessionId = terminalRelay.getSessionId(terminalId);
+          if (!sessionId) {
             ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
             return;
           }
-          attachedTerminalId = terminalId;
+
+          prisma.session.findFirst({
+            where: { id: sessionId, organization: { users: { some: { id: userId } } } },
+            select: { id: true },
+          }).then((session: { id: string } | null) => {
+            if (!session) {
+              ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+              return;
+            }
+            const attached = terminalRelay.attachFrontend(terminalId, ws);
+            if (!attached) {
+              ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
+              return;
+            }
+            attachedTerminalId = terminalId;
+          }).catch(() => {
+            ws.send(JSON.stringify({ type: "error", message: "Authorization check failed" }));
+          });
           break;
         }
         case "input": {

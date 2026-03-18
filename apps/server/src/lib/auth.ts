@@ -12,6 +12,16 @@ export function parseCookieToken(cookieHeader?: string): string | undefined {
   return match?.[1];
 }
 
+/** Verify a JWT and return the userId, or null if invalid. */
+export function verifyToken(token: string): string | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
+    return payload.userId;
+  } catch {
+    return null;
+  }
+}
+
 export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
 
