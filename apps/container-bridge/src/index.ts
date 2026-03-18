@@ -73,6 +73,7 @@ async function main(): Promise<void> {
   // Connect to server — sessions register dynamically via prepare commands
   const bridge = new ContainerBridge(bridgeUrl, bridgeToken, machineId, tool);
   bridge.connect();
+  bridge.startIdleWatch();
 
   // Keep the process alive
   process.on("SIGTERM", () => {

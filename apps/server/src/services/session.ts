@@ -7,6 +7,7 @@ import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
+import { terminalRelay } from "../lib/terminal-relay.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   organizationId: string;
@@ -392,6 +393,9 @@ export class SessionService {
 
     // Resolve any pending inbox items (plans/questions awaiting input)
     await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session deleted" });
+
+    // Clean up terminal relay entries and notify attached frontends
+    terminalRelay.destroyAllForSession(id);
 
     // Clean up runtime (bridge + cloud VM for cloud, bridge + worktree for local)
     await sessionRouter.destroyRuntime(id, session);

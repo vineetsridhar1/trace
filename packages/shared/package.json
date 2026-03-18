@@ -24,7 +24,16 @@
     "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
     "lint": "tsc -b"
   },
+  "peerDependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "peerDependenciesMeta": {
+    "node-pty": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "node-pty": "^1.1.0",
     "typescript": "^5.7.0"
   }
 }

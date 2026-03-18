@@ -7,6 +7,7 @@ import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
+import { TerminalManager } from "@trace/shared/adapters";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 
@@ -22,10 +23,21 @@ export class BridgeClient implements IBridgeClient {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private status: BridgeConnectionStatus = "disconnected";
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
+  /** Maps sessionId → workdir so terminals can spawn in the correct directory */
+  private sessionWorkdirs = new Map<string, string>();
+  private terminalManager: TerminalManager;
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
     this.instanceId = getOrCreateInstanceId();
+    this.terminalManager = new TerminalManager({
+      onOutput: (terminalId, data) => {
+        this.send({ type: "terminal_output", terminalId, data });
+      },
+      onExit: (terminalId, exitCode) => {
+        this.send({ type: "terminal_exit", terminalId, exitCode });
+      },
+    });
   }
 
   connect() {
@@ -72,6 +84,7 @@ export class BridgeClient implements IBridgeClient {
 
   disconnect() {
     this.stopHeartbeat();
+    this.terminalManager.destroyAll();
     for (const adapter of this.adapters.values()) {
       adapter.abort();
     }
@@ -241,6 +254,7 @@ export class BridgeClient implements IBridgeClient {
 
         createWorktree({ repoPath, repoId, sessionId, defaultBranch, startBranch: branch })
           .then(({ workdir }) => {
+            this.sessionWorkdirs.set(sessionId, workdir);
             this.send({ type: "workspace_ready", sessionId, workdir });
           })
           .catch((err: Error) => {
@@ -276,6 +290,8 @@ export class BridgeClient implements IBridgeClient {
         }
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
+        this.sessionWorkdirs.delete(cmd.sessionId);
+        this.terminalManager.destroyForSession(cmd.sessionId);
 
         // Clean up worktree if one exists
         if (cmd.workdir && cmd.repoId) {
@@ -308,6 +324,35 @@ export class BridgeClient implements IBridgeClient {
         });
         break;
       }
+      // Terminal access on local machines is disabled for security reasons.
+      // The frontend hides the terminal button for local sessions.
+      // Cloud sessions still handle terminals via the cloud adapter.
+      // To re-enable, uncomment the cases below.
+      //
+      // case "terminal_create": {
+      //   const { terminalId, sessionId, cols, rows, cwd } = cmd;
+      //   const workdir = cwd || this.sessionWorkdirs.get(sessionId) || process.cwd();
+      //   try {
+      //     this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
+      //     this.send({ type: "terminal_ready", terminalId });
+      //   } catch (err) {
+      //     const message = err instanceof Error ? err.message : String(err);
+      //     this.send({ type: "terminal_error", terminalId, error: message });
+      //   }
+      //   break;
+      // }
+      // case "terminal_input": {
+      //   this.terminalManager.write(cmd.terminalId, cmd.data);
+      //   break;
+      // }
+      // case "terminal_resize": {
+      //   this.terminalManager.resize(cmd.terminalId, cmd.cols, cmd.rows);
+      //   break;
+      // }
+      // case "terminal_destroy": {
+      //   this.terminalManager.destroy(cmd.terminalId);
+      //   break;
+      // }
     }
   }
 }

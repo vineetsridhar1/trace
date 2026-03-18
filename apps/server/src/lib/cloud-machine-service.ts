@@ -286,6 +286,7 @@ export class CloudMachineService {
 
   /**
    * Restore in-memory state from DB on startup.
+   * Also checks for started machines with no active sessions and schedules idle stops.
    */
   async restoreFromDb(): Promise<void> {
     const machines = await prisma.cloudMachine.findMany({
@@ -298,6 +299,22 @@ export class CloudMachineService {
 
     if (machines.length > 0) {
       console.log(`[cloud-machine-service] restored ${machines.length} machine bridge tokens`);
+    }
+
+    // Check for started machines with no active sessions (timers lost on restart)
+    const startedMachines = machines.filter((m) => m.status === "started");
+    for (const machine of startedMachines) {
+      const activeSessions = await prisma.session.count({
+        where: {
+          hosting: "cloud",
+          status: { in: ["creating", "pending", "active", "paused", "needs_input"] },
+          connection: { path: ["cloudMachineId"], equals: machine.id },
+        },
+      });
+      if (activeSessions === 0) {
+        console.log(`[cloud-machine-service] machine ${machine.id} has no active sessions on restore, scheduling idle stop`);
+        this.scheduleIdleStop(machine.id);
+      }
     }
   }
 

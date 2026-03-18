@@ -186,9 +186,11 @@ export type Mutation = {
   createChannel: Channel;
   createProject: Project;
   createRepo: Repo;
+  createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
   deleteSession: Session;
+  destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
@@ -229,6 +231,13 @@ export type MutationCreateRepoArgs = {
 };
 
 
+export type MutationCreateTerminalArgs = {
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
+  sessionId: Scalars['ID']['input'];
+};
+
+
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
@@ -241,6 +250,11 @@ export type MutationDeleteApiTokenArgs = {
 
 export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationDestroyTerminalArgs = {
+  terminalId: Scalars['ID']['input'];
 };
 
 
@@ -660,6 +674,12 @@ export type SubscriptionUserNotificationsArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
+export type Terminal = {
+  __typename?: 'Terminal';
+  id: Scalars['ID']['output'];
+  sessionId: Scalars['ID']['output'];
+};
+
 export type TerminalEndpoint = {
   __typename?: 'TerminalEndpoint';
   id: Scalars['String']['output'];
@@ -909,6 +929,22 @@ export type RepoBranchesQueryVariables = Exact<{
 
 export type RepoBranchesQuery = { __typename?: 'Query', repoBranches: Array<string> };
 
+export type CreateTerminalMutationVariables = Exact<{
+  sessionId: Scalars['ID']['input'];
+  cols: Scalars['Int']['input'];
+  rows: Scalars['Int']['input'];
+}>;
+
+
+export type CreateTerminalMutation = { __typename?: 'Mutation', createTerminal: { __typename?: 'Terminal', id: string, sessionId: string } };
+
+export type DestroyTerminalMutationVariables = Exact<{
+  terminalId: Scalars['ID']['input'];
+}>;
+
+
+export type DestroyTerminalMutation = { __typename?: 'Mutation', destroyTerminal: boolean };
+
 
 export const ChannelsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Channels"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"channels"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]} as unknown as DocumentNode<ChannelsQuery, ChannelsQueryVariables>;
 export const ReposDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Repos"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"repos"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"remoteUrl"}},{"kind":"Field","name":{"kind":"Name","value":"defaultBranch"}}]}}]}}]} as unknown as DocumentNode<ReposQuery, ReposQueryVariables>;
@@ -935,3 +971,5 @@ export const DismissInboxItemDocument = {"kind":"Document","definitions":[{"kind
 export const AvailableRuntimesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AvailableRuntimes"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"tool"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CodingTool"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"availableRuntimes"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"tool"},"value":{"kind":"Variable","name":{"kind":"Name","value":"tool"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"hostingMode"}},{"kind":"Field","name":{"kind":"Name","value":"supportedTools"}},{"kind":"Field","name":{"kind":"Name","value":"connected"}},{"kind":"Field","name":{"kind":"Name","value":"sessionCount"}},{"kind":"Field","name":{"kind":"Name","value":"registeredRepoIds"}}]}}]}}]} as unknown as DocumentNode<AvailableRuntimesQuery, AvailableRuntimesQueryVariables>;
 export const UpdateRepoDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateRepo"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateRepoInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateRepo"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateRepoMutation, UpdateRepoMutationVariables>;
 export const RepoBranchesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RepoBranches"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"repoId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"runtimeInstanceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"repoBranches"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"repoId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"repoId"}}},{"kind":"Argument","name":{"kind":"Name","value":"runtimeInstanceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runtimeInstanceId"}}}]}]}}]} as unknown as DocumentNode<RepoBranchesQuery, RepoBranchesQueryVariables>;
+export const CreateTerminalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateTerminal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"cols"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"rows"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createTerminal"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}},{"kind":"Argument","name":{"kind":"Name","value":"cols"},"value":{"kind":"Variable","name":{"kind":"Name","value":"cols"}}},{"kind":"Argument","name":{"kind":"Name","value":"rows"},"value":{"kind":"Variable","name":{"kind":"Name","value":"rows"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"sessionId"}}]}}]}}]} as unknown as DocumentNode<CreateTerminalMutation, CreateTerminalMutationVariables>;
+export const DestroyTerminalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DestroyTerminal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"terminalId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"destroyTerminal"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"terminalId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"terminalId"}}}]}]}}]} as unknown as DocumentNode<DestroyTerminalMutation, DestroyTerminalMutationVariables>;

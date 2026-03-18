@@ -2,16 +2,24 @@ import type WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
+import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
-export interface SessionCommand {
+interface BaseSessionCommand {
   type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches";
   sessionId: string;
   prompt?: string;
   [key: string]: unknown;
 }
+
+export type SessionCommand =
+  | BaseSessionCommand
+  | BridgeTerminalCreateCommand
+  | BridgeTerminalInputCommand
+  | BridgeTerminalResizeCommand
+  | BridgeTerminalDestroyCommand;
 
 export type DeliveryResult =
   | "delivered"
@@ -425,7 +433,7 @@ export class SessionRouter {
   /** Send a command to the runtime that owns this session, returning a typed delivery result. */
   send(sessionId: string, command: SessionCommand): DeliveryResult {
     let runtimeId = this.sessionRuntime.get(sessionId);
-    const requiredTool = typeof command.tool === "string" ? command.tool : undefined;
+    const requiredTool = "tool" in command && typeof command.tool === "string" ? command.tool : undefined;
 
     // Auto-bind to a default runtime if not yet bound
     if (!runtimeId) {

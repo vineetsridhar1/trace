@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@trace/shared": "workspace:*",
+    "node-pty": "^1.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
