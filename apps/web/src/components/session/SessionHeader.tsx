@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowLeft, History, Square, Circle, WifiOff } from "lucide-react";
+import { ArrowLeft, History, Square, Circle, WifiOff, Monitor, Cloud } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel, isDisconnected } from "./sessionStatus";
@@ -14,6 +14,7 @@ export function SessionHeader({
 }) {
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const [showHistory, setShowHistory] = useState(false);
@@ -21,6 +22,10 @@ export function SessionHeader({
 
   const isActive = status === "active";
   const disconnected = isDisconnected(connection);
+
+  const runtimeLabel = connection?.runtimeLabel as string | undefined;
+  const isCloud = hosting === "cloud";
+  const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
@@ -57,6 +62,13 @@ export function SessionHeader({
           {name ?? "Session"}
         </h2>
       </div>
+
+      {runtimeDisplayLabel && (
+        <span className="flex shrink-0 items-center gap-1 rounded-md bg-surface-elevated px-2 py-1 text-xs text-muted-foreground">
+          {isCloud ? <Cloud size={12} /> : <Monitor size={12} />}
+          {runtimeDisplayLabel}
+        </span>
+      )}
 
       <div className="flex shrink-0 items-center gap-2">
         <div className="relative" ref={historyRef}>
