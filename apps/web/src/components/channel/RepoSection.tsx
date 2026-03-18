@@ -29,6 +29,7 @@ export function RepoSection({
   onRuntimeInfoChange,
 }: RepoSectionProps) {
   const repoIds = useEntityIds("repos");
+  // Called unconditionally (rules of hooks); returns undefined when repoId is absent
   const selectedRepoName = useEntityField("repos", repoId ?? "", "name");
   const isDeviceBridge = runtimeInfo?.hostingMode === "local";
   const isUnlinked = repoId && isDeviceBridge && runtimeInfo?.registeredRepoIds

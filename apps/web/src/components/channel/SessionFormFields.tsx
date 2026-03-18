@@ -6,6 +6,7 @@ import { getModelsForTool, getDefaultModel, getModelLabel } from "../session/mod
 import { RepoSection } from "./RepoSection";
 import { cn } from "../../lib/utils";
 
+/** Must stay in sync with SelectItem labels below */
 const TOOL_LABELS: Record<string, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
