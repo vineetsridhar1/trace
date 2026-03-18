@@ -36,6 +36,9 @@ importers:
         specifier: ^8.18.0
         version: 8.19.0
     devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.5.0
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
@@ -274,6 +277,9 @@ importers:
 
   packages/shared:
     devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.5.0
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
