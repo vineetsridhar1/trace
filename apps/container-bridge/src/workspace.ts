@@ -20,17 +20,11 @@ export function getRepoPath(repoId: string): string | undefined {
 export async function ensureRepo(repoId: string, remoteUrl: string): Promise<string> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
 
-  // Convert SSH URLs to HTTPS so we can inject a token (containers don't have SSH)
-  let authUrl = remoteUrl;
-  const sshMatch = remoteUrl.match(/^git@github\.com:(.+?)(?:\.git)?$/);
-  if (sshMatch) {
-    authUrl = `https://github.com/${sshMatch[1]}.git`;
-  }
-
   // Inject GitHub token into HTTPS URL for private repo access
+  let authUrl = remoteUrl;
   const githubToken = process.env.GITHUB_TOKEN;
-  if (githubToken && authUrl.startsWith("https://github.com")) {
-    authUrl = authUrl.replace("https://github.com", `https://x-access-token:${githubToken}@github.com`);
+  if (githubToken && remoteUrl.startsWith("https://github.com")) {
+    authUrl = remoteUrl.replace("https://github.com", `https://x-access-token:${githubToken}@github.com`);
   }
 
   if (fs.existsSync(repoPath)) {
