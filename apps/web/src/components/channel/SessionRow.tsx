@@ -36,6 +36,11 @@ function RowContent({
 
       <div className="min-w-0 flex-1">
         <span className="text-sm text-foreground truncate block">{name}</span>
+        {updatedAt && (
+          <span className="mt-0.5 block text-[11px] text-muted-foreground sm:hidden">
+            {timeAgo(updatedAt)}
+          </span>
+        )}
         {parentSession && (
           <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
             <GitBranch size={10} className="shrink-0" />
@@ -64,7 +69,7 @@ function RowContent({
         <span className="min-w-0 truncate text-left text-xs text-muted-foreground">{createdBy?.name}</span>
       </div>
 
-      <span className="w-full min-w-0 self-start truncate pt-0.5 text-left text-xs text-muted-foreground">
+      <span className="hidden w-full min-w-0 self-start truncate pt-0.5 text-left text-xs text-muted-foreground sm:inline">
         {updatedAt ? timeAgo(updatedAt) : ""}
       </span>
 
