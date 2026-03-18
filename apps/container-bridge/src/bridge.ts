@@ -187,7 +187,7 @@ export class ContainerBridge implements IBridgeClient {
     switch (cmd.type) {
       case "run":
       case "send": {
-        void this.runPrompt({
+        this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt ?? "",
           cwd: cmd.cwd ?? "/workspace",
@@ -195,6 +195,10 @@ export class ContainerBridge implements IBridgeClient {
           model: cmd.model,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
+        }).catch((err) => {
+          console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
+          this.send({ type: "session_output", sessionId: cmd.sessionId, data: { type: "error", message: err instanceof Error ? err.message : String(err) } });
+          this.send({ type: "session_complete", sessionId: cmd.sessionId });
         });
         break;
       }
