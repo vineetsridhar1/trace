@@ -104,7 +104,6 @@ ipcMain.handle("get-repo-path", (_event, repoId: string) => {
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
-ipcMain.handle("get-bridge-instance-id", () => bridge.getInstanceId());
 
 app.whenReady().then(() => {
   bridge.onStatusChange((status) => {

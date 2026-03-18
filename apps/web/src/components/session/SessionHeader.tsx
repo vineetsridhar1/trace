@@ -4,7 +4,6 @@ import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel, isDisconnected } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
-import { useLocalBridgeInstanceId } from "../../hooks/useLocalBridgeInstanceId";
 
 export function SessionHeader({
   sessionId,
@@ -17,7 +16,6 @@ export function SessionHeader({
   const status = useEntityField("sessions", sessionId, "status");
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
-  const localBridgeId = useLocalBridgeInstanceId();
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -25,11 +23,9 @@ export function SessionHeader({
   const isActive = status === "active";
   const disconnected = isDisconnected(connection);
 
-  const runtimeInstanceId = connection?.runtimeInstanceId as string | undefined;
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
-  const isCurrentDevice = !isCloud && !!localBridgeId && !!runtimeInstanceId && localBridgeId === runtimeInstanceId;
-  const runtimeDisplayLabel = isCloud ? "Cloud" : isCurrentDevice ? "Current Device" : (runtimeLabel ?? null);
+  const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
