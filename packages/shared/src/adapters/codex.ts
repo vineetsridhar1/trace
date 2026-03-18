@@ -38,6 +38,7 @@ export class CodexAdapter implements CodingToolAdapter {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
+      detached: true,
     });
 
     if (this.process.stdout) {
@@ -152,7 +153,8 @@ export class CodexAdapter implements CodingToolAdapter {
 
   abort() {
     if (this.process) {
-      this.process.kill("SIGTERM");
+      // Kill the entire process group (negative PID) since we spawn detached
+      try { process.kill(-this.process.pid!, "SIGTERM"); } catch { /* already dead */ }
       this.process = null;
     }
   }

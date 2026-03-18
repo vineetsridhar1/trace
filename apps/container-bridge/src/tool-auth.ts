@@ -47,6 +47,12 @@ async function loginCodex(): Promise<void> {
 }
 
 export async function ensureToolReady(tool: string): Promise<void> {
+  // Fail fast with a clear message if the required API key is missing
+  const requiredEnv = TOOL_ENV_VARS[tool];
+  if (requiredEnv && !process.env[requiredEnv]) {
+    throw new Error(`Cannot run ${tool}: ${requiredEnv} is not set. Add your API key in Settings → API Tokens.`);
+  }
+
   if (tool === "codex") {
     await loginCodex();
   }
