@@ -1,0 +1,37 @@
+name: Deploy Container Bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/container-bridge/**"
+      - "packages/shared/src/adapters/**"
+      - "packages/shared/package.json"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @trace/shared build
+
+      - name: Build container-bridge
+        run: pnpm --filter @trace/container-bridge build
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly
+        run: flyctl deploy --config apps/container-bridge/fly.toml --dockerfile apps/container-bridge/Dockerfile
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
