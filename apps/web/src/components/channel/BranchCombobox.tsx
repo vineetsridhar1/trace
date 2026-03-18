@@ -31,7 +31,7 @@ export function BranchCombobox({ repoId, runtimeInstanceId, value, onChange }: B
       .query(REPO_BRANCHES_QUERY, { repoId, runtimeInstanceId: runtimeInstanceId ?? null })
       .toPromise()
       .then((result) => {
-        setBranches((result.data?.repoBranches as string[]) ?? []);
+        setBranches(result.data?.repoBranches ?? []);
       })
       .catch(() => {
         setBranches([]);

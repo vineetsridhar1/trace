@@ -86,11 +86,11 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
-      if (msg.type === "branches_result" && msg.requestId) {
+      if (msg.type === "branches_result" && typeof msg.requestId === "string" && Array.isArray(msg.branches)) {
         sessionRouter.resolveBranchRequest(
-          msg.requestId as string,
-          (msg.branches as string[]) ?? [],
-          msg.error as string | undefined,
+          msg.requestId,
+          msg.branches as string[],
+          typeof msg.error === "string" ? msg.error : undefined,
         );
         return;
       }

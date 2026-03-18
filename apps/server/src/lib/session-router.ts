@@ -519,7 +519,7 @@ export class SessionRouter {
   }
 
   /** Send a command directly to a runtime (not session-scoped). */
-  private sendToRuntime(runtimeId: string, command: SessionCommand): DeliveryResult {
+  private sendToRuntime(runtimeId: string, command: Record<string, unknown>): DeliveryResult {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return "no_runtime";
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
@@ -537,7 +537,7 @@ export class SessionRouter {
    */
   listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "list_branches", sessionId: "", requestId, repoId });
+    const result = this.sendToRuntime(runtimeId, { type: "list_branches", requestId, repoId });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
