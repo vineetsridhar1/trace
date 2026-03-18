@@ -18,7 +18,8 @@
     "gql:codegen": "pnpm --filter @trace/gql codegen",
     "db:migrate": "pnpm --filter @trace/server exec prisma migrate dev",
     "db:generate": "pnpm --filter @trace/server exec prisma generate",
-    "codegen": "pnpm db:generate && node packages/gql/scripts/codegen.cjs && pnpm --filter @trace/gql build"
+    "codegen": "pnpm db:generate && node packages/gql/scripts/codegen.cjs && pnpm --filter @trace/gql build",
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper node_modules/node-pty/prebuilds/linux-*/spawn-helper 2>/dev/null || true"
   },
   "engines": {
     "node": ">=22",

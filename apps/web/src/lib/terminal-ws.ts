@@ -4,6 +4,10 @@ const wsBase = API_URL
   ? API_URL.replace(/^https?:/, wsProtocol)
   : `${wsProtocol}//${window.location.host}`;
 
+function getToken(): string | null {
+  return localStorage.getItem("trace_token");
+}
+
 export type TerminalSocketEvent =
   | { type: "ready" }
   | { type: "output"; data: string }
@@ -22,7 +26,11 @@ export class TerminalSocket {
   constructor(private terminalId: string) {}
 
   connect(): void {
-    this.ws = new WebSocket(`${wsBase}/terminal`);
+    const token = getToken();
+    const url = token
+      ? `${wsBase}/terminal?token=${encodeURIComponent(token)}`
+      : `${wsBase}/terminal`;
+    this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
       this.ws?.send(JSON.stringify({ type: "attach", terminalId: this.terminalId }));

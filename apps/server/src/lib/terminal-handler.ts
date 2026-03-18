@@ -21,8 +21,9 @@ import { prisma } from "./db.js";
 export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie?: string }; url?: string }) {
   let attachedTerminalId: string | null = null;
 
-  // Authenticate from cookie (same as GraphQL WS)
-  const token = parseCookieToken(req.headers.cookie);
+  // Authenticate from query param (preferred) or cookie fallback
+  const url = new URL(req.url ?? "", "http://localhost");
+  const token = url.searchParams.get("token") ?? parseCookieToken(req.headers.cookie);
   if (!token) {
     ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
     ws.close();
@@ -55,20 +56,31 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
             return;
           }
 
-          prisma.session.findFirst({
-            where: { id: sessionId, organization: { users: { some: { id: userId } } } },
-            select: { id: true },
-          }).then((session: { id: string } | null) => {
-            if (!session) {
+          // Look up the user's org, then verify the session belongs to it
+          // (same pattern as buildContext — avoids nested relation queries)
+          prisma.user.findUnique({
+            where: { id: userId },
+            select: { organizationId: true },
+          }).then((user) => {
+            if (!user) {
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
-            const attached = terminalRelay.attachFrontend(terminalId, ws);
-            if (!attached) {
-              ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
-              return;
-            }
-            attachedTerminalId = terminalId;
+            return prisma.session.findFirst({
+              where: { id: sessionId, organizationId: user.organizationId },
+              select: { id: true },
+            }).then((session) => {
+              if (!session) {
+                ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+                return;
+              }
+              const attached = terminalRelay.attachFrontend(terminalId, ws);
+              if (!attached) {
+                ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
+                return;
+              }
+              attachedTerminalId = terminalId;
+            });
           }).catch(() => {
             ws.send(JSON.stringify({ type: "error", message: "Authorization check failed" }));
           });

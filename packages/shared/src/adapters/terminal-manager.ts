@@ -1,5 +1,6 @@
 import * as pty from "node-pty";
 import os from "os";
+import fs from "fs";
 
 export interface TerminalCallbacks {
   onOutput: (terminalId: string, data: string) => void;
@@ -29,11 +30,14 @@ export class TerminalManager {
       this.destroy(terminalId);
     }
 
+    // Fall back to home dir if the requested cwd doesn't exist
+    const safeCwd = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
+
     const terminal = pty.spawn(this.defaultShell, [], {
       name: "xterm-256color",
       cols,
       rows,
-      cwd,
+      cwd: safeCwd,
       env: process.env as Record<string, string>,
     });
 

@@ -32,7 +32,7 @@ class TerminalRelay {
     this.sessionTerminals.set(sessionId, ids);
 
     // Send terminal_create command to the bridge
-    sessionRouter.send(sessionId, {
+    const result = sessionRouter.send(sessionId, {
       type: "terminal_create",
       terminalId,
       sessionId,
@@ -40,6 +40,13 @@ class TerminalRelay {
       rows,
       cwd: cwd ?? "",
     });
+
+    if (result !== "delivered") {
+      // Bridge not available — buffer an error so the frontend gets feedback on attach
+      const errorMsg = JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` });
+      const entry = this.terminals.get(terminalId);
+      if (entry) entry.buffer.push(errorMsg);
+    }
 
     return terminalId;
   }
@@ -51,10 +58,18 @@ class TerminalRelay {
     entry.frontendWs = ws;
 
     // Flush buffered messages (e.g. terminal_ready that arrived before attach)
+    const hasTerminalEnd = entry.buffer.some(
+      (m) => m.includes('"type":"exit"') || m.includes('"type":"error"'),
+    );
     for (const msg of entry.buffer) {
       ws.send(msg);
     }
     entry.buffer.length = 0;
+
+    // If the terminal already exited/errored while buffered, clean up now
+    if (hasTerminalEnd) {
+      this.removeTerminal(terminalId);
+    }
 
     return true;
   }
@@ -93,14 +108,21 @@ class TerminalRelay {
 
     if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
       entry.frontendWs.send(serialized);
+      // Clean up after delivering exit/error to the attached frontend
+      if (msg.type === "terminal_exit" || msg.type === "terminal_error") {
+        this.removeTerminal(msg.terminalId);
+      }
     } else {
       // Buffer until frontend attaches (e.g. terminal_ready arrives before WS connect)
       entry.buffer.push(serialized);
-    }
-
-    // Clean up after terminal exit/error
-    if (msg.type === "terminal_exit" || msg.type === "terminal_error") {
-      this.removeTerminal(msg.terminalId);
+      // If terminal exited/errored before frontend attached, keep the entry
+      // so the frontend can still attach and receive the buffered messages.
+      // Schedule cleanup after a timeout to avoid leaking entries.
+      if (msg.type === "terminal_exit" || msg.type === "terminal_error") {
+        setTimeout(() => {
+          this.removeTerminal(msg.terminalId);
+        }, 30_000);
+      }
     }
   }
 

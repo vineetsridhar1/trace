@@ -19,9 +19,16 @@ export class ContainerBridge implements IBridgeClient {
   private reportedToolSessionIds = new Map<string, string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private consecutiveFailures = 0;
+  /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
+  private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
   private terminalSessions = new Map<string, string>();
   private terminalManager: TerminalManager;
+  private lastActivity = Date.now();
+  private idleCheckTimer: ReturnType<typeof setInterval> | null = null;
+  /** Exit if no sessions/terminals have been active for this long. */
+  private static IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
   constructor(
     private readonly serverUrl: string,
@@ -46,6 +53,7 @@ export class ContainerBridge implements IBridgeClient {
 
     this.ws.on("open", () => {
       console.log("[container-bridge] connected to server");
+      this.consecutiveFailures = 0;
       // Announce as a cloud runtime — machineId is the stable instanceId
       this.send({
         type: "runtime_hello",
@@ -69,7 +77,7 @@ export class ContainerBridge implements IBridgeClient {
     });
 
     this.ws.on("close", () => {
-      console.log("[container-bridge] disconnected, reconnecting in 3s...");
+      console.log("[container-bridge] disconnected");
       this.stopHeartbeat();
       this.scheduleReconnect();
     });
@@ -91,6 +99,10 @@ export class ContainerBridge implements IBridgeClient {
       adapter.abort();
     }
     this.adapters.clear();
+    if (this.idleCheckTimer) {
+      clearInterval(this.idleCheckTimer);
+      this.idleCheckTimer = null;
+    }
     this.ws?.close();
     this.ws = null;
   }
@@ -103,10 +115,48 @@ export class ContainerBridge implements IBridgeClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
+    this.consecutiveFailures++;
+
+    if (this.consecutiveFailures >= ContainerBridge.MAX_RECONNECT_FAILURES) {
+      console.error(
+        `[container-bridge] ${this.consecutiveFailures} consecutive connection failures, exiting`,
+      );
+      process.exit(1);
+    }
+
+    // Exponential backoff: 3s, 6s, 12s, ... capped at 30s
+    const delay = Math.min(3000 * 2 ** (this.consecutiveFailures - 1), 30_000);
+    console.log(`[container-bridge] reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.consecutiveFailures}/${ContainerBridge.MAX_RECONNECT_FAILURES})...`);
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
-    }, 3000);
+    }, delay);
+  }
+
+  private touchActivity(): void {
+    this.lastActivity = Date.now();
+  }
+
+  /** Returns true if there are active sessions or terminals. */
+  private hasActiveWork(): boolean {
+    return this.adapters.size > 0 || this.terminalSessions.size > 0;
+  }
+
+  startIdleWatch(): void {
+    if (this.idleCheckTimer) return;
+    this.idleCheckTimer = setInterval(() => {
+      if (this.hasActiveWork()) {
+        this.lastActivity = Date.now();
+        return;
+      }
+      const idleMs = Date.now() - this.lastActivity;
+      if (idleMs >= ContainerBridge.IDLE_TIMEOUT_MS) {
+        console.log(`[container-bridge] idle for ${Math.round(idleMs / 1000)}s with no active work, exiting`);
+        this.disconnect();
+        process.exit(0);
+      }
+    }, 60_000); // Check every minute
   }
 
   private startHeartbeat(): void {
@@ -135,6 +185,7 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private handleCommand(cmd: BridgeCommand): void {
+    this.touchActivity();
     switch (cmd.type) {
       case "run":
       case "send": {
