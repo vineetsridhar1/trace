@@ -14,16 +14,23 @@ const WORKSPACES_DIR = "/workspaces";
 export async function ensureRepo(repoId: string, remoteUrl: string): Promise<string> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
 
-  // Inject GitHub token into HTTPS URL for private repo access
+  // Convert SSH URLs to HTTPS so we can inject a token (containers don't have SSH)
   let authUrl = remoteUrl;
+  const sshMatch = remoteUrl.match(/^git@github\.com:(.+?)(?:\.git)?$/);
+  if (sshMatch) {
+    authUrl = `https://github.com/${sshMatch[1]}.git`;
+  }
+
+  // Inject GitHub token into HTTPS URL for private repo access
   const githubToken = process.env.GITHUB_TOKEN;
-  if (githubToken && remoteUrl.startsWith("https://github.com")) {
-    authUrl = remoteUrl.replace("https://github.com", `https://x-access-token:${githubToken}@github.com`);
+  if (githubToken && authUrl.startsWith("https://github.com")) {
+    authUrl = authUrl.replace("https://github.com", `https://x-access-token:${githubToken}@github.com`);
   }
 
   if (fs.existsSync(repoPath)) {
-    // Repo already cloned — fetch latest
+    // Repo already cloned — ensure remote uses auth URL, then fetch latest
     console.log(`[workspace] fetching latest for repo ${repoId}`);
+    await execFileAsync("git", ["remote", "set-url", "origin", authUrl], { cwd: repoPath });
     await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
     return repoPath;
   }
@@ -32,6 +39,11 @@ export async function ensureRepo(repoId: string, remoteUrl: string): Promise<str
   fs.mkdirSync(REPOS_DIR, { recursive: true });
   console.log(`[workspace] cloning ${remoteUrl} into ${repoPath}`);
   await execFileAsync("git", ["clone", authUrl, repoPath]);
+
+  // Update the stored remote URL to the auth URL so subsequent git operations
+  // (push, fetch) from within worktrees use HTTPS+token instead of SSH.
+  await execFileAsync("git", ["remote", "set-url", "origin", authUrl], { cwd: repoPath });
+
   return repoPath;
 }
 
