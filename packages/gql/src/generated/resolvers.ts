@@ -411,6 +411,7 @@ export type Query = {
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   session?: Maybe<Session>;
+  sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
@@ -494,6 +495,11 @@ export type QueryReposArgs = {
 
 export type QuerySessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionTerminalsArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -1055,6 +1061,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryRepoBranchesArgs, 'repoId'>>;
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
+  sessionTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QuerySessionTerminalsArgs, 'sessionId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionsArgs, 'organizationId'>>;
   ticket?: Resolver<Maybe<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryTicketArgs, 'id'>>;
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryTicketsArgs, 'organizationId'>>;

@@ -412,6 +412,7 @@ type Query {
   repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   myApiTokens: [ApiTokenStatus!]!
+  sessionTerminals(sessionId: ID!): [Terminal!]!
 }
 
 type Terminal {

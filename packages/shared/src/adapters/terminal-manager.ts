@@ -95,6 +95,15 @@ export class TerminalManager {
     return this.terminals.size > 0;
   }
 
+  /** Returns all active terminals as { terminalId, sessionId } pairs. */
+  getActiveTerminals(): Array<{ terminalId: string; sessionId: string }> {
+    const result: Array<{ terminalId: string; sessionId: string }> = [];
+    for (const [terminalId, sessionId] of this.terminalSessions) {
+      result.push({ terminalId, sessionId });
+    }
+    return result;
+  }
+
   /** Destroy all terminals belonging to a session and return the destroyed terminal IDs. */
   destroyForSession(sessionId: string): string[] {
     const destroyed: string[] = [];

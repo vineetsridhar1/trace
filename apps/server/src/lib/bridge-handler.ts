@@ -74,6 +74,13 @@ export function handleBridgeConnection(ws: WebSocket) {
         sessionService.restoreSessionsForRuntime(runtimeId).catch((err) => {
           console.error("[bridge] error restoring sessions for runtime:", err);
         });
+
+        // Restore terminal relay entries from bridge-reported active terminals
+        if (Array.isArray(msg.activeTerminals) && msg.activeTerminals.length > 0) {
+          const activeTerminals = msg.activeTerminals as Array<{ terminalId: string; sessionId: string }>;
+          runtimeDebug("restoring terminals from bridge", { runtimeId, count: activeTerminals.length });
+          terminalRelay.restoreTerminals(activeTerminals);
+        }
         return;
       }
 

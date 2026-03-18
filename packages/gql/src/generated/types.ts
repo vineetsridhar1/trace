@@ -408,6 +408,7 @@ export type Query = {
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   session?: Maybe<Session>;
+  sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
@@ -491,6 +492,11 @@ export type QueryReposArgs = {
 
 export type QuerySessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionTerminalsArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 

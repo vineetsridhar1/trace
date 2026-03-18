@@ -3,7 +3,7 @@ import { Plus, X, TerminalSquare } from "lucide-react";
 import { useTerminalStore, useSessionTerminals } from "../../stores/terminal";
 import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
-import { CREATE_TERMINAL_MUTATION, DESTROY_TERMINAL_MUTATION } from "../../lib/mutations";
+import { SESSION_TERMINALS_QUERY, CREATE_TERMINAL_MUTATION, DESTROY_TERMINAL_MUTATION } from "../../lib/mutations";
 import { cn } from "../../lib/utils";
 
 export function TerminalPanel({
@@ -46,14 +46,30 @@ export function TerminalPanel({
     [removeTerminal],
   );
 
-  // Auto-create first terminal on mount
-  const hasTriggeredCreate = useRef(false);
+  // On mount: query for existing terminals, restore them, or create a new one
+  const hasTriggeredInit = useRef(false);
   useEffect(() => {
-    if (!hasTriggeredCreate.current && terminals.length === 0) {
-      hasTriggeredCreate.current = true;
-      createNewTerminal();
-    }
-  }, [terminals.length, createNewTerminal]);
+    if (hasTriggeredInit.current) return;
+    hasTriggeredInit.current = true;
+
+    (async () => {
+      const result = await client
+        .query(SESSION_TERMINALS_QUERY, { sessionId })
+        .toPromise();
+
+      const existing = result.data?.sessionTerminals as Array<{ id: string; sessionId: string }> | undefined;
+      if (existing && existing.length > 0) {
+        for (const t of existing) {
+          // Only add if not already in store (idempotent)
+          if (!useTerminalStore.getState().terminals[t.id]) {
+            addTerminal(t.id, t.sessionId, "active");
+          }
+        }
+      } else {
+        createNewTerminal();
+      }
+    })();
+  }, [sessionId, addTerminal, createNewTerminal]);
 
   return (
     <div className="flex flex-col border-t border-border bg-[#0a0a0a]" style={{ height: 300 }}>

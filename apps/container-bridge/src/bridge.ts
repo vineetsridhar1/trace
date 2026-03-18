@@ -60,6 +60,7 @@ export class ContainerBridge implements IBridgeClient {
         hostingMode: "cloud",
         supportedTools: ["claude_code", "codex"],
         registeredRepoIds: [], // Cloud bridges clone on-demand — all repos supported
+        activeTerminals: this.terminalManager.getActiveTerminals(),
       });
 
       this.startHeartbeat();

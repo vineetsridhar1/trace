@@ -123,6 +123,7 @@ export class BridgeClient implements IBridgeClient {
       hostingMode: "local",
       supportedTools: ["claude_code", "codex", "custom"],
       registeredRepoIds: Object.keys(config.repos),
+      activeTerminals: this.terminalManager.getActiveTerminals(),
     });
   }
 
