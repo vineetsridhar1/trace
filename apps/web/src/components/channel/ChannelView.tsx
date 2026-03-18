@@ -86,6 +86,11 @@ export function ChannelView({ channelId }: { channelId: string }) {
       const ch = (s as SessionEntity).channel as { id: string } | null | undefined;
       return ch?.id === channelId;
     },
+    (a, b) => {
+      const aTime = (a as SessionEntity).createdAt ?? "";
+      const bTime = (b as SessionEntity).createdAt ?? "";
+      return bTime > aTime ? 1 : bTime < aTime ? -1 : 0;
+    },
   );
 
   if (activeSessionId) {
