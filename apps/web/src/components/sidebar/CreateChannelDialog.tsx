@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
+import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -27,6 +28,7 @@ export function CreateChannelDialog() {
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const isMobile = useIsMobile();
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -68,7 +70,7 @@ export function CreateChannelDialog() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. general"
-              autoFocus
+              autoFocus={!isMobile}
             />
           </div>
           <DialogFooter>
