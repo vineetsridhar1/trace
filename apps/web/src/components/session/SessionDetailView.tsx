@@ -132,7 +132,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-hidden">
           {loading ? (
             <div className="flex h-full items-center justify-center">
               <p className="text-sm text-muted-foreground">Loading events...</p>

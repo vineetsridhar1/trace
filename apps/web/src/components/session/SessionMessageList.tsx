@@ -118,7 +118,7 @@ export function SessionMessageList({
   }, [onLoadOlder]);
 
   return (
-    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4">
+    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 max-h-full">
       <div className="flex flex-col gap-3">
         {/* Sentinel for infinite scroll - triggers loading older messages */}
         <div ref={sentinelRef} className="h-px" />
@@ -131,9 +131,7 @@ export function SessionMessageList({
         )}
 
         {!hasOlder && nodes.length > 0 && (
-          <div className="text-center text-xs text-muted-foreground py-2">
-            Beginning of session
-          </div>
+          <div className="text-center text-xs text-muted-foreground py-2">Beginning of session</div>
         )}
 
         {nodes.map((node) =>
@@ -161,10 +159,7 @@ export function SessionMessageList({
               timestamp={node.timestamp}
             />
           ) : (
-            <ReadGlobGroup
-              key={node.items[0].id}
-              items={node.items}
-            />
+            <ReadGlobGroup key={node.items[0].id} items={node.items} />
           ),
         )}
         <div ref={bottomRef} />
