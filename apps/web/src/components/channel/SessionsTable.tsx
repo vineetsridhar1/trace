@@ -10,7 +10,7 @@ import { timeAgo } from "../../lib/utils";
 
 type SessionRow = SessionEntity & { id: string };
 
-/** Round a timestamp down to a 5-minute bucket so sort order stays stable
+/** Round a timestamp down to a 2-minute bucket so sort order stays stable
  *  while messages stream in — rows only reorder when they cross a boundary. */
 const BUCKET_MS = 2 * 60 * 1000;
 function bucketize(ts: string | undefined): number {
