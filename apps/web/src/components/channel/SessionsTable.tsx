@@ -8,9 +8,7 @@ import { useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
 import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
-
-const LONG_PRESS_MS = 500;
-const MOVE_THRESHOLD = 10;
+import { useLongPress } from "../../hooks/useLongPress";
 
 type SessionRow = SessionEntity & { id: string };
 
@@ -104,9 +102,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const sessions = useEntityStore((s) => s.sessions);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressFired = useRef(false);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const filteredSessions = useMemo(() => {
@@ -119,6 +114,16 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   useEffect(() => {
     useTable.getState().setRows(filteredSessions);
   }, [filteredSessions]);
+
+  const setDeleteFromRowId = useCallback(
+    (rowId: string) => {
+      const session = filteredSessions.find((s) => s.id === rowId);
+      if (session) setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" });
+    },
+    [filteredSessions],
+  );
+
+  const longPressFired = useLongPress({ ref: gridRef, onLongPress: setDeleteFromRowId });
 
   const getContextMenuItems = useCallback(
     (params: GetContextMenuItemsParams<SessionRow>): (MenuItemDef | string)[] => {
@@ -134,75 +139,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     },
     [],
   );
-
-  const clearLongPress = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-    touchStart.current = null;
-  }, []);
-
-  // Long-press: touch-only, cancelled by scroll/move
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-
-    const onTouchStart = (e: TouchEvent) => {
-      const touch = e.touches[0];
-      if (!touch) return;
-      // Find the AG Grid row element and its data-row-id
-      const rowEl = (e.target as HTMLElement).closest<HTMLElement>("[row-id]");
-      if (!rowEl) return;
-      const rowId = rowEl.getAttribute("row-id");
-      // Skip group rows (AG Grid prefixes group row IDs with "row-group-")
-      if (!rowId || rowId.startsWith("row-group-")) return;
-
-      touchStart.current = { x: touch.clientX, y: touch.clientY };
-      longPressFired.current = false;
-
-      const sessionData = filteredSessions.find((s) => s.id === rowId);
-      if (!sessionData) return;
-
-      longPressTimer.current = setTimeout(() => {
-        longPressFired.current = true;
-        setDeleteTarget({ id: sessionData.id, name: sessionData.name ?? "Untitled" });
-      }, LONG_PRESS_MS);
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (!longPressTimer.current || !touchStart.current) return;
-      const touch = e.touches[0];
-      if (!touch) return;
-      const dx = touch.clientX - touchStart.current.x;
-      const dy = touch.clientY - touchStart.current.y;
-      if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
-        clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-        touchStart.current = null;
-      }
-    };
-
-    const onTouchEnd = () => {
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-      }
-      touchStart.current = null;
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: true });
-    el.addEventListener("touchend", onTouchEnd);
-    el.addEventListener("touchcancel", onTouchEnd);
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchEnd);
-    };
-  }, [filteredSessions, clearLongPress]);
 
   const agGridOptions = useMemo(
     () => ({
@@ -258,7 +194,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     <>
       <div ref={gridRef}>
         <Table
-          // 48px = h-12 channel bar above
           className="h-[calc(100vh-48px)]"
           agGridOptions={agGridOptions}
         />
