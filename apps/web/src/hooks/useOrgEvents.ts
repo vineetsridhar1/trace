@@ -230,7 +230,7 @@ export function useOrgEvents() {
         // Route session activity events — update timestamp, and preview if it's a real message
         if (SESSION_ACTIVITY_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
           const preview = extractMessagePreview(event.eventType, event.payload);
-          const updates: Partial<SessionEntity> = { updatedAt: event.timestamp };
+          const updates: Partial<SessionEntity> = { updatedAt: event.timestamp, _lastMessageAt: event.timestamp };
           if (preview) {
             updates._lastEventPreview = preview;
           }

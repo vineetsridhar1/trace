@@ -10,6 +10,15 @@ import { timeAgo } from "../../lib/utils";
 
 type SessionRow = SessionEntity & { id: string };
 
+/** Round a timestamp down to a 2-minute bucket so sort order stays stable
+ *  while messages stream in — rows only reorder when they cross a boundary. */
+const BUCKET_MS = 2 * 60 * 1000;
+function bucketize(ts: string | undefined): number {
+  if (!ts) return 0;
+  const t = new Date(ts).getTime();
+  return Math.floor(t / BUCKET_MS) * BUCKET_MS;
+}
+
 /** Group ordering — attention-needed first, then active, then done. */
 const statusGroupOrder: Record<string, number> = {
   needs_input: 0,
@@ -72,21 +81,21 @@ const columns: ColDef<SessionRow>[] = [
     },
   },
   {
-    headerName: "Updated",
-    field: "updatedAt",
+    headerName: "Last message",
+    field: "_lastMessageAt",
     width: 120,
     sort: "desc",
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const updatedAt = params.data?.updatedAt;
-      if (!updatedAt) return null;
+      const lastMessageAt = params.data?._lastMessageAt ?? params.data?.updatedAt;
+      if (!lastMessageAt) return null;
       return (
         <span className="text-xs text-muted-foreground">
-          {timeAgo(updatedAt)}
+          {timeAgo(lastMessageAt)}
         </span>
       );
     },
-    comparator: (a: string, b: string) => {
-      return new Date(a).getTime() - new Date(b).getTime();
+    comparator: (a: string | undefined, b: string | undefined) => {
+      return bucketize(a) - bucketize(b);
     },
   },
 ];
