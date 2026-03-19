@@ -58,10 +58,10 @@ export const organizationMutations = {
     return organizationService.linkEntityToProject(args.entityType, args.entityId, args.projectId, ctx.actorType, ctx.userId);
   },
   registerRepoWebhook: (_: unknown, args: { repoId: string }, ctx: Context) => {
-    return webhookService.registerGitHubWebhook(args.repoId, ctx.userId);
+    return webhookService.registerGitHubWebhook(args.repoId, ctx.userId, ctx.organizationId);
   },
   unregisterRepoWebhook: (_: unknown, args: { repoId: string }, ctx: Context) => {
-    return webhookService.unregisterGitHubWebhook(args.repoId, ctx.userId);
+    return webhookService.unregisterGitHubWebhook(args.repoId, ctx.userId, ctx.organizationId);
   },
 };
 

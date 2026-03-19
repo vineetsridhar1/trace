@@ -30,7 +30,7 @@ function verifySignature(payload: string, signature: string, secret: string): bo
   }
 }
 
-router.post("/webhooks/github", async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   const event = req.headers["x-github-event"] as string | undefined;
   const signature = req.headers["x-hub-signature-256"] as string | undefined;
 
@@ -46,7 +46,14 @@ router.post("/webhooks/github", async (req: Request, res: Response) => {
 
   // req.body is a raw Buffer because of express.raw() middleware
   const rawBody = typeof req.body === "string" ? req.body : (req.body as Buffer).toString("utf-8");
-  const payload: PullRequestPayload = JSON.parse(rawBody);
+
+  let payload: PullRequestPayload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    res.status(400).json({ error: "Invalid JSON payload" });
+    return;
+  }
 
   const repoFullName = payload.repository.full_name;
 

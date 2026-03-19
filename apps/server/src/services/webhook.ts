@@ -18,8 +18,12 @@ function parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | n
 }
 
 export class WebhookService {
-  async registerGitHubWebhook(repoId: string, userId: string) {
+  async registerGitHubWebhook(repoId: string, userId: string, organizationId: string) {
     const repo = await prisma.repo.findUniqueOrThrow({ where: { id: repoId } });
+
+    if (repo.organizationId !== organizationId) {
+      throw new Error("Repo does not belong to the current organization");
+    }
 
     if (repo.webhookId) {
       throw new Error("Webhook already registered for this repo");
@@ -79,8 +83,12 @@ export class WebhookService {
     return updated;
   }
 
-  async unregisterGitHubWebhook(repoId: string, userId: string) {
+  async unregisterGitHubWebhook(repoId: string, userId: string, organizationId: string) {
     const repo = await prisma.repo.findUniqueOrThrow({ where: { id: repoId } });
+
+    if (repo.organizationId !== organizationId) {
+      throw new Error("Repo does not belong to the current organization");
+    }
 
     if (!repo.webhookId) {
       throw new Error("No webhook registered for this repo");

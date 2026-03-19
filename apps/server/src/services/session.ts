@@ -285,8 +285,8 @@ export class SessionService {
       return updated;
     }
 
-    // Don't run if session is in a terminal state (e.g. workspace preparation failed)
-    if (session.status === "failed" || session.status === "completed") {
+    // Don't run if session is in a terminal state
+    if (session.status === "failed" || session.status === "completed" || session.status === "in_review" || session.status === "merged") {
       return session;
     }
 
@@ -888,8 +888,8 @@ export class SessionService {
     });
     if (!session) return;
 
-    // Don't mark completed/failed sessions as disconnected
-    if (session.status === "completed" || session.status === "failed") return;
+    // Don't mark terminal sessions as disconnected
+    if (session.status === "completed" || session.status === "failed" || session.status === "in_review" || session.status === "merged") return;
 
     const conn = this.parseConnection(session.connection);
     const updated: SessionConnectionData = {
@@ -965,7 +965,7 @@ export class SessionService {
   /**
    * When a runtime connects, restore all non-terminal sessions it previously owned.
    * The DB (connection.runtimeInstanceId) is the single source of truth for ownership.
-   * Excludes terminal statuses (failed, and in the future, merged).
+   * Excludes terminal statuses (failed, completed, in_review, merged).
    */
   async restoreSessionsForRuntime(runtimeId: string) {
     const runtime = sessionRouter.getRuntime(runtimeId);
@@ -974,7 +974,7 @@ export class SessionService {
 
     const sessions = await prisma.session.findMany({
       where: {
-        status: { notIn: ["failed"] },
+        status: { notIn: ["failed", "completed", "in_review", "merged"] },
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
       select: { id: true, connection: true },
@@ -1564,18 +1564,13 @@ export class SessionService {
   async markPrOpened(params: { sessionId: string; prUrl: string; organizationId: string }) {
     const { sessionId, prUrl, organizationId } = params;
 
-    const current = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
-      select: { status: true },
-    });
-
-    // Skip if already in_review or merged
-    if (current.status === "in_review" || current.status === "merged") return;
-
-    await prisma.session.update({
-      where: { id: sessionId },
+    // Atomic conditional update — skip if already in_review or merged
+    const { count } = await prisma.session.updateMany({
+      where: { id: sessionId, status: { notIn: ["in_review", "merged"] } },
       data: { status: "in_review", prUrl },
     });
+
+    if (count === 0) return;
 
     await eventService.create({
       organizationId,
@@ -1592,18 +1587,13 @@ export class SessionService {
   async markPrMerged(params: { sessionId: string; prUrl: string; organizationId: string }) {
     const { sessionId, prUrl, organizationId } = params;
 
-    const current = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
-      select: { status: true },
-    });
-
-    // Skip if already merged
-    if (current.status === "merged") return;
-
-    await prisma.session.update({
-      where: { id: sessionId },
+    // Atomic conditional update — skip if already merged
+    const { count } = await prisma.session.updateMany({
+      where: { id: sessionId, status: { not: "merged" } },
       data: { status: "merged", prUrl },
     });
+
+    if (count === 0) return;
 
     await eventService.create({
       organizationId,
