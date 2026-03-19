@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useIsMobile } from "../../hooks/use-mobile";
 import { Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -30,6 +31,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [mode, setMode] = useState<InteractionMode>("code");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const isMobile = useIsMobile();
 
   const cycleMode = useCallback(() => {
     setMode((prev) => MODE_CYCLE[(MODE_CYCLE.indexOf(prev) + 1) % MODE_CYCLE.length]);
@@ -136,7 +138,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="e.g. Fix the login bug on the signup page..."
-                autoFocus
+                autoFocus={!isMobile}
                 rows={4}
                 className="w-full rounded-md border border-border bg-input px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(e); }}

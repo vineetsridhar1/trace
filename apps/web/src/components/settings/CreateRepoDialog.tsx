@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FolderOpen, Plus } from "lucide-react";
+import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -41,6 +42,7 @@ export function CreateRepoDialog() {
   const [manualName, setManualName] = useState("");
   const [manualRemoteUrl, setManualRemoteUrl] = useState("");
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const isMobile = useIsMobile();
 
   async function handlePickFolder() {
     setError(null);
@@ -162,7 +164,7 @@ export function CreateRepoDialog() {
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}
                   placeholder="e.g. api-server"
-                  autoFocus
+                  autoFocus={!isMobile}
                 />
               </div>
               <div>
