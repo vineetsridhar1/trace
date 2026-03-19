@@ -1,6 +1,5 @@
 import type {
   LLMAdapter,
-  LLMRequestOptions,
   LLMResponse,
   LLMStreamEvent,
   LLMMessage,
@@ -11,6 +10,8 @@ import type {
 import { createLLMAdapter, providerForModel } from "../lib/llm/index.js";
 import type { LLMProvider } from "../lib/llm/index.js";
 import { apiTokenService } from "./api-token.js";
+
+const MAX_CACHED_ADAPTERS = 200;
 
 interface AIRequestParams {
   organizationId: string;
@@ -24,10 +25,7 @@ interface AIRequestParams {
 }
 
 interface ToolLoopParams extends AIRequestParams {
-  executeToolCall: (
-    name: string,
-    input: Record<string, unknown>
-  ) => Promise<string>;
+  executeToolCall: (name: string, input: Record<string, unknown>) => Promise<string>;
   maxIterations?: number;
 }
 
@@ -47,12 +45,19 @@ class AIService {
     const apiKey = tokens[provider];
 
     if (!apiKey) {
-      throw new Error(
-        `No ${provider} API key configured. Please add your API key in settings.`
-      );
+      throw new Error(`No ${provider} API key configured. Please add your API key in settings.`);
     }
 
     const adapter = createLLMAdapter({ provider, apiKey });
+
+    // Evict oldest entry if cache is full
+    if (this.adapterCache.size >= MAX_CACHED_ADAPTERS) {
+      const oldest = this.adapterCache.keys().next().value;
+      if (oldest !== undefined) {
+        this.adapterCache.delete(oldest);
+      }
+    }
+
     this.adapterCache.set(cacheKey, adapter);
     return adapter;
   }
@@ -88,13 +93,10 @@ class AIService {
   async runToolLoop(params: ToolLoopParams): Promise<LLMResponse> {
     const { executeToolCall, maxIterations = 10, ...requestParams } = params;
     const messages = [...requestParams.messages];
+    const adapter = await this.getAdapter(requestParams.userId, requestParams.model);
     let iterations = 0;
 
     while (iterations < maxIterations) {
-      const adapter = await this.getAdapter(
-        requestParams.userId,
-        requestParams.model
-      );
       const response = await adapter.complete({
         model: requestParams.model,
         messages,
@@ -113,7 +115,7 @@ class AIService {
 
       // Execute tool calls and collect results
       const toolUseBlocks = response.content.filter(
-        (b): b is LLMToolUseContent => b.type === "tool_use"
+        (b): b is LLMToolUseContent => b.type === "tool_use",
       );
 
       const toolResults: LLMToolResultContent[] = await Promise.all(
@@ -129,23 +131,18 @@ class AIService {
             return {
               type: "tool_result" as const,
               toolUseId: block.id,
-              content:
-                err instanceof Error ? err.message : "Tool execution failed",
+              content: err instanceof Error ? err.message : "Tool execution failed",
               isError: true,
             };
           }
-        })
+        }),
       );
 
-      messages.push({ role: "user", content: toolResults });
+      messages.push({ role: "tool", content: toolResults });
       iterations++;
     }
 
     // Max iterations reached — do one final call without tools
-    const adapter = await this.getAdapter(
-      requestParams.userId,
-      requestParams.model
-    );
     return adapter.complete({
       model: requestParams.model,
       messages,

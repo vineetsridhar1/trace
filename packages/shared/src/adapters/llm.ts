@@ -1,6 +1,7 @@
 // ── Content block types ──
 
 export type LLMRole = "system" | "user" | "assistant" | "tool";
+export type LLMProvider = "anthropic" | "openai";
 
 export interface LLMTextContent {
   type: "text";
@@ -9,9 +10,7 @@ export interface LLMTextContent {
 
 export interface LLMImageContent {
   type: "image";
-  source:
-    | { type: "base64"; mediaType: string; data: string }
-    | { type: "url"; url: string };
+  source: { type: "base64"; mediaType: string; data: string } | { type: "url"; url: string };
 }
 
 export interface LLMToolUseContent {
@@ -115,7 +114,7 @@ export interface LLMRequestOptions {
 // ── Adapter interface ──
 
 export interface LLMAdapter {
-  readonly provider: string;
+  readonly provider: LLMProvider;
   complete(options: LLMRequestOptions): Promise<LLMResponse>;
   stream(options: LLMRequestOptions): AsyncIterable<LLMStreamEvent>;
 }

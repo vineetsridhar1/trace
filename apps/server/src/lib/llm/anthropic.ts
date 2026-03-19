@@ -59,12 +59,39 @@ function toAnthropicContent(
 }
 
 function toAnthropicMessages(messages: LLMMessage[]): AnthropicMessage[] {
-  return messages
-    .filter((m) => m.role !== "system")
-    .map((m) => ({
+  const result: AnthropicMessage[] = [];
+
+  for (const m of messages) {
+    if (m.role === "system") continue;
+
+    // Anthropic has no "tool" role — tool results are content blocks in user messages
+    if (m.role === "tool") {
+      const toolResultBlocks: AnthropicContent[] = [];
+      if (typeof m.content !== "string") {
+        for (const block of m.content) {
+          if (block.type === "tool_result") {
+            toolResultBlocks.push({
+              type: "tool_result",
+              tool_use_id: block.toolUseId,
+              content: block.content,
+              is_error: block.isError,
+            });
+          }
+        }
+      }
+      if (toolResultBlocks.length) {
+        result.push({ role: "user", content: toolResultBlocks });
+      }
+      continue;
+    }
+
+    result.push({
       role: m.role as "user" | "assistant",
       content: toAnthropicContent(m.content),
-    }));
+    });
+  }
+
+  return result;
 }
 
 function toAnthropicTools(

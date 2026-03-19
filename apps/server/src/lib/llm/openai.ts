@@ -1,21 +1,69 @@
 import OpenAI from "openai";
 import type {
   LLMAdapter,
+  LLMProvider,
   LLMRequestOptions,
   LLMResponse,
   LLMStreamEvent,
   LLMContentBlock,
   LLMMessage,
   LLMToolDefinition,
+  LLMTextContent,
+  LLMToolUseContent,
 } from "@trace/shared";
 
 type ChatMessage = OpenAI.ChatCompletionMessageParam;
 type ChatTool = OpenAI.ChatCompletionTool;
+type ChatContentPart = OpenAI.ChatCompletionContentPart;
+type ChatCompletionRequest = OpenAI.ChatCompletionCreateParamsNonStreaming;
+type ChatCompletionStreamRequest = OpenAI.ChatCompletionCreateParamsStreaming;
 
-function toOpenAIMessages(
-  messages: LLMMessage[],
-  system?: string
-): ChatMessage[] {
+function supportsOpenAIStopSequences(model: string): boolean {
+  return !/^(o3|o4)(?:[-.]|$)/i.test(model);
+}
+
+function buildOpenAIBaseRequest(options: LLMRequestOptions): Omit<ChatCompletionRequest, "stream"> {
+  if (options.stopSequences?.length && !supportsOpenAIStopSequences(options.model)) {
+    throw new Error(`Stop sequences are not supported for OpenAI model "${options.model}".`);
+  }
+
+  return {
+    model: options.model,
+    messages: toOpenAIMessages(options.messages, options.system),
+    tools: toOpenAITools(options.tools),
+    max_completion_tokens: options.maxTokens,
+    temperature: options.temperature,
+    stop: options.stopSequences,
+  };
+}
+
+function toOpenAIUserContent(content: string | LLMContentBlock[]): string | ChatContentPart[] {
+  if (typeof content === "string") return content;
+
+  const parts: ChatContentPart[] = [];
+  for (const block of content) {
+    if (block.type === "text") {
+      parts.push({ type: "text", text: block.text });
+    } else if (block.type === "image") {
+      const url =
+        block.source.type === "url"
+          ? block.source.url
+          : `data:${block.source.mediaType};base64,${block.source.data}`;
+      parts.push({ type: "image_url", image_url: { url } });
+    }
+  }
+  return parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts;
+}
+
+function contentToString(content: string | LLMContentBlock[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((b): b is LLMTextContent => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+}
+
+function toOpenAIMessages(messages: LLMMessage[], system?: string): ChatMessage[] {
   const result: ChatMessage[] = [];
 
   if (system) {
@@ -29,7 +77,7 @@ function toOpenAIMessages(
     }
 
     if (msg.role === "user") {
-      result.push({ role: "user", content: contentToString(msg.content) });
+      result.push({ role: "user", content: toOpenAIUserContent(msg.content) });
       continue;
     }
 
@@ -39,15 +87,12 @@ function toOpenAIMessages(
         continue;
       }
 
-      // Assistant messages may contain text + tool_use blocks
-      const textParts = msg.content.filter((b) => b.type === "text");
-      const toolUseParts = msg.content.filter((b) => b.type === "tool_use");
+      const textParts = msg.content.filter((b): b is LLMTextContent => b.type === "text");
+      const toolUseParts = msg.content.filter((b): b is LLMToolUseContent => b.type === "tool_use");
 
       const assistantMsg: OpenAI.ChatCompletionAssistantMessageParam = {
         role: "assistant",
-        content: textParts.length
-          ? textParts.map((b) => b.text).join("")
-          : null,
+        content: textParts.length ? textParts.map((b) => b.text).join("") : null,
       };
 
       if (toolUseParts.length) {
@@ -68,7 +113,6 @@ function toOpenAIMessages(
     // tool role — map tool_result blocks
     if (msg.role === "tool") {
       if (typeof msg.content === "string") {
-        // Shouldn't happen in practice, but handle gracefully
         continue;
       }
       for (const block of msg.content) {
@@ -86,14 +130,6 @@ function toOpenAIMessages(
   return result;
 }
 
-function contentToString(content: string | LLMContentBlock[]): string {
-  if (typeof content === "string") return content;
-  return content
-    .filter((b) => b.type === "text")
-    .map((b) => (b as { text: string }).text)
-    .join("");
-}
-
 function toOpenAITools(tools?: LLMToolDefinition[]): ChatTool[] | undefined {
   if (!tools?.length) return undefined;
   return tools.map((t) => ({
@@ -106,10 +142,38 @@ function toOpenAITools(tools?: LLMToolDefinition[]): ChatTool[] | undefined {
   }));
 }
 
-function fromOpenAIResponse(
-  response: OpenAI.ChatCompletion
-): LLMResponse {
+function parseToolArguments(args: string, context: string): Record<string, unknown> {
+  const trimmedArgs = args.trim();
+  if (!trimmedArgs) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(trimmedArgs);
+
+    if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") {
+      throw new Error("Tool arguments must be a JSON object");
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to parse tool arguments";
+    throw new Error(`Invalid tool arguments for ${context}: ${message}`);
+  }
+}
+
+function fromOpenAIResponse(response: OpenAI.ChatCompletion): LLMResponse {
   const choice = response.choices[0];
+  if (!choice) {
+    return {
+      content: [],
+      stopReason: "end_turn",
+      usage: {
+        inputTokens: response.usage?.prompt_tokens ?? 0,
+        outputTokens: response.usage?.completion_tokens ?? 0,
+      },
+      model: response.model,
+    };
+  }
+
   const content: LLMContentBlock[] = [];
 
   if (choice.message.content) {
@@ -123,7 +187,7 @@ function fromOpenAIResponse(
           type: "tool_use",
           id: tc.id,
           name: tc.function.name,
-          input: JSON.parse(tc.function.arguments) as Record<string, unknown>,
+          input: parseToolArguments(tc.function.arguments, `tool "${tc.function.name}"`),
         });
       }
     }
@@ -140,9 +204,7 @@ function fromOpenAIResponse(
   };
 }
 
-function fromOpenAIFinishReason(
-  reason: string | null
-): LLMResponse["stopReason"] {
+function fromOpenAIFinishReason(reason: string | null): LLMResponse["stopReason"] {
   switch (reason) {
     case "stop":
       return "end_turn";
@@ -158,7 +220,7 @@ function fromOpenAIFinishReason(
 }
 
 export class OpenAIAdapter implements LLMAdapter {
-  readonly provider = "openai";
+  readonly provider: LLMProvider = "openai";
   private client: OpenAI;
 
   constructor(apiKey: string) {
@@ -166,37 +228,27 @@ export class OpenAIAdapter implements LLMAdapter {
   }
 
   async complete(options: LLMRequestOptions): Promise<LLMResponse> {
-    const response = await this.client.chat.completions.create({
-      model: options.model,
-      messages: toOpenAIMessages(options.messages, options.system),
-      tools: toOpenAITools(options.tools),
-      max_tokens: options.maxTokens,
-      temperature: options.temperature,
-      stop: options.stopSequences,
-    });
+    const response = await this.client.chat.completions.create(buildOpenAIBaseRequest(options));
 
     return fromOpenAIResponse(response);
   }
 
   async *stream(options: LLMRequestOptions): AsyncIterable<LLMStreamEvent> {
-    const stream = await this.client.chat.completions.create({
-      model: options.model,
-      messages: toOpenAIMessages(options.messages, options.system),
-      tools: toOpenAITools(options.tools),
-      max_tokens: options.maxTokens,
-      temperature: options.temperature,
-      stop: options.stopSequences,
+    const streamRequest: ChatCompletionStreamRequest = {
+      ...buildOpenAIBaseRequest(options),
       stream: true,
       stream_options: { include_usage: true },
-    });
+    };
+    const stream = await this.client.chat.completions.create(streamRequest);
 
     // Track state for assembling the final response
     let textContent = "";
-    const toolCalls: Map<
+    const toolCalls = new Map<
       number,
-      { id: string; name: string; arguments: string }
-    > = new Map();
+      { id: string; name: string; arguments: string; started: boolean }
+    >();
     let model = options.model;
+    let finishReason: string | null = null;
     let inputTokens = 0;
     let outputTokens = 0;
 
@@ -217,49 +269,74 @@ export class OpenAIAdapter implements LLMAdapter {
 
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
-          const existing = toolCalls.get(tc.index);
-          if (!existing) {
-            const id = tc.id ?? "";
-            const name = tc.function?.name ?? "";
-            toolCalls.set(tc.index, { id, name, arguments: "" });
-            yield { type: "tool_use_start", id, name };
-          } else {
-            if (tc.function?.arguments) {
-              existing.arguments += tc.function.arguments;
-              yield {
-                type: "tool_use_input_delta",
-                inputDelta: tc.function.arguments,
-              };
-            }
+          let toolCall = toolCalls.get(tc.index);
+          if (!toolCall) {
+            toolCall = { id: "", name: "", arguments: "", started: false };
+            toolCalls.set(tc.index, toolCall);
+          }
+
+          if (tc.id) {
+            toolCall.id = tc.id;
+          }
+          if (tc.function?.name) {
+            toolCall.name = tc.function.name;
+          }
+
+          if (!toolCall.started && (toolCall.id || toolCall.name)) {
+            toolCall.started = true;
+            yield {
+              type: "tool_use_start",
+              id: toolCall.id,
+              name: toolCall.name,
+            };
+          }
+
+          if (tc.function?.arguments) {
+            toolCall.arguments += tc.function.arguments;
+            yield {
+              type: "tool_use_input_delta",
+              inputDelta: tc.function.arguments,
+            };
           }
         }
       }
 
-      // Final chunk has finish_reason
       if (chunk.choices[0]?.finish_reason) {
-        const content: LLMContentBlock[] = [];
-        if (textContent) {
-          content.push({ type: "text", text: textContent });
-        }
-        for (const tc of toolCalls.values()) {
-          content.push({
-            type: "tool_use",
-            id: tc.id,
-            name: tc.name,
-            input: JSON.parse(tc.arguments || "{}") as Record<string, unknown>,
-          });
-        }
-
-        yield {
-          type: "complete",
-          response: {
-            content,
-            stopReason: fromOpenAIFinishReason(chunk.choices[0].finish_reason),
-            usage: { inputTokens, outputTokens },
-            model,
-          },
-        };
+        finishReason = chunk.choices[0].finish_reason;
       }
     }
+
+    // Yield complete event after stream ends so usage data is captured
+    const content: LLMContentBlock[] = [];
+    if (textContent) {
+      content.push({ type: "text", text: textContent });
+    }
+    for (const tc of toolCalls.values()) {
+      try {
+        content.push({
+          type: "tool_use",
+          id: tc.id,
+          name: tc.name,
+          input: parseToolArguments(tc.arguments, `tool "${tc.name || tc.id || "unknown"}"`),
+        });
+      } catch (error) {
+        yield {
+          type: "error",
+          error:
+            error instanceof Error ? error : new Error("Failed to parse streamed tool arguments"),
+        };
+        return;
+      }
+    }
+
+    yield {
+      type: "complete",
+      response: {
+        content,
+        stopReason: fromOpenAIFinishReason(finishReason),
+        usage: { inputTokens, outputTokens },
+        model,
+      },
+    };
   }
 }
