@@ -1,22 +1,20 @@
 .ag-theme-quartz {
-  /* dark palette */
-  --ag-background-color: oklch(var(--background));
-  --ag-foreground-color: oklch(var(--foreground));
-  --ag-header-background-color: oklch(var(--background));
-  --ag-header-text-color: oklch(var(--muted-foreground));
+  --ag-background-color: var(--th-surface);
+  --ag-foreground-color: var(--foreground);
+  --ag-header-background-color: var(--th-surface-deep);
+  --ag-header-text-color: var(--th-muted);
 
-  /* spacing / density */
-  --ag-grid-size: 6px; /* compaction */
+  --ag-grid-size: 6px;
   --ag-font-size: 0.875rem;
   --ag-internal-content-line-height: 1.625;
   --ag-spacing: 4px;
 
   --ag-row-border-style: none;
-  --ag-row-hover-color: oklch(var(--base) / 0.03);
-  --ag-selected-row-background-color: #1f2831;
+  --ag-row-hover-color: var(--th-surface-elevated);
+  --ag-selected-row-background-color: var(--th-surface-elevated);
 
   --ag-wrapper-border-radius: 0px;
-  --ag-border-color: oklch(var(--border));
+  --ag-border-color: var(--th-edge);
 
   --ag-border-width: 0.5px;
   --ag-border-radius: 0px;
@@ -54,19 +52,19 @@
 
 /* Selected row highlighting */
 .ag-theme-quartz .selected-row {
-  background-color: oklch(var(--base) / 0.05) !important;
+  background-color: var(--th-surface-elevated) !important;
 }
 
 .ag-theme-quartz .selected-row:hover {
-  background-color: oklch(var(--base) / 0.06) !important;
+  background-color: var(--th-surface-hover) !important;
 }
 
 .ag-theme-quartz .ag-row-group {
-  background-color: oklch(var(--muted) / 0.3) !important;
+  background-color: var(--th-surface-deep) !important;
 }
 
 .ag-theme-quartz .ag-row-group:hover {
-  background-color: oklch(var(--muted) / 0.3) !important;
+  background-color: var(--th-surface-deep) !important;
 }
 
 .ag-theme-quartz,

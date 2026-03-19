@@ -9,7 +9,7 @@ import { colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import './ag-grid-styles.css';
 import { ensureAgGridSetup } from './loadTable';
 
-const darkModeTheme = themeQuartz.withPart(colorSchemeDark);
+const theme = themeQuartz.withPart(colorSchemeDark);
 
 const createTableStore = <T,>(columns: ColDef<T>[] = []) => {
   return create<TableState<T>>(set => ({
@@ -61,7 +61,7 @@ export const createTable = <T extends { id: string }>({
         columnDefs: columns,
         rowData: rows,
         headerHeight: 30,
-        theme: darkModeTheme,
+        theme,
         rowSelection: undefined,
         animateRows: true,
         rowHeight: 50,
