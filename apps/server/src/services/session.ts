@@ -1559,6 +1559,62 @@ export class SessionService {
       actorId: "system",
     });
   }
+
+  /** Transition a session to "in_review" when a PR is opened for its branch. */
+  async markPrOpened(params: { sessionId: string; prUrl: string; organizationId: string }) {
+    const { sessionId, prUrl, organizationId } = params;
+
+    const current = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { status: true },
+    });
+
+    // Skip if already in_review or merged
+    if (current.status === "in_review" || current.status === "merged") return;
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: "in_review", prUrl },
+    });
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_pr_opened",
+      payload: { sessionId, prUrl, status: "in_review" },
+      actorType: "system",
+      actorId: "github-webhook",
+    });
+  }
+
+  /** Transition a session to "merged" when its PR is merged. */
+  async markPrMerged(params: { sessionId: string; prUrl: string; organizationId: string }) {
+    const { sessionId, prUrl, organizationId } = params;
+
+    const current = await prisma.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { status: true },
+    });
+
+    // Skip if already merged
+    if (current.status === "merged") return;
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: "merged", prUrl },
+    });
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_pr_merged",
+      payload: { sessionId, prUrl, status: "merged" },
+      actorType: "system",
+      actorId: "github-webhook",
+    });
+  }
 }
 
 export const sessionService = new SessionService();

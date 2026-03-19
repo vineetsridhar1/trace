@@ -8,6 +8,7 @@ import {
   Monitor,
   Cloud,
   TerminalSquare,
+  GitPullRequest,
 } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
@@ -28,6 +29,7 @@ export function SessionHeader({
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const prUrl = useEntityField("sessions", sessionId, "prUrl") as string | null | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
@@ -115,6 +117,19 @@ export function SessionHeader({
             </div>
           )}
         </div>
+
+        {prUrl && (
+          <a
+            href={prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
+            title="View Pull Request"
+          >
+            <GitPullRequest size={14} />
+            <span className="hidden sm:inline">PR</span>
+          </a>
+        )}
 
         {disconnected ? (
           <span className="flex items-center gap-1.5 text-xs text-destructive">

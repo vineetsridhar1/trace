@@ -13,6 +13,7 @@ import { makeExecutableSchema } from "@graphql-tools/schema";
 import { resolvers } from "./schema/resolvers.js";
 import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
+import webhookRouter from "./routes/webhook.js";
 import { buildContext, buildWsContext } from "./lib/auth.js";
 import { handleBridgeConnection } from "./lib/bridge-handler.js";
 import { sessionRouter } from "./lib/session-router.js";
@@ -40,6 +41,9 @@ async function main() {
       : true,
     credentials: true,
   }));
+  // Webhook route needs raw body for signature verification — register before express.json()
+  app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
+
   app.use(express.json());
   app.use(cookieParser());
   app.use(authRouter);

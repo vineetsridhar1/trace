@@ -143,6 +143,8 @@ export type EventType =
   | 'session_deleted'
   | 'session_output'
   | 'session_paused'
+  | 'session_pr_merged'
+  | 'session_pr_opened'
   | 'session_resumed'
   | 'session_started'
   | 'session_terminated'
@@ -194,6 +196,7 @@ export type Mutation = {
   linkSessionToTicket: Session;
   moveSessionToRuntime: Session;
   pauseSession: Session;
+  registerRepoWebhook: Repo;
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
@@ -202,6 +205,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   terminateSession: Session;
+  unregisterRepoWebhook: Repo;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -285,6 +289,11 @@ export type MutationPauseSessionArgs = {
 };
 
 
+export type MutationRegisterRepoWebhookArgs = {
+  repoId: Scalars['ID']['input'];
+};
+
+
 export type MutationResumeSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -328,6 +337,11 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUnregisterRepoWebhookArgs = {
+  repoId: Scalars['ID']['input'];
 };
 
 
@@ -524,6 +538,7 @@ export type Repo = {
   projects: Array<Project>;
   remoteUrl: Scalars['String']['output'];
   sessions: Array<Session>;
+  webhookActive: Scalars['Boolean']['output'];
 };
 
 export type ScopeInput = {
@@ -551,6 +566,7 @@ export type Session = {
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   parentSession?: Maybe<Session>;
+  prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   status: SessionStatus;
@@ -608,6 +624,8 @@ export type SessionStatus =
   | 'completed'
   | 'creating'
   | 'failed'
+  | 'in_review'
+  | 'merged'
   | 'needs_input'
   | 'paused'
   | 'pending'

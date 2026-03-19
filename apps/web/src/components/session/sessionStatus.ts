@@ -7,6 +7,8 @@ export const statusColor: Record<string, string> = {
   completed: "text-green-400",
   failed: "text-destructive",
   unreachable: "text-muted-foreground",
+  in_review: "text-violet-400",
+  merged: "text-emerald-400",
 };
 
 export const statusLabel: Record<string, string> = {
@@ -18,6 +20,8 @@ export const statusLabel: Record<string, string> = {
   completed: "Completed",
   failed: "Stopped",
   unreachable: "Unreachable",
+  in_review: "In Review",
+  merged: "Merged",
 };
 
 export const connectionColor: Record<string, string> = {
@@ -41,7 +45,7 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
 /** Check if a session can accept new messages (not disconnected and not in a terminal state) */
 export function canSendMessage(status: string | undefined, connection: Record<string, unknown> | null | undefined): boolean {
   if (!status) return false;
-  if (status === "completed" || status === "failed") return false;
+  if (status === "completed" || status === "failed" || status === "in_review" || status === "merged") return false;
   if (status === "active") return false; // waiting for response
   if (isDisconnected(connection)) return false;
   return true;

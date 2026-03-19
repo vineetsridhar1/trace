@@ -10,6 +10,8 @@ enum SessionStatus {
   completed
   failed
   unreachable
+  in_review
+  merged
 }
 
 enum TicketStatus {
@@ -130,6 +132,8 @@ enum EventType {
   member_left
   inbox_item_created
   inbox_item_resolved
+  session_pr_opened
+  session_pr_merged
 }
 
 # --- Core Types ---
@@ -156,6 +160,7 @@ type Repo {
   name: String!
   remoteUrl: String!
   defaultBranch: String!
+  webhookActive: Boolean!
   projects: [Project!]!
   sessions: [Session!]!
 }
@@ -197,6 +202,7 @@ type Session {
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
   connection: SessionConnection
+  prUrl: String
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -448,6 +454,8 @@ type Mutation {
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
+  registerRepoWebhook(repoId: ID!): Repo!
+  unregisterRepoWebhook(repoId: ID!): Repo!
 }
 
 # --- Subscriptions ---

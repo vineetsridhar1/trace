@@ -27,6 +27,7 @@ const SESSION_DETAIL_QUERY = gql`
       }
       branch
       workdir
+      prUrl
       connection {
         state
         runtimeInstanceId
