@@ -1,15 +1,16 @@
 import { useEffect, useCallback, useState } from "react";
 import { Hash } from "lucide-react";
 import type { Session } from "@trace/gql";
-import { useEntityStore, useEntityField, useEntityIds } from "../../stores/entity";
-import type { SessionEntity } from "../../stores/entity";
+import { useEntityStore, useEntityField } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { StartSessionDialog } from "./StartSessionDialog";
-import { SessionRow } from "./SessionRow";
+import { SessionsTable } from "./SessionsTable";
 import { SessionDetailView } from "../session/SessionDetailView";
+import { SidebarTrigger } from "../ui/sidebar";
+import { ConnectionStatus } from "../ConnectionStatus";
 
 const SESSIONS_QUERY = gql`
   query Sessions($organizationId: ID!, $filters: SessionFilters) {
@@ -81,55 +82,29 @@ export function ChannelView({ channelId }: { channelId: string }) {
     fetchSessions();
   }, [fetchSessions, refreshTick]);
 
-  const sessionIds = useEntityIds(
-    "sessions",
-    (s) => {
-      const ch = (s as SessionEntity).channel as { id: string } | null | undefined;
-      return ch?.id === channelId;
-    },
-    (a, b) => {
-      const aTime = (a as SessionEntity).createdAt ?? "";
-      const bTime = (b as SessionEntity).createdAt ?? "";
-      return bTime > aTime ? 1 : bTime < aTime ? -1 : 0;
-    },
-  );
-
   if (activeSessionId) {
     return <SessionDetailView sessionId={activeSessionId} />;
   }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 items-center justify-between border-b border-border px-4">
-        <div className="flex items-center gap-2">
-          <Hash size={16} className="text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">
-            {channelName ?? "Channel"}
-          </h2>
-        </div>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+        <SidebarTrigger />
+        <Hash size={16} className="text-muted-foreground" />
+        <h2 className="text-sm font-semibold text-foreground">
+          {channelName ?? "Channel"}
+        </h2>
+        <ConnectionStatus />
         <StartSessionDialog channelId={channelId} />
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <p className="text-sm text-muted-foreground">Loading...</p>
           </div>
-        ) : sessionIds.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <p className="text-sm text-muted-foreground">No sessions yet</p>
-            <p className="text-xs text-muted-foreground">
-              Click + to start an AI coding session
-            </p>
-          </div>
         ) : (
-          <div className="divide-y divide-border">
-            {sessionIds.map((id) => (
-              <div key={id} className="group/session-row">
-                <SessionRow id={id} />
-              </div>
-            ))}
-          </div>
+          <SessionsTable channelId={channelId} />
         )}
       </div>
     </div>
