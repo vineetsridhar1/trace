@@ -33,12 +33,34 @@ export type LLMContentBlock =
   | LLMToolUseContent
   | LLMToolResultContent;
 
+export type LLMSystemContentBlock = LLMTextContent;
+export type LLMUserContentBlock = LLMTextContent | LLMImageContent;
+export type LLMAssistantContentBlock = LLMTextContent | LLMToolUseContent;
+export type LLMToolContentBlock = LLMToolResultContent;
+
 // ── Messages ──
 
-export interface LLMMessage {
-  role: LLMRole;
-  content: string | LLMContentBlock[];
+export interface LLMSystemMessage {
+  role: "system";
+  content: string | LLMSystemContentBlock[];
 }
+
+export interface LLMUserMessage {
+  role: "user";
+  content: string | LLMUserContentBlock[];
+}
+
+export interface LLMAssistantMessage {
+  role: "assistant";
+  content: string | LLMAssistantContentBlock[];
+}
+
+export interface LLMToolMessage {
+  role: "tool";
+  content: LLMToolContentBlock[];
+}
+
+export type LLMMessage = LLMSystemMessage | LLMUserMessage | LLMAssistantMessage | LLMToolMessage;
 
 // ── Tool definitions ──
 
@@ -58,7 +80,7 @@ export interface LLMUsage {
 }
 
 export interface LLMResponse {
-  content: LLMContentBlock[];
+  content: LLMAssistantContentBlock[];
   stopReason: LLMStopReason;
   usage: LLMUsage;
   model: string;

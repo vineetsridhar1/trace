@@ -1,8 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
   LLMAdapter,
+  LLMAssistantContentBlock,
   LLMRequestOptions,
   LLMResponse,
+  LLMStreamError,
   LLMStreamEvent,
   LLMContentBlock,
   LLMMessage,
@@ -12,9 +14,14 @@ type AnthropicMessage = Anthropic.MessageParam;
 type AnthropicContent = Anthropic.ContentBlockParam;
 type AnthropicTool = Anthropic.Tool;
 
-function toAnthropicContent(
-  content: string | LLMContentBlock[]
-): string | AnthropicContent[] {
+function toStreamError(error: unknown): LLMStreamError {
+  return {
+    type: "error",
+    error: error instanceof Error ? error : new Error("Anthropic stream failed"),
+  };
+}
+
+function toAnthropicContent(content: string | LLMContentBlock[]): string | AnthropicContent[] {
   if (typeof content === "string") return content;
 
   return content.map((block): AnthropicContent => {
@@ -67,17 +74,13 @@ function toAnthropicMessages(messages: LLMMessage[]): AnthropicMessage[] {
     // Anthropic has no "tool" role — tool results are content blocks in user messages
     if (m.role === "tool") {
       const toolResultBlocks: AnthropicContent[] = [];
-      if (typeof m.content !== "string") {
-        for (const block of m.content) {
-          if (block.type === "tool_result") {
-            toolResultBlocks.push({
-              type: "tool_result",
-              tool_use_id: block.toolUseId,
-              content: block.content,
-              is_error: block.isError,
-            });
-          }
-        }
+      for (const block of m.content) {
+        toolResultBlocks.push({
+          type: "tool_result",
+          tool_use_id: block.toolUseId,
+          content: block.content,
+          is_error: block.isError,
+        });
       }
       if (toolResultBlocks.length) {
         result.push({ role: "user", content: toolResultBlocks });
@@ -94,9 +97,7 @@ function toAnthropicMessages(messages: LLMMessage[]): AnthropicMessage[] {
   return result;
 }
 
-function toAnthropicTools(
-  tools: LLMRequestOptions["tools"]
-): AnthropicTool[] | undefined {
+function toAnthropicTools(tools: LLMRequestOptions["tools"]): AnthropicTool[] | undefined {
   if (!tools?.length) return undefined;
   return tools.map((t) => ({
     name: t.name,
@@ -105,10 +106,8 @@ function toAnthropicTools(
   }));
 }
 
-function fromAnthropicContent(
-  blocks: Anthropic.ContentBlock[]
-): LLMContentBlock[] {
-  const result: LLMContentBlock[] = [];
+function fromAnthropicContent(blocks: Anthropic.ContentBlock[]): LLMAssistantContentBlock[] {
+  const result: LLMAssistantContentBlock[] = [];
   for (const block of blocks) {
     if (block.type === "text") {
       result.push({ type: "text", text: block.text });
@@ -126,7 +125,7 @@ function fromAnthropicContent(
 }
 
 function fromAnthropicStopReason(
-  reason: Anthropic.Message["stop_reason"]
+  reason: Anthropic.Message["stop_reason"],
 ): LLMResponse["stopReason"] {
   switch (reason) {
     case "end_turn":
@@ -173,56 +172,60 @@ export class AnthropicAdapter implements LLMAdapter {
   }
 
   async *stream(options: LLMRequestOptions): AsyncIterable<LLMStreamEvent> {
-    const stream = this.client.messages.stream({
-      model: options.model,
-      max_tokens: options.maxTokens ?? 4096,
-      messages: toAnthropicMessages(options.messages),
-      system: options.system,
-      tools: toAnthropicTools(options.tools),
-      temperature: options.temperature,
-      stop_sequences: options.stopSequences,
-    });
+    try {
+      const stream = this.client.messages.stream({
+        model: options.model,
+        max_tokens: options.maxTokens ?? 4096,
+        messages: toAnthropicMessages(options.messages),
+        system: options.system,
+        tools: toAnthropicTools(options.tools),
+        temperature: options.temperature,
+        stop_sequences: options.stopSequences,
+      });
 
-    for await (const event of stream) {
-      switch (event.type) {
-        case "content_block_start":
-          if (event.content_block.type === "tool_use") {
+      for await (const event of stream) {
+        switch (event.type) {
+          case "content_block_start":
+            if (event.content_block.type === "tool_use") {
+              yield {
+                type: "tool_use_start",
+                id: event.content_block.id,
+                name: event.content_block.name,
+              };
+            }
+            break;
+
+          case "content_block_delta":
+            if (event.delta.type === "text_delta") {
+              yield { type: "text_delta", text: event.delta.text };
+            } else if (event.delta.type === "input_json_delta") {
+              yield {
+                type: "tool_use_input_delta",
+                inputDelta: event.delta.partial_json,
+              };
+            }
+            break;
+
+          case "message_stop": {
+            const finalMessage = await stream.finalMessage();
             yield {
-              type: "tool_use_start",
-              id: event.content_block.id,
-              name: event.content_block.name,
-            };
-          }
-          break;
-
-        case "content_block_delta":
-          if (event.delta.type === "text_delta") {
-            yield { type: "text_delta", text: event.delta.text };
-          } else if (event.delta.type === "input_json_delta") {
-            yield {
-              type: "tool_use_input_delta",
-              inputDelta: event.delta.partial_json,
-            };
-          }
-          break;
-
-        case "message_stop": {
-          const finalMessage = await stream.finalMessage();
-          yield {
-            type: "complete",
-            response: {
-              content: fromAnthropicContent(finalMessage.content),
-              stopReason: fromAnthropicStopReason(finalMessage.stop_reason),
-              usage: {
-                inputTokens: finalMessage.usage.input_tokens,
-                outputTokens: finalMessage.usage.output_tokens,
+              type: "complete",
+              response: {
+                content: fromAnthropicContent(finalMessage.content),
+                stopReason: fromAnthropicStopReason(finalMessage.stop_reason),
+                usage: {
+                  inputTokens: finalMessage.usage.input_tokens,
+                  outputTokens: finalMessage.usage.output_tokens,
+                },
+                model: finalMessage.model,
               },
-              model: finalMessage.model,
-            },
-          };
-          break;
+            };
+            break;
+          }
         }
       }
+    } catch (error) {
+      yield toStreamError(error);
     }
   }
 }
