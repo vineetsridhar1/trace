@@ -216,6 +216,15 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
+  if (action === "closed" && !pr.merged) {
+    await sessionService.markPrClosed({
+      sessionId: session.id,
+      organizationId: session.organizationId,
+    });
+    res.status(200).json({ ok: true, action: "pr_closed", sessionId: session.id });
+    return;
+  }
+
   res.status(200).json({ ignored: true, reason: `unhandled action: ${action}` });
 });
 

@@ -35,8 +35,13 @@ const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
   "session_paused",
   "session_resumed",
   "session_terminated",
-  "session_pr_opened",
   "session_pr_merged",
+]);
+
+/** PR lifecycle events that only patch prUrl, not status */
+const SESSION_PR_EVENTS: Set<EventType> = new Set([
+  "session_pr_opened",
+  "session_pr_closed",
 ]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set([
@@ -227,6 +232,12 @@ export function useOrgEvents() {
             }
             patch("sessions", event.scopeId, sessionPatch);
           }
+        }
+
+        // Route PR lifecycle events — only patch prUrl, not status
+        if (SESSION_PR_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
+          const prUrl = payload && typeof payload.prUrl === "string" ? payload.prUrl : null;
+          patch("sessions", event.scopeId, { prUrl, updatedAt: event.timestamp });
         }
 
         // Handle session_output subtypes that update session fields

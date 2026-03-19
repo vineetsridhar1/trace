@@ -9,10 +9,11 @@ import {
   Cloud,
   TerminalSquare,
   GitPullRequest,
+  Loader2,
 } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
-import { statusColor, statusLabel, isDisconnected } from "./sessionStatus";
+import { statusColor, statusLabel, isDisconnected, getDisplayStatus, isReviewAndActive } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 
 export function SessionHeader({
@@ -137,9 +138,13 @@ export function SessionHeader({
             Connection Lost
           </span>
         ) : (
-          <span className={`flex items-center gap-1.5 text-xs ${statusColor[status ?? "active"]}`}>
-            <Circle size={6} className="fill-current" />
-            {statusLabel[status ?? "active"]}
+          <span className={`flex items-center gap-1.5 text-xs ${statusColor[getDisplayStatus(status, prUrl)]}`}>
+            {isReviewAndActive(status, prUrl) ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Circle size={6} className="fill-current" />
+            )}
+            {statusLabel[getDisplayStatus(status, prUrl)]}
           </span>
         )}
 

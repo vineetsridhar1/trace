@@ -36,6 +36,23 @@ export const connectionLabel: Record<string, string> = {
   disconnected: "Connection Lost",
 };
 
+/**
+ * Derive the display status for a session.
+ * "in_review" is not a real DB status — it's derived from having a prUrl.
+ */
+export function getDisplayStatus(status: string | undefined, prUrl: string | null | undefined): string {
+  if (!status) return "active";
+  // These statuses take priority over the PR-derived "in review" state
+  if (status === "merged" || status === "failed" || status === "needs_input") return status;
+  if (prUrl) return "in_review";
+  return status;
+}
+
+/** Whether the session is "in review" and actively working (show spinner). */
+export function isReviewAndActive(status: string | undefined, prUrl: string | null | undefined): boolean {
+  return !!prUrl && status === "active";
+}
+
 /** Check if a session's connection is in a disconnected state */
 export function isDisconnected(connection: Record<string, unknown> | null | undefined): boolean {
   if (!connection) return false;

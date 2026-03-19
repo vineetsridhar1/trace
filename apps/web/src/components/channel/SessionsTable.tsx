@@ -10,7 +10,7 @@ import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
-import { statusColor, statusLabel } from "../session/sessionStatus";
+import { statusColor, statusLabel, getDisplayStatus } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
 import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
 import { useLongPress } from "../../hooks/useLongPress";
@@ -124,10 +124,15 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const gridRef = useRef<HTMLDivElement>(null);
 
   const filteredSessions = useMemo(() => {
-    return (Object.values(sessions) as SessionRow[]).filter((s) => {
-      const ch = s.channel as { id: string } | null | undefined;
-      return ch?.id === channelId;
-    });
+    return (Object.values(sessions) as SessionRow[])
+      .filter((s) => {
+        const ch = s.channel as { id: string } | null | undefined;
+        return ch?.id === channelId;
+      })
+      .map((s) => ({
+        ...s,
+        status: getDisplayStatus(s.status, s.prUrl as string | null | undefined),
+      } as SessionRow));
   }, [sessions, channelId]);
 
   useEffect(() => {
