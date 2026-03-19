@@ -4,13 +4,13 @@ import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "../ui/dialog";
+  ResponsiveDialog as Dialog,
+  ResponsiveDialogContent as DialogContent,
+  ResponsiveDialogHeader as DialogHeader,
+  ResponsiveDialogTitle as DialogTitle,
+  ResponsiveDialogFooter as DialogFooter,
+  ResponsiveDialogTrigger as DialogTrigger,
+} from "../ui/responsive-dialog";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 

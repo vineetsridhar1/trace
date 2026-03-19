@@ -2,14 +2,14 @@ import { useState } from "react";
 import { client } from "../../lib/urql";
 import { DELETE_SESSION_MUTATION } from "../../lib/mutations";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "../ui/dialog";
+  ResponsiveDialog as Dialog,
+  ResponsiveDialogContent as DialogContent,
+  ResponsiveDialogHeader as DialogHeader,
+  ResponsiveDialogTitle as DialogTitle,
+  ResponsiveDialogDescription as DialogDescription,
+  ResponsiveDialogFooter as DialogFooter,
+  ResponsiveDialogClose as DialogClose,
+} from "../ui/responsive-dialog";
 import { Button } from "../ui/button";
 
 export function DeleteSessionDialog({
