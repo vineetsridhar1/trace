@@ -1,15 +1,20 @@
 import { create } from 'zustand';
-import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridOptions } from 'ag-grid-community';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { TableState } from './table-types';
+import { lazy, Suspense, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
-import { cn } from '@/lib/utils';
-import { colorSchemeDark, themeQuartz } from 'ag-grid-community';
-import './ag-grid-styles.css';
-import { ensureAgGridSetup } from './loadTable';
+import type { TableState } from './table-types';
 
-const theme = themeQuartz.withPart(colorSchemeDark);
+type AgGridTableGridProps<T> = {
+  id: string;
+  rows: T[];
+  columns: GridOptions<T>['columnDefs'];
+  className?: string;
+  selectedRowIds?: string[];
+  agGridOptions?: GridOptions<T>;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const LazyGrid = lazy(() => import('./AgGridTableGrid')) as unknown as ComponentType<AgGridTableGridProps<any>>;
 
 const createTableStore = <T,>(columns: ColDef<T>[] = []) => {
   return create<TableState<T>>(set => ({
@@ -49,51 +54,20 @@ export const createTable = <T extends { id: string }>({
     const rows = useTable(state => state.rows);
     const columns = useTable(state => state.columns);
     const loading = useTable(state => state.loading);
-    const gridRef = useRef<AgGridReact<T>>(null);
-    const [ready, setReady] = useState(false);
 
-    useEffect(() => {
-      ensureAgGridSetup().then(() => setReady(true));
-    }, []);
-
-    const gridOptions: GridOptions<T> = useMemo(
-      () => ({
-        columnDefs: columns,
-        rowData: rows,
-        headerHeight: 30,
-        theme,
-        rowSelection: undefined,
-        animateRows: true,
-        rowHeight: 50,
-        enableCellTextSelection: true,
-        getRowId: params => params.data.id,
-        rowClassRules: {
-          'selected-row': params => {
-            return Boolean(selectedRowIds && selectedRowIds.includes(params.data?.id || ''));
-          },
-        },
-        autoGroupColumnDef: {
-          cellClass: 'group-row',
-        },
-        getRowHeight: params => {
-          if (params.node.group) return 30;
-          return undefined;
-        },
-        ...agGridOptions,
-      }),
-      [columns, rows, agGridOptions, selectedRowIds]
-    );
-
-    if (!ready || loading) return null;
+    if (loading) return null;
 
     return (
-      <div className="flex flex-col gap-5" data-table-id={id}>
-        <div className="relative">
-          <div className={cn('ag-theme-quartz', 'w-full', 'h-full', className)}>
-            <AgGridReact<T> ref={gridRef} {...gridOptions} />
-          </div>
-        </div>
-      </div>
+      <Suspense fallback={null}>
+        <LazyGrid
+          id={id}
+          rows={rows}
+          columns={columns}
+          className={className}
+          selectedRowIds={selectedRowIds}
+          agGridOptions={agGridOptions}
+        />
+      </Suspense>
     );
   };
 
