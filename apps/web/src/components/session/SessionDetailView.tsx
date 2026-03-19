@@ -100,13 +100,12 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
 
   const activeQuestion = useMemo(() => {
     if (status !== "needs_input") return null;
-    if (activePlan) return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
       if (node.kind === "ask-user-question") return node;
     }
     return null;
-  }, [nodes, status, activePlan]);
+  }, [nodes, status]);
 
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
   const showQuestion =
@@ -156,13 +155,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
         )}
       </div>
 
-      {activePlan ? (
-        <PlanResponseBar
-          sessionId={sessionId}
-          planContent={activePlan.planContent}
-          onDismiss={handleDismissPlan}
-        />
-      ) : showQuestion ? (
+      {showQuestion ? (
         <AskUserQuestionBar
           node={showQuestion}
           onResponse={(text) => {
@@ -170,6 +163,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
               .mutation(SEND_SESSION_MESSAGE_MUTATION, {
                 sessionId,
                 text,
+                interactionMode: activePlan ? "plan" : undefined,
               })
               .toPromise();
           }}
@@ -177,6 +171,12 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
             setDismissedQuestionId(showQuestion.id);
             client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
           }}
+        />
+      ) : activePlan ? (
+        <PlanResponseBar
+          sessionId={sessionId}
+          planContent={activePlan.planContent}
+          onDismiss={handleDismissPlan}
         />
       ) : (
         <SessionInput sessionId={sessionId} />
