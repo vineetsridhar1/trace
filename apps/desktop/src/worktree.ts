@@ -32,6 +32,9 @@ export async function createWorktree({
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 
+  // Fetch latest so origin refs are up to date
+  await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+
   // Check if the branch already exists (e.g. worktree was removed but branch remains)
   const branchExists = await execFileAsync(
     "git", ["rev-parse", "--verify", branch],
