@@ -1,33 +1,20 @@
 import { create } from 'zustand';
 import type { ColDef, GridOptions } from 'ag-grid-community';
-import { lazy, Suspense, type ComponentType } from 'react';
-import { createPortal } from 'react-dom';
+import { lazy, Suspense } from 'react';
 import type { TableState } from './table-types';
 
-type AgGridTableGridProps<T> = {
-  id: string;
-  rows: T[];
-  columns: GridOptions<T>['columnDefs'];
-  className?: string;
-  selectedRowIds?: string[];
-  agGridOptions?: GridOptions<T>;
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const LazyGrid = lazy(() => import('./AgGridTableGrid')) as unknown as ComponentType<AgGridTableGridProps<any>>;
+// React.lazy cannot preserve generic type parameters. We load the module
+// and assert the grid component inside createTable where T is known.
+const lazyModule = lazy(() => import('./AgGridTableGrid'));
 
 const createTableStore = <T,>(columns: ColDef<T>[] = []) => {
   return create<TableState<T>>(set => ({
     columns,
     setColumns: columns => set({ columns }),
-    search: '',
-    setSearch: search => set({ search }),
     rows: [],
     setRows: rows => set({ rows }),
     loading: false,
     setLoading: loading => set({ loading }),
-    total: 0,
-    setTotal: total => set({ total }),
   }));
 };
 
@@ -57,9 +44,20 @@ export const createTable = <T extends { id: string }>({
 
     if (loading) return null;
 
+    // Assert the lazy component to the concrete T — safe because AgGridTableGrid
+    // is generic and we control all call sites through createTable<T>.
+    const Grid = lazyModule as unknown as React.ComponentType<{
+      id: string;
+      rows: T[];
+      columns: GridOptions<T>['columnDefs'];
+      className?: string;
+      selectedRowIds?: string[];
+      agGridOptions?: GridOptions<T>;
+    }>;
+
     return (
       <Suspense fallback={null}>
-        <LazyGrid
+        <Grid
           id={id}
           rows={rows}
           columns={columns}
@@ -71,15 +69,8 @@ export const createTable = <T extends { id: string }>({
     );
   };
 
-  const TableActions = ({ children }: { children: React.ReactNode }) => {
-    const container = document.getElementById(`table-actions-container-${id}`);
-    if (!container) return null;
-    return createPortal(children, container);
-  };
-
   return {
     Table: TableComponent,
     useTable,
-    TableActions,
   };
 };

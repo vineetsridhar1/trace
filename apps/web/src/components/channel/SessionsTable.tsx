@@ -111,50 +111,56 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     useTable.getState().setRows(filteredSessions);
   }, [filteredSessions]);
 
+  const agGridOptions = useMemo(
+    () => ({
+      onRowClicked: (event: { node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void }; data?: SessionRow }) => {
+        if (event.node.group) {
+          event.node.setExpanded(!event.node.expanded);
+          return;
+        }
+        if (event.data?.id) {
+          setActiveSessionId(event.data.id);
+        }
+      },
+      rowHeight: 40,
+      headerHeight: 32,
+      suppressCellFocus: true,
+      getRowHeight: (params: { node: { group?: boolean } }) => {
+        if (params.node.group) return 40;
+        return undefined;
+      },
+      groupDisplayType: "groupRows" as const,
+      groupDefaultExpanded: -1,
+      groupRowRendererParams: {
+        suppressCount: true,
+        innerRenderer: (params: ICellRendererParams) => {
+          const status = params.value as string;
+          const color = statusColor[status] ?? "text-muted-foreground";
+          const label = statusLabel[status] ?? status;
+          const count = params.node.allChildrenCount ?? 0;
+          return (
+            <div className={`flex items-center gap-2 ${color}`}>
+              <Circle size={8} className="shrink-0 fill-current" />
+              <span className="text-sm font-semibold">{label}</span>
+              <span className="text-xs text-muted-foreground">{count}</span>
+            </div>
+          );
+        },
+      },
+      initialGroupOrderComparator: (params: { nodeA: { key?: string | null }; nodeB: { key?: string | null } }) => {
+        const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
+        const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
+        return a - b;
+      },
+    }),
+    [setActiveSessionId],
+  );
+
   return (
     <Table
+      // 48px = h-12 channel bar above
       className="h-[calc(100vh-48px)]"
-      agGridOptions={{
-        onRowClicked: (event) => {
-          if (event.node.group) {
-            event.node.setExpanded(!event.node.expanded);
-            return;
-          }
-          if (event.data?.id) {
-            setActiveSessionId(event.data.id);
-          }
-        },
-        rowHeight: 40,
-        headerHeight: 32,
-        suppressCellFocus: true,
-        getRowHeight: (params) => {
-          if (params.node.group) return 40;
-          return undefined;
-        },
-        groupDisplayType: "groupRows",
-        groupDefaultExpanded: -1,
-        groupRowRendererParams: {
-          suppressCount: true,
-          innerRenderer: (params: ICellRendererParams) => {
-            const status = params.value as string;
-            const color = statusColor[status] ?? "text-muted-foreground";
-            const label = statusLabel[status] ?? status;
-            const count = params.node.allChildrenCount ?? 0;
-            return (
-              <div className={`flex items-center gap-2 ${color}`}>
-                <Circle size={8} className="shrink-0 fill-current" />
-                <span className="text-sm font-semibold">{label}</span>
-                <span className="text-xs text-muted-foreground">{count}</span>
-              </div>
-            );
-          },
-        },
-        initialGroupOrderComparator: (params) => {
-          const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
-          const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
-          return a - b;
-        },
-      }}
+      agGridOptions={agGridOptions}
     />
   );
 }

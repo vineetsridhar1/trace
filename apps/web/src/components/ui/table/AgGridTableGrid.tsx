@@ -1,6 +1,6 @@
 import { AgGridReact } from 'ag-grid-react';
 import type { GridOptions } from 'ag-grid-community';
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import { cn } from '@/lib/utils';
 import './ag-grid-styles.css';
@@ -32,43 +32,33 @@ export default function AgGridTableGrid<T extends { id: string }>({
     ensureAgGridSetup().then(() => setReady(true));
   }, []);
 
-  const gridOptions: GridOptions<T> = useMemo(
-    () => ({
-      columnDefs: columns,
-      rowData: rows,
-      headerHeight: 30,
-      theme,
-      rowSelection: undefined,
-      animateRows: true,
-      rowHeight: 50,
-      enableCellTextSelection: true,
-      getRowId: params => params.data.id,
-      rowClassRules: {
-        'selected-row': params => {
-          return Boolean(selectedRowIds && selectedRowIds.includes(params.data?.id || ''));
-        },
-      },
-      autoGroupColumnDef: {
-        cellClass: 'group-row',
-      },
-      getRowHeight: params => {
-        if (params.node.group) return 40;
-        return undefined;
-      },
-      ...agGridOptions,
-    }),
-    [columns, rows, agGridOptions, selectedRowIds]
-  );
-
   if (!ready) return null;
 
   return (
-    <div className="flex flex-col gap-5" data-table-id={id}>
-      <div className="relative">
-        <div className={cn('ag-theme-quartz', 'w-full', 'h-full', className)}>
-          <AgGridReact<T> ref={gridRef} {...gridOptions} />
-        </div>
-      </div>
+    <div className={cn('ag-theme-quartz', 'w-full', 'h-full', className)} data-table-id={id}>
+      <AgGridReact<T>
+        ref={gridRef}
+        columnDefs={columns}
+        rowData={rows}
+        headerHeight={30}
+        theme={theme}
+        rowSelection={undefined}
+        animateRows={true}
+        rowHeight={50}
+        enableCellTextSelection={true}
+        getRowId={params => params.data.id}
+        rowClassRules={{
+          'selected-row': params => {
+            return Boolean(selectedRowIds && selectedRowIds.includes(params.data?.id || ''));
+          },
+        }}
+        autoGroupColumnDef={{ cellClass: 'group-row' }}
+        getRowHeight={params => {
+          if (params.node.group) return 40;
+          return undefined;
+        }}
+        {...agGridOptions}
+      />
     </div>
   );
 }
