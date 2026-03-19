@@ -1,12 +1,14 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle } from "lucide-react";
-import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import type { ColDef, GetContextMenuItemsParams, ICellRendererParams, MenuItemDef } from "ag-grid-community";
 import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
+import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
+import { useLongPress } from "../../hooks/useLongPress";
 
 type SessionRow = SessionEntity & { id: string };
 
@@ -108,21 +110,52 @@ const { Table, useTable } = createTable<SessionRow>({
 export function SessionsTable({ channelId }: { channelId: string }) {
   const sessions = useEntityStore((s) => s.sessions);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const filteredSessions = useMemo(() => {
-    return Object.values(sessions).filter((s) => {
+    return (Object.values(sessions) as SessionRow[]).filter((s) => {
       const ch = s.channel as { id: string } | null | undefined;
       return ch?.id === channelId;
-    }) as SessionRow[];
+    });
   }, [sessions, channelId]);
 
   useEffect(() => {
     useTable.getState().setRows(filteredSessions);
   }, [filteredSessions]);
 
+  const setDeleteFromRowId = useCallback(
+    (rowId: string) => {
+      const session = filteredSessions.find((s) => s.id === rowId);
+      if (session) setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" });
+    },
+    [filteredSessions],
+  );
+
+  const longPressFired = useLongPress({ ref: gridRef, onLongPress: setDeleteFromRowId });
+
+  const getContextMenuItems = useCallback(
+    (params: GetContextMenuItemsParams<SessionRow>): (MenuItemDef | string)[] => {
+      if (!params.node?.data) return [];
+      const session = params.node.data;
+      return [
+        {
+          name: "Delete Session",
+          action: () => setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" }),
+          cssClasses: ["text-destructive"],
+        },
+      ];
+    },
+    [],
+  );
+
   const agGridOptions = useMemo(
     () => ({
       onRowClicked: (event: { node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void }; data?: SessionRow }) => {
+        if (longPressFired.current) {
+          longPressFired.current = false;
+          return;
+        }
         if (event.node.group) {
           event.node.setExpanded(!event.node.expanded);
           return;
@@ -134,6 +167,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       rowHeight: 40,
       headerHeight: 32,
       suppressCellFocus: true,
+      getContextMenuItems,
       getRowHeight: (params: { node: { group?: boolean } }) => {
         if (params.node.group) return 40;
         return undefined;
@@ -162,14 +196,27 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         return a - b;
       },
     }),
-    [setActiveSessionId],
+    [setActiveSessionId, getContextMenuItems],
   );
 
   return (
-    <Table
-      // 48px = h-12 channel bar above
-      className="h-[calc(100vh-48px)]"
-      agGridOptions={agGridOptions}
-    />
+    <>
+      <div ref={gridRef}>
+        <Table
+          className="h-[calc(100vh-48px)]"
+          agGridOptions={agGridOptions}
+        />
+      </div>
+      {deleteTarget && (
+        <DeleteSessionDialog
+          sessionId={deleteTarget.id}
+          sessionName={deleteTarget.name}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null);
+          }}
+        />
+      )}
+    </>
   );
 }
