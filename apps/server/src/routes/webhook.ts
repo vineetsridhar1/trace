@@ -21,6 +21,83 @@ interface PullRequestPayload {
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function parsePullRequestPayload(value: unknown): PullRequestPayload | null {
+  const payload = asRecord(value);
+  const repository = asRecord(payload?.repository);
+  const pullRequest = asRecord(payload?.pull_request);
+  const head = asRecord(pullRequest?.head);
+
+  if (
+    !payload ||
+    typeof payload.action !== "string" ||
+    !repository ||
+    typeof repository.full_name !== "string" ||
+    typeof repository.html_url !== "string" ||
+    !pullRequest ||
+    typeof pullRequest.html_url !== "string" ||
+    typeof pullRequest.number !== "number" ||
+    typeof pullRequest.merged !== "boolean" ||
+    !head ||
+    typeof head.ref !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    action: payload.action,
+    repository: {
+      full_name: repository.full_name,
+      html_url: repository.html_url,
+    },
+    pull_request: {
+      html_url: pullRequest.html_url,
+      number: pullRequest.number,
+      merged: pullRequest.merged,
+      head: {
+        ref: head.ref,
+      },
+    },
+  };
+}
+
+async function findMatchingRepo(rawBody: string, signature: string, hookId: string | undefined, repoFullName: string) {
+  if (hookId) {
+    const exactMatches = await prisma.repo.findMany({
+      where: {
+        webhookId: hookId,
+        webhookSecret: { not: null },
+      },
+    });
+
+    const exactRepo = exactMatches.find((candidate) =>
+      candidate.webhookSecret != null && verifySignature(rawBody, signature, candidate.webhookSecret),
+    );
+    if (exactRepo) return { repo: exactRepo } as const;
+    if (exactMatches.length > 0) return { error: "unauthorized" as const };
+  }
+
+  const repoCandidates = await prisma.repo.findMany({
+    where: {
+      remoteUrl: { contains: repoFullName, mode: "insensitive" },
+      webhookSecret: { not: null },
+    },
+  });
+
+  const repo = repoCandidates.find((candidate) =>
+    candidate.webhookSecret != null && verifySignature(rawBody, signature, candidate.webhookSecret),
+  );
+  if (repo) return { repo } as const;
+
+  return { error: repoCandidates.length === 0 ? "missing" as const : "unauthorized" as const };
+}
+
 function verifySignature(payload: string, signature: string, secret: string): boolean {
   const expected = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
   try {
@@ -31,8 +108,9 @@ function verifySignature(payload: string, signature: string, secret: string): bo
 }
 
 router.post("/", async (req: Request, res: Response) => {
-  const event = req.headers["x-github-event"] as string | undefined;
-  const signature = req.headers["x-hub-signature-256"] as string | undefined;
+  const event = typeof req.headers["x-github-event"] === "string" ? req.headers["x-github-event"] : undefined;
+  const signature = typeof req.headers["x-hub-signature-256"] === "string" ? req.headers["x-hub-signature-256"] : undefined;
+  const hookId = typeof req.headers["x-github-hook-id"] === "string" ? req.headers["x-github-hook-id"] : undefined;
 
   if (event !== "pull_request") {
     res.status(200).json({ ignored: true, reason: "not a pull_request event" });
@@ -45,35 +123,35 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   // req.body is a raw Buffer because of express.raw() middleware
-  const rawBody = typeof req.body === "string" ? req.body : (req.body as Buffer).toString("utf-8");
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body.toString("utf-8")
+    : typeof req.body === "string"
+      ? req.body
+      : "";
 
   let payload: PullRequestPayload;
   try {
-    payload = JSON.parse(rawBody);
+    const parsed = JSON.parse(rawBody) as unknown;
+    const validated = parsePullRequestPayload(parsed);
+    if (!validated) {
+      throw new Error("invalid payload shape");
+    }
+    payload = validated;
   } catch {
-    res.status(400).json({ error: "Invalid JSON payload" });
+    res.status(400).json({ error: "Invalid pull_request payload" });
     return;
   }
 
-  const repoFullName = payload.repository.full_name;
-
-  // Find the repo by matching remoteUrl against the GitHub full name
-  const repo = await prisma.repo.findFirst({
-    where: {
-      remoteUrl: { contains: repoFullName },
-      webhookSecret: { not: null },
-    },
-  });
-
-  if (!repo || !repo.webhookSecret) {
-    res.status(404).json({ error: "No matching repo with webhook configured" });
-    return;
-  }
-
-  if (!verifySignature(rawBody, signature, repo.webhookSecret)) {
+  const repoMatch = await findMatchingRepo(rawBody, signature, hookId, payload.repository.full_name);
+  if ("error" in repoMatch) {
+    if (repoMatch.error === "missing") {
+      res.status(404).json({ error: "No matching repo with webhook configured" });
+      return;
+    }
     res.status(401).json({ error: "Invalid signature" });
     return;
   }
+  const repo = repoMatch.repo;
 
   const { action, pull_request: pr } = payload;
   const headBranch = pr.head.ref;

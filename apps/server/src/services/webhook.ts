@@ -1,18 +1,14 @@
 import { randomBytes } from "crypto";
 import { prisma } from "../lib/db.js";
 import { apiTokenService } from "./api-token.js";
+import { eventService } from "./event.js";
 
 const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? "https://trace-rgsa.onrender.com";
 
 /** Extract owner/repo from a GitHub remote URL (HTTPS or SSH). */
 function parseGitHubRepo(remoteUrl: string): { owner: string; repo: string } | null {
-  // HTTPS: https://github.com/owner/repo.git
-  const httpsMatch = remoteUrl.match(/github\.com\/([^/]+)\/([^/.]+)/);
-  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
-
-  // SSH: git@github.com:owner/repo.git
-  const sshMatch = remoteUrl.match(/github\.com:([^/]+)\/([^/.]+)/);
-  if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
+  const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (match) return { owner: match[1], repo: match[2] };
 
   return null;
 }
@@ -72,12 +68,34 @@ export class WebhookService {
 
     const hook = (await response.json()) as { id: number };
 
-    const updated = await prisma.repo.update({
-      where: { id: repoId },
-      data: {
-        webhookId: String(hook.id),
-        webhookSecret: secret,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const repo = await tx.repo.update({
+        where: { id: repoId },
+        data: {
+          webhookId: String(hook.id),
+          webhookSecret: secret,
+        },
+      });
+
+      await eventService.create({
+        organizationId: repo.organizationId,
+        scopeType: "system",
+        scopeId: repo.id,
+        eventType: "repo_updated",
+        payload: {
+          repo: {
+            id: repo.id,
+            name: repo.name,
+            remoteUrl: repo.remoteUrl,
+            defaultBranch: repo.defaultBranch,
+            webhookActive: true,
+          },
+        },
+        actorType: "user",
+        actorId: userId,
+      }, tx);
+
+      return repo;
     });
 
     return updated;
@@ -122,12 +140,34 @@ export class WebhookService {
       throw new Error(`GitHub API error (${response.status}): ${body}`);
     }
 
-    const updated = await prisma.repo.update({
-      where: { id: repoId },
-      data: {
-        webhookId: null,
-        webhookSecret: null,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const repo = await tx.repo.update({
+        where: { id: repoId },
+        data: {
+          webhookId: null,
+          webhookSecret: null,
+        },
+      });
+
+      await eventService.create({
+        organizationId: repo.organizationId,
+        scopeType: "system",
+        scopeId: repo.id,
+        eventType: "repo_updated",
+        payload: {
+          repo: {
+            id: repo.id,
+            name: repo.name,
+            remoteUrl: repo.remoteUrl,
+            defaultBranch: repo.defaultBranch,
+            webhookActive: false,
+          },
+        },
+        actorType: "user",
+        actorId: userId,
+      }, tx);
+
+      return repo;
     });
 
     return updated;

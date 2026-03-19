@@ -14,12 +14,13 @@ import { ApiTokensSection } from "./ApiTokensSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
 
 const REPOS_QUERY = gql`
-  query Repos($organizationId: ID!) {
+  query SettingsRepos($organizationId: ID!) {
     repos(organizationId: $organizationId) {
       id
       name
       remoteUrl
       defaultBranch
+      webhookActive
     }
   }
 `;

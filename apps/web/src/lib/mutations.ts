@@ -100,6 +100,22 @@ export const UPDATE_REPO_MUTATION = gql`
   }
 `;
 
+export const REGISTER_REPO_WEBHOOK_MUTATION = gql`
+  mutation RegisterRepoWebhook($repoId: ID!) {
+    registerRepoWebhook(repoId: $repoId) {
+      id
+    }
+  }
+`;
+
+export const UNREGISTER_REPO_WEBHOOK_MUTATION = gql`
+  mutation UnregisterRepoWebhook($repoId: ID!) {
+    unregisterRepoWebhook(repoId: $repoId) {
+      id
+    }
+  }
+`;
+
 export const REPO_BRANCHES_QUERY = gql`
   query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {
     repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)

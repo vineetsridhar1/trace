@@ -150,7 +150,8 @@ export function useOrgEvents() {
         if (event.eventType === "repo_created" || event.eventType === "repo_updated") {
           const repo = asRecord(event.payload.repo);
           if (repo && typeof repo.id === "string") {
-            upsert("repos", repo.id, repo as unknown as Repo);
+            const existing = useEntityStore.getState().repos[repo.id];
+            upsert("repos", repo.id, (existing ? { ...existing, ...repo } : repo) as unknown as Repo);
           }
         }
 

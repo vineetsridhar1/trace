@@ -120,6 +120,12 @@ function buildMigrationPrompt(context: string | null): string {
   return `${context}\n\nContinue this session on the new runtime.`;
 }
 
+const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["failed", "merged"];
+
+function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
+  return FULLY_UNLOADED_SESSION_STATUSES.includes(status);
+}
+
 export class SessionService {
   async list(organizationId: string, filters?: { status?: string | null; tool?: string | null; repoId?: string | null; channelId?: string | null }) {
     const where: Record<string, unknown> = { organizationId };
@@ -285,8 +291,8 @@ export class SessionService {
       return updated;
     }
 
-    // Don't run if session is in a terminal state
-    if (session.status === "failed" || session.status === "completed" || session.status === "in_review" || session.status === "merged") {
+    // Fully unloaded sessions cannot accept follow-up work.
+    if (isFullyUnloadedSessionStatus(session.status)) {
       return session;
     }
 
@@ -435,8 +441,12 @@ export class SessionService {
   ) {
     const current = await prisma.session.findUniqueOrThrow({
       where: { id },
-      select: { hosting: true, organizationId: true },
+      select: { hosting: true, organizationId: true, status: true },
     });
+
+    if (isFullyUnloadedSessionStatus(current.status)) {
+      return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+    }
 
     const deliveryResult = await sessionRouter.transitionRuntime(id, current.hosting, command);
 
@@ -727,8 +737,12 @@ export class SessionService {
   async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string, interactionMode?: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { organizationId: true, tool: true, model: true, toolChangedAt: true, workdir: true, toolSessionId: true, connection: true },
+      select: { organizationId: true, status: true, tool: true, model: true, toolChangedAt: true, workdir: true, toolSessionId: true, connection: true },
     });
+
+    if (isFullyUnloadedSessionStatus(session.status)) {
+      throw new Error(`Cannot send follow-up messages to a ${session.status} session`);
+    }
 
     // If the tool was recently switched and no user message has been sent since,
     // prepend conversation history so the new coding tool has context.
@@ -888,8 +902,8 @@ export class SessionService {
     });
     if (!session) return;
 
-    // Don't mark terminal sessions as disconnected
-    if (session.status === "completed" || session.status === "failed" || session.status === "in_review" || session.status === "merged") return;
+    // Fully unloaded sessions are excluded from reconnect/disconnect handling.
+    if (isFullyUnloadedSessionStatus(session.status)) return;
 
     const conn = this.parseConnection(session.connection);
     const updated: SessionConnectionData = {
@@ -963,9 +977,9 @@ export class SessionService {
   }
 
   /**
-   * When a runtime connects, restore all non-terminal sessions it previously owned.
+   * When a runtime connects, restore all sessions it previously owned except fully unloaded ones.
    * The DB (connection.runtimeInstanceId) is the single source of truth for ownership.
-   * Excludes terminal statuses (failed, completed, in_review, merged).
+   * Excludes fully unloaded statuses (failed, merged).
    */
   async restoreSessionsForRuntime(runtimeId: string) {
     const runtime = sessionRouter.getRuntime(runtimeId);
@@ -974,7 +988,7 @@ export class SessionService {
 
     const sessions = await prisma.session.findMany({
       where: {
-        status: { notIn: ["failed", "completed", "in_review", "merged"] },
+        status: { notIn: [...FULLY_UNLOADED_SESSION_STATUSES] },
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
       select: { id: true, connection: true },
@@ -1008,6 +1022,10 @@ export class SessionService {
       where: { id: sessionId, organizationId },
       include: SESSION_INCLUDE,
     });
+
+    if (isFullyUnloadedSessionStatus(session.status)) {
+      return session;
+    }
 
     const conn = this.parseConnection(session.connection);
 
@@ -1158,6 +1176,9 @@ export class SessionService {
       where: { id: sessionId, organizationId },
       include: { ...SESSION_INCLUDE, projects: true, tickets: true },
     });
+    if (isFullyUnloadedSessionStatus(session.status)) {
+      throw new Error(`Cannot move a ${session.status} session`);
+    }
     const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId);
     if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
       throw new Error("Selected runtime is not available");
@@ -1525,8 +1546,9 @@ export class SessionService {
   private async persistConnectionFailure(sessionId: string, organizationId: string, deliveryResult: DeliveryResult, operation: string) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { connection: true },
+      select: { status: true, connection: true },
     });
+    if (session?.status && isFullyUnloadedSessionStatus(session.status)) return;
     const conn = this.parseConnection(session?.connection);
 
     const updated: SessionConnectionData = {
@@ -1558,6 +1580,23 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+  }
+
+  private async fullyUnloadSession(sessionId: string) {
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { hosting: true, workdir: true, repoId: true, connection: true },
+    });
+    if (!session) return;
+
+    terminalRelay.destroyAllForSession(sessionId);
+
+    try {
+      await sessionRouter.destroyRuntime(sessionId, session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
+    }
   }
 
   /** Transition a session to "in_review" when a PR is opened for its branch. */
@@ -1593,7 +1632,16 @@ export class SessionService {
       data: { status: "merged", prUrl },
     });
 
-    if (count === 0) return;
+    if (count === 0) {
+      const existing = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { status: true },
+      });
+      if (existing?.status === "merged") {
+        await this.fullyUnloadSession(sessionId);
+      }
+      return;
+    }
 
     await eventService.create({
       organizationId,
@@ -1604,6 +1652,8 @@ export class SessionService {
       actorType: "system",
       actorId: "github-webhook",
     });
+
+    await this.fullyUnloadSession(sessionId);
   }
 }
 
