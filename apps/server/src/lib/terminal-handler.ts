@@ -97,9 +97,13 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
             }
             const session = await prisma.session.findFirst({
               where: { id: sessionId, organizationId: user.organizationId },
-              select: { id: true },
+              select: { id: true, hosting: true, createdById: true },
             });
             if (!session) {
+              ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+              return;
+            }
+            if (session.hosting === "local" && session.createdById !== userId) {
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
