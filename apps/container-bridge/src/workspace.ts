@@ -61,7 +61,7 @@ export async function createWorktree(
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
   const branchName = `trace/${sessionId}`;
-  const baseBranch = branch ?? defaultBranch;
+  const baseBranch = `origin/${branch ?? defaultBranch}`;
 
   // Check if the branch already exists
   const branchExists = await execFileAsync(

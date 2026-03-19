@@ -21,7 +21,7 @@ export async function createWorktree({
   startBranch?: string;
 }): Promise<{ workdir: string; branch: string }> {
   const branch = `trace/${sessionId}`;
-  const baseBranch = startBranch ?? defaultBranch;
+  const baseBranch = `origin/${startBranch ?? defaultBranch}`;
   const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
 
   // If the worktree directory already exists, reuse it
