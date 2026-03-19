@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
@@ -27,6 +27,23 @@ export function SessionMessageList({
   const isInitialLoadRef = useRef(true);
   const wasLoadingOlderRef = useRef(false);
   const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const isNearBottomRef = useRef(true);
+
+  // Track whether the user is near the bottom via scroll events
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 100;
+  }, []);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
   // Capture scroll position when older messages start loading
   useEffect(() => {
@@ -74,10 +91,8 @@ export function SessionMessageList({
     if (scrollSnapshotRef.current) return;
     if (nodes.length <= prevCount) return;
 
-    // Only auto-scroll if the user is near the bottom (within 150px)
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distanceFromBottom < 150) {
+    // Only auto-scroll if the user was near the bottom (within 100px)
+    if (isNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [nodes.length]);
