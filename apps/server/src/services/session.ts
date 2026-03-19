@@ -835,7 +835,7 @@ export class SessionService {
     return event;
   }
 
-  async workspaceReady(sessionId: string, workdir: string) {
+  async workspaceReady(sessionId: string, workdir: string, branch?: string) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(async (tx) => {
       const prev = await tx.session.findUniqueOrThrow({
@@ -845,7 +845,7 @@ export class SessionService {
 
       const updated = await tx.session.update({
         where: { id: sessionId },
-        data: { status: "pending", workdir, pendingRun: Prisma.DbNull },
+        data: { status: "pending", workdir, ...(branch && { branch }), pendingRun: Prisma.DbNull },
         include: SESSION_INCLUDE,
       });
 

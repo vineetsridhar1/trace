@@ -254,9 +254,9 @@ export class BridgeClient implements IBridgeClient {
         }
 
         createWorktree({ repoPath, repoId, sessionId, defaultBranch, startBranch: branch })
-          .then(({ workdir }) => {
+          .then(({ workdir, branch: worktreeBranch }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
-            this.send({ type: "workspace_ready", sessionId, workdir });
+            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch });
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });

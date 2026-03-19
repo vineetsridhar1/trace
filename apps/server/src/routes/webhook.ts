@@ -67,7 +67,12 @@ function parsePullRequestPayload(value: unknown): PullRequestPayload | null {
   };
 }
 
-async function findMatchingRepo(rawBody: string, signature: string, hookId: string | undefined, repoFullName: string) {
+async function findMatchingRepo(
+  rawBody: string,
+  signature: string,
+  hookId: string | undefined,
+  repoFullName: string,
+) {
   if (hookId) {
     const exactMatches = await prisma.repo.findMany({
       where: {
@@ -76,8 +81,10 @@ async function findMatchingRepo(rawBody: string, signature: string, hookId: stri
       },
     });
 
-    const exactRepo = exactMatches.find((candidate) =>
-      candidate.webhookSecret != null && verifySignature(rawBody, signature, candidate.webhookSecret),
+    const exactRepo = exactMatches.find(
+      (candidate) =>
+        candidate.webhookSecret != null &&
+        verifySignature(rawBody, signature, candidate.webhookSecret),
     );
     if (exactRepo) return { repo: exactRepo } as const;
     if (exactMatches.length > 0) return { error: "unauthorized" as const };
@@ -90,12 +97,14 @@ async function findMatchingRepo(rawBody: string, signature: string, hookId: stri
     },
   });
 
-  const repo = repoCandidates.find((candidate) =>
-    candidate.webhookSecret != null && verifySignature(rawBody, signature, candidate.webhookSecret),
+  const repo = repoCandidates.find(
+    (candidate) =>
+      candidate.webhookSecret != null &&
+      verifySignature(rawBody, signature, candidate.webhookSecret),
   );
   if (repo) return { repo } as const;
 
-  return { error: repoCandidates.length === 0 ? "missing" as const : "unauthorized" as const };
+  return { error: repoCandidates.length === 0 ? ("missing" as const) : ("unauthorized" as const) };
 }
 
 function verifySignature(payload: string, signature: string, secret: string): boolean {
@@ -108,9 +117,18 @@ function verifySignature(payload: string, signature: string, secret: string): bo
 }
 
 router.post("/", async (req: Request, res: Response) => {
-  const event = typeof req.headers["x-github-event"] === "string" ? req.headers["x-github-event"] : undefined;
-  const signature = typeof req.headers["x-hub-signature-256"] === "string" ? req.headers["x-hub-signature-256"] : undefined;
-  const hookId = typeof req.headers["x-github-hook-id"] === "string" ? req.headers["x-github-hook-id"] : undefined;
+  const event =
+    typeof req.headers["x-github-event"] === "string" ? req.headers["x-github-event"] : undefined;
+  const signature =
+    typeof req.headers["x-hub-signature-256"] === "string"
+      ? req.headers["x-hub-signature-256"]
+      : undefined;
+  const hookId =
+    typeof req.headers["x-github-hook-id"] === "string"
+      ? req.headers["x-github-hook-id"]
+      : undefined;
+
+  console.log("[webhook] Received GitHub webhook:", { event, hookId, hasSignature: !!signature });
 
   if (event !== "pull_request") {
     res.status(200).json({ ignored: true, reason: "not a pull_request event" });
@@ -142,12 +160,19 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const repoMatch = await findMatchingRepo(rawBody, signature, hookId, payload.repository.full_name);
+  const repoMatch = await findMatchingRepo(
+    rawBody,
+    signature,
+    hookId,
+    payload.repository.full_name,
+  );
   if ("error" in repoMatch) {
     if (repoMatch.error === "missing") {
+      console.log("[webhook] No matching repo found for:", payload.repository.full_name);
       res.status(404).json({ error: "No matching repo with webhook configured" });
       return;
     }
+    console.log("[webhook] Signature verification failed for:", payload.repository.full_name);
     res.status(401).json({ error: "Invalid signature" });
     return;
   }
@@ -166,6 +191,7 @@ router.post("/", async (req: Request, res: Response) => {
   });
 
   if (!session) {
+    console.log("[webhook] No session found for branch:", headBranch, "on repo:", repo.id);
     res.status(200).json({ ignored: true, reason: "no matching session for branch" });
     return;
   }
