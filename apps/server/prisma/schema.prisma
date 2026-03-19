@@ -29,6 +29,8 @@ enum SessionStatus {
   completed
   failed
   unreachable
+  in_review
+  merged
 }
 
 enum TicketStatus {
@@ -117,6 +119,8 @@ enum EventType {
   member_left
   inbox_item_created
   inbox_item_resolved
+  session_pr_opened
+  session_pr_merged
 }
 
 model Organization {
@@ -167,6 +171,9 @@ model Repo {
 
   projects Project[]
   sessions Session[]
+
+  webhookId     String?
+  webhookSecret String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -239,6 +246,7 @@ model Session {
   pendingRun      Json?
   endpoints       Json?
   connection      Json?
+  prUrl           String?
 
   projects SessionProject[]
   tickets  SessionTicket[]

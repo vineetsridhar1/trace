@@ -146,6 +146,8 @@ export type EventType =
   | 'session_deleted'
   | 'session_output'
   | 'session_paused'
+  | 'session_pr_merged'
+  | 'session_pr_opened'
   | 'session_resumed'
   | 'session_started'
   | 'session_terminated'
@@ -197,6 +199,7 @@ export type Mutation = {
   linkSessionToTicket: Session;
   moveSessionToRuntime: Session;
   pauseSession: Session;
+  registerRepoWebhook: Repo;
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
@@ -205,6 +208,7 @@ export type Mutation = {
   setApiToken: ApiTokenStatus;
   startSession: Session;
   terminateSession: Session;
+  unregisterRepoWebhook: Repo;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -288,6 +292,11 @@ export type MutationPauseSessionArgs = {
 };
 
 
+export type MutationRegisterRepoWebhookArgs = {
+  repoId: Scalars['ID']['input'];
+};
+
+
 export type MutationResumeSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -331,6 +340,11 @@ export type MutationStartSessionArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUnregisterRepoWebhookArgs = {
+  repoId: Scalars['ID']['input'];
 };
 
 
@@ -527,6 +541,7 @@ export type Repo = {
   projects: Array<Project>;
   remoteUrl: Scalars['String']['output'];
   sessions: Array<Session>;
+  webhookActive: Scalars['Boolean']['output'];
 };
 
 export type ScopeInput = {
@@ -554,6 +569,7 @@ export type Session = {
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   parentSession?: Maybe<Session>;
+  prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   status: SessionStatus;
@@ -611,6 +627,8 @@ export type SessionStatus =
   | 'completed'
   | 'creating'
   | 'failed'
+  | 'in_review'
+  | 'merged'
   | 'needs_input'
   | 'paused'
   | 'pending'
@@ -996,6 +1014,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
   moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
   pauseSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationPauseSessionArgs, 'id'>>;
+  registerRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationRegisterRepoWebhookArgs, 'repoId'>>;
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
@@ -1004,6 +1023,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
+  unregisterRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUnregisterRepoWebhookArgs, 'repoId'>>;
   updateRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUpdateRepoArgs, 'id' | 'input'>>;
   updateSessionConfig?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionConfigArgs, 'sessionId'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
@@ -1074,6 +1094,7 @@ export type RepoResolvers<ContextType = Context, ParentType extends ResolversPar
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   remoteUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
+  webhookActive?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1090,6 +1111,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   parentSession?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType>;
+  prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;

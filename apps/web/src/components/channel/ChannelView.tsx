@@ -20,6 +20,7 @@ const SESSIONS_QUERY = gql`
       tool
       model
       hosting
+      prUrl
       connection {
         state
         runtimeInstanceId

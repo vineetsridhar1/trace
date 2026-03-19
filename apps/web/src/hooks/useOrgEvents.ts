@@ -33,6 +33,8 @@ const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
   "session_paused",
   "session_resumed",
   "session_terminated",
+  "session_pr_opened",
+  "session_pr_merged",
 ]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set([
@@ -148,7 +150,8 @@ export function useOrgEvents() {
         if (event.eventType === "repo_created" || event.eventType === "repo_updated") {
           const repo = asRecord(event.payload.repo);
           if (repo && typeof repo.id === "string") {
-            upsert("repos", repo.id, repo as unknown as Repo);
+            const existing = useEntityStore.getState().repos[repo.id];
+            upsert("repos", repo.id, (existing ? { ...existing, ...repo } : repo) as unknown as Repo);
           }
         }
 
@@ -198,10 +201,14 @@ export function useOrgEvents() {
         if (SESSION_STATUS_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
           const status = statusFromEvent(event.eventType, event.payload);
           if (status) {
-            patch("sessions", event.scopeId, {
+            const sessionPatch: Record<string, unknown> = {
               status,
               updatedAt: event.timestamp,
-            });
+            };
+            if (typeof event.payload.prUrl === "string") {
+              sessionPatch.prUrl = event.payload.prUrl;
+            }
+            patch("sessions", event.scopeId, sessionPatch);
           }
         }
 

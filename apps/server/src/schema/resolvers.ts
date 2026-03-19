@@ -1,5 +1,5 @@
 import { DateTimeScalar, JSONScalar } from "./scalars.js";
-import { organizationQueries, organizationMutations } from "./organization.js";
+import { organizationQueries, organizationMutations, repoResolvers } from "./organization.js";
 import { channelQueries, channelMutations, channelSubscriptions } from "./channel.js";
 import { sessionQueries, sessionMutations, sessionSubscriptions } from "./session.js";
 import { ticketQueries, ticketMutations, ticketSubscriptions } from "./ticket.js";
@@ -12,6 +12,8 @@ import { prisma } from "../lib/db.js";
 export const resolvers = {
   DateTime: DateTimeScalar,
   JSON: JSONScalar,
+
+  ...repoResolvers,
 
   Event: {
     actor: async (event: { actorType: string; actorId: string }) => {

@@ -96,7 +96,13 @@ function handleInboxItemCreated(event: Event): void {
 }
 
 // Register the built-in handlers
-const sessionStatusEventTypes: EventType[] = ["session_paused", "session_resumed", "session_terminated"];
+const sessionStatusEventTypes: EventType[] = [
+  "session_paused",
+  "session_resumed",
+  "session_terminated",
+  "session_pr_opened",
+  "session_pr_merged",
+];
 for (const eventType of sessionStatusEventTypes) {
   registerHandler(eventType, handleSessionStatusChange);
 }

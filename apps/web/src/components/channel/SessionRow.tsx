@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Circle, GitBranch, MoreHorizontal, Trash2 } from "lucide-react";
+import { Circle, GitBranch, GitPullRequest, MoreHorizontal, Trash2 } from "lucide-react";
 import { motion, useMotionValue, useTransform, useAnimation, type PanInfo } from "framer-motion";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
@@ -23,6 +23,7 @@ function RowContent({
   const status = useEntityField("sessions", id, "status");
   const updatedAt = useEntityField("sessions", id, "updatedAt");
   const lastEventPreview = useEntityField("sessions", id, "_lastEventPreview");
+  const prUrl = useEntityField("sessions", id, "prUrl") as string | null | undefined;
   const parentSession = useEntityField("sessions", id, "parentSession") as { id: string; name: string } | null | undefined;
   const createdBy = useEntityField("sessions", id, "createdBy");
 
@@ -54,8 +55,19 @@ function RowContent({
         )}
       </div>
 
-      <span className={`hidden w-full min-w-0 self-start truncate pt-0.5 text-left text-xs sm:inline ${statusColor[status ?? "active"]}`}>
-        {statusLabel[status ?? "active"]}
+      <span className={`hidden w-full min-w-0 self-start pt-0.5 text-left text-xs sm:inline-flex sm:items-center sm:gap-1 ${statusColor[status ?? "active"]}`}>
+        {prUrl && (
+          <a
+            href={prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="hover:opacity-70"
+          >
+            <GitPullRequest size={12} />
+          </a>
+        )}
+        <span className="truncate">{statusLabel[status ?? "active"]}</span>
       </span>
 
       <div className="hidden min-w-0 w-full items-center gap-1.5 self-start pt-0.5 sm:flex">

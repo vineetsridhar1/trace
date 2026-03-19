@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type { CreateRepoInput, UpdateRepoInput, CreateProjectInput, EntityType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { organizationService } from "../services/organization.js";
+import { webhookService } from "../services/webhook.js";
 
 const projectInclude = {
   repo: true,
@@ -55,5 +56,17 @@ export const organizationMutations = {
   },
   linkEntityToProject: (_: unknown, args: { entityType: EntityType; entityId: string; projectId: string }, ctx: Context) => {
     return organizationService.linkEntityToProject(args.entityType, args.entityId, args.projectId, ctx.actorType, ctx.userId);
+  },
+  registerRepoWebhook: (_: unknown, args: { repoId: string }, ctx: Context) => {
+    return webhookService.registerGitHubWebhook(args.repoId, ctx.userId, ctx.organizationId);
+  },
+  unregisterRepoWebhook: (_: unknown, args: { repoId: string }, ctx: Context) => {
+    return webhookService.unregisterGitHubWebhook(args.repoId, ctx.userId, ctx.organizationId);
+  },
+};
+
+export const repoResolvers = {
+  Repo: {
+    webhookActive: (repo: { webhookId?: string | null }) => !!repo.webhookId,
   },
 };
