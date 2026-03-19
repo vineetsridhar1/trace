@@ -52,7 +52,7 @@ export default function AgGridTableGrid<T extends { id: string }>({
         cellClass: 'group-row',
       },
       getRowHeight: params => {
-        if (params.node.group) return 30;
+        if (params.node.group) return 40;
         return undefined;
       },
       ...agGridOptions,

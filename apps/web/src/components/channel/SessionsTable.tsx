@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Circle, GitPullRequest } from "lucide-react";
+import { Circle } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
@@ -9,6 +9,20 @@ import { statusColor, statusLabel } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
 
 type SessionRow = SessionEntity & { id: string };
+
+/** Group ordering — attention-needed first, then active, then done. */
+const statusGroupOrder: Record<string, number> = {
+  needs_input: 0,
+  creating: 1,
+  active: 2,
+  completed: 3,
+  paused: 4,
+  pending: 5,
+  in_review: 6,
+  merged: 7,
+  failed: 8,
+  unreachable: 9,
+};
 
 const columns: ColDef<SessionRow>[] = [
   {
@@ -31,29 +45,8 @@ const columns: ColDef<SessionRow>[] = [
   {
     headerName: "Status",
     field: "status",
-    width: 130,
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const { data } = params;
-      if (!data) return null;
-      const color = statusColor[data.status ?? "active"];
-      const label = statusLabel[data.status ?? "active"];
-      return (
-        <div className={`flex items-center gap-1.5 h-full text-xs ${color}`}>
-          {data.prUrl && (
-            <a
-              href={data.prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="hover:opacity-70"
-            >
-              <GitPullRequest size={12} />
-            </a>
-          )}
-          <span>{label}</span>
-        </div>
-      );
-    },
+    rowGroup: true,
+    hide: true,
   },
   {
     headerName: "Created by",
@@ -120,9 +113,13 @@ export function SessionsTable({ channelId }: { channelId: string }) {
 
   return (
     <Table
-      className="h-[calc(100vh-6rem)]"
+      className="h-[calc(100vh-48px)]"
       agGridOptions={{
         onRowClicked: (event) => {
+          if (event.node.group) {
+            event.node.setExpanded(!event.node.expanded);
+            return;
+          }
           if (event.data?.id) {
             setActiveSessionId(event.data.id);
           }
@@ -130,6 +127,33 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         rowHeight: 40,
         headerHeight: 32,
         suppressCellFocus: true,
+        getRowHeight: (params) => {
+          if (params.node.group) return 40;
+          return undefined;
+        },
+        groupDisplayType: "groupRows",
+        groupDefaultExpanded: -1,
+        groupRowRendererParams: {
+          suppressCount: true,
+          innerRenderer: (params: ICellRendererParams) => {
+            const status = params.value as string;
+            const color = statusColor[status] ?? "text-muted-foreground";
+            const label = statusLabel[status] ?? status;
+            const count = params.node.allChildrenCount ?? 0;
+            return (
+              <div className={`flex items-center gap-2 ${color}`}>
+                <Circle size={8} className="shrink-0 fill-current" />
+                <span className="text-sm font-semibold">{label}</span>
+                <span className="text-xs text-muted-foreground">{count}</span>
+              </div>
+            );
+          },
+        },
+        initialGroupOrderComparator: (params) => {
+          const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
+          const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
+          return a - b;
+        },
       }}
     />
   );

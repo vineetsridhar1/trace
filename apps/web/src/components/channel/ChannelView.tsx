@@ -9,6 +9,8 @@ import { gql } from "@urql/core";
 import { StartSessionDialog } from "./StartSessionDialog";
 import { SessionsTable } from "./SessionsTable";
 import { SessionDetailView } from "../session/SessionDetailView";
+import { SidebarTrigger } from "../ui/sidebar";
+import { ConnectionStatus } from "../ConnectionStatus";
 
 const SESSIONS_QUERY = gql`
   query Sessions($organizationId: ID!, $filters: SessionFilters) {
@@ -86,13 +88,13 @@ export function ChannelView({ channelId }: { channelId: string }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 items-center justify-between border-b border-border px-4">
-        <div className="flex items-center gap-2">
-          <Hash size={16} className="text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">
-            {channelName ?? "Channel"}
-          </h2>
-        </div>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+        <SidebarTrigger />
+        <Hash size={16} className="text-muted-foreground" />
+        <h2 className="text-sm font-semibold text-foreground">
+          {channelName ?? "Channel"}
+        </h2>
+        <ConnectionStatus />
         <StartSessionDialog channelId={channelId} />
       </div>
 

@@ -1,7 +1,7 @@
 .ag-theme-quartz {
   --ag-background-color: var(--th-surface);
   --ag-foreground-color: var(--foreground);
-  --ag-header-background-color: var(--th-surface-deep);
+  --ag-header-background-color: var(--th-surface);
   --ag-header-text-color: var(--th-muted);
 
   --ag-grid-size: 6px;
@@ -41,7 +41,7 @@
   font-size: 12px;
 }
 
-.ag-cell.center-all {
+.ag-cell {
   display: flex;
   align-items: center;
 }
@@ -60,11 +60,12 @@
 }
 
 .ag-theme-quartz .ag-row-group {
-  background-color: var(--th-surface-deep) !important;
+  background-color: var(--th-surface-mid) !important;
+  cursor: pointer;
 }
 
 .ag-theme-quartz .ag-row-group:hover {
-  background-color: var(--th-surface-deep) !important;
+  background-color: var(--th-surface-mid) !important;
 }
 
 .ag-theme-quartz,
