@@ -19,6 +19,20 @@ export type SessionEntity = Session & {
   _lastMessageAt?: string;
 };
 
+export type ThreadReplierEntity = {
+  id?: string;
+  name?: string;
+  avatarUrl?: string;
+  latestReplyAt: string;
+};
+
+export type ThreadSummaryEntity = {
+  rootEventId: string;
+  replyCount: number;
+  latestReplyAt: string;
+  repliers: ThreadReplierEntity[];
+};
+
 /** Entity types that the store manages, keyed by ID */
 export type EntityTableMap = {
   organizations: Organization;
@@ -30,6 +44,7 @@ export type EntityTableMap = {
   sessions: SessionEntity;
   tickets: Ticket;
   events: Event;
+  threadSummaries: ThreadSummaryEntity;
   inboxItems: InboxItem;
 };
 
@@ -50,6 +65,60 @@ interface EntityActions {
 
 type EntityState = Tables & EntityActions;
 
+function threadReplierKey(replier: {
+  id?: string | null;
+  name?: string | null;
+  avatarUrl?: string | null;
+}): string | null {
+  if (replier.id) return `id:${replier.id}`;
+  if (replier.name) return `name:${replier.name}`;
+  if (replier.avatarUrl) return `avatar:${replier.avatarUrl}`;
+  return null;
+}
+
+function applyReplyToThreadSummaries(
+  threadSummaries: Record<string, ThreadSummaryEntity>,
+  event: Event,
+) {
+  if (!event.parentId) return;
+
+  const existing = threadSummaries[event.parentId] ?? {
+    rootEventId: event.parentId,
+    replyCount: 0,
+    latestReplyAt: "",
+    repliers: [],
+  };
+
+  const replierKey = threadReplierKey(event.actor);
+  let repliers = existing.repliers;
+
+  if (replierKey) {
+    const current = existing.repliers.find((replier) => threadReplierKey(replier) === replierKey);
+    const nextReplier: ThreadReplierEntity = {
+      id: event.actor.id ?? undefined,
+      name: event.actor.name ?? undefined,
+      avatarUrl: event.actor.avatarUrl ?? undefined,
+      latestReplyAt:
+        current && current.latestReplyAt > event.timestamp ? current.latestReplyAt : event.timestamp,
+    };
+
+    repliers = [
+      ...existing.repliers.filter((replier) => threadReplierKey(replier) !== replierKey),
+      nextReplier,
+    ]
+      .sort((a, b) => b.latestReplyAt.localeCompare(a.latestReplyAt))
+      .slice(0, 3);
+  }
+
+  threadSummaries[event.parentId] = {
+    rootEventId: event.parentId,
+    replyCount: existing.replyCount + 1,
+    latestReplyAt:
+      existing.latestReplyAt > event.timestamp ? existing.latestReplyAt : event.timestamp,
+    repliers,
+  };
+}
+
 export const useEntityStore = create<EntityState>((set) => ({
   organizations: {},
   users: {},
@@ -60,10 +129,25 @@ export const useEntityStore = create<EntityState>((set) => ({
   sessions: {},
   tickets: {},
   events: {},
+  threadSummaries: {},
   inboxItems: {},
 
   upsert: (entityType, id, data) =>
     set((state) => {
+      if (entityType === "events") {
+        const events = { ...state.events };
+        const threadSummaries = { ...state.threadSummaries };
+        const existing = events[id];
+        const event = data as EntityTableMap["events"];
+
+        events[id] = event;
+        if (!existing) {
+          applyReplyToThreadSummaries(threadSummaries, event);
+        }
+
+        return { events, threadSummaries };
+      }
+
       const table = { ...(state[entityType] as Record<string, unknown>) };
       table[id] = data;
       return { [entityType]: table } as Partial<Tables>;
@@ -71,6 +155,22 @@ export const useEntityStore = create<EntityState>((set) => ({
 
   upsertMany: (entityType, items) =>
     set((state) => {
+      if (entityType === "events") {
+        const events = { ...state.events };
+        const threadSummaries = { ...state.threadSummaries };
+
+        for (const item of items) {
+          const existing = events[item.id];
+          const event = item as EntityTableMap["events"] & { id: string };
+          events[item.id] = event;
+          if (!existing) {
+            applyReplyToThreadSummaries(threadSummaries, event);
+          }
+        }
+
+        return { events, threadSummaries };
+      }
+
       const table = { ...(state[entityType] as Record<string, unknown>) };
       for (const item of items) {
         table[item.id] = item;

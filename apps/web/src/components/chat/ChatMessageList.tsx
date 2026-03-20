@@ -23,7 +23,17 @@ export function ChatMessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Scroll to bottom instantly when entering a chat
+  const prevChatIdRef = useRef(chatId);
+  useEffect(() => {
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView();
+    }
+    prevChatIdRef.current = chatId;
+    wasAtBottomRef.current = true;
+  }, [chatId, loading]);
+
+  // Auto-scroll to bottom smoothly when new messages arrive
   useEffect(() => {
     if (wasAtBottomRef.current && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });

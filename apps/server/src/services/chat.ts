@@ -417,36 +417,41 @@ export class ChatService {
     actorType: ActorType,
     actorId: string,
   ) {
-    const chat = await prisma.chat.findFirstOrThrow({
-      where: {
-        id: chatId,
-        organizationId,
-        members: { some: { userId: actorId, leftAt: null } },
-      },
-      select: { type: true, organizationId: true },
+    return prisma.$transaction(async (tx) => {
+      const chat = await tx.chat.findFirstOrThrow({
+        where: {
+          id: chatId,
+          organizationId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
+        select: { type: true, organizationId: true },
+      });
+
+      if (chat.type !== "group") {
+        throw new Error("Cannot rename a DM");
+      }
+
+      const updated = await tx.chat.update({
+        where: { id: chatId },
+        data: { name },
+        include: { members: { where: { leftAt: null } } },
+      });
+
+      await eventService.create(
+        {
+          organizationId: chat.organizationId,
+          scopeType: "chat",
+          scopeId: chatId,
+          eventType: "chat_renamed",
+          payload: { name },
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return updated;
     });
-
-    if (chat.type !== "group") {
-      throw new Error("Cannot rename a DM");
-    }
-
-    const updated = await prisma.chat.update({
-      where: { id: chatId },
-      data: { name },
-      include: { members: { where: { leftAt: null } } },
-    });
-
-    await eventService.create({
-      organizationId: chat.organizationId,
-      scopeType: "chat",
-      scopeId: chatId,
-      eventType: "chat_renamed",
-      payload: { name },
-      actorType,
-      actorId,
-    });
-
-    return updated;
   }
 
   async getChats(organizationId: string, userId: string) {

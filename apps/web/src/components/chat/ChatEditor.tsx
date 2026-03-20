@@ -11,7 +11,7 @@ import { useAuthStore } from "../../stores/auth";
 Quill.register("modules/mention", Mention);
 
 interface ChatEditorProps {
-  onSubmit: (html: string) => void;
+  onSubmit: (html: string) => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
 }
@@ -57,17 +57,27 @@ export function ChatEditor({ onSubmit, placeholder = "Type a message...", disabl
   const membersRef = useRef(members);
   const currentUserIdRef = useRef(currentUserId);
 
-  useEffect(() => {
-    membersRef.current = members;
-  }, [members]);
-
-  useEffect(() => {
-    currentUserIdRef.current = currentUserId;
-  }, [currentUserId]);
+  useEffect(() => { membersRef.current = members; }, [members]);
+  useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
 
   const modules = useMemo(
     () => ({
       toolbar: false,
+      keyboard: {
+        bindings: {
+          // Override Enter to do nothing in Quill — we handle submit in onKeyDown
+          enter: {
+            key: "Enter",
+            handler: () => false,
+          },
+          // Allow Shift+Enter to insert a newline
+          shiftEnter: {
+            key: "Enter",
+            shiftKey: true,
+            handler: () => true,
+          },
+        },
+      },
       mention: {
         allowedChars: /^[A-Za-z\s0-9-]*$/,
         mentionDenotationChars: ["@"],
@@ -104,6 +114,12 @@ export function ChatEditor({ onSubmit, placeholder = "Type a message...", disabl
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // Stop modifier shortcuts (Cmd+B, Cmd+I) from propagating to app-level handlers
+      if (e.metaKey || e.ctrlKey) {
+        e.stopPropagation();
+      }
+
+      // Enter to submit (Quill's Enter is suppressed via keyboard binding above)
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         const editor = quillRef.current?.getEditor();
@@ -113,8 +129,9 @@ export function ChatEditor({ onSubmit, placeholder = "Type a message...", disabl
         const text = editor.getText().trim();
         if (!text) return;
 
-        onSubmit(html);
-        setValue("");
+        void Promise.resolve(onSubmit(html))
+          .then(() => setValue(""))
+          .catch(() => undefined);
       }
     },
     [onSubmit, disabled],

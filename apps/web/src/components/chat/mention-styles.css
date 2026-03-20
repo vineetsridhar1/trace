@@ -73,16 +73,12 @@
   font-size: 14px;
 }
 
-.ql-mention-list-item:hover {
-  background-color: var(--color-muted, #3f3f46);
+.ql-mention-list-item.selected {
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .ql-mention-list-item:active {
-  background-color: color-mix(in srgb, var(--color-muted, #3f3f46) 60%, transparent);
-}
-
-.ql-mention-list-container .selected {
-  background-color: var(--color-muted, #3f3f46);
+  background-color: rgba(255, 255, 255, 0.06) !important;
 }
 
 /* Custom scrollbar */

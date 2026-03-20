@@ -5,6 +5,7 @@ import { useUIStore } from "../../stores/ui";
 import { useEntityStore } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
+import type { Chat } from "@trace/gql";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -32,6 +33,14 @@ const ORG_MEMBERS_QUERY = gql`
 const CREATE_CHAT_MUTATION = gql`
   mutation CreateChat($input: CreateChatInput!) {
     createChat(input: $input) {
+      id
+    }
+  }
+`;
+
+const CHAT_QUERY = gql`
+  query Chat($id: ID!) {
+    chat(id: $id) {
       id
       type
       name
@@ -64,7 +73,6 @@ export function CreateChatDialog() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const userId = useAuthStore((s) => s.user?.id);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
-  const upsert = useEntityStore((s) => s.upsert);
 
   const fetchMembers = useCallback(async () => {
     if (!activeOrgId) return;
@@ -93,6 +101,16 @@ export function CreateChatDialog() {
     });
   }
 
+  const hydrateChatIfMissing = useCallback(async (chatId: string) => {
+    if (useEntityStore.getState().chats[chatId]) return;
+
+    const result = await client.query(CHAT_QUERY, { id: chatId }).toPromise();
+    const chat = result.data?.chat;
+    if (chat?.id) {
+      useEntityStore.getState().upsert("chats", chat.id, chat as Chat);
+    }
+  }, []);
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (selectedIds.size === 0 || !activeOrgId) return;
@@ -108,10 +126,11 @@ export function CreateChatDialog() {
         })
         .toPromise();
 
-      if (result.data?.createChat) {
-        upsert("chats", result.data.createChat.id, result.data.createChat);
+      const chatId = result.data?.createChat?.id;
+      if (chatId) {
         setOpen(false);
-        setActiveChatId(result.data.createChat.id);
+        setActiveChatId(chatId);
+        await hydrateChatIfMissing(chatId);
       }
     } finally {
       setCreating(false);

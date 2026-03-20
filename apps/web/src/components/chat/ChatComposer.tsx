@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Send } from "lucide-react";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
+import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { ChatEditor } from "./ChatEditor";
 
@@ -28,13 +29,21 @@ export function ChatComposer({
 
       setSending(true);
       try {
-        await client
+        const result = await client
           .mutation(SEND_CHAT_MESSAGE, {
             chatId,
             html,
             parentId: parentId ?? null,
           })
           .toPromise();
+
+        if (result.error) {
+          throw result.error;
+        }
+      } catch (error) {
+        console.error("Failed to send chat message", error);
+        toast.error(error instanceof Error ? error.message : "Failed to send message");
+        throw error;
       } finally {
         setSending(false);
       }

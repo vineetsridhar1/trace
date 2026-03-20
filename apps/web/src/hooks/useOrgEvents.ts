@@ -157,19 +157,19 @@ export function useOrgEvents() {
         }
 
         // Chat events
-        if (event.eventType === ("chat_created" as EventType)) {
+        if (event.eventType === "chat_created") {
           const chat = asRecord(event.payload.chat);
           if (chat && typeof chat.id === "string") {
             upsert("chats", chat.id, chat as unknown as Chat);
           }
         }
-        if (event.eventType === ("chat_renamed" as EventType)) {
-          if (event.scopeType === ("chat" as ScopeType) && typeof event.payload.name === "string") {
+        if (event.eventType === "chat_renamed") {
+          if (event.scopeType === "chat" && typeof event.payload.name === "string") {
             patch("chats", event.scopeId, { name: event.payload.name } as Partial<Chat>);
           }
         }
-        if (event.eventType === ("chat_member_added" as EventType) || event.eventType === ("chat_member_removed" as EventType)) {
-          if (event.scopeType === ("chat" as ScopeType)) {
+        if (event.eventType === "chat_member_added" || event.eventType === "chat_member_removed") {
+          if (event.scopeType === "chat") {
             const members = event.payload.members;
             if (Array.isArray(members)) {
               patch("chats", event.scopeId, { members } as Partial<Chat>);
