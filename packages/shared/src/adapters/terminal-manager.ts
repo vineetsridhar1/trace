@@ -39,7 +39,13 @@ export class TerminalManager {
     }
     const safeCwd = cwdExists ? cwd : os.homedir();
 
-    const terminal = pty.spawn(this.defaultShell, [], {
+    // Spawn as a login shell so macOS runs path_helper (/etc/zprofile) and the
+    // user's full environment is available.  Without -l, Electron's minimal
+    // process.env can leave PATH incomplete, causing prompt themes that shell
+    // out to git/node/etc. to hang or produce no output (blinking cursor).
+    const args = os.platform() !== "win32" ? ["-l"] : [];
+
+    const terminal = pty.spawn(this.defaultShell, args, {
       name: "xterm-256color",
       cols,
       rows,
