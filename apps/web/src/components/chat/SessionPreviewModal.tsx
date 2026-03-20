@@ -70,7 +70,7 @@ export function SessionPreviewModal({ sessionId, channelId, children }: SessionP
               {/* Modal */}
               <motion.div
                 className="fixed z-50 rounded-2xl bg-background shadow-2xl overflow-hidden ring-1 ring-border"
-                style={{ width: "80vw", height: "85vh", transformOrigin: "center center" }}
+                style={{ width: "90vw", height: "92vh", transformOrigin: "center center" }}
                 initial={{
                   opacity: 0,
                   scale: 0,
@@ -103,7 +103,7 @@ export function SessionPreviewModal({ sessionId, channelId, children }: SessionP
               {/* Close button */}
               <motion.button
                 className="fixed z-50 rounded-full p-2 bg-background hover:bg-muted shadow-lg ring-1 ring-border"
-                style={{ top: "calc(7.5vh)", left: "calc(50% + 40vw + 12px)" }}
+                style={{ top: "calc(4vh)", left: "calc(50% + 45vw + 12px)" }}
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0 }}
@@ -117,7 +117,7 @@ export function SessionPreviewModal({ sessionId, channelId, children }: SessionP
               {/* Go to session button */}
               <motion.button
                 className="fixed z-50 rounded-full p-2 bg-background hover:bg-muted shadow-lg ring-1 ring-border"
-                style={{ top: "calc(7.5vh + 44px)", left: "calc(50% + 40vw + 12px)" }}
+                style={{ top: "calc(4vh + 44px)", left: "calc(50% + 45vw + 12px)" }}
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0 }}
