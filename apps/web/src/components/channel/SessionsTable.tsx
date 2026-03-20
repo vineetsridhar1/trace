@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Circle } from "lucide-react";
+import { Circle, Loader2 } from "lucide-react";
 import type {
   ColDef,
   GetContextMenuItemsParams,
@@ -10,13 +10,13 @@ import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
-import { statusColor, statusLabel, getDisplayStatus } from "../session/sessionStatus";
+import { statusColor, statusLabel, getDisplayStatus, isReviewAndActive } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
 import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
 import { useLongPress } from "../../hooks/useLongPress";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
-type SessionRow = SessionEntity & { id: string };
+type SessionRow = SessionEntity & { id: string; _reviewActive?: boolean };
 
 /** Round a timestamp down to a 2-minute bucket so sort order stays stable
  *  while messages stream in — rows only reorder when they cross a boundary. */
@@ -53,7 +53,11 @@ const columns: ColDef<SessionRow>[] = [
       const color = statusColor[data.status ?? "active"];
       return (
         <div className="flex items-center gap-2 h-full">
-          <Circle size={8} className={`shrink-0 fill-current ${color}`} />
+          {data._reviewActive ? (
+            <Loader2 size={8} className={`shrink-0 animate-spin ${color}`} />
+          ) : (
+            <Circle size={8} className={`shrink-0 fill-current ${color}`} />
+          )}
           <span className="truncate text-sm text-foreground">{data.name}</span>
         </div>
       );
@@ -144,6 +148,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       .map((s) => ({
         ...s,
         status: getDisplayStatus(s.status, s.prUrl as string | null | undefined),
+        _reviewActive: isReviewAndActive(s.status, s.prUrl as string | null | undefined),
       } as SessionRow))
       .sort((a, b) => {
         const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
