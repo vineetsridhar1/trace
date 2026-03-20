@@ -37,6 +37,10 @@ const SESSIONS_QUERY = gql`
         name
         avatarUrl
       }
+      repo {
+        id
+        name
+      }
       channel {
         id
       }
