@@ -1,5 +1,15 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
+const scalars = {
+  DateTime: "string",
+  JSON: "../json#JsonValue",
+} as const;
+
+const clientScalars = {
+  DateTime: "string",
+  JSON: "../../json#JsonValue",
+} as const;
+
 const config: CodegenConfig = {
   ignoreNoDocuments: true,
   schema: "src/schema.graphql",
@@ -11,10 +21,7 @@ const config: CodegenConfig = {
         // Keeps @trace/gql "no runtime code": enums become string unions instead
         // of emitted JS enums.
         enumsAsTypes: true,
-        scalars: {
-          DateTime: "string",
-          JSON: "Record<string, unknown>",
-        },
+        scalars,
       },
     },
     // Server resolver types — used by @trace/server
@@ -24,10 +31,7 @@ const config: CodegenConfig = {
         useIndexSignature: true,
         contextType: "../context#Context",
         enumsAsTypes: true,
-        scalars: {
-          DateTime: "string",
-          JSON: "Record<string, unknown>",
-        },
+        scalars,
       },
     },
     // Client hooks and document nodes — used by @trace/web
@@ -36,10 +40,7 @@ const config: CodegenConfig = {
       documents: ["../../apps/web/src/**/*.tsx", "../../apps/web/src/**/*.ts"],
       config: {
         enumsAsTypes: true,
-        scalars: {
-          DateTime: "string",
-          JSON: "Record<string, unknown>",
-        },
+        scalars: clientScalars,
       },
     },
   },

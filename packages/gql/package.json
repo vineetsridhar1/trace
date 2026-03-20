@@ -17,6 +17,7 @@
     "lint": "pnpm codegen && tsc -b"
   },
   "dependencies": {
+    "dataloader": "^2.2.3",
     "graphql": "^16.10.0"
   },
   "devDependencies": {

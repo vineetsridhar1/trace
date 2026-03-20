@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle } from "lucide-react";
-import type { ColDef, GetContextMenuItemsParams, ICellRendererParams, MenuItemDef } from "ag-grid-community";
+import type {
+  ColDef,
+  GetContextMenuItemsParams,
+  ICellRendererParams,
+  MenuItemDef,
+} from "ag-grid-community";
 import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
@@ -9,6 +14,7 @@ import { statusColor, statusLabel } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
 import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
 import { useLongPress } from "../../hooks/useLongPress";
+import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
 type SessionRow = SessionEntity & { id: string };
 
@@ -64,21 +70,29 @@ const columns: ColDef<SessionRow>[] = [
     field: "createdBy",
     width: 150,
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const createdBy = params.data?.createdBy;
+      const createdBy = params.data?.createdBy as
+        | { id: string; name: string; avatarUrl?: string | null }
+        | undefined;
       if (!createdBy) return null;
       return (
-        <div className="flex items-center gap-1.5 h-full">
-          {createdBy.avatarUrl && (
-            <img
-              src={createdBy.avatarUrl}
-              alt={createdBy.name}
-              className="h-4 w-4 rounded-full"
-            />
-          )}
-          <span className="truncate text-xs text-muted-foreground">
-            {createdBy.name}
-          </span>
-        </div>
+        <UserProfileChatCard
+          userId={createdBy.id}
+          fallbackName={createdBy.name}
+          fallbackAvatarUrl={createdBy.avatarUrl}
+        >
+          <div className="flex items-center gap-1.5 h-full cursor-pointer">
+            {createdBy.avatarUrl && (
+              <img
+                src={createdBy.avatarUrl}
+                alt={createdBy.name}
+                className="h-4 w-4 rounded-full"
+              />
+            )}
+            <span className="truncate text-xs text-muted-foreground hover:underline">
+              {createdBy.name}
+            </span>
+          </div>
+        </UserProfileChatCard>
       );
     },
   },
@@ -90,11 +104,7 @@ const columns: ColDef<SessionRow>[] = [
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
       const lastMessageAt = params.data?._lastMessageAt ?? params.data?.updatedAt;
       if (!lastMessageAt) return null;
-      return (
-        <span className="text-xs text-muted-foreground">
-          {timeAgo(lastMessageAt)}
-        </span>
-      );
+      return <span className="text-xs text-muted-foreground">{timeAgo(lastMessageAt)}</span>;
     },
     comparator: (a: string | undefined, b: string | undefined) => {
       return bucketize(a) - bucketize(b);
@@ -135,7 +145,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const longPressFired = useLongPress({ ref: gridRef, onLongPress: setDeleteFromRowId });
 
   const getContextMenuItems = useCallback(
-    (params: GetContextMenuItemsParams<SessionRow>): (MenuItemDef | string)[] => {
+    (params: GetContextMenuItemsParams<SessionRow>): MenuItemDef<SessionRow>[] => {
       if (!params.node?.data) return [];
       const session = params.node.data;
       return [
@@ -151,7 +161,10 @@ export function SessionsTable({ channelId }: { channelId: string }) {
 
   const agGridOptions = useMemo(
     () => ({
-      onRowClicked: (event: { node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void }; data?: SessionRow }) => {
+      onRowClicked: (event: {
+        node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void };
+        data?: SessionRow;
+      }) => {
         if (longPressFired.current) {
           longPressFired.current = false;
           return;
@@ -190,7 +203,10 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           );
         },
       },
-      initialGroupOrderComparator: (params: { nodeA: { key?: string | null }; nodeB: { key?: string | null } }) => {
+      initialGroupOrderComparator: (params: {
+        nodeA: { key?: string | null };
+        nodeB: { key?: string | null };
+      }) => {
         const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
         const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
         return a - b;
@@ -202,10 +218,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   return (
     <>
       <div ref={gridRef}>
-        <Table
-          className="h-[calc(100dvh-48px)]"
-          agGridOptions={agGridOptions}
-        />
+        <Table className="h-[calc(100dvh-48px)]" agGridOptions={agGridOptions} />
       </div>
       {deleteTarget && (
         <DeleteSessionDialog

@@ -1,4 +1,50 @@
-export type { CodingToolAdapter, OutputCallback, RunOptions, ToolOutput, AssistantEvent, ResultEvent, ErrorEvent, MessageBlock, ContentBlock, ToolUseBlock, ToolResultBlock, QuestionOption, Question, QuestionBlock, PlanBlock } from "./adapters/coding-tool.js";
+export type {
+  CodingToolAdapter,
+  OutputCallback,
+  RunOptions,
+  ToolOutput,
+  AssistantEvent,
+  ResultEvent,
+  ErrorEvent,
+  MessageBlock,
+  ContentBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  QuestionOption,
+  Question,
+  QuestionBlock,
+  PlanBlock,
+} from "./adapters/coding-tool.js";
 export { hasPlanBlock, hasQuestionBlock, parseQuestion } from "./adapters/coding-tool.js";
-export type { BridgeClient, BridgeCommand, BridgeMessage, BridgeRunCommand, BridgeSendCommand, BridgePrepareCommand, BridgeTerminateCommand, BridgePauseCommand, BridgeResumeCommand, BridgeDeleteCommand, BridgeListBranchesCommand, BridgeRuntimeHello, BridgeRuntimeHeartbeat, BridgeRegisterSession, BridgeSessionOutput, BridgeSessionComplete, BridgeWorkspaceReady, BridgeWorkspaceFailed, BridgeToolSessionId, BridgeRepoLinked, BridgeBranchesResult, BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand } from "./bridge.js";
+export type {
+  BridgeClient,
+  BridgeCommand,
+  BridgeMessage,
+  BridgeRunCommand,
+  BridgeSendCommand,
+  BridgePrepareCommand,
+  BridgeTerminateCommand,
+  BridgePauseCommand,
+  BridgeResumeCommand,
+  BridgeDeleteCommand,
+  BridgeListBranchesCommand,
+  BridgeRuntimeHello,
+  BridgeRuntimeHeartbeat,
+  BridgeRegisterSession,
+  BridgeSessionOutput,
+  BridgeSessionComplete,
+  BridgeWorkspaceReady,
+  BridgeWorkspaceFailed,
+  BridgeToolSessionId,
+  BridgeRepoLinked,
+  BridgeBranchesResult,
+  BridgeTerminalCreateCommand,
+  BridgeTerminalInputCommand,
+  BridgeTerminalResizeCommand,
+  BridgeTerminalDestroyCommand,
+} from "./bridge.js";
 export { parseBranchOutput } from "./bridge.js";
+export type { ModelOption } from "./models.js";
+export { getModelsForTool, getDefaultModel, getModelLabel, isSupportedModel } from "./models.js";
+export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
+export { asJsonObject, isJsonObject } from "./json.js";

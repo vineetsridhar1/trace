@@ -6,27 +6,33 @@ import type { ActivePage } from "../stores/ui";
 function parseNavFromPath(path: string): {
   channelId: string | null;
   sessionId: string | null;
+  chatId: string | null;
   page: ActivePage;
 } {
   // /settings
   if (path.startsWith("/settings")) {
-    return { channelId: null, sessionId: null, page: "settings" };
+    return { channelId: null, sessionId: null, chatId: null, page: "settings" };
   }
   // /inbox
   if (path.startsWith("/inbox")) {
-    return { channelId: null, sessionId: null, page: "inbox" };
+    return { channelId: null, sessionId: null, chatId: null, page: "inbox" };
+  }
+  // /dm/:chatId
+  const chatMatch = path.match(/^\/dm\/([^/]+)/);
+  if (chatMatch) {
+    return { channelId: null, sessionId: null, chatId: chatMatch[1], page: "main" };
   }
   // /c/:channelId/s/:sessionId
   const sessionMatch = path.match(/^\/c\/([^/]+)\/s\/([^/]+)/);
   if (sessionMatch) {
-    return { channelId: sessionMatch[1], sessionId: sessionMatch[2], page: "main" };
+    return { channelId: sessionMatch[1], sessionId: sessionMatch[2], chatId: null, page: "main" };
   }
   // /c/:channelId
   const channelMatch = path.match(/^\/c\/([^/]+)/);
   if (channelMatch) {
-    return { channelId: channelMatch[1], sessionId: null, page: "main" };
+    return { channelId: channelMatch[1], sessionId: null, chatId: null, page: "main" };
   }
-  return { channelId: null, sessionId: null, page: "main" };
+  return { channelId: null, sessionId: null, chatId: null, page: "main" };
 }
 
 /**
@@ -39,9 +45,9 @@ export function useHistorySync() {
 
   useEffect(() => {
     // Initialize from URL (or fall back to localStorage)
-    const { channelId, sessionId, page } = parseNavFromPath(window.location.pathname);
+    const { channelId, sessionId, chatId, page } = parseNavFromPath(window.location.pathname);
     const initialChannel =
-      (page === "settings" || page === "inbox") ? null : (channelId ?? localStorage.getItem("trace:activeChannelId"));
+      (page === "settings" || page === "inbox" || chatId) ? null : (channelId ?? localStorage.getItem("trace:activeChannelId"));
 
     // Replace current history entry with proper state
     let path: string;
@@ -49,6 +55,8 @@ export function useHistorySync() {
       path = "/settings";
     } else if (page === "inbox") {
       path = "/inbox";
+    } else if (chatId) {
+      path = `/dm/${chatId}`;
     } else if (initialChannel && sessionId) {
       path = `/c/${initialChannel}/s/${sessionId}`;
     } else if (initialChannel) {
@@ -57,26 +65,27 @@ export function useHistorySync() {
       path = "/";
     }
     history.replaceState(
-      { channelId: initialChannel, sessionId, page },
+      { channelId: initialChannel, sessionId, page, chatId },
       "",
       path,
     );
 
-    restoreNav(initialChannel, sessionId, page);
+    restoreNav(initialChannel, sessionId, page, chatId);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
         channelId: string | null;
         sessionId: string | null;
+        chatId?: string | null;
         page?: ActivePage;
       } | null;
 
       if (state) {
-        restoreNav(state.channelId, state.sessionId, state.page);
+        restoreNav(state.channelId, state.sessionId, state.page, state.chatId);
       } else {
         // No state — parse from URL
         const nav = parseNavFromPath(window.location.pathname);
-        restoreNav(nav.channelId, nav.sessionId, nav.page);
+        restoreNav(nav.channelId, nav.sessionId, nav.page, nav.chatId);
       }
     }
 

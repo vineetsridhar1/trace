@@ -153,3 +153,34 @@ export const DESTROY_TERMINAL_MUTATION = gql`
     destroyTerminal(terminalId: $terminalId)
   }
 `;
+
+export const ORG_MEMBERS_QUERY = gql`
+  query OrgMembers($id: ID!) {
+    organization(id: $id) {
+      id
+      members {
+        id
+        name
+        email
+        avatarUrl
+        role
+      }
+    }
+  }
+`;
+
+export const EDIT_CHAT_MESSAGE_MUTATION = gql`
+  mutation EditChatMessage($messageId: ID!, $html: String!) {
+    editChatMessage(messageId: $messageId, html: $html) {
+      id
+    }
+  }
+`;
+
+export const DELETE_CHAT_MESSAGE_MUTATION = gql`
+  mutation DeleteChatMessage($messageId: ID!) {
+    deleteChatMessage(messageId: $messageId) {
+      id
+    }
+  }
+`;

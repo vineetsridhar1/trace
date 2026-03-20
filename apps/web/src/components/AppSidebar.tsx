@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Channel, Repo, InboxItem } from "@trace/gql";
+import type { Channel, Chat, Repo, InboxItem } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
@@ -9,7 +9,9 @@ import { gql } from "@urql/core";
 import { OrgSwitcher } from "./sidebar/OrgSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
 import { ChannelItem } from "./sidebar/ChannelItem";
+import { ChatItem } from "./sidebar/ChatItem";
 import { CreateChannelDialog } from "./sidebar/CreateChannelDialog";
+import { CreateChatDialog } from "./sidebar/CreateChatDialog";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
 import { InboxButton } from "./sidebar/InboxButton";
 import {
@@ -46,6 +48,26 @@ const REPOS_QUERY = gql`
   }
 `;
 
+const CHATS_QUERY = gql`
+  query Chats($organizationId: ID!) {
+    chats(organizationId: $organizationId) {
+      id
+      type
+      name
+      members {
+        user {
+          id
+          name
+          avatarUrl
+        }
+        joinedAt
+      }
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 const INBOX_ITEMS_QUERY = gql`
   query InboxItems($organizationId: ID!) {
     inboxItems(organizationId: $organizationId) {
@@ -69,6 +91,8 @@ export function AppSidebar() {
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const activeChannelId = useUIStore((s) => s.activeChannelId);
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
+  const activeChatId = useUIStore((s) => s.activeChatId);
+  const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const refreshTick = useUIStore((s) => s.refreshTick);
   const [peeking, setPeeking] = useState(false);
   const { state } = useSidebar();
@@ -92,6 +116,15 @@ export function AppSidebar() {
     }
   }, [activeOrgId, upsertMany]);
 
+  const fetchChats = useCallback(async () => {
+    if (!activeOrgId) return;
+    const result = await client.query(CHATS_QUERY, { organizationId: activeOrgId }).toPromise();
+
+    if (result.data?.chats) {
+      upsertMany("chats", result.data.chats as Array<Chat & { id: string }>);
+    }
+  }, [activeOrgId, upsertMany]);
+
   const fetchInboxItems = useCallback(async () => {
     if (!activeOrgId) return;
     const result = await client.query(INBOX_ITEMS_QUERY, { organizationId: activeOrgId }).toPromise();
@@ -103,14 +136,17 @@ export function AppSidebar() {
 
   useEffect(() => {
     fetchChannels();
+    fetchChats();
     fetchRepos();
     fetchInboxItems();
-  }, [fetchChannels, fetchRepos, fetchInboxItems, refreshTick]);
+  }, [fetchChannels, fetchChats, fetchRepos, fetchInboxItems, refreshTick]);
 
   // Close peek when sidebar gets pinned open
   useEffect(() => {
     if (state === "expanded") setPeeking(false);
   }, [state]);
+
+  const chatIds = useEntityIds("chats");
 
   const sortedIds = useEntityIds(
     "channels",
@@ -150,6 +186,29 @@ export function AppSidebar() {
               </SidebarMenu>
               {sortedIds.length === 0 && (
                 <p className="px-2 py-4 text-center text-xs text-muted-foreground">No channels yet</p>
+              )}
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup>
+            <div className="flex items-center justify-between pr-1">
+              <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Direct Messages
+              </SidebarGroupLabel>
+              <CreateChatDialog />
+            </div>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {chatIds.map((id) => (
+                  <ChatItem
+                    key={id}
+                    id={id}
+                    isActive={id === activeChatId}
+                    onClick={() => setActiveChatId(id)}
+                  />
+                ))}
+              </SidebarMenu>
+              {chatIds.length === 0 && (
+                <p className="px-2 py-4 text-center text-xs text-muted-foreground">No conversations yet</p>
               )}
             </SidebarGroupContent>
           </SidebarGroup>

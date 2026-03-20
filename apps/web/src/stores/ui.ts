@@ -7,31 +7,43 @@ interface UIState {
   setActivePage: (page: ActivePage) => void;
   activeChannelId: string | null;
   setActiveChannelId: (id: string | null) => void;
+  activeChatId: string | null;
+  setActiveChatId: (id: string | null) => void;
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
+  activeThreadId: string | null;
+  setActiveThreadId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
   /** Internal: update state without pushing browser history (used by popstate handler) */
-  _restoreNav: (channelId: string | null, sessionId: string | null, page?: ActivePage) => void;
+  _restoreNav: (channelId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null) => void;
 }
 
-export function buildPath(channelId: string | null, sessionId: string | null, page: ActivePage = "main"): string {
+export function buildPath(
+  channelId: string | null,
+  sessionId: string | null,
+  page: ActivePage = "main",
+  chatId: string | null = null,
+): string {
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
+  if (chatId) return `/dm/${chatId}`;
   if (channelId && sessionId) return `/c/${channelId}/s/${sessionId}`;
   if (channelId) return `/c/${channelId}`;
   return "/";
 }
 
-function pushNav(channelId: string | null, sessionId: string | null, page: ActivePage = "main") {
-  const path = buildPath(channelId, sessionId, page);
-  history.pushState({ channelId, sessionId, page }, "", path);
+function pushNav(channelId: string | null, sessionId: string | null, page: ActivePage = "main", chatId: string | null = null) {
+  const path = buildPath(channelId, sessionId, page, chatId);
+  history.pushState({ channelId, sessionId, page, chatId }, "", path);
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
   activePage: "main",
   activeChannelId: null, // initialized from URL in useHistorySync
+  activeChatId: null,
   activeSessionId: null,
+  activeThreadId: null,
   refreshTick: 0,
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
@@ -44,7 +56,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     } else {
       const channelId = get().activeChannelId;
       const sessionId = get().activeSessionId;
-      pushNav(channelId, sessionId, "main");
+      const chatId = get().activeChatId;
+      pushNav(channelId, sessionId, "main", chatId);
     }
   },
 
@@ -54,9 +67,13 @@ export const useUIStore = create<UIState>((set, get) => ({
     } else {
       localStorage.removeItem("trace:activeChannelId");
     }
-    const sessionId = null; // switching channels clears session
-    set({ activePage: "main", activeChannelId: id, activeSessionId: sessionId });
-    pushNav(id, sessionId);
+    set({ activePage: "main", activeChannelId: id, activeChatId: null, activeSessionId: null, activeThreadId: null });
+    pushNav(id, null);
+  },
+
+  setActiveChatId: (id) => {
+    set({ activePage: "main", activeChatId: id, activeChannelId: null, activeSessionId: null, activeThreadId: null });
+    pushNav(null, null, "main", id);
   },
 
   setActiveSessionId: (id) => {
@@ -65,17 +82,27 @@ export const useUIStore = create<UIState>((set, get) => ({
     pushNav(channelId, id);
   },
 
-  _restoreNav: (channelId, sessionId, page) => {
+  setActiveThreadId: (id) => {
+    set({ activeThreadId: id });
+  },
+
+  _restoreNav: (channelId, sessionId, page, chatId) => {
     if (channelId) {
       localStorage.setItem("trace:activeChannelId", channelId);
     }
-    set({ activePage: page ?? "main", activeChannelId: channelId, activeSessionId: sessionId });
+    set({
+      activePage: page ?? "main",
+      activeChannelId: channelId,
+      activeSessionId: sessionId,
+      activeChatId: chatId ?? null,
+      activeThreadId: null,
+    });
   },
 }));
 
 /** Navigate to a session atomically — single state update, single history entry. */
 export function navigateToSession(channelId: string | null, sessionId: string): void {
-  useUIStore.getState()._restoreNav(channelId, sessionId, "main");
+  useUIStore.getState()._restoreNav(channelId, sessionId, "main", null);
   const path = buildPath(channelId, sessionId, "main");
-  history.pushState({ channelId, sessionId, page: "main" }, "", path);
+  history.pushState({ channelId, sessionId, page: "main", chatId: null }, "", path);
 }

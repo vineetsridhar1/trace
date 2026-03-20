@@ -1,7 +1,7 @@
 import type { StartSessionInput, ActorType } from "@trace/gql";
 import type { SessionStatus, EventType, CodingTool } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-import { hasQuestionBlock, hasPlanBlock } from "@trace/shared";
+import { getDefaultModel, hasQuestionBlock, hasPlanBlock, isSupportedModel } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
@@ -55,7 +55,13 @@ function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
 }
 
-const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true, parentSession: true, childSessions: true } as const;
+const SESSION_INCLUDE = {
+  createdBy: true,
+  repo: true,
+  channel: true,
+  parentSession: true,
+  childSessions: true,
+} as const;
 
 /** Instruction appended to the initial session prompt so the AI generates a title inline. */
 const TITLE_INSTRUCTION = `\n\nIMPORTANT: At the very beginning of your first response, output a short title (5-8 words) for this task wrapped in XML tags like this: <session-title>Your title here</session-title>. Then continue with your normal response.`;
@@ -134,6 +140,13 @@ function buildMigrationPrompt(context: string | null): string {
   return `${context}\n\nContinue this session on the new runtime.`;
 }
 
+function validateModelForTool(tool: string, model: string): string {
+  if (!isSupportedModel(tool, model)) {
+    throw new Error(`Unsupported model "${model}" for tool "${tool}"`);
+  }
+  return model;
+}
+
 const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["failed", "merged"];
 
 function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
@@ -141,13 +154,25 @@ function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
 }
 
 export class SessionService {
-  async list(organizationId: string, filters?: { status?: string | null; tool?: string | null; repoId?: string | null; channelId?: string | null }) {
+  async list(
+    organizationId: string,
+    filters?: {
+      status?: string | null;
+      tool?: string | null;
+      repoId?: string | null;
+      channelId?: string | null;
+    },
+  ) {
     const where: Record<string, unknown> = { organizationId };
     if (filters?.status) where.status = filters.status;
     if (filters?.tool) where.tool = filters.tool;
     if (filters?.repoId) where.repoId = filters.repoId;
     if (filters?.channelId) where.channelId = filters.channelId;
-    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: SESSION_INCLUDE });
+    return prisma.session.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      include: SESSION_INCLUDE,
+    });
   }
 
   async get(id: string) {
@@ -157,10 +182,17 @@ export class SessionService {
   async listByUser(organizationId: string, userId: string, status?: string | null) {
     const where: Record<string, unknown> = { organizationId, createdById: userId };
     if (status) where.status = status;
-    return prisma.session.findMany({ where, orderBy: { updatedAt: "desc" }, include: SESSION_INCLUDE });
+    return prisma.session.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      include: SESSION_INCLUDE,
+    });
   }
 
   async start(input: StartSessionServiceInput) {
+    const model = input.model
+      ? validateModelForTool(input.tool, input.model)
+      : getDefaultModel(input.tool);
     const name = input.prompt
       ? input.prompt.slice(0, 80)
       : `Session ${new Date().toLocaleString()}`;
@@ -196,7 +228,7 @@ export class SessionService {
     }
 
     // Cloud sessions always start as "creating" — the VM needs time to boot
-    const initialStatus = (needsWorkspace || hosting === "cloud") ? "creating" : "pending";
+    const initialStatus = needsWorkspace || hosting === "cloud" ? "creating" : "pending";
 
     const [session] = await prisma.$transaction(async (tx) => {
       const session = await tx.session.create({
@@ -204,7 +236,7 @@ export class SessionService {
           name,
           status: initialStatus,
           tool: input.tool,
-          model: input.model ?? undefined,
+          model: model ?? undefined,
           hosting,
           organizationId: input.organizationId,
           createdById: input.createdById,
@@ -213,10 +245,12 @@ export class SessionService {
           workdir: parentWorkdir ?? undefined,
           channelId: input.channelId ?? undefined,
           parentSessionId: input.parentSessionId ?? undefined,
-          connection: connJson(defaultConnection({
-            ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
-            ...(runtimeLabel && { runtimeLabel }),
-          })),
+          connection: connJson(
+            defaultConnection({
+              ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
+              ...(runtimeLabel && { runtimeLabel }),
+            }),
+          ),
           ...(input.projectId && {
             projects: { create: { projectId: input.projectId } },
           }),
@@ -224,34 +258,37 @@ export class SessionService {
         include: SESSION_INCLUDE,
       });
 
-      const event = await eventService.create({
-        organizationId: input.organizationId,
-        scopeType: "session",
-        scopeId: session.id,
-        eventType: "session_started",
-        payload: {
-          session: {
-            id: session.id,
-            name: session.name,
-            status: session.status,
-            tool: session.tool,
-            model: session.model,
-            hosting: session.hosting,
-            createdBy: session.createdBy,
-            repo: session.repo ?? null,
-            branch: session.branch ?? null,
-            channel: session.channel,
-            parentSession: session.parentSession ?? null,
-            childSessions: session.childSessions ?? [],
-            connection: session.connection,
-            createdAt: session.createdAt,
-            updatedAt: session.updatedAt,
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "session_started",
+          payload: {
+            session: {
+              id: session.id,
+              name: session.name,
+              status: session.status,
+              tool: session.tool,
+              model: session.model,
+              hosting: session.hosting,
+              createdBy: session.createdBy,
+              repo: session.repo ?? null,
+              branch: session.branch ?? null,
+              channel: session.channel,
+              parentSession: session.parentSession ?? null,
+              childSessions: session.childSessions ?? [],
+              connection: session.connection,
+              createdAt: session.createdAt,
+              updatedAt: session.updatedAt,
+            },
+            prompt: input.prompt ?? null,
           },
-          prompt: input.prompt ?? null,
+          actorType: "user",
+          actorId: input.createdById,
         },
-        actorType: "user",
-        actorId: input.createdById,
-      }, tx);
+        tx,
+      );
 
       return [session, event] as const;
     });
@@ -277,7 +314,14 @@ export class SessionService {
         hosting: session.hosting as "cloud" | "local",
         tool: session.tool,
         model: session.model ?? undefined,
-        repo: session.repo ? { id: session.repo.id, name: session.repo.name, remoteUrl: session.repo.remoteUrl, defaultBranch: session.repo.defaultBranch } : null,
+        repo: session.repo
+          ? {
+              id: session.repo.id,
+              name: session.repo.name,
+              remoteUrl: session.repo.remoteUrl,
+              defaultBranch: session.repo.defaultBranch,
+            }
+          : null,
         branch: input.branch ?? undefined,
         createdById: input.createdById,
         organizationId: input.organizationId,
@@ -299,7 +343,13 @@ export class SessionService {
     if (session.status === "creating") {
       const updated = await prisma.session.update({
         where: { id },
-        data: { pendingRun: { type: "run", prompt: prompt ?? null, interactionMode: interactionMode ?? null } },
+        data: {
+          pendingRun: {
+            type: "run",
+            prompt: prompt ?? null,
+            interactionMode: interactionMode ?? null,
+          },
+        },
         include: SESSION_INCLUDE,
       });
       return updated;
@@ -357,7 +407,11 @@ export class SessionService {
     const deliveryResult = sessionRouter.send(id, command);
 
     if (deliveryResult !== "delivered") {
-      await this.storePendingCommand(id, { type: "run", prompt: resolvedPrompt ?? null, interactionMode: interactionMode ?? null });
+      await this.storePendingCommand(id, {
+        type: "run",
+        prompt: resolvedPrompt ?? null,
+        interactionMode: interactionMode ?? null,
+      });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
@@ -372,7 +426,10 @@ export class SessionService {
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
-          ...(boundRuntime && { runtimeInstanceId: boundRuntime.id, runtimeLabel: boundRuntime.label }),
+          ...(boundRuntime && {
+            runtimeInstanceId: boundRuntime.id,
+            runtimeLabel: boundRuntime.label,
+          }),
         }),
       },
       include: SESSION_INCLUDE,
@@ -400,19 +457,30 @@ export class SessionService {
   }
 
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.terminateWithStatus(id, "failed", "Session terminated", actorType, actorId);
+    return this.terminateWithStatus(id, "completed", "Session stopped", actorType, actorId);
   }
 
   async dismiss(id: string, actorType: ActorType = "system", actorId: string = "system") {
     return this.terminateWithStatus(id, "completed", "Session dismissed", actorType, actorId);
   }
 
-  private async terminateWithStatus(id: string, targetStatus: SessionStatus, resolution: string, actorType: ActorType, actorId: string) {
+  private async terminateWithStatus(
+    id: string,
+    targetStatus: SessionStatus,
+    resolution: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
       select: { organizationId: true },
     });
-    await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution });
+    await inboxService.resolveBySource({
+      sourceType: "session",
+      sourceId: id,
+      orgId: session.organizationId,
+      resolution,
+    });
     return this.transition(id, "terminate", targetStatus, "session_terminated", actorType, actorId);
   }
 
@@ -424,7 +492,12 @@ export class SessionService {
     if (!session) throw new Error("Session not found or already deleted");
 
     // Resolve any pending inbox items (plans/questions awaiting input)
-    await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session deleted" });
+    await inboxService.resolveBySource({
+      sourceType: "session",
+      sourceId: id,
+      orgId: session.organizationId,
+      resolution: "Session deleted",
+    });
 
     // Clean up terminal relay entries and notify attached frontends
     terminalRelay.destroyAllForSession(id);
@@ -504,27 +577,35 @@ export class SessionService {
 
   async updateConfig(
     sessionId: string,
+    organizationId: string,
     config: { tool?: CodingTool; model?: string },
     actorType: ActorType,
     actorId: string,
   ) {
-    const prev = await prisma.session.findUniqueOrThrow({
-      where: { id: sessionId },
-      select: { tool: true },
+    const prev = await prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
+      select: { id: true, tool: true, model: true },
     });
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
+    const nextTool = config.tool ?? prev.tool;
+    const nextModel =
+      config.model != null
+        ? validateModelForTool(nextTool, config.model)
+        : toolChanged
+          ? (getDefaultModel(nextTool) ?? null)
+          : undefined;
 
     const data: Record<string, unknown> = {};
     if (config.tool != null) data.tool = config.tool;
-    if (config.model != null) data.model = config.model;
+    if (nextModel !== undefined) data.model = nextModel;
     if (toolChanged) {
       data.toolChangedAt = new Date();
       data.toolSessionId = null;
     }
 
     const session = await prisma.session.update({
-      where: { id: sessionId },
+      where: { id: prev.id },
       data,
       include: SESSION_INCLUDE,
     });
@@ -537,7 +618,7 @@ export class SessionService {
       payload: {
         type: "config_changed",
         tool: config.tool ?? session.tool,
-        model: config.model ?? session.model,
+        model: nextModel !== undefined ? nextModel : session.model,
         toolChanged,
       },
       actorType,
@@ -721,7 +802,7 @@ export class SessionService {
       return hasQuestionBlock(evt.payload as Record<string, unknown>);
     });
 
-    const newStatus = (hasPendingPlan || hasQuestion) ? "needs_input" : "completed";
+    const newStatus = hasPendingPlan || hasQuestion ? "needs_input" : "completed";
 
     const session = await prisma.session.update({
       where: { id },
@@ -760,10 +841,26 @@ export class SessionService {
     }
   }
 
-  async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string, interactionMode?: string) {
+  async sendMessage(
+    sessionId: string,
+    text: string,
+    actorType: ActorType,
+    actorId: string,
+    interactionMode?: string,
+  ) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { organizationId: true, status: true, tool: true, model: true, toolChangedAt: true, workdir: true, toolSessionId: true, repoId: true, connection: true },
+      select: {
+        organizationId: true,
+        status: true,
+        tool: true,
+        model: true,
+        toolChangedAt: true,
+        workdir: true,
+        toolSessionId: true,
+        repoId: true,
+        connection: true,
+      },
     });
 
     if (isFullyUnloadedSessionStatus(session.status)) {
@@ -806,8 +903,17 @@ export class SessionService {
     });
 
     if (deliveryResult !== "delivered") {
-      await this.storePendingCommand(sessionId, { type: "send", prompt, interactionMode: interactionMode ?? null });
-      await this.persistConnectionFailure(sessionId, session.organizationId, deliveryResult, "send");
+      await this.storePendingCommand(sessionId, {
+        type: "send",
+        prompt,
+        interactionMode: interactionMode ?? null,
+      });
+      await this.persistConnectionFailure(
+        sessionId,
+        session.organizationId,
+        deliveryResult,
+        "send",
+      );
       // Still record the message event so it's not lost
       const event = await eventService.create({
         organizationId: session.organizationId,
@@ -831,14 +937,22 @@ export class SessionService {
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
-          ...(boundRuntime && { runtimeInstanceId: boundRuntime.id, runtimeLabel: boundRuntime.label }),
+          ...(boundRuntime && {
+            runtimeInstanceId: boundRuntime.id,
+            runtimeLabel: boundRuntime.label,
+          }),
         }),
         pendingRun: Prisma.DbNull,
       },
     });
 
     // Resolve any inbox items for this session (leaving needs_input)
-    await inboxService.resolveBySource({ sourceType: "session", sourceId: sessionId, orgId: session.organizationId, resolution: text.slice(0, 200) });
+    await inboxService.resolveBySource({
+      sourceType: "session",
+      sourceId: sessionId,
+      orgId: session.organizationId,
+      resolution: text.slice(0, 200),
+    });
 
     // Emit a resumed event so all clients see the status change
     await eventService.create({
@@ -895,7 +1009,12 @@ export class SessionService {
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
       if (replayResult && replayResult !== "delivered") {
-        await this.persistConnectionFailure(sessionId, session.organizationId, replayResult, "workspace_replay");
+        await this.persistConnectionFailure(
+          sessionId,
+          session.organizationId,
+          replayResult,
+          "workspace_replay",
+        );
       }
     }
   }
@@ -1046,7 +1165,12 @@ export class SessionService {
     });
   }
 
-  async retryConnection(sessionId: string, organizationId: string, actorType: ActorType, actorId: string) {
+  async retryConnection(
+    sessionId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
       include: SESSION_INCLUDE,
@@ -1071,7 +1195,7 @@ export class SessionService {
 
     // Try to find a runtime to bind to
     const runtime = conn.runtimeInstanceId
-      ? sessionRouter.getRuntimeForSession(sessionId) ?? sessionRouter.getDefaultRuntime()
+      ? (sessionRouter.getRuntimeForSession(sessionId) ?? sessionRouter.getDefaultRuntime())
       : sessionRouter.getDefaultRuntime();
 
     if (!runtime) {
@@ -1094,12 +1218,19 @@ export class SessionService {
         scopeType: "session",
         scopeId: sessionId,
         eventType: "session_output",
-        payload: { type: "recovery_failed", reason: "no_runtime", connection: connJson(failedConn) },
+        payload: {
+          type: "recovery_failed",
+          reason: "no_runtime",
+          connection: connJson(failedConn),
+        },
         actorType: "system",
         actorId: "system",
       });
 
-      return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
+      return prisma.session.findUniqueOrThrow({
+        where: { id: sessionId },
+        include: SESSION_INCLUDE,
+      });
     }
 
     // Bind and attempt workspace setup if needed
@@ -1118,8 +1249,16 @@ export class SessionService {
       });
 
       if (prepResult !== "delivered") {
-        await this.persistConnectionFailure(sessionId, session.organizationId, prepResult, "retry_prepare");
-        return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
+        await this.persistConnectionFailure(
+          sessionId,
+          session.organizationId,
+          prepResult,
+          "retry_prepare",
+        );
+        return prisma.session.findUniqueOrThrow({
+          where: { id: sessionId },
+          include: SESSION_INCLUDE,
+        });
       }
 
       // Mark as creating — workspace_ready callback will transition to pending
@@ -1147,7 +1286,11 @@ export class SessionService {
         scopeType: "session",
         scopeId: sessionId,
         eventType: "session_output",
-        payload: { type: "connection_restored", runtimeInstanceId: runtime.id, connection: connJson(restoredConn) },
+        payload: {
+          type: "connection_restored",
+          runtimeInstanceId: runtime.id,
+          connection: connJson(restoredConn),
+        },
         actorType: "system",
         actorId: "system",
       });
@@ -1180,7 +1323,11 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
-      payload: { type: "connection_restored", runtimeInstanceId: runtime.id, connection: connJson(restoredConn) },
+      payload: {
+        type: "connection_restored",
+        runtimeInstanceId: runtime.id,
+        connection: connJson(restoredConn),
+      },
       actorType: "system",
       actorId: "system",
     });
@@ -1192,15 +1339,29 @@ export class SessionService {
     if (pending?.pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pending.pendingRun);
       if (replayResult && replayResult !== "delivered") {
-        await this.persistConnectionFailure(sessionId, session.organizationId, replayResult, "retry_replay");
+        await this.persistConnectionFailure(
+          sessionId,
+          session.organizationId,
+          replayResult,
+          "retry_replay",
+        );
       }
-      return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
+      return prisma.session.findUniqueOrThrow({
+        where: { id: sessionId },
+        include: SESSION_INCLUDE,
+      });
     }
 
     return updated;
   }
 
-  async moveToRuntime(sessionId: string, runtimeInstanceId: string, organizationId: string, actorType: ActorType, actorId: string) {
+  async moveToRuntime(
+    sessionId: string,
+    runtimeInstanceId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
       include: { ...SESSION_INCLUDE, projects: true, tickets: true },
@@ -1234,14 +1395,22 @@ export class SessionService {
         branch: session.branch ?? undefined,
         channelId: session.channelId ?? undefined,
         parentSessionId: sessionId,
-        pendingRun: { type: "run", prompt: bootstrapPrompt, interactionMode: null } satisfies PendingSessionCommand,
-        connection: connJson(defaultConnection({
-          runtimeInstanceId,
-          runtimeLabel: targetRuntime.label,
-        })),
+        pendingRun: {
+          type: "run",
+          prompt: bootstrapPrompt,
+          interactionMode: null,
+        } satisfies PendingSessionCommand,
+        connection: connJson(
+          defaultConnection({
+            runtimeInstanceId,
+            runtimeLabel: targetRuntime.label,
+          }),
+        ),
         ...(session.projects.length > 0 && {
           projects: {
-            create: session.projects.map((sp: { projectId: string }) => ({ projectId: sp.projectId })),
+            create: session.projects.map((sp: { projectId: string }) => ({
+              projectId: sp.projectId,
+            })),
           },
         }),
         ...(session.tickets.length > 0 && {
@@ -1294,7 +1463,14 @@ export class SessionService {
         hosting: targetRuntime.hostingMode,
         tool: childSession.tool,
         model: childSession.model ?? undefined,
-        repo: childSession.repo ? { id: childSession.repo.id, name: childSession.repo.name, remoteUrl: childSession.repo.remoteUrl, defaultBranch: childSession.repo.defaultBranch } : null,
+        repo: childSession.repo
+          ? {
+              id: childSession.repo.id,
+              name: childSession.repo.name,
+              remoteUrl: childSession.repo.remoteUrl,
+              defaultBranch: childSession.repo.defaultBranch,
+            }
+          : null,
         branch: childSession.branch ?? undefined,
         createdById: actorId,
         organizationId: childSession.organizationId,
@@ -1302,9 +1478,17 @@ export class SessionService {
         onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
       });
     } else {
-      const deliveryResult = await this.deliverPendingCommand(childSession.id, childSession.pendingRun);
+      const deliveryResult = await this.deliverPendingCommand(
+        childSession.id,
+        childSession.pendingRun,
+      );
       if (deliveryResult && deliveryResult !== "delivered") {
-        await this.persistConnectionFailure(childSession.id, childSession.organizationId, deliveryResult, "move_run");
+        await this.persistConnectionFailure(
+          childSession.id,
+          childSession.organizationId,
+          deliveryResult,
+          "move_run",
+        );
       }
     }
 
@@ -1357,18 +1541,21 @@ export class SessionService {
 
     const allRuntimes = sessionRouter
       .listRuntimes()
-      .filter((runtime) => runtime.hostingMode === "local" && runtime.supportedTools.includes(tool));
+      .filter(
+        (runtime) => runtime.hostingMode === "local" && runtime.supportedTools.includes(tool),
+      );
 
     const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
-    const sessions = sessionIds.length === 0
-      ? []
-      : await prisma.session.findMany({
-          where: {
-            id: { in: sessionIds },
-            organizationId,
-          },
-          select: { id: true },
-        });
+    const sessions =
+      sessionIds.length === 0
+        ? []
+        : await prisma.session.findMany({
+            where: {
+              id: { in: sessionIds },
+              organizationId,
+            },
+            select: { id: true },
+          });
     const orgSessionIds = new Set(sessions.map((session) => session.id));
 
     const result = allRuntimes.map((r) => ({
@@ -1399,7 +1586,11 @@ export class SessionService {
   }
 
   /** List branches for a repo by delegating to the bridge runtime. */
-  async listBranches(repoId: string, organizationId: string, runtimeInstanceId?: string): Promise<string[]> {
+  async listBranches(
+    repoId: string,
+    organizationId: string,
+    runtimeInstanceId?: string,
+  ): Promise<string[]> {
     const repo = await prisma.repo.findFirst({
       where: { id: repoId, organizationId },
       select: { id: true },
@@ -1423,22 +1614,25 @@ export class SessionService {
     data: Record<string, unknown>;
   }) {
     const { orgId, userId, sessionName, sessionId, data } = params;
-    const messageContent = (data.message as Record<string, unknown> | undefined)
-      ?.content as Array<Record<string, unknown>> | undefined;
+    const messageContent = (data.message as Record<string, unknown> | undefined)?.content as
+      | Array<Record<string, unknown>>
+      | undefined;
 
     const isQuestion = hasQuestionBlock(data);
 
     const questionBlock = isQuestion
-      ? messageContent?.find((b) => b.type === "question") as { questions: Array<Record<string, unknown>> } | undefined
+      ? (messageContent?.find((b) => b.type === "question") as
+          | { questions: Array<Record<string, unknown>> }
+          | undefined)
       : undefined;
 
     const planBlock = !isQuestion
-      ? messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined
+      ? (messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined)
       : undefined;
     const planText = planBlock?.content;
 
     const summary = isQuestion
-      ? questionBlock?.questions?.[0]?.question as string | undefined
+      ? (questionBlock?.questions?.[0]?.question as string | undefined)
       : planText?.slice(0, 200);
 
     await inboxService.createItem({
@@ -1461,7 +1655,10 @@ export class SessionService {
     return defaultConnection(raw as Partial<SessionConnectionData>);
   }
 
-  private mergeConnection(existing: unknown, patch: Partial<SessionConnectionData>): Prisma.InputJsonValue {
+  private mergeConnection(
+    existing: unknown,
+    patch: Partial<SessionConnectionData>,
+  ): Prisma.InputJsonValue {
     const conn = this.parseConnection(existing);
     return connJson({ ...conn, ...patch });
   }
@@ -1473,14 +1670,16 @@ export class SessionService {
       return {
         type: "send",
         prompt: pending.prompt,
-        interactionMode: typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+        interactionMode:
+          typeof pending.interactionMode === "string" ? pending.interactionMode : null,
       };
     }
     if (pending.type === "run" || pending.type == null) {
       return {
         type: "run",
         prompt: typeof pending.prompt === "string" ? pending.prompt : null,
-        interactionMode: typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+        interactionMode:
+          typeof pending.interactionMode === "string" ? pending.interactionMode : null,
       };
     }
     return null;
@@ -1493,7 +1692,10 @@ export class SessionService {
     });
   }
 
-  private async deliverPendingCommand(sessionId: string, rawPending: unknown): Promise<DeliveryResult | null> {
+  private async deliverPendingCommand(
+    sessionId: string,
+    rawPending: unknown,
+  ): Promise<DeliveryResult | null> {
     const pending = this.parsePendingCommand(rawPending);
     if (!pending) return null;
 
@@ -1560,7 +1762,10 @@ export class SessionService {
           state: "connected",
           lastSeen: new Date().toISOString(),
           lastError: undefined,
-          ...(boundRuntime && { runtimeInstanceId: boundRuntime.id, runtimeLabel: boundRuntime.label }),
+          ...(boundRuntime && {
+            runtimeInstanceId: boundRuntime.id,
+            runtimeLabel: boundRuntime.label,
+          }),
         }),
       },
     });
@@ -1578,7 +1783,12 @@ export class SessionService {
     return "delivered";
   }
 
-  private async persistConnectionFailure(sessionId: string, organizationId: string, deliveryResult: DeliveryResult, operation: string) {
+  private async persistConnectionFailure(
+    sessionId: string,
+    organizationId: string,
+    deliveryResult: DeliveryResult,
+    operation: string,
+  ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: { status: true, connection: true },

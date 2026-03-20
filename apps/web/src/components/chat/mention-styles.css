@@ -1,0 +1,96 @@
+/* Base container styles */
+.chat-editor .quill {
+  padding: 0;
+}
+
+.chat-editor .ql-container {
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.625;
+  border: none;
+  color: var(--color-foreground, #e4e4e7);
+}
+
+/* Editor content area */
+.chat-editor .ql-editor {
+  padding: 8px 12px;
+  min-height: 40px;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--color-foreground, #e4e4e7);
+}
+
+/* Placeholder text — vertically centered */
+.chat-editor .ql-editor.ql-blank::before {
+  color: var(--color-muted-foreground, #71717a) !important;
+  font-style: normal !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.chat-editor .ql-editor:focus {
+  outline: none;
+}
+
+/* Mention styling inside the editor */
+.chat-editor .mention {
+  color: var(--color-blue-300, #93c5fd);
+  font-weight: 500;
+  padding: 0;
+  margin: 0;
+  display: inline;
+  cursor: pointer;
+}
+
+/* Mention autocomplete dropdown */
+.ql-mention-list-container {
+  background-color: var(--color-surface-elevated, #27272a);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #3f3f46);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+  color: var(--color-foreground, #e4e4e7);
+  min-width: 250px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.ql-mention-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ql-mention-list-item {
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.ql-mention-list-item.selected {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.ql-mention-list-item:active {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Custom scrollbar */
+.chat-editor .ql-editor::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-editor .ql-editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-editor .ql-editor::-webkit-scrollbar-thumb {
+  background: var(--color-muted, #3f3f46);
+  border-radius: 3px;
+}

@@ -11,7 +11,7 @@ import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { buildSessionNodes } from "./groupReadGlob";
 import { client } from "../../lib/urql";
-import { TERMINATE_SESSION_MUTATION, DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -130,7 +130,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const [showTerminal, setShowTerminal] = useState(false);
 
   const handleStop = useCallback(async () => {
-    await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+    await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
   const handleDismissPlan = useCallback(async () => {

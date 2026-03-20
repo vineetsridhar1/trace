@@ -137,6 +137,10 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     }
   });
 
+  ws.on("error", (err) => {
+    console.warn("[terminal-handler] websocket error:", err.message);
+  });
+
   ws.on("close", () => {
     pendingMessages = [];
     terminalRelay.detachAllForFrontend(ws);
