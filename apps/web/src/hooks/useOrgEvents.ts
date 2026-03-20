@@ -6,7 +6,7 @@ import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
-import type { Event, EventType, ScopeType, SessionStatus, Channel, Repo, InboxItem } from "@trace/gql";
+import type { Event, EventType, ScopeType, SessionStatus, Channel, Chat, Repo, InboxItem } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -152,6 +152,21 @@ export function useOrgEvents() {
           if (repo && typeof repo.id === "string") {
             const existing = useEntityStore.getState().repos[repo.id];
             upsert("repos", repo.id, (existing ? { ...existing, ...repo } : repo) as unknown as Repo);
+          }
+        }
+
+        // Chat events
+        if (event.eventType === ("chat_created" as EventType)) {
+          const chat = asRecord(event.payload.chat);
+          if (chat && typeof chat.id === "string") {
+            upsert("chats", chat.id, chat as unknown as Chat);
+          }
+        }
+        if (event.eventType === ("chat_member_added" as EventType) || event.eventType === ("chat_member_removed" as EventType)) {
+          // Refetch chat members by patching — the event payload has the userId
+          // For now, trigger a refresh so the sidebar re-fetches
+          if (event.scopeType === ("chat" as ScopeType)) {
+            // The chat will be re-fetched on next mount
           }
         }
 

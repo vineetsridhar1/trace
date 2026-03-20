@@ -144,6 +144,7 @@ export class OrganizationService {
         session: () => tx.sessionProject.create({ data: { sessionId: entityId, projectId } }),
         ticket: () => tx.ticketProject.create({ data: { ticketId: entityId, projectId } }),
         channel: () => tx.channelProject.create({ data: { channelId: entityId, projectId } }),
+        chat: () => { throw new Error("Chats cannot be linked to projects"); },
       };
 
       await joinOps[entityType]();

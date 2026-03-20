@@ -60,8 +60,14 @@ enum CodingTool {
   custom
 }
 
+enum ChatType {
+  dm
+  group
+}
+
 enum ScopeType {
   channel
+  chat
   session
   ticket
   system
@@ -121,6 +127,9 @@ enum EventType {
   inbox_item_resolved
   session_pr_opened
   session_pr_merged
+  chat_created
+  chat_member_added
+  chat_member_removed
 }
 
 model Organization {
@@ -136,6 +145,8 @@ model Organization {
   tickets  Ticket[]
   events        Event[]
   inboxItems    InboxItem[]
+  chats         Chat[]
+  participants  Participant[]
   cloudMachines CloudMachine[]
 
   createdAt DateTime @default(now())
@@ -374,4 +385,45 @@ model InboxItem {
   @@index([userId, status])
   @@index([organizationId, userId])
   @@index([sourceType, sourceId])
+}
+
+model Chat {
+  id             String       @id @default(uuid())
+  type           ChatType
+  name           String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+
+  members ChatMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model ChatMember {
+  chatId   String
+  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId   String
+  joinedAt DateTime @default(now())
+  leftAt   DateTime?
+
+  @@id([chatId, userId])
+  @@index([userId])
+}
+
+model Participant {
+  userId         String
+  scopeType      String
+  scopeId        String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  subscribedAt   DateTime     @default(now())
+  mutedAt        DateTime?
+
+  @@id([userId, scopeType, scopeId])
+  @@index([scopeType, scopeId])
+  @@index([organizationId, userId])
 }

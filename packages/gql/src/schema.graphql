@@ -62,8 +62,14 @@ enum ChannelType {
   feed
 }
 
+enum ChatType {
+  dm
+  group
+}
+
 enum ScopeType {
   channel
+  chat
   session
   ticket
   system
@@ -79,6 +85,7 @@ enum EntityType {
   session
   ticket
   channel
+  chat
 }
 
 enum UserRole {
@@ -134,6 +141,9 @@ enum EventType {
   inbox_item_resolved
   session_pr_opened
   session_pr_merged
+  chat_created
+  chat_member_added
+  chat_member_removed
 }
 
 # --- Core Types ---
@@ -245,6 +255,38 @@ type InboxItem {
   sourceId: ID!
   createdAt: DateTime!
   resolvedAt: DateTime
+}
+
+type Chat {
+  id: ID!
+  type: ChatType!
+  name: String
+  members: [ChatMember!]!
+  messages(after: DateTime, before: DateTime, limit: Int): [Event!]!
+  createdBy: User!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ChatMember {
+  user: User!
+  joinedAt: DateTime!
+}
+
+type Participant {
+  userId: ID!
+  user: User!
+  scopeType: String!
+  scopeId: ID!
+  subscribedAt: DateTime!
+  muted: Boolean!
+}
+
+type ThreadSummary {
+  rootEventId: ID!
+  replyCount: Int!
+  lastReplyAt: DateTime
+  participantIds: [ID!]!
 }
 
 # --- Supporting Types ---
@@ -380,6 +422,17 @@ input CreateProjectInput {
   repoId: ID
 }
 
+input CreateChatInput {
+  organizationId: ID!
+  memberIds: [ID!]!
+  name: String
+}
+
+input AddChatMemberInput {
+  chatId: ID!
+  userId: ID!
+}
+
 input ScopeInput {
   type: ScopeType!
   id: ID!
@@ -417,6 +470,11 @@ type Query {
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
   repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
+  chats(organizationId: ID!): [Chat!]!
+  chat(id: ID!): Chat
+  threadReplies(rootEventId: ID!, after: DateTime, limit: Int): [Event!]!
+  threadSummary(rootEventId: ID!): ThreadSummary
+  participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
 }
@@ -457,6 +515,14 @@ type Mutation {
   destroyTerminal(terminalId: ID!): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
+  createChat(input: CreateChatInput!): Chat!
+  sendChatMessage(chatId: ID!, text: String!, parentId: ID): Event!
+  addChatMember(input: AddChatMemberInput!): Chat!
+  leaveChat(chatId: ID!): Chat!
+  subscribe(scopeType: String!, scopeId: ID!): Participant!
+  unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
+  muteScope(scopeType: String!, scopeId: ID!): Participant!
+  unmuteScope(scopeType: String!, scopeId: ID!): Participant!
 }
 
 # --- Subscriptions ---
@@ -468,4 +534,5 @@ type Subscription {
   userNotifications(organizationId: ID!): Notification!
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
+  chatEvents(chatId: ID!, organizationId: ID!, types: [String!]): Event!
 }

@@ -4,6 +4,7 @@ import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
+import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
@@ -48,6 +49,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useHistorySync();
   useVisibilityRefresh();
   const activePage = useUIStore((s) => s.activePage);
+  const activeChatId = useUIStore((s) => s.activeChatId);
 
   return (
     <TooltipProvider>
@@ -60,6 +62,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                 <SettingsPage />
               ) : activePage === "inbox" ? (
                 <InboxView />
+              ) : activeChatId ? (
+                <ChatView chatId={activeChatId} />
               ) : activeChannelId ? (
                 <ChannelView channelId={activeChannelId} />
               ) : (

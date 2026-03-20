@@ -28,6 +28,7 @@ export interface EventQueryOpts {
 // Keys must match the GraphQL subscription field names (e.g. "channel" → "channelEvents").
 const scopeTopicMap: Record<string, (id: string) => string> = {
   channel: topics.channelEvents,
+  chat: topics.chatEvents,
   ticket: topics.ticketEvents,
   // "system" scope has no entity-level topic — events are broadcast on the org topic only
 };
