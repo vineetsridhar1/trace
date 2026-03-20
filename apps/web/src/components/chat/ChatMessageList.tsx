@@ -4,6 +4,7 @@ import { ChatMessageErrorBoundary } from "./ChatMessageErrorBoundary";
 import { DmWelcome } from "./DmWelcome";
 import { useEntityStore } from "../../stores/entity";
 import { useShallow } from "zustand/react/shallow";
+import { Skeleton } from "../ui/skeleton";
 
 /** Max gap in ms between messages from the same user to be grouped (5 min like Slack) */
 const GROUP_THRESHOLD_MS = 5 * 60 * 1000;
@@ -81,8 +82,20 @@ export function ChatMessageList({
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading messages...</p>
+      <div className="flex-1 overflow-hidden px-4 py-2 space-y-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex gap-3">
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <div className="flex-1 space-y-2 pt-0.5">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+              <Skeleton className="h-3.5 w-full" />
+              <Skeleton className="h-3.5 w-[70%]" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
