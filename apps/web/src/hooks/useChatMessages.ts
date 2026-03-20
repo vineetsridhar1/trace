@@ -250,7 +250,10 @@ export function useChatMessages(chatId: string) {
 
   const messageIds = useEntityIds(
     "messages",
-    (message) => message.chatId === chatId && !message.parentMessageId,
+    (message) =>
+      message.chatId === chatId &&
+      !message.parentMessageId &&
+      (!message.deletedAt || (message.replyCount ?? 0) > 0),
     (a, b) => a.createdAt.localeCompare(b.createdAt),
   );
 

@@ -40,7 +40,7 @@ export function MessageBody({
         />
       ) : deletedAt ? (
         <p className="m-0 italic text-[15px] leading-snug text-muted-foreground">
-          This message was deleted.
+          This message has been deleted.
         </p>
       ) : html ? (
         <MessageContent html={html} />
