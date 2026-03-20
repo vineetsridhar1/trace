@@ -44,6 +44,36 @@ export type {
   BridgeTerminalDestroyCommand,
 } from "./bridge.js";
 export { parseBranchOutput } from "./bridge.js";
+export type {
+  LLMRole,
+  LLMProvider,
+  LLMTextContent,
+  LLMImageContent,
+  LLMToolUseContent,
+  LLMToolResultContent,
+  LLMContentBlock,
+  LLMSystemContentBlock,
+  LLMUserContentBlock,
+  LLMAssistantContentBlock,
+  LLMToolContentBlock,
+  LLMSystemMessage,
+  LLMUserMessage,
+  LLMAssistantMessage,
+  LLMToolMessage,
+  LLMMessage,
+  LLMToolDefinition,
+  LLMStopReason,
+  LLMUsage,
+  LLMResponse,
+  LLMStreamTextDelta,
+  LLMStreamToolUseStart,
+  LLMStreamToolUseInputDelta,
+  LLMStreamComplete,
+  LLMStreamError,
+  LLMStreamEvent,
+  LLMRequestOptions,
+  LLMAdapter,
+} from "./adapters/llm.js";
 export type { ModelOption } from "./models.js";
 export { getModelsForTool, getDefaultModel, getModelLabel, isSupportedModel } from "./models.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";

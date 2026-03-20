@@ -1,0 +1,142 @@
+// ── Content block types ──
+
+export type LLMRole = "system" | "user" | "assistant" | "tool";
+export type LLMProvider = "anthropic" | "openai";
+
+export interface LLMTextContent {
+  type: "text";
+  text: string;
+}
+
+export interface LLMImageContent {
+  type: "image";
+  source: { type: "base64"; mediaType: string; data: string } | { type: "url"; url: string };
+}
+
+export interface LLMToolUseContent {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface LLMToolResultContent {
+  type: "tool_result";
+  toolUseId: string;
+  content: string;
+  isError?: boolean;
+}
+
+export type LLMContentBlock =
+  | LLMTextContent
+  | LLMImageContent
+  | LLMToolUseContent
+  | LLMToolResultContent;
+
+export type LLMSystemContentBlock = LLMTextContent;
+export type LLMUserContentBlock = LLMTextContent | LLMImageContent;
+export type LLMAssistantContentBlock = LLMTextContent | LLMToolUseContent;
+export type LLMToolContentBlock = LLMToolResultContent;
+
+// ── Messages ──
+
+export interface LLMSystemMessage {
+  role: "system";
+  content: string | LLMSystemContentBlock[];
+}
+
+export interface LLMUserMessage {
+  role: "user";
+  content: string | LLMUserContentBlock[];
+}
+
+export interface LLMAssistantMessage {
+  role: "assistant";
+  content: string | LLMAssistantContentBlock[];
+}
+
+export interface LLMToolMessage {
+  role: "tool";
+  content: LLMToolContentBlock[];
+}
+
+export type LLMMessage = LLMSystemMessage | LLMUserMessage | LLMAssistantMessage | LLMToolMessage;
+
+// ── Tool definitions ──
+
+export interface LLMToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+// ── Response types ──
+
+export type LLMStopReason = "end_turn" | "tool_use" | "max_tokens" | "stop_sequence";
+
+export interface LLMUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface LLMResponse {
+  content: LLMAssistantContentBlock[];
+  stopReason: LLMStopReason;
+  usage: LLMUsage;
+  model: string;
+}
+
+// ── Streaming events ──
+
+export interface LLMStreamTextDelta {
+  type: "text_delta";
+  text: string;
+}
+
+export interface LLMStreamToolUseStart {
+  type: "tool_use_start";
+  id: string;
+  name: string;
+}
+
+export interface LLMStreamToolUseInputDelta {
+  type: "tool_use_input_delta";
+  inputDelta: string;
+}
+
+export interface LLMStreamComplete {
+  type: "complete";
+  response: LLMResponse;
+}
+
+export interface LLMStreamError {
+  type: "error";
+  error: Error;
+}
+
+export type LLMStreamEvent =
+  | LLMStreamTextDelta
+  | LLMStreamToolUseStart
+  | LLMStreamToolUseInputDelta
+  | LLMStreamComplete
+  | LLMStreamError;
+
+// ── Request options ──
+
+export interface LLMRequestOptions {
+  model: string;
+  messages: LLMMessage[];
+  tools?: LLMToolDefinition[];
+  system?: string;
+  maxTokens?: number;
+  temperature?: number;
+  stopSequences?: string[];
+}
+
+// ── Adapter interface ──
+
+export interface LLMAdapter {
+  readonly provider: LLMProvider;
+  complete(options: LLMRequestOptions): Promise<LLMResponse>;
+  stream(options: LLMRequestOptions): AsyncIterable<LLMStreamEvent>;
+}
