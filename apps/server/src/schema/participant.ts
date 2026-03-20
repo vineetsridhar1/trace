@@ -1,15 +1,32 @@
 import type { Context } from "../context.js";
 import { prisma } from "../lib/db.js";
 import { participantService } from "../services/participant.js";
+import { assertScopeAccess, assertThreadAccess } from "../services/access.js";
 
 export const participantQueries = {
-  participants: (_: unknown, args: { scopeType: string; scopeId: string }) => {
+  participants: async (
+    _: unknown,
+    args: { scopeType: string; scopeId: string },
+    ctx: Context,
+  ) => {
+    if (args.scopeType === "thread") {
+      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+    } else {
+      await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
+    }
+
     return participantService.getParticipants(args.scopeType, args.scopeId);
   },
 };
 
 export const participantMutations = {
-  subscribe: (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
+  subscribe: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
+    if (args.scopeType === "thread") {
+      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+    } else {
+      await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
+    }
+
     return participantService.subscribe({
       userId: ctx.userId,
       scopeType: args.scopeType,
@@ -25,14 +42,26 @@ export const participantMutations = {
     });
     return true;
   },
-  muteScope: (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
+  muteScope: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
+    if (args.scopeType === "thread") {
+      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+    } else {
+      await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
+    }
+
     return participantService.mute({
       userId: ctx.userId,
       scopeType: args.scopeType,
       scopeId: args.scopeId,
     });
   },
-  unmuteScope: (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
+  unmuteScope: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
+    if (args.scopeType === "thread") {
+      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+    } else {
+      await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
+    }
+
     return participantService.unmute({
       userId: ctx.userId,
       scopeType: args.scopeType,

@@ -1,12 +1,35 @@
 import type { CreateChatInput, ActorType } from "@trace/gql";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { participantService } from "./participant.js";
 
+function buildDmKey(userA: string, userB: string) {
+  return [userA, userB].sort().join(":");
+}
+
 export class ChatService {
   async create(input: CreateChatInput, actorType: ActorType, actorId: string) {
-    const memberIds = input.memberIds;
+    const memberIds = [...new Set(input.memberIds)];
+    if (memberIds.length === 0) {
+      throw new Error("Chats must include at least one other member");
+    }
+
     const isDM = memberIds.length === 1;
+    const allMemberIds = isDM
+      ? [actorId, memberIds[0]]
+      : [actorId, ...memberIds.filter((id) => id !== actorId)];
+
+    const validMembers = await prisma.user.findMany({
+      where: {
+        id: { in: allMemberIds },
+        organizationId: input.organizationId,
+      },
+      select: { id: true },
+    });
+    if (validMembers.length !== allMemberIds.length) {
+      throw new Error("All chat members must belong to the organization");
+    }
 
     // DM deduplication: check for existing DM between creator and target
     if (isDM) {
@@ -14,25 +37,16 @@ export class ChatService {
       if (actorId === targetId) {
         throw new Error("Cannot create a DM with yourself");
       }
+      const dmKey = buildDmKey(actorId, targetId);
       const existing = await prisma.chat.findFirst({
         where: {
           type: "dm",
           organizationId: input.organizationId,
-          members: {
-            every: {
-              userId: { in: [actorId, targetId] },
-              leftAt: null,
-            },
-          },
-          AND: [
-            { members: { some: { userId: actorId, leftAt: null } } },
-            { members: { some: { userId: targetId, leftAt: null } } },
-          ],
+          dmKey,
         },
         include: {
           members: {
             where: { leftAt: null },
-            include: { chat: false },
           },
         },
       });
@@ -40,15 +54,12 @@ export class ChatService {
       if (existing) return existing;
     }
 
-    const allMemberIds = isDM
-      ? [actorId, memberIds[0]]
-      : [actorId, ...memberIds.filter((id) => id !== actorId)];
-
-    const [chat, _event] = await prisma.$transaction(async (tx) => {
+    const createChatInTx = async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.create({
         data: {
           type: isDM ? "dm" : "group",
           name: isDM ? null : (input.name ?? null),
+          dmKey: isDM ? buildDmKey(actorId, memberIds[0]) : null,
           organizationId: input.organizationId,
           createdById: actorId,
           members: {
@@ -75,7 +86,6 @@ export class ChatService {
       // Fetch members with user data for the event payload
       const membersWithUsers = await tx.chatMember.findMany({
         where: { chatId: chat.id },
-        include: { chat: false },
       });
 
       // Look up user info for each member
@@ -114,7 +124,34 @@ export class ChatService {
       );
 
       return [chat, event] as const;
-    });
+    };
+
+    let result: readonly [Awaited<ReturnType<typeof prisma.chat.create>>, unknown];
+    try {
+      result = await prisma.$transaction(createChatInTx);
+    } catch (error) {
+      if (
+        isDM
+        && error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === "P2002"
+      ) {
+        return prisma.chat.findFirstOrThrow({
+          where: {
+            type: "dm",
+            organizationId: input.organizationId,
+            dmKey: buildDmKey(actorId, memberIds[0]),
+          },
+          include: {
+            members: {
+              where: { leftAt: null },
+            },
+          },
+        });
+      }
+      throw error;
+    }
+
+    const [chat, _event] = result;
 
     return chat;
   }
@@ -145,6 +182,39 @@ export class ChatService {
       throw new Error("Not an active member of this chat");
     }
 
+    let validatedParentId: string | undefined;
+    if (parentId) {
+      const parentEvent = await prisma.event.findUniqueOrThrow({
+        where: { id: parentId },
+        select: {
+          id: true,
+          organizationId: true,
+          scopeType: true,
+          scopeId: true,
+          parentId: true,
+          eventType: true,
+        },
+      });
+
+      if (
+        parentEvent.organizationId !== chat.organizationId
+        || parentEvent.scopeType !== "chat"
+        || parentEvent.scopeId !== chatId
+      ) {
+        throw new Error("Thread parent must belong to this chat");
+      }
+
+      if (parentEvent.parentId) {
+        throw new Error("Thread replies must target the root event");
+      }
+
+      if (parentEvent.eventType !== "message_sent") {
+        throw new Error("Only messages can be used as thread roots");
+      }
+
+      validatedParentId = parentEvent.id;
+    }
+
     const event = await eventService.create({
       organizationId: chat.organizationId,
       scopeType: "chat",
@@ -153,15 +223,15 @@ export class ChatService {
       payload: { text },
       actorType,
       actorId,
-      parentId,
+      parentId: validatedParentId,
     });
 
     // Auto-subscribe to thread if this is a reply
-    if (parentId) {
+    if (validatedParentId) {
       await participantService.subscribe({
         userId: actorId,
         scopeType: "thread",
-        scopeId: parentId,
+        scopeId: validatedParentId,
         organizationId: chat.organizationId,
       });
     }
@@ -180,9 +250,40 @@ export class ChatService {
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.chatMember.create({
-        data: { chatId, userId },
+      const actorMembership = await tx.chatMember.findFirst({
+        where: { chatId, userId: actorId, leftAt: null },
+        select: { chatId: true },
       });
+      if (!actorMembership) {
+        throw new Error("Not authorized to add members to this chat");
+      }
+
+      const targetUser = await tx.user.findFirst({
+        where: { id: userId, organizationId: chat.organizationId },
+        select: { id: true },
+      });
+      if (!targetUser) {
+        throw new Error("User must belong to the chat organization");
+      }
+
+      const existingMembership = await tx.chatMember.findUnique({
+        where: { chatId_userId: { chatId, userId } },
+      });
+
+      if (existingMembership?.leftAt === null) {
+        return;
+      }
+
+      if (existingMembership) {
+        await tx.chatMember.update({
+          where: { chatId_userId: { chatId, userId } },
+          data: { leftAt: null, joinedAt: new Date() },
+        });
+      } else {
+        await tx.chatMember.create({
+          data: { chatId, userId },
+        });
+      }
 
       await tx.participant.upsert({
         where: {

@@ -164,6 +164,9 @@ model User {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   createdSessions Session[] @relation("SessionCreator")
+  createdChats    Chat[]    @relation("ChatCreator")
+  chatMemberships ChatMember[]
+  participants    Participant[]
   apiTokens       ApiToken[]
   cloudMachines   CloudMachine[]
 
@@ -391,9 +394,11 @@ model Chat {
   id             String       @id @default(uuid())
   type           ChatType
   name           String?
+  dmKey          String?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdById    String
+  createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
 
   members ChatMember[]
 
@@ -401,12 +406,14 @@ model Chat {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@unique([organizationId, dmKey])
 }
 
 model ChatMember {
   chatId   String
   chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   joinedAt DateTime @default(now())
   leftAt   DateTime?
 
@@ -416,6 +423,7 @@ model ChatMember {
 
 model Participant {
   userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   scopeType      String
   scopeId        String
   organizationId String

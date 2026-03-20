@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
+import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import {
@@ -45,6 +46,10 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [adding, setAdding] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const userId = useAuthStore((s) => s.user?.id);
+  const chatMembers = useEntityField("chats", chatId, "members") as
+    | Array<{ user: { id: string } }>
+    | undefined;
 
   const fetchMembers = useCallback(async () => {
     if (!activeOrgId) return;
@@ -57,6 +62,11 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
   useEffect(() => {
     if (open) fetchMembers();
   }, [open, fetchMembers]);
+
+  const existingMemberIds = new Set(chatMembers?.map((member) => member.user.id) ?? []);
+  const availableMembers = members.filter(
+    (member) => member.id !== userId && !existingMemberIds.has(member.id),
+  );
 
   async function handleAdd(userId: string) {
     setAdding(true);
@@ -85,7 +95,7 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
           <DialogTitle>Add Member</DialogTitle>
         </DialogHeader>
         <div className="max-h-60 space-y-1 overflow-y-auto py-4">
-          {members.map((member) => (
+          {availableMembers.map((member) => (
             <button
               key={member.id}
               type="button"
@@ -103,6 +113,9 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
               <span>{member.name}</span>
             </button>
           ))}
+          {availableMembers.length === 0 && (
+            <p className="py-4 text-center text-xs text-muted-foreground">No available members</p>
+          )}
         </div>
       </DialogContent>
     </Dialog>

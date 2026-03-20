@@ -8,8 +8,14 @@ import { useAuthStore } from "../stores/auth";
 const PAGE_SIZE = 100;
 
 const CHAT_EVENTS_QUERY = gql`
-  query ChatEventsQuery($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime) {
-    events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) {
+  query ChatEventsQuery($organizationId: ID!, $scope: ScopeInput, $types: [String!], $limit: Int, $before: DateTime) {
+    events(
+      organizationId: $organizationId
+      scope: $scope
+      types: $types
+      limit: $limit
+      before: $before
+    ) {
       id
       scopeType
       scopeId
@@ -28,8 +34,8 @@ const CHAT_EVENTS_QUERY = gql`
 `;
 
 const CHAT_EVENTS_SUBSCRIPTION = gql`
-  subscription ChatEventsSubscription($chatId: ID!, $organizationId: ID!) {
-    chatEvents(chatId: $chatId, organizationId: $organizationId) {
+  subscription ChatEventsSubscription($chatId: ID!, $organizationId: ID!, $types: [String!]) {
+    chatEvents(chatId: $chatId, organizationId: $organizationId, types: $types) {
       id
       scopeType
       scopeId
@@ -56,6 +62,15 @@ export function useChatEvents(chatId: string) {
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
 
+  useEffect(() => {
+    setLoading(true);
+    setLoadingOlder(false);
+    setHasOlder(true);
+    oldestTimestampRef.current = null;
+    loadingOlderRef.current = false;
+    hasOlderRef.current = true;
+  }, [chatId, activeOrgId]);
+
   const fetchEvents = useCallback(async () => {
     if (!activeOrgId) return;
 
@@ -63,6 +78,7 @@ export function useChatEvents(chatId: string) {
       .query(CHAT_EVENTS_QUERY, {
         organizationId: activeOrgId,
         scope: { type: "chat", id: chatId },
+        types: ["message_sent"],
         limit: PAGE_SIZE,
         before: new Date().toISOString(),
       })
@@ -95,6 +111,7 @@ export function useChatEvents(chatId: string) {
       .subscription(CHAT_EVENTS_SUBSCRIPTION, {
         chatId,
         organizationId: activeOrgId,
+        types: ["message_sent"],
       })
       .subscribe((result) => {
         if (!result.data?.chatEvents) return;
@@ -117,6 +134,7 @@ export function useChatEvents(chatId: string) {
       .query(CHAT_EVENTS_QUERY, {
         organizationId: activeOrgId,
         scope: { type: "chat", id: chatId },
+        types: ["message_sent"],
         limit: PAGE_SIZE,
         before: oldestTimestampRef.current,
       })
@@ -141,7 +159,7 @@ export function useChatEvents(chatId: string) {
   // Main feed events: scopeType=chat, scopeId=chatId, and parentId IS NULL
   const eventIds = useEntityIds(
     "events",
-    (e) => e.scopeType === "chat" && e.scopeId === chatId && !e.parentId,
+    (e) => e.scopeType === "chat" && e.scopeId === chatId && e.eventType === "message_sent" && !e.parentId,
     (a, b) => a.timestamp.localeCompare(b.timestamp),
   );
 

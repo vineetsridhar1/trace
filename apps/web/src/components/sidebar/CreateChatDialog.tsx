@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
-import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
+import { useEntityStore } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import {
@@ -39,9 +39,12 @@ const CREATE_CHAT_MUTATION = gql`
         user {
           id
           name
+          avatarUrl
         }
         joinedAt
       }
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -61,7 +64,7 @@ export function CreateChatDialog() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const userId = useAuthStore((s) => s.user?.id);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
-  const isMobile = useIsMobile();
+  const upsert = useEntityStore((s) => s.upsert);
 
   const fetchMembers = useCallback(async () => {
     if (!activeOrgId) return;
@@ -106,6 +109,7 @@ export function CreateChatDialog() {
         .toPromise();
 
       if (result.data?.createChat) {
+        upsert("chats", result.data.createChat.id, result.data.createChat);
         setOpen(false);
         setActiveChatId(result.data.createChat.id);
       }

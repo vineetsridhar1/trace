@@ -4,9 +4,14 @@ import { prisma } from "../lib/db.js";
 import { chatService } from "../services/chat.js";
 import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { filterAsyncIterator } from "../lib/async-iterator.js";
+import { assertChatAccess, isActiveChatMember } from "../services/access.js";
 
 export const chatQueries = {
   chats: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    if (args.organizationId !== ctx.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return chatService.getChats(args.organizationId, ctx.userId);
   },
   chat: async (_: unknown, args: { id: string }, ctx: Context) => {
@@ -21,6 +26,9 @@ export const chatQueries = {
 
 export const chatMutations = {
   createChat: (_: unknown, args: { input: CreateChatInput }, ctx: Context) => {
+    if (args.input.organizationId !== ctx.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return chatService.create(args.input, ctx.actorType, ctx.userId);
   },
   sendChatMessage: (
@@ -46,8 +54,26 @@ export const chatMutations = {
 
 export const chatSubscriptions = {
   chatEvents: {
-    subscribe: (_: unknown, args: { chatId: string }) => {
-      return pubsub.asyncIterator(topics.chatEvents(args.chatId));
+    subscribe: async (
+      _: unknown,
+      args: { chatId: string; organizationId: string; types?: string[] },
+      ctx: Context,
+    ) => {
+      if (args.organizationId !== ctx.organizationId) {
+        throw new Error("Not authorized for this organization");
+      }
+
+      await assertChatAccess(args.chatId, ctx.userId, ctx.organizationId);
+
+      return filterAsyncIterator(
+        pubsub.asyncIterator<{ chatEvents: { eventType: string } }>(topics.chatEvents(args.chatId)),
+        async (payload) => {
+          const isMember = await isActiveChatMember(args.chatId, ctx.userId);
+          if (!isMember) return false;
+          if (!args.types?.length) return true;
+          return args.types.includes(payload.chatEvents.eventType);
+        },
+      );
     },
   },
 };

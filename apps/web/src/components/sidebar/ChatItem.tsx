@@ -1,5 +1,6 @@
 import { MessageCircle } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
+import { useAuthStore } from "../../stores/auth";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 
 export function ChatItem({
@@ -13,10 +14,13 @@ export function ChatItem({
 }) {
   const name = useEntityField("chats", id, "name");
   const type = useEntityField("chats", id, "type");
+  const members = useEntityField("chats", id, "members") as
+    | Array<{ user: { id: string; name: string } }>
+    | undefined;
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
-  // For DMs, we'd ideally show the other user's name.
-  // For now, fall back to "Direct Message" if no name.
-  const displayName = name ?? (type === "dm" ? "Direct Message" : "Group Chat");
+  const otherMember = members?.find((member) => member.user.id !== currentUserId);
+  const displayName = name ?? (type === "dm" ? (otherMember?.user.name ?? "Direct Message") : "Group Chat");
 
   return (
     <SidebarMenuItem>
