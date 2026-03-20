@@ -60,6 +60,20 @@ const SESSION_INCLUDE = { createdBy: true, repo: true, channel: true, parentSess
 /** Instruction appended to the initial session prompt so the AI generates a title inline. */
 const TITLE_INSTRUCTION = `\n\nIMPORTANT: At the very beginning of your first response, output a short title (5-8 words) for this task wrapped in XML tags like this: <session-title>Your title here</session-title>. Then continue with your normal response.`;
 
+/** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */
+const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
+After completing each task, silently save your work to the remote:
+1. Stage all changes: git add -A
+2. Commit with a short, descriptive message summarizing what changed (skip if nothing staged)
+3. Push: git push origin HEAD
+Do this silently — do not mention it to the user unless they ask or it fails.
+If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
+</system-instruction>`;
+
+function appendAutoSave(prompt: string, hasRepo: boolean): string {
+  return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
+}
+
 /** Regex to extract <session-title>…</session-title> from assistant output. */
 const TITLE_TAG_RE = /<session-title>([\s\S]*?)<\/session-title>/;
 
@@ -322,6 +336,11 @@ export class SessionService {
     const isFirstRun = !session.toolSessionId;
     if (isFirstRun && resolvedPrompt) {
       resolvedPrompt = resolvedPrompt + TITLE_INSTRUCTION;
+    }
+
+    // Append auto-save instruction for repo-based sessions
+    if (resolvedPrompt) {
+      resolvedPrompt = appendAutoSave(resolvedPrompt, !!session.repo);
     }
 
     const command = {
@@ -744,7 +763,7 @@ export class SessionService {
   async sendMessage(sessionId: string, text: string, actorType: ActorType, actorId: string, interactionMode?: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { organizationId: true, status: true, tool: true, model: true, toolChangedAt: true, workdir: true, toolSessionId: true, connection: true },
+      select: { organizationId: true, status: true, tool: true, model: true, toolChangedAt: true, workdir: true, toolSessionId: true, repoId: true, connection: true },
     });
 
     if (isFullyUnloadedSessionStatus(session.status)) {
@@ -770,6 +789,9 @@ export class SessionService {
         }
       }
     }
+
+    // Append auto-save instruction for repo-based sessions
+    prompt = appendAutoSave(prompt, !!session.repoId);
 
     // Attempt delivery before marking active
     const deliveryResult = sessionRouter.send(sessionId, {
@@ -1483,6 +1505,7 @@ export class SessionService {
         model: true,
         workdir: true,
         toolSessionId: true,
+        repoId: true,
         connection: true,
       },
     });
@@ -1495,6 +1518,11 @@ export class SessionService {
       if (context) {
         prompt = `${context}\n\n${prompt}`;
       }
+    }
+
+    // Append auto-save instruction for repo-based sessions
+    if (prompt) {
+      prompt = appendAutoSave(prompt, !!session.repoId);
     }
 
     const command = {
