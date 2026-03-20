@@ -1,0 +1,72 @@
+.ag-theme-quartz {
+  --ag-background-color: var(--th-surface);
+  --ag-foreground-color: var(--foreground);
+  --ag-header-background-color: var(--th-surface);
+  --ag-header-text-color: var(--th-muted);
+
+  --ag-grid-size: 6px;
+  --ag-font-size: 0.875rem;
+  --ag-internal-content-line-height: 1.625;
+  --ag-spacing: 4px;
+
+  --ag-row-border-style: none;
+  --ag-row-hover-color: var(--th-surface-elevated);
+  --ag-selected-row-background-color: var(--th-surface-elevated);
+
+  --ag-wrapper-border-radius: 0px;
+  --ag-border-color: var(--th-edge);
+
+  --ag-border-width: 0.5px;
+  --ag-border-radius: 0px;
+}
+
+.ag-cell-focus:not(.ag-cell-range-selected):focus-within {
+  border-width: 0.5px;
+}
+
+.ag-cell,
+.ag-full-width-row .ag-cell-wrapper.ag-row-group {
+  border-width: 0.5px;
+}
+
+.ag-cell-wrapper {
+  overflow: hidden;
+}
+
+.ag-cell {
+  --ag-internal-content-line-height: 1.625;
+  display: flex;
+  align-items: center;
+}
+
+.ag-header-cell {
+  font-size: 12px;
+}
+
+.ag-root-wrapper {
+  border: none;
+}
+
+/* Selected row highlighting */
+.ag-theme-quartz .selected-row {
+  background-color: var(--th-surface-elevated) !important;
+}
+
+.ag-theme-quartz .selected-row:hover {
+  background-color: var(--th-surface-hover) !important;
+}
+
+.ag-theme-quartz .ag-row-group {
+  background-color: var(--th-surface-mid) !important;
+  cursor: pointer;
+}
+
+.ag-theme-quartz .ag-row-group:hover {
+  background-color: var(--th-surface-mid) !important;
+}
+
+.ag-theme-quartz,
+.ag-theme-quartz .ag-body-viewport {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}

@@ -44,6 +44,7 @@
 
   /* Trace semantic tokens */
   --th-surface: #171717;
+  --th-surface-mid: #111111;
   --th-surface-deep: #0a0a0a;
   --th-surface-elevated: #262626;
   --th-surface-hover: #404040;
@@ -114,7 +115,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-surface-deep text-foreground;
   }
   html {
     @apply font-sans;

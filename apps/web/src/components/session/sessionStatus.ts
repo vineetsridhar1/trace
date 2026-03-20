@@ -7,6 +7,8 @@ export const statusColor: Record<string, string> = {
   completed: "text-green-400",
   failed: "text-destructive",
   unreachable: "text-muted-foreground",
+  in_review: "text-violet-400",
+  merged: "text-emerald-400",
 };
 
 export const statusLabel: Record<string, string> = {
@@ -16,8 +18,10 @@ export const statusLabel: Record<string, string> = {
   paused: "Paused",
   needs_input: "Needs Input",
   completed: "Completed",
-  failed: "Stopped",
+  failed: "Failed",
   unreachable: "Unreachable",
+  in_review: "In Review",
+  merged: "Merged",
 };
 
 export const connectionColor: Record<string, string> = {
@@ -32,16 +36,36 @@ export const connectionLabel: Record<string, string> = {
   disconnected: "Connection Lost",
 };
 
+/**
+ * Derive the display status for a session.
+ * "in_review" is not a real DB status — it's derived from having a prUrl.
+ */
+export function getDisplayStatus(status: string | undefined, prUrl: string | null | undefined): string {
+  if (!status) return "active";
+  // These statuses take priority over the PR-derived "in review" state
+  if (status === "merged" || status === "failed" || status === "needs_input") return status;
+  if (prUrl) return "in_review";
+  return status;
+}
+
+/** Whether the session is "in review" and actively working (show spinner). */
+export function isReviewAndActive(status: string | undefined, prUrl: string | null | undefined): boolean {
+  return !!prUrl && status === "active";
+}
+
 /** Check if a session's connection is in a disconnected state */
 export function isDisconnected(connection: Record<string, unknown> | null | undefined): boolean {
   if (!connection) return false;
   return connection.state === "disconnected";
 }
 
-/** Check if a session can accept new messages (not disconnected and not in a terminal state) */
-export function canSendMessage(status: string | undefined, connection: Record<string, unknown> | null | undefined): boolean {
+/** Check if a session can accept new messages (not disconnected and not fully unloaded) */
+export function canSendMessage(
+  status: string | undefined,
+  connection: Record<string, unknown> | null | undefined,
+): boolean {
   if (!status) return false;
-  if (status === "completed" || status === "failed") return false;
+  if (status === "failed" || status === "merged") return false;
   if (status === "active") return false; // waiting for response
   if (isDisconnected(connection)) return false;
   return true;

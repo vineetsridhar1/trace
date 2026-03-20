@@ -131,7 +131,7 @@ export function handleBridgeConnection(ws: WebSocket) {
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
-          await sessionService.workspaceReady(msg.sessionId, msg.workdir as string);
+          await sessionService.workspaceReady(msg.sessionId, msg.workdir as string, msg.branch as string | undefined);
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {
         enqueueEvent(msg.sessionId, async () => {
@@ -151,6 +151,10 @@ export function handleBridgeConnection(ws: WebSocket) {
     } catch (err) {
       console.error("[bridge] error handling message:", err);
     }
+  });
+
+  ws.on("error", (err) => {
+    runtimeDebug("bridge websocket error", { runtimeId, error: err.message });
   });
 
   ws.on("close", () => {

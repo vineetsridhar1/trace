@@ -5,7 +5,7 @@ import {
   SEND_SESSION_MESSAGE_MUTATION,
   START_SESSION_MUTATION,
   RUN_SESSION_MUTATION,
-  TERMINATE_SESSION_MUTATION,
+  DISMISS_SESSION_MUTATION,
   DISMISS_INBOX_ITEM_MUTATION,
 } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
@@ -30,14 +30,27 @@ export function InboxItemRow({ id }: { id: string }) {
   const itemType = useEntityField("inboxItems", id, "itemType");
   const status = useEntityField("inboxItems", id, "status");
   const createdAt = useEntityField("inboxItems", id, "createdAt");
-  const payload = useEntityField("inboxItems", id, "payload") as Record<string, unknown> | undefined;
+  const payload = useEntityField("inboxItems", id, "payload") as
+    | Record<string, unknown>
+    | undefined;
   const sourceId = useEntityField("inboxItems", id, "sourceId");
 
-  const sessionChannel = useEntityField("sessions", sourceId ?? "", "channel") as { id: string } | null | undefined;
+  const sessionChannel = useEntityField("sessions", sourceId ?? "", "channel") as
+    | { id: string }
+    | null
+    | undefined;
   const sessionTool = useEntityField("sessions", sourceId ?? "", "tool") as string | undefined;
-  const sessionHosting = useEntityField("sessions", sourceId ?? "", "hosting") as string | undefined;
-  const sessionRepo = useEntityField("sessions", sourceId ?? "", "repo") as { id: string } | null | undefined;
-  const sessionBranch = useEntityField("sessions", sourceId ?? "", "branch") as string | null | undefined;
+  const sessionHosting = useEntityField("sessions", sourceId ?? "", "hosting") as
+    | string
+    | undefined;
+  const sessionRepo = useEntityField("sessions", sourceId ?? "", "repo") as
+    | { id: string }
+    | null
+    | undefined;
+  const sessionBranch = useEntityField("sessions", sourceId ?? "", "branch") as
+    | string
+    | null
+    | undefined;
 
   const [sending, setSending] = useState(false);
 
@@ -81,16 +94,27 @@ export function InboxItemRow({ id }: { id: string }) {
     } finally {
       setSending(false);
     }
-  }, [sending, sourceId, planContent, sessionTool, sessionHosting, sessionChannel?.id, sessionRepo?.id, sessionBranch]);
+  }, [
+    sending,
+    sourceId,
+    planContent,
+    sessionTool,
+    sessionHosting,
+    sessionChannel?.id,
+    sessionRepo?.id,
+    sessionBranch,
+  ]);
 
   const handleApproveKeepContext = useCallback(async () => {
     if (sending || !sourceId) return;
     setSending(true);
     try {
-      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
-        sessionId: sourceId,
-        text: "Approved. Implement this plan.",
-      }).toPromise();
+      await client
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId: sourceId,
+          text: "Approved. Implement this plan.",
+        })
+        .toPromise();
     } finally {
       setSending(false);
     }
@@ -102,26 +126,31 @@ export function InboxItemRow({ id }: { id: string }) {
     try {
       await client.mutation(DISMISS_INBOX_ITEM_MUTATION, { id }).toPromise();
       if (sourceId) {
-        await client.mutation(TERMINATE_SESSION_MUTATION, { id: sourceId }).toPromise();
+        await client.mutation(DISMISS_SESSION_MUTATION, { id: sourceId }).toPromise();
       }
     } finally {
       setSending(false);
     }
   }, [sending, id, sourceId]);
 
-  const handleSendMessage = useCallback(async (text: string, interactionMode?: string) => {
-    if (!text.trim() || sending || !sourceId) return;
-    setSending(true);
-    try {
-      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
-        sessionId: sourceId,
-        text,
-        interactionMode,
-      }).toPromise();
-    } finally {
-      setSending(false);
-    }
-  }, [sending, sourceId]);
+  const handleSendMessage = useCallback(
+    async (text: string, interactionMode?: string) => {
+      if (!text.trim() || sending || !sourceId) return;
+      setSending(true);
+      try {
+        await client
+          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+            sessionId: sourceId,
+            text,
+            interactionMode,
+          })
+          .toPromise();
+      } finally {
+        setSending(false);
+      }
+    },
+    [sending, sourceId],
+  );
 
   if (!title) return null;
 
@@ -157,7 +186,11 @@ export function InboxItemRow({ id }: { id: string }) {
         onClick={handleNavigate}
       >
         <div className="mt-0.5 shrink-0 text-muted-foreground">
-          {isQuestion ? <MessageCircleQuestion size={16} /> : <Map size={16} className="text-accent" />}
+          {isQuestion ? (
+            <MessageCircleQuestion size={16} />
+          ) : (
+            <Map size={16} className="text-accent" />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

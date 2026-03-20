@@ -147,6 +147,7 @@ export interface BridgeWorkspaceReady {
   type: "workspace_ready";
   sessionId: string;
   workdir: string;
+  branch?: string;
 }
 
 export interface BridgeWorkspaceFailed {

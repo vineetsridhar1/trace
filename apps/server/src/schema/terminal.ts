@@ -12,6 +12,7 @@ export const terminalQueries = {
     return terminalService.listForSession({
       sessionId: args.sessionId,
       organizationId: ctx.organizationId,
+      userId: ctx.userId,
     });
   },
 };
@@ -28,6 +29,7 @@ export const terminalMutations = {
       cols: args.cols,
       rows: args.rows,
       organizationId: ctx.organizationId,
+      userId: ctx.userId,
     });
   },
 
@@ -40,6 +42,7 @@ export const terminalMutations = {
     return terminalService.destroy({
       terminalId: args.terminalId,
       organizationId: ctx.organizationId,
+      userId: ctx.userId,
     });
   },
 };

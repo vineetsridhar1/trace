@@ -127,11 +127,19 @@ export function TerminalPanel({
         </button>
       </div>
 
-      {/* Terminal content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTerminalId && (
-          <TerminalInstance key={activeTerminalId} terminalId={activeTerminalId} />
-        )}
+      {/* Terminal content — render all instances, show only active to preserve scrollback */}
+      <div className="flex-1 overflow-hidden relative">
+        {terminals.map((t) => (
+          <div
+            key={t.id}
+            className={cn(
+              "absolute inset-0",
+              activeTerminalId === t.id ? "visible" : "invisible",
+            )}
+          >
+            <TerminalInstance terminalId={t.id} visible={activeTerminalId === t.id} />
+          </div>
+        ))}
       </div>
     </div>
   );

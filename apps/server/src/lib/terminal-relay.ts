@@ -10,6 +10,10 @@ interface TerminalEntry {
   terminated: boolean;
   /** Messages buffered before the frontend attaches */
   buffer: string[];
+  /** Ring buffer of raw output chunks for scrollback replay on reconnect */
+  scrollback: string[];
+  /** Running byte total of scrollback chunks */
+  scrollbackBytes: number;
   /** Timer to kill orphaned terminals that no frontend attaches to */
   orphanTimer: ReturnType<typeof setTimeout> | null;
 }
@@ -21,6 +25,8 @@ interface TerminalEntry {
 class TerminalRelay {
   /** If no frontend attaches within this window, kill the orphaned terminal. */
   private static ORPHAN_TIMEOUT_MS = 5 * 60 * 1000;
+  /** Max scrollback buffer size in bytes — older output is trimmed from the front. */
+  private static MAX_SCROLLBACK_BYTES = 50 * 1024;
 
   private terminals = new Map<string, TerminalEntry>();
   /** Reverse index: sessionId → Set<terminalId> for bulk cleanup */
@@ -33,7 +39,16 @@ class TerminalRelay {
   createTerminal(sessionId: string, cols: number, rows: number, cwd?: string): string {
     const terminalId = randomUUID();
 
-    this.terminals.set(terminalId, { sessionId, frontendWs: null, ready: false, terminated: false, buffer: [], orphanTimer: null });
+    this.terminals.set(terminalId, {
+      sessionId,
+      frontendWs: null,
+      ready: false,
+      terminated: false,
+      buffer: [],
+      scrollback: [],
+      scrollbackBytes: 0,
+      orphanTimer: null,
+    });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
     this.sessionTerminals.set(sessionId, ids);
@@ -72,6 +87,8 @@ class TerminalRelay {
         ready: true, // Bridge says it's alive, so it's ready
         terminated: false,
         buffer: [],
+        scrollback: [],
+        scrollbackBytes: 0,
         orphanTimer: null,
       });
 
@@ -103,6 +120,11 @@ class TerminalRelay {
 
     // Cancel orphan cleanup — a frontend has attached
     this.cancelOrphanCleanup(terminalId);
+
+    // Replay scrollback history so the frontend sees prior output
+    if (entry.scrollback.length > 0) {
+      ws.send(JSON.stringify({ type: "output", data: entry.scrollback.join("") }));
+    }
 
     // Flush buffered messages (e.g. terminal_ready that arrived before attach)
     for (const msg of entry.buffer) {
@@ -137,6 +159,17 @@ class TerminalRelay {
     const entry = this.terminals.get(msg.terminalId);
     if (!entry) return;
 
+    // Accumulate output into the scrollback ring buffer
+    if (msg.type === "terminal_output") {
+      const data = msg.data as string;
+      entry.scrollback.push(data);
+      entry.scrollbackBytes += data.length;
+      // Trim oldest chunks when over budget
+      while (entry.scrollbackBytes > TerminalRelay.MAX_SCROLLBACK_BYTES && entry.scrollback.length > 1) {
+        entry.scrollbackBytes -= entry.scrollback.shift()!.length;
+      }
+    }
+
     let serialized: string | null = null;
     if (msg.type === "terminal_output") {
       serialized = JSON.stringify({ type: "output", data: msg.data });
@@ -158,8 +191,11 @@ class TerminalRelay {
       entry.frontendWs.send(serialized);
       if (isTerminalEnd) this.removeTerminal(msg.terminalId);
     } else {
-      // Buffer until frontend attaches (e.g. terminal_ready arrives before WS connect)
-      entry.buffer.push(serialized);
+      // Buffer non-output messages until frontend attaches (e.g. terminal_ready).
+      // Output is not buffered here — scrollback handles output replay on attach.
+      if (msg.type !== "terminal_output") {
+        entry.buffer.push(serialized);
+      }
       // Schedule cleanup so the entry doesn't leak if frontend never attaches
       if (isTerminalEnd) {
         setTimeout(() => this.removeTerminal(msg.terminalId), 30_000);

@@ -1,3 +1,4 @@
+import { JsonValue } from '../json';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
@@ -13,11 +14,12 @@ export type Scalars = {
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
   DateTime: { input: string; output: string; }
-  JSON: { input: Record<string, unknown>; output: Record<string, unknown>; }
+  JSON: { input: JsonValue; output: JsonValue; }
 };
 
 export type Actor = {
   __typename?: 'Actor';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name?: Maybe<Scalars['String']['output']>;
   type: ActorType;
@@ -27,6 +29,11 @@ export type ActorType =
   | 'agent'
   | 'system'
   | 'user';
+
+export type AddChatMemberInput = {
+  chatId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
+};
 
 export type AgentTrustLevel =
   | 'autonomous'
@@ -68,6 +75,35 @@ export type ChannelType =
   | 'feed'
   | 'triage';
 
+export type Chat = {
+  __typename?: 'Chat';
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
+  id: Scalars['ID']['output'];
+  members: Array<ChatMember>;
+  messages: Array<Message>;
+  name?: Maybe<Scalars['String']['output']>;
+  type: ChatType;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+
+export type ChatMessagesArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  before?: InputMaybe<Scalars['DateTime']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ChatMember = {
+  __typename?: 'ChatMember';
+  joinedAt: Scalars['DateTime']['output'];
+  user: User;
+};
+
+export type ChatType =
+  | 'dm'
+  | 'group';
+
 export type CodingTool =
   | 'claude_code'
   | 'codex'
@@ -78,6 +114,12 @@ export type CreateChannelInput = {
   organizationId: Scalars['ID']['input'];
   projectIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   type?: InputMaybe<ChannelType>;
+};
+
+export type CreateChatInput = {
+  memberIds: Array<Scalars['ID']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  organizationId: Scalars['ID']['input'];
 };
 
 export type CreateProjectInput = {
@@ -112,6 +154,7 @@ export type DeliveryResult =
 
 export type EntityType =
   | 'channel'
+  | 'chat'
   | 'session'
   | 'ticket';
 
@@ -130,6 +173,10 @@ export type Event = {
 
 export type EventType =
   | 'channel_created'
+  | 'chat_created'
+  | 'chat_member_added'
+  | 'chat_member_removed'
+  | 'chat_renamed'
   | 'entity_linked'
   | 'inbox_item_created'
   | 'inbox_item_resolved'
@@ -143,6 +190,9 @@ export type EventType =
   | 'session_deleted'
   | 'session_output'
   | 'session_paused'
+  | 'session_pr_closed'
+  | 'session_pr_merged'
+  | 'session_pr_opened'
   | 'session_resumed'
   | 'session_started'
   | 'session_terminated'
@@ -178,33 +228,70 @@ export type InboxItemType =
   | 'plan'
   | 'question';
 
+export type Message = {
+  __typename?: 'Message';
+  actor: Actor;
+  chatId: Scalars['ID']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  deletedAt?: Maybe<Scalars['DateTime']['output']>;
+  editedAt?: Maybe<Scalars['DateTime']['output']>;
+  html?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  latestReplyAt?: Maybe<Scalars['DateTime']['output']>;
+  mentions?: Maybe<Scalars['JSON']['output']>;
+  parentMessageId?: Maybe<Scalars['ID']['output']>;
+  replyCount: Scalars['Int']['output'];
+  text: Scalars['String']['output'];
+  threadRepliers: Array<Actor>;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
+  addChatMember: Chat;
   commentOnTicket: Event;
   createChannel: Channel;
+  createChat: Chat;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
+  deleteChatMessage: Message;
   deleteSession: Session;
   destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
+  dismissSession: Session;
+  editChatMessage: Message;
+  leaveChat: Chat;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
   moveSessionToRuntime: Session;
+  muteScope: Participant;
   pauseSession: Session;
+  registerRepoWebhook: Repo;
+  renameChat: Chat;
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
+  sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
   startSession: Session;
+  subscribe: Participant;
   terminateSession: Session;
+  unmuteScope: Participant;
+  unregisterRepoWebhook: Repo;
+  unsubscribe: Scalars['Boolean']['output'];
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
+};
+
+
+export type MutationAddChatMemberArgs = {
+  input: AddChatMemberInput;
 };
 
 
@@ -216,6 +303,11 @@ export type MutationCommentOnTicketArgs = {
 
 export type MutationCreateChannelArgs = {
   input: CreateChannelInput;
+};
+
+
+export type MutationCreateChatArgs = {
+  input: CreateChatInput;
 };
 
 
@@ -246,6 +338,11 @@ export type MutationDeleteApiTokenArgs = {
 };
 
 
+export type MutationDeleteChatMessageArgs = {
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -258,6 +355,22 @@ export type MutationDestroyTerminalArgs = {
 
 export type MutationDismissInboxItemArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationDismissSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationEditChatMessageArgs = {
+  html: Scalars['String']['input'];
+  messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationLeaveChatArgs = {
+  chatId: Scalars['ID']['input'];
 };
 
 
@@ -280,8 +393,25 @@ export type MutationMoveSessionToRuntimeArgs = {
 };
 
 
+export type MutationMuteScopeArgs = {
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
+};
+
+
 export type MutationPauseSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationRegisterRepoWebhookArgs = {
+  repoId: Scalars['ID']['input'];
+};
+
+
+export type MutationRenameChatArgs = {
+  chatId: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
 };
 
 
@@ -299,6 +429,14 @@ export type MutationRunSessionArgs = {
   id: Scalars['ID']['input'];
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationSendChatMessageArgs = {
+  chatId: Scalars['ID']['input'];
+  html?: InputMaybe<Scalars['String']['input']>;
+  parentId?: InputMaybe<Scalars['ID']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -326,8 +464,31 @@ export type MutationStartSessionArgs = {
 };
 
 
+export type MutationSubscribeArgs = {
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
+};
+
+
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUnmuteScopeArgs = {
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
+};
+
+
+export type MutationUnregisterRepoWebhookArgs = {
+  repoId: Scalars['ID']['input'];
+};
+
+
+export type MutationUnsubscribeArgs = {
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
 };
 
 
@@ -367,6 +528,16 @@ export type Organization = {
   repos: Array<Repo>;
 };
 
+export type Participant = {
+  __typename?: 'Participant';
+  muted: Scalars['Boolean']['output'];
+  scopeId: Scalars['ID']['output'];
+  scopeType: Scalars['String']['output'];
+  subscribedAt: Scalars['DateTime']['output'];
+  user: User;
+  userId: Scalars['ID']['output'];
+};
+
 export type PortEndpoint = {
   __typename?: 'PortEndpoint';
   label: Scalars['String']['output'];
@@ -397,11 +568,15 @@ export type Query = {
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
+  chat?: Maybe<Chat>;
+  chatMessages: Array<Message>;
+  chats: Array<Chat>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
+  participants: Array<Participant>;
   project?: Maybe<Project>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -410,6 +585,8 @@ export type Query = {
   session?: Maybe<Session>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
+  threadReplies: Array<Message>;
+  threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
 };
@@ -433,6 +610,24 @@ export type QueryChannelArgs = {
 export type QueryChannelsArgs = {
   organizationId: Scalars['ID']['input'];
   projectId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type QueryChatArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryChatMessagesArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  before?: InputMaybe<Scalars['DateTime']['input']>;
+  chatId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryChatsArgs = {
+  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -460,6 +655,12 @@ export type QueryMySessionsArgs = {
 
 export type QueryOrganizationArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryParticipantsArgs = {
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
 };
 
 
@@ -506,6 +707,18 @@ export type QuerySessionsArgs = {
 };
 
 
+export type QueryThreadRepliesArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  rootMessageId: Scalars['ID']['input'];
+};
+
+
+export type QueryThreadSummaryArgs = {
+  rootMessageId: Scalars['ID']['input'];
+};
+
+
 export type QueryTicketArgs = {
   id: Scalars['ID']['input'];
 };
@@ -524,6 +737,7 @@ export type Repo = {
   projects: Array<Project>;
   remoteUrl: Scalars['String']['output'];
   sessions: Array<Session>;
+  webhookActive: Scalars['Boolean']['output'];
 };
 
 export type ScopeInput = {
@@ -533,6 +747,7 @@ export type ScopeInput = {
 
 export type ScopeType =
   | 'channel'
+  | 'chat'
   | 'session'
   | 'system'
   | 'ticket';
@@ -551,6 +766,7 @@ export type Session = {
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   parentSession?: Maybe<Session>;
+  prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   status: SessionStatus;
@@ -608,6 +824,7 @@ export type SessionStatus =
   | 'completed'
   | 'creating'
   | 'failed'
+  | 'merged'
   | 'needs_input'
   | 'paused'
   | 'pending'
@@ -635,6 +852,7 @@ export type StartSessionInput = {
 export type Subscription = {
   __typename?: 'Subscription';
   channelEvents: Event;
+  chatEvents: Event;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -645,6 +863,13 @@ export type Subscription = {
 
 export type SubscriptionChannelEventsArgs = {
   channelId: Scalars['ID']['input'];
+  organizationId: Scalars['ID']['input'];
+  types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionChatEventsArgs = {
+  chatId: Scalars['ID']['input'];
   organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
 };
@@ -689,6 +914,14 @@ export type TerminalEndpoint = {
   id: Scalars['String']['output'];
   status: Scalars['String']['output'];
   wsUrl: Scalars['String']['output'];
+};
+
+export type ThreadSummary = {
+  __typename?: 'ThreadSummary';
+  lastReplyAt?: Maybe<Scalars['DateTime']['output']>;
+  participantIds: Array<Scalars['ID']['output']>;
+  replyCount: Scalars['Int']['output'];
+  rootMessageId: Scalars['ID']['output'];
 };
 
 export type Ticket = {

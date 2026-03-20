@@ -1,5 +1,10 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
+const scalars = {
+  DateTime: "string",
+  JSON: "../json#JsonValue",
+} as const;
+
 const config: CodegenConfig = {
   schema: "src/schema.graphql",
   generates: {
@@ -7,10 +12,7 @@ const config: CodegenConfig = {
       plugins: ["typescript"],
       config: {
         enumsAsTypes: true,
-        scalars: {
-          DateTime: "string",
-          JSON: "Record<string, unknown>",
-        },
+        scalars,
       },
     },
     "src/generated/resolvers.ts": {
@@ -19,10 +21,7 @@ const config: CodegenConfig = {
         useIndexSignature: true,
         contextType: "../context#Context",
         enumsAsTypes: true,
-        scalars: {
-          DateTime: "string",
-          JSON: "Record<string, unknown>",
-        },
+        scalars,
       },
     },
   },

@@ -70,6 +70,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     };
 
     if (this.process.stdout) {
+      // Prevent unhandled 'error' events on the pipe from crashing the process
+      // when abort() kills the child (the pipe can emit ECONNRESET/EPIPE).
+      this.process.stdout.on("error", () => {});
       const rl = createInterface({ input: this.process.stdout });
       rl.on("line", (line) => {
         if (!line.trim()) return;
@@ -98,6 +101,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
 
     const stderrChunks: string[] = [];
     if (this.process.stderr) {
+      this.process.stderr.on("error", () => {});
       const rl = createInterface({ input: this.process.stderr });
       rl.on("line", (line) => {
         stderrChunks.push(line);

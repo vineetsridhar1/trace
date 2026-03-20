@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
+import { createUserLoader } from "./dataloader.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 
@@ -60,6 +61,7 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     organizationId: user.organizationId,
     role: user.role as Context["role"],
     actorType: "user",
+    userLoader: createUserLoader(),
   };
 }
 
@@ -88,5 +90,6 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
     organizationId: user.organizationId,
     role: user.role as Context["role"],
     actorType: "user",
+    userLoader: createUserLoader(),
   };
 }

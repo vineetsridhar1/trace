@@ -32,6 +32,14 @@ export const TERMINATE_SESSION_MUTATION = gql`
   }
 `;
 
+export const DISMISS_SESSION_MUTATION = gql`
+  mutation DismissSession($id: ID!) {
+    dismissSession(id: $id) {
+      id
+    }
+  }
+`;
+
 export const RETRY_SESSION_CONNECTION_MUTATION = gql`
   mutation RetrySessionConnection($sessionId: ID!) {
     retrySessionConnection(sessionId: $sessionId) {
@@ -100,6 +108,22 @@ export const UPDATE_REPO_MUTATION = gql`
   }
 `;
 
+export const REGISTER_REPO_WEBHOOK_MUTATION = gql`
+  mutation RegisterRepoWebhook($repoId: ID!) {
+    registerRepoWebhook(repoId: $repoId) {
+      id
+    }
+  }
+`;
+
+export const UNREGISTER_REPO_WEBHOOK_MUTATION = gql`
+  mutation UnregisterRepoWebhook($repoId: ID!) {
+    unregisterRepoWebhook(repoId: $repoId) {
+      id
+    }
+  }
+`;
+
 export const REPO_BRANCHES_QUERY = gql`
   query RepoBranches($repoId: ID!, $runtimeInstanceId: ID) {
     repoBranches(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId)
@@ -127,5 +151,36 @@ export const CREATE_TERMINAL_MUTATION = gql`
 export const DESTROY_TERMINAL_MUTATION = gql`
   mutation DestroyTerminal($terminalId: ID!) {
     destroyTerminal(terminalId: $terminalId)
+  }
+`;
+
+export const ORG_MEMBERS_QUERY = gql`
+  query OrgMembers($id: ID!) {
+    organization(id: $id) {
+      id
+      members {
+        id
+        name
+        email
+        avatarUrl
+        role
+      }
+    }
+  }
+`;
+
+export const EDIT_CHAT_MESSAGE_MUTATION = gql`
+  mutation EditChatMessage($messageId: ID!, $html: String!) {
+    editChatMessage(messageId: $messageId, html: $html) {
+      id
+    }
+  }
+`;
+
+export const DELETE_CHAT_MESSAGE_MUTATION = gql`
+  mutation DeleteChatMessage($messageId: ID!) {
+    deleteChatMessage(messageId: $messageId) {
+      id
+    }
   }
 `;

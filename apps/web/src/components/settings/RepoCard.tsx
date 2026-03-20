@@ -2,7 +2,11 @@ import { useState } from "react";
 import { GitBranch, Pencil, Check, X } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { UPDATE_REPO_MUTATION } from "../../lib/mutations";
+import {
+  UPDATE_REPO_MUTATION,
+  REGISTER_REPO_WEBHOOK_MUTATION,
+  UNREGISTER_REPO_WEBHOOK_MUTATION,
+} from "../../lib/mutations";
 import { Button } from "../ui/button";
 import { BranchCombobox } from "../channel/BranchCombobox";
 
@@ -10,9 +14,12 @@ export function RepoCard({ id }: { id: string }) {
   const name = useEntityField("repos", id, "name");
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");
+  const webhookActive = useEntityField("repos", id, "webhookActive") as boolean | undefined;
   const [editing, setEditing] = useState(false);
   const [editBranch, setEditBranch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [webhookPending, setWebhookPending] = useState(false);
+  const [webhookError, setWebhookError] = useState<string | null>(null);
 
   const startEditing = () => {
     setEditBranch(defaultBranch ?? "main");
@@ -39,6 +46,28 @@ export function RepoCard({ id }: { id: string }) {
       setEditing(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleWebhook = async () => {
+    if (webhookPending) return;
+
+    setWebhookPending(true);
+    setWebhookError(null);
+
+    try {
+      const result = await client
+        .mutation(
+          webhookActive ? UNREGISTER_REPO_WEBHOOK_MUTATION : REGISTER_REPO_WEBHOOK_MUTATION,
+          { repoId: id },
+        )
+        .toPromise();
+
+      if (result.error) {
+        setWebhookError(result.error.message);
+      }
+    } finally {
+      setWebhookPending(false);
     }
   };
 
@@ -95,6 +124,24 @@ export function RepoCard({ id }: { id: string }) {
               </>
             )}
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <p className={`text-xs ${webhookActive ? "text-emerald-500" : "text-muted-foreground"}`}>
+              {webhookActive ? "GitHub webhook connected" : "GitHub webhook not connected"}
+            </p>
+            <Button
+              variant={webhookActive ? "ghost" : "outline"}
+              size="sm"
+              onClick={toggleWebhook}
+              disabled={webhookPending}
+            >
+              {webhookPending
+                ? (webhookActive ? "Disconnecting..." : "Connecting...")
+                : (webhookActive ? "Disconnect Webhook" : "Connect Webhook")}
+            </Button>
+          </div>
+          {webhookError && (
+            <p className="mt-2 text-xs text-destructive">{webhookError}</p>
+          )}
         </div>
       </div>
     </div>

@@ -1,23 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
+import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
-import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
-import { useConnectionStore } from "./stores/connection";
-import { CircleDot } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
-
-type DesktopBridgeStatus = Awaited<ReturnType<TraceElectronBridge["getBridgeStatus"]>>;
-
-const isElectron = typeof window.trace?.getBridgeStatus === "function";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -30,7 +25,7 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface-deep">
+      <div className="flex h-dvh items-center justify-center bg-surface-deep">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -48,122 +43,44 @@ export function App() {
   );
 }
 
-function ConnectionStatus() {
-  const [status, setStatus] = useState<DesktopBridgeStatus | null>(null);
-  const connected = useConnectionStore((s) => s.connected);
-
-  useEffect(() => {
-    if (!isElectron || !window.trace?.getBridgeStatus || !window.trace?.onBridgeStatus) return;
-
-    let cancelled = false;
-    window.trace.getBridgeStatus().then((nextStatus) => {
-      if (!cancelled) setStatus(nextStatus);
-    });
-
-    const unsubscribe = window.trace.onBridgeStatus((nextStatus) => {
-      setStatus(nextStatus);
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
-
-  const bridgeStatus = isElectron ? (status ?? "connecting") : null;
-
-  let health: "healthy" | "degraded" | "down" = "healthy";
-  if (!connected && isElectron && bridgeStatus === "disconnected") {
-    health = "down";
-  } else if (!connected || bridgeStatus === "connecting" || bridgeStatus === "disconnected") {
-    health = "degraded";
-  }
-
-  const indicatorClass =
-    health === "healthy" ? "text-green-500" : health === "down" ? "text-red-500" : "text-yellow-500";
-
-  const summaryLabel = !isElectron
-    ? connected
-      ? "Client Connected"
-      : "Client Disconnected"
-    : health === "healthy"
-      ? "All Connections Healthy"
-      : health === "down"
-        ? "All Connections Down"
-        : "Connection Degraded";
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        type="button"
-        className={`ml-auto flex h-8 items-center rounded-md px-1.5 ${indicatorClass}`}
-        aria-label={summaryLabel}
-      >
-        <CircleDot className="h-4 w-4" />
-      </TooltipTrigger>
-      <TooltipContent className="flex min-w-44 flex-col items-start gap-1.5 px-3 py-2">
-        <div className="font-medium">{summaryLabel}</div>
-        <div className="flex w-full items-center justify-between gap-4">
-          <span>Client</span>
-          <span>{connected ? "connected" : "disconnected"}</span>
-        </div>
-        {bridgeStatus && (
-          <div className="flex w-full items-center justify-between gap-4">
-            <span>Bridge</span>
-            <span>{bridgeStatus}</span>
-          </div>
-        )}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
   useHistorySync();
   useVisibilityRefresh();
   const activePage = useUIStore((s) => s.activePage);
+  const activeChatId = useUIStore((s) => s.activeChatId);
 
   return (
     <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {activePage === "settings" ? (
-            <SettingsPage />
-          ) : activePage === "inbox" ? (
-            <>
-              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-                <SidebarTrigger />
-                <h1 className="text-lg font-semibold text-foreground">Trace</h1>
-                <ConnectionStatus />
-              </header>
-              <main className="min-h-0 flex-1">
+      <div className="flex h-dvh max-h-dvh min-h-dvh flex-col pl-2 pr-2 pt-2">
+        <SidebarProvider className="flex-1">
+          <AppSidebar />
+          <div className="flex w-full flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background">
+            <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {activePage === "settings" ? (
+                <SettingsPage />
+              ) : activePage === "inbox" ? (
                 <InboxView />
-              </main>
-            </>
-          ) : (
-            <>
-              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-                <SidebarTrigger />
-                <h1 className="text-lg font-semibold text-foreground">Trace</h1>
-                <ConnectionStatus />
-              </header>
-              <main className="min-h-0 flex-1">
-                {activeChannelId ? (
-                  <ChannelView channelId={activeChannelId} />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
+              ) : activeChatId ? (
+                <ChatView chatId={activeChatId} />
+              ) : activeChannelId ? (
+                <ChannelView channelId={activeChannelId} />
+              ) : (
+                <div className="flex h-full flex-col">
+                  <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+                    <SidebarTrigger />
+                  </header>
+                  <div className="flex flex-1 items-center justify-center">
                     <p className="text-sm text-muted-foreground">
                       Select a channel to get started
                     </p>
                   </div>
-                )}
-              </main>
-            </>
-          )}
-        </div>
-      </SidebarProvider>
+                </div>
+              )}
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+      </div>
     </TooltipProvider>
   );
 }
@@ -199,7 +116,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-surface-deep">
+    <div className="flex h-dvh items-center justify-center bg-surface-deep">
       <div className="flex flex-col items-center gap-6">
         <h1 className="text-3xl font-bold text-foreground">Trace</h1>
         <p className="text-muted-foreground">

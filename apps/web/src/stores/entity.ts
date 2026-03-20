@@ -6,15 +6,19 @@ import type {
   Repo,
   Project,
   Channel,
+  Chat,
   Session,
   Ticket,
   Event,
   InboxItem,
+  Message,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
 export type SessionEntity = Session & {
   _lastEventPreview?: string;
+  _lastMessageAt?: string;
+  _sortTimestamp?: string;
 };
 
 /** Entity types that the store manages, keyed by ID */
@@ -24,10 +28,12 @@ export type EntityTableMap = {
   repos: Repo;
   projects: Project;
   channels: Channel;
+  chats: Chat;
   sessions: SessionEntity;
   tickets: Ticket;
   events: Event;
   inboxItems: InboxItem;
+  messages: Message;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -53,10 +59,12 @@ export const useEntityStore = create<EntityState>((set) => ({
   repos: {},
   projects: {},
   channels: {},
+  chats: {},
   sessions: {},
   tickets: {},
   events: {},
   inboxItems: {},
+  messages: {},
 
   upsert: (entityType, id, data) =>
     set((state) => {
@@ -101,6 +109,14 @@ export function useEntityField<T extends EntityType, F extends keyof EntityTable
     const entity = state[type][id] as EntityTableMap[T] | undefined;
     return entity?.[field];
   });
+}
+
+/** Typed selector for message fields — avoids `as` casts at call sites */
+export function useMessageField<F extends keyof Message>(
+  messageId: string,
+  field: F,
+): Message[F] | undefined {
+  return useEntityField("messages", messageId, field) as Message[F] | undefined;
 }
 
 /** Subscribe to sorted IDs of an entity table, optionally filtered.

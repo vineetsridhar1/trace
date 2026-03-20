@@ -22,12 +22,15 @@ export interface EventQueryOpts {
   after?: Date;
   before?: Date;
   limit?: number;
+  /** When true, exclude events that are thread replies (parentId IS NOT NULL) */
+  excludeReplies?: boolean;
 }
 
 // Maps scope types to their pubsub topic builders.
 // Keys must match the GraphQL subscription field names (e.g. "channel" → "channelEvents").
 const scopeTopicMap: Record<string, (id: string) => string> = {
   channel: topics.channelEvents,
+  chat: topics.chatEvents,
   ticket: topics.ticketEvents,
   // "system" scope has no entity-level topic — events are broadcast on the org topic only
 };
@@ -70,6 +73,7 @@ export class EventService {
     if (opts.scopeType) where.scopeType = opts.scopeType;
     if (opts.scopeId) where.scopeId = opts.scopeId;
     if (opts.types?.length) where.eventType = { in: opts.types };
+    if (opts.excludeReplies) where.parentId = null;
     const timestampFilter: Record<string, Date> = {};
     if (opts.after) timestampFilter.gt = opts.after;
     if (opts.before) timestampFilter.lt = opts.before;

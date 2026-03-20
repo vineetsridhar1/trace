@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import type { Event, EventType, SessionStatus } from "@trace/gql";
+import { asJsonObject } from "@trace/shared";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
@@ -39,7 +40,8 @@ function handleSessionStatusChange(event: Event): void {
   // Don't notify for your own actions
   if (event.actor.id === currentUserId) return;
 
-  const newStatus = (event.payload as Record<string, unknown>).status as SessionStatus | undefined;
+  const payload = asJsonObject(event.payload);
+  const newStatus = payload?.status as SessionStatus | undefined;
   if (!newStatus) return;
 
   // Look up the session to check ownership and get the name
@@ -76,7 +78,8 @@ function handleInboxItemCreated(event: Event): void {
   const currentUserId = useAuthStore.getState().user?.id;
   if (!currentUserId) return;
 
-  const item = event.payload.inboxItem as Record<string, unknown> | undefined;
+  const payload = asJsonObject(event.payload);
+  const item = asJsonObject(payload?.inboxItem);
   if (!item) return;
 
   // Only notify for items assigned to the current user
@@ -95,9 +98,79 @@ function handleInboxItemCreated(event: Event): void {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Built-in handler: Mention notifications
+// ---------------------------------------------------------------------------
+
+function handleMentionNotification(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  // Don't notify for your own messages
+  if (event.actor.id === currentUserId) return;
+
+  const payload = asJsonObject(event.payload);
+  if (!payload) return;
+
+  const mentions = Array.isArray(payload.mentions)
+    ? (payload.mentions as Array<{ userId: string; name: string }>)
+    : undefined;
+  if (!mentions?.some((m) => m.userId === currentUserId)) return;
+
+  const actorName = event.actor.name ?? "Someone";
+  toast(`${actorName} mentioned you`, {
+    action: {
+      label: "View",
+      onClick: () => {
+        if (event.scopeType === ("chat" as string)) {
+          useUIStore.getState().setActiveChatId(event.scopeId);
+        }
+      },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Built-in handler: PR lifecycle events (open / close without merge)
+// ---------------------------------------------------------------------------
+
+function handlePrEvent(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  const session = useEntityStore.getState().sessions[event.scopeId];
+  if (!session) return;
+  if (session.createdBy?.id !== currentUserId) return;
+
+  const now = Date.now();
+  const lastToast = recentToasts.get(event.scopeId);
+  if (lastToast && now - lastToast < DEBOUNCE_MS) return;
+  recentToasts.set(event.scopeId, now);
+
+  const sessionName = session.name || "Untitled session";
+  const channelId = (session.channel as { id: string } | null)?.id ?? null;
+  const sessionId = event.scopeId;
+  const label = event.eventType === "session_pr_opened" ? "PR opened" : "PR closed";
+
+  toast(`"${sessionName}" — ${label}`, {
+    action: {
+      label: "View",
+      onClick: () => navigateToSession(channelId, sessionId),
+    },
+  });
+}
+
 // Register the built-in handlers
-const sessionStatusEventTypes: EventType[] = ["session_paused", "session_resumed", "session_terminated"];
+const sessionStatusEventTypes: EventType[] = [
+  "session_paused",
+  "session_resumed",
+  "session_terminated",
+  "session_pr_merged",
+];
 for (const eventType of sessionStatusEventTypes) {
   registerHandler(eventType, handleSessionStatusChange);
 }
+registerHandler("session_pr_opened", handlePrEvent);
+registerHandler("session_pr_closed", handlePrEvent);
 registerHandler("inbox_item_created", handleInboxItemCreated);
+registerHandler("message_sent", handleMentionNotification);

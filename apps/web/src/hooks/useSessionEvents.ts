@@ -19,6 +19,7 @@ const SESSION_EVENTS_QUERY = gql`
         type
         id
         name
+        avatarUrl
       }
       parentId
       timestamp

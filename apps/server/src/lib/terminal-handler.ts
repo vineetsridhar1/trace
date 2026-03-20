@@ -97,9 +97,14 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
             }
             const session = await prisma.session.findFirst({
               where: { id: sessionId, organizationId: user.organizationId },
-              select: { id: true },
+              select: { id: true, hosting: true, createdById: true },
             });
             if (!session) {
+              ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
+              return;
+            }
+            if (session.hosting === "local" && session.createdById !== userId) {
+              console.warn(`[terminal-handler] user ${userId} denied terminal access to local session ${sessionId} owned by ${session.createdById}`);
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
@@ -130,6 +135,10 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     } catch (err) {
       console.error("[terminal-handler] error handling message:", err);
     }
+  });
+
+  ws.on("error", (err) => {
+    console.warn("[terminal-handler] websocket error:", err.message);
   });
 
   ws.on("close", () => {

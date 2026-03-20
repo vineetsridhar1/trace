@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "tsc -b && electron-forge start",
-    "build": "tsc -b",
+    "dev": "pnpm --filter @trace/shared build && tsc -b && electron-forge start",
+    "build": "pnpm --filter @trace/shared build && tsc -b",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "lint": "tsc -b"

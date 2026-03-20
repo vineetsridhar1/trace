@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField } from "../../stores/entity";
+import { useAuthStore } from "../../stores/auth";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
@@ -9,8 +10,9 @@ import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { buildSessionNodes } from "./groupReadGlob";
+import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
-import { TERMINATE_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -27,6 +29,7 @@ const SESSION_DETAIL_QUERY = gql`
       }
       branch
       workdir
+      prUrl
       connection {
         state
         runtimeInstanceId
@@ -66,7 +69,16 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const events = useEntityStore((s) => s.events);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const createdBy = useEntityField("sessions", sessionId, "createdBy") as { id: string } | undefined;
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
   const isCloud = hosting === "cloud";
+  const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
+  const isConnected = !connection || connection.state !== "disconnected";
+  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected;
 
   // Fetch full session with lineage data — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -93,33 +105,37 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     if (status !== "needs_input") return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
-      if (node.kind === "plan-review") return node;
+      if (node.kind === "plan-review") return { node, index: i };
     }
     return null;
   }, [nodes, status]);
 
   const activeQuestion = useMemo(() => {
     if (status !== "needs_input") return null;
-    if (activePlan) return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
-      if (node.kind === "ask-user-question") return node;
+      if (node.kind === "ask-user-question") return { node, index: i };
     }
     return null;
-  }, [nodes, status, activePlan]);
+  }, [nodes, status]);
 
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
-  const showQuestion =
-    activeQuestion && activeQuestion.id !== dismissedQuestionId ? activeQuestion : null;
+  // Don't show a stale question if a more recent plan exists — the question was already answered
+  const showQuestion = (() => {
+    if (!activeQuestion) return null;
+    if (activeQuestion.node.id === dismissedQuestionId) return null;
+    if (activePlan && activePlan.index > activeQuestion.index) return null;
+    return activeQuestion.node;
+  })();
 
   const [showTerminal, setShowTerminal] = useState(false);
 
   const handleStop = useCallback(async () => {
-    await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+    await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
   const handleDismissPlan = useCallback(async () => {
-    await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+    await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
   return (
@@ -127,15 +143,24 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       <SessionHeader
         sessionId={sessionId}
         onStop={handleStop}
-        onToggleTerminal={isCloud ? () => setShowTerminal((v) => !v) : undefined}
+        onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
         terminalOpen={showTerminal}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-hidden">
           {loading ? (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">Loading events...</p>
+            <div className="flex flex-col gap-4 p-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-24" />
+                    <Skeleton className="h-3.5 w-[80%]" />
+                    <Skeleton className="h-3.5 w-[60%]" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : error ? (
             <div className="flex h-full items-center justify-center">
@@ -151,18 +176,12 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
           )}
         </div>
 
-        {showTerminal && isCloud && (
+        {showTerminal && canAccessTerminal && (
           <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
         )}
       </div>
 
-      {activePlan ? (
-        <PlanResponseBar
-          sessionId={sessionId}
-          planContent={activePlan.planContent}
-          onDismiss={handleDismissPlan}
-        />
-      ) : showQuestion ? (
+      {showQuestion ? (
         <AskUserQuestionBar
           node={showQuestion}
           onResponse={(text) => {
@@ -170,13 +189,19 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
               .mutation(SEND_SESSION_MESSAGE_MUTATION, {
                 sessionId,
                 text,
+                interactionMode: activePlan ? "plan" : undefined,
               })
               .toPromise();
           }}
           onDismiss={() => {
             setDismissedQuestionId(showQuestion.id);
-            client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
           }}
+        />
+      ) : activePlan ? (
+        <PlanResponseBar
+          sessionId={sessionId}
+          planContent={activePlan.node.planContent}
+          onDismiss={handleDismissPlan}
         />
       ) : (
         <SessionInput sessionId={sessionId} />
