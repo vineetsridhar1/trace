@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from "react";
 import { Hash } from "lucide-react";
 import type { Session } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
+import type { SessionEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
@@ -72,7 +73,10 @@ export function ChannelView({ channelId }: { channelId: string }) {
       .toPromise();
 
     if (result.data?.sessions) {
-      const fetched = result.data.sessions as Array<Session & { id: string }>;
+      const fetched = (result.data.sessions as Array<Session & { id: string }>).map((session) => ({
+        ...session,
+        _sortTimestamp: session.updatedAt,
+      })) as Array<SessionEntity & { id: string }>;
       upsertMany("sessions", fetched);
     }
     setLoading(false);

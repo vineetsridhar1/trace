@@ -98,11 +98,13 @@ const columns: ColDef<SessionRow>[] = [
   },
   {
     headerName: "Last message",
-    field: "_lastMessageAt",
+    colId: "lastActivityAt",
     width: 120,
-    sort: "desc",
+    valueGetter: (params) => {
+      return params.data?._lastMessageAt ?? params.data?.updatedAt;
+    },
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const lastMessageAt = params.data?._lastMessageAt ?? params.data?.updatedAt;
+      const lastMessageAt = (params.value as string | undefined) ?? undefined;
       if (!lastMessageAt) return null;
       return <span className="text-xs text-muted-foreground">{timeAgo(lastMessageAt)}</span>;
     },
@@ -132,7 +134,14 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       .map((s) => ({
         ...s,
         status: getDisplayStatus(s.status, s.prUrl as string | null | undefined),
-      } as SessionRow));
+      } as SessionRow))
+      .sort((a, b) => {
+        const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
+        const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
+        const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
+        if (diff !== 0) return diff;
+        return a.id.localeCompare(b.id);
+      });
   }, [sessions, channelId]);
 
   useEffect(() => {

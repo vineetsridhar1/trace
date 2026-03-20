@@ -104,6 +104,13 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
   return undefined;
 }
 
+function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
+  return payload.type === "workspace_ready"
+    || payload.type === "question_pending"
+    || payload.type === "plan_pending"
+    || (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type));
+}
+
 /** Extract a human-readable preview from a normalized message payload */
 function extractMessagePreview(eventType: EventType, payload: JsonObject): string | null {
   if (eventType === "message_sent") {
@@ -189,7 +196,11 @@ export function useOrgEvents() {
         if (event.eventType === "session_started" && payload) {
           const session = asJsonObject(payload.session);
           if (session && typeof session.id === "string") {
-            upsert("sessions", session.id, session as unknown as SessionEntity);
+            upsert(
+              "sessions",
+              session.id,
+              { ...session, _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp } as unknown as SessionEntity,
+            );
 
             // If this session has a parent, update the parent's childSessions
             const parent = asJsonObject(session.parentSession);
@@ -226,6 +237,7 @@ export function useOrgEvents() {
             const sessionPatch: Record<string, unknown> = {
               status,
               updatedAt: event.timestamp,
+              _sortTimestamp: event.timestamp,
             };
             if (typeof payload.prUrl === "string") {
               sessionPatch.prUrl = payload.prUrl;
@@ -237,14 +249,18 @@ export function useOrgEvents() {
         // Route PR lifecycle events — only patch prUrl, not status
         if (SESSION_PR_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
           const prUrl = payload && typeof payload.prUrl === "string" ? payload.prUrl : null;
-          patch("sessions", event.scopeId, { prUrl, updatedAt: event.timestamp });
+          patch("sessions", event.scopeId, { prUrl, updatedAt: event.timestamp, _sortTimestamp: event.timestamp });
         }
 
         // Handle session_output subtypes that update session fields
         if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType) && payload) {
           const sessionPatch = sessionPatchFromOutput(payload);
           if (sessionPatch) {
-            patch("sessions", event.scopeId, { ...sessionPatch, updatedAt: event.timestamp });
+            patch("sessions", event.scopeId, {
+              ...sessionPatch,
+              updatedAt: event.timestamp,
+              ...(shouldBumpSortTimestampForOutput(payload) ? { _sortTimestamp: event.timestamp } : {}),
+            });
           }
 
           if (payload.type === "session_rehomed" && typeof payload.newSessionId === "string") {
@@ -259,6 +275,9 @@ export function useOrgEvents() {
         if (SESSION_ACTIVITY_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
           const preview = extractMessagePreview(event.eventType, payload);
           const updates: Partial<SessionEntity> = { updatedAt: event.timestamp, _lastMessageAt: event.timestamp };
+          if (event.eventType === "message_sent") {
+            updates._sortTimestamp = event.timestamp;
+          }
           if (preview) {
             updates._lastEventPreview = preview;
           }

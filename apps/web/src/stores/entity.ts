@@ -18,6 +18,7 @@ import type {
 export type SessionEntity = Session & {
   _lastEventPreview?: string;
   _lastMessageAt?: string;
+  _sortTimestamp?: string;
 };
 
 /** Entity types that the store manages, keyed by ID */
