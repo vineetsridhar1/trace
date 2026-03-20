@@ -29,7 +29,6 @@ enum SessionStatus {
   completed
   failed
   unreachable
-  in_review
   merged
 }
 
@@ -136,6 +135,7 @@ enum EventType {
   inbox_item_resolved
   session_pr_opened
   session_pr_merged
+  session_pr_closed
   chat_created
   chat_member_added
   chat_member_removed

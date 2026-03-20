@@ -1844,14 +1844,14 @@ export class SessionService {
     }
   }
 
-  /** Transition a session to "in_review" when a PR is opened for its branch. */
+  /** Set prUrl on a session when a PR is opened for its branch. */
   async markPrOpened(params: { sessionId: string; prUrl: string; organizationId: string }) {
     const { sessionId, prUrl, organizationId } = params;
 
-    // Atomic conditional update — skip if already in_review or merged
+    // Don't overwrite prUrl on merged sessions
     const { count } = await prisma.session.updateMany({
-      where: { id: sessionId, status: { notIn: ["in_review", "merged"] } },
-      data: { status: "in_review", prUrl },
+      where: { id: sessionId, status: { not: "merged" } },
+      data: { prUrl },
     });
 
     if (count === 0) return;
@@ -1861,7 +1861,29 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_pr_opened",
-      payload: { sessionId, prUrl, status: "in_review" },
+      payload: { sessionId, prUrl },
+      actorType: "system",
+      actorId: "github-webhook",
+    });
+  }
+
+  /** Clear prUrl on a session when its PR is closed without merging. */
+  async markPrClosed(params: { sessionId: string; organizationId: string }) {
+    const { sessionId, organizationId } = params;
+
+    const { count } = await prisma.session.updateMany({
+      where: { id: sessionId, status: { not: "merged" } },
+      data: { prUrl: null },
+    });
+
+    if (count === 0) return;
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_pr_closed",
+      payload: { sessionId },
       actorType: "system",
       actorId: "github-webhook",
     });

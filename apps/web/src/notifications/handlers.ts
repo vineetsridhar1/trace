@@ -130,16 +130,47 @@ function handleMentionNotification(event: Event): void {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Built-in handler: PR lifecycle events (open / close without merge)
+// ---------------------------------------------------------------------------
+
+function handlePrEvent(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  const session = useEntityStore.getState().sessions[event.scopeId];
+  if (!session) return;
+  if (session.createdBy?.id !== currentUserId) return;
+
+  const now = Date.now();
+  const lastToast = recentToasts.get(event.scopeId);
+  if (lastToast && now - lastToast < DEBOUNCE_MS) return;
+  recentToasts.set(event.scopeId, now);
+
+  const sessionName = session.name || "Untitled session";
+  const channelId = (session.channel as { id: string } | null)?.id ?? null;
+  const sessionId = event.scopeId;
+  const label = event.eventType === "session_pr_opened" ? "PR opened" : "PR closed";
+
+  toast(`"${sessionName}" — ${label}`, {
+    action: {
+      label: "View",
+      onClick: () => navigateToSession(channelId, sessionId),
+    },
+  });
+}
+
 // Register the built-in handlers
 const sessionStatusEventTypes: EventType[] = [
   "session_paused",
   "session_resumed",
   "session_terminated",
-  "session_pr_opened",
   "session_pr_merged",
 ];
 for (const eventType of sessionStatusEventTypes) {
   registerHandler(eventType, handleSessionStatusChange);
 }
+registerHandler("session_pr_opened", handlePrEvent);
+registerHandler("session_pr_closed", handlePrEvent);
 registerHandler("inbox_item_created", handleInboxItemCreated);
 registerHandler("message_sent", handleMentionNotification);
