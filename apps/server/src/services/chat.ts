@@ -6,8 +6,8 @@ import { participantService } from "./participant.js";
 import { sanitizeHtml, extractMentions, stripHtml } from "./mention.js";
 import { resolveActors, type ActorSummary } from "./actor.js";
 
-function buildDmKey(userA: string, userB: string) {
-  return [userA, userB].sort().join(":");
+function buildMemberKey(...userIds: string[]) {
+  return userIds.sort().join(":");
 }
 
 type DbMessage = Prisma.MessageGetPayload<Record<string, never>>;
@@ -95,41 +95,51 @@ export class ChatService {
         id: { in: allMemberIds },
         organizationId: input.organizationId,
       },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (validMembers.length !== allMemberIds.length) {
       throw new Error("All chat members must belong to the organization");
     }
 
-    // DM deduplication: check for existing DM between creator and target
+    // Deduplication: check for existing chat with the same members
+    const memberKey = buildMemberKey(...allMemberIds);
+
     if (isDM) {
       const targetId = memberIds[0];
       if (actorId === targetId) {
         throw new Error("Cannot create a DM with yourself");
       }
-      const dmKey = buildDmKey(actorId, targetId);
-      const existing = await prisma.chat.findFirst({
-        where: {
-          type: "dm",
-          organizationId: input.organizationId,
-          dmKey,
-        },
-        include: {
-          members: {
-            where: { leftAt: null },
-          },
-        },
-      });
-
-      if (existing) return existing;
     }
+
+    const existing = await prisma.chat.findFirst({
+      where: {
+        type: isDM ? "dm" : "group",
+        organizationId: input.organizationId,
+        dmKey: memberKey,
+      },
+      include: {
+        members: {
+          where: { leftAt: null },
+        },
+      },
+    });
+
+    if (existing) return existing;
+
+    // Default group name: comma-separated member names
+    const groupName = isDM
+      ? null
+      : (input.name ??
+          validMembers
+            .map((m) => m.name ?? "Unknown")
+            .join(", "));
 
     const createChatInTx = async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.create({
         data: {
           type: isDM ? "dm" : "group",
-          name: isDM ? null : (input.name ?? null),
-          dmKey: isDM ? buildDmKey(actorId, memberIds[0]) : null,
+          name: groupName,
+          dmKey: memberKey,
           organizationId: input.organizationId,
           createdById: actorId,
           members: {
@@ -185,12 +195,12 @@ export class ChatService {
     try {
       result = await prisma.$transaction(createChatInTx);
     } catch (error) {
-      if (isDM && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         return prisma.chat.findFirstOrThrow({
           where: {
-            type: "dm",
+            type: isDM ? "dm" : "group",
             organizationId: input.organizationId,
-            dmKey: buildDmKey(actorId, memberIds[0]),
+            dmKey: memberKey,
           },
           include: {
             members: {
