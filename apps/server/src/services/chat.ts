@@ -388,6 +388,43 @@ export class ChatService {
     });
   }
 
+  async rename(chatId: string, name: string, actorType: ActorType, actorId: string) {
+    const chat = await prisma.chat.findUniqueOrThrow({
+      where: { id: chatId },
+      select: { type: true, organizationId: true },
+    });
+
+    if (chat.type !== "group") {
+      throw new Error("Cannot rename a DM");
+    }
+
+    const member = await prisma.chatMember.findFirst({
+      where: { chatId, userId: actorId, leftAt: null },
+      select: { chatId: true },
+    });
+    if (!member) {
+      throw new Error("Not an active member of this chat");
+    }
+
+    const updated = await prisma.chat.update({
+      where: { id: chatId },
+      data: { name },
+      include: { members: { where: { leftAt: null } } },
+    });
+
+    await eventService.create({
+      organizationId: chat.organizationId,
+      scopeType: "chat",
+      scopeId: chatId,
+      eventType: "chat_renamed",
+      payload: { name },
+      actorType,
+      actorId,
+    });
+
+    return updated;
+  }
+
   async getChats(organizationId: string, userId: string) {
     return prisma.chat.findMany({
       where: {

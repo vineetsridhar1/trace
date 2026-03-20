@@ -21,6 +21,7 @@ export type Scalars = {
 
 export type Actor = {
   __typename?: 'Actor';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name?: Maybe<Scalars['String']['output']>;
   type: ActorType;
@@ -177,6 +178,7 @@ export type EventType =
   | 'chat_created'
   | 'chat_member_added'
   | 'chat_member_removed'
+  | 'chat_renamed'
   | 'entity_linked'
   | 'inbox_item_created'
   | 'inbox_item_resolved'
@@ -249,6 +251,7 @@ export type Mutation = {
   muteScope: Participant;
   pauseSession: Session;
   registerRepoWebhook: Repo;
+  renameChat: Chat;
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
@@ -373,6 +376,12 @@ export type MutationPauseSessionArgs = {
 
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
+};
+
+
+export type MutationRenameChatArgs = {
+  chatId: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
 };
 
 
@@ -1117,6 +1126,7 @@ export type ResolversParentTypes = ResolversObject<{
 }>;
 
 export type ActorResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Actor'] = ResolversParentTypes['Actor']> = ResolversObject<{
+  avatarUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['ActorType'], ParentType, ContextType>;
@@ -1215,6 +1225,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   muteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationMuteScopeArgs, 'scopeId' | 'scopeType'>>;
   pauseSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationPauseSessionArgs, 'id'>>;
   registerRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationRegisterRepoWebhookArgs, 'repoId'>>;
+  renameChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationRenameChatArgs, 'chatId' | 'name'>>;
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;

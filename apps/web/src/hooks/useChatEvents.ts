@@ -25,6 +25,7 @@ const CHAT_EVENTS_QUERY = gql`
         type
         id
         name
+        avatarUrl
       }
       parentId
       timestamp
@@ -45,6 +46,7 @@ const CHAT_EVENTS_SUBSCRIPTION = gql`
         type
         id
         name
+        avatarUrl
       }
       parentId
       timestamp

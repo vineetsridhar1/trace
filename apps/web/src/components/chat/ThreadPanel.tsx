@@ -22,6 +22,7 @@ const THREAD_REPLIES_QUERY = gql`
         type
         id
         name
+        avatarUrl
       }
       parentId
       timestamp
@@ -40,7 +41,7 @@ export function ThreadPanel({
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
   const [loading, setLoading] = useState(true);
   const rootPayload = useEntityField("events", rootEventId, "payload") as Record<string, unknown> | undefined;
-  const rootActor = useEntityField("events", rootEventId, "actor") as { name?: string } | undefined;
+  const rootActor = useEntityField("events", rootEventId, "actor") as { name?: string; avatarUrl?: string } | undefined;
 
   const fetchReplies = useCallback(async () => {
     const result = await client
@@ -77,11 +78,18 @@ export function ThreadPanel({
       </div>
 
       {/* Root message preview */}
-      <div className="border-b border-border px-3 py-2">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-foreground">{rootActorName}</span>
+      <div className="flex gap-3 border-b border-border px-3 py-2">
+        {rootActor?.avatarUrl ? (
+          <img src={rootActor.avatarUrl} alt={rootActorName} className="mt-0.5 h-7 w-7 shrink-0 rounded-md" />
+        ) : (
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
+            {rootActorName[0]?.toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <span className="text-sm font-bold text-foreground">{rootActorName}</span>
+          <p className="text-sm text-muted-foreground line-clamp-3">{rootText}</p>
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-3">{rootText}</p>
       </div>
 
       {/* Replies */}

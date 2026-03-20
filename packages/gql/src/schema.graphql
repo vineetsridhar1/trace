@@ -144,6 +144,7 @@ enum EventType {
   chat_created
   chat_member_added
   chat_member_removed
+  chat_renamed
 }
 
 # --- Core Types ---
@@ -295,6 +296,7 @@ type Actor {
   type: ActorType!
   id: ID!
   name: String
+  avatarUrl: String
 }
 
 type TerminalEndpoint {
@@ -519,6 +521,7 @@ type Mutation {
   sendChatMessage(chatId: ID!, text: String!, parentId: ID): Event!
   addChatMember(input: AddChatMemberInput!): Chat!
   leaveChat(chatId: ID!): Chat!
+  renameChat(chatId: ID!, name: String!): Chat!
   subscribe(scopeType: String!, scopeId: ID!): Participant!
   unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
   muteScope(scopeType: String!, scopeId: ID!): Participant!

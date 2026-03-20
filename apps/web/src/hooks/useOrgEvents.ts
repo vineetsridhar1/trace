@@ -20,6 +20,7 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
         type
         id
         name
+        avatarUrl
       }
       parentId
       timestamp
@@ -160,6 +161,11 @@ export function useOrgEvents() {
           const chat = asRecord(event.payload.chat);
           if (chat && typeof chat.id === "string") {
             upsert("chats", chat.id, chat as unknown as Chat);
+          }
+        }
+        if (event.eventType === ("chat_renamed" as EventType)) {
+          if (event.scopeType === ("chat" as ScopeType) && typeof event.payload.name === "string") {
+            patch("chats", event.scopeId, { name: event.payload.name } as Partial<Chat>);
           }
         }
         if (event.eventType === ("chat_member_added" as EventType) || event.eventType === ("chat_member_removed" as EventType)) {

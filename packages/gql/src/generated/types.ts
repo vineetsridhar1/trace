@@ -18,6 +18,7 @@ export type Scalars = {
 
 export type Actor = {
   __typename?: 'Actor';
+  avatarUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name?: Maybe<Scalars['String']['output']>;
   type: ActorType;
@@ -174,6 +175,7 @@ export type EventType =
   | 'chat_created'
   | 'chat_member_added'
   | 'chat_member_removed'
+  | 'chat_renamed'
   | 'entity_linked'
   | 'inbox_item_created'
   | 'inbox_item_resolved'
@@ -246,6 +248,7 @@ export type Mutation = {
   muteScope: Participant;
   pauseSession: Session;
   registerRepoWebhook: Repo;
+  renameChat: Chat;
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
@@ -370,6 +373,12 @@ export type MutationPauseSessionArgs = {
 
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
+};
+
+
+export type MutationRenameChatArgs = {
+  chatId: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
 };
 
 

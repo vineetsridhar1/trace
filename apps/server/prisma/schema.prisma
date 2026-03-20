@@ -130,6 +130,7 @@ enum EventType {
   chat_created
   chat_member_added
   chat_member_removed
+  chat_renamed
 }
 
 model Organization {

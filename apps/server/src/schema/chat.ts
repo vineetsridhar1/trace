@@ -50,6 +50,9 @@ export const chatMutations = {
   leaveChat: (_: unknown, args: { chatId: string }, ctx: Context) => {
     return chatService.leave(args.chatId, ctx.actorType, ctx.userId);
   },
+  renameChat: (_: unknown, args: { chatId: string; name: string }, ctx: Context) => {
+    return chatService.rename(args.chatId, args.name, ctx.actorType, ctx.userId);
+  },
 };
 
 export const chatSubscriptions = {

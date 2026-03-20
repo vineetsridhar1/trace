@@ -153,6 +153,10 @@ export function handleBridgeConnection(ws: WebSocket) {
     }
   });
 
+  ws.on("error", (err) => {
+    runtimeDebug("bridge websocket error", { runtimeId, error: err.message });
+  });
+
   ws.on("close", () => {
     runtimeDebug("bridge websocket closed", { runtimeId });
     const affectedSessions = sessionRouter.unregisterRuntime(runtimeId, ws);

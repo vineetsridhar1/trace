@@ -22,17 +22,19 @@ export const resolvers = {
 
   Event: {
     actor: async (event: { actorType: string; actorId: string }) => {
-      const actor: { type: string; id: string; name: string | null } = {
+      const actor: { type: string; id: string; name: string | null; avatarUrl: string | null } = {
         type: event.actorType,
         id: event.actorId,
         name: null,
+        avatarUrl: null,
       };
       if (event.actorType === "user") {
         const user = await prisma.user.findUnique({
           where: { id: event.actorId },
-          select: { name: true },
+          select: { name: true, avatarUrl: true },
         });
         actor.name = user?.name ?? null;
+        actor.avatarUrl = user?.avatarUrl ?? null;
       }
       return actor;
     },
