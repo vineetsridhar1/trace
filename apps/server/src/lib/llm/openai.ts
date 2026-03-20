@@ -63,8 +63,10 @@ function toOpenAIUserContent(content: LLMUserMessage["content"]): string | ChatC
         parts.push({ type: "image_url", image_url: { url } });
         break;
       }
-      default:
-        throw new Error(`Unsupported OpenAI user content block type "${block.type}".`);
+      default: {
+        const _exhaustive: never = block;
+        throw new Error(`Unsupported OpenAI user content block: ${String(_exhaustive)}`);
+      }
     }
   }
   return parts.length === 1 && parts[0].type === "text" ? parts[0].text : parts;
@@ -109,8 +111,10 @@ function toOpenAIMessages(messages: LLMMessage[], system?: string): ChatMessage[
           case "tool_use":
             toolUseParts.push(block);
             break;
-          default:
-            throw new Error(`Unsupported OpenAI assistant content block type "${block.type}".`);
+          default: {
+            const _exhaustive: never = block;
+            throw new Error(`Unsupported OpenAI assistant content block: ${String(_exhaustive)}`);
+          }
         }
       }
 
