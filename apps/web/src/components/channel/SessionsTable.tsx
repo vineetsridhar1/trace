@@ -47,6 +47,7 @@ const columns: ColDef<SessionRow>[] = [
     field: "name",
     flex: 2,
     minWidth: 200,
+    filter: true,
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
       const { data } = params;
       if (!data) return null;
@@ -73,6 +74,11 @@ const columns: ColDef<SessionRow>[] = [
     headerName: "Repo",
     field: "repo" as keyof SessionRow,
     width: 140,
+    filter: true,
+    valueGetter: (params) => {
+      const repo = params.data?.repo as { id: string; name: string } | null | undefined;
+      return repo?.name ?? "";
+    },
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
       const repo = params.data?.repo as { id: string; name: string } | null | undefined;
       if (!repo) return null;
@@ -80,9 +86,36 @@ const columns: ColDef<SessionRow>[] = [
     },
   },
   {
+    headerName: "Bridge",
+    colId: "bridge",
+    width: 140,
+    filter: true,
+    valueGetter: (params) => {
+      const connection = params.data?.connection as
+        | { runtimeLabel?: string | null }
+        | null
+        | undefined;
+      return connection?.runtimeLabel ?? "";
+    },
+    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
+      const connection = params.data?.connection as
+        | { runtimeLabel?: string | null }
+        | null
+        | undefined;
+      const label = connection?.runtimeLabel;
+      if (!label) return null;
+      return <span className="text-xs text-muted-foreground truncate">{label}</span>;
+    },
+  },
+  {
     headerName: "Created by",
     field: "createdBy",
     width: 150,
+    filter: true,
+    filterValueGetter: (params) => {
+      const createdBy = params.data?.createdBy as { name: string } | undefined;
+      return createdBy?.name ?? "";
+    },
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
       const createdBy = params.data?.createdBy as
         | { id: string; name: string; avatarUrl?: string | null }
@@ -114,6 +147,7 @@ const columns: ColDef<SessionRow>[] = [
     headerName: "Last message",
     colId: "lastActivityAt",
     width: 120,
+    filter: true,
     valueGetter: (params) => {
       return params.data?._lastMessageAt ?? params.data?.updatedAt;
     },
