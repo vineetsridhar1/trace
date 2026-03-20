@@ -9,8 +9,13 @@ export const chatQueries = {
   chats: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     return chatService.getChats(args.organizationId, ctx.userId);
   },
-  chat: (_: unknown, args: { id: string }) => {
-    return chatService.getChat(args.id);
+  chat: async (_: unknown, args: { id: string }, ctx: Context) => {
+    const chat = await chatService.getChat(args.id);
+    if (!chat) return null;
+    // Verify caller is an active member
+    const isMember = chat.members.some((m) => m.userId === ctx.userId);
+    if (!isMember) return null;
+    return chat;
   },
 };
 
@@ -67,6 +72,7 @@ export const chatTypeResolvers = {
         after: args.after ? new Date(args.after) : undefined,
         before: args.before ? new Date(args.before) : undefined,
         limit: args.limit,
+        excludeReplies: true,
       });
     },
     createdBy: (chat: { createdById: string }) => {

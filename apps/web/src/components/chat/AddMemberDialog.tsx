@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus } from "lucide-react";
-import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -9,10 +8,8 @@ import {
   ResponsiveDialogContent as DialogContent,
   ResponsiveDialogHeader as DialogHeader,
   ResponsiveDialogTitle as DialogTitle,
-  ResponsiveDialogFooter as DialogFooter,
   ResponsiveDialogTrigger as DialogTrigger,
 } from "../ui/responsive-dialog";
-import { Button } from "../ui/button";
 
 const ORG_MEMBERS_QUERY = gql`
   query OrgMembers($id: ID!) {
@@ -48,7 +45,6 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [adding, setAdding] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const isMobile = useIsMobile();
 
   const fetchMembers = useCallback(async () => {
     if (!activeOrgId) return;

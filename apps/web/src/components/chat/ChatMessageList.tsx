@@ -1,39 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useEntityStore } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
-import type { Event } from "@trace/gql";
-
-function ChatMessage({ eventId }: { eventId: string }) {
-  const event = useEntityStore((s) => s.events[eventId]) as Event | undefined;
-  const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
-
-  if (!event) return null;
-
-  const text = typeof event.payload.text === "string" ? event.payload.text : "";
-  const actorName = event.actor?.name ?? "Unknown";
-  const time = new Date(event.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-  return (
-    <div className="group flex gap-3 px-4 py-1.5 hover:bg-surface-elevated/30">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-        {actorName[0]?.toUpperCase()}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-foreground">{actorName}</span>
-          <span className="text-xs text-muted-foreground">{time}</span>
-        </div>
-        <p className="whitespace-pre-wrap text-sm text-foreground">{text}</p>
-        <button
-          onClick={() => setActiveThreadId(event.id)}
-          className="mt-0.5 hidden text-xs text-muted-foreground hover:text-foreground group-hover:inline-flex"
-        >
-          Reply in thread
-        </button>
-      </div>
-    </div>
-  );
-}
+import { ChatMessage } from "./ChatMessage";
 
 export function ChatMessageList({
   eventIds,

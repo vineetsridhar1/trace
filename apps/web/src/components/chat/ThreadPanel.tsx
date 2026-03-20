@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { X } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { useEntityStore } from "../../stores/entity";
-import { useEntityIds } from "../../stores/entity";
+import { useEntityStore, useEntityIds } from "../../stores/entity";
+import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
-import { useAuthStore } from "../../stores/auth";
+import { ThreadMessage } from "./ThreadMessage";
 import { ChatComposer } from "./ChatComposer";
 import { Button } from "../ui/button";
 
@@ -30,30 +30,6 @@ const THREAD_REPLIES_QUERY = gql`
   }
 `;
 
-function ThreadMessage({ eventId }: { eventId: string }) {
-  const event = useEntityStore((s) => s.events[eventId]) as Event | undefined;
-  if (!event) return null;
-
-  const text = typeof event.payload.text === "string" ? event.payload.text : "";
-  const actorName = event.actor?.name ?? "Unknown";
-  const time = new Date(event.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-  return (
-    <div className="flex gap-3 px-3 py-1.5">
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-        {actorName[0]?.toUpperCase()}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-foreground">{actorName}</span>
-          <span className="text-xs text-muted-foreground">{time}</span>
-        </div>
-        <p className="whitespace-pre-wrap text-sm text-foreground">{text}</p>
-      </div>
-    </div>
-  );
-}
-
 export function ThreadPanel({
   chatId,
   rootEventId,
@@ -62,9 +38,9 @@ export function ThreadPanel({
   rootEventId: string;
 }) {
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const [loading, setLoading] = useState(true);
-  const rootEvent = useEntityStore((s) => s.events[rootEventId]) as Event | undefined;
+  const rootPayload = useEntityField("events", rootEventId, "payload") as Record<string, unknown> | undefined;
+  const rootActor = useEntityField("events", rootEventId, "actor") as { name?: string } | undefined;
 
   const fetchReplies = useCallback(async () => {
     const result = await client
@@ -88,8 +64,8 @@ export function ThreadPanel({
     (a, b) => a.timestamp.localeCompare(b.timestamp),
   );
 
-  const rootText = rootEvent ? (typeof rootEvent.payload.text === "string" ? rootEvent.payload.text : "") : "";
-  const rootActorName = rootEvent?.actor?.name ?? "Unknown";
+  const rootText = typeof rootPayload?.text === "string" ? rootPayload.text : "";
+  const rootActorName = rootActor?.name ?? "Unknown";
 
   return (
     <div className="flex h-full w-80 flex-col border-l border-border">

@@ -11,6 +11,9 @@ export class ChatService {
     // DM deduplication: check for existing DM between creator and target
     if (isDM) {
       const targetId = memberIds[0];
+      if (actorId === targetId) {
+        throw new Error("Cannot create a DM with yourself");
+      }
       const existing = await prisma.chat.findFirst({
         where: {
           type: "dm",
@@ -69,13 +72,41 @@ export class ChatService {
         });
       }
 
+      // Fetch members with user data for the event payload
+      const membersWithUsers = await tx.chatMember.findMany({
+        where: { chatId: chat.id },
+        include: { chat: false },
+      });
+
+      // Look up user info for each member
+      const userIds = membersWithUsers.map((m) => m.userId);
+      const users = await tx.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true, avatarUrl: true },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u]));
+
+      const normalizedMembers = membersWithUsers.map((m) => ({
+        user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
+        joinedAt: m.joinedAt.toISOString(),
+      }));
+
       const event = await eventService.create(
         {
           organizationId: input.organizationId,
           scopeType: "chat",
           scopeId: chat.id,
           eventType: "chat_created",
-          payload: { chat: { id: chat.id, type: chat.type, name: chat.name, members: chat.members } },
+          payload: {
+            chat: {
+              id: chat.id,
+              type: chat.type,
+              name: chat.name,
+              members: normalizedMembers,
+              createdAt: chat.createdAt.toISOString(),
+              updatedAt: chat.updatedAt.toISOString(),
+            },
+          },
           actorType,
           actorId,
         },
@@ -106,10 +137,13 @@ export class ChatService {
       select: { organizationId: true },
     });
 
-    // Verify actor is active member
-    await prisma.chatMember.findUniqueOrThrow({
+    // Verify actor is active member (not left)
+    const member = await prisma.chatMember.findUnique({
       where: { chatId_userId: { chatId, userId: actorId } },
     });
+    if (!member || member.leftAt) {
+      throw new Error("Not an active member of this chat");
+    }
 
     const event = await eventService.create({
       organizationId: chat.organizationId,
@@ -163,13 +197,28 @@ export class ChatService {
         update: {},
       });
 
+      // Fetch updated members with user data for the event payload
+      const updatedMembers = await tx.chatMember.findMany({
+        where: { chatId, leftAt: null },
+      });
+      const memberUserIds = updatedMembers.map((m) => m.userId);
+      const users = await tx.user.findMany({
+        where: { id: { in: memberUserIds } },
+        select: { id: true, name: true, avatarUrl: true },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u]));
+      const normalizedMembers = updatedMembers.map((m) => ({
+        user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
+        joinedAt: m.joinedAt.toISOString(),
+      }));
+
       await eventService.create(
         {
           organizationId: chat.organizationId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_member_added",
-          payload: { userId },
+          payload: { userId, members: normalizedMembers },
           actorType,
           actorId,
         },
@@ -203,13 +252,28 @@ export class ChatService {
         where: { userId: actorId, scopeType: "chat", scopeId: chatId },
       });
 
+      // Fetch remaining members with user data for the event payload
+      const remainingMembers = await tx.chatMember.findMany({
+        where: { chatId, leftAt: null },
+      });
+      const memberUserIds = remainingMembers.map((m) => m.userId);
+      const users = await tx.user.findMany({
+        where: { id: { in: memberUserIds } },
+        select: { id: true, name: true, avatarUrl: true },
+      });
+      const userMap = new Map(users.map((u) => [u.id, u]));
+      const normalizedMembers = remainingMembers.map((m) => ({
+        user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
+        joinedAt: m.joinedAt.toISOString(),
+      }));
+
       await eventService.create(
         {
           organizationId: chat.organizationId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_member_removed",
-          payload: { userId: actorId },
+          payload: { userId: actorId, members: normalizedMembers },
           actorType,
           actorId,
         },

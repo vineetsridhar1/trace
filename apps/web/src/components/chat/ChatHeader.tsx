@@ -1,4 +1,4 @@
-import { MessageCircle, UserPlus } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { SidebarTrigger } from "../ui/sidebar";
 import { AddMemberDialog } from "./AddMemberDialog";

@@ -163,10 +163,11 @@ export function useOrgEvents() {
           }
         }
         if (event.eventType === ("chat_member_added" as EventType) || event.eventType === ("chat_member_removed" as EventType)) {
-          // Refetch chat members by patching — the event payload has the userId
-          // For now, trigger a refresh so the sidebar re-fetches
           if (event.scopeType === ("chat" as ScopeType)) {
-            // The chat will be re-fetched on next mount
+            const members = event.payload.members;
+            if (Array.isArray(members)) {
+              patch("chats", event.scopeId, { members } as Partial<Chat>);
+            }
           }
         }
 

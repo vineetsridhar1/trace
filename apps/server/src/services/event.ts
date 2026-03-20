@@ -22,6 +22,8 @@ export interface EventQueryOpts {
   after?: Date;
   before?: Date;
   limit?: number;
+  /** When true, exclude events that are thread replies (parentId IS NOT NULL) */
+  excludeReplies?: boolean;
 }
 
 // Maps scope types to their pubsub topic builders.
@@ -71,6 +73,7 @@ export class EventService {
     if (opts.scopeType) where.scopeType = opts.scopeType;
     if (opts.scopeId) where.scopeId = opts.scopeId;
     if (opts.types?.length) where.eventType = { in: opts.types };
+    if (opts.excludeReplies) where.parentId = null;
     const timestampFilter: Record<string, Date> = {};
     if (opts.after) timestampFilter.gt = opts.after;
     if (opts.before) timestampFilter.lt = opts.before;
