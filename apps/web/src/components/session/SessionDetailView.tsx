@@ -70,8 +70,14 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const createdBy = useEntityField("sessions", sessionId, "createdBy") as { id: string } | undefined;
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
   const isCloud = hosting === "cloud";
-  const canAccessTerminal = isCloud || createdBy?.id === currentUserId;
+  const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
+  const isConnected = !connection || connection.state !== "disconnected";
+  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected;
 
   // Fetch full session with lineage data — merge to avoid wiping fields set by events
   useEffect(() => {

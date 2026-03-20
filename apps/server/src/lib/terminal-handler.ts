@@ -104,6 +104,7 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
               return;
             }
             if (session.hosting === "local" && session.createdById !== userId) {
+              console.warn(`[terminal-handler] user ${userId} denied terminal access to local session ${sessionId} owned by ${session.createdById}`);
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
