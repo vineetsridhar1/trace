@@ -203,7 +203,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     <>
       <div ref={gridRef}>
         <Table
-          className="h-[calc(100vh-48px)]"
+          className="h-[calc(100dvh-48px)]"
           agGridOptions={agGridOptions}
         />
       </div>
