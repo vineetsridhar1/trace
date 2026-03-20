@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField } from "../../stores/entity";
+import { useAuthStore } from "../../stores/auth";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
@@ -67,7 +68,16 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const events = useEntityStore((s) => s.events);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const createdBy = useEntityField("sessions", sessionId, "createdBy") as { id: string } | undefined;
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
   const isCloud = hosting === "cloud";
+  const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
+  const isConnected = !connection || connection.state !== "disconnected";
+  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected;
 
   // Fetch full session with lineage data — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -127,7 +137,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       <SessionHeader
         sessionId={sessionId}
         onStop={handleStop}
-        onToggleTerminal={isCloud ? () => setShowTerminal((v) => !v) : undefined}
+        onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
         terminalOpen={showTerminal}
       />
 
@@ -151,7 +161,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
           )}
         </div>
 
-        {showTerminal && isCloud && (
+        {showTerminal && canAccessTerminal && (
           <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
         )}
       </div>
