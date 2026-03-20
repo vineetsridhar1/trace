@@ -1,6 +1,6 @@
 import { useEntityField } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
-import { UserProfileCard } from "../shared/UserProfileCard";
+import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
 interface UserMentionProps {
   userId: string;
@@ -15,7 +15,7 @@ export function UserMention({ userId, fallbackName }: UserMentionProps) {
   const displayName = (name as string | undefined) ?? fallbackName ?? "Unknown";
 
   return (
-    <UserProfileCard userId={userId} fallbackName={fallbackName}>
+    <UserProfileChatCard userId={userId} fallbackName={fallbackName}>
       <span
         className={`inline cursor-pointer font-medium hover:underline ${
           isMe ? "text-blue-300" : "text-blue-300"
@@ -23,6 +23,6 @@ export function UserMention({ userId, fallbackName }: UserMentionProps) {
       >
         @{displayName}
       </span>
-    </UserProfileCard>
+    </UserProfileChatCard>
   );
 }

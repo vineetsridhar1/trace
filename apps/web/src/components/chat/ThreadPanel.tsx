@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { X } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
@@ -31,37 +31,64 @@ const THREAD_REPLIES_QUERY = gql`
   }
 `;
 
-export function ThreadPanel({
-  chatId,
-  rootEventId,
-}: {
-  chatId: string;
-  rootEventId: string;
-}) {
+export function ThreadPanel({ chatId, rootEventId }: { chatId: string; rootEventId: string }) {
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
   const [loading, setLoading] = useState(true);
-  const rootPayload = useEntityField("events", rootEventId, "payload") as Record<string, unknown> | undefined;
-  const rootActor = useEntityField("events", rootEventId, "actor") as { name?: string; avatarUrl?: string } | undefined;
+  const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const rootPayload = useEntityField("events", rootEventId, "payload") as
+    | Record<string, unknown>
+    | undefined;
+  const rootActor = useEntityField("events", rootEventId, "actor") as
+    | { name?: string; avatarUrl?: string }
+    | undefined;
 
   const fetchReplies = useCallback(async () => {
-    const result = await client
-      .query(THREAD_REPLIES_QUERY, { rootEventId, limit: 200 })
-      .toPromise();
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
+    setLoading(true);
+    setError(null);
 
-    if (result.data?.threadReplies) {
-      const events = result.data.threadReplies as Array<Event & { id: string }>;
-      useEntityStore.getState().upsertMany("events", events);
+    try {
+      const result = await client
+        .query(THREAD_REPLIES_QUERY, { rootEventId, limit: 200 })
+        .toPromise();
+
+      if (requestId !== requestIdRef.current) return;
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.data?.threadReplies) {
+        const events = result.data.threadReplies as Array<Event & { id: string }>;
+        useEntityStore.getState().upsertMany("events", events);
+      }
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      setError(err instanceof Error ? err.message : "Failed to load replies");
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-    setLoading(false);
   }, [rootEventId]);
 
   useEffect(() => {
     fetchReplies();
   }, [fetchReplies]);
 
+  // Real-time updates: new replies arrive via the chatEvents subscription in
+  // useChatEvents (parent ChatView), which upserts all message_sent events
+  // (including replies with parentId) into the entity store. This useEntityIds
+  // filter then automatically picks them up — no separate subscription needed.
   const replyIds = useEntityIds(
     "events",
-    (e) => e.parentId === rootEventId,
+    (e) =>
+      e.scopeType === "chat" &&
+      e.scopeId === chatId &&
+      e.eventType === "message_sent" &&
+      e.parentId === rootEventId,
     (a, b) => a.timestamp.localeCompare(b.timestamp),
   );
 
@@ -80,7 +107,11 @@ export function ThreadPanel({
       {/* Root message preview */}
       <div className="flex gap-3 border-b border-border px-3 py-2">
         {rootActor?.avatarUrl ? (
-          <img src={rootActor.avatarUrl} alt={rootActorName} className="mt-0.5 h-7 w-7 shrink-0 rounded-md" />
+          <img
+            src={rootActor.avatarUrl}
+            alt={rootActorName}
+            className="mt-0.5 h-7 w-7 shrink-0 rounded-md"
+          />
         ) : (
           <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
             {rootActorName[0]?.toUpperCase()}
@@ -97,6 +128,10 @@ export function ThreadPanel({
         {loading ? (
           <div className="flex items-center justify-center py-4">
             <p className="text-xs text-muted-foreground">Loading replies...</p>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center py-4">
+            <p className="text-xs text-destructive">{error}</p>
           </div>
         ) : replyIds.length === 0 ? (
           <div className="flex items-center justify-center py-4">

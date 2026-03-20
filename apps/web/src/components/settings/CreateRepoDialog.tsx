@@ -66,9 +66,11 @@ export function CreateRepoDialog() {
   }
 
   async function handleLink() {
-    const repo = detected ?? (manualName.trim() && manualRemoteUrl.trim()
-      ? { name: manualName.trim(), remoteUrl: manualRemoteUrl.trim(), defaultBranch: "main" }
-      : null);
+    const repo =
+      detected ??
+      (manualName.trim() && manualRemoteUrl.trim()
+        ? { name: manualName.trim(), remoteUrl: manualRemoteUrl.trim(), defaultBranch: "main" }
+        : null);
     if (!repo || !activeOrgId) return;
 
     setCreating(true);
@@ -114,7 +116,7 @@ export function CreateRepoDialog() {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
+      <DialogTrigger className="inline-flex">
         <Button variant="outline" size="sm" className="gap-1.5">
           <Plus size={14} />
           Link Repository
@@ -133,18 +135,12 @@ export function CreateRepoDialog() {
         <div className="py-4 space-y-4">
           {isElectron ? (
             <>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={handlePickFolder}
-              >
+              <Button variant="outline" className="w-full gap-2" onClick={handlePickFolder}>
                 <FolderOpen size={16} />
                 Choose Folder
               </Button>
 
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
 
               {detected && (
                 <div className="rounded-lg border border-border bg-surface-deep p-3 space-y-1.5">
@@ -159,7 +155,9 @@ export function CreateRepoDialog() {
           ) : (
             <>
               <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">Repository name</label>
+                <label className="mb-1.5 block text-sm text-muted-foreground">
+                  Repository name
+                </label>
                 <Input
                   value={manualName}
                   onChange={(e) => setManualName(e.target.value)}

@@ -21,8 +21,8 @@ export function SessionDefaultsSection() {
   const effectiveTool = defaultTool ?? "claude_code";
   const modelOptions = getModelsForTool(effectiveTool);
 
-  const handleToolChange = (value: string) => {
-    if (value === "__none__") {
+  const handleToolChange = (value: string | null) => {
+    if (!value || value === "__none__") {
       setDefaultTool(null);
       setDefaultModel(null);
     } else {
@@ -32,8 +32,8 @@ export function SessionDefaultsSection() {
     }
   };
 
-  const handleModelChange = (value: string) => {
-    if (value === "__none__") {
+  const handleModelChange = (value: string | null) => {
+    if (!value || value === "__none__") {
       setDefaultModel(null);
     } else {
       setDefaultModel(value);
@@ -52,15 +52,21 @@ export function SessionDefaultsSection() {
       <div className="rounded-lg border border-border bg-surface-deep p-4 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">Default Coding Tool</label>
+            <label className="mb-1.5 block text-sm text-muted-foreground">
+              Default Coding Tool
+            </label>
             <Select value={defaultTool ?? "__none__"} onValueChange={handleToolChange}>
               <SelectTrigger className="w-full">
-                <SelectValue>{defaultTool ? (TOOL_LABELS[defaultTool] ?? defaultTool) : "None (use default)"}</SelectValue>
+                <SelectValue>
+                  {defaultTool ? (TOOL_LABELS[defaultTool] ?? defaultTool) : "None (use default)"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">None (use default)</SelectItem>
                 {TOOL_OPTIONS.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -70,12 +76,16 @@ export function SessionDefaultsSection() {
             <label className="mb-1.5 block text-sm text-muted-foreground">Default Model</label>
             <Select value={defaultModel ?? "__none__"} onValueChange={handleModelChange}>
               <SelectTrigger className="w-full">
-                <SelectValue>{defaultModel ? getModelLabel(defaultModel) : "None (use default)"}</SelectValue>
+                <SelectValue>
+                  {defaultModel ? getModelLabel(defaultModel) : "None (use default)"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">None (use default)</SelectItem>
                 {modelOptions.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

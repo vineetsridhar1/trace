@@ -105,7 +105,11 @@ export function useChatEvents(chatId: string) {
     fetchEvents();
   }, [fetchEvents]);
 
-  // Subscribe to real-time chat events
+  // Subscribe to real-time chat events.
+  // Note: orgEvents also processes message_sent for chats, but the dedup in
+  // entity store's upsert (same event ID) makes this harmless. This dedicated
+  // subscription ensures low-latency delivery for the active chat regardless
+  // of org-level filtering or ordering.
   useEffect(() => {
     if (!activeOrgId) return;
 

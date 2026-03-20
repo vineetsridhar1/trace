@@ -16,19 +16,25 @@ export class ThreadService {
   }
 
   async getSummary(rootEventId: string) {
-    const replies = await prisma.event.findMany({
-      where: { parentId: rootEventId },
-      select: { actorId: true, timestamp: true },
-      orderBy: { timestamp: "desc" },
-    });
-
-    const participantIds = [...new Set(replies.map((r) => r.actorId))];
+    const [replyCount, lastReply, participants] = await Promise.all([
+      prisma.event.count({ where: { parentId: rootEventId } }),
+      prisma.event.findFirst({
+        where: { parentId: rootEventId },
+        orderBy: { timestamp: "desc" },
+        select: { timestamp: true },
+      }),
+      prisma.event.findMany({
+        where: { parentId: rootEventId },
+        select: { actorId: true },
+        distinct: ["actorId"],
+      }),
+    ]);
 
     return {
       rootEventId,
-      replyCount: replies.length,
-      lastReplyAt: replies.length > 0 ? replies[0].timestamp.toISOString() : null,
-      participantIds,
+      replyCount,
+      lastReplyAt: lastReply ? lastReply.timestamp.toISOString() : null,
+      participantIds: participants.map((p) => p.actorId),
     };
   }
 }

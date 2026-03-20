@@ -5,6 +5,7 @@ import { useUIStore } from "../../stores/ui";
 import { useEntityStore } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
+import { ORG_MEMBERS_QUERY } from "../../lib/mutations";
 import type { Chat } from "@trace/gql";
 import {
   ResponsiveDialog as Dialog,
@@ -15,20 +16,6 @@ import {
   ResponsiveDialogTrigger as DialogTrigger,
 } from "../ui/responsive-dialog";
 import { Button } from "../ui/button";
-
-const ORG_MEMBERS_QUERY = gql`
-  query OrgMembers($id: ID!) {
-    organization(id: $id) {
-      id
-      members {
-        id
-        name
-        email
-        avatarUrl
-      }
-    }
-  }
-`;
 
 const CREATE_CHAT_MUTATION = gql`
   mutation CreateChat($input: CreateChatInput!) {
@@ -129,8 +116,8 @@ export function CreateChatDialog() {
       const chatId = result.data?.createChat?.id;
       if (chatId) {
         setOpen(false);
-        setActiveChatId(chatId);
         await hydrateChatIfMissing(chatId);
+        setActiveChatId(chatId);
       }
     } finally {
       setCreating(false);

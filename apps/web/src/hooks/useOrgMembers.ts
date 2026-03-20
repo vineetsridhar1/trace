@@ -1,63 +1,67 @@
-import { useEffect, useMemo, useRef } from "react";
-import { gql } from "@urql/core";
-import { client } from "../lib/urql";
-import { useEntityStore, useEntityIds } from "../stores/entity";
-import { useAuthStore } from "../stores/auth";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "@trace/gql";
-import { useShallow } from "zustand/react/shallow";
+import { client } from "../lib/urql";
+import { ORG_MEMBERS_QUERY } from "../lib/mutations";
+import { useEntityStore } from "../stores/entity";
+import { useAuthStore } from "../stores/auth";
 
-const ORG_MEMBERS_QUERY = gql`
-  query OrgMembers($id: ID!) {
-    organization(id: $id) {
-      id
-      members {
-        id
-        name
-        email
-        avatarUrl
-        role
-      }
-    }
-  }
-`;
+type OrgMember = {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+};
+
+const orgMemberCache = new Map<string, OrgMember[]>();
 
 /** Fetch org members into the entity store (once per org) and return them for mention autocomplete */
-export function useOrgMembers(): Array<{ id: string; name: string; avatarUrl?: string | null }> {
+export function useOrgMembers(): OrgMember[] {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const fetchedRef = useRef<string | null>(null);
+  const requestIdRef = useRef(0);
+  const [members, setMembers] = useState<OrgMember[]>([]);
 
   useEffect(() => {
-    if (!activeOrgId || fetchedRef.current === activeOrgId) return;
-    fetchedRef.current = activeOrgId;
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
 
-    client
+    if (!activeOrgId) {
+      setMembers([]);
+      return;
+    }
+
+    const cached = orgMemberCache.get(activeOrgId);
+    if (cached) {
+      setMembers(cached);
+    }
+
+    if (!cached) {
+      setMembers([]);
+    }
+
+    void client
       .query(ORG_MEMBERS_QUERY, { id: activeOrgId })
       .toPromise()
       .then((result) => {
-        const members = result.data?.organization?.members as User[] | undefined;
-        if (members) {
-          const { upsertMany } = useEntityStore.getState();
-          upsertMany("users", members);
-        }
+        if (requestId !== requestIdRef.current) return;
+
+        const users = result.data?.organization?.members as User[] | undefined;
+        if (!users) return;
+
+        useEntityStore.getState().upsertMany("users", users);
+
+        const scopedMembers = users.map((user) => ({
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+        }));
+
+        orgMemberCache.set(activeOrgId, scopedMembers);
+        setMembers(scopedMembers);
+      })
+      .catch(() => {
+        if (requestId !== requestIdRef.current || cached) return;
+        setMembers([]);
       });
   }, [activeOrgId]);
 
-  const userIds = useEntityIds("users");
-  const users = useEntityStore(
-    useShallow((state) =>
-      userIds
-        .map((id) => state.users[id])
-        .filter((user): user is User => Boolean(user)),
-    ),
-  );
-
-  return useMemo(
-    () =>
-      users.map((user) => ({
-        id: user.id,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-      })),
-    [users],
-  );
+  return members;
 }

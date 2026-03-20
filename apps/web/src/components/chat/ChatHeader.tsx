@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Hash, Pencil } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField, useEntityStore } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
+import type { Chat } from "@trace/gql";
 import { SidebarTrigger } from "../ui/sidebar";
 import { AddMemberDialog } from "./AddMemberDialog";
 
@@ -48,6 +49,8 @@ export function ChatHeader({ chatId }: { chatId: string }) {
     const trimmed = draft.trim();
     setEditing(false);
     if (!trimmed || trimmed === displayName) return;
+    // Optimistic update — write to store before server round-trip
+    useEntityStore.getState().patch("chats", chatId, { name: trimmed } as Partial<Chat>);
     await client.mutation(RENAME_CHAT_MUTATION, { chatId, name: trimmed }).toPromise();
   };
 

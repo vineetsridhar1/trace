@@ -4,6 +4,7 @@ import { useAuthStore } from "../../stores/auth";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
+import { ORG_MEMBERS_QUERY } from "../../lib/mutations";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -11,20 +12,6 @@ import {
   ResponsiveDialogTitle as DialogTitle,
   ResponsiveDialogTrigger as DialogTrigger,
 } from "../ui/responsive-dialog";
-
-const ORG_MEMBERS_QUERY = gql`
-  query OrgMembers($id: ID!) {
-    organization(id: $id) {
-      id
-      members {
-        id
-        name
-        email
-        avatarUrl
-      }
-    }
-  }
-`;
 
 const ADD_CHAT_MEMBER_MUTATION = gql`
   mutation AddChatMember($input: AddChatMemberInput!) {
@@ -68,12 +55,12 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
     (member) => member.id !== userId && !existingMemberIds.has(member.id),
   );
 
-  async function handleAdd(userId: string) {
+  async function handleAdd(targetUserId: string) {
     setAdding(true);
     try {
       await client
         .mutation(ADD_CHAT_MEMBER_MUTATION, {
-          input: { chatId, userId },
+          input: { chatId, userId: targetUserId },
         })
         .toPromise();
       setOpen(false);

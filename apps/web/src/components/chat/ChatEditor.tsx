@@ -1,19 +1,41 @@
-import { useRef, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  forwardRef,
+  useRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.bubble.css";
 import Quill from "quill";
 import { Mention } from "quill-mention";
 import "./MentionBlot";
 import "./mention-styles.css";
-import { useOrgMembers } from "../../hooks/useOrgMembers";
-import { useAuthStore } from "../../stores/auth";
 
-Quill.register("modules/mention", Mention);
+// Guard against double-registration (e.g. HMR in dev mode)
+if (!Quill.imports["modules/mention"]) {
+  Quill.register("modules/mention", Mention);
+}
+
+export interface MentionableUser {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+}
+
+export interface ChatEditorHandle {
+  focus: () => void;
+  submit: () => Promise<boolean>;
+}
 
 interface ChatEditorProps {
   onSubmit: (html: string) => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
+  mentionableUsers?: MentionableUser[];
+  currentUserId?: string | null;
 }
 
 function createCustomUserElement(
@@ -49,28 +71,32 @@ function createCustomUserElement(
   return div;
 }
 
-export function ChatEditor({ onSubmit, placeholder = "Type a message...", disabled }: ChatEditorProps) {
+export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function ChatEditor(
+  { onSubmit, placeholder = "Type a message...", disabled, mentionableUsers = [], currentUserId },
+  ref,
+) {
   const quillRef = useRef<ReactQuill>(null);
   const [value, setValue] = useState("");
-  const members = useOrgMembers();
-  const currentUserId = useAuthStore((s) => s.user?.id);
-  const membersRef = useRef(members);
+  const membersRef = useRef(mentionableUsers);
   const currentUserIdRef = useRef(currentUserId);
 
-  useEffect(() => { membersRef.current = members; }, [members]);
-  useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
+  useEffect(() => {
+    membersRef.current = mentionableUsers;
+  }, [mentionableUsers]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
 
   const modules = useMemo(
     () => ({
       toolbar: false,
       keyboard: {
         bindings: {
-          // Override Enter to do nothing in Quill — we handle submit in onKeyDown
           enter: {
             key: "Enter",
             handler: () => false,
           },
-          // Allow Shift+Enter to insert a newline
           shiftEnter: {
             key: "Enter",
             shiftKey: true,
@@ -88,53 +114,73 @@ export function ChatEditor({ onSubmit, placeholder = "Type a message...", disabl
         isolateCharacter: true,
         source: (
           searchTerm: string,
-          renderList: (values: Array<{ id: string; value: string; avatarUrl?: string | null; type: string }>, searchTerm: string) => void,
+          renderList: (
+            values: Array<{ id: string; value: string; avatarUrl?: string | null; type: string }>,
+            searchTerm: string,
+          ) => void,
         ) => {
           const matches = membersRef.current
-            .filter((m) => m.name.toLowerCase().includes(searchTerm.toLowerCase()))
-            .map((m) => ({
-              id: m.id,
-              value: m.name,
-              avatarUrl: m.avatarUrl,
+            .filter((member) => member.name.toLowerCase().includes(searchTerm.toLowerCase()))
+            .map((member) => ({
+              id: member.id,
+              value: member.name,
+              avatarUrl: member.avatarUrl,
               type: "user",
             }));
           renderList(matches, searchTerm);
         },
-        renderItem: (item: { id: string; value: string; avatarUrl?: string | null; type: string }) => {
-          return createCustomUserElement(
-            item.value,
-            item.avatarUrl,
-            item.id === currentUserIdRef.current,
-          );
-        },
+        renderItem: (item: {
+          id: string;
+          value: string;
+          avatarUrl?: string | null;
+          type: string;
+        }) =>
+          createCustomUserElement(item.value, item.avatarUrl, item.id === currentUserIdRef.current),
       },
     }),
     [],
   );
 
+  const submit = useCallback(async () => {
+    const editor = quillRef.current?.getEditor();
+    if (!editor || disabled) return false;
+
+    const html = editor.root.innerHTML;
+    const text = editor.getText().trim();
+    if (!text) return false;
+
+    try {
+      await Promise.resolve(onSubmit(html));
+      setValue("");
+      return true;
+    } catch {
+      return false;
+    }
+  }, [disabled, onSubmit]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => {
+        quillRef.current?.focus();
+      },
+      submit,
+    }),
+    [submit],
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Stop modifier shortcuts (Cmd+B, Cmd+I) from propagating to app-level handlers
       if (e.metaKey || e.ctrlKey) {
         e.stopPropagation();
       }
 
-      // Enter to submit (Quill's Enter is suppressed via keyboard binding above)
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        const editor = quillRef.current?.getEditor();
-        if (!editor || disabled) return;
-
-        const html = editor.root.innerHTML;
-        const text = editor.getText().trim();
-        if (!text) return;
-
-        void Promise.resolve(onSubmit(html))
-          .then(() => setValue(""))
-          .catch(() => undefined);
+        void submit();
       }
     },
-    [onSubmit, disabled],
+    [submit],
   );
 
   return (
@@ -150,4 +196,4 @@ export function ChatEditor({ onSubmit, placeholder = "Type a message...", disabl
       />
     </div>
   );
-}
+});

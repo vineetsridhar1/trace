@@ -153,3 +153,18 @@ export const DESTROY_TERMINAL_MUTATION = gql`
     destroyTerminal(terminalId: $terminalId)
   }
 `;
+
+export const ORG_MEMBERS_QUERY = gql`
+  query OrgMembers($id: ID!) {
+    organization(id: $id) {
+      id
+      members {
+        id
+        name
+        email
+        avatarUrl
+        role
+      }
+    }
+  }
+`;
