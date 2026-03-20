@@ -8,6 +8,7 @@ import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { ThreadMessage } from "./ThreadMessage";
 import { ChatComposer } from "./ChatComposer";
+import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 
 const THREAD_REPLIES_QUERY = gql`
@@ -133,8 +134,17 @@ export function ThreadPanel({ chatId, rootMessageId }: { chatId: string; rootMes
       {/* Replies */}
       <div className="flex-1 overflow-y-auto py-2">
         {loading ? (
-          <div className="flex items-center justify-center py-4">
-            <p className="text-xs text-muted-foreground">Loading replies...</p>
+          <div className="px-4 py-2 space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex gap-2.5">
+                <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                <div className="flex-1 space-y-1.5 pt-0.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-[50%]" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-4">

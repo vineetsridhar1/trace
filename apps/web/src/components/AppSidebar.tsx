@@ -14,6 +14,7 @@ import { CreateChannelDialog } from "./sidebar/CreateChannelDialog";
 import { CreateChatDialog } from "./sidebar/CreateChatDialog";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
 import { InboxButton } from "./sidebar/InboxButton";
+import { Skeleton } from "./ui/skeleton";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +24,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuItem,
   useSidebar,
 } from "./ui/sidebar";
 
@@ -95,6 +97,8 @@ export function AppSidebar() {
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const refreshTick = useUIStore((s) => s.refreshTick);
   const [peeking, setPeeking] = useState(false);
+  const [channelsLoading, setChannelsLoading] = useState(true);
+  const [chatsLoading, setChatsLoading] = useState(true);
   const { state } = useSidebar();
 
   const fetchChannels = useCallback(async () => {
@@ -105,6 +109,7 @@ export function AppSidebar() {
       const fetched = result.data.channels as Array<Channel & { id: string }>;
       upsertMany("channels", fetched);
     }
+    setChannelsLoading(false);
   }, [activeOrgId, upsertMany]);
 
   const fetchRepos = useCallback(async () => {
@@ -123,6 +128,7 @@ export function AppSidebar() {
     if (result.data?.chats) {
       upsertMany("chats", result.data.chats as Array<Chat & { id: string }>);
     }
+    setChatsLoading(false);
   }, [activeOrgId, upsertMany]);
 
   const fetchInboxItems = useCallback(async () => {
@@ -175,16 +181,27 @@ export function AppSidebar() {
             </div>
             <SidebarGroupContent>
               <SidebarMenu>
-                {sortedIds.map((id) => (
-                  <ChannelItem
-                    key={id}
-                    id={id}
-                    isActive={id === activeChannelId}
-                    onClick={() => setActiveChannelId(id)}
-                  />
-                ))}
+                {channelsLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <SidebarMenuItem key={i}>
+                      <div className="flex items-center gap-2 px-2 py-1.5">
+                        <Skeleton className="h-4 w-4 rounded shrink-0" />
+                        <Skeleton className="h-3.5 w-[60%]" />
+                      </div>
+                    </SidebarMenuItem>
+                  ))
+                ) : (
+                  sortedIds.map((id) => (
+                    <ChannelItem
+                      key={id}
+                      id={id}
+                      isActive={id === activeChannelId}
+                      onClick={() => setActiveChannelId(id)}
+                    />
+                  ))
+                )}
               </SidebarMenu>
-              {sortedIds.length === 0 && (
+              {!channelsLoading && sortedIds.length === 0 && (
                 <p className="px-2 py-4 text-center text-xs text-muted-foreground">No channels yet</p>
               )}
             </SidebarGroupContent>
@@ -198,16 +215,27 @@ export function AppSidebar() {
             </div>
             <SidebarGroupContent>
               <SidebarMenu>
-                {chatIds.map((id) => (
-                  <ChatItem
-                    key={id}
-                    id={id}
-                    isActive={id === activeChatId}
-                    onClick={() => setActiveChatId(id)}
-                  />
-                ))}
+                {chatsLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <SidebarMenuItem key={i}>
+                      <div className="flex items-center gap-2 px-2 py-1.5">
+                        <Skeleton className="h-4 w-4 rounded shrink-0" />
+                        <Skeleton className="h-3.5 w-[55%]" />
+                      </div>
+                    </SidebarMenuItem>
+                  ))
+                ) : (
+                  chatIds.map((id) => (
+                    <ChatItem
+                      key={id}
+                      id={id}
+                      isActive={id === activeChatId}
+                      onClick={() => setActiveChatId(id)}
+                    />
+                  ))
+                )}
               </SidebarMenu>
-              {chatIds.length === 0 && (
+              {!chatsLoading && chatIds.length === 0 && (
                 <p className="px-2 py-4 text-center text-xs text-muted-foreground">No conversations yet</p>
               )}
             </SidebarGroupContent>
