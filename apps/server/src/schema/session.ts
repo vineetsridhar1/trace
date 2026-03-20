@@ -50,6 +50,9 @@ export const sessionMutations = {
   terminateSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.terminate(args.id, ctx.actorType, ctx.userId);
   },
+  dismissSession: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.dismiss(args.id, ctx.actorType, ctx.userId);
+  },
   deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
   },

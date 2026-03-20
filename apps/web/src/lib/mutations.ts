@@ -32,6 +32,14 @@ export const TERMINATE_SESSION_MUTATION = gql`
   }
 `;
 
+export const DISMISS_SESSION_MUTATION = gql`
+  mutation DismissSession($id: ID!) {
+    dismissSession(id: $id) {
+      id
+    }
+  }
+`;
+
 export const RETRY_SESSION_CONNECTION_MUTATION = gql`
   mutation RetrySessionConnection($sessionId: ID!) {
     retrySessionConnection(sessionId: $sessionId) {

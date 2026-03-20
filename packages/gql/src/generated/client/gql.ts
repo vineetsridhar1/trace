@@ -32,6 +32,7 @@ type Documents = {
     "\n  mutation RunSession($id: ID!, $prompt: String, $interactionMode: String) {\n    runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) {\n      id\n    }\n  }\n": typeof types.RunSessionDocument,
     "\n  mutation SendSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {\n    sendSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) {\n      id\n    }\n  }\n": typeof types.SendSessionMessageDocument,
     "\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n": typeof types.TerminateSessionDocument,
+    "\n  mutation DismissSession($id: ID!) {\n    dismissSession(id: $id) {\n      id\n    }\n  }\n": typeof types.DismissSessionDocument,
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": typeof types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": typeof types.MoveSessionToRuntimeDocument,
     "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": typeof types.DeleteSessionDocument,
@@ -65,6 +66,7 @@ const documents: Documents = {
     "\n  mutation RunSession($id: ID!, $prompt: String, $interactionMode: String) {\n    runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) {\n      id\n    }\n  }\n": types.RunSessionDocument,
     "\n  mutation SendSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {\n    sendSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) {\n      id\n    }\n  }\n": types.SendSessionMessageDocument,
     "\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n": types.TerminateSessionDocument,
+    "\n  mutation DismissSession($id: ID!) {\n    dismissSession(id: $id) {\n      id\n    }\n  }\n": types.DismissSessionDocument,
     "\n  mutation RetrySessionConnection($sessionId: ID!) {\n    retrySessionConnection(sessionId: $sessionId) {\n      id\n    }\n  }\n": types.RetrySessionConnectionDocument,
     "\n  mutation MoveSessionToRuntime($sessionId: ID!, $runtimeInstanceId: ID!) {\n    moveSessionToRuntime(sessionId: $sessionId, runtimeInstanceId: $runtimeInstanceId) {\n      id\n    }\n  }\n": types.MoveSessionToRuntimeDocument,
     "\n  mutation DeleteSession($id: ID!) {\n    deleteSession(id: $id) {\n      id\n    }\n  }\n": types.DeleteSessionDocument,
@@ -166,6 +168,10 @@ export function graphql(source: "\n  mutation SendSessionMessage($sessionId: ID!
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation TerminateSession($id: ID!) {\n    terminateSession(id: $id) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DismissSession($id: ID!) {\n    dismissSession(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DismissSession($id: ID!) {\n    dismissSession(id: $id) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

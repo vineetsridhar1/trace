@@ -381,13 +381,20 @@ export class SessionService {
   }
 
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    return this.terminateWithStatus(id, "failed", "Session terminated", actorType, actorId);
+  }
+
+  async dismiss(id: string, actorType: ActorType = "system", actorId: string = "system") {
+    return this.terminateWithStatus(id, "completed", "Session dismissed", actorType, actorId);
+  }
+
+  private async terminateWithStatus(id: string, targetStatus: SessionStatus, resolution: string, actorType: ActorType, actorId: string) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
       select: { organizationId: true },
     });
-    // Resolve any inbox items when terminating (covers needs_input → failed path)
-    await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution: "Session terminated" });
-    return this.transition(id, "terminate", "failed", "session_terminated", actorType, actorId);
+    await inboxService.resolveBySource({ sourceType: "session", sourceId: id, orgId: session.organizationId, resolution });
+    return this.transition(id, "terminate", targetStatus, "session_terminated", actorType, actorId);
   }
 
   async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
