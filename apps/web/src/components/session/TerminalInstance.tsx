@@ -5,11 +5,13 @@ import "@xterm/xterm/css/xterm.css";
 import { TerminalSocket } from "../../lib/terminal-ws";
 import { useTerminalStore } from "../../stores/terminal";
 
-export function TerminalInstance({ terminalId }: { terminalId: string }) {
+export function TerminalInstance({ terminalId, visible }: { terminalId: string; visible: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const socketRef = useRef<TerminalSocket | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
   const setTerminalStatus = useTerminalStore((s) => s.setTerminalStatus);
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export function TerminalInstance({ terminalId }: { terminalId: string }) {
     // Handle resize (debounced to avoid flooding bridge during drag)
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver(() => {
+      if (!visibleRef.current) return;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         fitAddon.fit();
@@ -93,6 +96,19 @@ export function TerminalInstance({ terminalId }: { terminalId: string }) {
       fitRef.current = null;
     };
   }, [terminalId, setTerminalStatus]);
+
+  // Refit when tab becomes visible (xterm can't measure while hidden)
+  useEffect(() => {
+    if (visible && fitRef.current && termRef.current && socketRef.current) {
+      requestAnimationFrame(() => {
+        fitRef.current?.fit();
+        if (termRef.current && socketRef.current) {
+          socketRef.current.resize(termRef.current.cols, termRef.current.rows);
+        }
+        termRef.current?.focus();
+      });
+    }
+  }, [visible]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
