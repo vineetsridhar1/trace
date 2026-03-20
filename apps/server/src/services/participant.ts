@@ -1,3 +1,4 @@
+import type { ParticipantScope } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
 export class ParticipantService {
@@ -8,7 +9,7 @@ export class ParticipantService {
     organizationId,
   }: {
     userId: string;
-    scopeType: string;
+    scopeType: ParticipantScope;
     scopeId: string;
     organizationId: string;
   }) {
@@ -28,7 +29,7 @@ export class ParticipantService {
     organizationId,
   }: {
     userId: string;
-    scopeType: string;
+    scopeType: ParticipantScope;
     scopeId: string;
     organizationId: string;
   }) {
@@ -44,7 +45,7 @@ export class ParticipantService {
     organizationId,
   }: {
     userId: string;
-    scopeType: string;
+    scopeType: ParticipantScope;
     scopeId: string;
     organizationId: string;
   }) {
@@ -68,7 +69,7 @@ export class ParticipantService {
     organizationId,
   }: {
     userId: string;
-    scopeType: string;
+    scopeType: ParticipantScope;
     scopeId: string;
     organizationId: string;
   }) {
@@ -85,13 +86,13 @@ export class ParticipantService {
     });
   }
 
-  async getParticipants(scopeType: string, scopeId: string, organizationId: string) {
+  async getParticipants(scopeType: ParticipantScope, scopeId: string, organizationId: string) {
     return prisma.participant.findMany({
       where: { scopeType, scopeId, organizationId },
     });
   }
 
-  async isParticipant(userId: string, scopeType: string, scopeId: string, organizationId: string) {
+  async isParticipant(userId: string, scopeType: ParticipantScope, scopeId: string, organizationId: string) {
     const p = await prisma.participant.findFirst({
       where: { userId, scopeType, scopeId, organizationId },
     });

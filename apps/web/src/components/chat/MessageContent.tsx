@@ -1,5 +1,13 @@
+import DOMPurify from "dompurify";
 import parse, { type HTMLReactParserOptions, type DOMNode, Element } from "html-react-parser";
 import { UserMention } from "./UserMention";
+
+// Allow mention data attributes through DOMPurify
+DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
+  if (data.attrName.startsWith("data-mention-")) {
+    data.forceKeepAttr = true;
+  }
+});
 
 const parserOptions: HTMLReactParserOptions = {
   replace: (domNode: DOMNode) => {
@@ -21,7 +29,8 @@ const parserOptions: HTMLReactParserOptions = {
 
 export function MessageContent({ html }: { html: string }) {
   // Strip trailing empty paragraphs Quill always appends
-  const clean = html.replace(/(<p>\s*<br\s*\/?>\s*<\/p>\s*)+$/i, "");
+  const stripped = html.replace(/(<p>\s*<br\s*\/?>\s*<\/p>\s*)+$/i, "");
+  const clean = DOMPurify.sanitize(stripped);
   return (
     <div className="text-[15px] leading-snug text-foreground [&_p]:m-0">
       {parse(clean, parserOptions)}

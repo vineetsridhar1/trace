@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type { CreateChatInput, AddChatMemberInput } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { chatService } from "../services/chat.js";
+import { resolveActor } from "../services/actor.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { assertChatAccess, isActiveChatMember } from "../services/access.js";
@@ -140,23 +141,7 @@ export const chatTypeResolvers = {
     },
   },
   Message: {
-    actor: async (message: { actorType: string; actorId: string }) => {
-      const actor: { type: string; id: string; name: string | null; avatarUrl: string | null } = {
-        type: message.actorType,
-        id: message.actorId,
-        name: null,
-        avatarUrl: null,
-      };
-      if (message.actorType === "user") {
-        const user = await prisma.user.findUnique({
-          where: { id: message.actorId },
-          select: { name: true, avatarUrl: true },
-        });
-        actor.name = user?.name ?? null;
-        actor.avatarUrl = user?.avatarUrl ?? null;
-      }
-      return actor;
-    },
+    actor: (message: { actorType: string; actorId: string }) => resolveActor(message),
   },
   ChatMember: {
     user: (member: { userId: string }) => {

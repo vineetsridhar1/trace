@@ -1,23 +1,35 @@
+import type { ParticipantScope } from "@prisma/client";
 import type { Context } from "../context.js";
 import { prisma } from "../lib/db.js";
 import { participantService } from "../services/participant.js";
 import { assertScopeAccess, assertThreadAccess } from "../services/access.js";
 
+const VALID_SCOPES = new Set<string>(["channel", "chat", "session", "ticket", "thread", "system"]);
+
+function validateScope(scopeType: string): ParticipantScope {
+  if (!VALID_SCOPES.has(scopeType)) {
+    throw new Error(`Invalid scope type: ${scopeType}`);
+  }
+  return scopeType as ParticipantScope;
+}
+
 export const participantQueries = {
   participants: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
-    if (args.scopeType === "thread") {
+    const scopeType = validateScope(args.scopeType);
+    if (scopeType === "thread") {
       await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
     }
 
-    return participantService.getParticipants(args.scopeType, args.scopeId, ctx.organizationId);
+    return participantService.getParticipants(scopeType, args.scopeId, ctx.organizationId);
   },
 };
 
 export const participantMutations = {
   subscribe: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
-    if (args.scopeType === "thread") {
+    const scopeType = validateScope(args.scopeType);
+    if (scopeType === "thread") {
       await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
@@ -25,22 +37,24 @@ export const participantMutations = {
 
     return participantService.subscribe({
       userId: ctx.userId,
-      scopeType: args.scopeType,
+      scopeType,
       scopeId: args.scopeId,
       organizationId: ctx.organizationId,
     });
   },
   unsubscribe: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
+    const scopeType = validateScope(args.scopeType);
     await participantService.unsubscribe({
       userId: ctx.userId,
-      scopeType: args.scopeType,
+      scopeType,
       scopeId: args.scopeId,
       organizationId: ctx.organizationId,
     });
     return true;
   },
   muteScope: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
-    if (args.scopeType === "thread") {
+    const scopeType = validateScope(args.scopeType);
+    if (scopeType === "thread") {
       await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
@@ -48,13 +62,14 @@ export const participantMutations = {
 
     return participantService.mute({
       userId: ctx.userId,
-      scopeType: args.scopeType,
+      scopeType,
       scopeId: args.scopeId,
       organizationId: ctx.organizationId,
     });
   },
   unmuteScope: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
-    if (args.scopeType === "thread") {
+    const scopeType = validateScope(args.scopeType);
+    if (scopeType === "thread") {
       await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
@@ -62,7 +77,7 @@ export const participantMutations = {
 
     return participantService.unmute({
       userId: ctx.userId,
-      scopeType: args.scopeType,
+      scopeType,
       scopeId: args.scopeId,
       organizationId: ctx.organizationId,
     });

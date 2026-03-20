@@ -2,11 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
-import { useEntityStore } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { ORG_MEMBERS_QUERY } from "../../lib/mutations";
-import type { Chat } from "@trace/gql";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -21,26 +19,6 @@ const CREATE_CHAT_MUTATION = gql`
   mutation CreateChat($input: CreateChatInput!) {
     createChat(input: $input) {
       id
-    }
-  }
-`;
-
-const CHAT_QUERY = gql`
-  query Chat($id: ID!) {
-    chat(id: $id) {
-      id
-      type
-      name
-      members {
-        user {
-          id
-          name
-          avatarUrl
-        }
-        joinedAt
-      }
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -88,16 +66,6 @@ export function CreateChatDialog() {
     });
   }
 
-  const hydrateChatIfMissing = useCallback(async (chatId: string) => {
-    if (useEntityStore.getState().chats[chatId]) return;
-
-    const result = await client.query(CHAT_QUERY, { id: chatId }).toPromise();
-    const chat = result.data?.chat;
-    if (chat?.id) {
-      useEntityStore.getState().upsert("chats", chat.id, chat as Chat);
-    }
-  }, []);
-
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (selectedIds.size === 0 || !activeOrgId) return;
@@ -113,10 +81,11 @@ export function CreateChatDialog() {
         })
         .toPromise();
 
-      const chatId = result.data?.createChat?.id;
+      const chatId = result.data?.createChat?.id as string | undefined;
       if (chatId) {
         setOpen(false);
-        await hydrateChatIfMissing(chatId);
+        // Navigate immediately — the chat_created event via useOrgEvents
+        // will populate the entity store for all clients.
         setActiveChatId(chatId);
       }
     } finally {

@@ -34,7 +34,7 @@
 
 /* Mention styling inside the editor */
 .chat-editor .mention {
-  color: #93c5fd;
+  color: var(--color-blue-300, #93c5fd);
   font-weight: 500;
   padding: 0;
   margin: 0;

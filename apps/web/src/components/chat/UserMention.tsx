@@ -18,7 +18,7 @@ export function UserMention({ userId, fallbackName }: UserMentionProps) {
     <UserProfileChatCard userId={userId} fallbackName={fallbackName}>
       <span
         className={`inline cursor-pointer font-medium hover:underline ${
-          isMe ? "text-blue-300" : "text-blue-300"
+          isMe ? "text-primary" : "text-blue-300"
         }`}
       >
         @{displayName}

@@ -10,7 +10,7 @@ import { terminalQueries, terminalMutations } from "./terminal.js";
 import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from "./chat.js";
 import { participantQueries, participantMutations, participantTypeResolvers } from "./participant.js";
 import { threadQueries } from "./thread.js";
-import { prisma } from "../lib/db.js";
+import { resolveActor } from "../services/actor.js";
 
 export const resolvers = {
   DateTime: DateTimeScalar,
@@ -21,23 +21,7 @@ export const resolvers = {
   ...participantTypeResolvers,
 
   Event: {
-    actor: async (event: { actorType: string; actorId: string }) => {
-      const actor: { type: string; id: string; name: string | null; avatarUrl: string | null } = {
-        type: event.actorType,
-        id: event.actorId,
-        name: null,
-        avatarUrl: null,
-      };
-      if (event.actorType === "user") {
-        const user = await prisma.user.findUnique({
-          where: { id: event.actorId },
-          select: { name: true, avatarUrl: true },
-        });
-        actor.name = user?.name ?? null;
-        actor.avatarUrl = user?.avatarUrl ?? null;
-      }
-      return actor;
-    },
+    actor: (event: { actorType: string; actorId: string }) => resolveActor(event),
   },
 
   Query: {

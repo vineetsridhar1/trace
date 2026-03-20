@@ -97,6 +97,15 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum ParticipantScope {
+  channel
+  chat
+  session
+  ticket
+  thread
+  system
+}
+
 enum CloudMachineStatus {
   creating
   started
@@ -456,7 +465,7 @@ model ChatMember {
 model Participant {
   userId         String
   user           User         @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  scopeType      String
+  scopeType      ParticipantScope
   scopeId        String
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])

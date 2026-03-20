@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ChatMessage } from "./ChatMessage";
+import { ChatMessageErrorBoundary } from "./ChatMessageErrorBoundary";
 import { DmWelcome } from "./DmWelcome";
 import { useEntityStore } from "../../stores/entity";
 import { useShallow } from "zustand/react/shallow";
@@ -67,7 +68,7 @@ export function ChatMessageList({
   }, [messageIds.length]);
 
   // Track scroll position
-  function handleScroll() {
+  const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
@@ -76,7 +77,7 @@ export function ChatMessageList({
     if (el.scrollTop < 50 && hasOlder) {
       onLoadOlder();
     }
-  }
+  }, [hasOlder, onLoadOlder]);
 
   if (loading) {
     return (
@@ -101,7 +102,9 @@ export function ChatMessageList({
         <div className="py-2">
           {!hasOlder && <DmWelcome chatId={chatId} />}
           {messageIds.map((id, idx) => (
-            <ChatMessage key={id} messageId={id} isGrouped={groupedFlags[idx]} />
+            <ChatMessageErrorBoundary key={id}>
+              <ChatMessage messageId={id} isGrouped={groupedFlags[idx]} />
+            </ChatMessageErrorBoundary>
           ))}
         </div>
       )}

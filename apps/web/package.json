@@ -24,6 +24,7 @@
     "ag-grid-react": "^35.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dompurify": "^3.3.3",
     "framer-motion": "^12.36.0",
     "graphql": "^16.10.0",
     "graphql-ws": "^5.16.2",

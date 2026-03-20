@@ -1,10 +1,8 @@
 import { useCallback, useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { gql } from "@urql/core";
-import type { Chat } from "@trace/gql";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
-import { useEntityStore } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
@@ -13,18 +11,6 @@ const CREATE_CHAT_MUTATION = gql`
   mutation CreateDM($input: CreateChatInput!) {
     createChat(input: $input) {
       id
-      type
-      name
-      members {
-        user {
-          id
-          name
-          avatarUrl
-        }
-        joinedAt
-      }
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -54,10 +40,11 @@ export function StartDirectMessageButton({ userId }: { userId: string }) {
         throw result.error;
       }
 
-      if (result.data?.createChat) {
-        const chat = result.data.createChat as Chat;
-        useEntityStore.getState().upsert("chats", chat.id, chat);
-        setActiveChatId(chat.id);
+      const chatId = result.data?.createChat?.id as string | undefined;
+      if (chatId) {
+        // Navigate immediately — the chat_created event via useOrgEvents
+        // will populate the entity store for all clients.
+        setActiveChatId(chatId);
       }
     } catch (error) {
       console.error("Failed to start direct message", error);

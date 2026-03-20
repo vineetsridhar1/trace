@@ -4,6 +4,7 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { participantService } from "./participant.js";
 import { sanitizeHtml, extractMentions, stripHtml } from "./mention.js";
+import { resolveActors, type ActorSummary } from "./actor.js";
 
 function buildDmKey(userA: string, userB: string) {
   return [userA, userB].sort().join(":");
@@ -11,22 +12,24 @@ function buildDmKey(userA: string, userB: string) {
 
 type DbMessage = Prisma.MessageGetPayload<Record<string, never>>;
 
-type ActorSummary = {
-  type: string;
-  id: string;
-  name: string | null;
-  avatarUrl: string | null;
-};
-
 type MessageWithSummary = DbMessage & {
   replyCount: number;
   latestReplyAt: Date | null;
   threadRepliers: ActorSummary[];
 };
 
+const MAX_MESSAGE_LENGTH = 65536; // 64KB
+
 function normalizeMessageInput(text?: string, html?: string) {
   if (!text && !html) {
     throw new Error("Either text or html must be provided");
+  }
+
+  if (text && text.length > MAX_MESSAGE_LENGTH) {
+    throw new Error("Message text exceeds maximum length");
+  }
+  if (html && html.length > MAX_MESSAGE_LENGTH) {
+    throw new Error("Message HTML exceeds maximum length");
   }
 
   if (html) {
@@ -199,36 +202,6 @@ export class ChatService {
     return chat;
   }
 
-  private async resolveActors(
-    actorRefs: Array<{ actorType: string; actorId: string }>,
-  ): Promise<Map<string, ActorSummary>> {
-    const userIds = [...new Set(actorRefs.filter((ref) => ref.actorType === "user").map((ref) => ref.actorId))];
-    const users = userIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, avatarUrl: true },
-        })
-      : [];
-
-    const userMap = new Map(users.map((user) => [user.id, user]));
-    const actorMap = new Map<string, ActorSummary>();
-
-    for (const ref of actorRefs) {
-      const key = `${ref.actorType}:${ref.actorId}`;
-      if (actorMap.has(key)) continue;
-
-      const user = ref.actorType === "user" ? userMap.get(ref.actorId) : null;
-      actorMap.set(key, {
-        type: ref.actorType,
-        id: ref.actorId,
-        name: user?.name ?? null,
-        avatarUrl: user?.avatarUrl ?? null,
-      });
-    }
-
-    return actorMap;
-  }
-
   private async hydrateMessages(messages: DbMessage[]): Promise<MessageWithSummary[]> {
     if (messages.length === 0) return [];
 
@@ -246,7 +219,7 @@ export class ChatService {
         })
       : [];
 
-    const actorMap = await this.resolveActors(replies.map((reply) => ({
+    const actorMap = await resolveActors(replies.map((reply) => ({
       actorType: reply.actorType,
       actorId: reply.actorId,
     })));
@@ -404,8 +377,13 @@ export class ChatService {
       });
     }
 
-    const [hydratedMessage] = await this.hydrateMessages([message]);
-    return hydratedMessage;
+    // New messages have no replies yet — hydrate inline to avoid extra queries
+    return {
+      ...message,
+      replyCount: 0,
+      latestReplyAt: null,
+      threadRepliers: [],
+    } satisfies MessageWithSummary;
   }
 
   async editMessage({
@@ -544,7 +522,9 @@ export class ChatService {
           eventType: "message_deleted",
           payload: {
             messageId: deletedMessage.id,
+            chatId: deletedMessage.chatId,
             parentMessageId: deletedMessage.parentMessageId,
+            deletedAt: deletedMessage.deletedAt?.toISOString() ?? null,
           } as PrismaTypes.InputJsonValue,
           actorType,
           actorId,
@@ -754,6 +734,21 @@ export class ChatService {
           organizationId: chat.organizationId,
         },
       });
+
+      // Clean up thread subscriptions for threads in this chat
+      const threadRoots = await tx.message.findMany({
+        where: { chatId, parentMessageId: null },
+        select: { id: true },
+      });
+      if (threadRoots.length > 0) {
+        await tx.participant.deleteMany({
+          where: {
+            userId: actorId,
+            scopeType: "thread",
+            scopeId: { in: threadRoots.map((m) => m.id) },
+          },
+        });
+      }
 
       // Fetch remaining members with user data for the event payload
       const remainingMembers = await tx.chatMember.findMany({
