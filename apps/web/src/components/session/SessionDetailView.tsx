@@ -11,7 +11,7 @@ import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { buildSessionNodes } from "./groupReadGlob";
 import { client } from "../../lib/urql";
-import { TERMINATE_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
+import { TERMINATE_SESSION_MUTATION, DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 
 const SESSION_DETAIL_QUERY = gql`
   query SessionDetail($id: ID!) {
@@ -104,7 +104,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     if (status !== "needs_input") return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
-      if (node.kind === "plan-review") return node;
+      if (node.kind === "plan-review") return { node, index: i };
     }
     return null;
   }, [nodes, status]);
@@ -113,14 +113,19 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     if (status !== "needs_input") return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
-      if (node.kind === "ask-user-question") return node;
+      if (node.kind === "ask-user-question") return { node, index: i };
     }
     return null;
   }, [nodes, status]);
 
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
-  const showQuestion =
-    activeQuestion && activeQuestion.id !== dismissedQuestionId ? activeQuestion : null;
+  // Don't show a stale question if a more recent plan exists — the question was already answered
+  const showQuestion = (() => {
+    if (!activeQuestion) return null;
+    if (activeQuestion.node.id === dismissedQuestionId) return null;
+    if (activePlan && activePlan.index > activeQuestion.index) return null;
+    return activeQuestion.node;
+  })();
 
   const [showTerminal, setShowTerminal] = useState(false);
 
@@ -129,7 +134,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   const handleDismissPlan = useCallback(async () => {
-    await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
+    await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
   }, [sessionId]);
 
   return (
@@ -180,13 +185,12 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
           }}
           onDismiss={() => {
             setDismissedQuestionId(showQuestion.id);
-            client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
           }}
         />
       ) : activePlan ? (
         <PlanResponseBar
           sessionId={sessionId}
-          planContent={activePlan.planContent}
+          planContent={activePlan.node.planContent}
           onDismiss={handleDismissPlan}
         />
       ) : (

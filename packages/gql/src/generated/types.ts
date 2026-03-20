@@ -192,6 +192,7 @@ export type Mutation = {
   deleteSession: Session;
   destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
+  dismissSession: Session;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
   moveSessionToRuntime: Session;
@@ -261,6 +262,11 @@ export type MutationDestroyTerminalArgs = {
 
 
 export type MutationDismissInboxItemArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDismissSessionArgs = {
   id: Scalars['ID']['input'];
 };
 
