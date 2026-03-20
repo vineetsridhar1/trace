@@ -11,6 +11,7 @@ import { SessionsTable } from "./SessionsTable";
 import { SessionDetailView } from "../session/SessionDetailView";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
+import { Skeleton } from "../ui/skeleton";
 
 const SESSIONS_QUERY = gql`
   query Sessions($organizationId: ID!, $filters: SessionFilters) {
@@ -100,8 +101,15 @@ export function ChannelView({ channelId }: { channelId: string }) {
 
       <div className="flex-1 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-muted-foreground">Loading...</p>
+          <div className="px-4 pt-2 space-y-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 h-10 px-2">
+                <Skeleton className="h-2 w-2 rounded-full shrink-0" />
+                <Skeleton className="h-3.5 w-[40%]" />
+                <Skeleton className="h-3.5 w-[15%]" />
+                <Skeleton className="h-3.5 w-[10%] ml-auto" />
+              </div>
+            ))}
           </div>
         ) : (
           <SessionsTable channelId={channelId} />

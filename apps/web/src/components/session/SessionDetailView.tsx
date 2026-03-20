@@ -10,6 +10,7 @@ import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { buildSessionNodes } from "./groupReadGlob";
+import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
 import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 
@@ -149,8 +150,17 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden">
           {loading ? (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">Loading events...</p>
+            <div className="flex flex-col gap-4 p-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-24" />
+                    <Skeleton className="h-3.5 w-[80%]" />
+                    <Skeleton className="h-3.5 w-[60%]" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : error ? (
             <div className="flex h-full items-center justify-center">
