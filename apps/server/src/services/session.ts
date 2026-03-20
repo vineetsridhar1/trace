@@ -457,7 +457,7 @@ export class SessionService {
   }
 
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.terminateWithStatus(id, "failed", "Session terminated", actorType, actorId);
+    return this.terminateWithStatus(id, "completed", "Session stopped", actorType, actorId);
   }
 
   async dismiss(id: string, actorType: ActorType = "system", actorId: string = "system") {

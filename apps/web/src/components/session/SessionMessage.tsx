@@ -56,12 +56,7 @@ function renderAssistantContent(payload: Record<string, unknown>, ts: string) {
         );
       } else {
         elements.push(
-          <ToolCallRow
-            key={i}
-            name={name}
-            input={asRecord(block.input)}
-            timestamp={ts}
-          />,
+          <ToolCallRow key={i} name={name} input={asRecord(block.input)} timestamp={ts} />,
         );
       }
     } else if (block.type === "tool_result") {
@@ -102,27 +97,49 @@ export function SessionMessage({ id }: { id: string }) {
   const eventType = useEntityField("events", id, "eventType");
   const payload = useEntityField("events", id, "payload");
   const timestamp = useEntityField("events", id, "timestamp");
-  const actor = useEntityField("events", id, "actor") as { type: string; id: string; name?: string | null } | undefined;
+  const actor = useEntityField("events", id, "actor") as
+    | { type: string; id: string; name?: string | null }
+    | undefined;
 
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {
     case "session_started":
-      return typeof payload?.prompt === "string"
-        ? <UserBubble text={payload.prompt} timestamp={timestamp} actorId={actor?.id} actorName={actor?.name} />
-        : <SystemBadge text="Session started" />;
+      return typeof payload?.prompt === "string" ? (
+        <UserBubble
+          text={payload.prompt}
+          timestamp={timestamp}
+          actorId={actor?.id}
+          actorName={actor?.name}
+        />
+      ) : (
+        <SystemBadge text="Session started" />
+      );
 
     case "session_output":
       return payload ? renderSessionOutput(payload, timestamp) : null;
 
     case "message_sent":
-      return <UserBubble text={str(payload?.text)} timestamp={timestamp} actorId={actor?.id} actorName={actor?.name} />;
+      return (
+        <UserBubble
+          text={str(payload?.text)}
+          timestamp={timestamp}
+          actorId={actor?.id}
+          actorName={actor?.name}
+        />
+      );
 
     case "session_terminated": {
       if (payload?.reason === "bridge_complete") return null;
       if (payload?.reason === "workspace_failed") {
         const error = str(payload?.error);
         return <SystemBadge text={error || "Workspace preparation failed"} />;
+      }
+      if (payload?.status === "completed") {
+        return <SystemBadge text="Session completed" />;
+      }
+      if (payload?.status === "failed") {
+        return <SystemBadge text="Session failed" />;
       }
       return <SystemBadge text="Session terminated" />;
     }

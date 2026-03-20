@@ -18,7 +18,7 @@ export const statusLabel: Record<string, string> = {
   paused: "Paused",
   needs_input: "Needs Input",
   completed: "Completed",
-  failed: "Stopped",
+  failed: "Failed",
   unreachable: "Unreachable",
   in_review: "In Review",
   merged: "Merged",
@@ -43,7 +43,10 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
 }
 
 /** Check if a session can accept new messages (not disconnected and not fully unloaded) */
-export function canSendMessage(status: string | undefined, connection: Record<string, unknown> | null | undefined): boolean {
+export function canSendMessage(
+  status: string | undefined,
+  connection: Record<string, unknown> | null | undefined,
+): boolean {
   if (!status) return false;
   if (status === "failed" || status === "merged") return false;
   if (status === "active") return false; // waiting for response
