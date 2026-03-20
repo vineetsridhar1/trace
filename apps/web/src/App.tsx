@@ -25,7 +25,7 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface-deep">
+      <div className="flex h-dvh items-center justify-center bg-surface-deep">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -51,7 +51,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen max-h-screen min-h-screen flex-col pl-2 pr-2 pt-2">
+      <div className="flex h-dvh max-h-dvh min-h-dvh flex-col pl-2 pr-2 pt-2">
         <SidebarProvider className="flex-1">
           <AppSidebar />
           <div className="flex w-full flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background">
@@ -113,7 +113,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-surface-deep">
+    <div className="flex h-dvh items-center justify-center bg-surface-deep">
       <div className="flex flex-col items-center gap-6">
         <h1 className="text-3xl font-bold text-foreground">Trace</h1>
         <p className="text-muted-foreground">
