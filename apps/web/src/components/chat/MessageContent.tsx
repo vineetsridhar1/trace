@@ -13,6 +13,10 @@ DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
 /** Match internal session URLs: /c/{channelId}/s/{sessionId} */
 const SESSION_URL_RE = /\/c\/([a-f0-9-]+)\/s\/([a-f0-9-]+)\/?$/;
 
+/** Match session URLs in plain text (not already inside an <a> tag) and wrap them */
+const SESSION_URL_LINKIFY_RE =
+  /(https?:\/\/[^\s<]+\/c\/[a-f0-9-]+\/s\/[a-f0-9-]+\/?)/g;
+
 function parseSessionUrl(href: string | undefined): { channelId: string; sessionId: string } | null {
   if (!href) return null;
   // Handle both absolute (https://...) and relative (/c/...) URLs
@@ -60,10 +64,30 @@ const parserOptions: HTMLReactParserOptions = {
   },
 };
 
+/**
+ * Wrap bare session URLs (not already inside <a> tags) in anchor elements
+ * so the parser can detect them and render SessionLinkCard.
+ */
+function linkifySessionUrls(html: string): string {
+  // Split on existing <a...>...</a> to avoid double-wrapping
+  const parts = html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/gi);
+  return parts
+    .map((part, i) => {
+      // Odd indices are the <a>...</a> segments — leave them alone
+      if (i % 2 === 1) return part;
+      return part.replace(
+        SESSION_URL_LINKIFY_RE,
+        (url) => `<a href="${url}">${url}</a>`,
+      );
+    })
+    .join("");
+}
+
 export function MessageContent({ html }: { html: string }) {
   // Strip trailing empty paragraphs Quill always appends
   const stripped = html.replace(/(<p>\s*<br\s*\/?>\s*<\/p>\s*)+$/i, "");
-  const clean = DOMPurify.sanitize(stripped);
+  const linked = linkifySessionUrls(stripped);
+  const clean = DOMPurify.sanitize(linked);
   return (
     <div className="text-[15px] leading-snug text-foreground [&_p]:m-0">
       {parse(clean, parserOptions)}
