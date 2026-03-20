@@ -1,7 +1,18 @@
 import Quill from "quill";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Embed = Quill.import("blots/embed") as any;
+interface EmbedBlotInstance {
+  statics: Record<string, unknown>;
+}
+
+interface EmbedBlotConstructor {
+  new (): EmbedBlotInstance;
+  blotName: string;
+  tagName: string;
+  className: string;
+  create(value?: unknown): HTMLElement;
+}
+
+const Embed = Quill.import("blots/embed") as EmbedBlotConstructor;
 
 class MentionBlot extends Embed {
   static blotName = "mention";

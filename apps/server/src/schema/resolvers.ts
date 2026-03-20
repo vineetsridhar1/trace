@@ -10,6 +10,7 @@ import { terminalQueries, terminalMutations } from "./terminal.js";
 import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from "./chat.js";
 import { participantQueries, participantMutations, participantTypeResolvers } from "./participant.js";
 import { threadQueries } from "./thread.js";
+import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
 export const resolvers = {
@@ -21,7 +22,8 @@ export const resolvers = {
   ...participantTypeResolvers,
 
   Event: {
-    actor: (event: { actorType: string; actorId: string }) => resolveActor(event),
+    actor: (event: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
+      resolveActor(event, ctx.userLoader),
   },
 
   Query: {

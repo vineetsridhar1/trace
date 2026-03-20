@@ -136,16 +136,21 @@ export const chatTypeResolvers = {
         limit: args.limit,
       });
     },
-    createdBy: (chat: { createdById: string }) => {
-      return prisma.user.findUniqueOrThrow({ where: { id: chat.createdById } });
+    createdBy: async (chat: { createdById: string }, _args: unknown, ctx: Context) => {
+      const user = await ctx.userLoader.load(chat.createdById);
+      if (!user) throw new Error("User not found");
+      return user;
     },
   },
   Message: {
-    actor: (message: { actorType: string; actorId: string }) => resolveActor(message),
+    actor: (message: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
+      resolveActor(message, ctx.userLoader),
   },
   ChatMember: {
-    user: (member: { userId: string }) => {
-      return prisma.user.findUniqueOrThrow({ where: { id: member.userId } });
+    user: async (member: { userId: string }, _args: unknown, ctx: Context) => {
+      const user = await ctx.userLoader.load(member.userId);
+      if (!user) throw new Error("User not found");
+      return user;
     },
   },
 };

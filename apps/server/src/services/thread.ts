@@ -12,26 +12,28 @@ export class ThreadService {
   }
 
   async getSummary(rootMessageId: string) {
-    const [replyCount, lastReply, participants] = await Promise.all([
-      prisma.message.count({ where: { parentMessageId: rootMessageId } }),
-      prisma.message.findFirst({
-        where: { parentMessageId: rootMessageId },
-        orderBy: { createdAt: "desc" },
-        select: { createdAt: true },
-      }),
-      prisma.message.findMany({
-        where: { parentMessageId: rootMessageId },
-        select: { actorId: true },
-        distinct: ["actorId"],
-      }),
-    ]);
+    const replies = await prisma.message.findMany({
+      where: { parentMessageId: rootMessageId },
+      orderBy: { createdAt: "desc" },
+      select: { actorType: true, actorId: true, createdAt: true },
+    });
 
-    return {
-      rootMessageId,
-      replyCount,
-      lastReplyAt: lastReply ? lastReply.createdAt.toISOString() : null,
-      participantIds: participants.map((p) => p.actorId),
-    };
+    const replyCount = replies.length;
+    const lastReplyAt = replies[0]?.createdAt ?? null;
+
+    // Deduplicate actors, keep first 3
+    const seen = new Set<string>();
+    const participantRefs: Array<{ actorType: string; actorId: string }> = [];
+    for (const reply of replies) {
+      const key = `${reply.actorType}:${reply.actorId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        participantRefs.push(reply);
+        if (seen.size >= 3) break;
+      }
+    }
+
+    return { replyCount, lastReplyAt, participantRefs };
   }
 }
 

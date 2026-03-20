@@ -115,6 +115,9 @@ importers:
       cors:
         specifier: ^2.8.6
         version: 2.8.6
+      dataloader:
+        specifier: ^2.2.3
+        version: 2.2.3
       express:
         specifier: ^5.0.1
         version: 5.2.1
@@ -282,6 +285,9 @@ importers:
 
   packages/gql:
     dependencies:
+      dataloader:
+        specifier: ^2.2.3
+        version: 2.2.3
       graphql:
         specifier: ^16.10.0
         version: 16.13.1

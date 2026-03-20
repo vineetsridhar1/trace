@@ -42,21 +42,15 @@ export class ParticipantService {
     userId,
     scopeType,
     scopeId,
-    organizationId,
   }: {
     userId: string;
     scopeType: ParticipantScope;
     scopeId: string;
     organizationId: string;
   }) {
-    const participant = await prisma.participant.findFirstOrThrow({
-      where: { userId, scopeType, scopeId, organizationId },
-      select: { userId: true, scopeType: true, scopeId: true },
-    });
-
     return prisma.participant.update({
       where: {
-        userId_scopeType_scopeId: participant,
+        userId_scopeType_scopeId: { userId, scopeType, scopeId },
       },
       data: { mutedAt: new Date() },
     });
@@ -66,21 +60,15 @@ export class ParticipantService {
     userId,
     scopeType,
     scopeId,
-    organizationId,
   }: {
     userId: string;
     scopeType: ParticipantScope;
     scopeId: string;
     organizationId: string;
   }) {
-    const participant = await prisma.participant.findFirstOrThrow({
-      where: { userId, scopeType, scopeId, organizationId },
-      select: { userId: true, scopeType: true, scopeId: true },
-    });
-
     return prisma.participant.update({
       where: {
-        userId_scopeType_scopeId: participant,
+        userId_scopeType_scopeId: { userId, scopeType, scopeId },
       },
       data: { mutedAt: null },
     });

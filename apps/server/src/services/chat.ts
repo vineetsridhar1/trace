@@ -59,6 +59,26 @@ function buildMessageEventPayload(message: DbMessage) {
 }
 
 export class ChatService {
+  private async normalizeMembers(
+    tx: Prisma.TransactionClient,
+    chatId: string,
+    organizationId: string,
+  ): Promise<Array<{ user: { id: string; name: string | null; avatarUrl: string | null }; joinedAt: string }>> {
+    const members = await tx.chatMember.findMany({
+      where: { chatId, organizationId, leftAt: null },
+    });
+    const userIds = members.map((m) => m.userId);
+    const users = await tx.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true, avatarUrl: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    return members.map((m) => ({
+      user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
+      joinedAt: m.joinedAt.toISOString(),
+    }));
+  }
+
   async create(input: CreateChatInput, actorType: ActorType, actorId: string) {
     const memberIds = [...new Set(input.memberIds)];
     if (memberIds.length === 0) {
@@ -134,22 +154,7 @@ export class ChatService {
       }
 
       // Fetch members with user data for the event payload
-      const membersWithUsers = await tx.chatMember.findMany({
-        where: { chatId: chat.id, organizationId: input.organizationId },
-      });
-
-      // Look up user info for each member
-      const userIds = membersWithUsers.map((m) => m.userId);
-      const users = await tx.user.findMany({
-        where: { id: { in: userIds } },
-        select: { id: true, name: true, avatarUrl: true },
-      });
-      const userMap = new Map(users.map((u) => [u.id, u]));
-
-      const normalizedMembers = membersWithUsers.map((m) => ({
-        user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
-        joinedAt: m.joinedAt.toISOString(),
-      }));
+      const normalizedMembers = await this.normalizeMembers(tx, chat.id, input.organizationId);
 
       const event = await eventService.create(
         {
@@ -672,19 +677,7 @@ export class ChatService {
       });
 
       // Fetch updated members with user data for the event payload
-      const updatedMembers = await tx.chatMember.findMany({
-        where: { chatId, organizationId: chat.organizationId, leftAt: null },
-      });
-      const memberUserIds = updatedMembers.map((m) => m.userId);
-      const users = await tx.user.findMany({
-        where: { id: { in: memberUserIds } },
-        select: { id: true, name: true, avatarUrl: true },
-      });
-      const userMap = new Map(users.map((u) => [u.id, u]));
-      const normalizedMembers = updatedMembers.map((m) => ({
-        user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
-        joinedAt: m.joinedAt.toISOString(),
-      }));
+      const normalizedMembers = await this.normalizeMembers(tx, chatId, chat.organizationId);
 
       await eventService.create(
         {
@@ -736,34 +729,17 @@ export class ChatService {
       });
 
       // Clean up thread subscriptions for threads in this chat
-      const threadRoots = await tx.message.findMany({
-        where: { chatId, parentMessageId: null },
-        select: { id: true },
-      });
-      if (threadRoots.length > 0) {
-        await tx.participant.deleteMany({
-          where: {
-            userId: actorId,
-            scopeType: "thread",
-            scopeId: { in: threadRoots.map((m) => m.id) },
-          },
-        });
-      }
+      await tx.$executeRaw`
+        DELETE FROM "Participant"
+        WHERE "userId" = ${actorId}
+          AND "scopeType" = 'thread'::"ParticipantScope"
+          AND "scopeId" IN (
+            SELECT id FROM "Message" WHERE "chatId" = ${chatId} AND "parentMessageId" IS NULL
+          )
+      `;
 
       // Fetch remaining members with user data for the event payload
-      const remainingMembers = await tx.chatMember.findMany({
-        where: { chatId, organizationId: chat.organizationId, leftAt: null },
-      });
-      const memberUserIds = remainingMembers.map((m) => m.userId);
-      const users = await tx.user.findMany({
-        where: { id: { in: memberUserIds } },
-        select: { id: true, name: true, avatarUrl: true },
-      });
-      const userMap = new Map(users.map((u) => [u.id, u]));
-      const normalizedMembers = remainingMembers.map((m) => ({
-        user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
-        joinedAt: m.joinedAt.toISOString(),
-      }));
+      const normalizedMembers = await this.normalizeMembers(tx, chatId, chat.organizationId);
 
       await eventService.create(
         {

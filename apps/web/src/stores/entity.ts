@@ -110,6 +110,14 @@ export function useEntityField<T extends EntityType, F extends keyof EntityTable
   });
 }
 
+/** Typed selector for message fields — avoids `as` casts at call sites */
+export function useMessageField<F extends keyof Message>(
+  messageId: string,
+  field: F,
+): Message[F] | undefined {
+  return useEntityField("messages", messageId, field) as Message[F] | undefined;
+}
+
 /** Subscribe to sorted IDs of an entity table, optionally filtered.
  *  Uses shallow comparison to avoid spurious re-renders. */
 export function useEntityIds<T extends EntityType>(

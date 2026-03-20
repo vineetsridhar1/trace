@@ -1,6 +1,5 @@
 import type { ParticipantScope } from "@prisma/client";
 import type { Context } from "../context.js";
-import { prisma } from "../lib/db.js";
 import { participantService } from "../services/participant.js";
 import { assertScopeAccess, assertThreadAccess } from "../services/access.js";
 
@@ -86,8 +85,10 @@ export const participantMutations = {
 
 export const participantTypeResolvers = {
   Participant: {
-    user: (participant: { userId: string }) => {
-      return prisma.user.findUniqueOrThrow({ where: { id: participant.userId } });
+    user: async (participant: { userId: string }, _args: unknown, ctx: Context) => {
+      const user = await ctx.userLoader.load(participant.userId);
+      if (!user) throw new Error("User not found");
+      return user;
     },
     muted: (participant: { mutedAt: Date | null }) => {
       return participant.mutedAt !== null;

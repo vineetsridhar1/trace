@@ -15,21 +15,24 @@ export function InlineMessageEditor({
   onCancel: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const editorRef = useRef<ChatEditorHandle>(null);
   const currentUserId = useAuthStore((s) => s.user?.id);
   const mentionableUsers = useOrgMembers();
 
   const handleSubmit = useCallback(
     async (html: string) => {
-      if (saving) return;
+      if (savingRef.current) return;
+      savingRef.current = true;
       setSaving(true);
       try {
         await onSave(html);
       } finally {
+        savingRef.current = false;
         setSaving(false);
       }
     },
-    [onSave, saving],
+    [onSave],
   );
 
   return (

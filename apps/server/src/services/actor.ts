@@ -1,3 +1,4 @@
+import type DataLoader from "dataloader";
 import { prisma } from "../lib/db.js";
 
 export type ActorSummary = {
@@ -8,7 +9,10 @@ export type ActorSummary = {
 };
 
 /** Resolve a single actor reference to an ActorSummary */
-export async function resolveActor(ref: { actorType: string; actorId: string }): Promise<ActorSummary> {
+export async function resolveActor(
+  ref: { actorType: string; actorId: string },
+  userLoader?: DataLoader<string, { id: string; name: string | null; avatarUrl: string | null } | null>,
+): Promise<ActorSummary> {
   const actor: ActorSummary = {
     type: ref.actorType,
     id: ref.actorId,
@@ -16,10 +20,12 @@ export async function resolveActor(ref: { actorType: string; actorId: string }):
     avatarUrl: null,
   };
   if (ref.actorType === "user") {
-    const user = await prisma.user.findUnique({
-      where: { id: ref.actorId },
-      select: { name: true, avatarUrl: true },
-    });
+    const user = userLoader
+      ? await userLoader.load(ref.actorId)
+      : await prisma.user.findUnique({
+          where: { id: ref.actorId },
+          select: { name: true, avatarUrl: true },
+        });
     actor.name = user?.name ?? null;
     actor.avatarUrl = user?.avatarUrl ?? null;
   }

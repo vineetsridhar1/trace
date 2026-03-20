@@ -21,6 +21,7 @@
     "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "dataloader": "^2.2.3",
     "express": "^5.0.1",
     "graphql": "^16.10.0",
     "graphql-ws": "^5.16.2",
