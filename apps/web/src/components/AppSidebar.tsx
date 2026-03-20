@@ -120,7 +120,7 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar collapsible="offcanvas">
+      <Sidebar collapsible="offcanvas" className="border-none">
         <SidebarHeader className="h-12 p-0 border-b border-border">
           <OrgSwitcher />
         </SidebarHeader>

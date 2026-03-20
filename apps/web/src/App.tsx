@@ -6,7 +6,7 @@ import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
-import { SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
@@ -51,29 +51,33 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
   return (
     <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {activePage === "settings" ? (
-            <SettingsPage />
-          ) : activePage === "inbox" ? (
-            <InboxView />
-          ) : activeChannelId ? (
-            <ChannelView channelId={activeChannelId} />
-          ) : (
-            <div className="flex h-full flex-col">
-              <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-                <SidebarTrigger />
-              </header>
-              <div className="flex flex-1 items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  Select a channel to get started
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </SidebarProvider>
+      <div className="flex h-screen max-h-screen min-h-screen flex-col pl-2 pr-2 pt-2">
+        <SidebarProvider className="flex-1">
+          <AppSidebar />
+          <div className="flex w-full flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background">
+            <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {activePage === "settings" ? (
+                <SettingsPage />
+              ) : activePage === "inbox" ? (
+                <InboxView />
+              ) : activeChannelId ? (
+                <ChannelView channelId={activeChannelId} />
+              ) : (
+                <div className="flex h-full flex-col">
+                  <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+                    <SidebarTrigger />
+                  </header>
+                  <div className="flex flex-1 items-center justify-center">
+                    <p className="text-sm text-muted-foreground">
+                      Select a channel to get started
+                    </p>
+                  </div>
+                </div>
+              )}
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+      </div>
     </TooltipProvider>
   );
 }
