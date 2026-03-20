@@ -66,6 +66,16 @@ const columns: ColDef<SessionRow>[] = [
     hide: true,
   },
   {
+    headerName: "Repo",
+    field: "repo" as keyof SessionRow,
+    width: 140,
+    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
+      const repo = params.data?.repo as { id: string; name: string } | null | undefined;
+      if (!repo) return null;
+      return <span className="text-xs text-muted-foreground truncate">{repo.name}</span>;
+    },
+  },
+  {
     headerName: "Created by",
     field: "createdBy",
     width: 150,
