@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { getInitials } from "../../lib/utils";
 import { useEntityField } from "../../stores/entity";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card";
+import { EntityPreview, type EntityPreviewMode } from "./EntityPreview";
+import { EntityPreviewCard } from "./EntityPreviewCard";
 
 interface UserProfileCardProps {
   userId: string;
@@ -8,6 +10,7 @@ interface UserProfileCardProps {
   fallbackAvatarUrl?: string | null;
   children: ReactNode;
   footer?: ReactNode;
+  mode?: EntityPreviewMode;
 }
 
 /**
@@ -20,6 +23,7 @@ export function UserProfileCard({
   fallbackAvatarUrl,
   children,
   footer,
+  mode = "hover",
 }: UserProfileCardProps) {
   const name = useEntityField("users", userId, "name");
   const avatarUrl = useEntityField("users", userId, "avatarUrl");
@@ -30,44 +34,35 @@ export function UserProfileCard({
   const displayAvatar = (avatarUrl as string | undefined) ?? fallbackAvatarUrl ?? undefined;
   const displayEmail = email as string | undefined;
   const displayRole = role as string | undefined;
+  const avatar = displayAvatar ? (
+    <img
+      src={displayAvatar}
+      alt={displayName}
+      className="h-14 w-14 shrink-0 rounded-lg object-cover"
+    />
+  ) : (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-xl font-bold text-muted-foreground">
+      {getInitials(displayName)}
+    </div>
+  );
 
   return (
-    <HoverCard>
-      <HoverCardTrigger render={<span className="cursor-pointer" />}>{children}</HoverCardTrigger>
-      <HoverCardContent side="top" align="start" className="w-72 p-0">
-        {/* Top section — avatar + name */}
-        <div className="flex items-center gap-3 p-4">
-          {displayAvatar ? (
-            <img
-              src={displayAvatar}
-              alt={displayName}
-              className="h-14 w-14 shrink-0 rounded-lg object-cover"
-            />
-          ) : (
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-xl font-bold text-muted-foreground">
-              {displayName[0]?.toUpperCase()}
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="truncate text-base font-bold text-foreground">{displayName}</span>
-            </div>
-            {displayRole && (
-              <span className="text-xs capitalize text-muted-foreground">{displayRole}</span>
-            )}
-            {displayEmail && (
-              <p className="truncate text-xs text-muted-foreground">{displayEmail}</p>
-            )}
-          </div>
-        </div>
-
-        {footer ? (
-          <>
-            <div className="border-t border-border" />
-            <div className="p-2">{footer}</div>
-          </>
-        ) : null}
-      </HoverCardContent>
-    </HoverCard>
+    <EntityPreview
+      mode={mode}
+      side="top"
+      align="start"
+      contentClassName="w-72 gap-0 p-0"
+      content={
+        <EntityPreviewCard
+          media={avatar}
+          title={displayName}
+          subtitle={displayRole}
+          description={displayEmail}
+          footer={footer}
+        />
+      }
+    >
+      {children}
+    </EntityPreview>
   );
 }
