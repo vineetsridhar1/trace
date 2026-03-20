@@ -15,6 +15,7 @@
     "lint:eslint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "build:shared": "pnpm --filter @trace/shared build",
     "gql:codegen": "pnpm --filter @trace/gql codegen",
     "db:migrate": "pnpm --filter @trace/server exec prisma migrate dev",
     "db:generate": "pnpm --filter @trace/server exec prisma generate",

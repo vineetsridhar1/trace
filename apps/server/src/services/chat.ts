@@ -63,7 +63,10 @@ export class ChatService {
           organizationId: input.organizationId,
           createdById: actorId,
           members: {
-            create: allMemberIds.map((userId) => ({ userId })),
+            create: allMemberIds.map((userId) => ({
+              userId,
+              organizationId: input.organizationId,
+            })),
           },
         },
         include: {
@@ -85,7 +88,7 @@ export class ChatService {
 
       // Fetch members with user data for the event payload
       const membersWithUsers = await tx.chatMember.findMany({
-        where: { chatId: chat.id },
+        where: { chatId: chat.id, organizationId: input.organizationId },
       });
 
       // Look up user info for each member
@@ -130,11 +133,7 @@ export class ChatService {
     try {
       result = await prisma.$transaction(createChatInTx);
     } catch (error) {
-      if (
-        isDM
-        && error instanceof Prisma.PrismaClientKnownRequestError
-        && error.code === "P2002"
-      ) {
+      if (isDM && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         return prisma.chat.findFirstOrThrow({
           where: {
             type: "dm",
@@ -158,29 +157,27 @@ export class ChatService {
 
   async sendMessage({
     chatId,
+    organizationId,
     text,
     parentId,
     actorType,
     actorId,
   }: {
     chatId: string;
+    organizationId: string;
     text: string;
     parentId?: string;
     actorType: ActorType;
     actorId: string;
   }) {
-    const chat = await prisma.chat.findUniqueOrThrow({
-      where: { id: chatId },
+    const chat = await prisma.chat.findFirstOrThrow({
+      where: {
+        id: chatId,
+        organizationId,
+        members: { some: { userId: actorId, leftAt: null } },
+      },
       select: { organizationId: true },
     });
-
-    // Verify actor is active member (not left)
-    const member = await prisma.chatMember.findUnique({
-      where: { chatId_userId: { chatId, userId: actorId } },
-    });
-    if (!member || member.leftAt) {
-      throw new Error("Not an active member of this chat");
-    }
 
     let validatedParentId: string | undefined;
     if (parentId) {
@@ -197,9 +194,9 @@ export class ChatService {
       });
 
       if (
-        parentEvent.organizationId !== chat.organizationId
-        || parentEvent.scopeType !== "chat"
-        || parentEvent.scopeId !== chatId
+        parentEvent.organizationId !== chat.organizationId ||
+        parentEvent.scopeType !== "chat" ||
+        parentEvent.scopeId !== chatId
       ) {
         throw new Error("Thread parent must belong to this chat");
       }
@@ -239,23 +236,25 @@ export class ChatService {
     return event;
   }
 
-  async addMember(chatId: string, userId: string, actorType: ActorType, actorId: string) {
-    const chat = await prisma.chat.findUniqueOrThrow({
-      where: { id: chatId },
-      select: { type: true, organizationId: true },
-    });
-
-    if (chat.type !== "group") {
-      throw new Error("Cannot add members to a DM");
-    }
-
+  async addMember(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
     await prisma.$transaction(async (tx) => {
-      const actorMembership = await tx.chatMember.findFirst({
-        where: { chatId, userId: actorId, leftAt: null },
-        select: { chatId: true },
+      const chat = await tx.chat.findFirstOrThrow({
+        where: {
+          id: chatId,
+          organizationId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
+        select: { type: true, organizationId: true },
       });
-      if (!actorMembership) {
-        throw new Error("Not authorized to add members to this chat");
+
+      if (chat.type !== "group") {
+        throw new Error("Cannot add members to a DM");
       }
 
       const targetUser = await tx.user.findFirst({
@@ -277,11 +276,11 @@ export class ChatService {
       if (existingMembership) {
         await tx.chatMember.update({
           where: { chatId_userId: { chatId, userId } },
-          data: { leftAt: null, joinedAt: new Date() },
+          data: { organizationId: chat.organizationId, leftAt: null, joinedAt: new Date() },
         });
       } else {
         await tx.chatMember.create({
-          data: { chatId, userId },
+          data: { chatId, userId, organizationId: chat.organizationId },
         });
       }
 
@@ -295,12 +294,12 @@ export class ChatService {
           scopeId: chatId,
           organizationId: chat.organizationId,
         },
-        update: {},
+        update: { organizationId: chat.organizationId },
       });
 
       // Fetch updated members with user data for the event payload
       const updatedMembers = await tx.chatMember.findMany({
-        where: { chatId, leftAt: null },
+        where: { chatId, organizationId: chat.organizationId, leftAt: null },
       });
       const memberUserIds = updatedMembers.map((m) => m.userId);
       const users = await tx.user.findMany({
@@ -327,35 +326,44 @@ export class ChatService {
       );
     });
 
-    return prisma.chat.findUniqueOrThrow({
-      where: { id: chatId },
+    return prisma.chat.findFirstOrThrow({
+      where: { id: chatId, organizationId },
       include: { members: { where: { leftAt: null } } },
     });
   }
 
-  async leave(chatId: string, actorType: ActorType, actorId: string) {
-    const chat = await prisma.chat.findUniqueOrThrow({
-      where: { id: chatId },
-      select: { type: true, organizationId: true },
-    });
-
-    if (chat.type !== "group") {
-      throw new Error("Cannot leave a DM");
-    }
-
+  async leave(chatId: string, organizationId: string, actorType: ActorType, actorId: string) {
     await prisma.$transaction(async (tx) => {
+      const chat = await tx.chat.findFirstOrThrow({
+        where: {
+          id: chatId,
+          organizationId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
+        select: { type: true, organizationId: true },
+      });
+
+      if (chat.type !== "group") {
+        throw new Error("Cannot leave a DM");
+      }
+
       await tx.chatMember.update({
         where: { chatId_userId: { chatId, userId: actorId } },
         data: { leftAt: new Date() },
       });
 
       await tx.participant.deleteMany({
-        where: { userId: actorId, scopeType: "chat", scopeId: chatId },
+        where: {
+          userId: actorId,
+          scopeType: "chat",
+          scopeId: chatId,
+          organizationId: chat.organizationId,
+        },
       });
 
       // Fetch remaining members with user data for the event payload
       const remainingMembers = await tx.chatMember.findMany({
-        where: { chatId, leftAt: null },
+        where: { chatId, organizationId: chat.organizationId, leftAt: null },
       });
       const memberUserIds = remainingMembers.map((m) => m.userId);
       const users = await tx.user.findMany({
@@ -382,28 +390,30 @@ export class ChatService {
       );
     });
 
-    return prisma.chat.findUniqueOrThrow({
-      where: { id: chatId },
+    return prisma.chat.findFirstOrThrow({
+      where: { id: chatId, organizationId },
       include: { members: { where: { leftAt: null } } },
     });
   }
 
-  async rename(chatId: string, name: string, actorType: ActorType, actorId: string) {
-    const chat = await prisma.chat.findUniqueOrThrow({
-      where: { id: chatId },
+  async rename(
+    chatId: string,
+    name: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const chat = await prisma.chat.findFirstOrThrow({
+      where: {
+        id: chatId,
+        organizationId,
+        members: { some: { userId: actorId, leftAt: null } },
+      },
       select: { type: true, organizationId: true },
     });
 
     if (chat.type !== "group") {
       throw new Error("Cannot rename a DM");
-    }
-
-    const member = await prisma.chatMember.findFirst({
-      where: { chatId, userId: actorId, leftAt: null },
-      select: { chatId: true },
-    });
-    if (!member) {
-      throw new Error("Not an active member of this chat");
     }
 
     const updated = await prisma.chat.update({
@@ -440,9 +450,13 @@ export class ChatService {
     });
   }
 
-  async getChat(chatId: string) {
-    return prisma.chat.findUnique({
-      where: { id: chatId },
+  async getChat(chatId: string, organizationId: string, userId: string) {
+    return prisma.chat.findFirst({
+      where: {
+        id: chatId,
+        organizationId,
+        members: { some: { userId, leftAt: null } },
+      },
       include: {
         members: {
           where: { leftAt: null },

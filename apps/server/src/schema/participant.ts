@@ -4,18 +4,14 @@ import { participantService } from "../services/participant.js";
 import { assertScopeAccess, assertThreadAccess } from "../services/access.js";
 
 export const participantQueries = {
-  participants: async (
-    _: unknown,
-    args: { scopeType: string; scopeId: string },
-    ctx: Context,
-  ) => {
+  participants: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
     if (args.scopeType === "thread") {
       await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
     }
 
-    return participantService.getParticipants(args.scopeType, args.scopeId);
+    return participantService.getParticipants(args.scopeType, args.scopeId, ctx.organizationId);
   },
 };
 
@@ -39,6 +35,7 @@ export const participantMutations = {
       userId: ctx.userId,
       scopeType: args.scopeType,
       scopeId: args.scopeId,
+      organizationId: ctx.organizationId,
     });
     return true;
   },
@@ -53,6 +50,7 @@ export const participantMutations = {
       userId: ctx.userId,
       scopeType: args.scopeType,
       scopeId: args.scopeId,
+      organizationId: ctx.organizationId,
     });
   },
   unmuteScope: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
@@ -66,6 +64,7 @@ export const participantMutations = {
       userId: ctx.userId,
       scopeType: args.scopeType,
       scopeId: args.scopeId,
+      organizationId: ctx.organizationId,
     });
   },
 };

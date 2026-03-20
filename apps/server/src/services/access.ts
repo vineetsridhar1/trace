@@ -33,9 +33,9 @@ async function assertOrgEntityExists(
   }
 }
 
-export async function isActiveChatMember(chatId: string, userId: string) {
+export async function isActiveChatMember(chatId: string, userId: string, organizationId: string) {
   const member = await prisma.chatMember.findFirst({
-    where: { chatId, userId, leftAt: null },
+    where: { chatId, userId, organizationId, leftAt: null },
     select: { chatId: true },
   });
 

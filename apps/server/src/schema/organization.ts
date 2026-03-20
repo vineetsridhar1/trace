@@ -12,33 +12,42 @@ const projectInclude = {
 } as const;
 
 export const organizationQueries = {
-  organization: (_: unknown, args: { id: string }, _ctx: Context) => {
+  organization: (_: unknown, args: { id: string }, ctx: Context) => {
+    if (args.id !== ctx.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return prisma.organization.findUnique({
       where: { id: args.id },
       include: { members: true, repos: true, projects: true, channels: true },
     });
   },
-  repos: (_: unknown, args: { organizationId: string }, _ctx: Context) => {
+  repos: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    if (args.organizationId !== ctx.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return prisma.repo.findMany({
       where: { organizationId: args.organizationId },
       include: { projects: true, sessions: true },
     });
   },
-  repo: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return prisma.repo.findUnique({
-      where: { id: args.id },
+  repo: (_: unknown, args: { id: string }, ctx: Context) => {
+    return prisma.repo.findFirst({
+      where: { id: args.id, organizationId: ctx.organizationId },
       include: { projects: true, sessions: true },
     });
   },
-  projects: (_: unknown, args: { organizationId: string; repoId?: string }, _ctx: Context) => {
+  projects: (_: unknown, args: { organizationId: string; repoId?: string }, ctx: Context) => {
+    if (args.organizationId !== ctx.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return prisma.project.findMany({
       where: { organizationId: args.organizationId, ...(args.repoId && { repoId: args.repoId }) },
       include: projectInclude,
     });
   },
-  project: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return prisma.project.findUnique({
-      where: { id: args.id },
+  project: (_: unknown, args: { id: string }, ctx: Context) => {
+    return prisma.project.findFirst({
+      where: { id: args.id, organizationId: ctx.organizationId },
       include: projectInclude,
     });
   },
@@ -49,13 +58,29 @@ export const organizationMutations = {
     return organizationService.createRepo(args.input, ctx.actorType, ctx.userId);
   },
   updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
-    return organizationService.updateRepo(args.id, ctx.organizationId, args.input, ctx.actorType, ctx.userId);
+    return organizationService.updateRepo(
+      args.id,
+      ctx.organizationId,
+      args.input,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     return organizationService.createProject(args.input, ctx.actorType, ctx.userId);
   },
-  linkEntityToProject: (_: unknown, args: { entityType: EntityType; entityId: string; projectId: string }, ctx: Context) => {
-    return organizationService.linkEntityToProject(args.entityType, args.entityId, args.projectId, ctx.actorType, ctx.userId);
+  linkEntityToProject: (
+    _: unknown,
+    args: { entityType: EntityType; entityId: string; projectId: string },
+    ctx: Context,
+  ) => {
+    return organizationService.linkEntityToProject(
+      args.entityType,
+      args.entityId,
+      args.projectId,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   registerRepoWebhook: (_: unknown, args: { repoId: string }, ctx: Context) => {
     return webhookService.registerGitHubWebhook(args.repoId, ctx.userId, ctx.organizationId);

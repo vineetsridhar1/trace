@@ -1,2 +1,2 @@
 -- AlterEnum
-ALTER TYPE "EventType" ADD VALUE 'chat_renamed';
+ALTER TYPE "EventType" ADD VALUE IF NOT EXISTS 'chat_renamed';

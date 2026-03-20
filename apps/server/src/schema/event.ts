@@ -42,7 +42,7 @@ export const eventQueries = {
     const visibility = await Promise.all(
       events.map(async (event) => {
         if (event.scopeType !== "chat") return true;
-        return isActiveChatMember(event.scopeId, ctx.userId);
+        return isActiveChatMember(event.scopeId, ctx.userId, ctx.organizationId);
       }),
     );
 
@@ -64,7 +64,7 @@ export const eventSubscriptions = {
         async (payload) => {
           const event = payload.orgEvents;
           if (event.scopeType !== "chat") return true;
-          return isActiveChatMember(event.scopeId, ctx.userId);
+          return isActiveChatMember(event.scopeId, ctx.userId, ctx.organizationId);
         },
       );
     },

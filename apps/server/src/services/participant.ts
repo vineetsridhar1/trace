@@ -17,7 +17,7 @@ export class ParticipantService {
         userId_scopeType_scopeId: { userId, scopeType, scopeId },
       },
       create: { userId, scopeType, scopeId, organizationId },
-      update: {},
+      update: { organizationId },
     });
   }
 
@@ -25,13 +25,15 @@ export class ParticipantService {
     userId,
     scopeType,
     scopeId,
+    organizationId,
   }: {
     userId: string;
     scopeType: string;
     scopeId: string;
+    organizationId: string;
   }) {
     await prisma.participant.deleteMany({
-      where: { userId, scopeType, scopeId },
+      where: { userId, scopeType, scopeId, organizationId },
     });
   }
 
@@ -39,14 +41,21 @@ export class ParticipantService {
     userId,
     scopeType,
     scopeId,
+    organizationId,
   }: {
     userId: string;
     scopeType: string;
     scopeId: string;
+    organizationId: string;
   }) {
+    const participant = await prisma.participant.findFirstOrThrow({
+      where: { userId, scopeType, scopeId, organizationId },
+      select: { userId: true, scopeType: true, scopeId: true },
+    });
+
     return prisma.participant.update({
       where: {
-        userId_scopeType_scopeId: { userId, scopeType, scopeId },
+        userId_scopeType_scopeId: participant,
       },
       data: { mutedAt: new Date() },
     });
@@ -56,30 +65,35 @@ export class ParticipantService {
     userId,
     scopeType,
     scopeId,
+    organizationId,
   }: {
     userId: string;
     scopeType: string;
     scopeId: string;
+    organizationId: string;
   }) {
+    const participant = await prisma.participant.findFirstOrThrow({
+      where: { userId, scopeType, scopeId, organizationId },
+      select: { userId: true, scopeType: true, scopeId: true },
+    });
+
     return prisma.participant.update({
       where: {
-        userId_scopeType_scopeId: { userId, scopeType, scopeId },
+        userId_scopeType_scopeId: participant,
       },
       data: { mutedAt: null },
     });
   }
 
-  async getParticipants(scopeType: string, scopeId: string) {
+  async getParticipants(scopeType: string, scopeId: string, organizationId: string) {
     return prisma.participant.findMany({
-      where: { scopeType, scopeId },
+      where: { scopeType, scopeId, organizationId },
     });
   }
 
-  async isParticipant(userId: string, scopeType: string, scopeId: string) {
-    const p = await prisma.participant.findUnique({
-      where: {
-        userId_scopeType_scopeId: { userId, scopeType, scopeId },
-      },
+  async isParticipant(userId: string, scopeType: string, scopeId: string, organizationId: string) {
+    const p = await prisma.participant.findFirst({
+      where: { userId, scopeType, scopeId, organizationId },
     });
     return p !== null;
   }

@@ -14,13 +14,8 @@ export const chatQueries = {
     }
     return chatService.getChats(args.organizationId, ctx.userId);
   },
-  chat: async (_: unknown, args: { id: string }, ctx: Context) => {
-    const chat = await chatService.getChat(args.id);
-    if (!chat) return null;
-    // Verify caller is an active member
-    const isMember = chat.members.some((m) => m.userId === ctx.userId);
-    if (!isMember) return null;
-    return chat;
+  chat: (_: unknown, args: { id: string }, ctx: Context) => {
+    return chatService.getChat(args.id, ctx.organizationId, ctx.userId);
   },
 };
 
@@ -38,6 +33,7 @@ export const chatMutations = {
   ) => {
     return chatService.sendMessage({
       chatId: args.chatId,
+      organizationId: ctx.organizationId,
       text: args.text,
       parentId: args.parentId,
       actorType: ctx.actorType,
@@ -45,13 +41,25 @@ export const chatMutations = {
     });
   },
   addChatMember: (_: unknown, args: { input: AddChatMemberInput }, ctx: Context) => {
-    return chatService.addMember(args.input.chatId, args.input.userId, ctx.actorType, ctx.userId);
+    return chatService.addMember(
+      args.input.chatId,
+      args.input.userId,
+      ctx.organizationId,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
   leaveChat: (_: unknown, args: { chatId: string }, ctx: Context) => {
-    return chatService.leave(args.chatId, ctx.actorType, ctx.userId);
+    return chatService.leave(args.chatId, ctx.organizationId, ctx.actorType, ctx.userId);
   },
   renameChat: (_: unknown, args: { chatId: string; name: string }, ctx: Context) => {
-    return chatService.rename(args.chatId, args.name, ctx.actorType, ctx.userId);
+    return chatService.rename(
+      args.chatId,
+      args.name,
+      ctx.organizationId,
+      ctx.actorType,
+      ctx.userId,
+    );
   },
 };
 
@@ -71,7 +79,7 @@ export const chatSubscriptions = {
       return filterAsyncIterator(
         pubsub.asyncIterator<{ chatEvents: { eventType: string } }>(topics.chatEvents(args.chatId)),
         async (payload) => {
-          const isMember = await isActiveChatMember(args.chatId, ctx.userId);
+          const isMember = await isActiveChatMember(args.chatId, ctx.userId, ctx.organizationId);
           if (!isMember) return false;
           if (!args.types?.length) return true;
           return args.types.includes(payload.chatEvents.eventType);
@@ -92,8 +100,14 @@ export const chatTypeResolvers = {
       chat: { id: string; organizationId?: string },
       args: { after?: string; before?: string; limit?: number },
     ) => {
-      const organizationId = chat.organizationId
-        ?? (await prisma.chat.findUniqueOrThrow({ where: { id: chat.id }, select: { organizationId: true } })).organizationId;
+      const organizationId =
+        chat.organizationId ??
+        (
+          await prisma.chat.findUniqueOrThrow({
+            where: { id: chat.id },
+            select: { organizationId: true },
+          })
+        ).organizationId;
 
       return eventService.query(organizationId, {
         scopeType: "chat",

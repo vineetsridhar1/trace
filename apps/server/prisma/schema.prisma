@@ -173,6 +173,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([id, organizationId])
 }
 
 model Repo {
@@ -399,7 +401,7 @@ model Chat {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdById    String
-  createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
+  createdBy      User         @relation("ChatCreator", fields: [createdById, organizationId], references: [id, organizationId])
 
   members ChatMember[]
 
@@ -407,24 +409,27 @@ model Chat {
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@unique([id, organizationId])
   @@unique([organizationId, dmKey])
 }
 
 model ChatMember {
-  chatId   String
-  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt DateTime @default(now())
-  leftAt   DateTime?
+  chatId          String
+  organizationId  String
+  chat            Chat     @relation(fields: [chatId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  joinedAt        DateTime @default(now())
+  leftAt          DateTime?
 
   @@id([chatId, userId])
+  @@index([organizationId])
   @@index([userId])
 }
 
 model Participant {
   userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Cascade)
   scopeType      String
   scopeId        String
   organizationId String

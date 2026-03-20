@@ -1,12 +1,15 @@
 import { useEffect, useRef } from "react";
 import { ChatMessage } from "./ChatMessage";
+import { DmWelcome } from "./DmWelcome";
 
 export function ChatMessageList({
+  chatId,
   eventIds,
   loading,
   hasOlder,
   onLoadOlder,
 }: {
+  chatId: string;
   eventIds: string[];
   loading: boolean;
   hasOlder: boolean;
@@ -50,11 +53,13 @@ export function ChatMessageList({
       className="flex-1 overflow-y-auto"
     >
       {eventIds.length === 0 ? (
-        <div className="flex h-full items-center justify-center">
-          <p className="text-sm text-muted-foreground">No messages yet. Start the conversation!</p>
+        <div className="flex h-full flex-col">
+          <div className="flex-1" />
+          <DmWelcome chatId={chatId} />
         </div>
       ) : (
         <div className="py-2">
+          {!hasOlder && <DmWelcome chatId={chatId} />}
           {eventIds.map((id) => (
             <ChatMessage key={id} eventId={id} />
           ))}
