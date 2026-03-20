@@ -116,7 +116,7 @@ export function ThreadMessage({ messageId }: { messageId: string }) {
             />
           ) : deletedAt ? (
             <p className="whitespace-pre-wrap text-sm italic leading-relaxed text-muted-foreground">
-              This message was deleted.
+              This message has been deleted.
             </p>
           ) : html ? (
             <MessageContent html={html} />

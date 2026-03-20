@@ -92,12 +92,15 @@ export function ThreadPanel({ chatId, rootMessageId }: { chatId: string; rootMes
 
   const replyIds = useEntityIds(
     "messages",
-    (message) => message.chatId === chatId && message.parentMessageId === rootMessageId,
+    (message) =>
+      message.chatId === chatId &&
+      message.parentMessageId === rootMessageId &&
+      !message.deletedAt,
     (a, b) => a.createdAt.localeCompare(b.createdAt),
   );
 
   const rootActorName = rootActor?.name ?? "Unknown";
-  const rootPreview = rootDeletedAt ? "This message was deleted." : (rootText ?? "");
+  const rootPreview = rootDeletedAt ? "This message has been deleted." : (rootText ?? "");
 
   return (
     <div className="flex h-full w-full flex-col border-l border-border">
