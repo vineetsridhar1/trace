@@ -9,6 +9,7 @@ import { statusColor, statusLabel } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
 import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
 import { useLongPress } from "../../hooks/useLongPress";
+import { UserProfileCard } from "../shared/UserProfileCard";
 
 type SessionRow = SessionEntity & { id: string };
 
@@ -64,21 +65,23 @@ const columns: ColDef<SessionRow>[] = [
     field: "createdBy",
     width: 150,
     cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const createdBy = params.data?.createdBy;
+      const createdBy = params.data?.createdBy as { id: string; name: string; avatarUrl?: string | null } | undefined;
       if (!createdBy) return null;
       return (
-        <div className="flex items-center gap-1.5 h-full">
-          {createdBy.avatarUrl && (
-            <img
-              src={createdBy.avatarUrl}
-              alt={createdBy.name}
-              className="h-4 w-4 rounded-full"
-            />
-          )}
-          <span className="truncate text-xs text-muted-foreground">
-            {createdBy.name}
-          </span>
-        </div>
+        <UserProfileCard userId={createdBy.id} fallbackName={createdBy.name} fallbackAvatarUrl={createdBy.avatarUrl}>
+          <div className="flex items-center gap-1.5 h-full cursor-pointer">
+            {createdBy.avatarUrl && (
+              <img
+                src={createdBy.avatarUrl}
+                alt={createdBy.name}
+                className="h-4 w-4 rounded-full"
+              />
+            )}
+            <span className="truncate text-xs text-muted-foreground hover:underline">
+              {createdBy.name}
+            </span>
+          </div>
+        </UserProfileCard>
       );
     },
   },

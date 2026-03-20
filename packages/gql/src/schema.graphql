@@ -518,7 +518,7 @@ type Mutation {
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!
-  sendChatMessage(chatId: ID!, text: String!, parentId: ID): Event!
+  sendChatMessage(chatId: ID!, text: String, html: String, parentId: ID): Event!
   addChatMember(input: AddChatMemberInput!): Chat!
   leaveChat(chatId: ID!): Chat!
   renameChat(chatId: ID!, name: String!): Chat!

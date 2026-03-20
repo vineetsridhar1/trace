@@ -95,6 +95,34 @@ function handleInboxItemCreated(event: Event): void {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Built-in handler: Mention notifications
+// ---------------------------------------------------------------------------
+
+function handleMentionNotification(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  // Don't notify for your own messages
+  if (event.actor.id === currentUserId) return;
+
+  const payload = event.payload as Record<string, unknown>;
+  const mentions = payload.mentions as Array<{ userId: string; name: string }> | undefined;
+  if (!mentions?.some((m) => m.userId === currentUserId)) return;
+
+  const actorName = event.actor.name ?? "Someone";
+  toast(`${actorName} mentioned you`, {
+    action: {
+      label: "View",
+      onClick: () => {
+        if (event.scopeType === ("chat" as string)) {
+          useUIStore.getState().setActiveChatId(event.scopeId);
+        }
+      },
+    },
+  });
+}
+
 // Register the built-in handlers
 const sessionStatusEventTypes: EventType[] = [
   "session_paused",
@@ -107,3 +135,4 @@ for (const eventType of sessionStatusEventTypes) {
   registerHandler(eventType, handleSessionStatusChange);
 }
 registerHandler("inbox_item_created", handleInboxItemCreated);
+registerHandler("message_sent", handleMentionNotification);

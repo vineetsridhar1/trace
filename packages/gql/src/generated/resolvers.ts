@@ -404,8 +404,9 @@ export type MutationRunSessionArgs = {
 
 export type MutationSendChatMessageArgs = {
   chatId: Scalars['ID']['input'];
+  html?: InputMaybe<Scalars['String']['input']>;
   parentId?: InputMaybe<Scalars['ID']['input']>;
-  text: Scalars['String']['input'];
+  text?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -1229,7 +1230,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
-  sendChatMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId' | 'text'>>;
+  sendChatMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;

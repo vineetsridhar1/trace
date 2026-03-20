@@ -1,8 +1,9 @@
 import type { CreateChatInput, ActorType } from "@trace/gql";
-import { Prisma } from "@prisma/client";
+import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { participantService } from "./participant.js";
+import { sanitizeHtml, extractMentions, stripHtml } from "./mention.js";
 
 function buildDmKey(userA: string, userB: string) {
   return [userA, userB].sort().join(":");
@@ -63,10 +64,7 @@ export class ChatService {
           organizationId: input.organizationId,
           createdById: actorId,
           members: {
-            create: allMemberIds.map((userId) => ({
-              userId,
-              organizationId: input.organizationId,
-            })),
+            create: allMemberIds.map((userId) => ({ userId })),
           },
         },
         include: {
@@ -159,17 +157,22 @@ export class ChatService {
     chatId,
     organizationId,
     text,
+    html,
     parentId,
     actorType,
     actorId,
   }: {
     chatId: string;
     organizationId: string;
-    text: string;
+    text?: string;
+    html?: string;
     parentId?: string;
     actorType: ActorType;
     actorId: string;
   }) {
+    if (!text && !html) {
+      throw new Error("Either text or html must be provided");
+    }
     const chat = await prisma.chat.findFirstOrThrow({
       where: {
         id: chatId,
@@ -212,12 +215,23 @@ export class ChatService {
       validatedParentId = parentEvent.id;
     }
 
+    // Build payload: if html is provided, sanitize and extract mentions + plain text
+    let payload: PrismaTypes.InputJsonValue;
+    if (html) {
+      const cleanHtml = sanitizeHtml(html);
+      const mentions = extractMentions(cleanHtml);
+      const plainText = text || stripHtml(cleanHtml);
+      payload = { html: cleanHtml, text: plainText, mentions } as unknown as PrismaTypes.InputJsonValue;
+    } else {
+      payload = { text: text! } as PrismaTypes.InputJsonValue;
+    }
+
     const event = await eventService.create({
       organizationId: chat.organizationId,
       scopeType: "chat",
       scopeId: chatId,
       eventType: "message_sent",
-      payload: { text },
+      payload,
       actorType,
       actorId,
       parentId: validatedParentId,

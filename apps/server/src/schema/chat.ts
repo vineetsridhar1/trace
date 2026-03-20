@@ -28,13 +28,14 @@ export const chatMutations = {
   },
   sendChatMessage: (
     _: unknown,
-    args: { chatId: string; text: string; parentId?: string },
+    args: { chatId: string; text?: string; html?: string; parentId?: string },
     ctx: Context,
   ) => {
     return chatService.sendMessage({
       chatId: args.chatId,
       organizationId: ctx.organizationId,
       text: args.text,
+      html: args.html,
       parentId: args.parentId,
       actorType: ctx.actorType,
       actorId: ctx.userId,

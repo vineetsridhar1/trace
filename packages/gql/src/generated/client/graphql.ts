@@ -403,8 +403,9 @@ export type MutationRunSessionArgs = {
 
 export type MutationSendChatMessageArgs = {
   chatId: Scalars['ID']['input'];
+  html?: InputMaybe<Scalars['String']['input']>;
   parentId?: InputMaybe<Scalars['ID']['input']>;
-  text: Scalars['String']['input'];
+  text?: InputMaybe<Scalars['String']['input']>;
 };
 
 

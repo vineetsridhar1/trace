@@ -69,7 +69,7 @@ export function ThreadPanel({
   const rootActorName = rootActor?.name ?? "Unknown";
 
   return (
-    <div className="flex h-full w-80 flex-col border-l border-border">
+    <div className="flex h-full w-full flex-col border-l border-border">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-sm font-semibold text-foreground">Thread</span>
         <Button variant="ghost" size="icon" onClick={() => setActiveThreadId(null)}>
