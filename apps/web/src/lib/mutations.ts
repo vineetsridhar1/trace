@@ -168,3 +168,19 @@ export const ORG_MEMBERS_QUERY = gql`
     }
   }
 `;
+
+export const EDIT_CHAT_MESSAGE_MUTATION = gql`
+  mutation EditChatMessage($messageId: ID!, $html: String!) {
+    editChatMessage(messageId: $messageId, html: $html) {
+      id
+    }
+  }
+`;
+
+export const DELETE_CHAT_MESSAGE_MUTATION = gql`
+  mutation DeleteChatMessage($messageId: ID!) {
+    deleteChatMessage(messageId: $messageId) {
+      id
+    }
+  }
+`;

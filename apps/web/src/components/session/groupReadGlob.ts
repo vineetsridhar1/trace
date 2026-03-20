@@ -1,5 +1,5 @@
 import type { Event } from "@trace/gql";
-import { parseQuestion, type Question } from "@trace/shared";
+import { asJsonObject, parseQuestion, type JsonObject, type Question } from "@trace/shared";
 import type { ReadGlobItem } from "./messages/ReadGlobGroup";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
@@ -21,16 +21,9 @@ export type SessionNode =
   | { kind: "plan-review"; id: string; planContent: string; planFilePath: string; timestamp: string }
   | { kind: "ask-user-question"; id: string; questions: Question[]; timestamp: string };
 
-/** Safely narrow unknown to a record for property access */
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value != null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
 /** Extract tool name + file path from a session_output event payload, if it's a Read/Glob/Grep tool call */
 function extractReadGlobInfo(
-  payload: Record<string, unknown> | undefined,
+  payload: JsonObject | undefined,
   timestamp: string,
   id: string,
 ): ReadGlobItem | null {
@@ -40,7 +33,7 @@ function extractReadGlobInfo(
 
   // Assistant message with purely Read/Glob tool_use content blocks (no text)
   if (type === "assistant") {
-    const message = asRecord(payload.message);
+    const message = asJsonObject(payload.message);
     const blocks = message?.content;
     if (!Array.isArray(blocks)) return null;
 
@@ -48,7 +41,7 @@ function extractReadGlobInfo(
     let filePath = "";
     let toolName = "";
     for (const rawBlock of blocks) {
-      const block = asRecord(rawBlock);
+      const block = asJsonObject(rawBlock);
       if (!block) continue;
       if (block.type === "text" && typeof block.text === "string" && block.text.trim()) return null;
       if (block.type === "tool_use") {
@@ -56,7 +49,7 @@ function extractReadGlobInfo(
         if (!READ_GLOB_NAMES.has(name.toLowerCase())) return null;
         if (!foundReadGlob) {
           toolName = name;
-          const input = asRecord(block.input) ?? {};
+          const input = asJsonObject(block.input) ?? {};
           filePath = String(input.file_path ?? input.path ?? input.pattern ?? input.filepath ?? "");
           foundReadGlob = true;
         }
@@ -69,25 +62,25 @@ function extractReadGlobInfo(
 }
 
 function extractCommandStart(
-  payload: Record<string, unknown> | undefined,
+  payload: JsonObject | undefined,
   timestamp: string,
   id: string,
 ): { id: string; command: string; timestamp: string } | null {
   if (!payload || payload.type !== "assistant") return null;
 
-  const message = asRecord(payload.message);
+  const message = asJsonObject(payload.message);
   const blocks = message?.content;
   if (!Array.isArray(blocks)) return null;
 
   let command = "";
   for (const rawBlock of blocks) {
-    const block = asRecord(rawBlock);
+    const block = asJsonObject(rawBlock);
     if (!block) continue;
     if (block.type === "text" && typeof block.text === "string" && block.text.trim()) return null;
     if (block.type === "tool_use") {
       const name = String(block.name ?? "").toLowerCase();
       if (name !== "command" && name !== "bash") return null;
-      const input = asRecord(block.input);
+      const input = asJsonObject(block.input);
       if (typeof input?.command !== "string" || !input.command.trim()) return null;
       command = input.command;
     }
@@ -97,13 +90,13 @@ function extractCommandStart(
 }
 
 function extractCommandResult(
-  payload: Record<string, unknown> | undefined,
+  payload: JsonObject | undefined,
   timestamp: string,
   id: string,
 ): { id: string; command?: string; output?: string | Record<string, unknown>; timestamp: string; exitCode?: number } | null {
   if (!payload || payload.type !== "assistant") return null;
 
-  const message = asRecord(payload.message);
+  const message = asJsonObject(payload.message);
   const blocks = message?.content;
   if (!Array.isArray(blocks)) return null;
 
@@ -111,7 +104,7 @@ function extractCommandResult(
   let output: string | Record<string, unknown> | undefined;
   let exitCode: number | undefined;
   for (const rawBlock of blocks) {
-    const block = asRecord(rawBlock);
+    const block = asJsonObject(rawBlock);
     if (!block) continue;
     if (block.type === "text" && typeof block.text === "string" && block.text.trim()) return null;
     if (block.type === "tool_result") {
@@ -121,13 +114,13 @@ function extractCommandResult(
       if (typeof content === "string") {
         output = content;
       } else {
-        const result = asRecord(content);
+        const result = asJsonObject(content);
         if (!result) return null;
         if (typeof result.command === "string" && result.command.trim()) command = result.command;
         if (typeof result.output === "string") {
           output = result.output;
         } else {
-          const nestedOutput = asRecord(result.output);
+          const nestedOutput = asJsonObject(result.output);
           if (nestedOutput) output = nestedOutput;
         }
         if (typeof result.exitCode === "number") exitCode = result.exitCode;
@@ -166,12 +159,13 @@ export function buildSessionNodes(
     }
 
     if (event.eventType === "session_output") {
-      const commandStart = extractCommandStart(event.payload, event.timestamp, id);
+      const payload = asJsonObject(event.payload);
+      const commandStart = extractCommandStart(payload, event.timestamp, id);
       if (commandStart) {
         const nextId = eventIds[index + 1];
         const nextEvent = nextId ? events[nextId] : undefined;
         const nextPayload = nextEvent?.eventType === "session_output"
-          ? asRecord(nextEvent.payload)
+          ? asJsonObject(nextEvent.payload)
           : undefined;
         const commandResult = extractCommandResult(nextPayload, nextEvent?.timestamp ?? "", nextId ?? "");
         if (commandResult && (!commandResult.command || commandResult.command === commandStart.command)) {
@@ -189,14 +183,14 @@ export function buildSessionNodes(
         }
       }
 
-      const info = extractReadGlobInfo(event.payload, event.timestamp, id);
+      const info = extractReadGlobInfo(payload, event.timestamp, id);
       if (info) {
         bucket.push(info);
         continue;
       }
 
       // Events that render as nothing should not break a Read/Glob bucket
-      const payloadType = (event.payload as Record<string, unknown>).type;
+      const payloadType = payload?.type;
       if (typeof payloadType === "string" && INVISIBLE_PAYLOAD_TYPES.has(payloadType)) {
         result.push({ kind: "event", id });
         continue;
@@ -231,7 +225,7 @@ function deduplicateResultEvents(
     if (node.kind === "event") {
       const event = events[node.id];
       const payload = event?.eventType === "session_output"
-        ? asRecord(event.payload)
+        ? asJsonObject(event.payload)
         : undefined;
       const isResult = payload?.type === "result";
 
@@ -255,15 +249,15 @@ function detectPlanReviewNodes(
     if (node.kind !== "event") return node;
     const event = events[node.id];
     if (!event || event.eventType !== "session_output") return node;
-    const payload = asRecord(event.payload);
+    const payload = asJsonObject(event.payload);
     if (!payload || payload.type !== "assistant") return node;
-    const message = asRecord(payload.message);
+    const message = asJsonObject(payload.message);
     const blocks = message?.content;
     if (!Array.isArray(blocks)) return node;
 
-    const planBlock = blocks.find((b: unknown) => asRecord(b)?.type === "plan");
+    const planBlock = blocks.find((b: unknown) => asJsonObject(b)?.type === "plan");
     if (!planBlock) return node;
-    const p = asRecord(planBlock)!;
+    const p = asJsonObject(planBlock)!;
 
     return {
       kind: "plan-review" as const,
@@ -281,15 +275,15 @@ function detectQuestionNodes(nodes: SessionNode[], events: Record<string, Event>
     if (node.kind !== "event") return node;
     const event = events[node.id];
     if (!event || event.eventType !== "session_output") return node;
-    const payload = asRecord(event.payload);
+    const payload = asJsonObject(event.payload);
     if (!payload || payload.type !== "assistant") return node;
-    const message = asRecord(payload.message);
+    const message = asJsonObject(payload.message);
     const blocks = message?.content;
     if (!Array.isArray(blocks)) return node;
 
-    const qBlock = blocks.find((b: unknown) => asRecord(b)?.type === "question");
+    const qBlock = blocks.find((b: unknown) => asJsonObject(b)?.type === "question");
     if (!qBlock) return node;
-    const q = asRecord(qBlock)!;
+    const q = asJsonObject(qBlock)!;
     const questions = Array.isArray(q.questions) ? q.questions : [];
 
     return {

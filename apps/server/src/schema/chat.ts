@@ -2,7 +2,6 @@ import type { Context } from "../context.js";
 import type { CreateChatInput, AddChatMemberInput } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { chatService } from "../services/chat.js";
-import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { assertChatAccess, isActiveChatMember } from "../services/access.js";
@@ -16,6 +15,17 @@ export const chatQueries = {
   },
   chat: (_: unknown, args: { id: string }, ctx: Context) => {
     return chatService.getChat(args.id, ctx.organizationId, ctx.userId);
+  },
+  chatMessages: (
+    _: unknown,
+    args: { chatId: string; after?: Date; before?: Date; limit?: number },
+    ctx: Context,
+  ) => {
+    return chatService.getMessages(args.chatId, ctx.organizationId, ctx.userId, {
+      after: args.after,
+      before: args.before,
+      limit: args.limit,
+    });
   },
 };
 
@@ -37,6 +47,23 @@ export const chatMutations = {
       text: args.text,
       html: args.html,
       parentId: args.parentId,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
+  editChatMessage: (_: unknown, args: { messageId: string; html: string }, ctx: Context) => {
+    return chatService.editMessage({
+      messageId: args.messageId,
+      html: args.html,
+      organizationId: ctx.organizationId,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
+  deleteChatMessage: (_: unknown, args: { messageId: string }, ctx: Context) => {
+    return chatService.deleteMessage({
+      messageId: args.messageId,
+      organizationId: ctx.organizationId,
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
@@ -100,27 +127,35 @@ export const chatTypeResolvers = {
     messages: async (
       chat: { id: string; organizationId?: string },
       args: { after?: string; before?: string; limit?: number },
+      ctx: Context,
     ) => {
-      const organizationId =
-        chat.organizationId ??
-        (
-          await prisma.chat.findUniqueOrThrow({
-            where: { id: chat.id },
-            select: { organizationId: true },
-          })
-        ).organizationId;
-
-      return eventService.query(organizationId, {
-        scopeType: "chat",
-        scopeId: chat.id,
+      return chatService.getMessages(chat.id, ctx.organizationId, ctx.userId, {
         after: args.after ? new Date(args.after) : undefined,
         before: args.before ? new Date(args.before) : undefined,
         limit: args.limit,
-        excludeReplies: true,
       });
     },
     createdBy: (chat: { createdById: string }) => {
       return prisma.user.findUniqueOrThrow({ where: { id: chat.createdById } });
+    },
+  },
+  Message: {
+    actor: async (message: { actorType: string; actorId: string }) => {
+      const actor: { type: string; id: string; name: string | null; avatarUrl: string | null } = {
+        type: message.actorType,
+        id: message.actorId,
+        name: null,
+        avatarUrl: null,
+      };
+      if (message.actorType === "user") {
+        const user = await prisma.user.findUnique({
+          where: { id: message.actorId },
+          select: { name: true, avatarUrl: true },
+        });
+        actor.name = user?.name ?? null;
+        actor.avatarUrl = user?.avatarUrl ?? null;
+      }
+      return actor;
     },
   },
   ChatMember: {

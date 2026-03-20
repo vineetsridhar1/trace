@@ -147,6 +147,7 @@ model Organization {
   events        Event[]
   inboxItems    InboxItem[]
   chats         Chat[]
+  messages      Message[]
   participants  Participant[]
   cloudMachines CloudMachine[]
 
@@ -404,6 +405,7 @@ model Chat {
   createdBy      User         @relation("ChatCreator", fields: [createdById, organizationId], references: [id, organizationId])
 
   members ChatMember[]
+  messages Message[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -411,6 +413,30 @@ model Chat {
   @@index([organizationId])
   @@unique([id, organizationId])
   @@unique([organizationId, dmKey])
+}
+
+model Message {
+  id              String       @id @default(uuid())
+  chatId          String
+  organizationId  String
+  chat            Chat         @relation(fields: [chatId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  actorType       ActorType
+  actorId         String
+  text            String
+  html            String?
+  mentions        Json?
+  parentMessageId String?
+  parentMessage   Message?     @relation("MessageThread", fields: [parentMessageId], references: [id], onDelete: SetNull)
+  replies         Message[]    @relation("MessageThread")
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([chatId, createdAt])
+  @@index([parentMessageId, createdAt])
 }
 
 model ChatMember {

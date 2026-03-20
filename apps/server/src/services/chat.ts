@@ -9,6 +9,52 @@ function buildDmKey(userA: string, userB: string) {
   return [userA, userB].sort().join(":");
 }
 
+type DbMessage = Prisma.MessageGetPayload<Record<string, never>>;
+
+type ActorSummary = {
+  type: string;
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
+type MessageWithSummary = DbMessage & {
+  replyCount: number;
+  latestReplyAt: Date | null;
+  threadRepliers: ActorSummary[];
+};
+
+function normalizeMessageInput(text?: string, html?: string) {
+  if (!text && !html) {
+    throw new Error("Either text or html must be provided");
+  }
+
+  if (html) {
+    const cleanHtml = sanitizeHtml(html);
+    return {
+      text: text || stripHtml(cleanHtml),
+      html: cleanHtml,
+      mentions: extractMentions(cleanHtml),
+    };
+  }
+
+  return {
+    text: text!,
+    html: null,
+    mentions: [] as Array<{ userId: string; name: string }>,
+  };
+}
+
+function buildMessageEventPayload(message: DbMessage) {
+  return {
+    messageId: message.id,
+    parentMessageId: message.parentMessageId,
+    text: message.text,
+    html: message.html,
+    mentions: message.mentions,
+  };
+}
+
 export class ChatService {
   async create(input: CreateChatInput, actorType: ActorType, actorId: string) {
     const memberIds = [...new Set(input.memberIds)];
@@ -153,6 +199,111 @@ export class ChatService {
     return chat;
   }
 
+  private async resolveActors(
+    actorRefs: Array<{ actorType: string; actorId: string }>,
+  ): Promise<Map<string, ActorSummary>> {
+    const userIds = [...new Set(actorRefs.filter((ref) => ref.actorType === "user").map((ref) => ref.actorId))];
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, avatarUrl: true },
+        })
+      : [];
+
+    const userMap = new Map(users.map((user) => [user.id, user]));
+    const actorMap = new Map<string, ActorSummary>();
+
+    for (const ref of actorRefs) {
+      const key = `${ref.actorType}:${ref.actorId}`;
+      if (actorMap.has(key)) continue;
+
+      const user = ref.actorType === "user" ? userMap.get(ref.actorId) : null;
+      actorMap.set(key, {
+        type: ref.actorType,
+        id: ref.actorId,
+        name: user?.name ?? null,
+        avatarUrl: user?.avatarUrl ?? null,
+      });
+    }
+
+    return actorMap;
+  }
+
+  private async hydrateMessages(messages: DbMessage[]): Promise<MessageWithSummary[]> {
+    if (messages.length === 0) return [];
+
+    const rootIds = messages.filter((message) => !message.parentMessageId).map((message) => message.id);
+    const replies = rootIds.length
+      ? await prisma.message.findMany({
+          where: { parentMessageId: { in: rootIds } },
+          orderBy: { createdAt: "desc" },
+          select: {
+            parentMessageId: true,
+            actorType: true,
+            actorId: true,
+            createdAt: true,
+          },
+        })
+      : [];
+
+    const actorMap = await this.resolveActors(replies.map((reply) => ({
+      actorType: reply.actorType,
+      actorId: reply.actorId,
+    })));
+
+    const summaries = new Map<string, {
+      replyCount: number;
+      latestReplyAt: Date | null;
+      threadRepliers: ActorSummary[];
+      seenActors: Set<string>;
+    }>();
+
+    for (const reply of replies) {
+      if (!reply.parentMessageId) continue;
+
+      let summary = summaries.get(reply.parentMessageId);
+      if (!summary) {
+        summary = {
+          replyCount: 0,
+          latestReplyAt: null,
+          threadRepliers: [],
+          seenActors: new Set<string>(),
+        };
+        summaries.set(reply.parentMessageId, summary);
+      }
+
+      summary.replyCount += 1;
+      if (!summary.latestReplyAt) {
+        summary.latestReplyAt = reply.createdAt;
+      }
+
+      const actorKey = `${reply.actorType}:${reply.actorId}`;
+      if (summary.seenActors.has(actorKey) || summary.threadRepliers.length >= 3) {
+        continue;
+      }
+
+      summary.seenActors.add(actorKey);
+      summary.threadRepliers.push(
+        actorMap.get(actorKey) ?? {
+          type: reply.actorType,
+          id: reply.actorId,
+          name: null,
+          avatarUrl: null,
+        },
+      );
+    }
+
+    return messages.map((message) => {
+      const summary = message.parentMessageId ? null : summaries.get(message.id);
+      return {
+        ...message,
+        replyCount: summary?.replyCount ?? 0,
+        latestReplyAt: summary?.latestReplyAt ?? null,
+        threadRepliers: summary?.threadRepliers ?? [],
+      };
+    });
+  }
+
   async sendMessage({
     chatId,
     organizationId,
@@ -170,84 +321,313 @@ export class ChatService {
     actorType: ActorType;
     actorId: string;
   }) {
-    if (!text && !html) {
-      throw new Error("Either text or html must be provided");
-    }
-    const chat = await prisma.chat.findFirstOrThrow({
-      where: {
-        id: chatId,
-        organizationId,
-        members: { some: { userId: actorId, leftAt: null } },
-      },
-      select: { organizationId: true },
-    });
+    const normalized = normalizeMessageInput(text, html);
 
-    let validatedParentId: string | undefined;
-    if (parentId) {
-      const parentEvent = await prisma.event.findUniqueOrThrow({
-        where: { id: parentId },
-        select: {
-          id: true,
-          organizationId: true,
-          scopeType: true,
-          scopeId: true,
-          parentId: true,
-          eventType: true,
+    const message = await prisma.$transaction(async (tx) => {
+      const chat = await tx.chat.findFirstOrThrow({
+        where: {
+          id: chatId,
+          organizationId,
+          members: { some: { userId: actorId, leftAt: null } },
+        },
+        select: { id: true, organizationId: true },
+      });
+
+      let validatedParentId: string | null = null;
+      if (parentId) {
+        const parentMessage = await tx.message.findUniqueOrThrow({
+          where: { id: parentId },
+          select: {
+            id: true,
+            organizationId: true,
+            chatId: true,
+            parentMessageId: true,
+          },
+        });
+
+        if (
+          parentMessage.organizationId !== chat.organizationId ||
+          parentMessage.chatId !== chat.id
+        ) {
+          throw new Error("Thread parent must belong to this chat");
+        }
+
+        if (parentMessage.parentMessageId) {
+          throw new Error("Thread replies must target the root message");
+        }
+
+        validatedParentId = parentMessage.id;
+      }
+
+      const createdMessage = await tx.message.create({
+        data: {
+          chatId: chat.id,
+          organizationId: chat.organizationId,
+          actorType,
+          actorId,
+          text: normalized.text,
+          html: normalized.html,
+          mentions: normalized.mentions.length
+            ? (normalized.mentions as unknown as PrismaTypes.InputJsonValue)
+            : Prisma.DbNull,
+          parentMessageId: validatedParentId,
         },
       });
 
-      if (
-        parentEvent.organizationId !== chat.organizationId ||
-        parentEvent.scopeType !== "chat" ||
-        parentEvent.scopeId !== chatId
-      ) {
-        throw new Error("Thread parent must belong to this chat");
-      }
+      await tx.chat.update({
+        where: { id: chat.id },
+        data: { updatedAt: createdMessage.createdAt },
+      });
 
-      if (parentEvent.parentId) {
-        throw new Error("Thread replies must target the root event");
-      }
+      await eventService.create(
+        {
+          organizationId: chat.organizationId,
+          scopeType: "chat",
+          scopeId: chat.id,
+          eventType: "message_sent",
+          payload: buildMessageEventPayload(createdMessage) as unknown as PrismaTypes.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
 
-      if (parentEvent.eventType !== "message_sent") {
-        throw new Error("Only messages can be used as thread roots");
-      }
-
-      validatedParentId = parentEvent.id;
-    }
-
-    // Build payload: if html is provided, sanitize and extract mentions + plain text
-    let payload: PrismaTypes.InputJsonValue;
-    if (html) {
-      const cleanHtml = sanitizeHtml(html);
-      const mentions = extractMentions(cleanHtml);
-      const plainText = text || stripHtml(cleanHtml);
-      payload = { html: cleanHtml, text: plainText, mentions } as unknown as PrismaTypes.InputJsonValue;
-    } else {
-      payload = { text: text! } as PrismaTypes.InputJsonValue;
-    }
-
-    const event = await eventService.create({
-      organizationId: chat.organizationId,
-      scopeType: "chat",
-      scopeId: chatId,
-      eventType: "message_sent",
-      payload,
-      actorType,
-      actorId,
-      parentId: validatedParentId,
+      return createdMessage;
     });
 
-    // Auto-subscribe to thread if this is a reply
-    if (validatedParentId) {
+    if (message.parentMessageId) {
       await participantService.subscribe({
         userId: actorId,
         scopeType: "thread",
-        scopeId: validatedParentId,
-        organizationId: chat.organizationId,
+        scopeId: message.parentMessageId,
+        organizationId: message.organizationId,
       });
     }
 
-    return event;
+    const [hydratedMessage] = await this.hydrateMessages([message]);
+    return hydratedMessage;
+  }
+
+  async editMessage({
+    messageId,
+    html,
+    organizationId,
+    actorType,
+    actorId,
+  }: {
+    messageId: string;
+    html: string;
+    organizationId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const normalized = normalizeMessageInput(undefined, html);
+
+    const existing = await prisma.message.findFirstOrThrow({
+      where: {
+        id: messageId,
+        organizationId,
+        chat: {
+          members: { some: { userId: actorId, leftAt: null } },
+        },
+      },
+    });
+
+    if (existing.actorType !== actorType || existing.actorId !== actorId) {
+      throw new Error("Only the original author can edit this message");
+    }
+
+    if (existing.deletedAt) {
+      throw new Error("Deleted messages cannot be edited");
+    }
+
+    if (
+      existing.text === normalized.text &&
+      existing.html === normalized.html &&
+      JSON.stringify(existing.mentions ?? null) === JSON.stringify(normalized.mentions)
+    ) {
+      const [hydratedExisting] = await this.hydrateMessages([existing]);
+      return hydratedExisting;
+    }
+
+    const editedAt = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedMessage = await tx.message.update({
+        where: { id: messageId },
+        data: {
+          text: normalized.text,
+          html: normalized.html,
+          mentions: normalized.mentions.length
+            ? (normalized.mentions as unknown as PrismaTypes.InputJsonValue)
+            : Prisma.DbNull,
+          editedAt,
+        },
+      });
+
+      await tx.chat.update({
+        where: { id: updatedMessage.chatId },
+        data: { updatedAt: editedAt },
+      });
+
+      await eventService.create(
+        {
+          organizationId: updatedMessage.organizationId,
+          scopeType: "chat",
+          scopeId: updatedMessage.chatId,
+          eventType: "message_edited",
+          payload: buildMessageEventPayload(updatedMessage) as unknown as PrismaTypes.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return updatedMessage;
+    });
+
+    const [hydratedMessage] = await this.hydrateMessages([updated]);
+    return hydratedMessage;
+  }
+
+  async deleteMessage({
+    messageId,
+    organizationId,
+    actorType,
+    actorId,
+  }: {
+    messageId: string;
+    organizationId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const existing = await prisma.message.findFirstOrThrow({
+      where: {
+        id: messageId,
+        organizationId,
+        chat: {
+          members: { some: { userId: actorId, leftAt: null } },
+        },
+      },
+    });
+
+    if (existing.actorType !== actorType || existing.actorId !== actorId) {
+      throw new Error("Only the original author can delete this message");
+    }
+
+    if (existing.deletedAt) {
+      const [hydratedExisting] = await this.hydrateMessages([existing]);
+      return hydratedExisting;
+    }
+
+    const deletedAt = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const deletedMessage = await tx.message.update({
+        where: { id: messageId },
+        data: {
+          text: "",
+          html: null,
+          mentions: Prisma.DbNull,
+          deletedAt,
+        },
+      });
+
+      await tx.chat.update({
+        where: { id: deletedMessage.chatId },
+        data: { updatedAt: deletedAt },
+      });
+
+      await eventService.create(
+        {
+          organizationId: deletedMessage.organizationId,
+          scopeType: "chat",
+          scopeId: deletedMessage.chatId,
+          eventType: "message_deleted",
+          payload: {
+            messageId: deletedMessage.id,
+            parentMessageId: deletedMessage.parentMessageId,
+          } as PrismaTypes.InputJsonValue,
+          actorType,
+          actorId,
+        },
+        tx,
+      );
+
+      return deletedMessage;
+    });
+
+    const [hydratedMessage] = await this.hydrateMessages([updated]);
+    return hydratedMessage;
+  }
+
+  async getMessages(
+    chatId: string,
+    organizationId: string,
+    userId: string,
+    opts?: { after?: Date; before?: Date; limit?: number },
+  ) {
+    await prisma.chat.findFirstOrThrow({
+      where: {
+        id: chatId,
+        organizationId,
+        members: { some: { userId, leftAt: null } },
+      },
+      select: { id: true },
+    });
+
+    const createdAtFilter: Record<string, Date> = {};
+    if (opts?.after) createdAtFilter.gt = opts.after;
+    if (opts?.before) createdAtFilter.lt = opts.before;
+    const isBefore = !!opts?.before && !opts.after;
+
+    const messages = await prisma.message.findMany({
+      where: {
+        chatId,
+        organizationId,
+        parentMessageId: null,
+        ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
+      },
+      orderBy: { createdAt: isBefore ? "desc" : "asc" },
+      take: opts?.limit ?? 200,
+    });
+
+    const orderedMessages = isBefore ? messages.reverse() : messages;
+    return this.hydrateMessages(orderedMessages);
+  }
+
+  async getReplies(
+    rootMessageId: string,
+    organizationId: string,
+    userId: string,
+    opts?: { after?: Date; limit?: number },
+  ) {
+    const rootMessage = await prisma.message.findFirstOrThrow({
+      where: {
+        id: rootMessageId,
+        organizationId,
+        chat: {
+          members: { some: { userId, leftAt: null } },
+        },
+      },
+      select: {
+        id: true,
+        parentMessageId: true,
+      },
+    });
+
+    if (rootMessage.parentMessageId) {
+      throw new Error("Thread root must be a top-level message");
+    }
+
+    const replies = await prisma.message.findMany({
+      where: {
+        parentMessageId: rootMessageId,
+        ...(opts?.after ? { createdAt: { gt: opts.after } } : {}),
+      },
+      orderBy: { createdAt: "asc" },
+      take: opts?.limit ?? 200,
+    });
+
+    return this.hydrateMessages(replies);
   }
 
   async addMember(

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X } from "lucide-react";
 import { gql } from "@urql/core";
-import type { Event } from "@trace/gql";
+import type { Message } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { useEntityStore, useEntityIds } from "../../stores/entity";
 import { useEntityField } from "../../stores/entity";
@@ -11,35 +11,47 @@ import { ChatComposer } from "./ChatComposer";
 import { Button } from "../ui/button";
 
 const THREAD_REPLIES_QUERY = gql`
-  query ThreadReplies($rootEventId: ID!, $limit: Int) {
-    threadReplies(rootEventId: $rootEventId, limit: $limit) {
+  query ThreadReplies($rootMessageId: ID!, $limit: Int) {
+    threadReplies(rootMessageId: $rootMessageId, limit: $limit) {
       id
-      scopeType
-      scopeId
-      eventType
-      payload
+      chatId
+      text
+      html
+      mentions
+      parentMessageId
+      replyCount
+      latestReplyAt
+      threadRepliers {
+        type
+        id
+        name
+        avatarUrl
+      }
       actor {
         type
         id
         name
         avatarUrl
       }
-      parentId
-      timestamp
-      metadata
+      createdAt
+      updatedAt
+      editedAt
+      deletedAt
     }
   }
 `;
 
-export function ThreadPanel({ chatId, rootEventId }: { chatId: string; rootEventId: string }) {
+export function ThreadPanel({ chatId, rootMessageId }: { chatId: string; rootMessageId: string }) {
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
-  const rootPayload = useEntityField("events", rootEventId, "payload") as
-    | Record<string, unknown>
+  const rootText = useEntityField("messages", rootMessageId, "text") as string | undefined;
+  const rootDeletedAt = useEntityField("messages", rootMessageId, "deletedAt") as
+    | string
+    | null
     | undefined;
-  const rootActor = useEntityField("events", rootEventId, "actor") as
+  const rootActor = useEntityField("messages", rootMessageId, "actor") as
     | { name?: string; avatarUrl?: string }
     | undefined;
 
@@ -51,7 +63,7 @@ export function ThreadPanel({ chatId, rootEventId }: { chatId: string; rootEvent
 
     try {
       const result = await client
-        .query(THREAD_REPLIES_QUERY, { rootEventId, limit: 200 })
+        .query(THREAD_REPLIES_QUERY, { rootMessageId, limit: 200 })
         .toPromise();
 
       if (requestId !== requestIdRef.current) return;
@@ -61,8 +73,8 @@ export function ThreadPanel({ chatId, rootEventId }: { chatId: string; rootEvent
       }
 
       if (result.data?.threadReplies) {
-        const events = result.data.threadReplies as Array<Event & { id: string }>;
-        useEntityStore.getState().upsertMany("events", events);
+        const messages = result.data.threadReplies as Array<Message & { id: string }>;
+        useEntityStore.getState().upsertMany("messages", messages);
       }
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
@@ -72,28 +84,20 @@ export function ThreadPanel({ chatId, rootEventId }: { chatId: string; rootEvent
         setLoading(false);
       }
     }
-  }, [rootEventId]);
+  }, [rootMessageId]);
 
   useEffect(() => {
     fetchReplies();
   }, [fetchReplies]);
 
-  // Real-time updates: new replies arrive via the chatEvents subscription in
-  // useChatEvents (parent ChatView), which upserts all message_sent events
-  // (including replies with parentId) into the entity store. This useEntityIds
-  // filter then automatically picks them up — no separate subscription needed.
   const replyIds = useEntityIds(
-    "events",
-    (e) =>
-      e.scopeType === "chat" &&
-      e.scopeId === chatId &&
-      e.eventType === "message_sent" &&
-      e.parentId === rootEventId,
-    (a, b) => a.timestamp.localeCompare(b.timestamp),
+    "messages",
+    (message) => message.chatId === chatId && message.parentMessageId === rootMessageId,
+    (a, b) => a.createdAt.localeCompare(b.createdAt),
   );
 
-  const rootText = typeof rootPayload?.text === "string" ? rootPayload.text : "";
   const rootActorName = rootActor?.name ?? "Unknown";
+  const rootPreview = rootDeletedAt ? "This message was deleted." : (rootText ?? "");
 
   return (
     <div className="flex h-full w-full flex-col border-l border-border">
@@ -119,7 +123,7 @@ export function ThreadPanel({ chatId, rootEventId }: { chatId: string; rootEvent
         )}
         <div className="min-w-0 flex-1">
           <span className="text-sm font-bold text-foreground">{rootActorName}</span>
-          <p className="text-sm text-muted-foreground line-clamp-3">{rootText}</p>
+          <p className="text-sm text-muted-foreground line-clamp-3">{rootPreview}</p>
         </div>
       </div>
 
@@ -138,11 +142,11 @@ export function ThreadPanel({ chatId, rootEventId }: { chatId: string; rootEvent
             <p className="text-xs text-muted-foreground">No replies yet</p>
           </div>
         ) : (
-          replyIds.map((id) => <ThreadMessage key={id} eventId={id} />)
+          replyIds.map((id) => <ThreadMessage key={id} messageId={id} />)
         )}
       </div>
 
-      <ChatComposer chatId={chatId} parentId={rootEventId} />
+      <ChatComposer chatId={chatId} parentId={rootMessageId} />
     </div>
   );
 }

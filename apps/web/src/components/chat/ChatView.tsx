@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUIStore } from "../../stores/ui";
-import { useChatEvents } from "../../hooks/useChatEvents";
+import { useChatMessages } from "../../hooks/useChatMessages";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { ChatHeader } from "./ChatHeader";
 import { ChatMessageList } from "./ChatMessageList";
@@ -21,7 +21,7 @@ function getStoredWidth(): number {
 
 export function ChatView({ chatId }: { chatId: string }) {
   const activeThreadId = useUIStore((s) => s.activeThreadId);
-  const { eventIds, loading, hasOlder, fetchOlderEvents } = useChatEvents(chatId);
+  const { messageIds, loading, hasOlder, fetchOlderMessages } = useChatMessages(chatId);
   const isMobile = useIsMobile();
 
   // Keep the last thread ID around so the panel stays rendered during close animation
@@ -83,10 +83,10 @@ export function ChatView({ chatId }: { chatId: string }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <ChatMessageList
             chatId={chatId}
-            eventIds={eventIds}
+            messageIds={messageIds}
             loading={loading}
             hasOlder={hasOlder}
-            onLoadOlder={fetchOlderEvents}
+            onLoadOlder={fetchOlderMessages}
           />
           <ChatComposer chatId={chatId} />
         </div>
@@ -98,7 +98,7 @@ export function ChatView({ chatId }: { chatId: string }) {
               className="absolute inset-0 z-10 bg-background transition-transform duration-200 ease-in-out"
               style={{ transform: slideIn ? "translateX(0)" : "translateX(100%)" }}
             >
-              <ThreadPanel chatId={chatId} rootEventId={threadId} />
+              <ThreadPanel chatId={chatId} rootMessageId={threadId} />
             </div>
           )
         ) : (
@@ -114,7 +114,7 @@ export function ChatView({ chatId }: { chatId: string }) {
                   onMouseDown={handleDragStart}
                   className="absolute inset-y-0 left-0 z-20 w-1 cursor-col-resize hover:bg-ring active:bg-ring"
                 />
-                <ThreadPanel chatId={chatId} rootEventId={threadId} />
+                <ThreadPanel chatId={chatId} rootMessageId={threadId} />
               </>
             )}
           </div>

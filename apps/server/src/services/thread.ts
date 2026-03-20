@@ -1,39 +1,35 @@
 import { prisma } from "../lib/db.js";
+import { chatService } from "./chat.js";
 
 export class ThreadService {
   async getReplies(
-    rootEventId: string,
+    rootMessageId: string,
+    organizationId: string,
+    userId: string,
     opts?: { after?: Date; limit?: number },
   ) {
-    return prisma.event.findMany({
-      where: {
-        parentId: rootEventId,
-        ...(opts?.after ? { timestamp: { gt: opts.after } } : {}),
-      },
-      orderBy: { timestamp: "asc" },
-      take: opts?.limit ?? 200,
-    });
+    return chatService.getReplies(rootMessageId, organizationId, userId, opts);
   }
 
-  async getSummary(rootEventId: string) {
+  async getSummary(rootMessageId: string) {
     const [replyCount, lastReply, participants] = await Promise.all([
-      prisma.event.count({ where: { parentId: rootEventId } }),
-      prisma.event.findFirst({
-        where: { parentId: rootEventId },
-        orderBy: { timestamp: "desc" },
-        select: { timestamp: true },
+      prisma.message.count({ where: { parentMessageId: rootMessageId } }),
+      prisma.message.findFirst({
+        where: { parentMessageId: rootMessageId },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
       }),
-      prisma.event.findMany({
-        where: { parentId: rootEventId },
+      prisma.message.findMany({
+        where: { parentMessageId: rootMessageId },
         select: { actorId: true },
         distinct: ["actorId"],
       }),
     ]);
 
     return {
-      rootEventId,
+      rootMessageId,
       replyCount,
-      lastReplyAt: lastReply ? lastReply.timestamp.toISOString() : null,
+      lastReplyAt: lastReply ? lastReply.createdAt.toISOString() : null,
       participantIds: participants.map((p) => p.actorId),
     };
   }

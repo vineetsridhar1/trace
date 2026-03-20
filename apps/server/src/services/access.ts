@@ -84,31 +84,29 @@ export async function assertScopeAccess(
 }
 
 export async function assertThreadAccess(
-  rootEventId: string,
+  rootMessageId: string,
   userId: string,
   organizationId: string,
 ) {
-  const rootEvent = await prisma.event.findUniqueOrThrow({
-    where: { id: rootEventId },
+  const rootMessage = await prisma.message.findUniqueOrThrow({
+    where: { id: rootMessageId },
     select: {
       id: true,
       organizationId: true,
-      scopeType: true,
-      scopeId: true,
-      parentId: true,
-      eventType: true,
+      chatId: true,
+      parentMessageId: true,
     },
   });
 
-  if (rootEvent.organizationId !== organizationId) {
+  if (rootMessage.organizationId !== organizationId) {
     throw new Error("Not authorized for this thread");
   }
 
-  if (rootEvent.parentId) {
-    throw new Error("Thread root must be a top-level event");
+  if (rootMessage.parentMessageId) {
+    throw new Error("Thread root must be a top-level message");
   }
 
-  await assertScopeAccess(rootEvent.scopeType, rootEvent.scopeId, userId, organizationId);
+  await assertChatAccess(rootMessage.chatId, userId, organizationId);
 
-  return rootEvent;
+  return rootMessage;
 }

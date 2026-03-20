@@ -1,3 +1,4 @@
+import { JsonValue } from '../json';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
@@ -13,7 +14,7 @@ export type Scalars = {
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
   DateTime: { input: string; output: string; }
-  JSON: { input: Record<string, unknown>; output: Record<string, unknown>; }
+  JSON: { input: JsonValue; output: JsonValue; }
 };
 
 export type Actor = {
@@ -80,7 +81,7 @@ export type Chat = {
   createdBy: User;
   id: Scalars['ID']['output'];
   members: Array<ChatMember>;
-  messages: Array<Event>;
+  messages: Array<Message>;
   name?: Maybe<Scalars['String']['output']>;
   type: ChatType;
   updatedAt: Scalars['DateTime']['output'];
@@ -226,6 +227,24 @@ export type InboxItemType =
   | 'plan'
   | 'question';
 
+export type Message = {
+  __typename?: 'Message';
+  actor: Actor;
+  chatId: Scalars['ID']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  deletedAt?: Maybe<Scalars['DateTime']['output']>;
+  editedAt?: Maybe<Scalars['DateTime']['output']>;
+  html?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  latestReplyAt?: Maybe<Scalars['DateTime']['output']>;
+  mentions?: Maybe<Scalars['JSON']['output']>;
+  parentMessageId?: Maybe<Scalars['ID']['output']>;
+  replyCount: Scalars['Int']['output'];
+  text: Scalars['String']['output'];
+  threadRepliers: Array<Actor>;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   addChatMember: Chat;
@@ -237,10 +256,12 @@ export type Mutation = {
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
+  deleteChatMessage: Message;
   deleteSession: Session;
   destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
+  editChatMessage: Message;
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
@@ -252,7 +273,7 @@ export type Mutation = {
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
-  sendChatMessage: Event;
+  sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
@@ -316,6 +337,11 @@ export type MutationDeleteApiTokenArgs = {
 };
 
 
+export type MutationDeleteChatMessageArgs = {
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -333,6 +359,12 @@ export type MutationDismissInboxItemArgs = {
 
 export type MutationDismissSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationEditChatMessageArgs = {
+  html: Scalars['String']['input'];
+  messageId: Scalars['ID']['input'];
 };
 
 
@@ -536,6 +568,7 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
+  chatMessages: Array<Message>;
   chats: Array<Chat>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -551,7 +584,7 @@ export type Query = {
   session?: Maybe<Session>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
-  threadReplies: Array<Event>;
+  threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
@@ -581,6 +614,14 @@ export type QueryChannelsArgs = {
 
 export type QueryChatArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryChatMessagesArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  before?: InputMaybe<Scalars['DateTime']['input']>;
+  chatId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -668,12 +709,12 @@ export type QuerySessionsArgs = {
 export type QueryThreadRepliesArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
-  rootEventId: Scalars['ID']['input'];
+  rootMessageId: Scalars['ID']['input'];
 };
 
 
 export type QueryThreadSummaryArgs = {
-  rootEventId: Scalars['ID']['input'];
+  rootMessageId: Scalars['ID']['input'];
 };
 
 
@@ -880,7 +921,7 @@ export type ThreadSummary = {
   lastReplyAt?: Maybe<Scalars['DateTime']['output']>;
   participantIds: Array<Scalars['ID']['output']>;
   replyCount: Scalars['Int']['output'];
-  rootEventId: Scalars['ID']['output'];
+  rootMessageId: Scalars['ID']['output'];
 };
 
 export type Ticket = {

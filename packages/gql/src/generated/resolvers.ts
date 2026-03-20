@@ -1,3 +1,4 @@
+import { JsonValue } from '../json';
 import { GraphQLResolveInfo, GraphQLScalarType, GraphQLScalarTypeConfig } from 'graphql';
 import { Context } from '../context';
 export type Maybe<T> = T | null;
@@ -16,7 +17,7 @@ export type Scalars = {
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
   DateTime: { input: string; output: string; }
-  JSON: { input: Record<string, unknown>; output: Record<string, unknown>; }
+  JSON: { input: JsonValue; output: JsonValue; }
 };
 
 export type Actor = {
@@ -83,7 +84,7 @@ export type Chat = {
   createdBy: User;
   id: Scalars['ID']['output'];
   members: Array<ChatMember>;
-  messages: Array<Event>;
+  messages: Array<Message>;
   name?: Maybe<Scalars['String']['output']>;
   type: ChatType;
   updatedAt: Scalars['DateTime']['output'];
@@ -229,6 +230,24 @@ export type InboxItemType =
   | 'plan'
   | 'question';
 
+export type Message = {
+  __typename?: 'Message';
+  actor: Actor;
+  chatId: Scalars['ID']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  deletedAt?: Maybe<Scalars['DateTime']['output']>;
+  editedAt?: Maybe<Scalars['DateTime']['output']>;
+  html?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  latestReplyAt?: Maybe<Scalars['DateTime']['output']>;
+  mentions?: Maybe<Scalars['JSON']['output']>;
+  parentMessageId?: Maybe<Scalars['ID']['output']>;
+  replyCount: Scalars['Int']['output'];
+  text: Scalars['String']['output'];
+  threadRepliers: Array<Actor>;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   addChatMember: Chat;
@@ -240,10 +259,12 @@ export type Mutation = {
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
+  deleteChatMessage: Message;
   deleteSession: Session;
   destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
+  editChatMessage: Message;
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
@@ -255,7 +276,7 @@ export type Mutation = {
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
-  sendChatMessage: Event;
+  sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
@@ -319,6 +340,11 @@ export type MutationDeleteApiTokenArgs = {
 };
 
 
+export type MutationDeleteChatMessageArgs = {
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type MutationDeleteSessionArgs = {
   id: Scalars['ID']['input'];
 };
@@ -336,6 +362,12 @@ export type MutationDismissInboxItemArgs = {
 
 export type MutationDismissSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationEditChatMessageArgs = {
+  html: Scalars['String']['input'];
+  messageId: Scalars['ID']['input'];
 };
 
 
@@ -539,6 +571,7 @@ export type Query = {
   channel?: Maybe<Channel>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
+  chatMessages: Array<Message>;
   chats: Array<Chat>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -554,7 +587,7 @@ export type Query = {
   session?: Maybe<Session>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
-  threadReplies: Array<Event>;
+  threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
@@ -584,6 +617,14 @@ export type QueryChannelsArgs = {
 
 export type QueryChatArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryChatMessagesArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  before?: InputMaybe<Scalars['DateTime']['input']>;
+  chatId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -671,12 +712,12 @@ export type QuerySessionsArgs = {
 export type QueryThreadRepliesArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
-  rootEventId: Scalars['ID']['input'];
+  rootMessageId: Scalars['ID']['input'];
 };
 
 
 export type QueryThreadSummaryArgs = {
-  rootEventId: Scalars['ID']['input'];
+  rootMessageId: Scalars['ID']['input'];
 };
 
 
@@ -883,7 +924,7 @@ export type ThreadSummary = {
   lastReplyAt?: Maybe<Scalars['DateTime']['output']>;
   participantIds: Array<Scalars['ID']['output']>;
   replyCount: Scalars['Int']['output'];
-  rootEventId: Scalars['ID']['output'];
+  rootMessageId: Scalars['ID']['output'];
 };
 
 export type Ticket = {
@@ -1044,6 +1085,7 @@ export type ResolversTypes = ResolversObject<{
   InboxItemType: InboxItemType;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
+  Message: ResolverTypeWrapper<Message>;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
   Organization: ResolverTypeWrapper<Organization>;
@@ -1098,6 +1140,7 @@ export type ResolversParentTypes = ResolversObject<{
   InboxItem: InboxItem;
   Int: Scalars['Int']['output'];
   JSON: Scalars['JSON']['output'];
+  Message: Message;
   Mutation: {};
   Notification: Notification;
   Organization: Organization;
@@ -1156,7 +1199,7 @@ export type ChatResolvers<ContextType = Context, ParentType extends ResolversPar
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   members?: Resolver<Array<ResolversTypes['ChatMember']>, ParentType, ContextType>;
-  messages?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, Partial<ChatMessagesArgs>>;
+  messages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, Partial<ChatMessagesArgs>>;
   name?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['ChatType'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
@@ -1205,6 +1248,24 @@ export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes
   name: 'JSON';
 }
 
+export type MessageResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Message'] = ResolversParentTypes['Message']> = ResolversObject<{
+  actor?: Resolver<ResolversTypes['Actor'], ParentType, ContextType>;
+  chatId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  deletedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  editedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  html?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  latestReplyAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  mentions?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  parentMessageId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  replyCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  text?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  threadRepliers?: Resolver<Array<ResolversTypes['Actor']>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type MutationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
   addChatMember?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationAddChatMemberArgs, 'input'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
@@ -1215,10 +1276,12 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createTerminal?: Resolver<ResolversTypes['Terminal'], ParentType, ContextType, RequireFields<MutationCreateTerminalArgs, 'cols' | 'rows' | 'sessionId'>>;
   createTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationCreateTicketArgs, 'input'>>;
   deleteApiToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteApiTokenArgs, 'provider'>>;
+  deleteChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChatMessageArgs, 'messageId'>>;
   deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
   destroyTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDestroyTerminalArgs, 'terminalId'>>;
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
   dismissSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDismissSessionArgs, 'id'>>;
+  editChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChatMessageArgs, 'html' | 'messageId'>>;
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
@@ -1230,7 +1293,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
-  sendChatMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId'>>;
+  sendChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
@@ -1297,6 +1360,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   chat?: Resolver<Maybe<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatArgs, 'id'>>;
+  chatMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChatMessagesArgs, 'chatId'>>;
   chats?: Resolver<Array<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatsArgs, 'organizationId'>>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
   inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
@@ -1312,8 +1376,8 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
   sessionTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QuerySessionTerminalsArgs, 'sessionId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionsArgs, 'organizationId'>>;
-  threadReplies?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryThreadRepliesArgs, 'rootEventId'>>;
-  threadSummary?: Resolver<Maybe<ResolversTypes['ThreadSummary']>, ParentType, ContextType, RequireFields<QueryThreadSummaryArgs, 'rootEventId'>>;
+  threadReplies?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryThreadRepliesArgs, 'rootMessageId'>>;
+  threadSummary?: Resolver<Maybe<ResolversTypes['ThreadSummary']>, ParentType, ContextType, RequireFields<QueryThreadSummaryArgs, 'rootMessageId'>>;
   ticket?: Resolver<Maybe<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryTicketArgs, 'id'>>;
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType, RequireFields<QueryTicketsArgs, 'organizationId'>>;
 }>;
@@ -1411,7 +1475,7 @@ export type ThreadSummaryResolvers<ContextType = Context, ParentType extends Res
   lastReplyAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   participantIds?: Resolver<Array<ResolversTypes['ID']>, ParentType, ContextType>;
   replyCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
-  rootEventId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  rootMessageId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1449,6 +1513,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Event?: EventResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
   JSON?: GraphQLScalarType;
+  Message?: MessageResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   Organization?: OrganizationResolvers<ContextType>;

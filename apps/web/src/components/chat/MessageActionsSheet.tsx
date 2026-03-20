@@ -1,4 +1,4 @@
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Pencil, Trash2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -7,13 +7,17 @@ import {
 interface MessageActionsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onReplyInThread: () => void;
+  onReplyInThread?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export function MessageActionsSheet({
   open,
   onOpenChange,
   onReplyInThread,
+  onEdit,
+  onDelete,
 }: MessageActionsSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -24,16 +28,42 @@ export function MessageActionsSheet({
         </div>
 
         <div className="flex flex-col">
-          <button
-            onClick={() => {
-              onOpenChange(false);
-              onReplyInThread();
-            }}
-            className="flex items-center gap-3 px-5 py-3 text-left text-sm text-foreground active:bg-muted"
-          >
-            <MessageSquare size={18} className="text-muted-foreground" />
-            Reply in thread
-          </button>
+          {onReplyInThread && (
+            <button
+              onClick={() => {
+                onOpenChange(false);
+                onReplyInThread();
+              }}
+              className="flex items-center gap-3 px-5 py-3 text-left text-sm text-foreground active:bg-muted"
+            >
+              <MessageSquare size={18} className="text-muted-foreground" />
+              Reply in thread
+            </button>
+          )}
+          {onEdit && (
+            <button
+              onClick={() => {
+                onOpenChange(false);
+                onEdit();
+              }}
+              className="flex items-center gap-3 px-5 py-3 text-left text-sm text-foreground active:bg-muted"
+            >
+              <Pencil size={18} className="text-muted-foreground" />
+              Edit message
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={() => {
+                onOpenChange(false);
+                onDelete();
+              }}
+              className="flex items-center gap-3 px-5 py-3 text-left text-sm text-destructive active:bg-muted"
+            >
+              <Trash2 size={18} className="text-destructive" />
+              Delete message
+            </button>
+          )}
         </div>
       </SheetContent>
     </Sheet>

@@ -34,6 +34,7 @@ interface ChatEditorProps {
   onSubmit: (html: string) => void | Promise<void>;
   placeholder?: string;
   disabled?: boolean;
+  initialHtml?: string;
   mentionableUsers?: MentionableUser[];
   currentUserId?: string | null;
 }
@@ -72,13 +73,24 @@ function createCustomUserElement(
 }
 
 export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function ChatEditor(
-  { onSubmit, placeholder = "Type a message...", disabled, mentionableUsers = [], currentUserId },
+  {
+    onSubmit,
+    placeholder = "Type a message...",
+    disabled,
+    initialHtml = "",
+    mentionableUsers = [],
+    currentUserId,
+  },
   ref,
 ) {
   const quillRef = useRef<ReactQuill>(null);
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialHtml);
   const membersRef = useRef(mentionableUsers);
   const currentUserIdRef = useRef(currentUserId);
+
+  useEffect(() => {
+    setValue(initialHtml);
+  }, [initialHtml]);
 
   useEffect(() => {
     membersRef.current = mentionableUsers;

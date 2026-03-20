@@ -1,43 +1,31 @@
 import { useCallback, useRef, useState } from "react";
-import { MessageSquare } from "lucide-react";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import type { Actor } from "@trace/gql";
+import { MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { useEntityField } from "../../stores/entity";
+import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
+import { client } from "../../lib/urql";
+import {
+  DELETE_CHAT_MESSAGE_MUTATION,
+  EDIT_CHAT_MESSAGE_MUTATION,
+} from "../../lib/mutations";
 import { MessageContent } from "./MessageContent";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import { MessageActionsSheet } from "./MessageActionsSheet";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useLongPressEvent } from "../../hooks/useLongPressEvent";
-
-interface Actor {
-  id?: string;
-  name?: string;
-  avatarUrl?: string;
-}
-
-function formatRelativeTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  return date.toLocaleDateString([], { month: "short", day: "numeric" });
-}
+import { InlineMessageEditor } from "./InlineMessageEditor";
+import { formatRelativeTime, textToEditorHtml } from "./message-utils";
 
 function ThreadRepliesButton({
   replyCount,
   latestTimestamp,
-  replierAvatars,
+  repliers,
   onClick,
 }: {
   replyCount: number;
   latestTimestamp: string;
-  replierAvatars: Array<{ name?: string; avatarUrl?: string }>;
+  repliers: Actor[];
   onClick: () => void;
 }) {
   return (
@@ -46,17 +34,17 @@ function ThreadRepliesButton({
       className="-ml-3 flex w-full cursor-pointer items-center gap-2 rounded-md pl-3 pr-3 py-1.5 hover:bg-surface-elevated/50"
     >
       <div className="flex -space-x-1.5">
-        {replierAvatars.map((replier, i) =>
+        {repliers.map((replier, i) =>
           replier.avatarUrl ? (
             <img
-              key={i}
+              key={`${replier.type}:${replier.id}:${i}`}
               src={replier.avatarUrl}
               alt={replier.name ?? ""}
               className="h-6 w-6 rounded-md border-2 border-background"
             />
           ) : (
             <div
-              key={i}
+              key={`${replier.type}:${replier.id}:${i}`}
               className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground"
             >
               {replier.name?.[0]?.toUpperCase() ?? "?"}
@@ -73,42 +61,61 @@ function ThreadRepliesButton({
 }
 
 export function ChatMessage({
-  eventId,
+  messageId,
   isGrouped = false,
 }: {
-  eventId: string;
+  messageId: string;
   isGrouped?: boolean;
 }) {
-  const text = useEntityField("events", eventId, "payload") as Record<string, unknown> | undefined;
-  const actor = useEntityField("events", eventId, "actor") as Actor | undefined;
-  const timestamp = useEntityField("events", eventId, "timestamp") as string | undefined;
-  const threadSummary = useEntityStore((state) => state.threadSummaries[eventId]);
+  const text = useEntityField("messages", messageId, "text") as string | undefined;
+  const html = useEntityField("messages", messageId, "html") as string | null | undefined;
+  const actor = useEntityField("messages", messageId, "actor") as Actor | undefined;
+  const timestamp = useEntityField("messages", messageId, "createdAt") as string | undefined;
+  const replyCount = useEntityField("messages", messageId, "replyCount") as number | undefined;
+  const latestReplyAt = useEntityField("messages", messageId, "latestReplyAt") as
+    | string
+    | null
+    | undefined;
+  const threadRepliers = useEntityField("messages", messageId, "threadRepliers") as
+    | Actor[]
+    | undefined;
+  const deletedAt = useEntityField("messages", messageId, "deletedAt") as string | null | undefined;
+  const editedAt = useEntityField("messages", messageId, "editedAt") as string | null | undefined;
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
-  const replyCount = threadSummary?.replyCount ?? 0;
-  const latestTimestamp = threadSummary?.latestReplyAt ?? "";
-  const replierAvatars = (threadSummary?.repliers ?? []).map((replier) => ({
-    name: replier.name,
-    avatarUrl: replier.avatarUrl,
-  }));
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
 
+  const canManageMessage = actor?.id === currentUserId && !deletedAt;
   const openSheet = useCallback(() => setSheetOpen(true), []);
   useLongPressEvent({ ref: messageRef, onLongPress: openSheet, disabled: !isMobile });
 
+  const handleDelete = useCallback(async () => {
+    if (!window.confirm("Delete this message?")) return;
+    await client.mutation(DELETE_CHAT_MESSAGE_MUTATION, { messageId }).toPromise();
+  }, [messageId]);
+
+  const handleSaveEdit = useCallback(
+    async (nextHtml: string) => {
+      await client.mutation(EDIT_CHAT_MESSAGE_MUTATION, { messageId, html: nextHtml }).toPromise();
+      setEditing(false);
+    },
+    [messageId],
+  );
+
   if (!timestamp) return null;
 
-  const messageText = typeof text?.text === "string" ? text.text : "";
+  const messageText = text ?? "";
   const actorName = actor?.name ?? "Unknown";
   const avatarUrl = actor?.avatarUrl;
   const date = new Date(timestamp);
-  /** 12-hour with AM/PM for the name row */
   const headerTime = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  /** 12-hour without AM/PM for the compact gutter */
   const gutterTime = date
     .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     .replace(/\s?[AP]M$/i, "");
+  const editorHtml = html && html.trim() ? html : textToEditorHtml(messageText);
 
   return (
     <>
@@ -116,43 +123,71 @@ export function ChatMessage({
         ref={messageRef}
         className={`group relative flex gap-3 px-4 hover:bg-surface-elevated/30 ${isGrouped ? "py-0.5" : "mt-2 pt-1 pb-0.5"} ${isMobile ? "select-none active:bg-surface-elevated/20" : ""}`}
       >
-        {/* Desktop hover toolbar — hidden on mobile */}
         <div className="absolute -top-3 right-4 hidden items-center rounded-md border border-border bg-surface-elevated shadow-sm md:group-hover:inline-flex">
           <button
-            onClick={() => setActiveThreadId(eventId)}
+            onClick={() => setActiveThreadId(messageId)}
             className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             title="Reply in thread"
           >
             <MessageSquare size={15} />
           </button>
+          {canManageMessage && (
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Edit message"
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                onClick={() => void handleDelete()}
+                className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                title="Delete message"
+              >
+                <Trash2 size={15} />
+              </button>
+            </>
+          )}
         </div>
 
         {isGrouped ? (
-          /* Grouped: show hover timestamp in the gutter where the avatar normally goes */
           <>
             <div className="mt-px w-9 shrink-0 pt-0.5 text-center opacity-0 group-hover:opacity-100">
               <span className="text-[10px] text-muted-foreground">{gutterTime}</span>
             </div>
             <div className="min-w-0 flex-1">
-              {typeof text?.html === "string" ? (
-                <MessageContent html={text.html} />
+              {editing ? (
+                <InlineMessageEditor
+                  initialHtml={editorHtml}
+                  onSave={handleSaveEdit}
+                  onCancel={() => setEditing(false)}
+                />
+              ) : deletedAt ? (
+                <p className="m-0 italic text-[15px] leading-snug text-muted-foreground">
+                  This message was deleted.
+                </p>
+              ) : html ? (
+                <MessageContent html={html} />
               ) : (
                 <p className="m-0 whitespace-pre-wrap text-[15px] leading-snug text-foreground">
                   {messageText}
                 </p>
               )}
-              {replyCount > 0 && (
+              {!editing && editedAt && !deletedAt && (
+                <span className="text-[11px] text-muted-foreground">(edited)</span>
+              )}
+              {!editing && (replyCount ?? 0) > 0 && latestReplyAt && (
                 <ThreadRepliesButton
-                  replyCount={replyCount}
-                  latestTimestamp={latestTimestamp}
-                  replierAvatars={replierAvatars}
-                  onClick={() => setActiveThreadId(eventId)}
+                  replyCount={replyCount ?? 0}
+                  latestTimestamp={latestReplyAt}
+                  repliers={threadRepliers ?? []}
+                  onClick={() => setActiveThreadId(messageId)}
                 />
               )}
             </div>
           </>
         ) : (
-          /* Full message: avatar + name + timestamp */
           <>
             {actor?.id ? (
               <UserProfileChatCard
@@ -197,20 +232,33 @@ export function ChatMessage({
                   </span>
                 )}
                 <span className="text-xs text-muted-foreground">{headerTime}</span>
+                {editedAt && !deletedAt && (
+                  <span className="text-[11px] text-muted-foreground">(edited)</span>
+                )}
               </div>
-              {typeof text?.html === "string" ? (
-                <MessageContent html={text.html} />
+              {editing ? (
+                <InlineMessageEditor
+                  initialHtml={editorHtml}
+                  onSave={handleSaveEdit}
+                  onCancel={() => setEditing(false)}
+                />
+              ) : deletedAt ? (
+                <p className="italic text-[15px] leading-snug text-muted-foreground">
+                  This message was deleted.
+                </p>
+              ) : html ? (
+                <MessageContent html={html} />
               ) : (
                 <p className="m-0 whitespace-pre-wrap text-[15px] leading-snug text-foreground">
                   {messageText}
                 </p>
               )}
-              {replyCount > 0 && (
+              {!editing && (replyCount ?? 0) > 0 && latestReplyAt && (
                 <ThreadRepliesButton
-                  replyCount={replyCount}
-                  latestTimestamp={latestTimestamp}
-                  replierAvatars={replierAvatars}
-                  onClick={() => setActiveThreadId(eventId)}
+                  replyCount={replyCount ?? 0}
+                  latestTimestamp={latestReplyAt}
+                  repliers={threadRepliers ?? []}
+                  onClick={() => setActiveThreadId(messageId)}
                 />
               )}
             </div>
@@ -218,12 +266,13 @@ export function ChatMessage({
         )}
       </div>
 
-      {/* Mobile long-press action sheet */}
-      {isMobile && (
+      {isMobile && !editing && (
         <MessageActionsSheet
           open={sheetOpen}
           onOpenChange={setSheetOpen}
-          onReplyInThread={() => setActiveThreadId(eventId)}
+          onReplyInThread={() => setActiveThreadId(messageId)}
+          onEdit={canManageMessage ? () => setEditing(true) : undefined}
+          onDelete={canManageMessage ? () => void handleDelete() : undefined}
         />
       )}
     </>

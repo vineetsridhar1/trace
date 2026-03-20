@@ -244,6 +244,23 @@ type Event {
   metadata: JSON
 }
 
+type Message {
+  id: ID!
+  chatId: ID!
+  actor: Actor!
+  text: String!
+  html: String
+  mentions: JSON
+  parentMessageId: ID
+  replyCount: Int!
+  latestReplyAt: DateTime
+  threadRepliers: [Actor!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  editedAt: DateTime
+  deletedAt: DateTime
+}
+
 type InboxItem {
   id: ID!
   itemType: InboxItemType!
@@ -263,7 +280,7 @@ type Chat {
   type: ChatType!
   name: String
   members: [ChatMember!]!
-  messages(after: DateTime, before: DateTime, limit: Int): [Event!]!
+  messages(after: DateTime, before: DateTime, limit: Int): [Message!]!
   createdBy: User!
   createdAt: DateTime!
   updatedAt: DateTime!
@@ -284,7 +301,7 @@ type Participant {
 }
 
 type ThreadSummary {
-  rootEventId: ID!
+  rootMessageId: ID!
   replyCount: Int!
   lastReplyAt: DateTime
   participantIds: [ID!]!
@@ -474,8 +491,9 @@ type Query {
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats(organizationId: ID!): [Chat!]!
   chat(id: ID!): Chat
-  threadReplies(rootEventId: ID!, after: DateTime, limit: Int): [Event!]!
-  threadSummary(rootEventId: ID!): ThreadSummary
+  chatMessages(chatId: ID!, after: DateTime, before: DateTime, limit: Int): [Message!]!
+  threadReplies(rootMessageId: ID!, after: DateTime, limit: Int): [Message!]!
+  threadSummary(rootMessageId: ID!): ThreadSummary
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
@@ -518,7 +536,9 @@ type Mutation {
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!
-  sendChatMessage(chatId: ID!, text: String, html: String, parentId: ID): Event!
+  sendChatMessage(chatId: ID!, text: String, html: String, parentId: ID): Message!
+  editChatMessage(messageId: ID!, html: String!): Message!
+  deleteChatMessage(messageId: ID!): Message!
   addChatMember(input: AddChatMemberInput!): Chat!
   leaveChat(chatId: ID!): Chat!
   renameChat(chatId: ID!, name: String!): Chat!

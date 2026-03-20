@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
+import { asJsonObject, type JsonObject } from "@trace/shared";
 import { client } from "../lib/urql";
 import { useEntityStore } from "../stores/entity";
 import type { SessionEntity } from "../stores/entity";
@@ -43,7 +44,7 @@ const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set([
   "message_sent",
 ]);
 
-function statusFromEvent(eventType: EventType, payload: Record<string, unknown>): SessionStatus | undefined {
+function statusFromEvent(eventType: EventType, payload: JsonObject): SessionStatus | undefined {
   // Server includes the authoritative status in all session event payloads
   const explicit = payload.status as SessionStatus | undefined;
   if (explicit) return explicit;
@@ -77,7 +78,7 @@ const CONNECTION_EVENT_TYPES = new Set([
 ]);
 
 /** Extract session field updates from session_output subtypes (e.g. workspace_ready, connection events, title) */
-function sessionPatchFromOutput(payload: Record<string, unknown>): Partial<SessionEntity> | undefined {
+function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | undefined {
   if (payload.type === "workspace_ready" && typeof payload.workdir === "string") {
     return { status: "pending" as SessionStatus, workdir: payload.workdir };
   }
@@ -90,7 +91,7 @@ function sessionPatchFromOutput(payload: Record<string, unknown>): Partial<Sessi
   }
   // Connection state events carry a full connection patch
   if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
-    const connection = asRecord(payload.connection);
+    const connection = asJsonObject(payload.connection);
     if (connection) {
       return { connection } as Partial<SessionEntity>;
     }
@@ -98,15 +99,8 @@ function sessionPatchFromOutput(payload: Record<string, unknown>): Partial<Sessi
   return undefined;
 }
 
-/** Safely narrow unknown to a record */
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value != null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
 /** Extract a human-readable preview from a normalized message payload */
-function extractMessagePreview(eventType: EventType, payload: Record<string, unknown>): string | null {
+function extractMessagePreview(eventType: EventType, payload: JsonObject): string | null {
   if (eventType === "message_sent") {
     return typeof payload.text === "string" ? payload.text : null;
   }
@@ -114,12 +108,12 @@ function extractMessagePreview(eventType: EventType, payload: Record<string, unk
   // Adapters normalize all output to { type: "assistant", message: { content: [...] } }
   if (payload.type !== "assistant") return null;
 
-  const message = asRecord(payload.message);
+  const message = asJsonObject(payload.message);
   const content = message?.content;
   if (!Array.isArray(content)) return null;
 
   for (const block of content) {
-    const b = asRecord(block);
+    const b = asJsonObject(block);
     if (b?.type === "text" && typeof b.text === "string" && b.text.trim()) {
       return b.text;
     }
@@ -143,13 +137,14 @@ export function useOrgEvents() {
 
         const event = result.data.orgEvents as Event;
         const { upsert, patch, remove } = useEntityStore.getState();
+        const payload = asJsonObject(event.payload);
 
         // Always upsert the raw event
         upsert("events", event.id, event);
 
         // Repo created or updated — upsert directly from payload
-        if (event.eventType === "repo_created" || event.eventType === "repo_updated") {
-          const repo = asRecord(event.payload.repo);
+        if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {
+          const repo = asJsonObject(payload.repo);
           if (repo && typeof repo.id === "string") {
             const existing = useEntityStore.getState().repos[repo.id];
             upsert("repos", repo.id, (existing ? { ...existing, ...repo } : repo) as unknown as Repo);
@@ -157,20 +152,20 @@ export function useOrgEvents() {
         }
 
         // Chat events
-        if (event.eventType === "chat_created") {
-          const chat = asRecord(event.payload.chat);
+        if (event.eventType === "chat_created" && payload) {
+          const chat = asJsonObject(payload.chat);
           if (chat && typeof chat.id === "string") {
             upsert("chats", chat.id, chat as unknown as Chat);
           }
         }
-        if (event.eventType === "chat_renamed") {
-          if (event.scopeType === "chat" && typeof event.payload.name === "string") {
-            patch("chats", event.scopeId, { name: event.payload.name } as Partial<Chat>);
+        if (event.eventType === "chat_renamed" && payload) {
+          if (event.scopeType === "chat" && typeof payload.name === "string") {
+            patch("chats", event.scopeId, { name: payload.name } as Partial<Chat>);
           }
         }
-        if (event.eventType === "chat_member_added" || event.eventType === "chat_member_removed") {
+        if ((event.eventType === "chat_member_added" || event.eventType === "chat_member_removed") && payload) {
           if (event.scopeType === "chat") {
-            const members = event.payload.members;
+            const members = payload.members;
             if (Array.isArray(members)) {
               patch("chats", event.scopeId, { members } as Partial<Chat>);
             }
@@ -178,21 +173,21 @@ export function useOrgEvents() {
         }
 
         // New channel — upsert directly from payload
-        if (event.eventType === "channel_created") {
-          const channel = asRecord(event.payload.channel);
+        if (event.eventType === "channel_created" && payload) {
+          const channel = asJsonObject(payload.channel);
           if (channel && typeof channel.id === "string") {
             upsert("channels", channel.id, channel as unknown as Channel);
           }
         }
 
         // New session — upsert directly from payload
-        if (event.eventType === "session_started") {
-          const session = asRecord(event.payload.session);
+        if (event.eventType === "session_started" && payload) {
+          const session = asJsonObject(payload.session);
           if (session && typeof session.id === "string") {
             upsert("sessions", session.id, session as unknown as SessionEntity);
 
             // If this session has a parent, update the parent's childSessions
-            const parent = asRecord(session.parentSession);
+            const parent = asJsonObject(session.parentSession);
             if (parent && typeof parent.id === "string") {
               const { sessions } = useEntityStore.getState();
               const parentEntity = sessions[parent.id];
@@ -220,38 +215,38 @@ export function useOrgEvents() {
         }
 
         // Route session status events
-        if (SESSION_STATUS_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
-          const status = statusFromEvent(event.eventType, event.payload);
+        if (SESSION_STATUS_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
+          const status = statusFromEvent(event.eventType, payload);
           if (status) {
             const sessionPatch: Record<string, unknown> = {
               status,
               updatedAt: event.timestamp,
             };
-            if (typeof event.payload.prUrl === "string") {
-              sessionPatch.prUrl = event.payload.prUrl;
+            if (typeof payload.prUrl === "string") {
+              sessionPatch.prUrl = payload.prUrl;
             }
             patch("sessions", event.scopeId, sessionPatch);
           }
         }
 
         // Handle session_output subtypes that update session fields
-        if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType)) {
-          const sessionPatch = sessionPatchFromOutput(event.payload);
+        if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType) && payload) {
+          const sessionPatch = sessionPatchFromOutput(payload);
           if (sessionPatch) {
             patch("sessions", event.scopeId, { ...sessionPatch, updatedAt: event.timestamp });
           }
 
-          if (event.payload.type === "session_rehomed" && typeof event.payload.newSessionId === "string") {
+          if (payload.type === "session_rehomed" && typeof payload.newSessionId === "string") {
             const activeSessionId = useUIStore.getState().activeSessionId;
             if (activeSessionId === event.scopeId) {
-              useUIStore.getState().setActiveSessionId(event.payload.newSessionId);
+              useUIStore.getState().setActiveSessionId(payload.newSessionId);
             }
           }
         }
 
         // Route session activity events — update timestamp, and preview if it's a real message
-        if (SESSION_ACTIVITY_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
-          const preview = extractMessagePreview(event.eventType, event.payload);
+        if (SESSION_ACTIVITY_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
+          const preview = extractMessagePreview(event.eventType, payload);
           const updates: Partial<SessionEntity> = { updatedAt: event.timestamp, _lastMessageAt: event.timestamp };
           if (preview) {
             updates._lastEventPreview = preview;
@@ -260,14 +255,14 @@ export function useOrgEvents() {
         }
 
         // Inbox item events
-        if (event.eventType === ("inbox_item_created" as EventType)) {
-          const item = asRecord(event.payload.inboxItem);
+        if (event.eventType === ("inbox_item_created" as EventType) && payload) {
+          const item = asJsonObject(payload.inboxItem);
           if (item && typeof item.id === "string") {
             upsert("inboxItems", item.id, item as unknown as InboxItem);
           }
         }
-        if (event.eventType === ("inbox_item_resolved" as EventType)) {
-          const item = asRecord(event.payload.inboxItem);
+        if (event.eventType === ("inbox_item_resolved" as EventType) && payload) {
+          const item = asJsonObject(payload.inboxItem);
           if (item && typeof item.id === "string") {
             upsert("inboxItems", item.id, item as unknown as InboxItem);
           }

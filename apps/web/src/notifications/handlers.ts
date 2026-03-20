@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import type { Event, EventType, SessionStatus } from "@trace/gql";
+import { asJsonObject } from "@trace/shared";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
@@ -39,7 +40,8 @@ function handleSessionStatusChange(event: Event): void {
   // Don't notify for your own actions
   if (event.actor.id === currentUserId) return;
 
-  const newStatus = (event.payload as Record<string, unknown>).status as SessionStatus | undefined;
+  const payload = asJsonObject(event.payload);
+  const newStatus = payload?.status as SessionStatus | undefined;
   if (!newStatus) return;
 
   // Look up the session to check ownership and get the name
@@ -76,7 +78,8 @@ function handleInboxItemCreated(event: Event): void {
   const currentUserId = useAuthStore.getState().user?.id;
   if (!currentUserId) return;
 
-  const item = event.payload.inboxItem as Record<string, unknown> | undefined;
+  const payload = asJsonObject(event.payload);
+  const item = asJsonObject(payload?.inboxItem);
   if (!item) return;
 
   // Only notify for items assigned to the current user
@@ -106,8 +109,12 @@ function handleMentionNotification(event: Event): void {
   // Don't notify for your own messages
   if (event.actor.id === currentUserId) return;
 
-  const payload = event.payload as Record<string, unknown>;
-  const mentions = payload.mentions as Array<{ userId: string; name: string }> | undefined;
+  const payload = asJsonObject(event.payload);
+  if (!payload) return;
+
+  const mentions = Array.isArray(payload.mentions)
+    ? (payload.mentions as Array<{ userId: string; name: string }>)
+    : undefined;
   if (!mentions?.some((m) => m.userId === currentUserId)) return;
 
   const actorName = event.actor.name ?? "Someone";

@@ -9,13 +9,13 @@ const GROUP_THRESHOLD_MS = 5 * 60 * 1000;
 
 export function ChatMessageList({
   chatId,
-  eventIds,
+  messageIds,
   loading,
   hasOlder,
   onLoadOlder,
 }: {
   chatId: string;
-  eventIds: string[];
+  messageIds: string[];
   loading: boolean;
   hasOlder: boolean;
   onLoadOlder: () => void;
@@ -24,36 +24,30 @@ export function ChatMessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
 
-  // Subscribe to only the events we need for grouping decisions
-  const eventData = useEntityStore(
+  // Subscribe to only the messages we need for grouping decisions.
+  const messages = useEntityStore(
     useShallow((state) =>
-      eventIds.map((id) => {
-        const e = state.events[id];
-        if (!e) return null;
-        return {
-          id,
-          actorId: (e.actor as { id?: string })?.id ?? null,
-          timestamp: e.timestamp,
-          parentId: e.parentId,
-        };
-      }),
+      messageIds.map((id) => state.messages[id] ?? null),
     ),
   );
 
-  // Pre-compute grouping flags from subscribed event data
+  // Group consecutive top-level messages from the same actor when they are
+  // close together in time.
   const groupedFlags = useMemo(() => {
-    const flags: boolean[] = new Array(eventData.length).fill(false);
-    for (let i = 1; i < eventData.length; i++) {
-      const prev = eventData[i - 1];
-      const curr = eventData[i];
+    const flags: boolean[] = new Array(messages.length).fill(false);
+    for (let i = 1; i < messages.length; i++) {
+      const prev = messages[i - 1];
+      const curr = messages[i];
       if (!prev || !curr) continue;
-      const sameActor = prev.actorId != null && prev.actorId === curr.actorId;
-      const timeDiff = new Date(curr.timestamp).getTime() - new Date(prev.timestamp).getTime();
-      const neitherIsReply = !prev.parentId && !curr.parentId;
+      const prevActorId = (prev.actor as { id?: string })?.id ?? null;
+      const currActorId = (curr.actor as { id?: string })?.id ?? null;
+      const sameActor = prevActorId != null && prevActorId === currActorId;
+      const timeDiff = new Date(curr.createdAt).getTime() - new Date(prev.createdAt).getTime();
+      const neitherIsReply = !prev.parentMessageId && !curr.parentMessageId;
       flags[i] = sameActor && timeDiff < GROUP_THRESHOLD_MS && neitherIsReply;
     }
     return flags;
-  }, [eventData]);
+  }, [messages]);
 
   // Scroll to bottom instantly when entering a chat
   const prevChatIdRef = useRef(chatId);
@@ -70,7 +64,7 @@ export function ChatMessageList({
     if (wasAtBottomRef.current && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [eventIds.length]);
+  }, [messageIds.length]);
 
   // Track scroll position
   function handleScroll() {
@@ -98,7 +92,7 @@ export function ChatMessageList({
       onScroll={handleScroll}
       className="flex-1 overflow-y-auto"
     >
-      {eventIds.length === 0 ? (
+      {messageIds.length === 0 ? (
         <div className="flex h-full flex-col">
           <div className="flex-1" />
           <DmWelcome chatId={chatId} />
@@ -106,8 +100,8 @@ export function ChatMessageList({
       ) : (
         <div className="py-2">
           {!hasOlder && <DmWelcome chatId={chatId} />}
-          {eventIds.map((id, idx) => (
-            <ChatMessage key={id} eventId={id} isGrouped={groupedFlags[idx]} />
+          {messageIds.map((id, idx) => (
+            <ChatMessage key={id} messageId={id} isGrouped={groupedFlags[idx]} />
           ))}
         </div>
       )}
