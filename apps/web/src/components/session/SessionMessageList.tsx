@@ -5,8 +5,7 @@ import { ReadGlobGroup } from "./messages/ReadGlobGroup";
 import { PlanReviewCard } from "./messages/PlanReviewCard";
 import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
-import type { SessionNode } from "./groupReadGlob";
-import type { AgentToolResult } from "./buildCompletedAgentTools";
+import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 
 interface SessionMessageListProps {
   nodes: SessionNode[];
