@@ -164,7 +164,6 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       <div className="flex h-full flex-col overflow-hidden">
         <SessionHeader
           sessionId={sessionId}
-          onStop={handleStop}
           onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
           terminalOpen={showTerminal}
         />
@@ -231,7 +230,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
             {status === "active" && latestTodos && (
               <StickyTodoList todos={latestTodos} />
             )}
-            <SessionInput sessionId={sessionId} />
+            <SessionInput sessionId={sessionId} onStop={handleStop} />
           </>
         )}
       </div>

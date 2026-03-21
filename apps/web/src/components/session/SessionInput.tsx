@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
@@ -14,7 +14,7 @@ import { isDisconnected, canSendMessage } from "./sessionStatus";
 import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 
-export function SessionInput({ sessionId }: { sessionId: string }) {
+export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop?: () => void }) {
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
@@ -103,13 +103,23 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
           style={{ fieldSizing: "content" } as React.CSSProperties}
           className="flex-1 resize-none rounded-lg border border-border bg-surface-deep px-3 py-2 text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
         />
-        <button
-          onClick={handleSend}
-          disabled={!message.trim() || sending || !canSend}
-          className="shrink-0 rounded-lg bg-accent px-3 py-2 text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
-        >
-          <Send size={16} />
-        </button>
+        {isActive && onStop ? (
+          <button
+            onClick={onStop}
+            className="shrink-0 rounded-lg border border-border px-3 py-2 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
+            title="Stop"
+          >
+            <Square size={16} />
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!message.trim() || sending || !canSend}
+            className="shrink-0 rounded-lg bg-accent px-3 py-2 text-accent-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
+          >
+            <Send size={16} />
+          </button>
+        )}
       </div>
 
       {isActive ? (
