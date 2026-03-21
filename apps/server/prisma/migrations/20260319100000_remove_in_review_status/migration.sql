@@ -2,6 +2,8 @@
 UPDATE "Session" SET status = 'completed' WHERE status = 'in_review';
 
 -- Remove "in_review" from the SessionStatus enum
+-- Must drop the default first — Postgres cannot auto-cast it during the type swap
+ALTER TABLE "Session" ALTER COLUMN status DROP DEFAULT;
 ALTER TYPE "SessionStatus" RENAME TO "SessionStatus_old";
 CREATE TYPE "SessionStatus" AS ENUM ('creating', 'pending', 'active', 'paused', 'needs_input', 'completed', 'failed', 'unreachable', 'merged');
 ALTER TABLE "Session" ALTER COLUMN status TYPE "SessionStatus" USING status::text::"SessionStatus";
