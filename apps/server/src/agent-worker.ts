@@ -17,6 +17,7 @@ import {
   cleanupRateLimits,
   type AgentEvent,
 } from "./agent/router.js";
+import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,6 +42,25 @@ const agentContexts = new Map<string, OrgAgentSettings>();
 
 /** Whether the worker is shutting down */
 let shuttingDown = false;
+
+/** Event aggregator instance */
+const aggregator = new EventAggregator(handleBatch);
+
+/**
+ * Handle a closed aggregation window.
+ * Future tickets will send this to the context builder (#10) and planner (#11).
+ * For now, log the batch.
+ */
+function handleBatch(batch: AggregatedBatch): void {
+  log("batch ready", {
+    scopeKey: batch.scopeKey,
+    orgId: batch.organizationId,
+    eventCount: batch.events.length,
+    closeReason: batch.closeReason,
+    durationMs: batch.closedAt - batch.openedAt,
+    ...(batch.maxTier !== undefined ? { maxTier: batch.maxTier } : {}),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -260,14 +280,14 @@ async function ackEvents(orgId: string, entryIds: string[]): Promise<void> {
 
 /**
  * Process a batch of events from a single org.
- * Routes each event through the event router (ticket #04).
- * Future tickets will add aggregation (#05), context building (#10), planner (#11), etc.
+ * Routes each event through the event router (ticket #04), then feeds
+ * non-dropped events into the aggregator (ticket #05).
  *
  * The agent context (identity + settings) is available for each org.
  * When the agent takes actions in future tickets, it will use:
  *   actorType: "agent", actorId: agentContext.agentId
  */
-function processEvents(orgId: string, entries: StreamEntry[]): void {
+async function processEvents(orgId: string, entries: StreamEntry[]): Promise<void> {
   const agentContext = agentContexts.get(orgId);
   if (!agentContext) {
     log("skipping events — no agent context", { orgId });
@@ -307,10 +327,10 @@ function processEvents(orgId: string, entries: StreamEntry[]): void {
         ...(result.maxTier !== undefined ? { maxTier: result.maxTier } : {}),
       });
 
-      // Future tickets will handle aggregate/direct decisions:
-      // - "aggregate" → send to Event Aggregator (ticket #05)
-      // - "direct" → send to Context Builder / Planner (tickets #10, #11)
-      // - "drop" → nothing further
+      // Feed non-dropped events into the aggregator
+      if (result.decision !== "drop") {
+        await aggregator.ingest(event, result);
+      }
     } catch {
       log("event consumed (unparseable)", { orgId, streamId: entry.id });
     }
@@ -329,7 +349,7 @@ async function consumeLoop(): Promise<void> {
       const batches = await readEvents();
 
       for (const [orgId, entries] of batches) {
-        processEvents(orgId, entries);
+        await processEvents(orgId, entries);
         await ackEvents(orgId, entries.map((e) => e.id));
       }
     } catch (err) {
@@ -392,6 +412,14 @@ async function shutdown(signal: string): Promise<void> {
 
   stopTimers();
 
+  // Stop aggregator — persists open windows to Redis
+  try {
+    await aggregator.stop();
+    log("aggregator stopped");
+  } catch (err) {
+    logError("error stopping aggregator", err);
+  }
+
   // Give the consume loop time to exit its current XREADGROUP block
   // (it will exit on next iteration since shuttingDown is true)
   await sleep(500);
@@ -447,6 +475,10 @@ async function main(): Promise<void> {
 
   // Start rate limit cleanup
   startRateLimitCleanup();
+
+  // Start the event aggregator (recovers persisted windows from Redis)
+  await aggregator.start();
+  log("aggregator started");
 
   // Enter the main consume loop (blocks until shutdown)
   await consumeLoop();

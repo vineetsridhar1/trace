@@ -48,6 +48,7 @@ The packet should include:
 ## Dependencies
 
 - 05 (Event Aggregator — provides the batches)
+  <!-- Ticket 05 created: `AggregatedBatch` type (scopeKey, organizationId, events: AgentEvent[], maxTier?, openedAt, closedAt, closeReason). `buildScopeKey(event)` constructs keys like `chat:{id}:thread:{parentId}`, `chat:{id}`, `ticket:{id}`, `session:{id}`, generic `{type}:{id}`. Import `AggregatedBatch` and `buildScopeKey` from `./agent/aggregator.js`. The batch handler in agent-worker.ts is where the context builder will be wired in — replace the current log-only `handleBatch()` function. -->
 - 06 (Action Registry — provides available actions)
 - 09 (Entity Summaries — provides summaries)
 

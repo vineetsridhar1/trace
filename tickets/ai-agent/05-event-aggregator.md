@@ -30,13 +30,27 @@ The aggregator batches related events into coherent units before they reach the 
 
 ## Completion requirements
 
-- [ ] Aggregator module exists and receives events from the router
-- [ ] Events are grouped by scope key into windows
-- [ ] Windows close on silence timeout, max events, or max wall clock
-- [ ] Direct-routed events bypass aggregation
-- [ ] Open windows survive worker restart via Redis backup
-- [ ] Closed windows emit batches with all events and metadata (scope key, org, timing)
-- [ ] Scope key construction is generic enough that adding channels later is trivial
+- [x] Aggregator module exists and receives events from the router
+- [x] Events are grouped by scope key into windows
+- [x] Windows close on silence timeout, max events, or max wall clock
+- [x] Direct-routed events bypass aggregation
+- [x] Open windows survive worker restart via Redis backup
+- [x] Closed windows emit batches with all events and metadata (scope key, org, timing)
+- [x] Scope key construction is generic enough that adding channels later is trivial
+
+## Implementation notes
+<!-- Added after implementation review -->
+- Aggregator lives at `apps/server/src/agent/aggregator.ts`, wired into `agent-worker.ts`
+- `EventAggregator` class manages windows with `start()` / `stop()` lifecycle and `ingest(event, routing)` entry point
+- `buildScopeKey(event)` constructs scope keys: `chat:{id}:thread:{parentId}`, `chat:{id}`, `ticket:{id}`, `session:{id}`, generic `{type}:{id}` fallback
+- Windows keyed by `{orgId}:{scopeKey}` in the internal Map
+- Silence timeouts are configurable per scope type via `DEFAULT_SILENCE_TIMEOUTS` (chat/ticket/session: 30s, channel: 60s)
+- `maxTier` tracks the most restrictive tier across all events in a window
+- Redis persistence uses `SET` with TTL (max wall clock + 60s buffer) at key `agent:aggregator:window:{orgId}:{scopeKey}`
+- On startup, `start()` recovers windows via `SCAN`, checks expiry, resumes active ones with fresh silence timers
+- On shutdown, `stop()` persists all open windows to Redis so they survive restart
+- `AggregatedBatch` carries: scopeKey, organizationId, events[], maxTier, openedAt, closedAt, closeReason
+- Batch handler is injected via constructor — currently logs, future tickets (#10 context builder) will replace
 
 ## How to test
 

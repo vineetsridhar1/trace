@@ -19,6 +19,7 @@ Wire everything together. The individual components exist (router, aggregator, c
 - Wire this pipeline into the agent worker's event consumption loop:
   - Worker consumes event → router decides → if aggregate: aggregator batches → when window closes: pipeline runs on the batch
   - If direct: pipeline runs immediately on a single-event batch
+  <!-- Ticket 05 wired the aggregator into agent-worker.ts. The `handleBatch()` callback in agent-worker.ts currently just logs — replace it with a call to the pipeline orchestrator. The aggregator emits `AggregatedBatch` from `./agent/aggregator.js`. Note: loadPersistedWindows() uses a global SCAN, so multi-worker deployment will need scoped recovery (e.g. by consumer name or org assignment). -->
 - Handle errors at each stage — if the planner fails, log it and move on. If the executor fails, log the failure. Never let one bad event crash the pipeline
 - Add structured logging throughout so the full decision chain is traceable
 
