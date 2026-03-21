@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type { CodingTool, SessionFilters, SessionStatus, StartSessionInput } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
 export const sessionQueries = {
@@ -93,13 +94,6 @@ export const sessionMutations = {
       args.interactionMode ?? undefined,
     );
   },
-  linkSessionToTicket: (
-    _: unknown,
-    args: { sessionId: string; ticketId: string },
-    ctx: Context,
-  ) => {
-    return sessionService.linkToTicket(args.sessionId, args.ticketId, ctx.actorType, ctx.userId);
-  },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.retryConnection(
       args.sessionId,
@@ -132,6 +126,21 @@ export const sessionMutations = {
       ctx.actorType,
       ctx.userId,
     );
+  },
+};
+
+export const sessionTypeResolvers = {
+  Session: {
+    tickets: async (session: { id: string }) => {
+      const links = await prisma.ticketLink.findMany({
+        where: { entityType: "session", entityId: session.id },
+        select: { ticketId: true },
+      });
+      if (links.length === 0) return [];
+      return prisma.ticket.findMany({
+        where: { id: { in: links.map((l: { ticketId: string }) => l.ticketId) } },
+      });
+    },
   },
 };
 

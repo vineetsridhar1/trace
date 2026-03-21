@@ -139,6 +139,7 @@ export type CreateRepoInput = {
 };
 
 export type CreateTicketInput = {
+  assigneeIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   labels?: InputMaybe<Array<Scalars['String']['input']>>;
@@ -158,6 +159,7 @@ export type DeliveryResult =
 export type EntityType =
   | 'channel'
   | 'chat'
+  | 'message'
   | 'session'
   | 'ticket';
 
@@ -199,8 +201,12 @@ export type EventType =
   | 'session_resumed'
   | 'session_started'
   | 'session_terminated'
+  | 'ticket_assigned'
   | 'ticket_commented'
   | 'ticket_created'
+  | 'ticket_linked'
+  | 'ticket_unassigned'
+  | 'ticket_unlinked'
   | 'ticket_updated';
 
 export type HostingMode =
@@ -252,6 +258,7 @@ export type Message = {
 export type Mutation = {
   __typename?: 'Mutation';
   addChatMember: Chat;
+  assignTicket: Ticket;
   commentOnTicket: Event;
   createChannel: Channel;
   createChat: Chat;
@@ -268,7 +275,7 @@ export type Mutation = {
   editChatMessage: Message;
   leaveChat: Chat;
   linkEntityToProject: Project;
-  linkSessionToTicket: Session;
+  linkTicket: Ticket;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
@@ -285,6 +292,8 @@ export type Mutation = {
   startSession: Session;
   subscribe: Participant;
   terminateSession: Session;
+  unassignTicket: Ticket;
+  unlinkTicket: Ticket;
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
@@ -296,6 +305,12 @@ export type Mutation = {
 
 export type MutationAddChatMemberArgs = {
   input: AddChatMemberInput;
+};
+
+
+export type MutationAssignTicketArgs = {
+  ticketId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
 };
 
 
@@ -385,8 +400,9 @@ export type MutationLinkEntityToProjectArgs = {
 };
 
 
-export type MutationLinkSessionToTicketArgs = {
-  sessionId: Scalars['ID']['input'];
+export type MutationLinkTicketArgs = {
+  entityId: Scalars['ID']['input'];
+  entityType: EntityType;
   ticketId: Scalars['ID']['input'];
 };
 
@@ -481,6 +497,19 @@ export type MutationSubscribeArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUnassignTicketArgs = {
+  ticketId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
+};
+
+
+export type MutationUnlinkTicketArgs = {
+  entityId: Scalars['ID']['input'];
+  entityType: EntityType;
+  ticketId: Scalars['ID']['input'];
 };
 
 
@@ -938,21 +967,33 @@ export type Ticket = {
   __typename?: 'Ticket';
   assignees: Array<User>;
   channel?: Maybe<Channel>;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
   description: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   labels: Array<Scalars['String']['output']>;
+  links: Array<TicketLink>;
   origin?: Maybe<Event>;
   priority: Priority;
   projects: Array<Project>;
   sessions: Array<Session>;
   status: TicketStatus;
   title: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
 };
 
 export type TicketFilters = {
   channelId?: InputMaybe<Scalars['ID']['input']>;
   priority?: InputMaybe<Priority>;
   status?: InputMaybe<TicketStatus>;
+};
+
+export type TicketLink = {
+  __typename?: 'TicketLink';
+  createdAt: Scalars['DateTime']['output'];
+  entityId: Scalars['ID']['output'];
+  entityType: EntityType;
+  id: Scalars['ID']['output'];
 };
 
 export type TicketStatus =
@@ -1120,6 +1161,7 @@ export type ResolversTypes = ResolversObject<{
   ThreadSummary: ResolverTypeWrapper<ThreadSummary>;
   Ticket: ResolverTypeWrapper<Ticket>;
   TicketFilters: TicketFilters;
+  TicketLink: ResolverTypeWrapper<TicketLink>;
   TicketStatus: TicketStatus;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
@@ -1171,6 +1213,7 @@ export type ResolversParentTypes = ResolversObject<{
   ThreadSummary: ThreadSummary;
   Ticket: Ticket;
   TicketFilters: TicketFilters;
+  TicketLink: TicketLink;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
@@ -1275,6 +1318,7 @@ export type MessageResolvers<ContextType = Context, ParentType extends Resolvers
 
 export type MutationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
   addChatMember?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationAddChatMemberArgs, 'input'>>;
+  assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
   createChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationCreateChatArgs, 'input'>>;
@@ -1291,7 +1335,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   editChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChatMessageArgs, 'html' | 'messageId'>>;
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
-  linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
+  linkTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationLinkTicketArgs, 'entityId' | 'entityType' | 'ticketId'>>;
   moveSessionToCloud?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToCloudArgs, 'sessionId'>>;
   moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
   muteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationMuteScopeArgs, 'scopeId' | 'scopeType'>>;
@@ -1308,6 +1352,8 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   subscribe?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationSubscribeArgs, 'scopeId' | 'scopeType'>>;
   terminateSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationTerminateSessionArgs, 'id'>>;
+  unassignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnassignTicketArgs, 'ticketId' | 'userId'>>;
+  unlinkTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUnlinkTicketArgs, 'entityId' | 'entityType' | 'ticketId'>>;
   unmuteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationUnmuteScopeArgs, 'scopeId' | 'scopeType'>>;
   unregisterRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUnregisterRepoWebhookArgs, 'repoId'>>;
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
@@ -1491,15 +1537,27 @@ export type ThreadSummaryResolvers<ContextType = Context, ParentType extends Res
 export type TicketResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Ticket'] = ResolversParentTypes['Ticket']> = ResolversObject<{
   assignees?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   description?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   labels?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType>;
+  links?: Resolver<Array<ResolversTypes['TicketLink']>, ParentType, ContextType>;
   origin?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType>;
   priority?: Resolver<ResolversTypes['Priority'], ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['TicketStatus'], ParentType, ContextType>;
   title?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type TicketLinkResolvers<ContextType = Context, ParentType extends ResolversParentTypes['TicketLink'] = ResolversParentTypes['TicketLink']> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  entityId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  entityType?: Resolver<ResolversTypes['EntityType'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1540,6 +1598,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   TerminalEndpoint?: TerminalEndpointResolvers<ContextType>;
   ThreadSummary?: ThreadSummaryResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
+  TicketLink?: TicketLinkResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
 }>;
 

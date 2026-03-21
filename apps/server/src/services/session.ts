@@ -633,23 +633,16 @@ export class SessionService {
   }
 
   async linkToTicket(sessionId: string, ticketId: string, actorType: ActorType, actorId: string) {
-    const session = await prisma.session.update({
-      where: { id: sessionId },
-      data: { tickets: { create: { ticketId } } },
-      include: SESSION_INCLUDE,
-    });
-
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "entity_linked",
-      payload: { sessionId, ticketId },
+    const { ticketService } = await import("./ticket.js");
+    await ticketService.link({
+      ticketId,
+      entityType: "session",
+      entityId: sessionId,
       actorType,
       actorId,
     });
 
-    return session;
+    return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
@@ -1374,8 +1367,14 @@ export class SessionService {
   ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      include: { ...SESSION_INCLUDE, projects: true, tickets: true },
+      include: { ...SESSION_INCLUDE, projects: true },
     });
+
+    // Fetch ticket links for this session
+    const ticketLinks = await prisma.ticketLink.findMany({
+      where: { entityType: "session", entityId: sessionId },
+    });
+
     if (isFullyUnloadedSessionStatus(session.status)) {
       throw new Error(`Cannot move a ${session.status} session`);
     }
@@ -1423,14 +1422,21 @@ export class SessionService {
             })),
           },
         }),
-        ...(session.tickets.length > 0 && {
-          tickets: {
-            create: session.tickets.map((st: { ticketId: string }) => ({ ticketId: st.ticketId })),
-          },
-        }),
       },
       include: SESSION_INCLUDE,
     });
+
+    // Copy ticket links to the child session
+    if (ticketLinks.length > 0) {
+      await prisma.ticketLink.createMany({
+        data: ticketLinks.map((tl) => ({
+          ticketId: tl.ticketId,
+          entityType: "session",
+          entityId: childSession.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
     // Bind the child session to the target runtime
     sessionRouter.bindSession(childSession.id, runtimeInstanceId);
@@ -1550,8 +1556,14 @@ export class SessionService {
   ) {
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      include: { ...SESSION_INCLUDE, projects: true, tickets: true },
+      include: { ...SESSION_INCLUDE, projects: true },
     });
+
+    // Fetch ticket links for this session
+    const ticketLinks = await prisma.ticketLink.findMany({
+      where: { entityType: "session", entityId: sessionId },
+    });
+
     if (isFullyUnloadedSessionStatus(session.status)) {
       throw new Error(`Cannot move a ${session.status} session`);
     }
@@ -1588,14 +1600,21 @@ export class SessionService {
             })),
           },
         }),
-        ...(session.tickets.length > 0 && {
-          tickets: {
-            create: session.tickets.map((st: { ticketId: string }) => ({ ticketId: st.ticketId })),
-          },
-        }),
       },
       include: SESSION_INCLUDE,
     });
+
+    // Copy ticket links to the child session
+    if (ticketLinks.length > 0) {
+      await prisma.ticketLink.createMany({
+        data: ticketLinks.map((tl) => ({
+          ticketId: tl.ticketId,
+          entityType: "session",
+          entityId: childSession.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
     // Emit session_started for the child
     await eventService.create({
