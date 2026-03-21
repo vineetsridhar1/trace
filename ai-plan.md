@@ -568,30 +568,34 @@ Define a token budget strategy with priority-ranked allocation:
 
 ```ts
 interface TokenBudgetConfig {
-  totalBudget: number; // e.g., 8000 tokens for Tier 2, 16000 for Tier 3
+  totalBudget: number; // e.g., 32000 tokens for Tier 2, 64000 for Tier 3
   allocations: {
-    triggerEvent: number; // 500 — always included in full
-    eventBatch: number; // 2000 — recent batch, truncated from oldest
-    scopeEntity: number; // 500 — current entity state
-    linkedEntities: number; // 1500 — linked entities, diminishing per hop
-    recentEvents: number; // 1500 — recent events in scope
-    summaries: number; // 1000 — rolling summaries
-    retrievalResults: number; // 500 — semantic retrieval (Phase 2)
-    actionSchema: number; // 500 — available actions
+    triggerEvent: number; // 2000 — always included in full
+    eventBatch: number; // 8000 — recent batch, truncated from oldest
+    soulFile: number; // 2000 — org soul file (identity, rules, domain context)
+    scopeEntity: number; // 2000 — current entity state
+    linkedEntities: number; // 6000 — linked entities, diminishing per hop
+    recentEvents: number; // 6000 — recent events in scope
+    summaries: number; // 4000 — rolling summaries
+    retrievalResults: number; // 2000 — semantic retrieval (Phase 2)
+    actionSchema: number; // 2000 — available actions
   };
 }
 ```
+
+Modern models (Sonnet-class at 200K context, Opus-class at 200K+) can handle much larger context windows. The budget should use a meaningful fraction of the available context — starving the planner of information produces worse decisions than the marginal cost of additional input tokens. These defaults target ~30-50% of available context, leaving headroom for the system prompt, output, and safety margin.
 
 The context builder fills the packet greedily by priority:
 
 1. Trigger event (always in full)
 2. Action schema (planner needs to know what it can do)
-3. Scope entity state
-4. Event batch from aggregator
-5. Linked entities (first hop gets more budget than second hop)
-6. Summaries
-7. Recent events (fill remaining budget)
-8. Retrieval results (Phase 2)
+3. Soul file (planner needs to know who it is)
+4. Scope entity state
+5. Event batch from aggregator
+6. Linked entities (first hop gets more budget than second hop)
+7. Summaries
+8. Recent events (fill remaining budget)
+9. Retrieval results (Phase 2)
 
 If a section exceeds its budget, it is truncated. Events are truncated from oldest. Linked entities are truncated from furthest hops. Summaries are truncated from least relevant scope.
 
@@ -823,15 +827,92 @@ interface PlannedAgentDecision {
 
 ### Model prompts should include
 
+- **soul file** (resolved from org + project + repo sources — see Section 9.6.1),
 - event type and batch context,
 - current scope entity state,
 - linked entities (with hop distance),
 - recent summary (with freshness indicator),
 - allowed actions (from registry, filtered for scope),
 - policy mode and confidence guidance,
-- org-specific preferences,
 - explicit instruction to prefer no-op when uncertain,
 - concise structured output schema.
+
+### 9.6.1 Soul File Integration
+
+The soul file replaces the generic "org-specific preferences" concept with a concrete, user-editable identity document that shapes every planner decision.
+
+**What it is.** A structured markdown document per organization that defines the agent's personality, tone, domain expertise, priorities, and behavioral rules. It is the primary lever for organizations to customize agent behavior without touching code.
+
+**Loading order.** The context builder assembles the soul from multiple sources:
+
+1. **Platform default** — Built-in baseline. Conservative, generic, professional. Always present as fallback.
+2. **Organization soul** — Stored in `OrgAgentSettings.soulFile`. Overrides platform default. Editable by admins in settings UI.
+3. **Project-level overrides** (optional) — A project can add or modify rules for its scope.
+4. **Repo-level `.trace/soul.md`** (optional) — Merged into context for any event involving that repo.
+
+More specific sources override less specific ones.
+
+**Prompt positioning.** The resolved soul file is injected into the planner system prompt after the action schema and before the event context:
+
+```
+[System prompt preamble]
+[Action schema — what you can do]
+[Soul file — who you are and how to behave]
+[Context packet — what happened]
+[Output schema — how to respond]
+```
+
+This ordering ensures the planner knows its capabilities (actions) and identity (soul) before seeing the specific situation it needs to reason about.
+
+**Token budget.** The soul file gets a dedicated allocation in the token budget (default: 2000 tokens). If it exceeds budget, it is truncated from the bottom — identity and personality sections at the top are preserved, detailed behavioral rules at the bottom are trimmed.
+
+**Example soul file:**
+
+```markdown
+# Agent Soul — Acme Payments
+
+## Identity
+You are the ambient AI assistant for Acme Payments. You are a member of the engineering team.
+
+## Personality & Tone
+- Be direct and concise. No filler.
+- Use technical language appropriate for senior engineers.
+- When uncertain, say so explicitly.
+
+## Domain Context
+- We build a fintech payments platform processing real money.
+- Correctness > speed. When in doubt, suggest rather than act.
+- Stack: Go backend, React frontend, PostgreSQL, AWS EKS.
+
+## Priorities
+1. Production incidents — always urgent, always immediate.
+2. Security discussions — flag and suggest tickets immediately.
+3. Performance regressions — investigate and link to sessions.
+
+## Behavioral Rules
+- Never auto-assign tickets. Always suggest.
+- Never post in #announcements without approval.
+- For bug reports, default to "high" priority.
+- Suppress suggestions in #watercooler and #random.
+```
+
+**Schema:**
+
+```ts
+interface OrgAgentSettings {
+  aiEnabled: boolean;
+  autonomyMode: "observe" | "suggest" | "act";
+  soulFile: string;         // markdown content
+  modelTier: "default" | "custom";
+  costBudget: {
+    dailyLimitCents: number;
+    currentUsageCents: number;
+  };
+  customPreferences: Record<string, unknown>;
+}
+```
+
+The `customPreferences` field in the existing `AgentOrgContext` (Section 5) is superseded by `soulFile` for behavioral configuration. `customPreferences` can remain for machine-readable settings (thresholds, feature flags) that don't belong in a prose document.
 
 ---
 
@@ -1737,7 +1818,7 @@ This should generally use Tier 3 (or at minimum Tier 2 with higher token budget)
 2. `ticket.assigned` event emitted.
 3. Router sees explicit agent ownership — bypasses aggregation, sends directly to planner.
 4. Router selects Tier 3 (high-stakes: explicit agent assignment).
-5. Context builder fetches ticket, linked repo, project, recent discussion. Uses 16000-token budget.
+5. Context builder fetches ticket, linked repo, project, recent discussion. Uses 64000-token budget.
 6. Tier 3 planner decides `session.start` with confidence 0.92.
 7. Policy allows because ticket is explicitly agent-owned and confidence exceeds act threshold.
 8. Executor calls `sessionService.start(...)`.
