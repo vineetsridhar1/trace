@@ -10,6 +10,7 @@ import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { buildSessionNodes } from "./groupReadGlob";
+import { isTerminalStatus } from "./sessionStatus";
 import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
 import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
@@ -30,6 +31,7 @@ const SESSION_DETAIL_QUERY = gql`
       branch
       workdir
       prUrl
+      worktreeDeleted
       connection {
         state
         runtimeInstanceId
@@ -75,10 +77,11 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     | Record<string, unknown>
     | null
     | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as boolean | undefined;
   const isCloud = hosting === "cloud";
   const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
   const isConnected = !connection || connection.state !== "disconnected";
-  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected;
+  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(status) && !worktreeDeleted;
 
   // Fetch full session with lineage data — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -129,6 +132,13 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   })();
 
   const [showTerminal, setShowTerminal] = useState(false);
+
+  // Auto-close terminal when session enters a terminal state or worktree is deleted
+  useEffect(() => {
+    if ((isTerminalStatus(status) || worktreeDeleted) && showTerminal) {
+      setShowTerminal(false);
+    }
+  }, [status, worktreeDeleted, showTerminal]);
 
   const handleStop = useCallback(async () => {
     await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();

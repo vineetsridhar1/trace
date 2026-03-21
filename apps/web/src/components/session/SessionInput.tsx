@@ -18,13 +18,14 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as boolean | undefined;
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isActive = status === "active";
   const disconnected = isDisconnected(connection);
-  const canSend = canSendMessage(status, connection);
+  const canSend = canSendMessage(status, connection, worktreeDeleted);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   // Find the timestamp of the last user message for accurate working time
@@ -72,13 +73,16 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
 
-  const placeholder = isActive
-    ? "Waiting for response..."
-    : status === "merged"
-      ? "Session merged. Follow-up messages are disabled."
-      : status === "failed"
-        ? "Session failed. Follow-up messages are disabled."
-        : "Send a message...";
+  const disabledPlaceholders: Record<string, string> = {
+    completed: "Session completed. Follow-up messages are disabled.",
+    merged: "Session merged. Follow-up messages are disabled.",
+    failed: "Session failed. Follow-up messages are disabled.",
+  };
+  const placeholder = worktreeDeleted
+    ? "Worktree deleted. This session is read-only."
+    : isActive
+      ? "Waiting for response..."
+      : (status && disabledPlaceholders[status]) ?? "Send a message...";
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">

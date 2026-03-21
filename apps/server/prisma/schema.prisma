@@ -274,6 +274,7 @@ model Session {
   endpoints       Json?
   connection      Json?
   prUrl           String?
+  worktreeDeleted Boolean      @default(false)
 
   projects SessionProject[]
   tickets  SessionTicket[]

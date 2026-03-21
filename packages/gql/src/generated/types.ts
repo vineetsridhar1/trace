@@ -775,6 +775,7 @@ export type Session = {
   toolSessionId?: Maybe<Scalars['String']['output']>;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
+  worktreeDeleted: Scalars['Boolean']['output'];
 };
 
 export type SessionConnection = {
