@@ -10,6 +10,7 @@ import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
+import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { Skeleton } from "../ui/skeleton";
@@ -136,6 +137,11 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     return activeQuestion.node;
   })();
 
+  const latestTodos = useMemo(
+    () => (status && !isTerminalStatus(status) ? extractLatestTodos(eventIds, events) : null),
+    [eventIds, events, status],
+  );
+
   const [showTerminal, setShowTerminal] = useState(false);
 
   // Auto-close terminal when session enters a terminal state or worktree is deleted
@@ -221,7 +227,12 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
             onDismiss={handleDismissPlan}
           />
         ) : (
-          <SessionInput sessionId={sessionId} />
+          <>
+            {status === "active" && latestTodos && (
+              <StickyTodoList todos={latestTodos} />
+            )}
+            <SessionInput sessionId={sessionId} />
+          </>
         )}
       </div>
     </EventScopeContext.Provider>
