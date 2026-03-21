@@ -53,36 +53,44 @@ export interface ServiceContainer {
 // Idempotency store
 // ---------------------------------------------------------------------------
 
-/**
- * Simple in-memory idempotency store with TTL.
- * Can be swapped for Redis in production.
- */
 const IDEMPOTENCY_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-const usedKeys = new Map<string, number>();
-
-function buildIdempotencyKey(ctx: AgentContext, actionName: string): string {
-  return `agent:${ctx.agentId}:${actionName}:${ctx.triggerEventId}`;
+/**
+ * Pluggable idempotency store. The default in-memory implementation works for
+ * single-process development. Swap for a Redis-backed implementation in
+ * production (ticket #15 pipeline integration).
+ */
+export interface IdempotencyStore {
+  has(key: string): Promise<boolean>;
+  set(key: string): Promise<void>;
 }
 
-function hasBeenExecuted(key: string): boolean {
-  const ts = usedKeys.get(key);
-  if (ts === undefined) return false;
-  if (Date.now() - ts > IDEMPOTENCY_TTL_MS) {
-    usedKeys.delete(key);
-    return false;
+/**
+ * In-memory idempotency store with TTL — suitable for development and tests.
+ * For production, use a Redis-backed store so keys survive worker restarts.
+ */
+export class InMemoryIdempotencyStore implements IdempotencyStore {
+  private keys = new Map<string, number>();
+
+  async has(key: string): Promise<boolean> {
+    const ts = this.keys.get(key);
+    if (ts === undefined) return false;
+    if (Date.now() - ts > IDEMPOTENCY_TTL_MS) {
+      this.keys.delete(key);
+      return false;
+    }
+    return true;
   }
-  return true;
-}
 
-function markExecuted(key: string): void {
-  usedKeys.set(key, Date.now());
+  async set(key: string): Promise<void> {
+    this.keys.set(key, Date.now());
 
-  // Lazy cleanup: prune expired keys when the map gets large
-  if (usedKeys.size > 10_000) {
-    const now = Date.now();
-    for (const [k, ts] of usedKeys) {
-      if (now - ts > IDEMPOTENCY_TTL_MS) usedKeys.delete(k);
+    // Lazy cleanup when the map gets large
+    if (this.keys.size > 10_000) {
+      const now = Date.now();
+      for (const [k, ts] of this.keys) {
+        if (now - ts > IDEMPOTENCY_TTL_MS) this.keys.delete(k);
+      }
     }
   }
 }
@@ -92,7 +100,14 @@ function markExecuted(key: string): void {
 // ---------------------------------------------------------------------------
 
 export class ActionExecutor {
-  constructor(private services: ServiceContainer) {}
+  private idempotency: IdempotencyStore;
+
+  constructor(
+    private services: ServiceContainer,
+    idempotency?: IdempotencyStore,
+  ) {
+    this.idempotency = idempotency ?? new InMemoryIdempotencyStore();
+  }
 
   async execute(action: PlannedAction, ctx: AgentContext): Promise<ExecutionResult> {
     const { actionType, args } = action;
@@ -123,8 +138,8 @@ export class ActionExecutor {
     }
 
     // ---- Idempotency check ----
-    const idempotencyKey = buildIdempotencyKey(ctx, actionType);
-    if (hasBeenExecuted(idempotencyKey)) {
+    const idempotencyKey = `agent:${ctx.agentId}:${actionType}:${ctx.triggerEventId}`;
+    if (await this.idempotency.has(idempotencyKey)) {
       return {
         status: "success",
         actionType,
@@ -135,7 +150,7 @@ export class ActionExecutor {
     // ---- Execute ----
     try {
       const result = await this.dispatch(registration.service, registration.method, args, ctx);
-      markExecuted(idempotencyKey);
+      await this.idempotency.set(idempotencyKey);
       return { status: "success", actionType, result };
     } catch (err) {
       return {
@@ -167,30 +182,39 @@ export class ActionExecutor {
         switch (method) {
           case "create":
             return svc.create({
-              ...args,
               organizationId: orgId,
+              title: args.title as string,
+              description: args.description as string | undefined,
+              priority: args.priority as string | undefined,
+              labels: args.labels as string[] | undefined,
+              channelId: args.channelId as string | undefined,
+              projectId: args.projectId as string | undefined,
+              assigneeIds: args.assigneeIds as string[] | undefined,
               actorType,
               actorId,
-            } as Parameters<typeof svc.create>[0]);
+            });
 
           case "update": {
             const { id, ...input } = args;
             return svc.update(id as string, input, actorType, actorId);
           }
 
-          case "addComment": {
-            const { ticketId, text } = args as { ticketId: string; text: string };
-            return svc.addComment(ticketId, text, actorType, actorId);
-          }
+          case "addComment":
+            return svc.addComment(
+              args.ticketId as string,
+              args.text as string,
+              actorType,
+              actorId,
+            );
 
-          case "link": {
-            const { ticketId, entityType, entityId } = args as {
-              ticketId: string;
-              entityType: EntityType;
-              entityId: string;
-            };
-            return svc.link({ ticketId, entityType, entityId, actorType, actorId });
-          }
+          case "link":
+            return svc.link({
+              ticketId: args.ticketId as string,
+              entityType: args.entityType as EntityType,
+              entityId: args.entityId as string,
+              actorType,
+              actorId,
+            });
 
           default:
             throw new Error(`Unknown ticketService method: ${method}`);
@@ -223,10 +247,18 @@ export class ActionExecutor {
         switch (method) {
           case "start":
             return svc.start({
-              ...args,
+              tool: (args.tool as string) ?? "claude_code",
+              model: args.model as string | undefined,
+              hosting: args.hosting as string | undefined,
+              repoId: args.repoId as string | undefined,
+              branch: args.branch as string | undefined,
+              channelId: args.channelId as string | undefined,
+              projectId: args.projectId as string | undefined,
+              parentSessionId: args.parentSessionId as string | undefined,
+              prompt: args.prompt as string | undefined,
               organizationId: orgId,
               createdById: actorId,
-            } as Parameters<typeof svc.start>[0]);
+            });
 
           case "pause":
             return svc.pause(args.id as string, actorType, actorId);
@@ -244,10 +276,12 @@ export class ActionExecutor {
         const svc = this.services.inboxService;
         switch (method) {
           case "createItem":
+            // agent_escalation is not in the InboxItemType enum yet (added in ticket #14).
+            // Cast is intentional — this code path won't be hit until ticket #14's migration runs.
             return svc.createItem({
               orgId,
               userId: args.userId as string,
-              itemType: "agent_escalation" as Parameters<typeof svc.createItem>[0]["itemType"],
+              itemType: "agent_escalation" as unknown as Parameters<typeof svc.createItem>[0]["itemType"],
               title: args.title as string,
               summary: args.summary as string | undefined,
               sourceType: args.sourceType as string,
