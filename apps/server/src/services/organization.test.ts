@@ -1,0 +1,128 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../lib/db.js", async () => {
+  const { createPrismaMock } = await import("../../test/helpers.js");
+  return { prisma: createPrismaMock() };
+});
+
+vi.mock("./event.js", () => ({
+  eventService: {
+    create: vi.fn(),
+  },
+}));
+
+import { prisma } from "../lib/db.js";
+import { eventService } from "./event.js";
+import { OrganizationService } from "./organization.js";
+
+const prismaMock = prisma as any;
+const eventServiceMock = eventService as any;
+
+describe("OrganizationService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deduplicates repos by remote url within an org", async () => {
+    prismaMock.repo.findUnique.mockResolvedValueOnce({ id: "repo-1" });
+
+    const service = new OrganizationService();
+    await expect(
+      service.createRepo(
+        {
+          organizationId: "org-1",
+          name: "trace",
+          remoteUrl: "https://github.com/acme/trace.git",
+        } as any,
+        "user",
+        "user-1",
+      ),
+    ).resolves.toEqual({ id: "repo-1" });
+
+    expect(prismaMock.repo.create).not.toHaveBeenCalled();
+  });
+
+  it("creates repos and emits repo_created events", async () => {
+    prismaMock.repo.findUnique.mockResolvedValueOnce(null);
+    prismaMock.repo.create.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "trace",
+      remoteUrl: "https://github.com/acme/trace.git",
+      defaultBranch: "main",
+      webhookId: null,
+    });
+
+    const service = new OrganizationService();
+    const repo = await service.createRepo(
+      {
+        organizationId: "org-1",
+        name: "trace",
+        remoteUrl: "https://github.com/acme/trace.git",
+      } as any,
+      "user",
+      "user-1",
+    );
+
+    expect(repo.id).toBe("repo-1");
+    expect(eventServiceMock.create).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      scopeType: "system",
+      scopeId: "repo-1",
+      eventType: "repo_created",
+      payload: {
+        repo: {
+          id: "repo-1",
+          name: "trace",
+          remoteUrl: "https://github.com/acme/trace.git",
+          defaultBranch: "main",
+          webhookActive: false,
+        },
+      },
+      actorType: "user",
+      actorId: "user-1",
+    }, prismaMock);
+  });
+
+  it("updates repos, creates projects, and links entities", async () => {
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({ id: "repo-1" });
+    prismaMock.repo.update.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "trace-renamed",
+      remoteUrl: "https://github.com/acme/trace.git",
+      defaultBranch: "develop",
+      webhookId: "123",
+    });
+    prismaMock.project.create.mockResolvedValueOnce({
+      id: "project-1",
+      organizationId: "org-1",
+      name: "Roadmap",
+    });
+    prismaMock.project.findUniqueOrThrow
+      .mockResolvedValueOnce({ organizationId: "org-1" })
+      .mockResolvedValueOnce({ id: "project-1", name: "Roadmap" });
+
+    const service = new OrganizationService();
+    await service.updateRepo(
+      "repo-1",
+      "org-1",
+      { name: "trace-renamed", defaultBranch: "develop" } as any,
+      "user",
+      "user-1",
+    );
+    await service.createProject(
+      { organizationId: "org-1", name: "Roadmap", repoId: "repo-1" } as any,
+      "user",
+      "user-1",
+    );
+    await service.linkEntityToProject("session", "session-1", "project-1", "user", "user-1");
+
+    expect(prismaMock.sessionProject.create).toHaveBeenCalledWith({
+      data: { sessionId: "session-1", projectId: "project-1" },
+    });
+    await expect(
+      service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
+    ).rejects.toThrow("Chats cannot be linked to projects");
+  });
+});

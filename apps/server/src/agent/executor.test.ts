@@ -1,249 +1,213 @@
-/**
- * Manual QA script for the Action Executor.
- *
- * Run with: npx tsx apps/server/src/agent/executor.test.ts
- *
- * This uses mock services — no DB or running server required.
- * It validates all 5 scenarios from ticket #07's "How to test" section.
- */
-
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ServiceContainer } from "./executor.js";
 import {
   ActionExecutor,
   InMemoryIdempotencyStore,
-  type ServiceContainer,
-  type ExecutionResult,
 } from "./executor.js";
 
-// ---------------------------------------------------------------------------
-// Mock services — record calls instead of hitting DB
-// ---------------------------------------------------------------------------
-
-const calls: { service: string; method: string; args: unknown[] }[] = [];
-
-function mockFn(service: string, method: string) {
-  return (...args: unknown[]) => {
-    calls.push({ service, method, args });
-    return Promise.resolve({ id: "mock-id", title: "mock" });
+function createServices(): ServiceContainer {
+  return {
+    ticketService: {
+      create: vi.fn().mockResolvedValue({ id: "ticket-1" }),
+      update: vi.fn().mockResolvedValue({ id: "ticket-1", status: "done" }),
+      addComment: vi.fn().mockResolvedValue({ id: "event-1" }),
+      link: vi.fn().mockResolvedValue({ id: "ticket-1", entityId: "session-1" }),
+    } as unknown as ServiceContainer["ticketService"],
+    chatService: {
+      sendMessage: vi.fn().mockResolvedValue({ id: "message-1" }),
+    } as unknown as ServiceContainer["chatService"],
+    sessionService: {
+      start: vi.fn().mockResolvedValue({ id: "session-1" }),
+      pause: vi.fn().mockResolvedValue({ id: "session-1", status: "paused" }),
+      resume: vi.fn().mockResolvedValue({ id: "session-1", status: "active" }),
+    } as unknown as ServiceContainer["sessionService"],
+    inboxService: {
+      createItem: vi.fn().mockResolvedValue({ id: "inbox-1" }),
+    } as unknown as ServiceContainer["inboxService"],
   };
 }
 
-const mockServices: ServiceContainer = {
-  ticketService: {
-    create: mockFn("ticketService", "create"),
-    update: mockFn("ticketService", "update"),
-    addComment: mockFn("ticketService", "addComment"),
-    link: mockFn("ticketService", "link"),
-  } as unknown as ServiceContainer["ticketService"],
-  chatService: {
-    sendMessage: mockFn("chatService", "sendMessage"),
-  } as unknown as ServiceContainer["chatService"],
-  sessionService: {
-    start: mockFn("sessionService", "start"),
-    pause: mockFn("sessionService", "pause"),
-    resume: mockFn("sessionService", "resume"),
-  } as unknown as ServiceContainer["sessionService"],
-  inboxService: {
-    createItem: mockFn("inboxService", "createItem"),
-  } as unknown as ServiceContainer["inboxService"],
-};
-
 const ctx = {
-  organizationId: "org-test-123",
-  agentId: "agent-test-456",
-  triggerEventId: "event-test-789",
+  organizationId: "org-1",
+  agentId: "agent-1",
+  triggerEventId: "evt-1",
 };
 
-// ---------------------------------------------------------------------------
-// Test runner
-// ---------------------------------------------------------------------------
+describe("ActionExecutor", () => {
+  let services: ServiceContainer;
 
-let passed = 0;
-let failed = 0;
+  beforeEach(() => {
+    services = createServices();
+  });
 
-function assert(condition: boolean, msg: string) {
-  if (condition) {
-    console.log(`  ✅ ${msg}`);
-    passed++;
-  } else {
-    console.log(`  ❌ ${msg}`);
-    failed++;
-  }
-}
+  it("returns success immediately for no_op actions", async () => {
+    const executor = new ActionExecutor(services);
 
-async function test(name: string, fn: () => Promise<void>) {
-  console.log(`\n📋 ${name}`);
-  calls.length = 0;
-  await fn();
-}
+    await expect(executor.execute({ actionType: "no_op", args: {} }, ctx)).resolves.toEqual({
+      status: "success",
+      actionType: "no_op",
+    });
+  });
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+  it("rejects unknown actions", async () => {
+    const executor = new ActionExecutor(services);
 
-async function run() {
-  console.log("=== Action Executor QA ===\n");
+    await expect(executor.execute({ actionType: "unknown.action", args: {} }, ctx)).resolves.toEqual({
+      status: "failed",
+      actionType: "unknown.action",
+      error: "Unknown action: unknown.action",
+    });
+  });
 
-  // ---- Test 1: ticket.create with valid args ----
-  await test("1. Execute ticket.create with valid args", async () => {
-    const executor = new ActionExecutor(mockServices);
+  it("rejects invalid parameters before dispatching", async () => {
+    const executor = new ActionExecutor(services);
+
+    const result = await executor.execute({ actionType: "ticket.create", args: {} }, ctx);
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("Missing required field: title");
+    expect((services.ticketService.create as any)).not.toHaveBeenCalled();
+  });
+
+  it("injects agent context into ticket creation", async () => {
+    const executor = new ActionExecutor(services);
+
     const result = await executor.execute(
-      { actionType: "ticket.create", args: { title: "Bug: login broken" } },
-      { ...ctx, triggerEventId: "evt-1" },
+      {
+        actionType: "ticket.create",
+        args: { title: "Bug: login broken", priority: "high" },
+      },
+      ctx,
     );
-    assert(result.status === "success", `status is "success" (got: ${result.status})`);
-    assert(calls.length === 1, `one service call made (got: ${calls.length})`);
-    assert(calls[0]?.service === "ticketService", `called ticketService`);
-    assert(calls[0]?.method === "create", `called create method`);
 
-    // Verify agent identity was injected
-    const createArg = calls[0]?.args[0] as Record<string, unknown>;
-    assert(createArg?.actorType === "agent", `actorType is "agent"`);
-    assert(createArg?.actorId === "agent-test-456", `actorId is the agent's ID`);
-    assert(createArg?.organizationId === "org-test-123", `organizationId injected`);
-    assert(createArg?.title === "Bug: login broken", `title passed through`);
+    expect(result).toEqual({
+      status: "success",
+      actionType: "ticket.create",
+      result: { id: "ticket-1" },
+    });
+    expect(services.ticketService.create).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      title: "Bug: login broken",
+      description: undefined,
+      priority: "high",
+      labels: undefined,
+      channelId: undefined,
+      projectId: undefined,
+      assigneeIds: undefined,
+      actorType: "agent",
+      actorId: "agent-1",
+    });
   });
 
-  // ---- Test 2: Idempotency prevents duplicate ----
-  await test("2. Same action + triggerEventId is idempotent", async () => {
-    const executor = new ActionExecutor(mockServices);
-    const sharedCtx = { ...ctx, triggerEventId: "evt-idem" };
-
-    const r1 = await executor.execute(
-      { actionType: "ticket.create", args: { title: "First" } },
-      sharedCtx,
-    );
-    assert(r1.status === "success", `first call succeeds`);
-    assert(calls.length === 1, `first call makes a service call`);
-
-    calls.length = 0;
-    const r2 = await executor.execute(
-      { actionType: "ticket.create", args: { title: "First" } },
-      sharedCtx,
-    );
-    assert(r2.status === "success", `second call returns success`);
-    assert(
-      typeof r2.result === "string" && r2.result.includes("duplicate"),
-      `second call result indicates duplicate`,
-    );
-    assert(calls.length === 0, `no service call on duplicate (got: ${calls.length})`);
-  });
-
-  // ---- Test 3: no_op returns success with no side effects ----
-  await test("3. no_op returns success, no service calls", async () => {
-    const executor = new ActionExecutor(mockServices);
-    const result = await executor.execute(
-      { actionType: "no_op", args: {} },
-      { ...ctx, triggerEventId: "evt-noop" },
-    );
-    assert(result.status === "success", `status is "success"`);
-    assert(calls.length === 0, `no service calls made`);
-  });
-
-  // ---- Test 4: Unknown action returns error ----
-  await test("4. Unknown action is rejected", async () => {
-    const executor = new ActionExecutor(mockServices);
-    const result = await executor.execute(
-      { actionType: "foo.bar", args: {} },
-      { ...ctx, triggerEventId: "evt-unknown" },
-    );
-    assert(result.status === "failed", `status is "failed"`);
-    assert(result.error?.includes("Unknown action"), `error mentions unknown action`);
-    assert(calls.length === 0, `no service calls made`);
-  });
-
-  // ---- Test 5: Invalid args returns failure ----
-  await test("5. Invalid args (missing required field) returns failure", async () => {
-    const executor = new ActionExecutor(mockServices);
-    const result = await executor.execute(
-      { actionType: "ticket.create", args: {} }, // missing required `title`
-      { ...ctx, triggerEventId: "evt-invalid" },
-    );
-    assert(result.status === "failed", `status is "failed"`);
-    assert(result.error?.includes("title"), `error mentions missing "title" field`);
-    assert(calls.length === 0, `no service calls made`);
-  });
-
-  // ---- Test 6: Idempotency is instance-scoped ----
-  await test("6. Two executor instances have independent idempotency", async () => {
-    const exec1 = new ActionExecutor(mockServices);
-    const exec2 = new ActionExecutor(mockServices);
-    const sharedCtx = { ...ctx, triggerEventId: "evt-iso" };
-    const action = { actionType: "ticket.create", args: { title: "Isolation test" } };
-
-    await exec1.execute(action, sharedCtx);
-    calls.length = 0;
-
-    const r2 = await exec2.execute(action, sharedCtx);
-    assert(r2.status === "success", `exec2 succeeds independently`);
-    assert(calls.length === 1, `exec2 makes its own service call (not blocked by exec1)`);
-  });
-
-  // ---- Test 7: Custom idempotency store is injectable ----
-  await test("7. Injectable idempotency store", async () => {
-    const store = new InMemoryIdempotencyStore();
-    const executor = new ActionExecutor(mockServices, store);
-    const key = `agent:${ctx.agentId}:ticket.create:evt-inject`;
-
-    const hasBefore = await store.has(key);
-    assert(!hasBefore, `key not in store before execute`);
+  it("dispatches update, comment, link, chat, and session methods", async () => {
+    const executor = new ActionExecutor(services);
 
     await executor.execute(
-      { actionType: "ticket.create", args: { title: "Injectable" } },
-      { ...ctx, triggerEventId: "evt-inject" },
+      { actionType: "ticket.update", args: { id: "ticket-1", status: "in_progress" } },
+      { ...ctx, triggerEventId: "evt-update" },
+    );
+    await executor.execute(
+      { actionType: "ticket.addComment", args: { ticketId: "ticket-1", text: "done" } },
+      { ...ctx, triggerEventId: "evt-comment" },
+    );
+    await executor.execute(
+      {
+        actionType: "link.create",
+        args: { ticketId: "ticket-1", entityType: "session", entityId: "session-1" },
+      },
+      { ...ctx, triggerEventId: "evt-link" },
+    );
+    await executor.execute(
+      { actionType: "message.send", args: { chatId: "chat-1", text: "hello" } },
+      { ...ctx, triggerEventId: "evt-message" },
+    );
+    await executor.execute(
+      { actionType: "session.pause", args: { id: "session-1" } },
+      { ...ctx, triggerEventId: "evt-pause" },
+    );
+    await executor.execute(
+      { actionType: "session.resume", args: { id: "session-1" } },
+      { ...ctx, triggerEventId: "evt-resume" },
     );
 
-    const hasAfter = await store.has(key);
-    assert(hasAfter, `key is in store after execute`);
-  });
-
-  // ---- Test 8: All action types dispatch correctly ----
-  await test("8. All action types dispatch to correct service methods", async () => {
-    const executor = new ActionExecutor(mockServices);
-    const actions = [
-      { actionType: "ticket.update", args: { id: "t1", status: "closed" }, expect: ["ticketService", "update"] },
-      { actionType: "ticket.addComment", args: { ticketId: "t1", text: "hi" }, expect: ["ticketService", "addComment"] },
-      { actionType: "link.create", args: { ticketId: "t1", entityType: "session", entityId: "s1" }, expect: ["ticketService", "link"] },
-      { actionType: "message.send", args: { chatId: "c1", text: "hello" }, expect: ["chatService", "sendMessage"] },
-      { actionType: "session.pause", args: { id: "s1" }, expect: ["sessionService", "pause"] },
-      { actionType: "session.resume", args: { id: "s1" }, expect: ["sessionService", "resume"] },
-    ];
-
-    for (const { actionType, args, expect: [svc, method] } of actions) {
-      calls.length = 0;
-      const result = await executor.execute(
-        { actionType, args },
-        { ...ctx, triggerEventId: `evt-${actionType}` },
-      );
-      assert(
-        result.status === "success" && calls[0]?.service === svc && calls[0]?.method === method,
-        `${actionType} → ${svc}.${method}`,
-      );
-    }
-  });
-
-  // ---- Test 9: Service errors are caught, not thrown ----
-  await test("9. Service errors are caught and returned", async () => {
-    const failingServices: ServiceContainer = {
-      ...mockServices,
-      ticketService: {
-        create: () => Promise.reject(new Error("DB connection lost")),
-      } as unknown as ServiceContainer["ticketService"],
-    };
-    const executor = new ActionExecutor(failingServices);
-    const result = await executor.execute(
-      { actionType: "ticket.create", args: { title: "Will fail" } },
-      { ...ctx, triggerEventId: "evt-fail" },
+    expect(services.ticketService.update).toHaveBeenCalledWith(
+      "ticket-1",
+      { status: "in_progress" },
+      "agent",
+      "agent-1",
     );
-    assert(result.status === "failed", `status is "failed"`);
-    assert(result.error === "DB connection lost", `error message preserved`);
+    expect(services.ticketService.addComment).toHaveBeenCalledWith(
+      "ticket-1",
+      "done",
+      "agent",
+      "agent-1",
+    );
+    expect(services.ticketService.link).toHaveBeenCalledWith({
+      ticketId: "ticket-1",
+      entityType: "session",
+      entityId: "session-1",
+      actorType: "agent",
+      actorId: "agent-1",
+    });
+    expect(services.chatService.sendMessage).toHaveBeenCalledWith({
+      chatId: "chat-1",
+      organizationId: "org-1",
+      text: "hello",
+      html: undefined,
+      parentId: undefined,
+      actorType: "agent",
+      actorId: "agent-1",
+    });
+    expect(services.sessionService.pause).toHaveBeenCalledWith("session-1", "agent", "agent-1");
+    expect(services.sessionService.resume).toHaveBeenCalledWith("session-1", "agent", "agent-1");
   });
 
-  // ---- Summary ----
-  console.log(`\n${"=".repeat(40)}`);
-  console.log(`Results: ${passed} passed, ${failed} failed`);
-  console.log(`${"=".repeat(40)}\n`);
+  it("uses idempotency keys per agent, action, and trigger event", async () => {
+    const executor = new ActionExecutor(services);
 
-  process.exit(failed > 0 ? 1 : 0);
-}
+    const first = await executor.execute(
+      { actionType: "ticket.create", args: { title: "Same" } },
+      { ...ctx, triggerEventId: "evt-same" },
+    );
+    const second = await executor.execute(
+      { actionType: "ticket.create", args: { title: "Same" } },
+      { ...ctx, triggerEventId: "evt-same" },
+    );
 
-run();
+    expect(first.status).toBe("success");
+    expect(second).toEqual({
+      status: "success",
+      actionType: "ticket.create",
+      result: "duplicate — already executed for this trigger event",
+    });
+    expect(services.ticketService.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports an injected idempotency store", async () => {
+    const store = new InMemoryIdempotencyStore();
+    const executor = new ActionExecutor(services, store);
+
+    await expect(store.has("agent:agent-1:ticket.create:evt-store")).resolves.toBe(false);
+    await executor.execute(
+      { actionType: "ticket.create", args: { title: "Stored" } },
+      { ...ctx, triggerEventId: "evt-store" },
+    );
+    await expect(store.has("agent:agent-1:ticket.create:evt-store")).resolves.toBe(true);
+  });
+
+  it("returns service errors instead of throwing", async () => {
+    (services.ticketService.create as any).mockRejectedValueOnce(new Error("DB lost"));
+    const executor = new ActionExecutor(services);
+
+    await expect(
+      executor.execute(
+        { actionType: "ticket.create", args: { title: "Boom" } },
+        { ...ctx, triggerEventId: "evt-error" },
+      ),
+    ).resolves.toEqual({
+      status: "failed",
+      actionType: "ticket.create",
+      error: "DB lost",
+    });
+  });
+});

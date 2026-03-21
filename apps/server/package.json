@@ -9,7 +9,12 @@
     "build": "tsc -b",
     "start": "node dist/index.js",
     "lint": "tsc -b",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "pnpm test:unit",
+    "test:unit": "vitest run",
+    "test:unit:coverage": "vitest run --coverage && node ./test/check-coverage.mjs",
+    "test:coverage": "pnpm test:unit:coverage",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -34,6 +39,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.10",
@@ -41,6 +47,7 @@
     "@types/ws": "^8.5.13",
     "prisma": "^6.19.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
   }
 }
