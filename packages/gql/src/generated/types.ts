@@ -35,6 +35,23 @@ export type AddChatMemberInput = {
   userId: Scalars['ID']['input'];
 };
 
+export type AgentIdentity = {
+  __typename?: 'AgentIdentity';
+  autonomyMode: AutonomyMode;
+  costBudget: CostBudget;
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  organizationId: Scalars['ID']['output'];
+  soulFile: Scalars['String']['output'];
+  status: AgentStatus;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type AgentStatus =
+  | 'disabled'
+  | 'enabled';
+
 export type AgentTrustLevel =
   | 'autonomous'
   | 'blocked'
@@ -52,6 +69,11 @@ export type ApiTokenStatus = {
   provider: ApiTokenProvider;
   updatedAt?: Maybe<Scalars['DateTime']['output']>;
 };
+
+export type AutonomyMode =
+  | 'act'
+  | 'observe'
+  | 'suggest';
 
 export type Channel = {
   __typename?: 'Channel';
@@ -108,6 +130,11 @@ export type CodingTool =
   | 'claude_code'
   | 'codex'
   | 'custom';
+
+export type CostBudget = {
+  __typename?: 'CostBudget';
+  dailyLimitCents: Scalars['Int']['output'];
+};
 
 export type CreateChannelInput = {
   name: Scalars['String']['input'];
@@ -294,6 +321,7 @@ export type Mutation = {
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
+  updateAgentSettings: AgentIdentity;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -527,6 +555,12 @@ export type MutationUnsubscribeArgs = {
 };
 
 
+export type MutationUpdateAgentSettingsArgs = {
+  input: UpdateAgentSettingsInput;
+  organizationId: Scalars['ID']['input'];
+};
+
+
 export type MutationUpdateRepoArgs = {
   id: Scalars['ID']['input'];
   input: UpdateRepoInput;
@@ -599,6 +633,7 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
+  agentIdentity?: Maybe<AgentIdentity>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
@@ -624,6 +659,11 @@ export type Query = {
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
   tickets: Array<Ticket>;
+};
+
+
+export type QueryAgentIdentityArgs = {
+  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -1000,6 +1040,14 @@ export type TicketStatus =
   | 'in_progress'
   | 'in_review'
   | 'todo';
+
+export type UpdateAgentSettingsInput = {
+  autonomyMode?: InputMaybe<AutonomyMode>;
+  dailyLimitCents?: InputMaybe<Scalars['Int']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  soulFile?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<AgentStatus>;
+};
 
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars['String']['input']>;

@@ -10,6 +10,7 @@ import { terminalQueries, terminalMutations } from "./terminal.js";
 import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from "./chat.js";
 import { participantQueries, participantMutations, participantTypeResolvers } from "./participant.js";
 import { threadQueries } from "./thread.js";
+import { agentIdentityQueries, agentIdentityMutations, agentIdentityTypeResolvers } from "./agent-identity.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
@@ -22,6 +23,7 @@ export const resolvers = {
   ...participantTypeResolvers,
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
+  ...agentIdentityTypeResolvers,
 
   Event: {
     actor: (event: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>
@@ -40,6 +42,7 @@ export const resolvers = {
     ...chatQueries,
     ...participantQueries,
     ...threadQueries,
+    ...agentIdentityQueries,
   },
 
   Mutation: {
@@ -52,6 +55,7 @@ export const resolvers = {
     ...terminalMutations,
     ...chatMutations,
     ...participantMutations,
+    ...agentIdentityMutations,
   },
 
   Subscription: {
