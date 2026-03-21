@@ -274,6 +274,11 @@ export function useOrgEvents() {
           }
         }
 
+        // Chat activity — update sort timestamp when a new message arrives in a chat
+        if (event.eventType === "message_sent" && event.scopeType === ("chat" satisfies ScopeType)) {
+          patch("chats", event.scopeId, { updatedAt: event.timestamp } as Partial<Chat>);
+        }
+
         // Route session activity events — update timestamp, and preview if it's a real message
         if (SESSION_ACTIVITY_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
           const preview = extractMessagePreview(event.eventType, payload);

@@ -15,6 +15,12 @@ interface UIState {
   setActiveThreadId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
+  /** Chat IDs that have unread messages (Record for fine-grained Zustand selectors) */
+  unreadChatIds: Record<string, boolean>;
+  /** Mark a chat as having unread messages */
+  markChatUnread: (chatId: string) => void;
+  /** Clear unread state for a chat */
+  markChatRead: (chatId: string) => void;
   /** Internal: update state without pushing browser history (used by popstate handler) */
   _restoreNav: (channelId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null) => void;
 }
@@ -45,6 +51,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeSessionId: null,
   activeThreadId: null,
   refreshTick: 0,
+  unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   setActivePage: (page) => {
@@ -71,8 +78,30 @@ export const useUIStore = create<UIState>((set, get) => ({
     pushNav(id, null);
   },
 
+  markChatUnread: (chatId) => {
+    set((s) => {
+      if (s.unreadChatIds[chatId]) return s;
+      return { unreadChatIds: { ...s.unreadChatIds, [chatId]: true } };
+    });
+  },
+
+  markChatRead: (chatId) => {
+    set((s) => {
+      if (!s.unreadChatIds[chatId]) return s;
+      const { [chatId]: _, ...rest } = s.unreadChatIds;
+      return { unreadChatIds: rest };
+    });
+  },
+
   setActiveChatId: (id) => {
-    set({ activePage: "main", activeChatId: id, activeChannelId: null, activeSessionId: null, activeThreadId: null });
+    set((s) => {
+      let unreadChatIds = s.unreadChatIds;
+      if (id && unreadChatIds[id]) {
+        const { [id]: _, ...rest } = unreadChatIds;
+        unreadChatIds = rest;
+      }
+      return { activePage: "main" as ActivePage, activeChatId: id, activeChannelId: null, activeSessionId: null, activeThreadId: null, unreadChatIds };
+    });
     pushNav(null, null, "main", id);
   },
 
