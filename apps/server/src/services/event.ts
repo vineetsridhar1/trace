@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { ScopeType, EventType, ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { redis } from "../lib/redis.js";
 
 export interface CreateEventInput {
   organizationId: string;
@@ -63,6 +64,14 @@ export class EventService {
 
     // Always broadcast to org-level topic for discovery (e.g. new channels)
     pubsub.publish(topics.orgEvents(input.organizationId), { orgEvents: event });
+
+    // Append to org-scoped Redis Stream for durable consumption by the agent worker
+    const streamKey = `stream:org:${input.organizationId}:events`;
+    redis
+      .xadd(streamKey, "*", "event", JSON.stringify(event))
+      .catch((err) => {
+        console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
+      });
 
     return event;
   }

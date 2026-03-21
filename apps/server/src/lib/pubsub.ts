@@ -1,35 +1,69 @@
-import { EventEmitter } from "events";
+import { redis, redisSub } from "./redis.js";
 
 /**
- * Simple in-memory pub-sub for event broadcasting.
- * Sufficient for single-process dev. Replace with Redis pub-sub for multi-process prod.
+ * Redis-backed pub-sub for event broadcasting.
+ * Drop-in replacement for the previous EventEmitter-based implementation.
+ * Supports multi-process communication (server + agent worker).
  */
 class PubSub {
-  private emitter = new EventEmitter();
+  private subscriptions = new Map<string, Set<(payload: unknown) => void>>();
 
+  /**
+   * Publish a payload to a topic. Serializes to JSON and sends via Redis.
+   */
   publish<T>(topic: string, payload: T): void {
-    this.emitter.emit(topic, payload);
+    redis.publish(topic, JSON.stringify(payload)).catch((err) => {
+      console.error(`[pubsub] publish error on topic ${topic}:`, err.message);
+    });
   }
 
   /**
    * Returns an AsyncIterableIterator for use in GraphQL subscription resolvers.
+   * Each call creates a dedicated listener on the Redis subscriber connection.
    */
   asyncIterator<T>(topic: string): AsyncIterableIterator<T> {
-    const emitter = this.emitter;
     const pullQueue: ((value: IteratorResult<T>) => void)[] = [];
     const pushQueue: T[] = [];
     let done = false;
 
-    const handler = (payload: T) => {
+    const handler = (payload: unknown) => {
+      if (done) return;
       const resolve = pullQueue.shift();
       if (resolve) {
-        resolve({ value: payload, done: false });
+        resolve({ value: payload as T, done: false });
       } else {
-        pushQueue.push(payload);
+        pushQueue.push(payload as T);
       }
     };
 
-    emitter.on(topic, handler);
+    // Track this handler so the shared message listener can dispatch to it
+    let handlers = this.subscriptions.get(topic);
+    if (!handlers) {
+      handlers = new Set();
+      this.subscriptions.set(topic, handlers);
+      // First subscriber for this topic — tell Redis to subscribe
+      redisSub.subscribe(topic).catch((err) => {
+        console.error(`[pubsub] subscribe error on topic ${topic}:`, err.message);
+      });
+    }
+    handlers.add(handler);
+
+    const cleanup = () => {
+      done = true;
+      const h = this.subscriptions.get(topic);
+      if (h) {
+        h.delete(handler);
+        if (h.size === 0) {
+          this.subscriptions.delete(topic);
+          redisSub.unsubscribe(topic).catch(() => {});
+        }
+      }
+      for (const resolve of pullQueue) {
+        resolve({ value: undefined as T, done: true });
+      }
+      pullQueue.length = 0;
+      pushQueue.length = 0;
+    };
 
     return {
       next(): Promise<IteratorResult<T>> {
@@ -39,24 +73,36 @@ class PubSub {
         return new Promise((resolve) => pullQueue.push(resolve));
       },
       return(): Promise<IteratorResult<T>> {
-        done = true;
-        emitter.off(topic, handler);
-        for (const resolve of pullQueue) {
-          resolve({ value: undefined as T, done: true });
-        }
-        pullQueue.length = 0;
-        pushQueue.length = 0;
+        cleanup();
         return Promise.resolve({ value: undefined as T, done: true });
       },
       throw(error: Error): Promise<IteratorResult<T>> {
-        done = true;
-        emitter.off(topic, handler);
+        cleanup();
         return Promise.reject(error);
       },
       [Symbol.asyncIterator]() {
         return this;
       },
     };
+  }
+
+  /**
+   * Initialize the shared message listener on the subscriber connection.
+   * Call once at server startup after Redis is connected.
+   */
+  init(): void {
+    redisSub.on("message", (channel: string, message: string) => {
+      const handlers = this.subscriptions.get(channel);
+      if (!handlers || handlers.size === 0) return;
+      try {
+        const payload = JSON.parse(message);
+        for (const handler of handlers) {
+          handler(payload);
+        }
+      } catch (err) {
+        console.error(`[pubsub] failed to parse message on ${channel}:`, err);
+      }
+    });
   }
 }
 
