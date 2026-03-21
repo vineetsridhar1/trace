@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { gql } from "@urql/core";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { client } from "../lib/urql";
-import { useEntityStore } from "../stores/entity";
+import { useEntityStore, eventScopeKey } from "../stores/entity";
 import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
@@ -148,11 +148,11 @@ export function useOrgEvents() {
         if (!result.data?.orgEvents) return;
 
         const event = result.data.orgEvents as Event;
-        const { upsert, patch, remove } = useEntityStore.getState();
+        const { upsert, patch, remove, upsertScopedEvent } = useEntityStore.getState();
         const payload = asJsonObject(event.payload);
 
-        // Always upsert the raw event
-        upsert("events", event.id, event);
+        // Always upsert the raw event into its scoped bucket
+        upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
 
         // Repo created or updated — upsert directly from payload
         if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {
