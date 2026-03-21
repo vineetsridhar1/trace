@@ -73,17 +73,16 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
 
+  const disabledPlaceholders: Record<string, string> = {
+    completed: "Session completed. Follow-up messages are disabled.",
+    merged: "Session merged. Follow-up messages are disabled.",
+    failed: "Session failed. Follow-up messages are disabled.",
+  };
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
     : isActive
       ? "Waiting for response..."
-      : status === "completed"
-        ? "Session completed. Follow-up messages are disabled."
-        : status === "merged"
-          ? "Session merged. Follow-up messages are disabled."
-          : status === "failed"
-            ? "Session failed. Follow-up messages are disabled."
-            : "Send a message...";
+      : (status && disabledPlaceholders[status]) ?? "Send a message...";
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">

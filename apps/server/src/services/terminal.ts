@@ -1,7 +1,6 @@
 import { prisma } from "../lib/db.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
-
-const TERMINAL_STATUSES: readonly string[] = ["completed", "failed", "merged"];
+import { isFullyUnloadedSessionStatus } from "./session.js";
 
 class TerminalService {
   private assertLocalOwnership(session: { hosting: string | null; createdById: string }, userId: string): void {
@@ -28,7 +27,7 @@ class TerminalService {
       select: { id: true, workdir: true, hosting: true, createdById: true, status: true, worktreeDeleted: true },
     });
     if (!session) throw new Error("Session not found");
-    if (TERMINAL_STATUSES.includes(session.status)) {
+    if (isFullyUnloadedSessionStatus(session.status)) {
       throw new Error(`Cannot create terminal on a ${session.status} session`);
     }
     if (session.worktreeDeleted) {

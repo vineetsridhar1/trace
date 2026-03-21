@@ -59,7 +59,7 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
   return connection.state === "disconnected";
 }
 
-/** Whether the session is in a terminal state (no runtime, no worktree). */
+/** Whether the session has reached a final state and cannot accept further input. */
 export function isTerminalStatus(status: string | undefined): boolean {
   return status === "completed" || status === "failed" || status === "merged";
 }

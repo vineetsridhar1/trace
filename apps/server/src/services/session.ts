@@ -149,7 +149,7 @@ function validateModelForTool(tool: string, model: string): string {
 
 const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["completed", "failed", "merged"];
 
-function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
+export function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
   return FULLY_UNLOADED_SESSION_STATUSES.includes(status);
 }
 
@@ -361,7 +361,7 @@ export class SessionService {
     }
 
     if (session.worktreeDeleted) {
-      return session;
+      throw new Error("Cannot run session: worktree has been deleted");
     }
 
     // If no prompt provided, retrieve the original prompt from the session_started event
