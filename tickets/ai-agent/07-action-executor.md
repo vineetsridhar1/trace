@@ -24,13 +24,13 @@ The executor is the only place where the agent runtime mutates product state. It
 
 ## Completion requirements
 
-- [ ] Executor module exists and can execute any registered action
-- [ ] Actions are routed to the correct service method
-- [ ] Agent identity is injected into every service call
-- [ ] Idempotency prevents duplicate execution for the same trigger event
-- [ ] Unknown actions are rejected with a clear error
-- [ ] `no_op` is handled without side effects
-- [ ] Errors from service calls are caught and returned, not thrown
+- [x] Executor module exists and can execute any registered action
+- [x] Actions are routed to the correct service method
+- [x] Agent identity is injected into every service call
+- [x] Idempotency prevents duplicate execution for the same trigger event
+- [x] Unknown actions are rejected with a clear error
+- [x] `no_op` is handled without side effects
+- [x] Errors from service calls are caught and returned, not thrown
 
 ## How to test
 
