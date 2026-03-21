@@ -47,8 +47,8 @@ export function showNativeNotification(
 
   const notification = new Notification(title, {
     body: options?.body,
-    icon: "/icon-192.svg",
-    badge: "/icon-192.svg",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
     tag: options?.tag, // Replaces existing notification with same tag
     silent: false,
   });

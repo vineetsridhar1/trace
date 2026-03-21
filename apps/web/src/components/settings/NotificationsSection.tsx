@@ -11,7 +11,7 @@ const PERMISSION_LABELS: Record<string, { text: string; className: string }> = {
   granted: { text: "Enabled", className: "text-emerald-500" },
   denied: { text: "Blocked by browser", className: "text-destructive" },
   default: { text: "Not yet requested", className: "text-muted-foreground" },
-  unsupported: { text: "Not supported in this browser", className: "text-muted-foreground" },
+  unsupported: { text: "Install as app for notifications", className: "text-muted-foreground" },
 };
 
 export function NotificationsSection() {
@@ -96,6 +96,14 @@ export function NotificationsSection() {
           <p className="mt-3 text-xs text-muted-foreground">
             You&apos;ll receive native notifications when the app isn&apos;t focused — for
             session status changes, mentions, inbox items, and PR updates.
+          </p>
+        )}
+
+        {!supported && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            On mobile, notifications require installing Trace as an app. Tap the share
+            button in your browser and select &quot;Add to Home Screen&quot;, then open
+            Trace from your home screen to enable notifications.
           </p>
         )}
       </div>
