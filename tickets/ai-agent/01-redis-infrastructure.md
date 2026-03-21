@@ -20,12 +20,12 @@ None — this is the foundation.
 
 ## Completion requirements
 
-- [ ] `ioredis` installed and Redis client module exists
-- [ ] `PubSub` class uses Redis pub/sub instead of EventEmitter
-- [ ] All existing GraphQL subscriptions still work (test by running `pnpm dev:server` and `pnpm dev:web`, verify real-time updates in the UI)
-- [ ] Every event created via `EventService.create()` is also added to a Redis Stream keyed by org
-- [ ] Redis runs locally via docker-compose or similar
-- [ ] Graceful fallback or clear error if Redis is not running
+- [x] `ioredis` installed and Redis client module exists
+- [x] `PubSub` class uses Redis pub/sub instead of EventEmitter
+- [x] All existing GraphQL subscriptions still work (test by running `pnpm dev:server` and `pnpm dev:web`, verify real-time updates in the UI)
+- [x] Every event created via `EventService.create()` is also added to a Redis Stream keyed by org
+- [x] Redis runs locally via docker-compose or similar
+- [x] Graceful fallback or clear error if Redis is not running
 
 ## How to test
 

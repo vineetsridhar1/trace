@@ -34,8 +34,15 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
 
   // Connect Redis and initialize pub/sub message listener
-  await connectRedis();
-  pubsub.init();
+  try {
+    await connectRedis();
+    pubsub.init();
+  } catch {
+    const url = process.env.REDIS_URL ?? "redis://localhost:6379";
+    console.error(`\n[redis] Failed to connect to Redis at ${url}`);
+    console.error("[redis] Start Redis with: docker compose up -d redis\n");
+    process.exit(1);
+  }
 
   // Initialize cloud machine service and inject into session router
   const cloudMachineService = new CloudMachineService(flyProvider, "fly");
