@@ -7,10 +7,10 @@
  */
 
 import type { ActorType, EntityType } from "@trace/gql";
-import type { TicketService } from "../services/ticket.js";
+import type { StartSessionServiceInput, SessionService } from "../services/session.js";
 import type { ChatService } from "../services/chat.js";
-import type { SessionService } from "../services/session.js";
 import type { InboxService } from "../services/inbox.js";
+import type { CreateTicketServiceInput, TicketService } from "../services/ticket.js";
 import { findAction, validateActionParams } from "./action-registry.js";
 
 // ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ export class ActionExecutor {
               organizationId: orgId,
               title: args.title as string,
               description: args.description as string | undefined,
-              priority: args.priority as string | undefined,
+              priority: args.priority as CreateTicketServiceInput["priority"],
               labels: args.labels as string[] | undefined,
               channelId: args.channelId as string | undefined,
               projectId: args.projectId as string | undefined,
@@ -247,9 +247,9 @@ export class ActionExecutor {
         switch (method) {
           case "start":
             return svc.start({
-              tool: (args.tool as string) ?? "claude_code",
+              tool: (args.tool as StartSessionServiceInput["tool"] | undefined) ?? "claude_code",
               model: args.model as string | undefined,
-              hosting: args.hosting as string | undefined,
+              hosting: args.hosting as StartSessionServiceInput["hosting"],
               repoId: args.repoId as string | undefined,
               branch: args.branch as string | undefined,
               channelId: args.channelId as string | undefined,
