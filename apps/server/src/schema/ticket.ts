@@ -9,7 +9,14 @@ import type {
 import { prisma } from "../lib/db.js";
 import { ticketService } from "../services/ticket.js";
 import { pubsub, topics } from "../lib/pubsub.js";
-import { resolveActor } from "../services/actor.js";
+
+const TICKET_QUERY_INCLUDE = {
+  channel: true,
+  createdBy: true,
+  projects: { include: { project: true } },
+  assignees: { include: { user: true } },
+  links: true,
+} as const;
 
 export const ticketQueries = {
   tickets: (_: unknown, args: { organizationId: string; filters?: TicketFilters }, _ctx: Context) => {
@@ -17,10 +24,10 @@ export const ticketQueries = {
     if (args.filters?.status) where.status = args.filters.status;
     if (args.filters?.priority) where.priority = args.filters.priority;
     if (args.filters?.channelId) where.channelId = args.filters.channelId;
-    return prisma.ticket.findMany({ where });
+    return prisma.ticket.findMany({ where, include: TICKET_QUERY_INCLUDE });
   },
   ticket: (_: unknown, args: { id: string }, _ctx: Context) => {
-    return prisma.ticket.findUnique({ where: { id: args.id } });
+    return prisma.ticket.findUnique({ where: { id: args.id }, include: TICKET_QUERY_INCLUDE });
   },
 };
 

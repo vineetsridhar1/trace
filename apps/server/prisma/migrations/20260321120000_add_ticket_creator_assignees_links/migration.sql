@@ -4,8 +4,21 @@ ALTER TYPE "EventType" ADD VALUE 'ticket_unassigned';
 ALTER TYPE "EventType" ADD VALUE 'ticket_linked';
 ALTER TYPE "EventType" ADD VALUE 'ticket_unlinked';
 
--- Add createdById to Ticket (required FK to User)
-ALTER TABLE "Ticket" ADD COLUMN "createdById" TEXT NOT NULL;
+-- Add createdById to Ticket — nullable first, then backfill, then NOT NULL
+ALTER TABLE "Ticket" ADD COLUMN "createdById" TEXT;
+
+-- Backfill: assign existing tickets to the first admin in their org (or first member)
+UPDATE "Ticket" t
+SET "createdById" = (
+  SELECT u."id" FROM "User" u
+  WHERE u."organizationId" = t."organizationId"
+  ORDER BY u."role" = 'admin' DESC, u."createdAt" ASC
+  LIMIT 1
+)
+WHERE t."createdById" IS NULL;
+
+-- Now enforce NOT NULL
+ALTER TABLE "Ticket" ALTER COLUMN "createdById" SET NOT NULL;
 ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- CreateTable: TicketAssignee

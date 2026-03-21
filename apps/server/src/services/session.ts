@@ -632,19 +632,6 @@ export class SessionService {
     return session;
   }
 
-  async linkToTicket(sessionId: string, ticketId: string, actorType: ActorType, actorId: string) {
-    const { ticketService } = await import("./ticket.js");
-    await ticketService.link({
-      ticketId,
-      entityType: "session",
-      entityId: sessionId,
-      actorType,
-      actorId,
-    });
-
-    return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: SESSION_INCLUDE });
-  }
-
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
     // Extract and strip <session-title> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
@@ -1390,53 +1377,56 @@ export class SessionService {
     const context = await buildConversationContext(sessionId);
     const bootstrapPrompt = buildMigrationPrompt(context);
 
-    // Create child session targeted at the chosen runtime
-    const childSession = await prisma.session.create({
-      data: {
-        name: session.name,
-        status: session.repoId ? "creating" : "pending",
-        tool: session.tool,
-        model: session.model ?? undefined,
-        hosting: targetRuntime.hostingMode,
-        organizationId: session.organizationId,
-        createdById: actorId,
-        repoId: session.repoId ?? undefined,
-        branch: session.branch ?? undefined,
-        channelId: session.channelId ?? undefined,
-        parentSessionId: sessionId,
-        pendingRun: {
-          type: "run",
-          prompt: bootstrapPrompt,
-          interactionMode: null,
-        } satisfies PendingSessionCommand,
-        connection: connJson(
-          defaultConnection({
-            runtimeInstanceId,
-            runtimeLabel: targetRuntime.label,
+    // Create child session and copy ticket links in a single transaction
+    const childSession = await prisma.$transaction(async (tx) => {
+      const child = await tx.session.create({
+        data: {
+          name: session.name,
+          status: session.repoId ? "creating" : "pending",
+          tool: session.tool,
+          model: session.model ?? undefined,
+          hosting: targetRuntime.hostingMode,
+          organizationId: session.organizationId,
+          createdById: actorId,
+          repoId: session.repoId ?? undefined,
+          branch: session.branch ?? undefined,
+          channelId: session.channelId ?? undefined,
+          parentSessionId: sessionId,
+          pendingRun: {
+            type: "run",
+            prompt: bootstrapPrompt,
+            interactionMode: null,
+          } satisfies PendingSessionCommand,
+          connection: connJson(
+            defaultConnection({
+              runtimeInstanceId,
+              runtimeLabel: targetRuntime.label,
+            }),
+          ),
+          ...(session.projects.length > 0 && {
+            projects: {
+              create: session.projects.map((sp: { projectId: string }) => ({
+                projectId: sp.projectId,
+              })),
+            },
           }),
-        ),
-        ...(session.projects.length > 0 && {
-          projects: {
-            create: session.projects.map((sp: { projectId: string }) => ({
-              projectId: sp.projectId,
-            })),
-          },
-        }),
-      },
-      include: SESSION_INCLUDE,
-    });
-
-    // Copy ticket links to the child session
-    if (ticketLinks.length > 0) {
-      await prisma.ticketLink.createMany({
-        data: ticketLinks.map((tl) => ({
-          ticketId: tl.ticketId,
-          entityType: "session",
-          entityId: childSession.id,
-        })),
-        skipDuplicates: true,
+        },
+        include: SESSION_INCLUDE,
       });
-    }
+
+      if (ticketLinks.length > 0) {
+        await tx.ticketLink.createMany({
+          data: ticketLinks.map((tl) => ({
+            ticketId: tl.ticketId,
+            entityType: "session",
+            entityId: child.id,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return child;
+    });
 
     // Bind the child session to the target runtime
     sessionRouter.bindSession(childSession.id, runtimeInstanceId);
@@ -1572,49 +1562,51 @@ export class SessionService {
     const context = await buildConversationContext(sessionId);
     const bootstrapPrompt = buildMigrationPrompt(context);
 
-    // Create child session targeted at cloud — the CloudAdapter will
-    // provision the VM and bind the session when the bridge connects.
-    const childSession = await prisma.session.create({
-      data: {
-        name: session.name,
-        status: "creating",
-        tool: session.tool,
-        model: session.model ?? undefined,
-        hosting: "cloud",
-        organizationId: session.organizationId,
-        createdById: actorId,
-        repoId: session.repoId ?? undefined,
-        branch: session.branch ?? undefined,
-        channelId: session.channelId ?? undefined,
-        parentSessionId: sessionId,
-        pendingRun: {
-          type: "run",
-          prompt: bootstrapPrompt,
-          interactionMode: null,
-        } satisfies PendingSessionCommand,
-        connection: connJson(defaultConnection()),
-        ...(session.projects.length > 0 && {
-          projects: {
-            create: session.projects.map((sp: { projectId: string }) => ({
-              projectId: sp.projectId,
-            })),
-          },
-        }),
-      },
-      include: SESSION_INCLUDE,
-    });
-
-    // Copy ticket links to the child session
-    if (ticketLinks.length > 0) {
-      await prisma.ticketLink.createMany({
-        data: ticketLinks.map((tl) => ({
-          ticketId: tl.ticketId,
-          entityType: "session",
-          entityId: childSession.id,
-        })),
-        skipDuplicates: true,
+    // Create child session and copy ticket links in a single transaction
+    const childSession = await prisma.$transaction(async (tx) => {
+      const child = await tx.session.create({
+        data: {
+          name: session.name,
+          status: "creating",
+          tool: session.tool,
+          model: session.model ?? undefined,
+          hosting: "cloud",
+          organizationId: session.organizationId,
+          createdById: actorId,
+          repoId: session.repoId ?? undefined,
+          branch: session.branch ?? undefined,
+          channelId: session.channelId ?? undefined,
+          parentSessionId: sessionId,
+          pendingRun: {
+            type: "run",
+            prompt: bootstrapPrompt,
+            interactionMode: null,
+          } satisfies PendingSessionCommand,
+          connection: connJson(defaultConnection()),
+          ...(session.projects.length > 0 && {
+            projects: {
+              create: session.projects.map((sp: { projectId: string }) => ({
+                projectId: sp.projectId,
+              })),
+            },
+          }),
+        },
+        include: SESSION_INCLUDE,
       });
-    }
+
+      if (ticketLinks.length > 0) {
+        await tx.ticketLink.createMany({
+          data: ticketLinks.map((tl) => ({
+            ticketId: tl.ticketId,
+            entityType: "session",
+            entityId: child.id,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return child;
+    });
 
     // Emit session_started for the child
     await eventService.create({
