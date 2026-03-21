@@ -26,6 +26,7 @@ Wire everything together. The individual components exist (router, aggregator, c
 ## Dependencies
 
 - All previous tickets (04-14)
+  <!-- Ticket 07 created: `ActionExecutor` class in `./agent/executor.js`. Instantiate with `new ActionExecutor(serviceContainer)` where serviceContainer has { ticketService, chatService, sessionService, inboxService }. Call `executor.execute({ actionType, args }, { organizationId, agentId, triggerEventId })`. Returns `ExecutionResult { status, actionType, result?, error? }`. Note: idempotency is currently in-memory — migrate to Redis before deploying (use SET with EX 3600 on key `idempotency:agent:{agentId}:{actionName}:{triggerEventId}`). The executor handles no_op internally (returns success, no service call). -->
 
 ## Completion requirements
 
