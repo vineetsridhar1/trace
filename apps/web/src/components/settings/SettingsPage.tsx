@@ -12,6 +12,7 @@ import { RepoCard } from "./RepoCard";
 import { CreateRepoDialog } from "./CreateRepoDialog";
 import { ApiTokensSection } from "./ApiTokensSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
+import { NotificationsSection } from "./NotificationsSection";
 
 const REPOS_QUERY = gql`
   query SettingsRepos($organizationId: ID!) {
@@ -93,6 +94,8 @@ export function SettingsPage() {
         </section>
 
         <SessionDefaultsSection />
+
+        <NotificationsSection />
 
         <ApiTokensSection />
       </div>
