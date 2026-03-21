@@ -1,8 +1,8 @@
 import { DateTimeScalar, JSONScalar } from "./scalars.js";
 import { organizationQueries, organizationMutations, repoResolvers } from "./organization.js";
 import { channelQueries, channelMutations, channelSubscriptions } from "./channel.js";
-import { sessionQueries, sessionMutations, sessionSubscriptions } from "./session.js";
-import { ticketQueries, ticketMutations, ticketSubscriptions } from "./ticket.js";
+import { sessionQueries, sessionMutations, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
+import { ticketQueries, ticketMutations, ticketSubscriptions, ticketTypeResolvers } from "./ticket.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries, inboxMutations } from "./inbox.js";
 import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
@@ -20,6 +20,8 @@ export const resolvers = {
   ...repoResolvers,
   ...chatTypeResolvers,
   ...participantTypeResolvers,
+  ...ticketTypeResolvers,
+  ...sessionTypeResolvers,
 
   Event: {
     actor: (event: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>

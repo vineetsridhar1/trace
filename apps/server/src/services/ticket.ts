@@ -1,4 +1,4 @@
-import type { CreateTicketInput, UpdateTicketInput, ActorType } from "@trace/gql";
+import type { CreateTicketInput, UpdateTicketInput, ActorType, EntityType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
@@ -9,8 +9,10 @@ export type CreateTicketServiceInput = CreateTicketInput & {
 
 const TICKET_INCLUDE = {
   channel: true,
+  createdBy: true,
   projects: { include: { project: true } },
-  sessions: { include: { session: true } },
+  assignees: { include: { user: true } },
+  links: true,
 } as const;
 
 export class TicketService {
@@ -23,9 +25,15 @@ export class TicketService {
           priority: input.priority ?? "medium",
           labels: input.labels ?? [],
           organizationId: input.organizationId,
+          createdById: input.actorId,
           channelId: input.channelId ?? undefined,
           ...(input.projectId && {
             projects: { create: { projectId: input.projectId } },
+          }),
+          ...(input.assigneeIds?.length && {
+            assignees: {
+              create: input.assigneeIds.map((userId) => ({ userId })),
+            },
           }),
         },
         include: TICKET_INCLUDE,
@@ -101,6 +109,138 @@ export class TicketService {
       actorType,
       actorId,
     });
+  }
+
+  async assign({ ticketId, userId, actorType, actorId }: {
+    ticketId: string;
+    userId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const ticket = await prisma.$transaction(async (tx) => {
+      await tx.ticketAssignee.create({
+        data: { ticketId, userId },
+      });
+
+      const ticket = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        include: TICKET_INCLUDE,
+      });
+
+      await eventService.create({
+        organizationId: ticket.organizationId,
+        scopeType: "ticket",
+        scopeId: ticketId,
+        eventType: "ticket_assigned",
+        payload: { ticketId, userId },
+        actorType,
+        actorId,
+      }, tx);
+
+      return ticket;
+    });
+
+    return ticket;
+  }
+
+  async unassign({ ticketId, userId, actorType, actorId }: {
+    ticketId: string;
+    userId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const ticket = await prisma.$transaction(async (tx) => {
+      await tx.ticketAssignee.delete({
+        where: { ticketId_userId: { ticketId, userId } },
+      });
+
+      const ticket = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        include: TICKET_INCLUDE,
+      });
+
+      await eventService.create({
+        organizationId: ticket.organizationId,
+        scopeType: "ticket",
+        scopeId: ticketId,
+        eventType: "ticket_unassigned",
+        payload: { ticketId, userId },
+        actorType,
+        actorId,
+      }, tx);
+
+      return ticket;
+    });
+
+    return ticket;
+  }
+
+  async link({ ticketId, entityType, entityId, actorType, actorId }: {
+    ticketId: string;
+    entityType: EntityType;
+    entityId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const ticket = await prisma.$transaction(async (tx) => {
+      await tx.ticketLink.create({
+        data: { ticketId, entityType, entityId },
+      });
+
+      const ticket = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        include: TICKET_INCLUDE,
+      });
+
+      await eventService.create({
+        organizationId: ticket.organizationId,
+        scopeType: "ticket",
+        scopeId: ticketId,
+        eventType: "ticket_linked",
+        payload: { ticketId, entityType, entityId },
+        actorType,
+        actorId,
+      }, tx);
+
+      return ticket;
+    });
+
+    return ticket;
+  }
+
+  async unlink({ ticketId, entityType, entityId, actorType, actorId }: {
+    ticketId: string;
+    entityType: EntityType;
+    entityId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const ticket = await prisma.$transaction(async (tx) => {
+      await tx.ticketLink.delete({
+        where: {
+          ticketId_entityType_entityId: { ticketId, entityType, entityId },
+        },
+      });
+
+      const ticket = await tx.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+        include: TICKET_INCLUDE,
+      });
+
+      await eventService.create({
+        organizationId: ticket.organizationId,
+        scopeType: "ticket",
+        scopeId: ticketId,
+        eventType: "ticket_unlinked",
+        payload: { ticketId, entityType, entityId },
+        actorType,
+        actorId,
+      }, tx);
+
+      return ticket;
+    });
+
+    return ticket;
   }
 }
 

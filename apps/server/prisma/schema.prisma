@@ -136,6 +136,10 @@ enum EventType {
   session_pr_opened
   session_pr_merged
   session_pr_closed
+  ticket_assigned
+  ticket_unassigned
+  ticket_linked
+  ticket_unlinked
   chat_created
   chat_member_added
   chat_member_removed
@@ -174,12 +178,14 @@ model User {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  createdSessions Session[] @relation("SessionCreator")
-  createdChats    Chat[]    @relation("ChatCreator")
-  chatMemberships ChatMember[]
-  participants    Participant[]
-  apiTokens       ApiToken[]
-  cloudMachines   CloudMachine[]
+  createdSessions   Session[]        @relation("SessionCreator")
+  createdTickets    Ticket[]         @relation("TicketCreator")
+  ticketAssignments TicketAssignee[] @relation("TicketAssignees")
+  createdChats      Chat[]           @relation("ChatCreator")
+  chatMemberships   ChatMember[]
+  participants      Participant[]
+  apiTokens         ApiToken[]
+  cloudMachines     CloudMachine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -277,7 +283,6 @@ model Session {
   worktreeDeleted Boolean      @default(false)
 
   projects SessionProject[]
-  tickets  SessionTicket[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -301,12 +306,15 @@ model Ticket {
   labels         String[]     @default([])
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User         @relation("TicketCreator", fields: [createdById], references: [id])
   originEventId  String?
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
 
-  projects TicketProject[]
-  sessions SessionTicket[]
+  projects  TicketProject[]
+  assignees TicketAssignee[]
+  links     TicketLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -321,13 +329,26 @@ model TicketProject {
   @@id([ticketId, projectId])
 }
 
-model SessionTicket {
-  sessionId String
-  session   Session @relation(fields: [sessionId], references: [id])
-  ticketId  String
-  ticket    Ticket  @relation(fields: [ticketId], references: [id])
+model TicketAssignee {
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation("TicketAssignees", fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
 
-  @@id([sessionId, ticketId])
+  @@id([ticketId, userId])
+}
+
+model TicketLink {
+  id         String   @id @default(uuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  entityType String
+  entityId   String
+  createdAt  DateTime @default(now())
+
+  @@unique([ticketId, entityType, entityId])
+  @@index([entityType, entityId])
 }
 
 model ApiToken {

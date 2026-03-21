@@ -138,6 +138,7 @@ export type CreateRepoInput = {
 };
 
 export type CreateTicketInput = {
+  assigneeIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   labels?: InputMaybe<Array<Scalars['String']['input']>>;
@@ -157,6 +158,7 @@ export type DeliveryResult =
 export type EntityType =
   | 'channel'
   | 'chat'
+  | 'message'
   | 'session'
   | 'ticket';
 
@@ -198,8 +200,12 @@ export type EventType =
   | 'session_resumed'
   | 'session_started'
   | 'session_terminated'
+  | 'ticket_assigned'
   | 'ticket_commented'
   | 'ticket_created'
+  | 'ticket_linked'
+  | 'ticket_unassigned'
+  | 'ticket_unlinked'
   | 'ticket_updated';
 
 export type HostingMode =
@@ -251,6 +257,7 @@ export type Message = {
 export type Mutation = {
   __typename?: 'Mutation';
   addChatMember: Chat;
+  assignTicket: Ticket;
   commentOnTicket: Event;
   createChannel: Channel;
   createChat: Chat;
@@ -267,7 +274,7 @@ export type Mutation = {
   editChatMessage: Message;
   leaveChat: Chat;
   linkEntityToProject: Project;
-  linkSessionToTicket: Session;
+  linkTicket: Ticket;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
@@ -284,6 +291,8 @@ export type Mutation = {
   startSession: Session;
   subscribe: Participant;
   terminateSession: Session;
+  unassignTicket: Ticket;
+  unlinkTicket: Ticket;
   unmuteScope: Participant;
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
@@ -295,6 +304,12 @@ export type Mutation = {
 
 export type MutationAddChatMemberArgs = {
   input: AddChatMemberInput;
+};
+
+
+export type MutationAssignTicketArgs = {
+  ticketId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
 };
 
 
@@ -384,8 +399,9 @@ export type MutationLinkEntityToProjectArgs = {
 };
 
 
-export type MutationLinkSessionToTicketArgs = {
-  sessionId: Scalars['ID']['input'];
+export type MutationLinkTicketArgs = {
+  entityId: Scalars['ID']['input'];
+  entityType: EntityType;
   ticketId: Scalars['ID']['input'];
 };
 
@@ -480,6 +496,19 @@ export type MutationSubscribeArgs = {
 
 export type MutationTerminateSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUnassignTicketArgs = {
+  ticketId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
+};
+
+
+export type MutationUnlinkTicketArgs = {
+  entityId: Scalars['ID']['input'];
+  entityType: EntityType;
+  ticketId: Scalars['ID']['input'];
 };
 
 
@@ -937,21 +966,33 @@ export type Ticket = {
   __typename?: 'Ticket';
   assignees: Array<User>;
   channel?: Maybe<Channel>;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
   description: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   labels: Array<Scalars['String']['output']>;
+  links: Array<TicketLink>;
   origin?: Maybe<Event>;
   priority: Priority;
   projects: Array<Project>;
   sessions: Array<Session>;
   status: TicketStatus;
   title: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
 };
 
 export type TicketFilters = {
   channelId?: InputMaybe<Scalars['ID']['input']>;
   priority?: InputMaybe<Priority>;
   status?: InputMaybe<TicketStatus>;
+};
+
+export type TicketLink = {
+  __typename?: 'TicketLink';
+  createdAt: Scalars['DateTime']['output'];
+  entityId: Scalars['ID']['output'];
+  entityType: EntityType;
+  id: Scalars['ID']['output'];
 };
 
 export type TicketStatus =

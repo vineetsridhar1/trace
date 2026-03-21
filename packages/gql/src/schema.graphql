@@ -85,6 +85,7 @@ enum EntityType {
   ticket
   channel
   chat
+  message
 }
 
 enum UserRole {
@@ -130,6 +131,10 @@ enum EventType {
   ticket_created
   ticket_updated
   ticket_commented
+  ticket_assigned
+  ticket_unassigned
+  ticket_linked
+  ticket_unlinked
   entity_linked
   repo_created
   repo_updated
@@ -225,12 +230,23 @@ type Ticket {
   description: String!
   status: TicketStatus!
   priority: Priority!
+  createdBy: User!
   assignees: [User!]!
   labels: [String!]!
   origin: Event
   channel: Channel
   projects: [Project!]!
   sessions: [Session!]!
+  links: [TicketLink!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type TicketLink {
+  id: ID!
+  entityType: EntityType!
+  entityId: ID!
+  createdAt: DateTime!
 }
 
 type Event {
@@ -408,6 +424,7 @@ input CreateTicketInput {
   labels: [String!]
   channelId: ID
   projectId: ID
+  assigneeIds: [ID!]
 }
 
 input UpdateTicketInput {
@@ -525,7 +542,10 @@ type Mutation {
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!
   commentOnTicket(ticketId: ID!, text: String!): Event!
-  linkSessionToTicket(sessionId: ID!, ticketId: ID!): Session!
+  assignTicket(ticketId: ID!, userId: ID!): Ticket!
+  unassignTicket(ticketId: ID!, userId: ID!): Ticket!
+  linkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
+  unlinkTicket(ticketId: ID!, entityType: EntityType!, entityId: ID!): Ticket!
   linkEntityToProject(entityType: EntityType!, entityId: ID!, projectId: ID!): Project!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
