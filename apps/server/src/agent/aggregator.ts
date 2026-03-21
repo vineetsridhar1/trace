@@ -30,7 +30,7 @@ export interface AggregatedBatch {
   maxTier?: number;
   openedAt: number;
   closedAt: number;
-  closeReason: "silence" | "max_events" | "max_wall_clock";
+  closeReason: "silence" | "max_events" | "max_wall_clock" | "direct";
 }
 
 /** Callback invoked when a window closes and emits a batch */
@@ -116,6 +116,11 @@ async function removePersistedWindow(scopeKey: string, orgId: string): Promise<v
   await redis.del(redisKey(scopeKey, orgId));
 }
 
+/**
+ * Load all persisted windows from Redis. Uses a global SCAN — safe for
+ * single-worker deployment. Multi-worker will need scoped recovery
+ * (e.g. by consumer name or org assignment) — see ticket #15.
+ */
 async function loadPersistedWindows(): Promise<AggregationWindow[]> {
   const pattern = `${REDIS_KEY_PREFIX}*`;
   const windows: AggregationWindow[] = [];
@@ -233,7 +238,7 @@ export class EventAggregator {
         maxTier: routing.maxTier,
         openedAt: Date.now(),
         closedAt: Date.now(),
-        closeReason: "silence", // direct events are single-event "batches"
+        closeReason: "direct",
       };
       this.batchHandler(batch);
       return;
@@ -313,12 +318,17 @@ export class EventAggregator {
 
   private checkWallClocks(): void {
     const now = Date.now();
+    // Collect expired keys first to avoid mutating the map during iteration
+    const expired: string[] = [];
     for (const [windowKey, window] of this.windows) {
       if (now - window.openedAt >= MAX_WALL_CLOCK_MS) {
-        this.closeWindow(windowKey, "max_wall_clock").catch((err) => {
-          logError("failed to close window on wall clock", err);
-        });
+        expired.push(windowKey);
       }
+    }
+    for (const key of expired) {
+      this.closeWindow(key, "max_wall_clock").catch((err) => {
+        logError("failed to close window on wall clock", err);
+      });
     }
   }
 
