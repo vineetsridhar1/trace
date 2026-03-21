@@ -1061,41 +1061,129 @@ User starts cloud session
 
 ### 8.4 Agent Runtime
 
-The ambient agent runs as a server-side service that subscribes to the event stream directly via the real-time broker — not through GraphQL subscriptions. It calls the service layer directly to take actions — not through GraphQL mutations. It's a first-class server-side component, not an external client.
+The ambient agent runs as a **separately deployed backend service** within the same codebase. It subscribes to the event stream directly via the real-time broker — not through GraphQL subscriptions. It calls the service layer directly to take actions — not through GraphQL mutations. It's a first-class server-side component, not an external client.
 
-Its architecture:
+The full implementation spec is in `ai-plan.md`. This section covers the architectural decisions and how the runtime fits into the broader system.
+
+**Deployment shape.** Same repo, same codebase, separate service process. The agent has a different latency profile than the API (long-lived jobs, retries, async event processing), needs independent scaling, and should be failure-isolated from user-facing request paths. Recommended services: `api`, `agent-worker`, and optionally later `agent-memory-worker`, `agent-eval-worker`.
+
+**Architecture:**
 
 ```
-Event Stream → Filter/Router → Intent Classifier → Action Planner → Executor → Service Layer
+Event Stream
+  → Event Consumer (durable, checkpointed, replayable)
+  → Event Router / Filter (deterministic code, no LLM — processes every event at zero inference cost)
+  → Event Aggregator (batches related events into coherent units via time/count windows)
+  → Context Builder (assembles token-budgeted context packets with bounded graph traversal)
+  → Tiered Planner (Tier 1: code router, Tier 2: workhorse model, Tier 3: premium model)
+  → Policy Engine (confidence-based routing: execute / suggest / drop)
+  → Action Executor (calls service layer through reflective action registry)
+  → Service Layer (creates normal events)
 ```
 
-- **Filter/Router.** Determines which events are worth processing (ignore ephemeral events, presence updates, etc.).
-- **Intent Classifier.** Uses the LLM adapter to analyze the event in context and determine what, if anything, the agent should do.
-- **Action Planner.** Decides on a specific action and constructs the appropriate service call.
-- **Executor.** Calls the service layer directly (e.g., `ticketService.create()`, `sessionService.start()`), producing new events that flow back into the stream.
+Key design decisions:
 
-The agent runtime is stateless between events (all state is in the event log) and horizontally scalable.
+- **Event consumption is durable.** The agent uses Postgres outbox tailing on the existing `Event` table with per-consumer checkpointing and at-least-once delivery. No new broker infrastructure for v1. The events are already durably written — the agent worker reads them with a cursor.
+- **The router is code, not LLM.** Every event hits the router, so it must be free. A switch on event type with rate limiting, burst detection, self-trigger suppression, and org AI settings checks. This filters ~80-90% of events before any model call.
+- **The aggregator batches related events.** A thread of 8 messages about a bug is one conceptual unit. Windows close on silence timeout (30s default), max events (25), or max wall-clock time (5min). High-priority events (agent @mention, ticket assignment, session failure) bypass aggregation.
+- **The context builder is the most critical subsystem.** It converts raw events into compact, relevant working sets for the planner within a defined token budget. Maximum 2-hop graph traversal with diminishing token allocation per hop. Rolling summaries for long histories with freshness validation.
+- **The planner uses a tiered model system.** Tier 2 (Haiku/Sonnet-class) handles ~90% of decisions. Tier 3 (Opus-class) is reserved for urgent tickets, complex cross-scope reasoning, and explicit agent assignments. The Tier 2 planner can request promotion to Tier 3.
+- **The policy engine prevents chaos.** Confidence-based routing with per-action risk levels. Low-risk silent enrichment executes automatically. Medium-risk user-visible actions require higher confidence. High-risk actions (ticket assignment, session creation) require near-certainty or become suggestions. Actions route through the existing `InboxItem` system for suggestion delivery.
+- **The action registry is the AI's capability boundary.** The model picks from a registered set of actions — it cannot invent new capabilities. Each registration maps an action name to a service method, a risk level, and a parameter schema. Adding a new AI-accessible capability means adding one registry entry.
+- **`no_op` is the most common output.** The system prompt heavily emphasizes that most events require no action. The planner is tuned to be conservative.
 
-**LLM adapter.** The agent runtime (and potentially other parts of the platform) needs to call language models for intent classification, ticket description generation, research synthesis, and comment responses. This is behind an interface so the platform isn't hardcoded to a single provider, and so different tasks can use different models — a fast cheap model for intent classification, a more capable model for research and code review.
+**Relationship to AIService.** The codebase has an existing `AIService` with `runToolLoop()` for session-scoped LLM execution (coding work inside sessions). The Agent Runtime is a separate concern:
+- `AIService` = session-scoped, handles tool-use loops for coding work within a single session
+- `Agent Runtime` = org-scoped, handles ambient observation, planning, and orchestration across all entities
+- Both share the `LLMAdapter` interface for model calls
+- The Agent Runtime may invoke `sessionService.start()` to create sessions but never directly interacts with `AIService`
+
+**LLM adapter.** The agent runtime uses the same `LLMAdapter` interface already implemented in the codebase (`AnthropicAdapter`, `OpenAIAdapter`). Organizations can configure which model powers the agent and set different models for different tiers. The agent runtime resolves the adapter at call time based on configuration — it never imports a specific provider directly.
 
 ```typescript
 interface LLMAdapter {
   complete(messages: Message[], options: CompletionOptions): Promise<LLMResponse>;
   stream(messages: Message[], options: CompletionOptions): AsyncIterable<LLMChunk>;
 }
+```
 
-class AnthropicAdapter implements LLMAdapter {
-  // complete() → calls Claude API, returns full response
-  // stream()   → calls Claude API with streaming, yields chunks
-}
+**Cost management.** Per-org daily cost budgets with tiered degradation: >50% remaining = normal, 10-50% = downgrade Tier 3 to Tier 2, <10% = observe-only, exhausted = drop all. Every planner call records model tier, token counts, and estimated cost.
 
-class OpenAIAdapter implements LLMAdapter {
-  // complete() → calls OpenAI API, returns full response
-  // stream()   → calls OpenAI API with streaming, yields chunks
+**Soul file.** The agent's personality, tone, priorities, and behavioral rules are defined in a configurable **soul file** per organization. See Section 8.4.1.
+
+### 8.4.1 Agent Soul File
+
+The soul file is the agent's configurable identity document. It defines _who_ the agent is within a specific organization — its personality, communication style, domain expertise, priorities, and behavioral boundaries. The soul file is loaded into the planner's system prompt on every decision, making it the primary lever for organizations to shape agent behavior without touching code.
+
+**Why a soul file.** Every organization has different norms. A fast-moving startup wants a terse, proactive agent that creates tickets aggressively. An enterprise compliance team wants a cautious agent that only suggests and never acts autonomously. A game studio wants the agent to understand Unity conventions and prioritize crash reports. The soul file captures these preferences in a human-readable, version-controllable format.
+
+**Format.** The soul file is a structured markdown document stored per organization. It is editable through Trace's organization settings UI and can optionally be committed to a repo as `.trace/soul.md` for version control.
+
+```markdown
+# Agent Soul — {Organization Name}
+
+## Identity
+You are the ambient AI assistant for {Organization Name}. You are a member of the engineering team, not an external tool.
+
+## Personality & Tone
+- Be direct and concise. No filler, no preamble.
+- Use technical language appropriate for senior engineers.
+- When uncertain, say so explicitly rather than hedging.
+- Never use emoji in professional channels.
+
+## Domain Context
+- We build a fintech payments platform processing real money.
+- Correctness matters more than speed. When in doubt, suggest rather than act.
+- Our stack: Go backend, React frontend, PostgreSQL, deployed on AWS EKS.
+- Key terminology: "ledger" = transaction log, "settlement" = end-of-day reconciliation.
+
+## Priorities
+1. Production incidents and bugs — always high priority, always immediate.
+2. Security-related discussions — flag and suggest tickets immediately.
+3. Performance regressions — proactively investigate and link to relevant sessions.
+4. Feature requests — suggest tickets but don't create autonomously.
+
+## Behavioral Rules
+- Never auto-assign tickets to team members. Always suggest.
+- Never post in #announcements without explicit user approval.
+- When creating tickets from conversations, always include the original message link.
+- For bug reports, always suggest "urgent" or "high" priority — let humans downgrade.
+- Suppress suggestions in #watercooler and #random — these are social channels.
+
+## Code Conventions
+- PR titles follow conventional commits: feat:, fix:, chore:, docs:.
+- Test files are co-located with source: `foo.ts` → `foo.test.ts`.
+- Database migrations require a rollback script.
+```
+
+**Loading order.** The soul file is assembled from multiple sources with increasing specificity:
+
+1. **Platform default** — A built-in baseline soul that ships with Trace. Conservative, generic, professional tone. Always present as a fallback.
+2. **Organization soul** — Stored in org settings. Overrides the platform default. Editable by org admins through the settings UI.
+3. **Project-level overrides** (optional) — A project can define a `soul_overrides` section that adds or modifies rules for that project's scope. Useful when different teams within an org have different norms.
+4. **Repo-level `.trace/soul.md`** (optional) — If a repo contains this file, its contents are merged into the soul for any session or context involving that repo. Good for repo-specific conventions (coding standards, test patterns, terminology).
+
+More specific sources override less specific ones. The context builder merges them at prompt assembly time.
+
+**Schema in org settings:**
+
+```typescript
+interface OrgAgentSettings {
+  aiEnabled: boolean;
+  autonomyMode: "observe" | "suggest" | "act";
+  soulFile: string;         // markdown content of the org soul file
+  modelTier: "default" | "custom";
+  costBudget: {
+    dailyLimitCents: number;
+    currentUsageCents: number;
+  };
+  customPreferences: Record<string, unknown>;
 }
 ```
 
-Organizations can configure which model powers the agent and potentially set different models for different tasks. The agent runtime resolves the adapter at call time based on configuration — it never imports a specific provider directly.
+**Soul file in the planner prompt.** The context builder injects the resolved soul file into every planner call as a dedicated section of the system prompt, positioned after the action schema and before the event context. This ensures the planner's decisions are shaped by the organization's preferences on every call.
+
+**Editability.** The soul file is plain markdown — non-technical team leads can edit it. The settings UI provides a live preview showing how the agent would respond to sample events with the current soul file. Changes take effect immediately (no deployment required).
 
 ### 8.5 Adapter Summary
 
@@ -1440,15 +1528,33 @@ Every organization member — human or agent — has a permission set:
 
 Agents default to Member permissions but can be scoped down. For example, an agent might have permission to create tickets but not delete them, or to start coding sessions but not merge code.
 
-### 9.2 Agent Trust Levels
+### 9.2 Agent Trust Levels & Confidence-Based Routing
 
-Agent actions have configurable trust levels:
+The agent's ability to act is governed by three interacting systems:
 
-- **Autonomous.** The agent acts without confirmation (e.g., adding labels, linking entities, posting informational comments).
-- **Suggest.** The agent proposes an action that requires user approval (e.g., creating a ticket, reassigning work, starting a session).
-- **Blocked.** The agent cannot perform this action (e.g., deleting tickets, removing members).
+**Operating modes** (configurable per org, project, channel, or ticket — more specific overrides take precedence):
 
-Trust levels are configurable per organization and per action type. Teams can start conservative and increase autonomy as they build confidence in the agent's behavior.
+- **Observe.** Agent reads events and updates internal state (summaries, memory) but never surfaces anything to users. All actions are dropped.
+- **Suggest.** Default user-visible mode. Agent proposes actions via `InboxItem` that users can accept, edit, or dismiss. Never acts autonomously on user-visible actions.
+- **Act.** Higher-trust mode. Agent can perform low-risk actions autonomously (silent enrichment, entity linking, bounded progress updates) and suggest higher-risk actions.
+
+**Per-action risk levels** (defined in the action registry):
+
+| Action                  | Risk    | Notes                                       |
+| ----------------------- | ------- | ------------------------------------------- |
+| Update internal summary | low     | Silent internal action                      |
+| Link entities           | low     | Usually safe                                |
+| Comment on ticket       | medium  | User-visible but bounded                    |
+| Send channel message    | medium  | User-visible, depends on confidence         |
+| Create ticket           | medium  | Creates real artifact                       |
+| Update ticket fields    | medium  | Modifies existing artifact                  |
+| Assign ticket           | high    | Avoid silent reassignment in v1             |
+| Start session           | high    | Resource-intensive, cost-generating         |
+| Close ticket            | blocked | Requires explicit human approval            |
+
+**Confidence-based routing.** The policy engine combines the planner's confidence score, the action's risk level, and the scope's operating mode to decide: execute, suggest, or drop. Higher risk requires higher confidence. Thresholds are tunable per org.
+
+Teams should start conservative (suggest mode, high confidence thresholds) and increase autonomy as they build trust in the agent. The soul file (Section 8.4.1) provides additional behavioral guardrails beyond the mechanical confidence system.
 
 ---
 
@@ -1469,15 +1575,15 @@ These are unresolved design decisions for the next iteration of this document:
 
 1. **Event retention & storage costs.** How long do we retain the full event log? What is the archival strategy for old sessions with thousands of tool invocation events?
 
-2. **Agent model selection.** Should the ambient agent be hardcoded to a specific model (e.g., Claude), or should organizations be able to configure which model powers the agent? (The adapter architecture supports pluggability, but the default matters.)
+2. ~~**Agent model selection.**~~ **Resolved.** Organizations configure which model powers the agent via org settings. The tiered model system (Section 8.4) uses different models for different decision tiers. The `LLMAdapter` interface makes this pluggable.
 
-3. **Multi-organization agents.** Can an agent span multiple organizations? This has implications for data isolation and context management.
+3. ~~**Multi-organization agents.**~~ **Resolved.** No. Agent identities are per-org. The agent in Org A and the agent in Org B are different actors with different IDs, permissions, trust levels, accumulated context, and soul files. No cross-org context sharing of any kind. See `ai-plan.md` Section 5.
 
-4. **Session cost management.** Coding sessions generate significant API costs (both LLM and compute). How do we surface, track, and budget these costs at the organization level? Fly Machines are billed per-second when running, so idle management directly impacts cost.
+4. ~~**Session cost management.**~~ **Partially resolved.** The agent runtime has per-org daily cost budgets with tiered degradation (Section 8.4). Session compute costs (Fly Machines billing) still need a separate tracking and budgeting system.
 
 5. **Conflict resolution in multiplayer sessions.** What happens when two users send conflicting instructions to the same coding session simultaneously?
 
-6. **Custom agent behaviors.** Beyond the ambient agent, should users be able to define custom agents with specific triggers and behaviors (a la GitHub Actions)?
+6. **Custom agent behaviors.** Beyond the ambient agent, should users be able to define custom agents with specific triggers and behaviors (a la GitHub Actions)? The soul file (Section 8.4.1) covers behavioral customization of the ambient agent itself, but user-defined trigger-action workflows are a separate question.
 
 7. **External integrations.** What's the initial set of integrations (GitHub, GitLab, Slack import, Linear import)? How deep do they go?
 

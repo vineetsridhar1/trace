@@ -823,15 +823,92 @@ interface PlannedAgentDecision {
 
 ### Model prompts should include
 
+- **soul file** (resolved from org + project + repo sources — see Section 9.6.1),
 - event type and batch context,
 - current scope entity state,
 - linked entities (with hop distance),
 - recent summary (with freshness indicator),
 - allowed actions (from registry, filtered for scope),
 - policy mode and confidence guidance,
-- org-specific preferences,
 - explicit instruction to prefer no-op when uncertain,
 - concise structured output schema.
+
+### 9.6.1 Soul File Integration
+
+The soul file replaces the generic "org-specific preferences" concept with a concrete, user-editable identity document that shapes every planner decision.
+
+**What it is.** A structured markdown document per organization that defines the agent's personality, tone, domain expertise, priorities, and behavioral rules. It is the primary lever for organizations to customize agent behavior without touching code.
+
+**Loading order.** The context builder assembles the soul from multiple sources:
+
+1. **Platform default** — Built-in baseline. Conservative, generic, professional. Always present as fallback.
+2. **Organization soul** — Stored in `OrgAgentSettings.soulFile`. Overrides platform default. Editable by admins in settings UI.
+3. **Project-level overrides** (optional) — A project can add or modify rules for its scope.
+4. **Repo-level `.trace/soul.md`** (optional) — Merged into context for any event involving that repo.
+
+More specific sources override less specific ones.
+
+**Prompt positioning.** The resolved soul file is injected into the planner system prompt after the action schema and before the event context:
+
+```
+[System prompt preamble]
+[Action schema — what you can do]
+[Soul file — who you are and how to behave]
+[Context packet — what happened]
+[Output schema — how to respond]
+```
+
+This ordering ensures the planner knows its capabilities (actions) and identity (soul) before seeing the specific situation it needs to reason about.
+
+**Token budget.** The soul file gets a dedicated allocation in the token budget (default: 800 tokens). If it exceeds budget, it is truncated from the bottom — identity and personality sections at the top are preserved, detailed behavioral rules at the bottom are trimmed. Org admins should keep soul files concise.
+
+**Example soul file:**
+
+```markdown
+# Agent Soul — Acme Payments
+
+## Identity
+You are the ambient AI assistant for Acme Payments. You are a member of the engineering team.
+
+## Personality & Tone
+- Be direct and concise. No filler.
+- Use technical language appropriate for senior engineers.
+- When uncertain, say so explicitly.
+
+## Domain Context
+- We build a fintech payments platform processing real money.
+- Correctness > speed. When in doubt, suggest rather than act.
+- Stack: Go backend, React frontend, PostgreSQL, AWS EKS.
+
+## Priorities
+1. Production incidents — always urgent, always immediate.
+2. Security discussions — flag and suggest tickets immediately.
+3. Performance regressions — investigate and link to sessions.
+
+## Behavioral Rules
+- Never auto-assign tickets. Always suggest.
+- Never post in #announcements without approval.
+- For bug reports, default to "high" priority.
+- Suppress suggestions in #watercooler and #random.
+```
+
+**Schema:**
+
+```ts
+interface OrgAgentSettings {
+  aiEnabled: boolean;
+  autonomyMode: "observe" | "suggest" | "act";
+  soulFile: string;         // markdown content
+  modelTier: "default" | "custom";
+  costBudget: {
+    dailyLimitCents: number;
+    currentUsageCents: number;
+  };
+  customPreferences: Record<string, unknown>;
+}
+```
+
+The `customPreferences` field in the existing `AgentOrgContext` (Section 5) is superseded by `soulFile` for behavioral configuration. `customPreferences` can remain for machine-readable settings (thresholds, feature flags) that don't belong in a prose document.
 
 ---
 
