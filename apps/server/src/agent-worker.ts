@@ -9,6 +9,7 @@
 
 import { redis, connectRedis, disconnectRedis } from "./lib/redis.js";
 import { prisma } from "./lib/db.js";
+import { agentIdentityService, type OrgAgentSettings } from "./services/agent-identity.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -27,6 +28,9 @@ const ORG_POLL_INTERVAL_MS = 30_000; // poll for new orgs every 30s
 
 /** Set of org IDs we're currently consuming from */
 const activeOrgs = new Set<string>();
+
+/** Agent identity settings per org */
+const agentContexts = new Map<string, OrgAgentSettings>();
 
 /** Whether the worker is shutting down */
 let shuttingDown = false;
@@ -96,9 +100,34 @@ async function discoverOrgs(): Promise<void> {
         log(`subscribed to org`, { orgId: org.id });
       }
     }
+
+    // Load agent identities for all orgs (creates if missing)
+    await loadAgentIdentities();
   } catch (err) {
     logError("failed to discover orgs", err);
   }
+}
+
+/**
+ * Load agent identities for all active orgs.
+ * Creates identities for any orgs that don't have one yet.
+ */
+async function loadAgentIdentities(): Promise<void> {
+  const identities = await agentIdentityService.loadAll();
+
+  for (const orgId of activeOrgs) {
+    if (identities.has(orgId)) {
+      const settings = identities.get(orgId)!;
+      agentContexts.set(orgId, settings);
+    } else {
+      // Auto-create identity for orgs that don't have one
+      const settings = await agentIdentityService.getOrCreate(orgId);
+      agentContexts.set(orgId, settings);
+      log("created agent identity for org", { orgId, agentId: settings.agentId });
+    }
+  }
+
+  log(`loaded agent identities for ${agentContexts.size} org(s)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,9 +151,17 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
   const ids: string[] = [];
 
   for (const orgId of activeOrgs) {
+    // Skip disabled orgs — leave their events pending in Redis
+    // so they can be processed if the agent is re-enabled
+    const agentContext = agentContexts.get(orgId);
+    if (agentContext && agentContext.status === "disabled") {
+      continue;
+    }
     streams.push(streamKey(orgId));
     ids.push(">"); // only new messages not yet delivered to this group
   }
+
+  if (streams.length === 0) return result;
 
   try {
     // XREADGROUP GROUP <group> <consumer> COUNT 100 BLOCK <ms> STREAMS <keys...> <ids...>
@@ -190,13 +227,21 @@ async function ackEvents(orgId: string, entryIds: string[]): Promise<void> {
 /**
  * Process a batch of events from a single org.
  * For now, just logs them. Future tickets will add routing, aggregation, etc.
+ *
+ * The agent context (identity + settings) is available for each org.
+ * When the agent takes actions in future tickets, it will use:
+ *   actorType: "agent", actorId: agentContext.agentId
  */
 function processEvents(orgId: string, entries: StreamEntry[]): void {
+  const agentContext = agentContexts.get(orgId);
+
   for (const entry of entries) {
     try {
       const event = JSON.parse(entry.event) as Record<string, unknown>;
       log("event consumed", {
         orgId,
+        agentId: agentContext?.agentId ?? "unknown",
+        autonomyMode: agentContext?.autonomyMode ?? "unknown",
         streamId: entry.id,
         eventType: event.eventType as string,
         scopeType: event.scopeType as string,
