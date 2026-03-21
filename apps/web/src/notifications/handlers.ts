@@ -5,6 +5,7 @@ import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { statusLabel } from "../components/session/sessionStatus";
+import { showNativeNotification } from "./native";
 
 /** Notification handler for a specific event type. */
 type NotificationHandler = (event: Event) => void;
@@ -23,6 +24,28 @@ export function notifyForEvent(event: Event) {
   for (const handler of eventHandlers) {
     handler(event);
   }
+}
+
+/**
+ * Show a notification via toast (foreground) or native OS notification (background).
+ * When the app is hidden, native notification is shown and the toast is skipped.
+ */
+function notify(
+  title: string,
+  options?: { tag?: string; onClick?: () => void },
+): void {
+  const shown = showNativeNotification(title, {
+    tag: options?.tag,
+    onClick: options?.onClick,
+  });
+  // If native notification was shown (app hidden), skip the toast
+  if (shown) return;
+
+  toast(title, {
+    action: options?.onClick
+      ? { label: "View", onClick: options.onClick }
+      : undefined,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -62,11 +85,9 @@ function handleSessionStatusChange(event: Event): void {
   const channelId = (session.channel as { id: string } | null)?.id ?? null;
   const sessionId = event.scopeId;
 
-  toast(`"${sessionName}" moved to "${label}"`, {
-    action: {
-      label: "View",
-      onClick: () => navigateToSession(channelId, sessionId),
-    },
+  notify(`"${sessionName}" moved to "${label}"`, {
+    tag: `session-status-${sessionId}`,
+    onClick: () => navigateToSession(channelId, sessionId),
   });
 }
 
@@ -88,12 +109,10 @@ function handleInboxItemCreated(event: Event): void {
   const itemType = item.itemType === "question" ? "Question" : "Plan";
   const title = (item.title as string) || "New item";
 
-  toast(`${itemType}: ${title}`, {
-    action: {
-      label: "View",
-      onClick: () => {
-        useUIStore.getState().setActivePage("inbox");
-      },
+  notify(`${itemType}: ${title}`, {
+    tag: `inbox-${item.id}`,
+    onClick: () => {
+      useUIStore.getState().setActivePage("inbox");
     },
   });
 }
@@ -118,14 +137,12 @@ function handleMentionNotification(event: Event): void {
   if (!mentions?.some((m) => m.userId === currentUserId)) return;
 
   const actorName = event.actor.name ?? "Someone";
-  toast(`${actorName} mentioned you`, {
-    action: {
-      label: "View",
-      onClick: () => {
-        if (event.scopeType === ("chat" as string)) {
-          useUIStore.getState().setActiveChatId(event.scopeId);
-        }
-      },
+  notify(`${actorName} mentioned you`, {
+    tag: `mention-${event.id}`,
+    onClick: () => {
+      if (event.scopeType === ("chat" as string)) {
+        useUIStore.getState().setActiveChatId(event.scopeId);
+      }
     },
   });
 }
@@ -152,11 +169,9 @@ function handlePrEvent(event: Event): void {
   const sessionId = event.scopeId;
   const label = event.eventType === "session_pr_opened" ? "PR opened" : "PR closed";
 
-  toast(`"${sessionName}" — ${label}`, {
-    action: {
-      label: "View",
-      onClick: () => navigateToSession(channelId, sessionId),
-    },
+  notify(`"${sessionName}" — ${label}`, {
+    tag: `session-pr-${sessionId}`,
+    onClick: () => navigateToSession(channelId, sessionId),
   });
 }
 
