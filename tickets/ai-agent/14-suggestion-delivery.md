@@ -56,6 +56,7 @@ When the policy engine routes a decision to `suggest`, the agent creates an Inbo
 ## Dependencies
 
 - 07 (Action Executor — executes accepted suggestions)
+  <!-- Ticket 07 created: `ActionExecutor` class in `./agent/executor.js`. Constructor takes `ServiceContainer` (ticketService, chatService, sessionService, inboxService, summaryService?). Call `executor.execute(action, ctx)` where `action: PlannedAction { actionType: string, args: Record<string, unknown> }` and `ctx: AgentContext { organizationId, agentId, triggerEventId }`. Returns `ExecutionResult { status: "success" | "failed", actionType, result?, error? }`. The accept mutation should construct a PlannedAction from the stored InboxItem payload and an AgentContext from the org's agent identity + the original triggerEventId. -->
 - 08 (Execution Logging — records suggestion outcomes)
 - 12 (Policy Engine — triggers suggestion creation)
 
