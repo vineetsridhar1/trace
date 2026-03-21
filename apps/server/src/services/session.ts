@@ -1538,6 +1538,154 @@ export class SessionService {
     return childSession;
   }
 
+  /**
+   * Move a session to a cloud runtime. Provisions a cloud machine on-demand
+   * and creates a child session bound to it.
+   */
+  async moveToCloud(
+    sessionId: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    const session = await prisma.session.findFirstOrThrow({
+      where: { id: sessionId, organizationId },
+      include: { ...SESSION_INCLUDE, projects: true, tickets: true },
+    });
+    if (isFullyUnloadedSessionStatus(session.status)) {
+      throw new Error(`Cannot move a ${session.status} session`);
+    }
+
+    // Build conversation context from the old session
+    const context = await buildConversationContext(sessionId);
+    const bootstrapPrompt = buildMigrationPrompt(context);
+
+    // Create child session targeted at cloud — the CloudAdapter will
+    // provision the VM and bind the session when the bridge connects.
+    const childSession = await prisma.session.create({
+      data: {
+        name: session.name,
+        status: "creating",
+        tool: session.tool,
+        model: session.model ?? undefined,
+        hosting: "cloud",
+        organizationId: session.organizationId,
+        createdById: actorId,
+        repoId: session.repoId ?? undefined,
+        branch: session.branch ?? undefined,
+        channelId: session.channelId ?? undefined,
+        parentSessionId: sessionId,
+        pendingRun: {
+          type: "run",
+          prompt: bootstrapPrompt,
+          interactionMode: null,
+        } satisfies PendingSessionCommand,
+        connection: connJson(defaultConnection()),
+        ...(session.projects.length > 0 && {
+          projects: {
+            create: session.projects.map((sp: { projectId: string }) => ({
+              projectId: sp.projectId,
+            })),
+          },
+        }),
+        ...(session.tickets.length > 0 && {
+          tickets: {
+            create: session.tickets.map((st: { ticketId: string }) => ({ ticketId: st.ticketId })),
+          },
+        }),
+      },
+      include: SESSION_INCLUDE,
+    });
+
+    // Emit session_started for the child
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: childSession.id,
+      eventType: "session_started",
+      payload: {
+        session: {
+          id: childSession.id,
+          name: childSession.name,
+          status: childSession.status,
+          tool: childSession.tool,
+          model: childSession.model,
+          hosting: childSession.hosting,
+          createdBy: childSession.createdBy,
+          repo: childSession.repo ?? null,
+          branch: childSession.branch ?? null,
+          channel: childSession.channel,
+          parentSession: childSession.parentSession ?? null,
+          childSessions: [],
+          connection: childSession.connection,
+          createdAt: childSession.createdAt,
+          updatedAt: childSession.updatedAt,
+        },
+        prompt: bootstrapPrompt,
+        movedFromSessionId: sessionId,
+      },
+      actorType,
+      actorId,
+    });
+
+    // Provision cloud runtime — the CloudAdapter handles VM creation,
+    // waiting for bridge connection, and workspace setup.
+    sessionRouter.createRuntime({
+      sessionId: childSession.id,
+      hosting: "cloud",
+      tool: childSession.tool,
+      model: childSession.model ?? undefined,
+      repo: childSession.repo
+        ? {
+            id: childSession.repo.id,
+            name: childSession.repo.name,
+            remoteUrl: childSession.repo.remoteUrl,
+            defaultBranch: childSession.repo.defaultBranch,
+          }
+        : null,
+      branch: childSession.branch ?? undefined,
+      createdById: actorId,
+      organizationId: childSession.organizationId,
+      onFailed: (error) => this.workspaceFailed(childSession.id, error),
+      onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
+    });
+
+    // Mark the old session as disconnected with context about the move
+    const oldConn = this.parseConnection(session.connection);
+    const rehomedConnection = {
+      ...oldConn,
+      state: "disconnected",
+      lastError: `Moved to new session ${childSession.id}`,
+      canRetry: false,
+      canMove: true,
+    } satisfies SessionConnectionData;
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        connection: connJson(rehomedConnection),
+      },
+    });
+
+    // Emit rehome event on old session
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "session_rehomed",
+        newSessionId: childSession.id,
+        runtimeInstanceId: null,
+        connection: connJson(rehomedConnection),
+      },
+      actorType,
+      actorId,
+    });
+
+    return childSession;
+  }
+
   async listRuntimesForTool(tool: string, organizationId: string) {
     // Only return local runtimes — cloud is always offered as a single
     // "Cloud" option by the UI, and the adapter auto-provisions the

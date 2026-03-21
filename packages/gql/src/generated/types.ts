@@ -266,6 +266,7 @@ export type Mutation = {
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
+  moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
   pauseSession: Session;
@@ -384,6 +385,11 @@ export type MutationLinkEntityToProjectArgs = {
 export type MutationLinkSessionToTicketArgs = {
   sessionId: Scalars['ID']['input'];
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationMoveSessionToCloudArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 

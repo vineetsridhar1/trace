@@ -121,6 +121,18 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  moveSessionToCloud: (
+    _: unknown,
+    args: { sessionId: string },
+    ctx: Context,
+  ) => {
+    return sessionService.moveToCloud(
+      args.sessionId,
+      ctx.organizationId,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
 };
 
 export const sessionSubscriptions = {
