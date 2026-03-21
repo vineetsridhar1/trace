@@ -103,7 +103,10 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
       });
   }, [sessionId]);
 
-  const nodes = useMemo(() => buildSessionNodes(eventIds, events), [eventIds, events]);
+  const { nodes, completedAgentTools } = useMemo(
+    () => buildSessionNodes(eventIds, events),
+    [eventIds, events],
+  );
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
@@ -185,6 +188,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
                 hasOlder={hasOlder}
                 loadingOlder={loadingOlder}
                 onLoadOlder={fetchOlderEvents}
+                completedAgentTools={completedAgentTools}
               />
             )}
           </div>

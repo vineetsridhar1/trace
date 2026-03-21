@@ -8,6 +8,10 @@ import { ToolResultRow } from "./messages/ToolResultRow";
 import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
+import { serializeUnknown } from "./messages/utils";
+import type { AgentToolResult } from "./groupReadGlob";
+
+const AGENT_NAMES = new Set(["agent", "task"]);
 
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
@@ -20,11 +24,22 @@ function asOutput(value: unknown): string | Record<string, unknown> | undefined 
   return asJsonObject(value);
 }
 
+/** Serialize agent result content to a display string */
+function agentResultToString(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (content != null && typeof content === "object") return serializeUnknown(content, 3000);
+  return undefined;
+}
+
 /**
  * Render an assistant event. Adapters normalize all tool output into a
  * consistent schema: { type: "assistant", message: { content: MessageBlock[] } }
  */
-function renderAssistantContent(payload: JsonObject, ts: string) {
+function renderAssistantContent(
+  payload: JsonObject,
+  ts: string,
+  completedAgentTools: Map<string, AgentToolResult>,
+) {
   const message = asJsonObject(payload.message);
   const contentBlocks = message?.content;
   if (!Array.isArray(contentBlocks)) return null;
@@ -38,14 +53,17 @@ function renderAssistantContent(payload: JsonObject, ts: string) {
       elements.push(<AssistantText key={i} text={block.text} timestamp={ts} />);
     } else if (block.type === "tool_use") {
       const name = str(block.name, "Tool");
-      if (name.toLowerCase() === "agent" || name.toLowerCase() === "task") {
+      if (AGENT_NAMES.has(name.toLowerCase())) {
         const input = asJsonObject(block.input);
+        const toolUseId = typeof block.id === "string" ? block.id : undefined;
+        const agentResult = toolUseId ? completedAgentTools.get(toolUseId) : undefined;
         elements.push(
           <SubagentRow
             key={i}
             description={str(input?.description) || str(input?.prompt) || "Subagent"}
             subagentType={str(input?.subagent_type, "agent")}
-            isLoading={true}
+            isLoading={!agentResult}
+            result={agentResult ? agentResultToString(agentResult.content) : undefined}
             timestamp={ts}
           />,
         );
@@ -55,6 +73,9 @@ function renderAssistantContent(payload: JsonObject, ts: string) {
         );
       }
     } else if (block.type === "tool_result") {
+      // Agent/task tool_results are rendered inline in the SubagentRow of the
+      // matching tool_use event — don't render them as standalone rows.
+      if (AGENT_NAMES.has(str(block.name, "").toLowerCase())) continue;
       elements.push(
         <ToolResultRow
           key={i}
@@ -69,12 +90,16 @@ function renderAssistantContent(payload: JsonObject, ts: string) {
   return elements.length > 0 ? <>{elements}</> : null;
 }
 
-function renderSessionOutput(payload: JsonObject, ts: string) {
+function renderSessionOutput(
+  payload: JsonObject,
+  ts: string,
+  completedAgentTools: Map<string, AgentToolResult>,
+) {
   const type = payload.type;
   if (typeof type !== "string") return null;
 
   if (type === "assistant") {
-    return renderAssistantContent(payload, ts);
+    return renderAssistantContent(payload, ts, completedAgentTools);
   }
 
   if (type === "result") {
@@ -88,7 +113,13 @@ function renderSessionOutput(payload: JsonObject, ts: string) {
   return null;
 }
 
-export function SessionMessage({ id }: { id: string }) {
+export function SessionMessage({
+  id,
+  completedAgentTools,
+}: {
+  id: string;
+  completedAgentTools: Map<string, AgentToolResult>;
+}) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
   const payload = asJsonObject(useScopedEventField(scopeKey, id, "payload"));
@@ -113,7 +144,7 @@ export function SessionMessage({ id }: { id: string }) {
       );
 
     case "session_output":
-      return payload ? renderSessionOutput(payload, timestamp) : null;
+      return payload ? renderSessionOutput(payload, timestamp, completedAgentTools) : null;
 
     case "message_sent":
       return (

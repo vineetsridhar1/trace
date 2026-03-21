@@ -11,12 +11,14 @@ export interface ContentBlock {
 
 export interface ToolUseBlock {
   type: "tool_use";
+  id?: string;
   name: string;
   input?: Record<string, unknown>;
 }
 
 export interface ToolResultBlock {
   type: "tool_result";
+  tool_use_id?: string;
   name: string;
   content?: string | Record<string, unknown>;
 }

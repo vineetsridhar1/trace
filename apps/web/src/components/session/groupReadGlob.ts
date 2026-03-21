@@ -3,6 +3,16 @@ import { asJsonObject, parseQuestion, type JsonObject, type Question } from "@tr
 import type { ReadGlobItem } from "./messages/ReadGlobGroup";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
+const AGENT_NAMES = new Set(["agent", "task"]);
+
+export interface AgentToolResult {
+  content: unknown;
+}
+
+export interface BuildSessionNodesResult {
+  nodes: SessionNode[];
+  completedAgentTools: Map<string, AgentToolResult>;
+}
 
 /** Payload types that render as nothing in SessionMessage — these should not break a Read/Glob bucket */
 const INVISIBLE_PAYLOAD_TYPES = new Set(["result"]);
@@ -131,12 +141,13 @@ function extractCommandResult(
   return output != null || command != null ? { id, command, output, timestamp, exitCode } : null;
 }
 
-/** Group consecutive Read/Glob events into collapsed nodes */
+/** Group consecutive Read/Glob events into collapsed nodes and collect completed agent tool results */
 export function buildSessionNodes(
   eventIds: string[],
   events: Record<string, Event>,
-): SessionNode[] {
+): BuildSessionNodesResult {
   const result: SessionNode[] = [];
+  const completedAgentTools = new Map<string, AgentToolResult>();
   let bucket: ReadGlobItem[] = [];
 
   const flushBucket = () => {
@@ -160,6 +171,23 @@ export function buildSessionNodes(
 
     if (event.eventType === "session_output") {
       const payload = asJsonObject(event.payload);
+
+      // Collect agent/task tool_result blocks for cross-event matching
+      if (payload?.type === "assistant") {
+        const msg = asJsonObject(payload.message);
+        const blocks = msg?.content;
+        if (Array.isArray(blocks)) {
+          for (const raw of blocks) {
+            const block = asJsonObject(raw);
+            if (!block || block.type !== "tool_result") continue;
+            const name = typeof block.name === "string" ? block.name.toLowerCase() : "";
+            if (!AGENT_NAMES.has(name)) continue;
+            if (typeof block.tool_use_id === "string") {
+              completedAgentTools.set(block.tool_use_id, { content: block.content });
+            }
+          }
+        }
+      }
       const commandStart = extractCommandStart(payload, event.timestamp, id);
       if (commandStart) {
         const nextId = eventIds[index + 1];
@@ -210,7 +238,7 @@ export function buildSessionNodes(
   // Questions run first — they need immediate interaction and take precedence
   // if both a QuestionBlock and PlanBlock appear in the same event.
   const withQuestions = detectQuestionNodes(deduped, events);
-  return detectPlanReviewNodes(withQuestions, events);
+  return { nodes: detectPlanReviewNodes(withQuestions, events), completedAgentTools };
 }
 
 /** Remove duplicate consecutive "result" session_output events */

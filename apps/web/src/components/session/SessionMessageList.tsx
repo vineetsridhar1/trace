@@ -5,13 +5,14 @@ import { ReadGlobGroup } from "./messages/ReadGlobGroup";
 import { PlanReviewCard } from "./messages/PlanReviewCard";
 import { AskUserQuestionInline } from "./messages/AskUserQuestionInline";
 import { CommandExecutionRow } from "./messages/CommandExecutionRow";
-import type { SessionNode } from "./groupReadGlob";
+import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 
 interface SessionMessageListProps {
   nodes: SessionNode[];
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
+  completedAgentTools: Map<string, AgentToolResult>;
 }
 
 export function SessionMessageList({
@@ -19,6 +20,7 @@ export function SessionMessageList({
   hasOlder,
   loadingOlder,
   onLoadOlder,
+  completedAgentTools,
 }: SessionMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -136,7 +138,7 @@ export function SessionMessageList({
 
         {nodes.map((node) =>
           node.kind === "event" ? (
-            <SessionMessage key={node.id} id={node.id} />
+            <SessionMessage key={node.id} id={node.id} completedAgentTools={completedAgentTools} />
           ) : node.kind === "command-execution" ? (
             <CommandExecutionRow
               key={node.id}
