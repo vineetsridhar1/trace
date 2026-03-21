@@ -33,12 +33,12 @@ None — this is a data definition. But it will be consumed by tickets 07, 10, a
 
 ## Completion requirements
 
-- [ ] Action registry module exists with all initial actions registered
-- [ ] Each action maps to a real service and method that exists in the codebase
-- [ ] Parameter schemas are defined and validate correctly
-- [ ] Registry can be queried by name, by scope, or in full
-- [ ] `no_op` is explicitly registered with a description emphasizing it's the default choice
-- [ ] Adding a new action is a single registry entry — no other changes needed
+- [x] Action registry module exists with all initial actions registered
+- [x] Each action maps to a real service and method that exists in the codebase
+- [x] Parameter schemas are defined and validate correctly
+- [x] Registry can be queried by name, by scope, or in full
+- [x] `no_op` is explicitly registered with a description emphasizing it's the default choice
+- [x] Adding a new action is a single registry entry — no other changes needed
 
 ## How to test
 

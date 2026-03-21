@@ -50,6 +50,7 @@ The packet should include:
 - 05 (Event Aggregator — provides the batches)
   <!-- Ticket 05 created: `AggregatedBatch` type (scopeKey, organizationId, events: AgentEvent[], maxTier?, openedAt, closedAt, closeReason). `buildScopeKey(event)` constructs keys like `chat:{id}:thread:{parentId}`, `chat:{id}`, `ticket:{id}`, `session:{id}`, generic `{type}:{id}`. Import `AggregatedBatch` and `buildScopeKey` from `./agent/aggregator.js`. The batch handler in agent-worker.ts is where the context builder will be wired in — replace the current log-only `handleBatch()` function. -->
 - 06 (Action Registry — provides available actions)
+  <!-- Ticket 06 created: Use `getActionsByScope(scope)` from `./agent/action-registry.js` to get scope-filtered actions. Each `AgentActionRegistration` has `name`, `description`, `risk`, `suggestable`, `parameters: ParameterSchema` (with `fields: Record<string, ParameterField>` where each field has `type`, `description`, `required?`, `enum?`). Serialize the action schema into the context packet's permissions section. -->
 - 09 (Entity Summaries — provides summaries)
 
 ## Completion requirements

@@ -20,6 +20,7 @@ The executor is the only place where the agent runtime mutates product state. It
 ## Dependencies
 
 - 06 (Action Registry)
+  <!-- Ticket 06 created: `AgentActionRegistration` interface with `name`, `service`, `method`, `description`, `risk: RiskLevel`, `suggestable`, `parameters: ParameterSchema`, `scopes: ScopeType[]`, `requiredPermissions?`. Query functions: `getAllActions()`, `getActionsByScope(scope)`, `findAction(name)`, `validateActionParams(action, params)`. Import from `./agent/action-registry.js`. Implementation notes for executor: (1) `ticket.update` has `id` in params — destructure it out and pass as first positional arg to `ticketService.update(id, input, actorType, actorId)`. Same for `ticket.addComment(ticketId, text, actorType, actorId)`. (2) `escalate.toHuman` maps to `inboxService.createItem` — executor must inject `orgId` and `itemType: "agent_escalation"` since they're not in the LLM-facing schema. (3) `summary.update` references `summaryService` which doesn't exist until ticket #09 — handle gracefully (skip or error). (4) `session.start` needs `organizationId` and `createdById` injected from agent context. (5) `session.pause/resume` take positional args `(id, actorType, actorId)`, not an object. -->
 
 ## Completion requirements
 
