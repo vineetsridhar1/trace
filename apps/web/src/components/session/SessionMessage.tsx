@@ -55,7 +55,7 @@ function renderAssistantContent(
       const name = str(block.name, "Tool");
       if (AGENT_NAMES.has(name.toLowerCase())) {
         const input = asJsonObject(block.input);
-        const toolUseId = str(block.id);
+        const toolUseId = typeof block.id === "string" ? block.id : undefined;
         const agentResult = toolUseId ? completedAgentTools.get(toolUseId) : undefined;
         elements.push(
           <SubagentRow
