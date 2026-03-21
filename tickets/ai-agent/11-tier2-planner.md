@@ -37,6 +37,7 @@ The planner is where the LLM decides what to do. It receives a context packet an
 ## Dependencies
 
 - 06 (Action Registry — provides action schema for the prompt)
+  <!-- Ticket 06 created: Use `getActionsByScope(scope)` from `./agent/action-registry.js` to get available actions. Build the action schema section of the prompt from `AgentActionRegistration.name`, `.description`, and `.parameters.fields`. The `parameters.fields` record maps field names to `{ type, description, required?, enum? }` — serialize these as the tool/action schema the LLM picks from. `no_op` is always available in all scopes. -->
 - 10 (Context Builder — provides the context packet)
 
 ## Completion requirements
