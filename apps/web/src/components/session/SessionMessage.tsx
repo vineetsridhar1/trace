@@ -29,6 +29,16 @@ function renderAssistantContent(payload: JsonObject, ts: string) {
   const contentBlocks = message?.content;
   if (!Array.isArray(contentBlocks)) return null;
 
+  // Collect agent/task tool_result blocks in order so we can match them to tool_use blocks
+  const agentResults: JsonObject[] = [];
+  for (const raw of contentBlocks) {
+    const b = asJsonObject(raw);
+    if (!b || b.type !== "tool_result") continue;
+    const rName = str(b.name, "").toLowerCase();
+    if (rName === "agent" || rName === "task") agentResults.push(b);
+  }
+  let agentResultIdx = 0;
+
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < contentBlocks.length; i++) {
     const block = asJsonObject(contentBlocks[i]);
@@ -40,12 +50,17 @@ function renderAssistantContent(payload: JsonObject, ts: string) {
       const name = str(block.name, "Tool");
       if (name.toLowerCase() === "agent" || name.toLowerCase() === "task") {
         const input = asJsonObject(block.input);
+        const resultBlock = agentResults[agentResultIdx];
+        const hasResult = !!resultBlock;
+        if (hasResult) agentResultIdx++;
         elements.push(
           <SubagentRow
             key={i}
             description={str(input?.description) || str(input?.prompt) || "Subagent"}
             subagentType={str(input?.subagent_type, "agent")}
-            isLoading={true}
+            isLoading={!hasResult}
+            result={hasResult ? str(resultBlock?.content as unknown) || str(resultBlock?.output as unknown) : undefined}
+            rawResponse={hasResult ? resultBlock : undefined}
             timestamp={ts}
           />,
         );
@@ -55,6 +70,9 @@ function renderAssistantContent(payload: JsonObject, ts: string) {
         );
       }
     } else if (block.type === "tool_result") {
+      // Skip tool_results for agent/task tools — they're shown inline in SubagentRow
+      const resultName = str(block.name, "").toLowerCase();
+      if (resultName === "agent" || resultName === "task") continue;
       elements.push(
         <ToolResultRow
           key={i}
