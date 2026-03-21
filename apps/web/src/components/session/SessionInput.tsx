@@ -74,7 +74,6 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
   }
 
   const disabledPlaceholders: Record<string, string> = {
-    completed: "Session completed. Follow-up messages are disabled.",
     merged: "Session merged. Follow-up messages are disabled.",
     failed: "Session failed. Follow-up messages are disabled.",
   };

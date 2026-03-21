@@ -147,7 +147,7 @@ function validateModelForTool(tool: string, model: string): string {
   return model;
 }
 
-const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["completed", "failed", "merged"];
+const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["failed", "merged"];
 
 export function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
   return FULLY_UNLOADED_SESSION_STATUSES.includes(status);
