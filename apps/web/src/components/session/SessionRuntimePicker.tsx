@@ -28,6 +28,7 @@ export function SessionRuntimePicker({
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [moving, setMoving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export function SessionRuntimePicker({
   const handleMove = useCallback(
     async (runtimeInstanceId: string) => {
       setMoving(runtimeInstanceId);
+      setError(null);
       try {
         const result = await client
           .mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, { sessionId, runtimeInstanceId })
@@ -74,6 +76,7 @@ export function SessionRuntimePicker({
 
   const handleMoveToCloud = useCallback(async () => {
     setMoving("cloud");
+    setError(null);
     try {
       const result = await client
         .mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId })
@@ -110,6 +113,12 @@ export function SessionRuntimePicker({
           Cancel
         </button>
       </div>
+
+      {error && (
+        <p className="mb-2 rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+          {error}
+        </p>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-4">
