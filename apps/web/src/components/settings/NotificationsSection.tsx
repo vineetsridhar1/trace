@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Bell, BellOff, Check, X } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -23,6 +23,16 @@ export function NotificationsSection() {
     const result = await requestPermission();
     setPermission(result);
     setRequesting(false);
+  }, []);
+
+  // Refresh permission state when the user returns to the tab (they may have
+  // changed it via browser settings while away).
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) setPermission(getPermission());
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   const supported = isSupported();

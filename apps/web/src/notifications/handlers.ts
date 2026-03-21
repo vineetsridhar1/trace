@@ -5,7 +5,7 @@ import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
 import { statusLabel } from "../components/session/sessionStatus";
-import { showNativeNotification, isAppHidden } from "./native";
+import { showNativeNotification } from "./native";
 
 /** Notification handler for a specific event type. */
 type NotificationHandler = (event: Event) => void;
