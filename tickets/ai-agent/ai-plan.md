@@ -317,7 +317,7 @@ Use the existing event primitive and ensure every delivered event includes at le
 interface DomainEvent {
   id: string;
   organizationId: string;
-  scopeType: "channel" | "session" | "ticket" | "system";
+  scopeType: "channel" | "chat" | "session" | "ticket" | "system";
   scopeId: string;
   actorType: "user" | "agent" | "system";
   actorId: string;
@@ -333,10 +333,17 @@ interface DomainEvent {
 
 #### Communication
 
-- `message.sent`
-- `message.edited`
+- `message.sent` (channels and chats)
+- `message.edited` (channels and chats)
 - `thread.created`
 - `reaction.added` (usually low priority)
+
+#### Chat lifecycle
+
+- `chat.created` (DM or group chat)
+- `chat.member_added` (agent added to chat — triggers observation)
+- `chat.member_removed` (agent removed — stop observing)
+- `chat.renamed` (group chat rename)
 
 #### Ticket lifecycle
 
@@ -430,6 +437,10 @@ Avoid sending every event to the full planner. This layer processes every single
 ### Example routing outcomes
 
 - `message.sent` in product channel -> forward to aggregator (batch with thread)
+- `message.sent` in chat where agent is member -> forward to aggregator
+- `message.sent` in chat where agent is not member -> drop (no observation without membership)
+- `chat.member_added` where new member is agent -> register chat for observation
+- `chat.member_removed` where removed member is agent -> deregister chat, stop observing
 - `ticket.assigned` to agent -> send directly to planner (high priority, skip aggregation)
 - `tool.result` with test failure -> forward to session-monitoring pipeline
 - `reaction.added` -> drop or memory-only pipeline
@@ -438,12 +449,26 @@ Avoid sending every event to the full planner. This layer processes every single
 - any event where org AI is disabled -> drop
 - any event where org cost budget is exhausted -> downgrade to observe-only
 
+### Chat membership gate
+
+The router must enforce a **membership check** for chat-scoped events. Unlike channels (which are team-visible and always observable), DMs and group chats require explicit agent membership for observation. The agent only processes events from chats where it is an active member (`ChatMember.leftAt IS NULL`).
+
+The router maintains an in-memory set of chat IDs the agent is a member of, updated by `chat.member_added` and `chat.member_removed` events.
+
+```ts
+// In the event router
+if (event.scopeType === 'chat') {
+  if (!agentChatMemberships.has(event.scopeId)) return 'drop';
+}
+```
+
 ### Required heuristics
 
 - rate limit per scope,
 - burst coalescing,
 - dedupe repetitive activity,
 - ignore self-trigger loops,
+- chat membership gate (only observe chats where agent is a member),
 - respect org/project/channel AI settings,
 - respect ticket/session autonomy mode,
 - cost budget enforcement.
@@ -487,7 +512,7 @@ Some events should bypass aggregation entirely and go straight to the planner:
 
 ```ts
 interface AggregationWindow {
-  scopeKey: string; // e.g., "channel:ch_123:thread:th_456"
+  scopeKey: string; // e.g., "channel:ch_123:thread:th_456" or "chat:chat_789:thread:msg_012"
   organizationId: string;
   events: DomainEvent[];
   openedAt: string;
@@ -495,6 +520,33 @@ interface AggregationWindow {
   silenceTimeoutMs: number; // default 30000
   maxEvents: number; // default 25
   maxWallClockMs: number; // default 300000
+}
+```
+
+### Scope key construction
+
+The scope key determines how events are grouped. Each independent conversation gets its own window:
+
+```ts
+function buildScopeKey(event: DomainEvent): string {
+  const threadId = event.metadata.threadId || event.metadata.parentMessageId;
+
+  switch (event.scopeType) {
+    case "channel":
+      return threadId
+        ? `channel:${event.scopeId}:thread:${threadId}`
+        : `channel:${event.scopeId}`;
+    case "chat":
+      return threadId
+        ? `chat:${event.scopeId}:thread:${threadId}`
+        : `chat:${event.scopeId}`;
+    case "ticket":
+      return `ticket:${event.scopeId}`;
+    case "session":
+      return `session:${event.scopeId}`;
+    default:
+      return `${event.scopeType}:${event.scopeId}`;
+  }
 }
 ```
 
@@ -535,7 +587,7 @@ interface AgentContextPacket {
     settings: Record<string, unknown>;
   };
   scope: {
-    type: "channel" | "ticket" | "session" | "system";
+    type: "channel" | "chat" | "ticket" | "session" | "system";
     id: string;
     entity: Record<string, unknown>;
   };
@@ -657,6 +709,7 @@ Examples:
 Long histories need compression. Maintain AI-generated summaries for:
 
 - channels,
+- chats (group chats where agent is a member; not DMs unless explicitly requested),
 - tickets,
 - sessions,
 - projects,
@@ -1399,7 +1452,116 @@ Channels are the main surface for proactive observation.
 
 ---
 
-## 10.2 Tickets
+## 10.2 DMs and Group Chats
+
+DMs and group chats are private conversational spaces. Unlike channels (which are team-visible and always observable), chats require explicit agent membership before the AI can observe or participate.
+
+### Privacy model: opt-in via membership
+
+The agent only observes chats where it has been explicitly added as a member. This mirrors how bots work in Slack — adding the agent is consent.
+
+- **DMs:** A user starts a DM with the agent. The agent is a `ChatMember` with `type = "dm"`. This is a direct, private conversation.
+- **Group chats:** A user adds the agent to a group chat. The agent is a `ChatMember` with `type = "group"`. The agent can observe and participate in the group conversation.
+- **No membership = no observation.** The router drops all chat-scoped events where the agent is not an active member. No silent surveillance.
+
+### Adding the agent to a chat
+
+Uses the existing `ChatMember` model — the agent is added like any other user:
+
+```ts
+// User adds the AI to a group chat or starts a DM
+await chatService.addMember({
+  chatId: 'chat_xyz',
+  userId: agentId,            // per-org agent identity
+  organizationId: orgId,
+  actorType: 'user',
+  actorId: invitingUserId,
+});
+// Emits: chat.member_added event
+// Agent runtime registers this chat for observation
+```
+
+Removing the agent (`chat.member_removed`) immediately stops all observation and processing for that chat.
+
+### Default autonomy modes by chat type
+
+DMs and group chats have different proactivity defaults. DMs carry a stronger expectation of privacy and user control.
+
+```ts
+function getEffectiveAutonomyMode(scope: Scope, orgDefault: string): string {
+  // Explicit scope override always takes precedence
+  if (scope.aiMode) return scope.aiMode;
+
+  if (scope.type === 'chat') {
+    // DMs: respond when asked, don't volunteer
+    if (scope.entity.chatType === 'dm') return 'observe';
+    // Group chats: can suggest, similar to channels but less aggressive
+    if (scope.entity.chatType === 'group') return 'suggest';
+  }
+
+  return orgDefault;
+}
+```
+
+### AI behavior by chat type
+
+| Behavior | Channel | Group Chat | DM |
+|---|---|---|---|
+| Observe silently | Always | If member | If member |
+| Suggest tickets (InboxItem) | Yes | Yes | Only if asked |
+| Post messages | Via suggestion or @mention | Via suggestion or @mention | Only when @mentioned or directly asked |
+| Summarize | Rolling summaries | Rolling summaries | Only on explicit request |
+| Proactive suggestions | Normal | Reduced — suggest mode | Minimal — observe mode by default |
+| Link entities | Autonomous (low risk) | Via suggestion | Only if asked |
+
+### AI responsibilities in DMs
+
+DMs with the agent are essentially a **direct conversation with the AI**. The agent should:
+
+- respond to questions with full context from the org (tickets, sessions, channels it has access to),
+- perform actions the user requests (create tickets, look up information, summarize work),
+- treat DM conversation as a private command interface — the user is explicitly talking to the agent.
+
+When a user DMs the agent, bypass aggregation and respond promptly (Path D: explicit request path).
+
+### AI responsibilities in group chats
+
+Group chats where the agent is a member should behave like a quieter version of channels:
+
+- detect actionable discussions (bugs, blockers, decisions) and suggest tickets via InboxItem,
+- respond when @mentioned with contextual information,
+- create internal summaries (silent enrichment),
+- avoid interrupting casual conversation — higher threshold for proactive suggestions than channels.
+
+### Recommended constraints
+
+- DMs: no unsolicited suggestions, no proactive posting, respond only when addressed,
+- Group chats: maximum 1 suggestion per hour (vs 2 per hour for channels),
+- Never share DM content in other contexts (channel summaries, ticket comments, etc.),
+- Agent's chat membership list is visible to org admins for auditability.
+
+### Context building for chats
+
+The context builder handles chats the same way as channels, with one addition — it includes the chat member list and chat type so the planner knows the privacy context:
+
+```ts
+// In context builder for chat-scoped events
+const chat = await services.chat.getById(event.scopeId);
+const members = await services.chat.getMembers(event.scopeId);
+
+const scopeEntity = {
+  ...chat,
+  chatType: chat.type,       // 'dm' or 'group'
+  memberCount: members.length,
+  members: members.map(m => ({ id: m.userId, name: m.user.name })),
+};
+```
+
+This lets the planner adjust its behavior: more responsive in DMs, more conservative in group chats.
+
+---
+
+## 10.3 Tickets
 
 Tickets are derived state but still a primary working surface.
 
@@ -1422,7 +1584,7 @@ Tickets are derived state but still a primary working surface.
 
 ---
 
-## 10.3 Sessions
+## 10.4 Sessions
 
 Sessions are where autonomous work becomes tangible.
 
@@ -1462,7 +1624,7 @@ The session tool:
 
 ---
 
-## 10.4 Projects and Repos
+## 10.5 Projects and Repos
 
 Projects and repos provide structural context.
 
@@ -1632,7 +1794,7 @@ The `payload` JSON field carries the proposed action, confidence, trigger event 
 interface EntitySummary {
   id: string;
   organizationId: string;
-  entityType: "channel" | "ticket" | "session" | "project" | "repo";
+  entityType: "channel" | "chat" | "ticket" | "session" | "project" | "repo";
   entityId: string;
   summaryType: "rolling" | "milestone" | "incident" | "snapshot";
   text: string;
@@ -1835,7 +1997,30 @@ This should generally use Tier 3 (or at minimum Tier 2 with higher token budget)
 6. Executor posts concise clarification request as ticket comment.
 7. InboxItem created for the ticket assignee flagging the blocked session.
 
-## 17.4 Burst of channel activity -> summary only
+## 17.4 DM with agent -> direct action
+
+1. User opens a DM with the agent and sends: "what's the status of TK-142?"
+2. `message.sent` event in `chat:chat_dm_xyz` scope.
+3. Router checks membership — agent is a member of this DM. Chat type is `dm`, so this is a direct conversation.
+4. Router bypasses aggregation (DM to agent = explicit request path).
+5. Context builder fetches TK-142 (ticket entity), linked session sess_044, recent ticket events, and rolling summary.
+6. Tier 2 planner (or Tier 3 if complex) sees the direct question and assembles a response.
+7. Planner decides `message.send` with confidence 0.95 — user explicitly asked in a DM.
+8. Policy allows: DM with agent, explicit question, high confidence.
+9. Executor calls `chatService.sendMessage(...)` with a status summary of TK-142.
+10. User sees the response in their DM thread.
+
+## 17.5 Group chat discussion -> ticket suggestion
+
+1. Agent is a member of a group chat with 4 engineers.
+2. Three messages discuss a flaky integration test over 2 minutes.
+3. Aggregator batches into a window, closes after 30s silence.
+4. Planner sees the discussion and an open ticket TK-200 about test flakiness.
+5. Planner decides: suggest linking the discussion to TK-200 (confidence 0.65).
+6. Policy: group chat autonomy is "suggest," confidence above suggest threshold. Disposition: **suggest**.
+7. InboxItem created for the group chat members suggesting the link.
+
+## 17.6 Burst of channel activity -> summary only
 
 1. A channel has 30 messages in 10 minutes discussing architecture options.
 2. Aggregator batches events. Window closes at max wall-clock time (5 minutes), produces two batches.
