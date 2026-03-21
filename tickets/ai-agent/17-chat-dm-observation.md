@@ -23,9 +23,9 @@ Make the agent fully functional in DMs and group chats. The router and aggregato
 
 ### Membership management
 
-- The router's in-memory chat membership set (from ticket 04) should be initialized on worker startup by querying all chats where the agent is an active member
-- The set updates in real-time as `chat_member_added` / `chat_member_removed` events arrive
-- When the agent is removed from a chat, immediately stop all processing for that chat (close any open aggregation windows)
+- The router's in-memory chat membership set (from ticket 04) is already initialized on worker startup via `seedChatMembershipGate()` and updated in real-time by `updateChatMembership()` — no additional work needed for membership tracking
+  <!-- Note: The ChatMember table stores userId which references User.id. For the agent to be a chat member, either the agent's AgentIdentity.id must be inserted into ChatMember.userId (requires ChatService changes to accept agent actors), or a synthetic User row must exist for the agent. This ticket must resolve how agents become chat members at the DB level. -->
+- When the agent is removed from a chat, immediately stop all processing for that chat (close any open aggregation windows via aggregator API from ticket #05)
 
 ### Privacy guard
 

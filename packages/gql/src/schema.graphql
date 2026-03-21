@@ -100,6 +100,17 @@ enum AgentTrustLevel {
   blocked
 }
 
+enum AgentStatus {
+  enabled
+  disabled
+}
+
+enum AutonomyMode {
+  observe
+  suggest
+  act
+}
+
 enum InboxItemType {
   plan
   question
@@ -317,6 +328,22 @@ type Participant {
   muted: Boolean!
 }
 
+type AgentIdentity {
+  id: ID!
+  organizationId: ID!
+  name: String!
+  status: AgentStatus!
+  autonomyMode: AutonomyMode!
+  soulFile: String!
+  costBudget: CostBudget!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type CostBudget {
+  dailyLimitCents: Int!
+}
+
 type ThreadSummary {
   rootMessageId: ID!
   replyCount: Int!
@@ -480,6 +507,14 @@ input SetApiTokenInput {
   token: String!
 }
 
+input UpdateAgentSettingsInput {
+  name: String
+  status: AgentStatus
+  autonomyMode: AutonomyMode
+  soulFile: String
+  dailyLimitCents: Int
+}
+
 # --- Queries ---
 
 type Query {
@@ -515,6 +550,7 @@ type Query {
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
+  agentIdentity(organizationId: ID!): AgentIdentity
 }
 
 type Terminal {
@@ -568,6 +604,7 @@ type Mutation {
   unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
   muteScope(scopeType: String!, scopeId: ID!): Participant!
   unmuteScope(scopeType: String!, scopeId: ID!): Participant!
+  updateAgentSettings(organizationId: ID!, input: UpdateAgentSettingsInput!): AgentIdentity!
 }
 
 # --- Subscriptions ---

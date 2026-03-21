@@ -7,7 +7,7 @@ The soul file is a structured markdown document that defines the agent's persona
 ## What needs to happen
 
 - Create a platform default soul file at `apps/server/src/agent/default-soul.md` — conservative, generic, professional baseline
-- Store the org-level soul file in `OrgAgentSettings.soulFile` (already added in ticket 03)
+- The org-level soul file is already stored in `AgentIdentity.soulFile` and updatable via the `updateAgentSettings` GraphQL mutation (added in ticket 03)
 - Create a soul file resolver that merges sources in priority order:
   1. Platform default (always present as fallback)
   2. Org-level soul file (overrides platform default)
@@ -15,7 +15,7 @@ The soul file is a structured markdown document that defines the agent's persona
   4. Repo-level `.trace/soul.md` (optional, merged for events involving that repo)
 - More specific sources override less specific ones
 - The context builder (ticket 10) should call the resolver and include the resolved soul file in the context packet
-- Add a GraphQL mutation for org admins to update their soul file
+- ~~Add a GraphQL mutation for org admins to update their soul file~~ (Already done — `updateAgentSettings(input: { soulFile: "..." })` from ticket 03)
 - Add a simple UI in org settings to edit the soul file (a markdown textarea)
 - The soul file is positioned in the planner prompt between the action schema and the event context
 

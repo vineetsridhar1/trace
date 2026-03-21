@@ -7,9 +7,10 @@ The event router is the first stage of the agent pipeline. It processes every ev
 ## What needs to happen
 
 - Create `apps/server/src/agent/router.ts`
-- The router receives a deserialized event and the org's agent settings, and returns a routing decision: `drop`, `aggregate`, or `direct`
+- The router receives a deserialized event and the org's `OrgAgentSettings` (from `AgentIdentityService`), and returns a routing decision: `drop`, `aggregate`, or `direct`
+  <!-- Ticket 03 created `OrgAgentSettings` with fields: agentId, organizationId, name, status, autonomyMode, soulFile, costBudget.dailyLimitCents -->
 - Implement these routing rules:
-  - **Drop** if org AI is disabled (`aiEnabled: false`)
+  - **Drop** if org AI is disabled (`agentSettings.status === "disabled"` — ticket 03 collapsed `aiEnabled` into the `AgentIdentity.status` field)
   - **Drop** if `actorId` matches the agent's own ID (self-trigger suppression) — with an explicit allowlist for cases where the agent should still observe its own events (e.g., monitoring a session the agent itself started). The allowlist should be a simple set of event types + scope type combinations
   - **Drop** for low-value events (e.g. `inbox_item_created`, `inbox_item_resolved` from system actor)
   - **Direct** (bypass aggregation) for: `ticket.assigned` where assignee is the agent, `session_terminated`/`session_paused` with `needs_input`, explicit @mention of the agent in a message
@@ -32,18 +33,30 @@ The event router is the first stage of the agent pipeline. It processes every ev
 
 ## Completion requirements
 
-- [ ] Router module exists and is called by the agent worker for every consumed event
-- [ ] Self-trigger suppression works (agent's own events are dropped)
-- [ ] Org AI disabled check works
-- [ ] Chat membership gate works (chat events dropped if agent not a member)
-- [ ] Rate limiting per scope is implemented
-- [ ] Cost budget degradation tiers are enforced (normal → suppress Tier 3 → observe-only → drop all)
-- [ ] Routing decisions are logged
-- [ ] Adding a new event type to routing is a one-line change
+- [x] Router module exists and is called by the agent worker for every consumed event
+- [x] Self-trigger suppression works (agent's own events are dropped)
+- [x] Org AI disabled check works
+- [x] Chat membership gate works (chat events dropped if agent not a member)
+- [x] Rate limiting per scope is implemented
+- [x] Cost budget degradation tiers are enforced (normal → suppress Tier 3 → observe-only → drop all)
+- [x] Routing decisions are logged
+- [x] Adding a new event type to routing is a one-line change
+
+## Implementation notes
+<!-- Added after implementation review -->
+- Router lives at `apps/server/src/agent/router.ts`, integrated in `agent-worker.ts:processEvents()`
+- `routeEvent(event, settings)` is the main entry point — pure function, no side effects except rate limit counter
+- `AgentEvent` type is the canonical shape for deserialized events in the agent pipeline — downstream tickets should use this type
+- `RoutingResult.maxTier` annotation is how cost budget tier suppression flows to the planner (ticket #11)
+- `CostTracker` interface (`getRemainingBudgetFraction(orgId): number`) is the contract ticket #08 must implement
+- `setCostTracker(tracker)` is the injection point for wiring the real cost tracker in ticket #15
+- Chat membership gate is updated via `updateChatMembership()` called before routing — membership events always processed regardless of routing decision
+- Mention detection uses the structured `mentions` array from the message payload (`mentions.some(m => m.userId === agentId)`), not raw text search
+- Rate limiter uses a sliding window (10s, 20 events/scope) with periodic cleanup every 30s
 
 ## How to test
 
-1. Disable AI for an org in settings — verify all events for that org are dropped
+1. Set `AgentIdentity.status` to `disabled` for an org (via `updateAgentSettings` mutation) — verify all events for that org are dropped
 2. Have the agent create an event (manually simulate) — verify it's dropped as self-trigger
 3. Send a message in a chat where the agent is NOT a member — verify it's dropped
 4. Add the agent to a chat, send a message — verify it's forwarded

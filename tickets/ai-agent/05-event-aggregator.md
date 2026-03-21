@@ -26,6 +26,7 @@ The aggregator batches related events into coherent units before they reach the 
 ## Dependencies
 
 - 04 (Event Router)
+  <!-- Ticket 04 created: `AgentEvent` type (id, organizationId, scopeType, scopeId, eventType, actorType, actorId, payload, metadata, timestamp), `RoutingResult` with decision ("aggregate"|"direct"|"drop") and maxTier annotation. The aggregator receives events with decision="aggregate" and should pass through decision="direct" as single-event batches. Import from `./agent/router.js`. -->
 
 ## Completion requirements
 

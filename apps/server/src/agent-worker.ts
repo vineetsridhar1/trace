@@ -9,6 +9,14 @@
 
 import { redis, connectRedis, disconnectRedis } from "./lib/redis.js";
 import { prisma } from "./lib/db.js";
+import { agentIdentityService, type OrgAgentSettings } from "./services/agent-identity.js";
+import {
+  routeEvent,
+  updateChatMembership,
+  seedChatMemberships,
+  cleanupRateLimits,
+  type AgentEvent,
+} from "./agent/router.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -27,6 +35,9 @@ const ORG_POLL_INTERVAL_MS = 30_000; // poll for new orgs every 30s
 
 /** Set of org IDs we're currently consuming from */
 const activeOrgs = new Set<string>();
+
+/** Agent identity settings per org */
+const agentContexts = new Map<string, OrgAgentSettings>();
 
 /** Whether the worker is shutting down */
 let shuttingDown = false;
@@ -96,8 +107,61 @@ async function discoverOrgs(): Promise<void> {
         log(`subscribed to org`, { orgId: org.id });
       }
     }
+
+    // Load agent identities for all orgs (creates if missing)
+    await loadAgentIdentities();
   } catch (err) {
     logError("failed to discover orgs", err);
+  }
+}
+
+/**
+ * Load agent identities for all active orgs.
+ * Creates identities for any orgs that don't have one yet.
+ */
+async function loadAgentIdentities(): Promise<void> {
+  const identities = await agentIdentityService.loadAll();
+
+  for (const orgId of activeOrgs) {
+    if (identities.has(orgId)) {
+      const settings = identities.get(orgId)!;
+      agentContexts.set(orgId, settings);
+    } else {
+      // Auto-create identity for orgs that don't have one
+      const settings = await agentIdentityService.getOrCreate(orgId);
+      agentContexts.set(orgId, settings);
+      log("created agent identity for org", { orgId, agentId: settings.agentId });
+    }
+  }
+
+  log(`loaded agent identities for ${agentContexts.size} org(s)`);
+}
+
+/**
+ * Seed the chat membership gate for all orgs where the agent is a member.
+ * Queries the ChatMember table for rows matching the agent's identity ID.
+ */
+async function seedChatMembershipGate(): Promise<void> {
+  for (const [orgId, settings] of agentContexts) {
+    try {
+      const memberships = await prisma.chatMember.findMany({
+        where: {
+          organizationId: orgId,
+          userId: settings.agentId,
+          leftAt: null,
+        },
+        select: { chatId: true },
+      });
+
+      const chatIds = memberships.map((m) => m.chatId);
+      seedChatMemberships(orgId, chatIds);
+
+      if (chatIds.length > 0) {
+        log("seeded chat memberships", { orgId, chatCount: chatIds.length });
+      }
+    } catch (err) {
+      logError(`failed to seed chat memberships for org ${orgId}`, err);
+    }
   }
 }
 
@@ -122,9 +186,17 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
   const ids: string[] = [];
 
   for (const orgId of activeOrgs) {
+    // Skip disabled orgs — leave their events pending in Redis
+    // so they can be processed if the agent is re-enabled
+    const agentContext = agentContexts.get(orgId);
+    if (agentContext && agentContext.status === "disabled") {
+      continue;
+    }
     streams.push(streamKey(orgId));
     ids.push(">"); // only new messages not yet delivered to this group
   }
+
+  if (streams.length === 0) return result;
 
   try {
     // XREADGROUP GROUP <group> <consumer> COUNT 100 BLOCK <ms> STREAMS <keys...> <ids...>
@@ -189,20 +261,57 @@ async function ackEvents(orgId: string, entryIds: string[]): Promise<void> {
 
 /**
  * Process a batch of events from a single org.
- * For now, just logs them. Future tickets will add routing, aggregation, etc.
+ * Routes each event through the event router (ticket #04).
+ * Future tickets will add aggregation (#05), context building (#10), planner (#11), etc.
+ *
+ * The agent context (identity + settings) is available for each org.
+ * When the agent takes actions in future tickets, it will use:
+ *   actorType: "agent", actorId: agentContext.agentId
  */
 function processEvents(orgId: string, entries: StreamEntry[]): void {
+  const agentContext = agentContexts.get(orgId);
+  if (!agentContext) {
+    log("skipping events — no agent context", { orgId });
+    return;
+  }
+
   for (const entry of entries) {
     try {
-      const event = JSON.parse(entry.event) as Record<string, unknown>;
-      log("event consumed", {
+      const raw = JSON.parse(entry.event) as Record<string, unknown>;
+      const event: AgentEvent = {
+        id: raw.id as string,
+        organizationId: orgId,
+        scopeType: raw.scopeType as string,
+        scopeId: raw.scopeId as string,
+        eventType: raw.eventType as string,
+        actorType: raw.actorType as string,
+        actorId: raw.actorId as string,
+        payload: (raw.payload as Record<string, unknown>) ?? {},
+        metadata: raw.metadata as Record<string, unknown> | undefined,
+        timestamp: raw.timestamp as string,
+      };
+
+      // Update chat membership gate before routing
+      updateChatMembership(event, agentContext.agentId);
+
+      // Route the event
+      const result = routeEvent(event, agentContext);
+
+      log("event routed", {
         orgId,
         streamId: entry.id,
-        eventType: event.eventType as string,
-        scopeType: event.scopeType as string,
-        scopeId: event.scopeId as string,
-        actorType: event.actorType as string,
+        eventType: event.eventType,
+        scopeType: event.scopeType,
+        scopeId: event.scopeId,
+        decision: result.decision,
+        reason: result.reason,
+        ...(result.maxTier !== undefined ? { maxTier: result.maxTier } : {}),
       });
+
+      // Future tickets will handle aggregate/direct decisions:
+      // - "aggregate" → send to Event Aggregator (ticket #05)
+      // - "direct" → send to Context Builder / Planner (tickets #10, #11)
+      // - "drop" → nothing further
     } catch {
       log("event consumed (unparseable)", { orgId, streamId: entry.id });
     }
@@ -245,6 +354,7 @@ function sleep(ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 let orgPollTimer: ReturnType<typeof setInterval> | null = null;
+let rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 function startOrgPolling(): void {
   orgPollTimer = setInterval(() => {
@@ -254,10 +364,21 @@ function startOrgPolling(): void {
   }, ORG_POLL_INTERVAL_MS);
 }
 
-function stopOrgPolling(): void {
+function startRateLimitCleanup(): void {
+  // Clean up stale rate limit entries every 30 seconds
+  rateLimitCleanupTimer = setInterval(() => {
+    cleanupRateLimits();
+  }, 30_000);
+}
+
+function stopTimers(): void {
   if (orgPollTimer) {
     clearInterval(orgPollTimer);
     orgPollTimer = null;
+  }
+  if (rateLimitCleanupTimer) {
+    clearInterval(rateLimitCleanupTimer);
+    rateLimitCleanupTimer = null;
   }
 }
 
@@ -270,7 +391,7 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   log(`received ${signal}, shutting down gracefully...`);
 
-  stopOrgPolling();
+  stopTimers();
 
   // Give the consume loop time to exit its current XREADGROUP block
   // (it will exit on next iteration since shuttingDown is true)
@@ -319,8 +440,14 @@ async function main(): Promise<void> {
   await discoverOrgs();
   log(`consuming events for ${activeOrgs.size} org(s)`);
 
+  // Seed chat membership gate from database
+  await seedChatMembershipGate();
+
   // Start polling for new orgs
   startOrgPolling();
+
+  // Start rate limit cleanup
+  startRateLimitCleanup();
 
   // Enter the main consume loop (blocks until shutdown)
   await consumeLoop();

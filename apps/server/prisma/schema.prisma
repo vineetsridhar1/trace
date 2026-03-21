@@ -112,6 +112,17 @@ enum CloudMachineStatus {
   destroyed
 }
 
+enum AgentStatus {
+  enabled
+  disabled
+}
+
+enum AutonomyMode {
+  observe
+  suggest
+  act
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -163,6 +174,21 @@ model Organization {
   messages      Message[]
   participants  Participant[]
   cloudMachines CloudMachine[]
+  agentIdentity AgentIdentity?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AgentIdentity {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String       @default("Trace AI")
+  status         AgentStatus  @default(enabled)
+  autonomyMode   AutonomyMode @default(observe)
+  soulFile       String       @default("")
+  dailyLimitCents Int         @default(1000)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
