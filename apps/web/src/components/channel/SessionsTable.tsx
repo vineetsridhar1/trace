@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Loader2 } from "lucide-react";
 import type {
   ColDef,
+  FilterChangedEvent,
   GetContextMenuItemsParams,
+  GridReadyEvent,
   ICellRendererParams,
+  IsGroupOpenByDefaultParams,
   MenuItemDef,
 } from "ag-grid-community";
 import { createTable } from "../ui/table";
@@ -26,6 +29,11 @@ function bucketize(ts: string | undefined): number {
   const t = new Date(ts).getTime();
   return Math.floor(t / BUCKET_MS) * BUCKET_MS;
 }
+
+/** Statuses whose groups should start collapsed. */
+const collapsedByDefault = new Set(["merged", "failed"]);
+
+const FILTER_STORAGE_KEY_PREFIX = "trace:sessions-filter:";
 
 /** Group ordering — attention-needed first, then active, then done. */
 const statusGroupOrder: Record<string, number> = {
@@ -222,6 +230,8 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     [],
   );
 
+  const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}`;
+
   const agGridOptions = useMemo(
     () => ({
       onRowClicked: (event: {
@@ -240,6 +250,24 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           setActiveSessionId(event.data.id);
         }
       },
+      onGridReady: (event: GridReadyEvent<SessionRow>) => {
+        try {
+          const saved = localStorage.getItem(filterStorageKey);
+          if (saved) {
+            event.api.setFilterModel(JSON.parse(saved));
+          }
+        } catch {
+          // ignore corrupt data
+        }
+      },
+      onFilterChanged: (event: FilterChangedEvent<SessionRow>) => {
+        const model = event.api.getFilterModel();
+        if (Object.keys(model).length === 0) {
+          localStorage.removeItem(filterStorageKey);
+        } else {
+          localStorage.setItem(filterStorageKey, JSON.stringify(model));
+        }
+      },
       rowHeight: 40,
       headerHeight: 32,
       suppressCellFocus: true,
@@ -249,7 +277,9 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         return undefined;
       },
       groupDisplayType: "groupRows" as const,
-      groupDefaultExpanded: -1,
+      isGroupOpenByDefault: (params: IsGroupOpenByDefaultParams) => {
+        return !collapsedByDefault.has(params.key ?? "");
+      },
       groupRowRendererParams: {
         suppressCount: true,
         innerRenderer: (params: ICellRendererParams) => {
@@ -275,7 +305,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         return a - b;
       },
     }),
-    [setActiveSessionId, getContextMenuItems],
+    [setActiveSessionId, getContextMenuItems, filterStorageKey],
   );
 
   return (
