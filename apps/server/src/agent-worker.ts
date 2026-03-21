@@ -18,6 +18,7 @@ import {
   type AgentEvent,
 } from "./agent/router.js";
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
+import { summaryService } from "./services/summary.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -29,6 +30,7 @@ const STREAM_KEY_PREFIX = "stream:org:";
 const STREAM_KEY_SUFFIX = ":events";
 const BLOCK_MS = 5_000; // block timeout for XREADGROUP
 const ORG_POLL_INTERVAL_MS = 30_000; // poll for new orgs every 30s
+const SUMMARY_REFRESH_INTERVAL_MS = 60_000; // check for stale summaries every 60s
 
 // ---------------------------------------------------------------------------
 // State
@@ -374,6 +376,7 @@ function sleep(ms: number): Promise<void> {
 
 let orgPollTimer: ReturnType<typeof setInterval> | null = null;
 let rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null;
+let summaryRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 function startOrgPolling(): void {
   orgPollTimer = setInterval(() => {
@@ -390,6 +393,42 @@ function startRateLimitCleanup(): void {
   }, 30_000);
 }
 
+function startSummaryRefresh(): void {
+  summaryRefreshTimer = setInterval(async () => {
+    if (shuttingDown) return;
+    try {
+      const staleEntities = await summaryService.findStaleEntities();
+      if (staleEntities.length === 0) return;
+
+      log("refreshing stale summaries", { count: staleEntities.length });
+
+      for (const entity of staleEntities) {
+        if (shuttingDown) break;
+        try {
+          await summaryService.refreshSummary({
+            organizationId: entity.organizationId,
+            entityType: entity.entityType,
+            entityId: entity.entityId,
+          });
+          log("summary refreshed", {
+            orgId: entity.organizationId,
+            entityType: entity.entityType,
+            entityId: entity.entityId,
+            newEvents: entity.newEventCount,
+          });
+        } catch (err) {
+          logError(
+            `failed to refresh summary for ${entity.entityType}:${entity.entityId}`,
+            err,
+          );
+        }
+      }
+    } catch (err) {
+      logError("summary refresh cycle failed", err);
+    }
+  }, SUMMARY_REFRESH_INTERVAL_MS);
+}
+
 function stopTimers(): void {
   if (orgPollTimer) {
     clearInterval(orgPollTimer);
@@ -398,6 +437,10 @@ function stopTimers(): void {
   if (rateLimitCleanupTimer) {
     clearInterval(rateLimitCleanupTimer);
     rateLimitCleanupTimer = null;
+  }
+  if (summaryRefreshTimer) {
+    clearInterval(summaryRefreshTimer);
+    summaryRefreshTimer = null;
   }
 }
 
@@ -475,6 +518,10 @@ async function main(): Promise<void> {
 
   // Start rate limit cleanup
   startRateLimitCleanup();
+
+  // Start summary refresh loop (checks for stale entity summaries every 60s)
+  startSummaryRefresh();
+  log("summary refresh loop started");
 
   // Start the event aggregator (recovers persisted windows from Redis)
   await aggregator.start();
