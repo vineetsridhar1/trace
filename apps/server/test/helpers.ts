@@ -151,6 +151,20 @@ export function createPrismaMock() {
     ticketProject: {
       create: vi.fn(),
     },
+    agentExecutionLog: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
+    processedAgentEvent: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+      findMany: vi.fn(),
+    },
+    agentCostTracker: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+    },
     $executeRaw: vi.fn(),
   };
 
