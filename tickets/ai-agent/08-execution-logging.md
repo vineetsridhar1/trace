@@ -44,13 +44,29 @@ Every planner decision and action execution must be logged for observability, de
 
 ## Completion requirements
 
-- [ ] `AgentExecutionLog` table exists with migration
-- [ ] `ProcessedAgentEvent` table exists with migration
-- [ ] `AgentCostTracker` table exists with migration
-- [ ] Service methods exist to write execution logs and update cost tracking
-- [ ] Budget check method returns remaining budget percentage for an org
-- [ ] Logs are queryable by org, by date range, by status
-- [ ] Cost tracker correctly aggregates across multiple planner calls in a day
+- [x] `AgentExecutionLog` table exists with migration
+- [x] `ProcessedAgentEvent` table exists with migration
+- [x] `AgentCostTracker` table exists with migration
+- [x] Service methods exist to write execution logs and update cost tracking
+- [x] Budget check method returns remaining budget percentage for an org
+- [x] Logs are queryable by org, by date range, by status
+- [x] Cost tracker correctly aggregates across multiple planner calls in a day
+
+## Implementation notes
+<!-- Added after implementation -->
+- Three Prisma models added: `AgentExecutionLog`, `ProcessedAgentEvent`, `AgentCostTracker` with migrations `20260321203642` and `20260321204650`
+- Three service classes in `apps/server/src/services/`:
+  - `ExecutionLoggingService` (`execution-logging.ts`) — `write(input)`, `query(input)`, `getByTriggerEvent({ organizationId, triggerEventId })`
+  - `CostTrackingService` (`cost-tracking.ts`) — `recordCost(input)`, `checkBudget(orgId)`, `getByDateRange(input)`
+  - `ProcessedEventService` (`processed-event.ts`) — `isProcessed(consumerName, eventId)`, `markProcessed(input)`, `getProcessedEvents(input)`
+- `checkBudget()` returns `BudgetStatus { dailyLimitCents, spentCents, remainingCents, remainingPercent }` — `remainingPercent` is 0-100
+- The router (ticket 04) defines `CostTracker.getRemainingBudgetFraction(orgId): number` (synchronous, 0.0-1.0). Ticket #15 must create an adapter that wraps `checkBudget()` with a cached value (since the router calls this per event synchronously, hitting the DB per event is too expensive). Adapter: cache `checkBudget()` result with a 30-60s TTL, return `remainingPercent / 100`
+- `recordCost()` uses Prisma upsert with `increment` for atomic daily aggregation. Handles P2002 race condition (concurrent create) with retry-as-update
+- `RecordCostInput` accepts `isSummary?: boolean` to track summary calls separately from planner calls
+- `AgentExecutionLog` includes `contextTokenAllocation` (JSON) per plan section 14.3
+- `AgentCostTracker` includes `summaryCalls`/`summaryCostCents` per plan section 14.5
+- `ProcessedAgentEvent` table will grow unboundedly — ticket #19 should add a TTL-based cleanup job alongside its other cleanup work
+- Enums `ModelTier`, `ExecutionDisposition`, `ExecutionStatus` are defined in the Prisma schema. Import from `@prisma/client`
 
 ## How to test
 

@@ -123,6 +123,27 @@ enum AutonomyMode {
   act
 }
 
+enum ModelTier {
+  tier2
+  tier3
+}
+
+enum ExecutionDisposition {
+  ignore
+  suggest
+  act
+  summarize
+  escalate
+}
+
+enum ExecutionStatus {
+  succeeded
+  suggested
+  blocked
+  dropped
+  failed
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -174,7 +195,10 @@ model Organization {
   messages      Message[]
   participants  Participant[]
   cloudMachines CloudMachine[]
-  agentIdentity AgentIdentity?
+  agentIdentity    AgentIdentity?
+  executionLogs    AgentExecutionLog[]
+  processedEvents  ProcessedAgentEvent[]
+  costTrackers     AgentCostTracker[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -192,6 +216,68 @@ model AgentIdentity {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AgentExecutionLog {
+  id                    String               @id @default(uuid())
+  organizationId        String
+  organization          Organization         @relation(fields: [organizationId], references: [id])
+  triggerEventId        String
+  batchSize             Int                  @default(1)
+  agentId               String
+  modelTier             ModelTier
+  model                 String
+  promoted              Boolean              @default(false)
+  promotionReason       String?
+  inputTokens           Int
+  outputTokens          Int
+  estimatedCostCents    Float
+  contextTokenAllocation Json                @default("{}")
+  disposition           ExecutionDisposition
+  confidence            Float
+  plannedActions        Json                 @default("[]")
+  policyDecision        Json                 @default("{}")
+  finalActions          Json                 @default("[]")
+  status                ExecutionStatus
+  inboxItemId           String?
+  latencyMs             Int
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([triggerEventId])
+  @@index([organizationId, agentId, status])
+}
+
+model ProcessedAgentEvent {
+  consumerName   String
+  eventId        String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  resultHash     String?
+
+  processedAt DateTime @default(now())
+
+  @@id([consumerName, eventId])
+  @@index([organizationId, processedAt])
+}
+
+model AgentCostTracker {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  date           String       // YYYY-MM-DD
+  totalCostCents Float        @default(0)
+  tier2Calls     Int          @default(0)
+  tier2CostCents Float        @default(0)
+  tier3Calls     Int          @default(0)
+  tier3CostCents Float        @default(0)
+  summaryCalls     Int        @default(0)
+  summaryCostCents Float      @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, date])
 }
 
 model User {
