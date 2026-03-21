@@ -232,6 +232,7 @@ model AgentExecutionLog {
   inputTokens           Int
   outputTokens          Int
   estimatedCostCents    Float
+  contextTokenAllocation Json                @default("{}")
   disposition           ExecutionDisposition
   confidence            Float
   plannedActions        Json                 @default("[]")
@@ -271,6 +272,8 @@ model AgentCostTracker {
   tier2CostCents Float        @default(0)
   tier3Calls     Int          @default(0)
   tier3CostCents Float        @default(0)
+  summaryCalls     Int        @default(0)
+  summaryCostCents Float      @default(0)
 
   updatedAt DateTime @updatedAt
 

@@ -1,10 +1,12 @@
 import type { ModelTier } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
 export interface RecordCostInput {
   organizationId: string;
   modelTier: ModelTier;
   costCents: number;
+  isSummary?: boolean;
 }
 
 export interface BudgetStatus {
@@ -21,6 +23,7 @@ function todayDateString(): string {
 export class CostTrackingService {
   /**
    * Record cost for a planner call. Atomically upserts the daily cost tracker.
+   * Retries on unique constraint race condition (two concurrent creates).
    */
   async recordCost(input: RecordCostInput) {
     const date = todayDateString();
@@ -28,31 +31,54 @@ export class CostTrackingService {
     const tier3Inc = input.modelTier === "tier3" ? 1 : 0;
     const tier2CostInc = input.modelTier === "tier2" ? input.costCents : 0;
     const tier3CostInc = input.modelTier === "tier3" ? input.costCents : 0;
+    const summaryInc = input.isSummary ? 1 : 0;
+    const summaryCostInc = input.isSummary ? input.costCents : 0;
 
-    return prisma.agentCostTracker.upsert({
-      where: {
-        organizationId_date: {
-          organizationId: input.organizationId,
-          date,
-        },
-      },
-      create: {
+    const where = {
+      organizationId_date: {
         organizationId: input.organizationId,
         date,
-        totalCostCents: input.costCents,
-        tier2Calls: tier2Inc,
-        tier2CostCents: tier2CostInc,
-        tier3Calls: tier3Inc,
-        tier3CostCents: tier3CostInc,
       },
-      update: {
-        totalCostCents: { increment: input.costCents },
-        tier2Calls: { increment: tier2Inc },
-        tier2CostCents: { increment: tier2CostInc },
-        tier3Calls: { increment: tier3Inc },
-        tier3CostCents: { increment: tier3CostInc },
-      },
-    });
+    };
+
+    const updateData = {
+      totalCostCents: { increment: input.costCents },
+      tier2Calls: { increment: tier2Inc },
+      tier2CostCents: { increment: tier2CostInc },
+      tier3Calls: { increment: tier3Inc },
+      tier3CostCents: { increment: tier3CostInc },
+      summaryCalls: { increment: summaryInc },
+      summaryCostCents: { increment: summaryCostInc },
+    };
+
+    try {
+      return await prisma.agentCostTracker.upsert({
+        where,
+        create: {
+          organizationId: input.organizationId,
+          date,
+          totalCostCents: input.costCents,
+          tier2Calls: tier2Inc,
+          tier2CostCents: tier2CostInc,
+          tier3Calls: tier3Inc,
+          tier3CostCents: tier3CostInc,
+          summaryCalls: summaryInc,
+          summaryCostCents: summaryCostInc,
+        },
+        update: updateData,
+      });
+    } catch (e: unknown) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002"
+      ) {
+        return prisma.agentCostTracker.update({
+          where,
+          data: updateData,
+        });
+      }
+      throw e;
+    }
   }
 
   /**

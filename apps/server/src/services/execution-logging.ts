@@ -2,6 +2,7 @@ import type {
   ExecutionDisposition,
   ExecutionStatus,
   ModelTier,
+  Prisma,
 } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
@@ -17,6 +18,7 @@ export interface WriteExecutionLogInput {
   inputTokens: number;
   outputTokens: number;
   estimatedCostCents: number;
+  contextTokenAllocation?: Record<string, number>;
   disposition: ExecutionDisposition;
   confidence: number;
   plannedActions?: Record<string, unknown>[];
@@ -52,6 +54,8 @@ export class ExecutionLoggingService {
         inputTokens: input.inputTokens,
         outputTokens: input.outputTokens,
         estimatedCostCents: input.estimatedCostCents,
+        contextTokenAllocation: (input.contextTokenAllocation ??
+          {}) as unknown as Record<string, unknown>,
         disposition: input.disposition,
         confidence: input.confidence,
         plannedActions: (input.plannedActions ?? []) as unknown as Record<
@@ -74,12 +78,12 @@ export class ExecutionLoggingService {
   }
 
   async query(input: QueryExecutionLogsInput) {
-    const where: Record<string, unknown> = {
+    const where: Prisma.AgentExecutionLogWhereInput = {
       organizationId: input.organizationId,
     };
 
     if (input.startDate || input.endDate) {
-      const createdAt: Record<string, Date> = {};
+      const createdAt: { gte?: Date; lte?: Date } = {};
       if (input.startDate) createdAt.gte = input.startDate;
       if (input.endDate) createdAt.lte = input.endDate;
       where.createdAt = createdAt;
@@ -96,9 +100,15 @@ export class ExecutionLoggingService {
     });
   }
 
-  async getByTriggerEvent(triggerEventId: string) {
+  async getByTriggerEvent(input: {
+    organizationId: string;
+    triggerEventId: string;
+  }) {
     return prisma.agentExecutionLog.findMany({
-      where: { triggerEventId },
+      where: {
+        organizationId: input.organizationId,
+        triggerEventId: input.triggerEventId,
+      },
       orderBy: { createdAt: "desc" },
     });
   }

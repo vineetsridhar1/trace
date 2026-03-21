@@ -120,13 +120,16 @@ describe("ExecutionLoggingService", () => {
     });
   });
 
-  it("gets logs by trigger event", async () => {
+  it("gets logs by trigger event with org scoping", async () => {
     prismaMock.agentExecutionLog.findMany.mockResolvedValueOnce([]);
 
-    await service.getByTriggerEvent("evt-1");
+    await service.getByTriggerEvent({
+      organizationId: "org-1",
+      triggerEventId: "evt-1",
+    });
 
     expect(prismaMock.agentExecutionLog.findMany).toHaveBeenCalledWith({
-      where: { triggerEventId: "evt-1" },
+      where: { organizationId: "org-1", triggerEventId: "evt-1" },
       orderBy: { createdAt: "desc" },
     });
   });

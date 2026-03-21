@@ -162,6 +162,7 @@ export function createPrismaMock() {
     },
     agentCostTracker: {
       upsert: vi.fn(),
+      update: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
