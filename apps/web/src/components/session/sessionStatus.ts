@@ -43,7 +43,7 @@ export const connectionLabel: Record<string, string> = {
 export function getDisplayStatus(status: string | undefined, prUrl: string | null | undefined): string {
   if (!status) return "active";
   // These statuses take priority over the PR-derived "in review" state
-  if (status === "merged" || status === "failed" || status === "needs_input") return status;
+  if (status === "completed" || status === "merged" || status === "failed" || status === "needs_input") return status;
   if (prUrl) return "in_review";
   return status;
 }
