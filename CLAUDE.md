@@ -58,7 +58,7 @@ No core system has a hard dependency on a specific vendor. Adding a new hosting 
 
 - **Zustand is the single state management solution**. No React context for state. No urql normalized cache. No `useState` for shared state. One system, one mental model.
 - **urql is a transport layer only**. It sends queries and manages the WebSocket. Its cache is disabled. All results are normalized into Zustand. urql never triggers re-renders — Zustand does.
-- **Components take entity IDs as props**, not full objects. Use `useEntityField(type, id, field)` selectors for fine-grained re-renders.
+- **Components take entity IDs as props**, not full objects. Use `useEntityField(type, id, field)` selectors for fine-grained re-renders. For events, use `useScopedEventField(scopeKey, id, field)` — events are partitioned by scope, not stored in a flat table.
 - **Virtualize all lists** — message lists, event logs, ticket lists. Only visible items render to the DOM.
 - **Optimistic updates** — write to cache before server round-trip, reconcile when the event comes back.
 - **Viewport-driven subscriptions** — subscribe on navigate-in, unsubscribe on navigate-away. Only the ambient tier (badges, mentions, notifications) stays always-on.
@@ -106,6 +106,7 @@ apps/desktop/        — Electron shell + bridge client
 - **No urql cache for state management.** urql is transport only. Data lives in Zustand.
 - **No `any` types.** Never use `any` — use `unknown` with runtime narrowing for truly unknown data, or import the correct type from `@trace/gql` or `@prisma/client`. GQL scalar overrides in codegen ensure `DateTime` → `string` and `JSON` → `Record<string, unknown>`.
 - **Events are the source of truth for state changes.** Never read mutation results to update the Zustand store. Mutations fire-and-forget; the org-wide event subscription (`useOrgEvents`) receives the resulting event and updates the store. This ensures all clients see changes, not just the one that triggered the mutation. Event payloads must carry enough data to upsert the full entity directly — no refetches. Lists derive from the entity store (e.g. filter `sessions` by `channel.id`), so new entities appear automatically when upserted by event handlers.
+- **Events are partitioned by scope in Zustand.** The entity store uses `eventsByScope: Record<string, Record<string, Event>>` keyed by `${scopeType}:${scopeId}`. Use `eventScopeKey()`, `useScopedEvents()`, `useScopedEventIds()`, and `useScopedEventField()` from `stores/entity.ts` — never store events in the generic entity tables. Components that need the scope key should read it from `EventScopeContext` via `useEventScopeKey()`.
 
 ## Commands
 
