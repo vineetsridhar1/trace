@@ -4,14 +4,13 @@ import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey } from "../../stores/entity";
 import { EventScopeContext } from "./EventScopeContext";
 import { useAuthStore } from "../../stores/auth";
-import { asJsonObject } from "@trace/shared";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInput } from "./SessionInput";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
-import { StickyTodoList, type TodoItem } from "./StickyTodoList";
+import { StickyTodoList, extractLatestTodos } from "./StickyTodoList";
 import { buildSessionNodes } from "./groupReadGlob";
 import { isTerminalStatus } from "./sessionStatus";
 import { Skeleton } from "../ui/skeleton";
@@ -135,39 +134,10 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
     return activeQuestion.node;
   })();
 
-  // Extract latest todos from session events (TodoWrite tool_use blocks)
-  const latestTodos = useMemo<TodoItem[] | null>(() => {
-    if (!status || isTerminalStatus(status)) return null;
-    for (let i = eventIds.length - 1; i >= 0; i--) {
-      const ev = events[eventIds[i]];
-      if (!ev || ev.eventType !== "session_output") continue;
-      const payload = asJsonObject(ev.payload);
-      if (!payload || payload.type !== "assistant") continue;
-      const message = asJsonObject(payload.message);
-      const blocks = message?.content;
-      if (!Array.isArray(blocks)) continue;
-      for (const rawBlock of blocks) {
-        const block = asJsonObject(rawBlock);
-        if (!block || block.type !== "tool_use") continue;
-        const name = String(block.name ?? "").toLowerCase();
-        if (name === "todowrite" || name === "todo_write") {
-          const input = asJsonObject(block.input);
-          const todos = input?.todos;
-          if (Array.isArray(todos)) {
-            return todos.map((t: unknown) => {
-              const item = asJsonObject(t);
-              return {
-                content: String(item?.content ?? ""),
-                status: String(item?.status ?? "pending"),
-                activeForm: typeof item?.activeForm === "string" ? item.activeForm : undefined,
-              };
-            });
-          }
-        }
-      }
-    }
-    return null;
-  }, [eventIds, events, status]);
+  const latestTodos = useMemo(
+    () => (status && !isTerminalStatus(status) ? extractLatestTodos(eventIds, events) : null),
+    [eventIds, events, status],
+  );
 
   const [showTerminal, setShowTerminal] = useState(false);
 
