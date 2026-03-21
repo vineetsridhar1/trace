@@ -69,6 +69,8 @@ export function createPrismaMock() {
     },
     ticketLink: {
       create: vi.fn(),
+      createMany: vi.fn(),
+      findMany: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },

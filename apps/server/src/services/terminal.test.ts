@@ -14,13 +14,14 @@ vi.mock("../lib/terminal-relay.js", () => ({
   },
 }));
 
-vi.mock("./session.js", () => ({
-  isFullyUnloadedSessionStatus: vi.fn().mockReturnValue(false),
-}));
+// Use the real isFullyUnloadedSessionStatus — it's a pure function with no side effects
+vi.mock("./session.js", async () => {
+  const actual = await vi.importActual<typeof import("./session.js")>("./session.js");
+  return { isFullyUnloadedSessionStatus: actual.isFullyUnloadedSessionStatus };
+});
 
 import { prisma } from "../lib/db.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
-import { isFullyUnloadedSessionStatus } from "./session.js";
 import { terminalService } from "./terminal.js";
 
 const prismaMock = prisma as any;
@@ -82,8 +83,6 @@ describe("TerminalService", () => {
         status: "failed",
         worktreeDeleted: false,
       });
-      vi.mocked(isFullyUnloadedSessionStatus).mockReturnValueOnce(true);
-
       await expect(
         terminalService.create({
           sessionId: "session-1",

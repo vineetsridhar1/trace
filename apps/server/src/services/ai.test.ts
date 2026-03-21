@@ -19,6 +19,13 @@ const apiTokenServiceMock = apiTokenService as any;
 const createLLMAdapterMock = createLLMAdapter as ReturnType<typeof vi.fn>;
 const providerForModelMock = providerForModel as ReturnType<typeof vi.fn>;
 
+// Helper to access the private adapter cache for assertions.
+// This is necessary because cache behavior (eviction, invalidation) can only
+// be verified by inspecting internal state — there's no public API for it.
+function getCache(): Map<string, unknown> {
+  return (aiService as Record<string, unknown>).adapterCache as Map<string, unknown>;
+}
+
 function makeAdapter(overrides: Record<string, unknown> = {}) {
   return {
     complete: vi.fn(),
@@ -31,7 +38,7 @@ describe("AIService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Clear the adapter cache between tests
-    (aiService as any).adapterCache.clear();
+    getCache().clear();
   });
 
   describe("getAdapter", () => {
@@ -119,17 +126,17 @@ describe("AIService", () => {
         await aiService.getAdapter(`user-${i}`, "claude-sonnet-4-20250514");
       }
 
-      expect((aiService as any).adapterCache.size).toBe(200);
+      expect(getCache().size).toBe(200);
 
       // Add one more — should evict the oldest
       apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({ anthropic: "key-new" });
       createLLMAdapterMock.mockReturnValueOnce(makeAdapter());
       await aiService.getAdapter("user-new", "claude-sonnet-4-20250514");
 
-      expect((aiService as any).adapterCache.size).toBe(200);
+      expect(getCache().size).toBe(200);
       // The oldest entry (user-0) should have been evicted
-      expect((aiService as any).adapterCache.has("user-0:anthropic")).toBe(false);
-      expect((aiService as any).adapterCache.has("user-new:anthropic")).toBe(true);
+      expect(getCache().has("user-0:anthropic")).toBe(false);
+      expect(getCache().has("user-new:anthropic")).toBe(true);
     });
   });
 
@@ -140,10 +147,10 @@ describe("AIService", () => {
       createLLMAdapterMock.mockReturnValueOnce(makeAdapter());
 
       await aiService.getAdapter("user-1", "claude-sonnet-4-20250514");
-      expect((aiService as any).adapterCache.has("user-1:anthropic")).toBe(true);
+      expect(getCache().has("user-1:anthropic")).toBe(true);
 
       aiService.invalidateAdapter("user-1", "anthropic" as any);
-      expect((aiService as any).adapterCache.has("user-1:anthropic")).toBe(false);
+      expect(getCache().has("user-1:anthropic")).toBe(false);
     });
 
     it("is a no-op when adapter not cached", () => {
