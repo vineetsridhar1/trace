@@ -197,6 +197,13 @@
   outline-offset: 2px;
 }
 
+/* ── Sticky todo list (above input bar) ── */
+.sticky-todo-list {
+  flex-shrink: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
 /* ── Session thread ── */
 
 .user-prompt-bubble {
