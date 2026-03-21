@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
   History,
-  Square,
   Circle,
   WifiOff,
   Monitor,
@@ -18,12 +17,10 @@ import { SessionHistory } from "./SessionHistory";
 
 export function SessionHeader({
   sessionId,
-  onStop,
   onToggleTerminal,
   terminalOpen,
 }: {
   sessionId: string;
-  onStop: () => void;
   onToggleTerminal?: () => void;
   terminalOpen?: boolean;
 }) {
@@ -39,7 +36,6 @@ export function SessionHeader({
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
 
-  const isActive = status === "active";
   const disconnected = isDisconnected(connection);
 
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
@@ -76,6 +72,22 @@ export function SessionHeader({
         <ArrowLeft size={16} />
       </button>
 
+      {disconnected ? (
+        <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
+          <WifiOff size={12} />
+          Connection Lost
+        </span>
+      ) : (
+        <span className={`flex shrink-0 items-center gap-1.5 text-xs ${statusColor[getDisplayStatus(status, prUrl)]}`}>
+          {isReviewAndActive(status, prUrl) ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Circle size={6} className="fill-current" />
+          )}
+          {statusLabel[getDisplayStatus(status, prUrl)]}
+        </span>
+      )}
+
       <div className="min-w-0 flex-1">
         <h2 className="text-sm font-semibold text-foreground truncate">{name ?? "Session"}</h2>
       </div>
@@ -87,11 +99,11 @@ export function SessionHeader({
         </span>
       )}
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1">
         {onToggleTerminal && (
           <button
             onClick={onToggleTerminal}
-            className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors ${
+            className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
               terminalOpen
                 ? "bg-surface-elevated text-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-surface-elevated"
@@ -99,18 +111,16 @@ export function SessionHeader({
             title="Toggle terminal"
           >
             <TerminalSquare size={14} />
-            <span className="hidden sm:inline">Terminal</span>
           </button>
         )}
 
         <div className="relative" ref={historyRef}>
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
             title="Session history"
           >
             <History size={14} />
-            <span className="hidden sm:inline">History</span>
           </button>
           {showHistory && (
             <div className="absolute right-0 top-full z-50 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
@@ -124,38 +134,11 @@ export function SessionHeader({
             href={prUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
             title="View Pull Request"
           >
             <GitPullRequest size={14} />
-            <span className="hidden sm:inline">PR</span>
           </a>
-        )}
-
-        {disconnected ? (
-          <span className="flex items-center gap-1.5 text-xs text-destructive">
-            <WifiOff size={12} />
-            Connection Lost
-          </span>
-        ) : (
-          <span className={`flex items-center gap-1.5 text-xs ${statusColor[getDisplayStatus(status, prUrl)]}`}>
-            {isReviewAndActive(status, prUrl) ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <Circle size={6} className="fill-current" />
-            )}
-            {statusLabel[getDisplayStatus(status, prUrl)]}
-          </span>
-        )}
-
-        {isActive && !disconnected && (
-          <button
-            onClick={onStop}
-            className="flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
-          >
-            <Square size={12} />
-            Stop
-          </button>
         )}
       </div>
     </div>
