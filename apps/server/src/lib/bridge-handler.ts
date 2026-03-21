@@ -5,6 +5,9 @@ import { sessionService } from "../services/session.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 
+/** Grace period before marking sessions disconnected — allows fast reconnects */
+const DISCONNECT_GRACE_MS = 10_000;
+
 export function handleBridgeConnection(ws: WebSocket) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
@@ -158,15 +161,31 @@ export function handleBridgeConnection(ws: WebSocket) {
   });
 
   ws.on("close", () => {
-    runtimeDebug("bridge websocket closed", { runtimeId });
-    const affectedSessions = sessionRouter.unregisterRuntime(runtimeId, ws);
-    runtimeDebug("bridge close affected sessions", { runtimeId, affectedSessions });
+    runtimeDebug("bridge websocket closed, grace period starting", { runtimeId, graceMs: DISCONNECT_GRACE_MS });
+    const closedRuntimeId = runtimeId;
+    const affectedSessions = sessionRouter.unregisterRuntime(closedRuntimeId, ws);
+    runtimeDebug("bridge close affected sessions", { runtimeId: closedRuntimeId, affectedSessions });
 
-    // Mark all bound sessions as disconnected through the service layer
-    for (const sessionId of affectedSessions) {
-      enqueueEvent(sessionId, async () => {
-        await sessionService.markConnectionLost(sessionId, "runtime_disconnected", runtimeId);
-      });
-    }
+    // Wait a grace period before marking sessions disconnected — if the bridge
+    // reconnects quickly (e.g. brief network blip), restoreSessionsForRuntime
+    // will rebind sessions and we can skip the disconnect notification entirely.
+    setTimeout(() => {
+      for (const sessionId of affectedSessions) {
+        // Check if the runtime reconnected and reclaimed this session
+        const reboundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+        if (reboundRuntime) {
+          runtimeDebug("session rebound during grace period, skipping disconnect", {
+            sessionId,
+            oldRuntimeId: closedRuntimeId,
+            newRuntimeId: reboundRuntime.id,
+          });
+          continue;
+        }
+
+        enqueueEvent(sessionId, async () => {
+          await sessionService.markConnectionLost(sessionId, "runtime_disconnected", closedRuntimeId);
+        });
+      }
+    }, DISCONNECT_GRACE_MS);
   });
 }

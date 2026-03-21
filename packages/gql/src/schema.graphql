@@ -521,6 +521,7 @@ type Mutation {
   sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
   retrySessionConnection(sessionId: ID!): Session!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
+  moveSessionToCloud(sessionId: ID!): Session!
   createTicket(input: CreateTicketInput!): Ticket!
   updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!
   commentOnTicket(ticketId: ID!, text: String!): Event!

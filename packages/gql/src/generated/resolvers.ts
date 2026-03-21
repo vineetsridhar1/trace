@@ -269,6 +269,7 @@ export type Mutation = {
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkSessionToTicket: Session;
+  moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
   pauseSession: Session;
@@ -387,6 +388,11 @@ export type MutationLinkEntityToProjectArgs = {
 export type MutationLinkSessionToTicketArgs = {
   sessionId: Scalars['ID']['input'];
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationMoveSessionToCloudArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -1286,6 +1292,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
   linkSessionToTicket?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationLinkSessionToTicketArgs, 'sessionId' | 'ticketId'>>;
+  moveSessionToCloud?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToCloudArgs, 'sessionId'>>;
   moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
   muteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationMuteScopeArgs, 'scopeId' | 'scopeType'>>;
   pauseSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationPauseSessionArgs, 'id'>>;

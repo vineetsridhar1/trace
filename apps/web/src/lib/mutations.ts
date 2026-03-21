@@ -56,6 +56,14 @@ export const MOVE_SESSION_TO_RUNTIME_MUTATION = gql`
   }
 `;
 
+export const MOVE_SESSION_TO_CLOUD_MUTATION = gql`
+  mutation MoveSessionToCloud($sessionId: ID!) {
+    moveSessionToCloud(sessionId: $sessionId) {
+      id
+    }
+  }
+`;
+
 export const DELETE_SESSION_MUTATION = gql`
   mutation DeleteSession($id: ID!) {
     deleteSession(id: $id) {
