@@ -33,14 +33,26 @@ The event router is the first stage of the agent pipeline. It processes every ev
 
 ## Completion requirements
 
-- [ ] Router module exists and is called by the agent worker for every consumed event
-- [ ] Self-trigger suppression works (agent's own events are dropped)
-- [ ] Org AI disabled check works
-- [ ] Chat membership gate works (chat events dropped if agent not a member)
-- [ ] Rate limiting per scope is implemented
-- [ ] Cost budget degradation tiers are enforced (normal → suppress Tier 3 → observe-only → drop all)
-- [ ] Routing decisions are logged
-- [ ] Adding a new event type to routing is a one-line change
+- [x] Router module exists and is called by the agent worker for every consumed event
+- [x] Self-trigger suppression works (agent's own events are dropped)
+- [x] Org AI disabled check works
+- [x] Chat membership gate works (chat events dropped if agent not a member)
+- [x] Rate limiting per scope is implemented
+- [x] Cost budget degradation tiers are enforced (normal → suppress Tier 3 → observe-only → drop all)
+- [x] Routing decisions are logged
+- [x] Adding a new event type to routing is a one-line change
+
+## Implementation notes
+<!-- Added after implementation review -->
+- Router lives at `apps/server/src/agent/router.ts`, integrated in `agent-worker.ts:processEvents()`
+- `routeEvent(event, settings)` is the main entry point — pure function, no side effects except rate limit counter
+- `AgentEvent` type is the canonical shape for deserialized events in the agent pipeline — downstream tickets should use this type
+- `RoutingResult.maxTier` annotation is how cost budget tier suppression flows to the planner (ticket #11)
+- `CostTracker` interface (`getRemainingBudgetFraction(orgId): number`) is the contract ticket #08 must implement
+- `setCostTracker(tracker)` is the injection point for wiring the real cost tracker in ticket #15
+- Chat membership gate is updated via `updateChatMembership()` called before routing — membership events always processed regardless of routing decision
+- Mention detection uses the structured `mentions` array from the message payload (`mentions.some(m => m.userId === agentId)`), not raw text search
+- Rate limiter uses a sliding window (10s, 20 events/scope) with periodic cleanup every 30s
 
 ## How to test
 

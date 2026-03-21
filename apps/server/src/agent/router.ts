@@ -57,8 +57,8 @@ const DIRECT_RULES: Record<string, (event: AgentEvent, agentId: string) => boole
   session_paused: (event) =>
     (event.payload.needsInput as boolean) === true,
   message_sent: (event, agentId) => {
-    const content = event.payload.content as string | undefined;
-    return content !== undefined && content.includes(`@${agentId}`);
+    const mentions = event.payload.mentions as Array<{ userId: string }> | undefined;
+    return mentions !== undefined && mentions.some((m) => m.userId === agentId);
   },
 };
 
@@ -206,9 +206,7 @@ export function setCostTracker(tracker: CostTracker): void {
   activeCostTracker = tracker;
 }
 
-function getCostBudgetTier(orgId: string): RoutingResult | null {
-  const remaining = activeCostTracker.getRemainingBudgetFraction(orgId);
-
+function getCostBudgetTier(remaining: number): RoutingResult | null {
   if (remaining <= 0) {
     return { decision: "drop", reason: "cost_budget_exhausted" };
   }
@@ -221,8 +219,7 @@ function getCostBudgetTier(orgId: string): RoutingResult | null {
   return null;
 }
 
-function getMaxTier(orgId: string): number | undefined {
-  const remaining = activeCostTracker.getRemainingBudgetFraction(orgId);
+function getMaxTier(remaining: number): number | undefined {
   if (remaining < 0.5) return 2; // suppress Tier 3 promotions
   return undefined; // no restriction
 }
@@ -243,7 +240,8 @@ export function routeEvent(
   }
 
   // 2. Cost budget — exhausted or observe-only
-  const budgetResult = getCostBudgetTier(event.organizationId);
+  const budgetFraction = activeCostTracker.getRemainingBudgetFraction(event.organizationId);
+  const budgetResult = getCostBudgetTier(budgetFraction);
   if (budgetResult) {
     return budgetResult;
   }
@@ -276,7 +274,7 @@ export function routeEvent(
     return { decision: "drop", reason: "rate_limited" };
   }
 
-  const maxTier = getMaxTier(event.organizationId);
+  const maxTier = getMaxTier(budgetFraction);
 
   // 7. Direct routing — check if this event should bypass aggregation
   const directRule = DIRECT_RULES[event.eventType];
