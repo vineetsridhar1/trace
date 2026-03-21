@@ -22,6 +22,8 @@ import { CloudMachineService } from "./lib/cloud-machine-service.js";
 import { flyProvider } from "./lib/fly-provider.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
+import { connectRedis, disconnectRedis } from "./lib/redis.js";
+import { pubsub } from "./lib/pubsub.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -30,6 +32,10 @@ async function main() {
   const app = express();
   const httpServer = createServer(app);
   const schema = makeExecutableSchema({ typeDefs, resolvers });
+
+  // Connect Redis and initialize pub/sub message listener
+  await connectRedis();
+  pubsub.init();
 
   // Initialize cloud machine service and inject into session router
   const cloudMachineService = new CloudMachineService(flyProvider, "fly");
@@ -135,6 +141,7 @@ async function main() {
               clearInterval(staleRuntimeMonitor);
               bridgeWss.close();
               terminalWss.close();
+              await disconnectRedis();
             },
           };
         },
