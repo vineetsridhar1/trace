@@ -31,6 +31,7 @@ Build an internal UI for observing and debugging the agent pipeline. Without thi
 ## Dependencies
 
 - 08 (Execution Logging — data source)
+  <!-- Ticket 08 created: Use `executionLoggingService.query({ organizationId, startDate?, endDate?, status?, agentId?, limit?, offset? })` for the execution log table. Use `executionLoggingService.getByTriggerEvent({ organizationId, triggerEventId })` for detail views. Use `costTrackingService.getByDateRange({ organizationId, startDate, endDate })` for the cost dashboard. Use `costTrackingService.checkBudget(orgId)` for the budget remaining display. All services are in `apps/server/src/services/`. -->
 - 15 (Pipeline Integration — the pipeline must be producing logs)
 
 ## Completion requirements

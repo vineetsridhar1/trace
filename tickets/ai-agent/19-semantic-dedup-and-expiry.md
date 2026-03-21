@@ -28,6 +28,13 @@ Prevent the agent from suggesting the same thing twice. If users discuss the sam
 - The expiry timestamp is stored in the InboxItem payload's `expiresAt` field
 - A periodic background job (runs every 15 minutes) queries for active InboxItems past their expiry and resolves them as `expired`
 
+### Processed event cleanup
+<!-- Added after ticket 08: The `ProcessedAgentEvent` table (ticket 08) grows unboundedly as the worker processes events. Add a periodic cleanup job that deletes records older than 7 days (events are unlikely to be replayed after that). Run alongside the suggestion expiry job. Query: `DELETE FROM "ProcessedAgentEvent" WHERE "processedAt" < NOW() - INTERVAL '7 days'` -->
+
+- Add a periodic cleanup for the `ProcessedAgentEvent` table (from ticket 08)
+- Delete records older than 7 days — events older than this are safe to reprocess if replayed
+- Run as part of the same background job that handles suggestion expiry
+
 ### Dismissal suppression
 
 - Track when users dismiss suggestions by type and scope

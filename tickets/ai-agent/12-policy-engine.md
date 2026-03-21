@@ -41,6 +41,7 @@ Use configurable thresholds based on risk × autonomy mode:
 - 06 (Action Registry — risk levels)
   <!-- Ticket 06 created: Use `findAction(name)` from `./agent/action-registry.js` to look up action metadata. Use `.risk` (RiskLevel: "low" | "medium" | "high") for confidence threshold lookup, `.suggestable` to determine if an action can be downgraded to a suggestion, and `validateActionParams(action, params)` for input validation before execution. -->
 - 08 (Execution Logging — cost budget check)
+  <!-- Ticket 08 created: `CostTrackingService` in `./services/cost-tracking.js`. Call `costTrackingService.checkBudget(organizationId)` to get `BudgetStatus { dailyLimitCents, spentCents, remainingCents, remainingPercent }`. `remainingPercent` is 0-100. For budget enforcement: >50% = normal, 10-50% = suppress Tier 3, <10% = observe-only, 0% = drop all. The router (ticket 04) already handles degradation tiers via `CostTracker.getRemainingBudgetFraction()`, so the policy engine only needs to check budget for its own decisions (e.g., suppressing expensive actions when budget is low). -->
 
 ## Completion requirements
 

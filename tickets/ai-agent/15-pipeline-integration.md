@@ -26,6 +26,11 @@ Wire everything together. The individual components exist (router, aggregator, c
 ## Dependencies
 
 - All previous tickets (04-14)
+  <!-- Ticket 08 created: Three services to wire in the pipeline:
+    1. `executionLoggingService.write(input)` — call after each planner run to record the full decision chain. `WriteExecutionLogInput` takes: organizationId, triggerEventId, batchSize, agentId, modelTier, model, promoted, promotionReason, inputTokens, outputTokens, estimatedCostCents, contextTokenAllocation, disposition, confidence, plannedActions, policyDecision, finalActions, status, inboxItemId, latencyMs. Import types `ModelTier`, `ExecutionDisposition`, `ExecutionStatus` from `@prisma/client`.
+    2. `costTrackingService.recordCost({ organizationId, modelTier, costCents, isSummary? })` — call after each planner call and each summary generation to update daily cost aggregation.
+    3. `processedEventService.markProcessed({ consumerName, eventId, organizationId, resultHash? })` / `isProcessed(consumerName, eventId)` — call in the worker loop to skip already-processed events.
+    IMPORTANT: The router (ticket 04) uses `CostTracker.getRemainingBudgetFraction(orgId): number` (synchronous, 0.0-1.0). Create an adapter that caches `costTrackingService.checkBudget(orgId)` with a 30-60s TTL, returns `remainingPercent / 100`, and inject it via `setCostTracker()` from `./agent/router.js`. -->
   <!-- Ticket 07 created: `ActionExecutor` class in `./agent/executor.js`. Instantiate with `new ActionExecutor(serviceContainer)` where serviceContainer has { ticketService, chatService, sessionService, inboxService }. Call `executor.execute({ actionType, args }, { organizationId, agentId, triggerEventId })`. Returns `ExecutionResult { status, actionType, result?, error? }`. Note: idempotency is currently in-memory — migrate to Redis before deploying (use SET with EX 3600 on key `idempotency:agent:{agentId}:{actionName}:{triggerEventId}`). The executor handles no_op internally (returns success, no service call). -->
 
 ## Completion requirements
