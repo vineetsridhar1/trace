@@ -10,8 +10,10 @@
     "start": "node dist/index.js",
     "lint": "tsc -b",
     "db:seed": "tsx prisma/seed.ts",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test": "pnpm test:unit",
+    "test:unit": "vitest run",
+    "test:unit:coverage": "vitest run --coverage && node ./test/check-coverage.mjs",
+    "test:coverage": "pnpm test:unit:coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
