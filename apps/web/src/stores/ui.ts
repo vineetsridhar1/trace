@@ -15,6 +15,12 @@ interface UIState {
   setActiveThreadId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
+  /** Chat IDs that have unread messages */
+  unreadChatIds: Set<string>;
+  /** Mark a chat as having unread messages */
+  markChatUnread: (chatId: string) => void;
+  /** Clear unread state for a chat */
+  markChatRead: (chatId: string) => void;
   /** Internal: update state without pushing browser history (used by popstate handler) */
   _restoreNav: (channelId: string | null, sessionId: string | null, page?: ActivePage, chatId?: string | null) => void;
 }
@@ -45,6 +51,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeSessionId: null,
   activeThreadId: null,
   refreshTick: 0,
+  unreadChatIds: new Set<string>(),
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   setActivePage: (page) => {
@@ -71,8 +78,29 @@ export const useUIStore = create<UIState>((set, get) => ({
     pushNav(id, null);
   },
 
+  markChatUnread: (chatId) => {
+    set((s) => {
+      const next = new Set(s.unreadChatIds);
+      next.add(chatId);
+      return { unreadChatIds: next };
+    });
+  },
+
+  markChatRead: (chatId) => {
+    set((s) => {
+      if (!s.unreadChatIds.has(chatId)) return s;
+      const next = new Set(s.unreadChatIds);
+      next.delete(chatId);
+      return { unreadChatIds: next };
+    });
+  },
+
   setActiveChatId: (id) => {
-    set({ activePage: "main", activeChatId: id, activeChannelId: null, activeSessionId: null, activeThreadId: null });
+    set((s) => {
+      const unreadChatIds = id ? new Set(s.unreadChatIds) : s.unreadChatIds;
+      if (id) unreadChatIds.delete(id);
+      return { activePage: "main" as ActivePage, activeChatId: id, activeChannelId: null, activeSessionId: null, activeThreadId: null, unreadChatIds };
+    });
     pushNav(null, null, "main", id);
   },
 

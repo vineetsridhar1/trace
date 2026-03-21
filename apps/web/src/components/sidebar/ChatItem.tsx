@@ -1,6 +1,7 @@
 import { MessageCircle } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
+import { useUIStore } from "../../stores/ui";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 
 export function ChatItem({
@@ -18,6 +19,7 @@ export function ChatItem({
     | Array<{ user: { id: string; name: string } }>
     | undefined;
   const currentUserId = useAuthStore((s) => s.user?.id);
+  const isUnread = useUIStore((s) => s.unreadChatIds.has(id));
 
   const otherMember = members?.find((member) => member.user.id !== currentUserId);
   const displayName = name ?? (type === "dm" ? (otherMember?.user.name ?? "Direct Message") : "Group Chat");
@@ -25,8 +27,16 @@ export function ChatItem({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={displayName}>
-        <MessageCircle size={16} className="opacity-50" />
-        <span>{displayName}</span>
+        <div className="relative">
+          <MessageCircle size={16} className="opacity-50" />
+          {isUnread && (
+            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary" />
+            </span>
+          )}
+        </div>
+        <span className={isUnread ? "font-semibold" : ""}>{displayName}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );

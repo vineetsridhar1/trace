@@ -175,6 +175,44 @@ function handlePrEvent(event: Event): void {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Built-in handler: DM message notifications
+// ---------------------------------------------------------------------------
+
+function handleDmMessage(event: Event): void {
+  const currentUserId = useAuthStore.getState().user?.id;
+  if (!currentUserId) return;
+
+  // Don't notify for your own messages
+  if (event.actor.id === currentUserId) return;
+
+  // Only handle chat-scoped messages (DMs / group chats)
+  if (event.scopeType !== ("chat" as string)) return;
+
+  const chatId = event.scopeId;
+
+  // Mark the chat as unread
+  useUIStore.getState().markChatUnread(chatId);
+
+  // Don't show toast/native notification if the user is already viewing this chat
+  const activeChatId = useUIStore.getState().activeChatId;
+  if (activeChatId === chatId) return;
+
+  const payload = asJsonObject(event.payload);
+  const actorName = event.actor.name ?? "Someone";
+  const text = typeof payload?.text === "string" ? payload.text : "";
+  const preview = text.length > 80 ? text.slice(0, 80) + "…" : text;
+
+  const title = preview ? `${actorName}: ${preview}` : `New message from ${actorName}`;
+
+  notify(title, {
+    tag: `dm-${chatId}`,
+    onClick: () => {
+      useUIStore.getState().setActiveChatId(chatId);
+    },
+  });
+}
+
 // Register the built-in handlers
 const sessionStatusEventTypes: EventType[] = [
   "session_paused",
@@ -189,3 +227,4 @@ registerHandler("session_pr_opened", handlePrEvent);
 registerHandler("session_pr_closed", handlePrEvent);
 registerHandler("inbox_item_created", handleInboxItemCreated);
 registerHandler("message_sent", handleMentionNotification);
+registerHandler("message_sent", handleDmMessage);
