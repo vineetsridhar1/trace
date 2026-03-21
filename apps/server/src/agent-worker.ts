@@ -217,8 +217,7 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
 
     for (const [key, entries] of response as [string, [string, string[]][]][]) {
       // Extract orgId from stream key: stream:org:{orgId}:events
-      const keyStr = typeof key === "string" ? key : key.toString();
-      const orgId = keyStr.replace(STREAM_KEY_PREFIX, "").replace(STREAM_KEY_SUFFIX, "");
+      const orgId = key.replace(STREAM_KEY_PREFIX, "").replace(STREAM_KEY_SUFFIX, "");
 
       const parsed: StreamEntry[] = [];
       for (const [entryId, fields] of entries) {
@@ -228,7 +227,7 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
           fieldMap[fields[i]] = fields[i + 1];
         }
         if (fieldMap.event) {
-          parsed.push({ id: typeof entryId === "string" ? entryId : entryId.toString(), event: fieldMap.event });
+          parsed.push({ id: entryId, event: fieldMap.event });
         }
       }
 
