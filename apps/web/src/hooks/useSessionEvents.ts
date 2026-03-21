@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
-import { useEntityStore, useEntityIds } from "../stores/entity";
+import { useEntityStore, useScopedEventIds, eventScopeKey } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 
 const PAGE_SIZE = 100;
@@ -60,7 +60,8 @@ export function useSessionEvents(sessionId: string) {
 
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
-      useEntityStore.getState().upsertMany("events", events);
+      const scopeKey = eventScopeKey("session", sessionId);
+      useEntityStore.getState().upsertManyScopedEvents(scopeKey, events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);
@@ -103,7 +104,8 @@ export function useSessionEvents(sessionId: string) {
 
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
-      useEntityStore.getState().upsertMany("events", events);
+      const scopeKey = eventScopeKey("session", sessionId);
+      useEntityStore.getState().upsertManyScopedEvents(scopeKey, events);
 
       if (events.length < PAGE_SIZE) {
         setHasOlder(false);
@@ -117,11 +119,10 @@ export function useSessionEvents(sessionId: string) {
     setLoadingOlder(false);
   }, [activeOrgId, sessionId]);
 
-  // Derive eventIds from the entity store — useOrgEvents already upserts
-  // all incoming events, so no separate subscription is needed.
-  const eventIds = useEntityIds(
-    "events",
-    (e) => e.scopeType === "session" && e.scopeId === sessionId,
+  // Derive eventIds from the scoped bucket — O(session events) not O(all events)
+  const scopeKey = eventScopeKey("session", sessionId);
+  const eventIds = useScopedEventIds(
+    scopeKey,
     (a, b) => a.timestamp.localeCompare(b.timestamp),
   );
 

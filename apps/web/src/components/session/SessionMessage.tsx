@@ -1,5 +1,6 @@
 import { asJsonObject, type JsonObject } from "@trace/shared";
-import { useEntityField } from "../../stores/entity";
+import { useScopedEventField } from "../../stores/entity";
+import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
 import { ToolCallRow } from "./messages/ToolCallRow";
@@ -88,10 +89,11 @@ function renderSessionOutput(payload: JsonObject, ts: string) {
 }
 
 export function SessionMessage({ id }: { id: string }) {
-  const eventType = useEntityField("events", id, "eventType");
-  const payload = asJsonObject(useEntityField("events", id, "payload"));
-  const timestamp = useEntityField("events", id, "timestamp");
-  const actor = useEntityField("events", id, "actor") as
+  const scopeKey = useEventScopeKey();
+  const eventType = useScopedEventField(scopeKey, id, "eventType");
+  const payload = asJsonObject(useScopedEventField(scopeKey, id, "payload"));
+  const timestamp = useScopedEventField(scopeKey, id, "timestamp");
+  const actor = useScopedEventField(scopeKey, id, "actor") as
     | { type: string; id: string; name?: string | null }
     | undefined;
 

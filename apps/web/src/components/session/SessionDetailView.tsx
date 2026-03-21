@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
-import { useEntityStore, useEntityField } from "../../stores/entity";
+import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey } from "../../stores/entity";
+import { EventScopeContext } from "./EventScopeContext";
 import { useAuthStore } from "../../stores/auth";
 import { SessionMessageList } from "./SessionMessageList";
 import { SessionHeader } from "./SessionHeader";
@@ -68,7 +69,8 @@ const SESSION_DETAIL_QUERY = gql`
 export function SessionDetailView({ sessionId }: { sessionId: string }) {
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
     useSessionEvents(sessionId);
-  const events = useEntityStore((s) => s.events);
+  const scopeKey = eventScopeKey("session", sessionId);
+  const events = useScopedEvents(scopeKey);
   const status = useEntityField("sessions", sessionId, "status") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const createdBy = useEntityField("sessions", sessionId, "createdBy") as { id: string } | undefined;
@@ -149,6 +151,7 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   return (
+    <EventScopeContext.Provider value={scopeKey}>
     <div className="flex h-full flex-col overflow-hidden">
       <SessionHeader
         sessionId={sessionId}
@@ -217,5 +220,6 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
         <SessionInput sessionId={sessionId} />
       )}
     </div>
+    </EventScopeContext.Provider>
   );
 }

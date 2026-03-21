@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Send } from "lucide-react";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 import {
@@ -29,13 +29,14 @@ export function SessionInput({ sessionId }: { sessionId: string }) {
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   // Find the timestamp of the last user message for accurate working time
+  const scopeKey = eventScopeKey("session", sessionId);
   const lastUserMessageAt = useEntityStore((s) => {
     if (!isActive) return undefined;
     let latest: string | undefined;
-    const table = s.events;
-    for (const id of Object.keys(table)) {
-      const event = table[id];
-      if (event.scopeType !== "session" || event.scopeId !== sessionId) continue;
+    const bucket = s.eventsByScope[scopeKey];
+    if (!bucket) return undefined;
+    for (const id of Object.keys(bucket)) {
+      const event = bucket[id];
       if (event.eventType === "message_sent" || event.eventType === "session_started") {
         if (!latest || event.timestamp > latest) latest = event.timestamp;
       }
