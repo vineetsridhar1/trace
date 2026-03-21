@@ -37,6 +37,7 @@ export function useSessionEvents(sessionId: string) {
   const oldestTimestampRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
   const hasOlderRef = useRef(true);
+  const scopeKey = eventScopeKey("session", sessionId);
 
   // Fetch the most recent page of events on mount
   const fetchEvents = useCallback(async () => {
@@ -60,7 +61,6 @@ export function useSessionEvents(sessionId: string) {
 
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
-      const scopeKey = eventScopeKey("session", sessionId);
       useEntityStore.getState().upsertManyScopedEvents(scopeKey, events);
 
       if (events.length < PAGE_SIZE) {
@@ -72,7 +72,7 @@ export function useSessionEvents(sessionId: string) {
       }
     }
     setLoading(false);
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, sessionId, scopeKey]);
 
   useEffect(() => {
     fetchEvents();
@@ -104,7 +104,6 @@ export function useSessionEvents(sessionId: string) {
 
     if (result.data?.events) {
       const events = result.data.events as Array<Event & { id: string }>;
-      const scopeKey = eventScopeKey("session", sessionId);
       useEntityStore.getState().upsertManyScopedEvents(scopeKey, events);
 
       if (events.length < PAGE_SIZE) {
@@ -117,10 +116,9 @@ export function useSessionEvents(sessionId: string) {
     }
     loadingOlderRef.current = false;
     setLoadingOlder(false);
-  }, [activeOrgId, sessionId]);
+  }, [activeOrgId, sessionId, scopeKey]);
 
   // Derive eventIds from the scoped bucket — O(session events) not O(all events)
-  const scopeKey = eventScopeKey("session", sessionId);
   const eventIds = useScopedEventIds(
     scopeKey,
     (a, b) => a.timestamp.localeCompare(b.timestamp),

@@ -7,5 +7,9 @@ import { createContext, useContext } from "react";
 export const EventScopeContext = createContext<string>("");
 
 export function useEventScopeKey(): string {
-  return useContext(EventScopeContext);
+  const key = useContext(EventScopeContext);
+  if (process.env.NODE_ENV !== "production" && !key) {
+    console.warn("useEventScopeKey() called outside of an EventScopeContext.Provider");
+  }
+  return key;
 }

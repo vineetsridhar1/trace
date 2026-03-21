@@ -189,7 +189,10 @@ export function useScopedEventIds(
   );
 }
 
-/** Subscribe to the full scoped event bucket (e.g. for passing to buildSessionNodes) */
+/** Subscribe to the full scoped event bucket (e.g. for passing to buildSessionNodes).
+ *  NOTE: Do NOT wrap this with useShallow — the raw bucket reference is stable
+ *  (only replaced when this scope's events change) and downstream useMemo deps
+ *  rely on referential equality to avoid recomputing buildSessionNodes. */
 export function useScopedEvents(scopeKey: string): Record<string, Event> {
   return useEntityStore((state) => state.eventsByScope[scopeKey] ?? EMPTY_EVENTS);
 }

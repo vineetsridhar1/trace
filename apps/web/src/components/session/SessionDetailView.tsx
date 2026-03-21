@@ -152,74 +152,74 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
 
   return (
     <EventScopeContext.Provider value={scopeKey}>
-    <div className="flex h-full flex-col overflow-hidden">
-      <SessionHeader
-        sessionId={sessionId}
-        onStop={handleStop}
-        onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
-        terminalOpen={showTerminal}
-      />
+      <div className="flex h-full flex-col overflow-hidden">
+        <SessionHeader
+          sessionId={sessionId}
+          onStop={handleStop}
+          onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
+          terminalOpen={showTerminal}
+        />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-hidden">
-          {loading ? (
-            <div className="flex flex-col gap-4 p-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex gap-3">
-                  <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-3.5 w-24" />
-                    <Skeleton className="h-3.5 w-[80%]" />
-                    <Skeleton className="h-3.5 w-[60%]" />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 overflow-hidden">
+            {loading ? (
+              <div className="flex flex-col gap-4 p-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex gap-3">
+                    <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-3.5 w-[80%]" />
+                      <Skeleton className="h-3.5 w-[60%]" />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-destructive">Failed to load events</p>
-            </div>
-          ) : (
-            <SessionMessageList
-              nodes={nodes}
-              hasOlder={hasOlder}
-              loadingOlder={loadingOlder}
-              onLoadOlder={fetchOlderEvents}
-            />
+                ))}
+              </div>
+            ) : error ? (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-destructive">Failed to load events</p>
+              </div>
+            ) : (
+              <SessionMessageList
+                nodes={nodes}
+                hasOlder={hasOlder}
+                loadingOlder={loadingOlder}
+                onLoadOlder={fetchOlderEvents}
+              />
+            )}
+          </div>
+
+          {showTerminal && canAccessTerminal && (
+            <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
           )}
         </div>
 
-        {showTerminal && canAccessTerminal && (
-          <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
+        {showQuestion ? (
+          <AskUserQuestionBar
+            node={showQuestion}
+            onResponse={(text) => {
+              client
+                .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                  sessionId,
+                  text,
+                  interactionMode: activePlan ? "plan" : undefined,
+                })
+                .toPromise();
+            }}
+            onDismiss={() => {
+              setDismissedQuestionId(showQuestion.id);
+            }}
+          />
+        ) : activePlan ? (
+          <PlanResponseBar
+            sessionId={sessionId}
+            planContent={activePlan.node.planContent}
+            onDismiss={handleDismissPlan}
+          />
+        ) : (
+          <SessionInput sessionId={sessionId} />
         )}
       </div>
-
-      {showQuestion ? (
-        <AskUserQuestionBar
-          node={showQuestion}
-          onResponse={(text) => {
-            client
-              .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                sessionId,
-                text,
-                interactionMode: activePlan ? "plan" : undefined,
-              })
-              .toPromise();
-          }}
-          onDismiss={() => {
-            setDismissedQuestionId(showQuestion.id);
-          }}
-        />
-      ) : activePlan ? (
-        <PlanResponseBar
-          sessionId={sessionId}
-          planContent={activePlan.node.planContent}
-          onDismiss={handleDismissPlan}
-        />
-      ) : (
-        <SessionInput sessionId={sessionId} />
-      )}
-    </div>
     </EventScopeContext.Provider>
   );
 }
