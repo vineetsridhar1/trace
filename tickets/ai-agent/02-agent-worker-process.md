@@ -34,13 +34,13 @@ Create the agent worker as a separate entry point in `apps/server`. This is the 
 
 ## Completion requirements
 
-- [ ] `apps/server/src/agent-worker.ts` exists and runs as a separate process
-- [ ] Worker consumes events from Redis Streams using consumer groups
-- [ ] `pnpm dev:agent` starts the worker
-- [ ] Worker logs every event it consumes (event type, scope, org)
-- [ ] Worker handles graceful shutdown without hanging
-- [ ] Worker reconnects if Redis connection drops
-- [ ] Worker does not interfere with the API server process
+- [x] `apps/server/src/agent-worker.ts` exists and runs as a separate process
+- [x] Worker consumes events from Redis Streams using consumer groups
+- [x] `pnpm dev:agent` starts the worker
+- [x] Worker logs every event it consumes (event type, scope, org)
+- [x] Worker handles graceful shutdown without hanging
+- [x] Worker reconnects if Redis connection drops
+- [x] Worker does not interfere with the API server process
 
 ## How to test
 
