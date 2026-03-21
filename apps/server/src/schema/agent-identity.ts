@@ -1,9 +1,13 @@
+import type { Context } from "../context.js";
 import { prisma } from "../lib/db.js";
 import { agentIdentityService } from "../services/agent-identity.js";
 import type { AgentIdentity as PrismaAgentIdentity } from "@prisma/client";
 
 export const agentIdentityQueries = {
-  agentIdentity: async (_: unknown, args: { organizationId: string }) => {
+  agentIdentity: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    if (args.organizationId !== ctx.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return prisma.agentIdentity.findUnique({
       where: { organizationId: args.organizationId },
     });
@@ -23,18 +27,24 @@ export const agentIdentityMutations = {
         dailyLimitCents?: number;
       };
     },
+    ctx: Context,
   ) => {
-    const updates: Record<string, unknown> = {};
-    if (args.input.name != null) updates.name = args.input.name;
-    if (args.input.status != null) updates.status = args.input.status;
-    if (args.input.autonomyMode != null) updates.autonomyMode = args.input.autonomyMode;
-    if (args.input.soulFile != null) updates.soulFile = args.input.soulFile;
-    if (args.input.dailyLimitCents != null) updates.dailyLimitCents = args.input.dailyLimitCents;
+    if (args.organizationId !== ctx.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+    if (ctx.role !== "admin") {
+      throw new Error("Only admins can update agent settings");
+    }
 
-    await agentIdentityService.update(args.organizationId, updates);
-
-    return prisma.agentIdentity.findUniqueOrThrow({
+    return prisma.agentIdentity.update({
       where: { organizationId: args.organizationId },
+      data: {
+        ...(args.input.name != null && { name: args.input.name }),
+        ...(args.input.status != null && { status: args.input.status }),
+        ...(args.input.autonomyMode != null && { autonomyMode: args.input.autonomyMode }),
+        ...(args.input.soulFile != null && { soulFile: args.input.soulFile }),
+        ...(args.input.dailyLimitCents != null && { dailyLimitCents: args.input.dailyLimitCents }),
+      },
     });
   },
 };

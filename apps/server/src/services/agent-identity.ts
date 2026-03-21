@@ -19,19 +19,13 @@ export class AgentIdentityService {
    * Every org gets exactly one agent identity (1:1 relation).
    */
   async getOrCreate(organizationId: string): Promise<OrgAgentSettings> {
-    const existing = await prisma.agentIdentity.findUnique({
+    const identity = await prisma.agentIdentity.upsert({
       where: { organizationId },
+      create: { organizationId },
+      update: {},
     });
 
-    if (existing) {
-      return this.toSettings(existing);
-    }
-
-    const created = await prisma.agentIdentity.create({
-      data: { organizationId },
-    });
-
-    return this.toSettings(created);
+    return this.toSettings(identity);
   }
 
   /**

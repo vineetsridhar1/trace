@@ -151,9 +151,17 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
   const ids: string[] = [];
 
   for (const orgId of activeOrgs) {
+    // Skip disabled orgs — leave their events pending in Redis
+    // so they can be processed if the agent is re-enabled
+    const agentContext = agentContexts.get(orgId);
+    if (agentContext && agentContext.status === "disabled") {
+      continue;
+    }
     streams.push(streamKey(orgId));
     ids.push(">"); // only new messages not yet delivered to this group
   }
+
+  if (streams.length === 0) return result;
 
   try {
     // XREADGROUP GROUP <group> <consumer> COUNT 100 BLOCK <ms> STREAMS <keys...> <ids...>
@@ -226,11 +234,6 @@ async function ackEvents(orgId: string, entryIds: string[]): Promise<void> {
  */
 function processEvents(orgId: string, entries: StreamEntry[]): void {
   const agentContext = agentContexts.get(orgId);
-
-  // Skip processing if agent is disabled for this org
-  if (agentContext && agentContext.status === "disabled") {
-    return;
-  }
 
   for (const entry of entries) {
     try {
