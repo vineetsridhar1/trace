@@ -42,7 +42,7 @@ const actionRegistry: AgentActionRegistration[] = [
     service: "ticketService",
     method: "create",
     description:
-      "Create a new ticket. Use when a conversation reveals a bug, task, or feature request that should be tracked. Requires a title and organizationId at minimum.",
+      "Create a new ticket. Use when a conversation reveals a bug, task, or feature request that should be tracked. Requires a title at minimum.",
     risk: "medium",
     suggestable: true,
     parameters: {
@@ -232,7 +232,7 @@ const actionRegistry: AgentActionRegistration[] = [
   },
   {
     name: "summary.update",
-    service: "summaryService",
+    service: "summaryService", // Forward reference — created in ticket #09 (Entity Summaries)
     method: "upsert",
     description:
       "Update or create a rolling summary for an entity. Used for silent enrichment — keeping entity summaries up to date as new events occur. This action is never surfaced as a suggestion.",
