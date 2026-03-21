@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import type { Event, EventType, SessionStatus } from "@trace/gql";
+import type { Event, EventType, ScopeType, SessionStatus } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
@@ -187,16 +187,16 @@ function handleDmMessage(event: Event): void {
   if (event.actor.id === currentUserId) return;
 
   // Only handle chat-scoped messages (DMs / group chats)
-  if (event.scopeType !== ("chat" as string)) return;
+  if (event.scopeType !== ("chat" satisfies ScopeType)) return;
 
   const chatId = event.scopeId;
 
-  // Mark the chat as unread
-  useUIStore.getState().markChatUnread(chatId);
-
-  // Don't show toast/native notification if the user is already viewing this chat
+  // Don't mark as unread or notify if the user is already viewing this chat
   const activeChatId = useUIStore.getState().activeChatId;
   if (activeChatId === chatId) return;
+
+  // Mark the chat as unread
+  useUIStore.getState().markChatUnread(chatId);
 
   const payload = asJsonObject(event.payload);
   const actorName = event.actor.name ?? "Someone";

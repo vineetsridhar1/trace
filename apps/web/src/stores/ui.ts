@@ -15,8 +15,8 @@ interface UIState {
   setActiveThreadId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
-  /** Chat IDs that have unread messages */
-  unreadChatIds: Set<string>;
+  /** Chat IDs that have unread messages (Record for fine-grained Zustand selectors) */
+  unreadChatIds: Record<string, boolean>;
   /** Mark a chat as having unread messages */
   markChatUnread: (chatId: string) => void;
   /** Clear unread state for a chat */
@@ -51,7 +51,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeSessionId: null,
   activeThreadId: null,
   refreshTick: 0,
-  unreadChatIds: new Set<string>(),
+  unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   setActivePage: (page) => {
@@ -80,25 +80,26 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   markChatUnread: (chatId) => {
     set((s) => {
-      const next = new Set(s.unreadChatIds);
-      next.add(chatId);
-      return { unreadChatIds: next };
+      if (s.unreadChatIds[chatId]) return s;
+      return { unreadChatIds: { ...s.unreadChatIds, [chatId]: true } };
     });
   },
 
   markChatRead: (chatId) => {
     set((s) => {
-      if (!s.unreadChatIds.has(chatId)) return s;
-      const next = new Set(s.unreadChatIds);
-      next.delete(chatId);
-      return { unreadChatIds: next };
+      if (!s.unreadChatIds[chatId]) return s;
+      const { [chatId]: _, ...rest } = s.unreadChatIds;
+      return { unreadChatIds: rest };
     });
   },
 
   setActiveChatId: (id) => {
     set((s) => {
-      const unreadChatIds = id ? new Set(s.unreadChatIds) : s.unreadChatIds;
-      if (id) unreadChatIds.delete(id);
+      let unreadChatIds = s.unreadChatIds;
+      if (id && unreadChatIds[id]) {
+        const { [id]: _, ...rest } = unreadChatIds;
+        unreadChatIds = rest;
+      }
       return { activePage: "main" as ActivePage, activeChatId: id, activeChannelId: null, activeSessionId: null, activeThreadId: null, unreadChatIds };
     });
     pushNav(null, null, "main", id);
