@@ -1,6 +1,8 @@
 import { prisma } from "../lib/db.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 
+const TERMINAL_STATUSES: readonly string[] = ["completed", "failed", "merged"];
+
 class TerminalService {
   private assertLocalOwnership(session: { hosting: string | null; createdById: string }, userId: string): void {
     if (session.hosting === "local" && session.createdById !== userId) {
@@ -23,9 +25,15 @@ class TerminalService {
   }): Promise<{ id: string; sessionId: string }> {
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, workdir: true, hosting: true, createdById: true },
+      select: { id: true, workdir: true, hosting: true, createdById: true, status: true, worktreeDeleted: true },
     });
     if (!session) throw new Error("Session not found");
+    if (TERMINAL_STATUSES.includes(session.status)) {
+      throw new Error(`Cannot create terminal on a ${session.status} session`);
+    }
+    if (session.worktreeDeleted) {
+      throw new Error("Cannot create terminal: session worktree has been deleted");
+    }
     this.assertLocalOwnership(session, userId);
 
     const terminalId = terminalRelay.createTerminal(

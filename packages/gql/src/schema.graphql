@@ -214,6 +214,7 @@ type Session {
   endpoints: SessionEndpoints
   connection: SessionConnection
   prUrl: String
+  worktreeDeleted: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }

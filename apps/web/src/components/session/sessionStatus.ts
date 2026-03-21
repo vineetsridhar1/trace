@@ -59,13 +59,20 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
   return connection.state === "disconnected";
 }
 
+/** Whether the session is in a terminal state (no runtime, no worktree). */
+export function isTerminalStatus(status: string | undefined): boolean {
+  return status === "completed" || status === "failed" || status === "merged";
+}
+
 /** Check if a session can accept new messages (not disconnected and not fully unloaded) */
 export function canSendMessage(
   status: string | undefined,
   connection: Record<string, unknown> | null | undefined,
+  worktreeDeleted?: boolean,
 ): boolean {
   if (!status) return false;
-  if (status === "failed" || status === "merged") return false;
+  if (isTerminalStatus(status)) return false;
+  if (worktreeDeleted) return false;
   if (status === "active") return false; // waiting for response
   if (isDisconnected(connection)) return false;
   return true;

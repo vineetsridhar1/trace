@@ -242,6 +242,9 @@ export function useOrgEvents() {
             if (typeof payload.prUrl === "string") {
               sessionPatch.prUrl = payload.prUrl;
             }
+            if (payload.worktreeDeleted === true) {
+              sessionPatch.worktreeDeleted = true;
+            }
             patch("sessions", event.scopeId, sessionPatch);
           }
         }

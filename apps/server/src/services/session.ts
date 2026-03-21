@@ -147,7 +147,7 @@ function validateModelForTool(tool: string, model: string): string {
   return model;
 }
 
-const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["failed", "merged"];
+const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["completed", "failed", "merged"];
 
 function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
   return FULLY_UNLOADED_SESSION_STATUSES.includes(status);
@@ -357,6 +357,10 @@ export class SessionService {
 
     // Fully unloaded sessions cannot accept follow-up work.
     if (isFullyUnloadedSessionStatus(session.status)) {
+      return session;
+    }
+
+    if (session.worktreeDeleted) {
       return session;
     }
 
@@ -860,11 +864,16 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         connection: true,
+        worktreeDeleted: true,
       },
     });
 
     if (isFullyUnloadedSessionStatus(session.status)) {
       throw new Error(`Cannot send follow-up messages to a ${session.status} session`);
+    }
+
+    if (session.worktreeDeleted) {
+      throw new Error("Cannot send messages: session worktree has been deleted");
     }
 
     // If the tool was recently switched and no user message has been sent since,
@@ -1024,6 +1033,7 @@ export class SessionService {
       where: { id: sessionId },
       data: {
         status: "failed",
+        worktreeDeleted: true,
         pendingRun: Prisma.DbNull,
         connection: connJson(defaultConnection({ state: "disconnected", lastError: error })),
       },
@@ -1035,7 +1045,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_terminated",
-      payload: { sessionId, reason: "workspace_failed", error },
+      payload: { sessionId, reason: "workspace_failed", error, worktreeDeleted: true },
       actorType: "system",
       actorId: "system",
     });
@@ -1842,6 +1852,11 @@ export class SessionService {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
     }
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { worktreeDeleted: true },
+    });
   }
 
   /** Set prUrl on a session when a PR is opened for its branch. */
@@ -1915,7 +1930,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_pr_merged",
-      payload: { sessionId, prUrl, status: "merged" },
+      payload: { sessionId, prUrl, status: "merged", worktreeDeleted: true },
       actorType: "system",
       actorId: "github-webhook",
     });
