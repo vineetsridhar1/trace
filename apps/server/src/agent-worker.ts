@@ -215,7 +215,7 @@ async function readEvents(): Promise<Map<string, StreamEntry[]>> {
 
     if (!response) return result; // timeout, no new messages
 
-    for (const [key, entries] of response) {
+    for (const [key, entries] of response as [string, [string, string[]][]][]) {
       // Extract orgId from stream key: stream:org:{orgId}:events
       const keyStr = typeof key === "string" ? key : key.toString();
       const orgId = keyStr.replace(STREAM_KEY_PREFIX, "").replace(STREAM_KEY_SUFFIX, "");

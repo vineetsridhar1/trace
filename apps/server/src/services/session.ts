@@ -516,7 +516,7 @@ export class SessionService {
         data: { parentSessionId: null },
       });
       await tx.sessionProject.deleteMany({ where: { sessionId: id } });
-      await tx.sessionTicket.deleteMany({ where: { sessionId: id } });
+      await tx.ticketLink.deleteMany({ where: { entityType: "session", entityId: id } });
       await tx.session.delete({ where: { id } });
     });
 
