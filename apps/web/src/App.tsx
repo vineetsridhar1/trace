@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
@@ -64,8 +64,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     if (!activeSessionId) setSessionFullscreen(false);
   }, [activeSessionId]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
   const toggleFullscreen = useCallback(() => setSessionFullscreen((f) => !f), []);
+  const setFullscreen = useCallback((v: boolean) => setSessionFullscreen(v), []);
 
   const hasSession = !!activeSessionId;
 
@@ -77,11 +80,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
           <AppSidebar />
 
           {/* Two-card container: main content + session panel */}
-          <div className="flex w-full flex-1 gap-2 overflow-hidden">
+          <div ref={containerRef} className="flex w-full flex-1 overflow-hidden">
             {/* Main content card */}
             <div
               className={cn(
-                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-all duration-300 ease-out",
+                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-all duration-300 ease-in-out",
                 hasSession && sessionFullscreen && !isMobile
                   ? "flex-[0_0_0%] border-transparent opacity-0"
                   : "flex-[1_1_0%]",
@@ -117,6 +120,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               isFullscreen={sessionFullscreen}
               onClose={closePanel}
               onToggleFullscreen={toggleFullscreen}
+              containerRef={containerRef}
+              onSetFullscreen={setFullscreen}
             />
           </div>
         </SidebarProvider>
