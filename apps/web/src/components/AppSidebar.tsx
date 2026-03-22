@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
-import type { Channel, Chat, Repo, InboxItem } from "@trace/gql";
-import { useAuthStore } from "../stores/auth";
-import { useEntityStore, useEntityIds } from "../stores/entity";
-import type { EntityTableMap } from "../stores/entity";
+import { Fragment, useState, useEffect } from "react";
+import { DndContext, useDroppable, DragOverlay } from "@dnd-kit/core";
+import { cn } from "../lib/utils";
 import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { gql } from "@urql/core";
+import { Hash, Folder } from "lucide-react";
 import { OrgSwitcher } from "./sidebar/OrgSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
 import { ChannelItem } from "./sidebar/ChannelItem";
 import { ChatItem } from "./sidebar/ChatItem";
+import { ChannelGroupSection } from "./sidebar/ChannelGroupSection";
 import { CreateChannelDialog } from "./sidebar/CreateChannelDialog";
 import { CreateChatDialog } from "./sidebar/CreateChatDialog";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
@@ -27,138 +27,76 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "./ui/sidebar";
+import { useSidebarData } from "../hooks/useSidebarData";
+import { useChannelDnd, customCollision, TOP_LEVEL_GAP_PREFIX } from "../hooks/useChannelDnd";
 
-const CHANNELS_QUERY = gql`
-  query Channels($organizationId: ID!) {
-    channels(organizationId: $organizationId) {
-      id
-      name
-      type
-    }
+const DELETE_GROUP_MUTATION = gql`
+  mutation DeleteChannelGroup($id: ID!) {
+    deleteChannelGroup(id: $id)
   }
 `;
 
-const REPOS_QUERY = gql`
-  query Repos($organizationId: ID!) {
-    repos(organizationId: $organizationId) {
-      id
-      name
-      remoteUrl
-      defaultBranch
-      webhookActive
-    }
-  }
-`;
+function TopLevelDropIndicator({ index, isDragging }: { index: number; isDragging: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${TOP_LEVEL_GAP_PREFIX}${index}`,
+    data: { type: "top-level-gap", index },
+  });
 
-const CHATS_QUERY = gql`
-  query Chats($organizationId: ID!) {
-    chats(organizationId: $organizationId) {
-      id
-      type
-      name
-      members {
-        user {
-          id
-          name
-          avatarUrl
-        }
-        joinedAt
-      }
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-const INBOX_ITEMS_QUERY = gql`
-  query InboxItems($organizationId: ID!) {
-    inboxItems(organizationId: $organizationId) {
-      id
-      itemType
-      status
-      title
-      summary
-      payload
-      userId
-      sourceType
-      sourceId
-      createdAt
-      resolvedAt
-    }
-  }
-`;
+  return (
+    <div ref={setNodeRef} className="relative z-10 h-2 -my-1 overflow-visible">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-2 top-1/2 z-10 -translate-y-1/2 rounded-full transition-all",
+          isDragging
+            ? isOver
+              ? "h-0.5 bg-blue-500 opacity-100"
+              : "h-px bg-border/80 opacity-100"
+            : "h-px bg-transparent opacity-0"
+        )}
+      />
+    </div>
+  );
+}
 
 export function AppSidebar() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const upsertMany = useEntityStore((s) => s.upsertMany);
   const activeChannelId = useUIStore((s) => s.activeChannelId);
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const activeChatId = useUIStore((s) => s.activeChatId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
-  const refreshTick = useUIStore((s) => s.refreshTick);
-  const [peeking, setPeeking] = useState(false);
-  const [channelsLoading, setChannelsLoading] = useState(true);
-  const [chatsLoading, setChatsLoading] = useState(true);
   const { state } = useSidebar();
 
-  const fetchChannels = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client.query(CHANNELS_QUERY, { organizationId: activeOrgId }).toPromise();
+  const [peeking, setPeeking] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
 
-    if (result.data?.channels) {
-      const fetched = result.data.channels as Array<Channel & { id: string }>;
-      upsertMany("channels", fetched);
-    }
-    setChannelsLoading(false);
-  }, [activeOrgId, upsertMany]);
+  const {
+    activeOrgId,
+    channelsLoading,
+    chatsLoading,
+    chatIds,
+    allChannelIds,
+    groupIds,
+    channelIdsByGroup,
+    topLevelItems,
+    channelsById,
+    channelGroupsById,
+  } = useSidebarData();
 
-  const fetchRepos = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client.query(REPOS_QUERY, { organizationId: activeOrgId }).toPromise();
-
-    if (result.data?.repos) {
-      upsertMany("repos", result.data.repos as Array<Repo & { id: string }>);
-    }
-  }, [activeOrgId, upsertMany]);
-
-  const fetchChats = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client.query(CHATS_QUERY, { organizationId: activeOrgId }).toPromise();
-
-    if (result.data?.chats) {
-      upsertMany("chats", result.data.chats as Array<Chat & { id: string }>);
-    }
-    setChatsLoading(false);
-  }, [activeOrgId, upsertMany]);
-
-  const fetchInboxItems = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client.query(INBOX_ITEMS_QUERY, { organizationId: activeOrgId }).toPromise();
-
-    if (result.data?.inboxItems) {
-      upsertMany("inboxItems", result.data.inboxItems as Array<InboxItem & { id: string }>);
-    }
-  }, [activeOrgId, upsertMany]);
-
-  useEffect(() => {
-    fetchChannels();
-    fetchChats();
-    fetchRepos();
-    fetchInboxItems();
-  }, [fetchChannels, fetchChats, fetchRepos, fetchInboxItems, refreshTick]);
+  const {
+    dragItem,
+    dragOverGroupId,
+    sensors,
+    handleDragStart,
+    handleDragOver,
+    handleDragEnd,
+  } = useChannelDnd({ activeOrgId, topLevelItems, channelIdsByGroup, channelsById, channelGroupsById });
 
   // Close peek when sidebar gets pinned open
   useEffect(() => {
     if (state === "expanded") setPeeking(false);
   }, [state]);
 
-  const chatIds = useEntityIds("chats");
-
-  const sortedIds = useEntityIds(
-    "channels",
-    undefined,
-    (a, b) => ((a as EntityTableMap["channels"]).name ?? "").localeCompare((b as EntityTableMap["channels"]).name ?? ""),
-  );
+  const isDragging = dragItem !== null;
 
   return (
     <>
@@ -177,31 +115,82 @@ export function AppSidebar() {
               <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Channels
               </SidebarGroupLabel>
-              <CreateChannelDialog />
+              <CreateChannelDialog
+                open={createDialogOpen}
+                onOpenChange={setCreateDialogOpen}
+                defaultGroupId={createForGroupId}
+                onTriggerClick={() => { setCreateForGroupId(null); setCreateDialogOpen(true); }}
+              />
             </div>
             <SidebarGroupContent>
-              <SidebarMenu>
-                {channelsLoading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
+              {channelsLoading ? (
+                <SidebarMenu>
+                  {Array.from({ length: 4 }).map((_, i) => (
                     <SidebarMenuItem key={i}>
                       <div className="flex items-center gap-2 px-2 py-1.5">
                         <Skeleton className="h-4 w-4 rounded shrink-0" />
                         <Skeleton className="h-3.5 w-[60%]" />
                       </div>
                     </SidebarMenuItem>
-                  ))
-                ) : (
-                  sortedIds.map((id) => (
-                    <ChannelItem
-                      key={id}
-                      id={id}
-                      isActive={id === activeChannelId}
-                      onClick={() => setActiveChannelId(id)}
-                    />
-                  ))
-                )}
-              </SidebarMenu>
-              {!channelsLoading && sortedIds.length === 0 && (
+                  ))}
+                </SidebarMenu>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={customCollision}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="py-2">
+                    {topLevelItems.length > 0 && (
+                      <>
+                        <TopLevelDropIndicator index={0} isDragging={isDragging} />
+                        {topLevelItems.map((item, index) => (
+                          <Fragment key={`${item.kind}:${item.id}`}>
+                            {item.kind === "channel" ? (
+                              <SidebarMenu>
+                                <ChannelItem
+                                  id={item.id}
+                                  isActive={item.id === activeChannelId}
+                                  onClick={() => setActiveChannelId(item.id)}
+                                  groupId={null}
+                                />
+                              </SidebarMenu>
+                            ) : (
+                              <ChannelGroupSection
+                                id={item.id}
+                                channelIds={channelIdsByGroup[item.id] ?? []}
+                                activeChannelId={activeChannelId}
+                                onChannelClick={setActiveChannelId}
+                                onAddChannel={(gid) => { setCreateForGroupId(gid); setCreateDialogOpen(true); }}
+                                onDeleteGroup={(gid) => client.mutation(DELETE_GROUP_MUTATION, { id: gid }).toPromise()}
+                                isDropTarget={dragOverGroupId === item.id}
+                                isDragging={isDragging}
+                              />
+                            )}
+                            <TopLevelDropIndicator index={index + 1} isDragging={isDragging} />
+                          </Fragment>
+                        ))}
+                      </>
+                    )}
+                  </div>
+
+                  <DragOverlay dropAnimation={null}>
+                    {dragItem ? (
+                      <div className="flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-sidebar-accent px-2 text-sm text-sidebar-accent-foreground shadow-lg">
+                        {dragItem.type === "channel" ? (
+                          <Hash size={16} className="opacity-50" />
+                        ) : (
+                          <Folder size={16} className="opacity-50" />
+                        )}
+                        <span className="truncate">{dragItem.name}</span>
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
+              {!channelsLoading && allChannelIds.length === 0 && groupIds.length === 0 && (
                 <p className="px-2 py-4 text-center text-xs text-muted-foreground">No channels yet</p>
               )}
             </SidebarGroupContent>
@@ -252,7 +241,7 @@ export function AppSidebar() {
 
       <PeekOverlay
         visible={peeking && state === "collapsed"}
-        channelIds={sortedIds}
+        channelIds={allChannelIds}
         activeChannelId={activeChannelId}
         onChannelClick={setActiveChannelId}
         onMouseLeave={() => setPeeking(false)}

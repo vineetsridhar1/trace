@@ -14,3 +14,4 @@ coverage/
 **/src/**/*.js.map
 **/src/**/*.d.ts
 **/src/**/*.d.ts.map
+package-lock.json
