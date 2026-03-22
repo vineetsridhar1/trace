@@ -9,6 +9,31 @@ const FULLSCREEN_SNAP_RATIO = 0.85;
 const MIN_PANEL_RATIO = 0.25;
 /** Maximum panel ratio before fullscreen snap */
 const MAX_PANEL_RATIO = FULLSCREEN_SNAP_RATIO;
+/** Default panel width ratio */
+const DEFAULT_RATIO = 0.55;
+/** localStorage key for persisted panel width */
+const STORAGE_KEY = "trace:session-panel-width";
+
+function loadPersistedRatio(): number {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const val = parseFloat(stored);
+      if (val >= MIN_PANEL_RATIO && val <= MAX_PANEL_RATIO) return val;
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_RATIO;
+}
+
+function persistRatio(ratio: number) {
+  try {
+    localStorage.setItem(STORAGE_KEY, String(ratio));
+  } catch {
+    // ignore
+  }
+}
 
 export function SessionPanel({
   sessionId,
@@ -65,6 +90,7 @@ export function SessionPanel({
 /**
  * Renders the session panel card alongside the main content card.
  * Includes a drag handle for resizing with auto-snap to fullscreen.
+ * Panel width is persisted in localStorage.
  */
 export function SessionPanelSlot({
   sessionId,
@@ -84,15 +110,16 @@ export function SessionPanelSlot({
   const isMobile = useIsMobile();
   const hasSession = !!sessionId;
 
-  // Custom panel ratio from drag (null = use default flex layout)
-  const [panelRatio, setPanelRatio] = useState<number | null>(null);
+  // Panel ratio — initialized from localStorage
+  const [panelRatio, setPanelRatio] = useState(loadPersistedRatio);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startRatio: 0 });
 
-  // Reset custom ratio when session changes or enters fullscreen
-  useEffect(() => {
-    if (!sessionId || isFullscreen) setPanelRatio(null);
-  }, [sessionId, isFullscreen]);
+  // Persist ratio on change (but not during drag — too frequent)
+  const persistOnDragEnd = useCallback((ratio: number) => {
+    setPanelRatio(ratio);
+    persistRatio(ratio);
+  }, []);
 
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -101,8 +128,7 @@ export function SessionPanelSlot({
       if (!container) return;
 
       const totalWidth = container.offsetWidth;
-      const currentRatio = panelRatio ?? 0.55;
-      dragRef.current = { startX: e.clientX, startRatio: currentRatio };
+      dragRef.current = { startX: e.clientX, startRatio: panelRatio };
       setIsDragging(true);
 
       function onMouseMove(ev: MouseEvent) {
@@ -121,15 +147,17 @@ export function SessionPanelSlot({
         const dx = dragRef.current.startX - ev.clientX;
         const finalRatio = dragRef.current.startRatio + dx / totalWidth;
         if (finalRatio > FULLSCREEN_SNAP_RATIO) {
-          setPanelRatio(null);
           onSetFullscreen(true);
+        } else {
+          const clamped = Math.max(MIN_PANEL_RATIO, Math.min(MAX_PANEL_RATIO, finalRatio));
+          persistOnDragEnd(clamped);
         }
       }
 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [containerRef, panelRatio, onSetFullscreen],
+    [containerRef, panelRatio, onSetFullscreen, persistOnDragEnd],
   );
 
   // On mobile, render as a fixed overlay outside the flex layout
@@ -144,11 +172,18 @@ export function SessionPanelSlot({
     );
   }
 
-  // Compute inline style for drag-based sizing
-  const panelStyle: React.CSSProperties | undefined =
-    hasSession && !isFullscreen && panelRatio != null
-      ? { flexBasis: `${panelRatio * 100}%`, flexGrow: 0, flexShrink: 0 }
-      : undefined;
+  // Always use inline flex-basis so transitions are smooth between all states:
+  // - closed: flex-basis 0%
+  // - open: flex-basis from panelRatio (e.g. 55%)
+  // - fullscreen: flex-basis 100%
+  let flexBasis: string;
+  if (!hasSession) {
+    flexBasis = "0%";
+  } else if (isFullscreen) {
+    flexBasis = "100%";
+  } else {
+    flexBasis = `${panelRatio * 100}%`;
+  }
 
   return (
     <>
@@ -166,14 +201,10 @@ export function SessionPanelSlot({
       <div
         className={cn(
           "min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg bg-background",
-          // Disable transitions during drag for instant feedback
           isDragging ? "" : "transition-all duration-300 ease-in-out",
-          hasSession
-            ? "flex-[1.2_1_0%] border opacity-100"
-            : "flex-[0_0_0%] border-transparent opacity-0",
-          hasSession && isFullscreen && "flex-[1_1_0%]",
+          hasSession ? "border opacity-100" : "border-transparent opacity-0",
         )}
-        style={panelStyle}
+        style={{ flexBasis, flexGrow: isFullscreen ? 1 : 0, flexShrink: 0 }}
       >
         {sessionId && (
           <div className="h-full min-w-[400px]">
