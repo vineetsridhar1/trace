@@ -1,5 +1,6 @@
 import { MessageSquare, Code } from "lucide-react";
-import { useDraggable } from "@dnd-kit/core";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "../../stores/entity";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
@@ -27,16 +28,24 @@ export function ChannelItem({
     attributes,
     listeners,
     setNodeRef,
+    transform,
+    transition,
     isDragging,
-  } = useDraggable({
+  } = useSortable({
     id: `channel:${id}`,
     data: { type: "channel", id, groupId: groupId ?? null },
   });
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+  };
+
   return (
     <div
       ref={setNodeRef}
-      style={isDragging ? { opacity: 0, pointerEvents: "none" } : undefined}
+      style={style}
       {...attributes}
       {...listeners}
     >
