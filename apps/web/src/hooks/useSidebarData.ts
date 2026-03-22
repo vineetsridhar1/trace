@@ -43,8 +43,8 @@ const REPOS_QUERY = gql`
 `;
 
 const CHATS_QUERY = gql`
-  query Chats($organizationId: ID!) {
-    chats(organizationId: $organizationId) {
+  query Chats {
+    chats {
       id
       type
       name
@@ -119,13 +119,12 @@ export function useSidebarData() {
   }, [activeOrgId, upsertMany]);
 
   const fetchChats = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client.query(CHATS_QUERY, { organizationId: activeOrgId }).toPromise();
+    const result = await client.query(CHATS_QUERY, {}).toPromise();
     if (result.data?.chats) {
       upsertMany("chats", result.data.chats as Array<Chat & { id: string }>);
     }
     setChatsLoading(false);
-  }, [activeOrgId, upsertMany]);
+  }, [upsertMany]);
 
   const fetchInboxItems = useCallback(async () => {
     if (!activeOrgId) return;

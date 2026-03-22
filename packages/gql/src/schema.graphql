@@ -172,10 +172,17 @@ enum EventType {
 type Organization {
   id: ID!
   name: String!
-  members: [User!]!
+  members: [OrgMember!]!
   repos: [Repo!]!
   projects: [Project!]!
   channels: [Channel!]!
+}
+
+type OrgMember {
+  user: User!
+  organization: Organization!
+  role: UserRole!
+  joinedAt: DateTime!
 }
 
 type User {
@@ -183,7 +190,7 @@ type User {
   email: String!
   name: String!
   avatarUrl: String
-  role: UserRole!
+  organizations: [OrgMember!]!
 }
 
 type Repo {
@@ -531,7 +538,6 @@ input CreateProjectInput {
 }
 
 input CreateChatInput {
-  organizationId: ID!
   memberIds: [ID!]!
   name: String
 }
@@ -563,6 +569,7 @@ input UpdateAgentSettingsInput {
 
 type Query {
   organization(id: ID!): Organization
+  myOrganizations: [OrgMember!]!
   repos(organizationId: ID!): [Repo!]!
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!
@@ -587,7 +594,7 @@ type Query {
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
   repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
-  chats(organizationId: ID!): [Chat!]!
+  chats: [Chat!]!
   chat(id: ID!): Chat
   chatMessages(chatId: ID!, after: DateTime, before: DateTime, limit: Int): [Message!]!
   threadReplies(rootMessageId: ID!, after: DateTime, limit: Int): [Message!]!
@@ -656,6 +663,9 @@ type Mutation {
   muteScope(scopeType: String!, scopeId: ID!): Participant!
   unmuteScope(scopeType: String!, scopeId: ID!): Participant!
   updateAgentSettings(organizationId: ID!, input: UpdateAgentSettingsInput!): AgentIdentity!
+  addOrgMember(organizationId: ID!, userId: ID!, role: UserRole): OrgMember!
+  removeOrgMember(organizationId: ID!, userId: ID!): Boolean!
+  updateOrgMemberRole(organizationId: ID!, userId: ID!, role: UserRole!): OrgMember!
 }
 
 # --- Subscriptions ---
@@ -667,5 +677,5 @@ type Subscription {
   userNotifications(organizationId: ID!): Notification!
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
-  chatEvents(chatId: ID!, organizationId: ID!, types: [String!]): Event!
+  chatEvents(chatId: ID!, types: [String!]): Event!
 }
