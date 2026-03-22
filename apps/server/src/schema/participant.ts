@@ -38,7 +38,6 @@ export const participantMutations = {
       userId: ctx.userId,
       scopeType,
       scopeId: args.scopeId,
-      organizationId: ctx.organizationId,
     });
   },
   unsubscribe: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {

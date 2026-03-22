@@ -6,19 +6,17 @@ export class ParticipantService {
     userId,
     scopeType,
     scopeId,
-    organizationId,
   }: {
     userId: string;
     scopeType: ParticipantScope;
     scopeId: string;
-    organizationId?: string | null;
   }) {
     return prisma.participant.upsert({
       where: {
         userId_scopeType_scopeId: { userId, scopeType, scopeId },
       },
-      create: { userId, scopeType, scopeId, organizationId },
-      update: { organizationId },
+      create: { userId, scopeType, scopeId },
+      update: {},
     });
   }
 

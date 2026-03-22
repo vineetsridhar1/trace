@@ -196,7 +196,6 @@ model Organization {
   tickets  Ticket[]
   events        Event[]
   inboxItems    InboxItem[]
-  participants  Participant[]
   cloudMachines CloudMachine[]
   agentIdentity    AgentIdentity?
   executionLogs    AgentExecutionLog[]
@@ -636,16 +635,13 @@ model ChatMember {
 }
 
 model Participant {
-  userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scopeType      ParticipantScope
-  scopeId        String
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  subscribedAt   DateTime     @default(now())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopeType    ParticipantScope
+  scopeId      String
+  subscribedAt DateTime         @default(now())
   mutedAt        DateTime?
 
   @@id([userId, scopeType, scopeId])
   @@index([scopeType, scopeId])
-  @@index([organizationId, userId])
 }
