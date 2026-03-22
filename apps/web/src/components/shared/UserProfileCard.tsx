@@ -28,12 +28,9 @@ export function UserProfileCard({
   const name = useEntityField("users", userId, "name");
   const avatarUrl = useEntityField("users", userId, "avatarUrl");
   const email = useEntityField("users", userId, "email");
-  const role = useEntityField("users", userId, "role");
-
   const displayName = (name as string | undefined) ?? fallbackName ?? "Unknown";
   const displayAvatar = (avatarUrl as string | undefined) ?? fallbackAvatarUrl ?? undefined;
   const displayEmail = email as string | undefined;
-  const displayRole = role as string | undefined;
   const avatar = displayAvatar ? (
     <img
       src={displayAvatar}
@@ -56,7 +53,7 @@ export function UserProfileCard({
         <EntityPreviewCard
           media={avatar}
           title={displayName}
-          subtitle={displayRole}
+          subtitle={displayEmail}
           description={displayEmail}
           footer={footer}
         />
