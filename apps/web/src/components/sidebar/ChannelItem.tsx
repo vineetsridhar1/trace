@@ -2,6 +2,7 @@ import { Hash } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { useEntityField } from "../../stores/entity";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
+import { cn } from "../../lib/utils";
 
 export function ChannelItem({
   id,
@@ -58,11 +59,12 @@ export function PeekChannelItem({
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors ${
+      className={cn(
+        "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors",
         isActive
           ? "bg-surface-elevated text-foreground"
           : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground"
-      }`}
+      )}
     >
       <Hash size={16} className="shrink-0 opacity-50" />
       <span className="truncate">{name}</span>
