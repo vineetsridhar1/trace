@@ -112,6 +112,7 @@ export function SessionGroupDetailView({
   const groupWorktreeDeleted = useEntityField("sessionGroups", sessionGroupId, "worktreeDeleted") as
     | boolean
     | undefined;
+  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
   const activeSessionId = useUIStore((s) => s.activeSessionId);
   const activeTerminalId = useUIStore((s) => s.activeTerminalId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
@@ -168,10 +169,11 @@ export function SessionGroupDetailView({
   }, [sessionGroupId, upsert, upsertMany]);
 
   useEffect(() => {
+    if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionsByRecency.length === 0) return;
     if (activeSessionId && sessionsByRecency.some((session) => session.id === activeSessionId)) return;
     setActiveSessionId(sessionsByRecency[0].id);
-  }, [activeSessionId, sessionsByRecency, setActiveSessionId]);
+  }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionsByRecency, setActiveSessionId]);
 
   useEffect(() => {
     if (!activeTerminalId) return;

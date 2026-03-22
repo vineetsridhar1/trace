@@ -221,9 +221,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
 
     const sessionGroupId = resolveSessionGroupIdForSession(id, currentSessionGroupId);
-    const channelId = resolveChannelIdForSession(
-      id,
-      resolveChannelIdForSessionGroup(sessionGroupId, currentChannelId),
+    const channelId = resolveChannelIdForSessionGroup(
+      sessionGroupId,
+      resolveChannelIdForSession(id, currentChannelId),
     );
     persistActiveChannelId(channelId);
     set({
@@ -264,7 +264,10 @@ export function navigateToSession(
 ): void {
   const fallbackChannelId = useUIStore.getState().activeChannelId;
   const resolvedChannelId =
-    resolveChannelIdForSession(sessionId, resolveChannelIdForSessionGroup(sessionGroupId, channelId ?? fallbackChannelId));
+    resolveChannelIdForSessionGroup(
+      sessionGroupId,
+      resolveChannelIdForSession(sessionId, channelId ?? fallbackChannelId),
+    );
   useUIStore.getState()._restoreNav(resolvedChannelId, sessionGroupId, sessionId, "main", null);
   const path = buildPath(resolvedChannelId, sessionGroupId, sessionId, "main");
   history.pushState(
