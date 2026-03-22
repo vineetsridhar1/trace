@@ -51,7 +51,7 @@ export const channelTypeResolvers = {
     members: async (channel: { id: string }) => {
       const members = await prisma.channelMember.findMany({
         where: { channelId: channel.id, leftAt: null },
-        include: { user: { select: { id: true, email: true, name: true, avatarUrl: true, role: true } } },
+        include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
       });
       return members.map((m) => ({ user: m.user, joinedAt: m.joinedAt }));
     },
