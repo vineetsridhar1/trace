@@ -227,6 +227,7 @@ export function AppSidebar() {
   const backgroundBlend = tabProgress * 100;
   const dmSelectedness = 1 - tabProgress;
   const mainSelectedness = tabProgress;
+  const currentTab = tabProgress > 0.5 ? "main" : "dm";
 
   useEffect(() => {
     document.documentElement.style.setProperty(
@@ -453,9 +454,17 @@ export function AppSidebar() {
 
       <PeekOverlay
         visible={peeking && state === "collapsed"}
+        channelsLoading={channelsLoading}
         channelIds={allChannelIds}
         activeChannelId={activeChannelId}
         onChannelClick={setActiveChannelId}
+        chatsLoading={chatsLoading}
+        chatIds={chatIds}
+        activeChatId={activeChatId}
+        onChatClick={setActiveChatId}
+        currentTab={currentTab}
+        onTabProgressChange={setTabProgress}
+        onTabChange={(tab) => scrollToTab(tab, "auto")}
         onMouseLeave={() => setPeeking(false)}
       />
     </>
