@@ -471,9 +471,9 @@ export function AppSidebar() {
 
                   <DragOverlay dropAnimation={null}>
                     {dragChannelName ? (
-                      <div className="flex items-center gap-2 rounded-md bg-surface-elevated px-2 py-1.5 text-sm shadow-lg border border-border">
+                      <div className="flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-sidebar-accent px-2 text-sm text-sidebar-accent-foreground shadow-lg">
                         <Hash size={16} className="opacity-50" />
-                        <span>{dragChannelName}</span>
+                        <span className="truncate">{dragChannelName}</span>
                       </div>
                     ) : null}
                   </DragOverlay>

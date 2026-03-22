@@ -1,6 +1,5 @@
 import { Hash } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "../../stores/entity";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 
@@ -21,24 +20,19 @@ export function ChannelItem({
     attributes,
     listeners,
     setNodeRef,
-    transform,
     isDragging,
   } = useDraggable({
     id: `channel:${id}`,
     data: { type: "channel", id, groupId: groupId ?? null },
   });
 
-  const style = transform
-    ? {
-        transform: CSS.Transform.toString(transform),
-        opacity: isDragging ? 0.5 : 1,
-        zIndex: isDragging ? 50 : undefined,
-        position: "relative" as const,
-      }
-    : undefined;
-
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div
+      ref={setNodeRef}
+      style={isDragging ? { opacity: 0, pointerEvents: "none" } : undefined}
+      {...attributes}
+      {...listeners}
+    >
       <SidebarMenuItem>
         <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
           <Hash size={16} className="opacity-50" />
