@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { MessageSquare, Send } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import {
   useEntityStore,
   useEntityField,
-  useScopedEventIds,
   useScopedEventField,
   eventScopeKey,
 } from "../../stores/entity";
@@ -76,6 +76,21 @@ function MessageItem({ scopeKey, eventId }: { scopeKey: string; eventId: string 
   );
 }
 
+function useMessageEventIds(scopeKey: string): string[] {
+  const selector = useMemo(
+    () => (state: { eventsByScope: Record<string, Record<string, Event>> }) => {
+      const bucket = state.eventsByScope[scopeKey];
+      if (!bucket) return [] as string[];
+      return Object.entries(bucket)
+        .filter(([, e]) => e.eventType === "message_sent")
+        .sort(([, a], [, b]) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .map(([id]) => id);
+    },
+    [scopeKey],
+  );
+  return useEntityStore(useShallow(selector));
+}
+
 export function TextChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
@@ -87,24 +102,7 @@ export function TextChannelView({ channelId }: { channelId: string }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scopeKey = eventScopeKey("channel", channelId);
-  const eventIds = useScopedEventIds(scopeKey, (a, b) =>
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-  );
-
-  // Filter to only message_sent events
-  const messageEventIds = useEntityStore(
-    useCallback(
-      (state) => {
-        const bucket = state.eventsByScope[scopeKey];
-        if (!bucket) return [];
-        return Object.entries(bucket)
-          .filter(([, e]) => e.eventType === "message_sent")
-          .sort(([, a], [, b]) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-          .map(([id]) => id);
-      },
-      [scopeKey],
-    ),
-  );
+  const messageEventIds = useMessageEventIds(scopeKey);
 
   const fetchMessages = useCallback(async () => {
     if (!activeOrgId) return;
