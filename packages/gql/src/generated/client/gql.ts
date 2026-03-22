@@ -16,6 +16,8 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
 type Documents = {
     "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n": typeof types.DeleteChannelGroupDocument,
     "\n  query Sessions($organizationId: ID!, $filters: SessionFilters) {\n    sessions(organizationId: $organizationId, filters: $filters) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      prUrl\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      repo {\n        id\n        name\n      }\n      channel {\n        id\n      }\n      parentSession {\n        id\n        name\n      }\n      childSessions {\n        id\n        name\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SessionsDocument,
+    "\n  query ChannelEvents($organizationId: ID!, $scope: ScopeInput!, $types: [String!], $limit: Int) {\n    events(organizationId: $organizationId, scope: $scope, types: $types, limit: $limit) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.ChannelEventsDocument,
+    "\n  mutation SendChannelMessage($channelId: ID!, $text: String!) {\n    sendMessage(channelId: $channelId, text: $text) {\n      id\n    }\n  }\n": typeof types.SendChannelMessageDocument,
     "\n  mutation AddChatMember($input: AddChatMemberInput!) {\n    addChatMember(input: $input) {\n      id\n    }\n  }\n": typeof types.AddChatMemberDocument,
     "\n  mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID) {\n    sendChatMessage(chatId: $chatId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n": typeof types.SendChatMessageDocument,
     "\n  mutation RenameChat($chatId: ID!, $name: String!) {\n    renameChat(chatId: $chatId, name: $name) {\n      id\n      name\n    }\n  }\n": typeof types.RenameChatDocument,
@@ -28,6 +30,9 @@ type Documents = {
     "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateRepoDocument,
     "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.SettingsReposDocument,
     "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument,
+    "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n": typeof types.AllChannelsDocument,
+    "\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n": typeof types.JoinChannelDocument,
+    "\n  mutation LeaveChannel($channelId: ID!) {\n    leaveChannel(channelId: $channelId) {\n      id\n    }\n  }\n": typeof types.LeaveChannelDocument,
     "\n  mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {\n    updateChannelGroup(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateChannelGroupCollapseDocument,
     "\n  mutation CreateChannel($input: CreateChannelInput!) {\n    createChannel(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChannelDocument,
     "\n  mutation CreateChannelGroup($input: CreateChannelGroupInput!) {\n    createChannelGroup(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChannelGroupDocument,
@@ -39,7 +44,7 @@ type Documents = {
     "\n  subscription ChatEventsSubscription($chatId: ID!, $types: [String!]) {\n    chatEvents(chatId: $chatId, types: $types) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.ChatEventsSubscriptionDocument,
     "\n  subscription OrgEvents($organizationId: ID!) {\n    orgEvents(organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.OrgEventsDocument,
     "\n  query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime) {\n    events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": typeof types.SessionEventsDocument,
-    "\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      position\n      groupId\n    }\n  }\n": typeof types.ChannelsDocument,
+    "\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n    }\n  }\n": typeof types.ChannelsDocument,
     "\n  query ChannelGroups($organizationId: ID!) {\n    channelGroups(organizationId: $organizationId) {\n      id\n      name\n      position\n      isCollapsed\n    }\n  }\n": typeof types.ChannelGroupsDocument,
     "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": typeof types.ReposDocument,
     "\n  query Chats {\n    chats {\n      id\n      type\n      name\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.ChatsDocument,
@@ -70,6 +75,8 @@ type Documents = {
 const documents: Documents = {
     "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n": types.DeleteChannelGroupDocument,
     "\n  query Sessions($organizationId: ID!, $filters: SessionFilters) {\n    sessions(organizationId: $organizationId, filters: $filters) {\n      id\n      name\n      status\n      tool\n      model\n      hosting\n      prUrl\n      connection {\n        state\n        runtimeInstanceId\n        runtimeLabel\n        lastError\n        retryCount\n        canRetry\n        canMove\n      }\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      repo {\n        id\n        name\n      }\n      channel {\n        id\n      }\n      parentSession {\n        id\n        name\n      }\n      childSessions {\n        id\n        name\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": types.SessionsDocument,
+    "\n  query ChannelEvents($organizationId: ID!, $scope: ScopeInput!, $types: [String!], $limit: Int) {\n    events(organizationId: $organizationId, scope: $scope, types: $types, limit: $limit) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": types.ChannelEventsDocument,
+    "\n  mutation SendChannelMessage($channelId: ID!, $text: String!) {\n    sendMessage(channelId: $channelId, text: $text) {\n      id\n    }\n  }\n": types.SendChannelMessageDocument,
     "\n  mutation AddChatMember($input: AddChatMemberInput!) {\n    addChatMember(input: $input) {\n      id\n    }\n  }\n": types.AddChatMemberDocument,
     "\n  mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID) {\n    sendChatMessage(chatId: $chatId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n": types.SendChatMessageDocument,
     "\n  mutation RenameChat($chatId: ID!, $name: String!) {\n    renameChat(chatId: $chatId, name: $name) {\n      id\n      name\n    }\n  }\n": types.RenameChatDocument,
@@ -82,6 +89,9 @@ const documents: Documents = {
     "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": types.CreateRepoDocument,
     "\n  query SettingsRepos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": types.SettingsReposDocument,
     "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": types.CreateDmDocument,
+    "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n": types.AllChannelsDocument,
+    "\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n": types.JoinChannelDocument,
+    "\n  mutation LeaveChannel($channelId: ID!) {\n    leaveChannel(channelId: $channelId) {\n      id\n    }\n  }\n": types.LeaveChannelDocument,
     "\n  mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {\n    updateChannelGroup(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateChannelGroupCollapseDocument,
     "\n  mutation CreateChannel($input: CreateChannelInput!) {\n    createChannel(input: $input) {\n      id\n    }\n  }\n": types.CreateChannelDocument,
     "\n  mutation CreateChannelGroup($input: CreateChannelGroupInput!) {\n    createChannelGroup(input: $input) {\n      id\n    }\n  }\n": types.CreateChannelGroupDocument,
@@ -93,7 +103,7 @@ const documents: Documents = {
     "\n  subscription ChatEventsSubscription($chatId: ID!, $types: [String!]) {\n    chatEvents(chatId: $chatId, types: $types) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": types.ChatEventsSubscriptionDocument,
     "\n  subscription OrgEvents($organizationId: ID!) {\n    orgEvents(organizationId: $organizationId) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": types.OrgEventsDocument,
     "\n  query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime) {\n    events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n": types.SessionEventsDocument,
-    "\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      position\n      groupId\n    }\n  }\n": types.ChannelsDocument,
+    "\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n    }\n  }\n": types.ChannelsDocument,
     "\n  query ChannelGroups($organizationId: ID!) {\n    channelGroups(organizationId: $organizationId) {\n      id\n      name\n      position\n      isCollapsed\n    }\n  }\n": types.ChannelGroupsDocument,
     "\n  query Repos($organizationId: ID!) {\n    repos(organizationId: $organizationId) {\n      id\n      name\n      remoteUrl\n      defaultBranch\n      webhookActive\n    }\n  }\n": types.ReposDocument,
     "\n  query Chats {\n    chats {\n      id\n      type\n      name\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": types.ChatsDocument,
@@ -147,6 +157,14 @@ export function graphql(source: "\n  query Sessions($organizationId: ID!, $filte
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function graphql(source: "\n  query ChannelEvents($organizationId: ID!, $scope: ScopeInput!, $types: [String!], $limit: Int) {\n    events(organizationId: $organizationId, scope: $scope, types: $types, limit: $limit) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n"): (typeof documents)["\n  query ChannelEvents($organizationId: ID!, $scope: ScopeInput!, $types: [String!], $limit: Int) {\n    events(organizationId: $organizationId, scope: $scope, types: $types, limit: $limit) {\n      id\n      scopeType\n      scopeId\n      eventType\n      payload\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      parentId\n      timestamp\n      metadata\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation SendChannelMessage($channelId: ID!, $text: String!) {\n    sendMessage(channelId: $channelId, text: $text) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation SendChannelMessage($channelId: ID!, $text: String!) {\n    sendMessage(channelId: $channelId, text: $text) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function graphql(source: "\n  mutation AddChatMember($input: AddChatMemberInput!) {\n    addChatMember(input: $input) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation AddChatMember($input: AddChatMemberInput!) {\n    addChatMember(input: $input) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
@@ -195,6 +213,18 @@ export function graphql(source: "\n  mutation CreateDM($input: CreateChatInput!)
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function graphql(source: "\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n"): (typeof documents)["\n  query AllChannels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      members {\n        user {\n          id\n        }\n        joinedAt\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation JoinChannel($channelId: ID!) {\n    joinChannel(channelId: $channelId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation LeaveChannel($channelId: ID!) {\n    leaveChannel(channelId: $channelId) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation LeaveChannel($channelId: ID!) {\n    leaveChannel(channelId: $channelId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function graphql(source: "\n  mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {\n    updateChannelGroup(id: $id, input: $input) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {\n    updateChannelGroup(id: $id, input: $input) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
@@ -239,7 +269,7 @@ export function graphql(source: "\n  query SessionEvents($organizationId: ID!, $
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      position\n      groupId\n    }\n  }\n"): (typeof documents)["\n  query Channels($organizationId: ID!) {\n    channels(organizationId: $organizationId) {\n      id\n      name\n      type\n      position\n      groupId\n    }\n  }\n"];
+export function graphql(source: "\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n    }\n  }\n"): (typeof documents)["\n  query Channels($organizationId: ID!, $memberOnly: Boolean) {\n    channels(organizationId: $organizationId, memberOnly: $memberOnly) {\n      id\n      name\n      type\n      position\n      groupId\n      members {\n        user {\n          id\n          name\n          avatarUrl\n        }\n        joinedAt\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

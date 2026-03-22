@@ -21,6 +21,17 @@ export const channelQueries = {
   channel: (_: unknown, args: { id: string }, _ctx: Context) => {
     return prisma.channel.findUnique({ where: { id: args.id } });
   },
+  channelMessages: (
+    _: unknown,
+    args: { channelId: string; after?: string; before?: string; limit?: number },
+    ctx: Context,
+  ) => {
+    return channelService.getChannelMessages(args.channelId, ctx.userId, {
+      after: args.after ? new Date(args.after) : undefined,
+      before: args.before ? new Date(args.before) : undefined,
+      limit: args.limit ?? undefined,
+    });
+  },
 };
 
 export const channelMutations = {
@@ -35,6 +46,35 @@ export const channelMutations = {
   },
   sendMessage: (_: unknown, args: { channelId: string; text: string; parentId?: string }, ctx: Context) => {
     return channelService.sendMessage(args.channelId, args.text, args.parentId ?? null, ctx.actorType, ctx.userId);
+  },
+  sendChannelMessage: (
+    _: unknown,
+    args: { channelId: string; text?: string; html?: string; parentId?: string },
+    ctx: Context,
+  ) => {
+    return channelService.sendChannelMessage({
+      channelId: args.channelId,
+      text: args.text ?? undefined,
+      html: args.html ?? undefined,
+      parentId: args.parentId ?? undefined,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
+  editChannelMessage: (_: unknown, args: { messageId: string; html: string }, ctx: Context) => {
+    return channelService.editChannelMessage({
+      messageId: args.messageId,
+      html: args.html,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
+  deleteChannelMessage: (_: unknown, args: { messageId: string }, ctx: Context) => {
+    return channelService.deleteChannelMessage({
+      messageId: args.messageId,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
   },
 };
 

@@ -300,7 +300,8 @@ type Event {
 
 type Message {
   id: ID!
-  chatId: ID!
+  chatId: ID
+  channelId: ID
   actor: Actor!
   text: String!
   html: String
@@ -602,6 +603,7 @@ type Query {
   chats: [Chat!]!
   chat(id: ID!): Chat
   chatMessages(chatId: ID!, after: DateTime, before: DateTime, limit: Int): [Message!]!
+  channelMessages(channelId: ID!, after: DateTime, before: DateTime, limit: Int): [Message!]!
   threadReplies(rootMessageId: ID!, after: DateTime, limit: Int): [Message!]!
   threadSummary(rootMessageId: ID!): ThreadSummary
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
@@ -662,6 +664,9 @@ type Mutation {
   sendChatMessage(chatId: ID!, text: String, html: String, parentId: ID): Message!
   editChatMessage(messageId: ID!, html: String!): Message!
   deleteChatMessage(messageId: ID!): Message!
+  sendChannelMessage(channelId: ID!, text: String, html: String, parentId: ID): Message!
+  editChannelMessage(messageId: ID!, html: String!): Message!
+  deleteChannelMessage(messageId: ID!): Message!
   addChatMember(input: AddChatMemberInput!): Chat!
   leaveChat(chatId: ID!): Chat!
   renameChat(chatId: ID!, name: String!): Chat!

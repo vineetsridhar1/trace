@@ -295,7 +295,8 @@ export type InboxItemType =
 export type Message = {
   __typename?: 'Message';
   actor: Actor;
-  chatId: Scalars['ID']['output'];
+  channelId?: Maybe<Scalars['ID']['output']>;
+  chatId?: Maybe<Scalars['ID']['output']>;
   createdAt: Scalars['DateTime']['output'];
   deletedAt?: Maybe<Scalars['DateTime']['output']>;
   editedAt?: Maybe<Scalars['DateTime']['output']>;
@@ -331,11 +332,13 @@ export type Mutation = {
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
   deleteChannelGroup: Scalars['Boolean']['output'];
+  deleteChannelMessage: Message;
   deleteChatMessage: Message;
   deleteSession: Session;
   destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
+  editChannelMessage: Message;
   editChatMessage: Message;
   joinChannel: Channel;
   leaveChannel: Channel;
@@ -355,6 +358,7 @@ export type Mutation = {
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
+  sendChannelMessage: Message;
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
@@ -447,6 +451,11 @@ export type MutationDeleteChannelGroupArgs = {
 };
 
 
+export type MutationDeleteChannelMessageArgs = {
+  messageId: Scalars['ID']['input'];
+};
+
+
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars['ID']['input'];
 };
@@ -469,6 +478,12 @@ export type MutationDismissInboxItemArgs = {
 
 export type MutationDismissSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationEditChannelMessageArgs = {
+  html: Scalars['String']['input'];
+  messageId: Scalars['ID']['input'];
 };
 
 
@@ -575,6 +590,14 @@ export type MutationRunSessionArgs = {
   id: Scalars['ID']['input'];
   interactionMode?: InputMaybe<Scalars['String']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationSendChannelMessageArgs = {
+  channelId: Scalars['ID']['input'];
+  html?: InputMaybe<Scalars['String']['input']>;
+  parentId?: InputMaybe<Scalars['ID']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -755,6 +778,7 @@ export type Query = {
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
+  channelMessages: Array<Message>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
@@ -803,6 +827,14 @@ export type QueryChannelArgs = {
 
 export type QueryChannelGroupsArgs = {
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryChannelMessagesArgs = {
+  after?: InputMaybe<Scalars['DateTime']['input']>;
+  before?: InputMaybe<Scalars['DateTime']['input']>;
+  channelId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -1539,7 +1571,8 @@ export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes
 
 export type MessageResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Message'] = ResolversParentTypes['Message']> = ResolversObject<{
   actor?: Resolver<ResolversTypes['Actor'], ParentType, ContextType>;
-  chatId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  channelId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
+  chatId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   deletedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   editedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
@@ -1569,11 +1602,13 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationCreateTicketArgs, 'input'>>;
   deleteApiToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteApiTokenArgs, 'provider'>>;
   deleteChannelGroup?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteChannelGroupArgs, 'id'>>;
+  deleteChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChannelMessageArgs, 'messageId'>>;
   deleteChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChatMessageArgs, 'messageId'>>;
   deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
   destroyTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDestroyTerminalArgs, 'terminalId'>>;
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
   dismissSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDismissSessionArgs, 'id'>>;
+  editChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChannelMessageArgs, 'html' | 'messageId'>>;
   editChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChatMessageArgs, 'html' | 'messageId'>>;
   joinChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationJoinChannelArgs, 'channelId'>>;
   leaveChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationLeaveChannelArgs, 'channelId'>>;
@@ -1593,6 +1628,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   resumeSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationResumeSessionArgs, 'id'>>;
   retrySessionConnection?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRetrySessionConnectionArgs, 'sessionId'>>;
   runSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationRunSessionArgs, 'id'>>;
+  sendChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChannelMessageArgs, 'channelId'>>;
   sendChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
@@ -1673,6 +1709,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   availableSessionRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableSessionRuntimesArgs, 'sessionId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<QueryChannelGroupsArgs, 'organizationId'>>;
+  channelMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChannelMessagesArgs, 'channelId'>>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   chat?: Resolver<Maybe<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatArgs, 'id'>>;
   chatMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChatMessagesArgs, 'chatId'>>;

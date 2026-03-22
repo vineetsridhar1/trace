@@ -384,6 +384,7 @@ model Channel {
   sessions Session[]
   tickets  Ticket[]
   members  ChannelMember[]
+  messages Message[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -600,8 +601,10 @@ model Chat {
 
 model Message {
   id              String       @id @default(uuid())
-  chatId          String
-  chat            Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId          String?
+  chat            Chat?        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  channelId       String?
+  channel         Channel?     @relation(fields: [channelId], references: [id], onDelete: Cascade)
   actorType       ActorType
   actorId         String
   text            String
@@ -616,6 +619,7 @@ model Message {
   updatedAt       DateTime     @updatedAt
 
   @@index([chatId, createdAt])
+  @@index([channelId, createdAt])
   @@index([parentMessageId, createdAt])
 }
 
