@@ -126,14 +126,19 @@ const MOVE_CHANNEL_MUTATION = gql`
 function UngroupedDropZone({
   isDropTarget,
   isDragging,
+  hasGroups,
 }: {
   isDropTarget: boolean;
   isDragging: boolean;
+  hasGroups: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: "ungrouped",
     data: { type: "ungrouped" },
   });
+
+  // Only show when there are groups (otherwise nothing to ungroup from)
+  if (!hasGroups) return null;
 
   const showHighlight = isDropTarget || isOver;
 
@@ -141,16 +146,15 @@ function UngroupedDropZone({
     <div
       ref={setNodeRef}
       className={cn(
-        "mx-1 mt-1 flex items-center justify-center rounded-md border border-dashed px-2 text-xs transition-all",
-        isDragging ? "py-2" : "py-0 border-transparent",
-        isDragging && showHighlight
-          ? "border-blue-500 bg-blue-500/10 text-blue-400"
-          : isDragging
-            ? "border-border text-muted-foreground"
-            : ""
+        "mx-1 mt-1 flex items-center justify-center rounded-md border border-dashed px-2 py-2 text-xs",
+        isDragging
+          ? showHighlight
+            ? "border-blue-500 bg-blue-500/10 text-blue-400"
+            : "border-border text-muted-foreground"
+          : "border-transparent text-transparent select-none"
       )}
     >
-      {isDragging && "Drop here to ungroup"}
+      Drop here to ungroup
     </div>
   );
 }
@@ -452,7 +456,7 @@ export function AppSidebar() {
                   ))}
 
                   {/* Drop zone to ungroup channels — appears below groups during drag */}
-                  <UngroupedDropZone isDropTarget={dragOverUngrouped} isDragging={dragChannelName !== null} />
+                  <UngroupedDropZone isDropTarget={dragOverUngrouped} isDragging={dragChannelName !== null} hasGroups={groupIds.length > 0} />
 
                   <DragOverlay dropAnimation={null}>
                     {dragChannelName ? (
