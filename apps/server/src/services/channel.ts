@@ -9,7 +9,9 @@ export class ChannelService {
         data: {
           name: input.name,
           type: input.type ?? "default",
+          position: input.position ?? 0,
           organizationId: input.organizationId,
+          groupId: input.groupId ?? null,
           ...(input.projectIds?.length && {
             projects: {
               create: input.projectIds.map((projectId) => ({ projectId })),
@@ -23,7 +25,7 @@ export class ChannelService {
         scopeType: "channel",
         scopeId: channel.id,
         eventType: "channel_created",
-        payload: { channel: { id: channel.id, name: channel.name, type: channel.type } },
+        payload: { channel: { id: channel.id, name: channel.name, type: channel.type, position: channel.position, groupId: channel.groupId } },
         actorType,
         actorId,
       }, tx);

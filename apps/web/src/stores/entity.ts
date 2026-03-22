@@ -6,6 +6,7 @@ import type {
   Repo,
   Project,
   Channel,
+  ChannelGroup,
   Chat,
   Session,
   Ticket,
@@ -28,6 +29,7 @@ export type EntityTableMap = {
   repos: Repo;
   projects: Project;
   channels: Channel;
+  channelGroups: ChannelGroup;
   chats: Chat;
   sessions: SessionEntity;
   tickets: Ticket;
@@ -67,6 +69,7 @@ export const useEntityStore = create<EntityState>((set) => ({
   repos: {},
   projects: {},
   channels: {},
+  channelGroups: {},
   chats: {},
   sessions: {},
   tickets: {},

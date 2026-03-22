@@ -161,6 +161,10 @@ enum EventType {
   repo_created
   repo_updated
   channel_created
+  channel_updated
+  channel_group_created
+  channel_group_updated
+  channel_group_deleted
   member_joined
   member_left
   inbox_item_created
@@ -186,6 +190,7 @@ model Organization {
   members  User[]
   repos    Repo[]
   projects Project[]
+  channelGroups ChannelGroup[]
   channels Channel[]
   sessions Session[]
   tickets  Ticket[]
@@ -342,12 +347,31 @@ model Project {
   updatedAt DateTime @updatedAt
 }
 
+model ChannelGroup {
+  id             String       @id @default(uuid())
+  name           String
+  position       Int          @default(0)
+  isCollapsed    Boolean      @default(false)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  channels Channel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, position])
+}
+
 model Channel {
   id             String       @id @default(uuid())
   name           String
   type           ChannelType  @default(default)
+  position       Int          @default(0)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  groupId        String?
+  group          ChannelGroup? @relation(fields: [groupId], references: [id])
 
   projects ChannelProject[]
   sessions Session[]
@@ -355,6 +379,8 @@ model Channel {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId, position])
 }
 
 model ChannelProject {

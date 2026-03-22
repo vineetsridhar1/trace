@@ -7,7 +7,7 @@ import type { SessionEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
-import type { Event, EventType, ScopeType, SessionStatus, Channel, Chat, Repo, InboxItem } from "@trace/gql";
+import type { Event, EventType, ScopeType, SessionStatus, Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -189,6 +189,51 @@ export function useOrgEvents() {
           const channel = asJsonObject(payload.channel);
           if (channel && typeof channel.id === "string") {
             upsert("channels", channel.id, channel as unknown as Channel);
+          }
+        }
+
+        // Channel updated (position/group changes, reorder)
+        if (event.eventType === ("channel_updated" as EventType) && payload) {
+          if (payload.reorder && Array.isArray(payload.channels)) {
+            for (const ch of payload.channels) {
+              const c = asJsonObject(ch);
+              if (c && typeof c.id === "string") {
+                patch("channels", c.id, c as Partial<Channel>);
+              }
+            }
+          } else {
+            const channel = asJsonObject(payload.channel);
+            if (channel && typeof channel.id === "string") {
+              patch("channels", channel.id, channel as Partial<Channel>);
+            }
+          }
+        }
+
+        // Channel group events
+        if (event.eventType === ("channel_group_created" as EventType) && payload) {
+          const group = asJsonObject(payload.channelGroup);
+          if (group && typeof group.id === "string") {
+            upsert("channelGroups", group.id, group as unknown as ChannelGroup);
+          }
+        }
+        if (event.eventType === ("channel_group_updated" as EventType) && payload) {
+          if (payload.reorder && Array.isArray(payload.groups)) {
+            for (const g of payload.groups) {
+              const group = asJsonObject(g);
+              if (group && typeof group.id === "string") {
+                patch("channelGroups", group.id, group as Partial<ChannelGroup>);
+              }
+            }
+          } else {
+            const group = asJsonObject(payload.channelGroup);
+            if (group && typeof group.id === "string") {
+              patch("channelGroups", group.id, group as Partial<ChannelGroup>);
+            }
+          }
+        }
+        if (event.eventType === ("channel_group_deleted" as EventType) && payload) {
+          if (typeof payload.channelGroupId === "string") {
+            remove("channelGroups", payload.channelGroupId);
           }
         }
 

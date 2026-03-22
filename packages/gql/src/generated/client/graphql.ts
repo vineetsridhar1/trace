@@ -79,10 +79,12 @@ export type AutonomyMode =
 
 export type Channel = {
   __typename?: 'Channel';
+  groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   members: Array<User>;
   messages: Array<Event>;
   name: Scalars['String']['output'];
+  position: Scalars['Int']['output'];
   projects: Array<Project>;
   type: ChannelType;
 };
@@ -91,6 +93,15 @@ export type Channel = {
 export type ChannelMessagesArgs = {
   after?: InputMaybe<Scalars['DateTime']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ChannelGroup = {
+  __typename?: 'ChannelGroup';
+  channels: Array<Channel>;
+  id: Scalars['ID']['output'];
+  isCollapsed: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  position: Scalars['Int']['output'];
 };
 
 export type ChannelType =
@@ -138,9 +149,17 @@ export type CostBudget = {
   dailyLimitCents: Scalars['Int']['output'];
 };
 
-export type CreateChannelInput = {
+export type CreateChannelGroupInput = {
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];
+  position?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type CreateChannelInput = {
+  groupId?: InputMaybe<Scalars['ID']['input']>;
+  name: Scalars['String']['input'];
+  organizationId: Scalars['ID']['input'];
+  position?: InputMaybe<Scalars['Int']['input']>;
   projectIds?: InputMaybe<Array<Scalars['ID']['input']>>;
   type?: InputMaybe<ChannelType>;
 };
@@ -204,6 +223,10 @@ export type Event = {
 
 export type EventType =
   | 'channel_created'
+  | 'channel_group_created'
+  | 'channel_group_deleted'
+  | 'channel_group_updated'
+  | 'channel_updated'
   | 'chat_created'
   | 'chat_member_added'
   | 'chat_member_removed'
@@ -281,18 +304,26 @@ export type Message = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
+export type MoveChannelInput = {
+  channelId: Scalars['ID']['input'];
+  groupId?: InputMaybe<Scalars['ID']['input']>;
+  position: Scalars['Int']['input'];
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   addChatMember: Chat;
   assignTicket: Ticket;
   commentOnTicket: Event;
   createChannel: Channel;
+  createChannelGroup: ChannelGroup;
   createChat: Chat;
   createProject: Project;
   createRepo: Repo;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteApiToken: Scalars['Boolean']['output'];
+  deleteChannelGroup: Scalars['Boolean']['output'];
   deleteChatMessage: Message;
   deleteSession: Session;
   destroyTerminal: Scalars['Boolean']['output'];
@@ -302,12 +333,15 @@ export type Mutation = {
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkTicket: Ticket;
+  moveChannel: Channel;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
   pauseSession: Session;
   registerRepoWebhook: Repo;
   renameChat: Chat;
+  reorderChannelGroups: Array<ChannelGroup>;
+  reorderChannels: Array<Channel>;
   resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
@@ -324,6 +358,7 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
+  updateChannelGroup: ChannelGroup;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -349,6 +384,11 @@ export type MutationCommentOnTicketArgs = {
 
 export type MutationCreateChannelArgs = {
   input: CreateChannelInput;
+};
+
+
+export type MutationCreateChannelGroupArgs = {
+  input: CreateChannelGroupInput;
 };
 
 
@@ -381,6 +421,11 @@ export type MutationCreateTicketArgs = {
 
 export type MutationDeleteApiTokenArgs = {
   provider: ApiTokenProvider;
+};
+
+
+export type MutationDeleteChannelGroupArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -434,6 +479,11 @@ export type MutationLinkTicketArgs = {
 };
 
 
+export type MutationMoveChannelArgs = {
+  input: MoveChannelInput;
+};
+
+
 export type MutationMoveSessionToCloudArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -464,6 +514,16 @@ export type MutationRegisterRepoWebhookArgs = {
 export type MutationRenameChatArgs = {
   chatId: Scalars['ID']['input'];
   name: Scalars['String']['input'];
+};
+
+
+export type MutationReorderChannelGroupsArgs = {
+  input: ReorderChannelGroupsInput;
+};
+
+
+export type MutationReorderChannelsArgs = {
+  input: ReorderChannelsInput;
 };
 
 
@@ -563,6 +623,12 @@ export type MutationUpdateAgentSettingsArgs = {
 };
 
 
+export type MutationUpdateChannelGroupArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateChannelGroupInput;
+};
+
+
 export type MutationUpdateRepoArgs = {
   id: Scalars['ID']['input'];
   input: UpdateRepoInput;
@@ -639,6 +705,7 @@ export type Query = {
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
+  channelGroups: Array<ChannelGroup>;
   channels: Array<Channel>;
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
@@ -681,6 +748,11 @@ export type QueryAvailableSessionRuntimesArgs = {
 
 export type QueryChannelArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryChannelGroupsArgs = {
+  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -804,6 +876,16 @@ export type QueryTicketArgs = {
 export type QueryTicketsArgs = {
   filters?: InputMaybe<TicketFilters>;
   organizationId: Scalars['ID']['input'];
+};
+
+export type ReorderChannelGroupsInput = {
+  groupIds: Array<Scalars['ID']['input']>;
+  organizationId: Scalars['ID']['input'];
+};
+
+export type ReorderChannelsInput = {
+  channelIds: Array<Scalars['ID']['input']>;
+  groupId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type Repo = {
@@ -1049,6 +1131,12 @@ export type UpdateAgentSettingsInput = {
   name?: InputMaybe<Scalars['String']['input']>;
   soulFile?: InputMaybe<Scalars['String']['input']>;
   status?: InputMaybe<AgentStatus>;
+};
+
+export type UpdateChannelGroupInput = {
+  isCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  position?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type UpdateRepoInput = {

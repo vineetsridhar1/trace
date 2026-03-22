@@ -150,6 +150,10 @@ enum EventType {
   repo_created
   repo_updated
   channel_created
+  channel_updated
+  channel_group_created
+  channel_group_updated
+  channel_group_deleted
   member_joined
   member_left
   inbox_item_created
@@ -205,9 +209,19 @@ type Channel {
   id: ID!
   name: String!
   type: ChannelType!
+  position: Int!
+  groupId: ID
   members: [User!]!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
+}
+
+type ChannelGroup {
+  id: ID!
+  name: String!
+  position: Int!
+  isCollapsed: Boolean!
+  channels: [Channel!]!
 }
 
 type Session {
@@ -420,6 +434,36 @@ input CreateChannelInput {
   name: String!
   type: ChannelType
   projectIds: [ID!]
+  groupId: ID
+  position: Int
+}
+
+input CreateChannelGroupInput {
+  organizationId: ID!
+  name: String!
+  position: Int
+}
+
+input UpdateChannelGroupInput {
+  name: String
+  position: Int
+  isCollapsed: Boolean
+}
+
+input MoveChannelInput {
+  channelId: ID!
+  groupId: ID
+  position: Int!
+}
+
+input ReorderChannelGroupsInput {
+  organizationId: ID!
+  groupIds: [ID!]!
+}
+
+input ReorderChannelsInput {
+  groupId: ID
+  channelIds: [ID!]!
 }
 
 input StartSessionInput {
@@ -524,6 +568,7 @@ type Query {
   projects(organizationId: ID!, repoId: ID): [Project!]!
   project(id: ID!): Project
   channels(organizationId: ID!, projectId: ID): [Channel!]!
+  channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
@@ -562,6 +607,12 @@ type Terminal {
 
 type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
+  createChannelGroup(input: CreateChannelGroupInput!): ChannelGroup!
+  updateChannelGroup(id: ID!, input: UpdateChannelGroupInput!): ChannelGroup!
+  deleteChannelGroup(id: ID!): Boolean!
+  moveChannel(input: MoveChannelInput!): Channel!
+  reorderChannelGroups(input: ReorderChannelGroupsInput!): [ChannelGroup!]!
+  reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
   pauseSession(id: ID!): Session!

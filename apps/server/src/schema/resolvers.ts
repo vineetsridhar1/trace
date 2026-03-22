@@ -1,6 +1,7 @@
 import { DateTimeScalar, JSONScalar } from "./scalars.js";
 import { organizationQueries, organizationMutations, repoResolvers } from "./organization.js";
 import { channelQueries, channelMutations, channelSubscriptions } from "./channel.js";
+import { channelGroupQueries, channelGroupMutations } from "./channelGroup.js";
 import { sessionQueries, sessionMutations, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
 import { ticketQueries, ticketMutations, ticketSubscriptions, ticketTypeResolvers } from "./ticket.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
@@ -33,6 +34,7 @@ export const resolvers = {
   Query: {
     ...organizationQueries,
     ...channelQueries,
+    ...channelGroupQueries,
     ...sessionQueries,
     ...ticketQueries,
     ...eventQueries,
@@ -48,6 +50,7 @@ export const resolvers = {
   Mutation: {
     ...organizationMutations,
     ...channelMutations,
+    ...channelGroupMutations,
     ...sessionMutations,
     ...ticketMutations,
     ...inboxMutations,
