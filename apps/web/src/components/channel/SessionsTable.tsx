@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Circle, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo } from "react";
+import { Circle } from "lucide-react";
 import type {
   ColDef,
   FilterChangedEvent,
@@ -11,18 +11,26 @@ import type {
 } from "ag-grid-community";
 import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
-import type { SessionEntity } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
-import { statusColor, statusLabel, getDisplayStatus, isReviewAndActive } from "../session/sessionStatus";
+import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
+import { navigateToSessionGroup } from "../../stores/ui";
+import { getSessionGroupChannelId } from "../../lib/session-group";
+import {
+  getSessionGroupDisplayStatus,
+  statusColor,
+  statusLabel,
+} from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
-import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
-import { useLongPress } from "../../hooks/useLongPress";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
-type SessionRow = SessionEntity & { id: string; _reviewActive?: boolean };
+type SessionGroupRow = SessionGroupEntity & {
+  id: string;
+  status: string;
+  latestSession?: SessionEntity;
+  createdBySession?: SessionEntity;
+  _lastMessageAt?: string;
+  _sortTimestamp?: string;
+};
 
-/** Round a timestamp down to a 2-minute bucket so sort order stays stable
- *  while messages stream in — rows only reorder when they cross a boundary. */
 const BUCKET_MS = 2 * 60 * 1000;
 function bucketize(ts: string | undefined): number {
   if (!ts) return 0;
@@ -30,12 +38,9 @@ function bucketize(ts: string | undefined): number {
   return Math.floor(t / BUCKET_MS) * BUCKET_MS;
 }
 
-/** Statuses whose groups should start collapsed. */
 const collapsedByDefault = new Set(["merged", "failed"]);
-
 const FILTER_STORAGE_KEY_PREFIX = "trace:sessions-filter:";
 
-/** Group ordering — attention-needed first, then active, then done. */
 const statusGroupOrder: Record<string, number> = {
   needs_input: 0,
   creating: 1,
@@ -49,24 +54,20 @@ const statusGroupOrder: Record<string, number> = {
   unreachable: 9,
 };
 
-const columns: ColDef<SessionRow>[] = [
+const columns: ColDef<SessionGroupRow>[] = [
   {
     headerName: "Name",
     field: "name",
     flex: 2,
     minWidth: 200,
     filter: true,
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
       const { data } = params;
       if (!data) return null;
       const color = statusColor[data.status ?? "active"];
       return (
-        <div className="flex items-center gap-2 h-full">
-          {data._reviewActive ? (
-            <Loader2 size={8} className={`shrink-0 animate-spin ${color}`} />
-          ) : (
-            <Circle size={8} className={`shrink-0 fill-current ${color}`} />
-          )}
+        <div className="flex h-full items-center gap-2">
+          <Circle size={8} className={`shrink-0 fill-current ${color}`} />
           <span className="truncate text-sm text-foreground">{data.name}</span>
         </div>
       );
@@ -80,52 +81,34 @@ const columns: ColDef<SessionRow>[] = [
   },
   {
     headerName: "Repo",
-    field: "repo" as keyof SessionRow,
+    field: "repo" as keyof SessionGroupRow,
     width: 140,
     filter: true,
     valueGetter: (params) => {
-      const repo = params.data?.repo as { id: string; name: string } | null | undefined;
+      const repo =
+        (params.data?.repo as { id: string; name: string } | null | undefined)
+        ?? (params.data?.latestSession?.repo as { id: string; name: string } | null | undefined);
       return repo?.name ?? "";
     },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const repo = params.data?.repo as { id: string; name: string } | null | undefined;
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const repo =
+        (params.data?.repo as { id: string; name: string } | null | undefined)
+        ?? (params.data?.latestSession?.repo as { id: string; name: string } | null | undefined);
       if (!repo) return null;
-      return <span className="text-xs text-muted-foreground truncate">{repo.name}</span>;
-    },
-  },
-  {
-    headerName: "Bridge",
-    colId: "bridge",
-    width: 140,
-    filter: true,
-    valueGetter: (params) => {
-      const connection = params.data?.connection as
-        | { runtimeLabel?: string | null }
-        | null
-        | undefined;
-      return connection?.runtimeLabel ?? "";
-    },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const connection = params.data?.connection as
-        | { runtimeLabel?: string | null }
-        | null
-        | undefined;
-      const label = connection?.runtimeLabel;
-      if (!label) return null;
-      return <span className="text-xs text-muted-foreground truncate">{label}</span>;
+      return <span className="truncate text-xs text-muted-foreground">{repo.name}</span>;
     },
   },
   {
     headerName: "Created by",
-    field: "createdBy",
+    colId: "createdBy",
     width: 150,
     filter: true,
     filterValueGetter: (params) => {
-      const createdBy = params.data?.createdBy as { name: string } | undefined;
+      const createdBy = params.data?.createdBySession?.createdBy as { name: string } | undefined;
       return createdBy?.name ?? "";
     },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const createdBy = params.data?.createdBy as
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const createdBy = params.data?.createdBySession?.createdBy as
         | { id: string; name: string; avatarUrl?: string | null }
         | undefined;
       if (!createdBy) return null;
@@ -135,7 +118,7 @@ const columns: ColDef<SessionRow>[] = [
           fallbackName={createdBy.name}
           fallbackAvatarUrl={createdBy.avatarUrl}
         >
-          <div className="flex items-center gap-1.5 h-full cursor-pointer">
+          <div className="flex h-full cursor-pointer items-center gap-1.5">
             {createdBy.avatarUrl && (
               <img
                 src={createdBy.avatarUrl}
@@ -156,43 +139,68 @@ const columns: ColDef<SessionRow>[] = [
     colId: "lastActivityAt",
     width: 120,
     filter: true,
-    valueGetter: (params) => {
-      return params.data?._lastMessageAt ?? params.data?.updatedAt;
-    },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
+    valueGetter: (params) => params.data?._lastMessageAt ?? params.data?.updatedAt,
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
       const lastMessageAt = (params.value as string | undefined) ?? undefined;
       if (!lastMessageAt) return null;
       return <span className="text-xs text-muted-foreground">{timeAgo(lastMessageAt)}</span>;
     },
-    comparator: (a: string | undefined, b: string | undefined) => {
-      return bucketize(a) - bucketize(b);
-    },
+    comparator: (a: string | undefined, b: string | undefined) => bucketize(a) - bucketize(b),
   },
 ];
 
-const { Table, useTable } = createTable<SessionRow>({
+const { Table, useTable } = createTable<SessionGroupRow>({
   id: "sessions",
   columns,
 });
 
 export function SessionsTable({ channelId }: { channelId: string }) {
+  const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const sessions = useEntityStore((s) => s.sessions);
-  const activeSessionId = useUIStore((s) => s.activeSessionId);
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
 
-  const filteredSessions = useMemo(() => {
-    return (Object.values(sessions) as SessionRow[])
-      .filter((s) => {
-        const ch = s.channel as { id: string } | null | undefined;
-        return ch?.id === channelId;
+  const filteredGroups = useMemo(() => {
+    return (Object.values(sessionGroups) as SessionGroupEntity[])
+      .map((group) => {
+        const groupSessions = (Object.values(sessions) as SessionEntity[])
+          .filter((session) => session.sessionGroupId === group.id)
+          .sort((a, b) => {
+            const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
+            const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
+            const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
+            if (diff !== 0) return diff;
+            return a.id.localeCompare(b.id);
+          });
+        return { group, groupSessions };
       })
-      .map((s) => ({
-        ...s,
-        status: getDisplayStatus(s.status, s.prUrl as string | null | undefined),
-        _reviewActive: isReviewAndActive(s.status, s.prUrl as string | null | undefined),
-      } as SessionRow))
+      .filter(({ group, groupSessions }) => getSessionGroupChannelId(group, groupSessions) === channelId)
+      .map(({ group, groupSessions }) => {
+        const latestSession = groupSessions[0];
+        const createdBySession = [...groupSessions].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        )[0];
+        const status = getSessionGroupDisplayStatus(
+          groupSessions.map((session) => session.status),
+          group.prUrl as string | null | undefined,
+        );
+
+        return {
+          ...group,
+          latestSession,
+          createdBySession,
+          status,
+          _lastMessageAt:
+            latestSession?._lastMessageAt
+            ?? latestSession?._sortTimestamp
+            ?? latestSession?.updatedAt
+            ?? group.updatedAt,
+          _sortTimestamp:
+            latestSession?._sortTimestamp
+            ?? latestSession?._lastMessageAt
+            ?? latestSession?.updatedAt
+            ?? group._sortTimestamp
+            ?? group.updatedAt,
+        } as SessionGroupRow;
+      })
       .sort((a, b) => {
         const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
         const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
@@ -200,38 +208,26 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         if (diff !== 0) return diff;
         return a.id.localeCompare(b.id);
       });
-  }, [sessions, channelId]);
+  }, [channelId, sessionGroups, sessions]);
 
   useEffect(() => {
-    useTable.getState().setRows(filteredSessions);
-  }, [filteredSessions]);
-
-  const setDeleteFromRowId = useCallback(
-    (rowId: string) => {
-      const session = filteredSessions.find((s) => s.id === rowId);
-      if (session) setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" });
-    },
-    [filteredSessions],
-  );
-
-  const longPressFired = useLongPress({ ref: gridRef, onLongPress: setDeleteFromRowId });
+    useTable.getState().setRows(filteredGroups);
+  }, [filteredGroups]);
 
   const getContextMenuItems = useCallback(
-    (params: GetContextMenuItemsParams<SessionRow>): MenuItemDef<SessionRow>[] => {
+    (params: GetContextMenuItemsParams<SessionGroupRow>): MenuItemDef<SessionGroupRow>[] => {
       if (!params.node?.data) return [];
-      const session = params.node.data;
+      const group = params.node.data;
+      const sessionId = group.latestSession?.id;
       return [
         {
-          name: "Copy Session Link",
+          name: "Copy Workspace Link",
           action: () => {
-            const url = `${window.location.origin}/c/${channelId}/s/${session.id}`;
-            navigator.clipboard.writeText(url);
+            const path = sessionId
+              ? `/c/${channelId}/g/${group.id}/s/${sessionId}`
+              : `/c/${channelId}/g/${group.id}`;
+            navigator.clipboard.writeText(`${window.location.origin}${path}`);
           },
-        },
-        {
-          name: "Delete Session",
-          action: () => setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" }),
-          cssClasses: ["text-destructive"],
         },
       ];
     },
@@ -244,21 +240,18 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     () => ({
       onRowClicked: (event: {
         node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void };
-        data?: SessionRow;
+        data?: SessionGroupRow;
       }) => {
-        if (longPressFired.current) {
-          longPressFired.current = false;
-          return;
-        }
         if (event.node.group) {
           event.node.setExpanded(!event.node.expanded);
           return;
         }
+        const latestSessionId = event.data?.latestSession?.id ?? null;
         if (event.data?.id) {
-          setActiveSessionId(event.data.id);
+          navigateToSessionGroup(channelId, event.data.id, latestSessionId);
         }
       },
-      onGridReady: (event: GridReadyEvent<SessionRow>) => {
+      onGridReady: (event: GridReadyEvent<SessionGroupRow>) => {
         try {
           const saved = localStorage.getItem(filterStorageKey);
           if (saved) {
@@ -268,7 +261,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           // ignore corrupt data
         }
       },
-      onFilterChanged: (event: FilterChangedEvent<SessionRow>) => {
+      onFilterChanged: (event: FilterChangedEvent<SessionGroupRow>) => {
         const model = event.api.getFilterModel();
         if (Object.keys(model).length === 0) {
           localStorage.removeItem(filterStorageKey);
@@ -285,12 +278,12 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         return undefined;
       },
       groupDisplayType: "groupRows" as const,
-      isGroupOpenByDefault: (params: IsGroupOpenByDefaultParams) => {
+      isGroupOpenByDefault: (params: IsGroupOpenByDefaultParams<SessionGroupRow>) => {
         return !collapsedByDefault.has(params.key ?? "");
       },
       groupRowRendererParams: {
         suppressCount: true,
-        innerRenderer: (params: ICellRendererParams) => {
+        innerRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
           const status = params.value as string;
           const color = statusColor[status] ?? "text-muted-foreground";
           const label = statusLabel[status] ?? status;
@@ -313,28 +306,8 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         return a - b;
       },
     }),
-    [setActiveSessionId, getContextMenuItems, filterStorageKey],
+    [channelId, filterStorageKey, getContextMenuItems],
   );
 
-  return (
-    <>
-      <div ref={gridRef} className="h-full">
-        <Table
-          className="h-full"
-          agGridOptions={agGridOptions}
-          selectedRowIds={activeSessionId ? [activeSessionId] : undefined}
-        />
-      </div>
-      {deleteTarget && (
-        <DeleteSessionDialog
-          sessionId={deleteTarget.id}
-          sessionName={deleteTarget.name}
-          open={true}
-          onOpenChange={(open) => {
-            if (!open) setDeleteTarget(null);
-          }}
-        />
-      )}
-    </>
-  );
+  return <Table className="h-full" agGridOptions={agGridOptions} />;
 }

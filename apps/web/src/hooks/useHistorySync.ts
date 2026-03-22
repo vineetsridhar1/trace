@@ -2,54 +2,101 @@ import { useEffect } from "react";
 import { useUIStore } from "../stores/ui";
 import type { ActivePage } from "../stores/ui";
 
-/** Parse the URL path into navigation state */
 function parseNavFromPath(path: string): {
   channelId: string | null;
+  sessionGroupId: string | null;
   sessionId: string | null;
   chatId: string | null;
   page: ActivePage;
 } {
-  // /settings
   if (path.startsWith("/settings")) {
-    return { channelId: null, sessionId: null, chatId: null, page: "settings" };
+    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "settings" };
   }
-  // /inbox
   if (path.startsWith("/inbox")) {
-    return { channelId: null, sessionId: null, chatId: null, page: "inbox" };
+    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "inbox" };
   }
-  // /dm/:chatId
+
   const chatMatch = path.match(/^\/dm\/([^/]+)/);
   if (chatMatch) {
-    return { channelId: null, sessionId: null, chatId: chatMatch[1], page: "main" };
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: chatMatch[1],
+      page: "main",
+    };
   }
-  // /c/:channelId/s/:sessionId
-  const sessionMatch = path.match(/^\/c\/([^/]+)\/s\/([^/]+)/);
-  if (sessionMatch) {
-    return { channelId: sessionMatch[1], sessionId: sessionMatch[2], chatId: null, page: "main" };
+
+  const channelGroupSessionMatch = path.match(/^\/c\/([^/]+)\/g\/([^/]+)\/s\/([^/]+)/);
+  if (channelGroupSessionMatch) {
+    return {
+      channelId: channelGroupSessionMatch[1],
+      sessionGroupId: channelGroupSessionMatch[2],
+      sessionId: channelGroupSessionMatch[3],
+      chatId: null,
+      page: "main",
+    };
   }
-  // /c/:channelId
+
+  const channelGroupMatch = path.match(/^\/c\/([^/]+)\/g\/([^/]+)/);
+  if (channelGroupMatch) {
+    return {
+      channelId: channelGroupMatch[1],
+      sessionGroupId: channelGroupMatch[2],
+      sessionId: null,
+      chatId: null,
+      page: "main",
+    };
+  }
+
+  const groupSessionMatch = path.match(/^\/g\/([^/]+)\/s\/([^/]+)/);
+  if (groupSessionMatch) {
+    return {
+      channelId: null,
+      sessionGroupId: groupSessionMatch[1],
+      sessionId: groupSessionMatch[2],
+      chatId: null,
+      page: "main",
+    };
+  }
+
+  const groupMatch = path.match(/^\/g\/([^/]+)/);
+  if (groupMatch) {
+    return {
+      channelId: null,
+      sessionGroupId: groupMatch[1],
+      sessionId: null,
+      chatId: null,
+      page: "main",
+    };
+  }
+
   const channelMatch = path.match(/^\/c\/([^/]+)/);
   if (channelMatch) {
-    return { channelId: channelMatch[1], sessionId: null, chatId: null, page: "main" };
+    return {
+      channelId: channelMatch[1],
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "main",
+    };
   }
-  return { channelId: null, sessionId: null, chatId: null, page: "main" };
+
+  return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "main" };
 }
 
-/**
- * Syncs browser history with the UI navigation store.
- * - Initializes state from the current URL on mount
- * - Listens for popstate (browser back/forward) to update the store
- */
 export function useHistorySync() {
   const restoreNav = useUIStore((s) => s._restoreNav);
 
   useEffect(() => {
-    // Initialize from URL (or fall back to localStorage)
-    const { channelId, sessionId, chatId, page } = parseNavFromPath(window.location.pathname);
+    const { channelId, sessionGroupId, sessionId, chatId, page } = parseNavFromPath(
+      window.location.pathname,
+    );
     const initialChannel =
-      (page === "settings" || page === "inbox" || chatId) ? null : (channelId ?? localStorage.getItem("trace:activeChannelId"));
+      (page === "settings" || page === "inbox" || chatId)
+        ? null
+        : (channelId ?? localStorage.getItem("trace:activeChannelId"));
 
-    // Replace current history entry with proper state
     let path: string;
     if (page === "settings") {
       path = "/settings";
@@ -57,40 +104,52 @@ export function useHistorySync() {
       path = "/inbox";
     } else if (chatId) {
       path = `/dm/${chatId}`;
-    } else if (initialChannel && sessionId) {
-      path = `/c/${initialChannel}/s/${sessionId}`;
+    } else if (initialChannel && sessionGroupId && sessionId) {
+      path = `/c/${initialChannel}/g/${sessionGroupId}/s/${sessionId}`;
+    } else if (initialChannel && sessionGroupId) {
+      path = `/c/${initialChannel}/g/${sessionGroupId}`;
+    } else if (sessionGroupId && sessionId) {
+      path = `/g/${sessionGroupId}/s/${sessionId}`;
+    } else if (sessionGroupId) {
+      path = `/g/${sessionGroupId}`;
     } else if (initialChannel) {
       path = `/c/${initialChannel}`;
     } else {
       path = "/";
     }
+
     history.replaceState(
-      { channelId: initialChannel, sessionId, page, chatId },
+      { channelId: initialChannel, sessionGroupId, sessionId, page, chatId },
       "",
       path,
     );
 
-    restoreNav(initialChannel, sessionId, page, chatId);
+    restoreNav(initialChannel, sessionGroupId, sessionId, page, chatId);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
         channelId: string | null;
+        sessionGroupId: string | null;
         sessionId: string | null;
         chatId?: string | null;
         page?: ActivePage;
       } | null;
 
       if (state) {
-        restoreNav(state.channelId, state.sessionId, state.page, state.chatId);
-      } else {
-        // No state — parse from URL
-        const nav = parseNavFromPath(window.location.pathname);
-        restoreNav(nav.channelId, nav.sessionId, nav.page, nav.chatId);
+        restoreNav(
+          state.channelId,
+          state.sessionGroupId,
+          state.sessionId,
+          state.page,
+          state.chatId,
+        );
+        return;
       }
+
+      const nav = parseNavFromPath(window.location.pathname);
+      restoreNav(nav.channelId, nav.sessionGroupId, nav.sessionId, nav.page, nav.chatId);
     }
 
-    // Handle mouse back/forward buttons (button 3 = back, button 4 = forward)
-    // This covers macOS Electron where app-command doesn't fire
     function onMouseUp(e: MouseEvent) {
       if (e.button === 3) {
         e.preventDefault();

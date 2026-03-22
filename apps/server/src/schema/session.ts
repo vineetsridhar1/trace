@@ -7,6 +7,12 @@ import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 
 export const sessionQueries = {
+  sessionGroups: (_: unknown, args: { channelId: string }, ctx: Context) => {
+    return sessionService.listGroups(args.channelId, requireOrgContext(ctx));
+  },
+  sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.getGroup(args.id, requireOrgContext(ctx));
+  },
   sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }) => {
     return sessionService.list(args.organizationId, args.filters ?? undefined);
   },
@@ -135,6 +141,21 @@ export const sessionMutations = {
 };
 
 export const sessionTypeResolvers = {
+  SessionGroup: {
+    sessions: async (group: { id: string; sessions?: unknown[] }) => {
+      if (Array.isArray(group.sessions)) return group.sessions;
+      return prisma.session.findMany({
+        where: { sessionGroupId: group.id },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        include: {
+          createdBy: true,
+          repo: true,
+          channel: true,
+          sessionGroup: true,
+        },
+      });
+    },
+  },
   Session: {
     tickets: async (session: { id: string }) => {
       const links = await prisma.ticketLink.findMany({

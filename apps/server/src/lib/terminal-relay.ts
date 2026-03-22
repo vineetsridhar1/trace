@@ -1,9 +1,11 @@
 import { randomUUID } from "crypto";
 import type WebSocket from "ws";
+import { prisma } from "./db.js";
 import { sessionRouter } from "./session-router.js";
 
 interface TerminalEntry {
   sessionId: string;
+  sessionGroupId: string | null;
   frontendWs: WebSocket | null;
   ready: boolean;
   /** True once the bridge has sent terminal_exit or terminal_error */
@@ -31,16 +33,25 @@ class TerminalRelay {
   private terminals = new Map<string, TerminalEntry>();
   /** Reverse index: sessionId → Set<terminalId> for bulk cleanup */
   private sessionTerminals = new Map<string, Set<string>>();
+  /** Reverse index: sessionGroupId → Set<terminalId> for group-scoped terminal tabs */
+  private sessionGroupTerminals = new Map<string, Set<string>>();
 
   /**
    * Create a terminal on the bridge for a given session.
    * Returns the terminalId that the frontend uses to attach.
    */
-  createTerminal(sessionId: string, cols: number, rows: number, cwd?: string): string {
+  createTerminal(
+    sessionId: string,
+    sessionGroupId: string | null,
+    cols: number,
+    rows: number,
+    cwd?: string,
+  ): string {
     const terminalId = randomUUID();
 
     this.terminals.set(terminalId, {
       sessionId,
+      sessionGroupId,
       frontendWs: null,
       ready: false,
       terminated: false,
@@ -52,6 +63,11 @@ class TerminalRelay {
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
     this.sessionTerminals.set(sessionId, ids);
+    if (sessionGroupId) {
+      const groupIds = this.sessionGroupTerminals.get(sessionGroupId) ?? new Set();
+      groupIds.add(terminalId);
+      this.sessionGroupTerminals.set(sessionGroupId, groupIds);
+    }
 
     // Send terminal_create command to the bridge
     const result = sessionRouter.send(sessionId, {
@@ -77,12 +93,25 @@ class TerminalRelay {
    * Rebuild relay entries from bridge-reported active terminals (on reconnect).
    * Skips entries that already exist. Starts orphan cleanup timer for each restored entry.
    */
-  restoreTerminals(terminals: Array<{ terminalId: string; sessionId: string }>): void {
+  async restoreTerminals(terminals: Array<{ terminalId: string; sessionId: string }>): Promise<void> {
+    const sessionIds = [...new Set(terminals.map(({ sessionId }) => sessionId))];
+    const sessions = sessionIds.length === 0
+      ? []
+      : await prisma.session.findMany({
+          where: { id: { in: sessionIds } },
+          select: { id: true, sessionGroupId: true },
+        });
+    const sessionGroupIds = new Map(
+      sessions.map((session) => [session.id, session.sessionGroupId ?? null]),
+    );
+
     for (const { terminalId, sessionId } of terminals) {
       if (this.terminals.has(terminalId)) continue;
+      const sessionGroupId = sessionGroupIds.get(sessionId) ?? null;
 
       this.terminals.set(terminalId, {
         sessionId,
+        sessionGroupId,
         frontendWs: null,
         ready: true, // Bridge says it's alive, so it's ready
         terminated: false,
@@ -95,6 +124,11 @@ class TerminalRelay {
       const ids = this.sessionTerminals.get(sessionId) ?? new Set();
       ids.add(terminalId);
       this.sessionTerminals.set(sessionId, ids);
+      if (sessionGroupId) {
+        const groupIds = this.sessionGroupTerminals.get(sessionGroupId) ?? new Set();
+        groupIds.add(terminalId);
+        this.sessionGroupTerminals.set(sessionGroupId, groupIds);
+      }
 
       this.scheduleOrphanCleanup(terminalId);
     }
@@ -103,6 +137,18 @@ class TerminalRelay {
   /** Returns non-terminated terminal IDs for a session. */
   getTerminalsForSession(sessionId: string): string[] {
     const ids = this.sessionTerminals.get(sessionId);
+    if (!ids) return [];
+    const result: string[] = [];
+    for (const id of ids) {
+      const entry = this.terminals.get(id);
+      if (entry && !entry.terminated) result.push(id);
+    }
+    return result;
+  }
+
+  /** Returns non-terminated terminal IDs for a session group. */
+  getTerminalsForSessionGroup(sessionGroupId: string): string[] {
+    const ids = this.sessionGroupTerminals.get(sessionGroupId);
     if (!ids) return [];
     const result: string[] = [];
     for (const id of ids) {
@@ -152,6 +198,10 @@ class TerminalRelay {
   /** Get the sessionId for a terminal (used for auth checks). */
   getSessionId(terminalId: string): string | undefined {
     return this.terminals.get(terminalId)?.sessionId;
+  }
+
+  getSessionGroupId(terminalId: string): string | undefined {
+    return this.terminals.get(terminalId)?.sessionGroupId ?? undefined;
   }
 
   /** Forward a message from the bridge to the attached frontend WebSocket. */
@@ -247,9 +297,36 @@ class TerminalRelay {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
       this.cancelOrphanCleanup(terminalId);
+      if (entry?.sessionGroupId) {
+        const groupIds = this.sessionGroupTerminals.get(entry.sessionGroupId);
+        if (groupIds) {
+          groupIds.delete(terminalId);
+          if (groupIds.size === 0) this.sessionGroupTerminals.delete(entry.sessionGroupId);
+        }
+      }
       this.terminals.delete(terminalId);
     }
     this.sessionTerminals.delete(sessionId);
+  }
+
+  destroyAllForSessionGroup(sessionGroupId: string): void {
+    const ids = this.sessionGroupTerminals.get(sessionGroupId);
+    if (!ids) return;
+    for (const terminalId of ids) {
+      const entry = this.terminals.get(terminalId);
+      if (!entry) continue;
+      if (entry?.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
+        entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
+      }
+      this.cancelOrphanCleanup(terminalId);
+      this.terminals.delete(terminalId);
+      const sessionIds = this.sessionTerminals.get(entry.sessionId);
+      if (sessionIds) {
+        sessionIds.delete(terminalId);
+        if (sessionIds.size === 0) this.sessionTerminals.delete(entry.sessionId);
+      }
+    }
+    this.sessionGroupTerminals.delete(sessionGroupId);
   }
 
   /** Detach all frontend WebSockets associated with a given WebSocket (called on /terminal WS close). */
@@ -296,6 +373,13 @@ class TerminalRelay {
       if (ids) {
         ids.delete(terminalId);
         if (ids.size === 0) this.sessionTerminals.delete(entry.sessionId);
+      }
+      if (entry.sessionGroupId) {
+        const groupIds = this.sessionGroupTerminals.get(entry.sessionGroupId);
+        if (groupIds) {
+          groupIds.delete(terminalId);
+          if (groupIds.size === 0) this.sessionGroupTerminals.delete(entry.sessionGroupId);
+        }
       }
     }
     this.terminals.delete(terminalId);

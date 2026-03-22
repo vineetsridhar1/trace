@@ -517,3 +517,27 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--th-edge-hover);
 }
+
+/* Allow specific surfaces to opt back into the browser's native scrollbar. */
+.native-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+.native-scrollbar::-webkit-scrollbar {
+  width: initial;
+  height: initial;
+}
+
+.native-scrollbar::-webkit-scrollbar-track {
+  background: initial;
+}
+
+.native-scrollbar::-webkit-scrollbar-thumb {
+  background: initial;
+  border-radius: initial;
+}
+
+.native-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: initial;
+}

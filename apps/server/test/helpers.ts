@@ -42,6 +42,10 @@ export function createPrismaMock() {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      update: vi.fn(),
+      deleteMany: vi.fn(),
     },
     agentIdentity: {
       findUnique: vi.fn(),
@@ -135,6 +139,7 @@ export function createPrismaMock() {
     },
     session: {
       create: vi.fn(),
+      count: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
@@ -142,6 +147,14 @@ export function createPrismaMock() {
       findFirstOrThrow: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
+      delete: vi.fn(),
+    },
+    sessionGroup: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
       delete: vi.fn(),
     },
     sessionProject: {
@@ -165,7 +178,12 @@ export function createPrismaMock() {
       update: vi.fn(),
     },
     channelGroup: {
+      create: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      delete: vi.fn(),
     },
     channelProject: {
       create: vi.fn(),

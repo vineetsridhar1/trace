@@ -7,7 +7,7 @@ import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
-import { SessionDetailView } from "./components/session/SessionDetailView";
+import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -55,7 +55,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useVisibilityRefresh();
   const activePage = useUIStore((s) => s.activePage);
   const activeChatId = useUIStore((s) => s.activeChatId);
-  const activeSessionId = useUIStore((s) => s.activeSessionId);
+  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const isMobile = useIsMobile();
@@ -64,15 +64,14 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
   const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
 
-  // Keep session ID around during close animation so children don't unmount early
-  const [displayedSessionId, setDisplayedSessionId] = useState<string | null>(activeSessionId);
+  const [displayedSessionGroupId, setDisplayedSessionGroupId] = useState<string | null>(activeSessionGroupId);
   useEffect(() => {
-    if (activeSessionId) {
-      setDisplayedSessionId(activeSessionId);
+    if (activeSessionGroupId) {
+      setDisplayedSessionGroupId(activeSessionGroupId);
     }
-  }, [activeSessionId]);
+  }, [activeSessionGroupId]);
 
-  const hasSession = !!activeSessionId;
+  const hasSession = !!activeSessionGroupId;
 
   return (
     <TooltipProvider>
@@ -121,10 +120,10 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               isOpen={hasSession}
               onClose={closePanel}
               containerRef={containerRef}
-              onClosed={() => setDisplayedSessionId(null)}
+              onClosed={() => setDisplayedSessionGroupId(null)}
             >
-              {displayedSessionId && (
-                <SessionDetailView sessionId={displayedSessionId} panelMode />
+              {displayedSessionGroupId && (
+                <SessionGroupDetailView sessionGroupId={displayedSessionGroupId} panelMode />
               )}
             </DetailPanel>
           </div>

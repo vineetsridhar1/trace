@@ -8,15 +8,14 @@ import {
   Cloud,
   TerminalSquare,
   GitPullRequest,
-  Loader2,
   Maximize2,
   Minimize2,
   X,
 } from "lucide-react";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField, useEntityStore } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { useDetailPanelStore } from "../../stores/detail-panel";
-import { statusColor, statusLabel, isDisconnected, getDisplayStatus, isReviewAndActive } from "./sessionStatus";
+import { statusColor, statusLabel, isDisconnected, getDisplayStatus, getSessionGroupDisplayStatus } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 
 export function SessionHeader({
@@ -33,22 +32,36 @@ export function SessionHeader({
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
-  const prUrl = useEntityField("sessions", sessionId, "prUrl") as string | null | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const groupPrUrl = useEntityField("sessionGroups", sessionGroupId ?? "", "prUrl") as
+    | string
+    | null
+    | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
     | null
     | undefined;
+  const groupStatuses = useEntityStore((state) => {
+    if (!sessionGroupId) return [status];
+    return Object.values(state.sessions)
+      .filter((session) => session.sessionGroupId === sessionGroupId)
+      .map((session) => session.status);
+  });
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
+  const prUrl = groupPrUrl ?? null;
 
   const disconnected = isDisconnected(connection);
 
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
+  const displayStatus = sessionGroupId
+    ? getSessionGroupDisplayStatus(groupStatuses, prUrl)
+    : getDisplayStatus(status, prUrl);
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
@@ -96,13 +109,9 @@ export function SessionHeader({
           Connection Lost
         </span>
       ) : (
-        <span className={`flex shrink-0 items-center gap-1.5 text-xs ${statusColor[getDisplayStatus(status, prUrl)]}`}>
-          {isReviewAndActive(status, prUrl) ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <Circle size={6} className="fill-current" />
-          )}
-          {statusLabel[getDisplayStatus(status, prUrl)]}
+        <span className={`flex shrink-0 items-center gap-1.5 text-xs ${statusColor[displayStatus]}`}>
+          <Circle size={6} className="fill-current" />
+          {statusLabel[displayStatus]}
         </span>
       )}
 

@@ -9,6 +9,7 @@ vi.mock("../lib/terminal-relay.js", () => ({
   terminalRelay: {
     createTerminal: vi.fn().mockReturnValue("term-1"),
     getTerminalsForSession: vi.fn().mockReturnValue([]),
+    getTerminalsForSessionGroup: vi.fn().mockReturnValue([]),
     getSessionId: vi.fn(),
     destroyTerminal: vi.fn(),
   },
@@ -36,11 +37,11 @@ describe("TerminalService", () => {
     it("creates a terminal for a valid session", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        workdir: "/workspace",
+        sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
         status: "active",
-        worktreeDeleted: false,
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
       const result = await terminalService.create({
@@ -54,6 +55,7 @@ describe("TerminalService", () => {
       expect(result).toEqual({ id: "term-1", sessionId: "session-1" });
       expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
         "session-1",
+        "group-1",
         80,
         24,
         "/workspace",
@@ -77,11 +79,11 @@ describe("TerminalService", () => {
     it("throws when session is fully unloaded", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        workdir: null,
+        sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
         status: "failed",
-        worktreeDeleted: false,
+        sessionGroup: { workdir: null, worktreeDeleted: false },
       });
       await expect(
         terminalService.create({
@@ -97,11 +99,11 @@ describe("TerminalService", () => {
     it("throws when worktree is deleted", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        workdir: null,
+        sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
         status: "active",
-        worktreeDeleted: true,
+        sessionGroup: { workdir: null, worktreeDeleted: true },
       });
 
       await expect(
@@ -118,11 +120,11 @@ describe("TerminalService", () => {
     it("throws when local session is accessed by different user", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        workdir: "/workspace",
+        sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
         status: "active",
-        worktreeDeleted: false,
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
       await expect(
@@ -139,11 +141,11 @@ describe("TerminalService", () => {
     it("allows local session access by the owner", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        workdir: "/workspace",
+        sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
         status: "active",
-        worktreeDeleted: false,
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
       const result = await terminalService.create({
@@ -160,11 +162,11 @@ describe("TerminalService", () => {
     it("passes undefined workdir when session has no workdir", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        workdir: null,
+        sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
         status: "active",
-        worktreeDeleted: false,
+        sessionGroup: { workdir: null, worktreeDeleted: false },
       });
 
       await terminalService.create({
@@ -177,6 +179,7 @@ describe("TerminalService", () => {
 
       expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
         "session-1",
+        "group-1",
         120,
         40,
         undefined,
@@ -186,11 +189,11 @@ describe("TerminalService", () => {
     it("allows cloud session access by any user", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
-        workdir: "/workspace",
+        sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
         status: "active",
-        worktreeDeleted: false,
+        sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
       const result = await terminalService.create({
@@ -209,10 +212,20 @@ describe("TerminalService", () => {
     it("lists terminals for a valid session", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
       });
-      terminalRelayMock.getTerminalsForSession.mockReturnValueOnce(["term-1", "term-2"]);
+      terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
+      terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
+        if (terminalId === "term-1") return "session-1";
+        if (terminalId === "term-2") return "session-2";
+        return undefined;
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", hosting: "cloud", createdById: "user-1" },
+        { id: "session-2", hosting: "cloud", createdById: "user-2" },
+      ]);
 
       const result = await terminalService.listForSession({
         sessionId: "session-1",
@@ -222,7 +235,7 @@ describe("TerminalService", () => {
 
       expect(result).toEqual([
         { id: "term-1", sessionId: "session-1" },
-        { id: "term-2", sessionId: "session-1" },
+        { id: "term-2", sessionId: "session-2" },
       ]);
     });
 
@@ -241,6 +254,7 @@ describe("TerminalService", () => {
     it("throws when local session accessed by wrong user", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
       });
@@ -257,10 +271,11 @@ describe("TerminalService", () => {
     it("returns empty array when no terminals exist", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
+        sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
       });
-      terminalRelayMock.getTerminalsForSession.mockReturnValueOnce([]);
+      terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce([]);
 
       const result = await terminalService.listForSession({
         sessionId: "session-1",
@@ -269,6 +284,33 @@ describe("TerminalService", () => {
       });
 
       expect(result).toEqual([]);
+    });
+
+    it("filters out local terminals owned by a different user in the same group", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        sessionGroupId: "group-1",
+        hosting: "cloud",
+        createdById: "user-1",
+      });
+      terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
+      terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
+        if (terminalId === "term-1") return "session-1";
+        if (terminalId === "term-2") return "session-2";
+        return undefined;
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", hosting: "cloud", createdById: "user-1" },
+        { id: "session-2", hosting: "local", createdById: "user-2" },
+      ]);
+
+      const result = await terminalService.listForSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([{ id: "term-1", sessionId: "session-1" }]);
     });
   });
 

@@ -1,9 +1,14 @@
 import { useState, useCallback } from "react";
 import { Send, X } from "lucide-react";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION, START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
+import {
+  SEND_SESSION_MESSAGE_MUTATION,
+  START_SESSION_MUTATION,
+  RUN_SESSION_MUTATION,
+  TERMINATE_SESSION_MUTATION,
+} from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
+import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 
 interface PlanResponseBarProps {
@@ -20,13 +25,15 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const [sending, setSending] = useState(false);
 
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
+  const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
 
   const handleClearContext = useCallback(async () => {
-    if (sending) return;
+    if (sending || !sessionGroupId) return;
     setSending(true);
     try {
       const prompt = `Implement the following plan:\n\n${planContent}`;
@@ -34,10 +41,12 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         .mutation(START_SESSION_MUTATION, {
           input: {
             tool: tool ?? "claude_code",
+            model,
             hosting: hosting ?? "cloud",
             channelId: channel?.id,
             repoId: repo?.id,
-            parentSessionId: sessionId,
+            branch,
+            sessionGroupId,
             prompt,
           },
         })
@@ -46,12 +55,13 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
-        setActiveSessionId(newSessionId);
+        navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
+        await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
       }
     } finally {
       setSending(false);
     }
-  }, [sending, planContent, tool, hosting, channel?.id, repo?.id, sessionId, setActiveSessionId]);
+  }, [sending, sessionGroupId, planContent, tool, model, hosting, channel?.id, repo?.id, branch, sessionId]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;

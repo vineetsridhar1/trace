@@ -53,6 +53,29 @@ export function isReviewAndActive(status: string | undefined, prUrl: string | nu
   return !!prUrl && status === "active";
 }
 
+const GROUP_IN_PROGRESS_STATUSES = new Set([
+  "creating",
+  "pending",
+  "active",
+  "paused",
+  "unreachable",
+]);
+
+export function getSessionGroupDisplayStatus(
+  statuses: Array<string | null | undefined>,
+  prUrl: string | null | undefined,
+): string {
+  if (statuses.some((status) => status === "needs_input")) return "needs_input";
+  if (statuses.some((status) => status != null && GROUP_IN_PROGRESS_STATUSES.has(status))) {
+    return "active";
+  }
+  if (statuses.some((status) => status === "merged")) return "merged";
+  if (prUrl) return "in_review";
+  if (statuses.some((status) => status === "completed")) return "completed";
+  if (statuses.some((status) => status === "failed")) return "failed";
+  return "pending";
+}
+
 /** Check if a session's connection is in a disconnected state */
 export function isDisconnected(connection: Record<string, unknown> | null | undefined): boolean {
   if (!connection) return false;

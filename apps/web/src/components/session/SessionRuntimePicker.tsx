@@ -7,7 +7,8 @@ import {
   MOVE_SESSION_TO_RUNTIME_MUTATION,
   MOVE_SESSION_TO_CLOUD_MUTATION,
 } from "../../lib/mutations";
-import { useUIStore } from "../../stores/ui";
+import { navigateToSession } from "../../stores/ui";
+import { useEntityField } from "../../stores/entity";
 
 interface RuntimeInstance {
   id: string;
@@ -28,7 +29,8 @@ export function SessionRuntimePicker({
   const [runtimes, setRuntimes] = useState<RuntimeInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [moving, setMoving] = useState<string | null>(null);
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
 
   useEffect(() => {
     client
@@ -54,8 +56,8 @@ export function SessionRuntimePicker({
           return;
         }
         const newSessionId = result.data?.moveSessionToRuntime?.id;
-        if (newSessionId) {
-          setActiveSessionId(newSessionId);
+        if (newSessionId && sessionGroupId) {
+          navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
         } else {
           toast.error("Failed to move session", { description: "No session returned" });
           return;
@@ -69,7 +71,7 @@ export function SessionRuntimePicker({
         setMoving(null);
       }
     },
-    [sessionId, onClose, setActiveSessionId],
+    [channel?.id, onClose, sessionGroupId, sessionId],
   );
 
   const handleMoveToCloud = useCallback(async () => {
@@ -83,8 +85,8 @@ export function SessionRuntimePicker({
         return;
       }
       const newSessionId = result.data?.moveSessionToCloud?.id;
-      if (newSessionId) {
-        setActiveSessionId(newSessionId);
+      if (newSessionId && sessionGroupId) {
+        navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
       } else {
         toast.error("Failed to move session to cloud", { description: "No session returned" });
         return;
@@ -97,7 +99,7 @@ export function SessionRuntimePicker({
     } finally {
       setMoving(null);
     }
-  }, [sessionId, onClose, setActiveSessionId]);
+  }, [channel?.id, onClose, sessionGroupId, sessionId]);
 
   return (
     <div className="mt-2 rounded-lg border border-border bg-surface p-3">

@@ -796,6 +796,8 @@ export type Query = {
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   session?: Maybe<Session>;
+  sessionGroup?: Maybe<SessionGroup>;
+  sessionGroups: Array<SessionGroup>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
@@ -923,6 +925,16 @@ export type QuerySessionArgs = {
 };
 
 
+export type QuerySessionGroupArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupsArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
 export type QuerySessionTerminalsArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -993,7 +1005,6 @@ export type Session = {
   __typename?: 'Session';
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
-  childSessions: Array<Session>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -1002,10 +1013,11 @@ export type Session = {
   id: Scalars['ID']['output'];
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
-  parentSession?: Maybe<Session>;
   prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
+  sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupId?: Maybe<Scalars['ID']['output']>;
   status: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
@@ -1046,6 +1058,22 @@ export type SessionFilters = {
   tool?: InputMaybe<CodingTool>;
 };
 
+export type SessionGroup = {
+  __typename?: 'SessionGroup';
+  branch?: Maybe<Scalars['String']['output']>;
+  channel?: Maybe<Channel>;
+  connection?: Maybe<SessionConnection>;
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  prUrl?: Maybe<Scalars['String']['output']>;
+  repo?: Maybe<Repo>;
+  sessions: Array<Session>;
+  updatedAt: Scalars['DateTime']['output'];
+  workdir?: Maybe<Scalars['String']['output']>;
+  worktreeDeleted: Scalars['Boolean']['output'];
+};
+
 export type SessionRuntimeInstance = {
   __typename?: 'SessionRuntimeInstance';
   connected: Scalars['Boolean']['output'];
@@ -1078,11 +1106,12 @@ export type StartSessionInput = {
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars['String']['input']>;
-  parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
   runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
+  sourceSessionId?: InputMaybe<Scalars['ID']['input']>;
   ticketId?: InputMaybe<Scalars['ID']['input']>;
   tool: CodingTool;
 };
@@ -1373,6 +1402,7 @@ export type ResolversTypes = ResolversObject<{
   SessionConnectionState: SessionConnectionState;
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
+  SessionGroup: ResolverTypeWrapper<SessionGroup>;
   SessionRuntimeInstance: ResolverTypeWrapper<SessionRuntimeInstance>;
   SessionStatus: SessionStatus;
   SetApiTokenInput: SetApiTokenInput;
@@ -1437,6 +1467,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionConnection: SessionConnection;
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
+  SessionGroup: SessionGroup;
   SessionRuntimeInstance: SessionRuntimeInstance;
   SetApiTokenInput: SetApiTokenInput;
   StartSessionInput: StartSessionInput;
@@ -1727,6 +1758,8 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryRepoBranchesArgs, 'repoId'>>;
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
+  sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupArgs, 'id'>>;
+  sessionGroups?: Resolver<Array<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupsArgs, 'channelId'>>;
   sessionTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QuerySessionTerminalsArgs, 'sessionId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionsArgs, 'organizationId'>>;
   threadReplies?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryThreadRepliesArgs, 'rootMessageId'>>;
@@ -1749,7 +1782,6 @@ export type RepoResolvers<ContextType = Context, ParentType extends ResolversPar
 export type SessionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Session'] = ResolversParentTypes['Session']> = ResolversObject<{
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
-  childSessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
@@ -1758,10 +1790,11 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  parentSession?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
+  sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
+  sessionGroupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   status?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType>;
   tool?: Resolver<ResolversTypes['CodingTool'], ParentType, ContextType>;
@@ -1788,6 +1821,22 @@ export type SessionConnectionResolvers<ContextType = Context, ParentType extends
 export type SessionEndpointsResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionEndpoints'] = ResolversParentTypes['SessionEndpoints']> = ResolversObject<{
   ports?: Resolver<Array<ResolversTypes['PortEndpoint']>, ParentType, ContextType>;
   terminals?: Resolver<Array<ResolversTypes['TerminalEndpoint']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SessionGroupResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionGroup'] = ResolversParentTypes['SessionGroup']> = ResolversObject<{
+  branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
+  connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
+  sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  workdir?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  worktreeDeleted?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1896,6 +1945,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Session?: SessionResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
+  SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionRuntimeInstance?: SessionRuntimeInstanceResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   Terminal?: TerminalResolvers<ContextType>;

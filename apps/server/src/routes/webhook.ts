@@ -181,47 +181,61 @@ router.post("/", async (req: Request, res: Response) => {
   const { action, pull_request: pr } = payload;
   const headBranch = pr.head.ref;
 
-  // Find session(s) with this branch on this repo
-  const session = await prisma.session.findFirst({
+  // Find the active session group for this repo/branch pair.
+  const sessionGroup = await prisma.sessionGroup.findFirst({
     where: {
-      branch: headBranch,
       repoId: repo.id,
+      branch: headBranch,
     },
-    select: { id: true, organizationId: true, status: true },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      organizationId: true,
+      sessions: {
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        take: 1,
+        select: { id: true },
+      },
+    },
   });
 
-  if (!session) {
-    console.log("[webhook] No session found for branch:", headBranch, "on repo:", repo.id);
-    res.status(200).json({ ignored: true, reason: "no matching session for branch" });
+  const eventSessionId = sessionGroup?.sessions[0]?.id;
+  if (!sessionGroup || !eventSessionId) {
+    console.log("[webhook] No session group found for branch:", headBranch, "on repo:", repo.id);
+    res.status(200).json({ ignored: true, reason: "no matching session group for branch" });
     return;
   }
 
   if (action === "opened" || action === "reopened") {
     await sessionService.markPrOpened({
-      sessionId: session.id,
+      sessionGroupId: sessionGroup.id,
+      eventSessionId,
       prUrl: pr.html_url,
-      organizationId: session.organizationId,
+      organizationId: sessionGroup.organizationId,
     });
-    res.status(200).json({ ok: true, action: "pr_opened", sessionId: session.id });
+    res.status(200).json({ ok: true, action: "pr_opened", sessionGroupId: sessionGroup.id });
     return;
   }
 
   if (action === "closed" && pr.merged) {
     await sessionService.markPrMerged({
-      sessionId: session.id,
+      sessionGroupId: sessionGroup.id,
+      eventSessionId,
       prUrl: pr.html_url,
-      organizationId: session.organizationId,
+      organizationId: sessionGroup.organizationId,
     });
-    res.status(200).json({ ok: true, action: "pr_merged", sessionId: session.id });
+    res.status(200).json({ ok: true, action: "pr_merged", sessionGroupId: sessionGroup.id });
     return;
   }
 
   if (action === "closed" && !pr.merged) {
     await sessionService.markPrClosed({
-      sessionId: session.id,
-      organizationId: session.organizationId,
+      sessionGroupId: sessionGroup.id,
+      eventSessionId,
+      prUrl: pr.html_url,
+      organizationId: sessionGroup.organizationId,
     });
-    res.status(200).json({ ok: true, action: "pr_closed", sessionId: session.id });
+    res.status(200).json({ ok: true, action: "pr_closed", sessionGroupId: sessionGroup.id });
     return;
   }
 

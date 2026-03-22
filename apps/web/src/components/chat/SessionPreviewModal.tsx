@@ -7,11 +7,17 @@ import { SessionDetailView } from "../session/SessionDetailView";
 
 interface SessionPreviewModalProps {
   sessionId: string;
-  channelId: string;
+  channelId: string | null;
+  sessionGroupId: string;
   children: React.ReactNode;
 }
 
-export function SessionPreviewModal({ sessionId, channelId, children }: SessionPreviewModalProps) {
+export function SessionPreviewModal({
+  sessionId,
+  channelId,
+  sessionGroupId,
+  children,
+}: SessionPreviewModalProps) {
   const [open, setOpen] = useState(false);
   const [origin, setOrigin] = useState({ x: 0, y: 0 });
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -31,8 +37,8 @@ export function SessionPreviewModal({ sessionId, channelId, children }: SessionP
 
   const handleGoToSession = useCallback(() => {
     setOpen(false);
-    navigateToSession(channelId, sessionId);
-  }, [channelId, sessionId]);
+    navigateToSession(channelId, sessionGroupId, sessionId);
+  }, [channelId, sessionGroupId, sessionId]);
 
   // Close on Escape
   useEffect(() => {
