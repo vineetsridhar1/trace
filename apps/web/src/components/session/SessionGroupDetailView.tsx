@@ -427,7 +427,7 @@ export function SessionGroupDetailView({
       </div>
 
       <div className="shrink-0 border-b border-border bg-surface px-2 py-1">
-        <div className="overflow-x-auto">
+        <div className="native-scrollbar overflow-x-auto">
           <div className="flex min-w-max items-center gap-1">
             {sessionTabs.map((session) => {
               const displayStatus = getDisplayStatus(session.status, null);
