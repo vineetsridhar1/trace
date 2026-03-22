@@ -177,6 +177,7 @@ const { Table, useTable } = createTable<SessionRow>({
 
 export function SessionsTable({ channelId }: { channelId: string }) {
   const sessions = useEntityStore((s) => s.sessions);
+  const activeSessionId = useUIStore((s) => s.activeSessionId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -318,7 +319,11 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   return (
     <>
       <div ref={gridRef} className="h-full">
-        <Table className="h-full" agGridOptions={agGridOptions} />
+        <Table
+          className="h-full"
+          agGridOptions={agGridOptions}
+          selectedRowIds={activeSessionId ? [activeSessionId] : undefined}
+        />
       </div>
       {deleteTarget && (
         <DeleteSessionDialog
