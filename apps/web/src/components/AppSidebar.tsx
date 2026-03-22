@@ -126,32 +126,44 @@ const MOVE_CHANNEL_MUTATION = gql`
   }
 `;
 
-const UNGROUPED_DROP_PREFIX = "ungrouped-gap:";
+const UPDATE_CHANNEL_GROUP_POSITION_MUTATION = gql`
+  mutation UpdateChannelGroupPosition($id: ID!, $input: UpdateChannelGroupInput!) {
+    updateChannelGroup(id: $id, input: $input) {
+      id
+    }
+  }
+`;
 
-function isUngroupedDropId(id: string | number) {
-  return String(id).startsWith(UNGROUPED_DROP_PREFIX);
+const TOP_LEVEL_GAP_PREFIX = "top-level-gap:";
+
+type TopLevelItem =
+  | { kind: "channel"; id: string; position: number }
+  | { kind: "group"; id: string; position: number };
+
+function isTopLevelGapId(id: string | number) {
+  return String(id).startsWith(TOP_LEVEL_GAP_PREFIX);
 }
 
-/** Prefer specific group targets; only use the top-level ungrouped zone in whitespace/gaps. */
+/** Prefer specific group targets; only use insertion gaps when the pointer is actually on a gap. */
 const customCollision: CollisionDetection = (args) => {
   const pw = pointerWithin(args);
-  const nonUngroupedPointer = pw.filter((collision) => !isUngroupedDropId(collision.id));
-  if (nonUngroupedPointer.length > 0) return nonUngroupedPointer;
+  const nonGapPointer = pw.filter((collision) => !isTopLevelGapId(collision.id));
+  if (nonGapPointer.length > 0) return nonGapPointer;
   if (pw.length > 0) return pw;
 
-  return rectIntersection(args).filter((collision) => !isUngroupedDropId(collision.id));
+  return rectIntersection(args).filter((collision) => !isTopLevelGapId(collision.id));
 };
 
-function UngroupedGapDropTarget({
-  id,
+function TopLevelDropIndicator({
+  index,
   isDragging,
 }: {
-  id: string;
+  index: number;
   isDragging: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
-    id: `${UNGROUPED_DROP_PREFIX}${id}`,
-    data: { type: "ungrouped" },
+    id: `${TOP_LEVEL_GAP_PREFIX}${index}`,
+    data: { type: "top-level-gap", index },
   });
 
   return (
@@ -185,6 +197,7 @@ export function AppSidebar() {
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const refreshTick = useUIStore((s) => s.refreshTick);
   const channelsById = useEntityStore((s) => s.channels);
+  const channelGroupsById = useEntityStore((s) => s.channelGroups);
   const [peeking, setPeeking] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [chatsLoading, setChatsLoading] = useState(true);
@@ -283,10 +296,10 @@ export function AppSidebar() {
     },
   );
 
-  // Derive ungrouped channels and channel-to-group mapping
-  const { ungroupedChannelIds, channelIdsByGroup } = useMemo(() => {
+  // Derive grouped channel ids plus the mixed top-level sequence of groups and ungrouped channels.
+  const { channelIdsByGroup, topLevelItems } = useMemo(() => {
     const byGroup: Record<string, string[]> = {};
-    const ungrouped: string[] = [];
+    const items: TopLevelItem[] = [];
 
     for (const id of allChannelIds) {
       const channel = channelsById[id];
@@ -296,12 +309,24 @@ export function AppSidebar() {
         if (!byGroup[gId]) byGroup[gId] = [];
         byGroup[gId].push(id);
       } else {
-        ungrouped.push(id);
+        items.push({ kind: "channel", id, position: channel.position ?? 0 });
       }
     }
 
-    return { ungroupedChannelIds: ungrouped, channelIdsByGroup: byGroup };
-  }, [allChannelIds, channelsById]);
+    for (const id of groupIds) {
+      const group = channelGroupsById[id];
+      if (!group) continue;
+      items.push({ kind: "group", id, position: group.position ?? 0 });
+    }
+
+    items.sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      if (a.kind !== b.kind) return a.kind === "channel" ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+
+    return { channelIdsByGroup: byGroup, topLevelItems: items };
+  }, [allChannelIds, groupIds, channelsById, channelGroupsById]);
 
   function handleDragStart(event: DragStartEvent) {
     const data = event.active.data.current as { type: string; id: string } | undefined;
@@ -319,12 +344,50 @@ export function AppSidebar() {
       return;
     }
 
-    const overData = over.data.current as { type: string; groupId?: string } | undefined;
+    const overData = over.data.current as { type: string; groupId?: string; index?: number } | undefined;
     if (overData?.type === "group" && overData.groupId) {
       setDragOverGroupId(overData.groupId);
     } else {
       setDragOverGroupId(null);
     }
+  }
+
+  async function persistTopLevelOrder(nextTopLevelItems: TopLevelItem[]) {
+    const { patch } = useEntityStore.getState();
+    const updates: Array<Promise<unknown>> = [];
+
+    for (const [index, item] of nextTopLevelItems.entries()) {
+      if (item.kind === "channel") {
+        const channel = channelsById[item.id];
+        if (!channel) continue;
+        const currentGroupId = (channel as Channel & { groupId?: string | null }).groupId ?? null;
+        const currentPosition = channel.position ?? 0;
+        if (currentGroupId === null && currentPosition === index) continue;
+
+        patch("channels", item.id, { groupId: null, position: index } as Partial<Channel>);
+        updates.push(
+          client.mutation(MOVE_CHANNEL_MUTATION, {
+            input: { channelId: item.id, groupId: null, position: index },
+          }).toPromise()
+        );
+        continue;
+      }
+
+      const group = channelGroupsById[item.id];
+      if (!group) continue;
+      const currentPosition = group.position ?? 0;
+      if (currentPosition === index) continue;
+
+      patch("channelGroups", item.id, { position: index } as Partial<ChannelGroup>);
+      updates.push(
+        client.mutation(UPDATE_CHANNEL_GROUP_POSITION_MUTATION, {
+          id: item.id,
+          input: { position: index },
+        }).toPromise()
+      );
+    }
+
+    await Promise.all(updates);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -335,23 +398,22 @@ export function AppSidebar() {
     if (!over || !activeOrgId) return;
 
     const activeData = active.data.current as { type: string; id: string; groupId?: string | null } | undefined;
-    const overData = over.data.current as { type: string; groupId?: string } | undefined;
+    const overData = over.data.current as { type: string; groupId?: string; index?: number } | undefined;
 
     if (activeData?.type !== "channel") return;
 
     const channelId = activeData.id;
     const sourceGroupId = activeData.groupId ?? null;
 
-    // Dropped on ungrouped zone — move to top level
-    if (overData?.type === "ungrouped") {
-      if (sourceGroupId === null) return; // already ungrouped
-      const { patch } = useEntityStore.getState();
-      const position = ungroupedChannelIds.length;
-      patch("channels", channelId, { groupId: null, position } as Partial<Channel>);
-
-      await client.mutation(MOVE_CHANNEL_MUTATION, {
-        input: { channelId, groupId: null, position },
-      }).toPromise();
+    if (overData?.type === "top-level-gap") {
+      const insertIndex = Math.max(0, Math.min(overData.index ?? topLevelItems.length, topLevelItems.length));
+      const withoutDragged = topLevelItems.filter((item) => !(item.kind === "channel" && item.id === channelId));
+      const nextTopLevelItems = [
+        ...withoutDragged.slice(0, insertIndex),
+        { kind: "channel", id: channelId, position: insertIndex } satisfies TopLevelItem,
+        ...withoutDragged.slice(insertIndex),
+      ];
+      await persistTopLevelOrder(nextTopLevelItems);
       return;
     }
 
@@ -431,40 +493,35 @@ export function AppSidebar() {
                   onDragEnd={handleDragEnd}
                 >
                   <div className="py-2">
-                    {/* Ungrouped channels */}
-                    {ungroupedChannelIds.length > 0 && (
-                      <SidebarMenu>
-                        {ungroupedChannelIds.map((id) => (
-                          <ChannelItem
-                            key={id}
-                            id={id}
-                            isActive={id === activeChannelId}
-                            onClick={() => setActiveChannelId(id)}
-                            groupId={null}
-                          />
-                        ))}
-                      </SidebarMenu>
-                    )}
-
-                    {/* Groups */}
-                    {groupIds.length > 0 && (
-                      <div className={ungroupedChannelIds.length > 0 ? "mt-2" : ""}>
-                        <UngroupedGapDropTarget id="before-groups" isDragging={dragChannelName !== null} />
-                        {groupIds.map((groupId) => (
-                          <Fragment key={groupId}>
-                            <ChannelGroupSection
-                              id={groupId}
-                              channelIds={channelIdsByGroup[groupId] ?? []}
-                              activeChannelId={activeChannelId}
-                              onChannelClick={setActiveChannelId}
-                              onAddChannel={handleAddChannelToGroup}
-                              onDeleteGroup={handleDeleteGroup}
-                              isDropTarget={dragOverGroupId === groupId}
-                            />
-                            <UngroupedGapDropTarget id={`after-${groupId}`} isDragging={dragChannelName !== null} />
+                    {topLevelItems.length > 0 && (
+                      <>
+                        <TopLevelDropIndicator index={0} isDragging={dragChannelName !== null} />
+                        {topLevelItems.map((item, index) => (
+                          <Fragment key={`${item.kind}:${item.id}`}>
+                            {item.kind === "channel" ? (
+                              <SidebarMenu>
+                                <ChannelItem
+                                  id={item.id}
+                                  isActive={item.id === activeChannelId}
+                                  onClick={() => setActiveChannelId(item.id)}
+                                  groupId={null}
+                                />
+                              </SidebarMenu>
+                            ) : (
+                              <ChannelGroupSection
+                                id={item.id}
+                                channelIds={channelIdsByGroup[item.id] ?? []}
+                                activeChannelId={activeChannelId}
+                                onChannelClick={setActiveChannelId}
+                                onAddChannel={handleAddChannelToGroup}
+                                onDeleteGroup={handleDeleteGroup}
+                                isDropTarget={dragOverGroupId === item.id}
+                              />
+                            )}
+                            <TopLevelDropIndicator index={index + 1} isDragging={dragChannelName !== null} />
                           </Fragment>
                         ))}
-                      </div>
+                      </>
                     )}
                   </div>
 
