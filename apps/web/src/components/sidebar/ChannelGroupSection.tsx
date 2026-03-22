@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
-import { useSortable } from "@dnd-kit/sortable";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField, useEntityStore } from "../../stores/entity";
