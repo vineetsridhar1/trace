@@ -77,20 +77,22 @@ export function ChannelGroupSection({
         </div>
       </div>
       {!collapsed && (
-        <SidebarMenu>
-          {channelIds.map((channelId) => (
-            <ChannelItem
-              key={channelId}
-              id={channelId}
-              isActive={channelId === activeChannelId}
-              onClick={() => onChannelClick(channelId)}
-              groupId={id}
-            />
-          ))}
-          {channelIds.length === 0 && (
-            <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
-          )}
-        </SidebarMenu>
+        <div className="ml-3 border-l border-border/60 pl-2">
+          <SidebarMenu>
+            {channelIds.map((channelId) => (
+              <ChannelItem
+                key={channelId}
+                id={channelId}
+                isActive={channelId === activeChannelId}
+                onClick={() => onChannelClick(channelId)}
+                groupId={id}
+              />
+            ))}
+            {channelIds.length === 0 && (
+              <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
+            )}
+          </SidebarMenu>
+        </div>
       )}
     </div>
   );
