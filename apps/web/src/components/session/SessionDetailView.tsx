@@ -67,7 +67,19 @@ const SESSION_DETAIL_QUERY = gql`
   }
 `;
 
-export function SessionDetailView({ sessionId }: { sessionId: string }) {
+export function SessionDetailView({
+  sessionId,
+  panelMode,
+  isFullscreen,
+  onClose,
+  onToggleFullscreen,
+}: {
+  sessionId: string;
+  panelMode?: boolean;
+  isFullscreen?: boolean;
+  onClose?: () => void;
+  onToggleFullscreen?: () => void;
+}) {
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
     useSessionEvents(sessionId);
   const scopeKey = eventScopeKey("session", sessionId);
@@ -166,6 +178,10 @@ export function SessionDetailView({ sessionId }: { sessionId: string }) {
           sessionId={sessionId}
           onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
           terminalOpen={showTerminal}
+          panelMode={panelMode}
+          isFullscreen={isFullscreen}
+          onClose={onClose}
+          onToggleFullscreen={onToggleFullscreen}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden">

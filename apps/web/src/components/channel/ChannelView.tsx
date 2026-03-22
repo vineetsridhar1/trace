@@ -9,7 +9,6 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { StartSessionDialog } from "./StartSessionDialog";
 import { SessionsTable } from "./SessionsTable";
-import { SessionDetailView } from "../session/SessionDetailView";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
@@ -64,7 +63,6 @@ export function ChannelView({ channelId }: { channelId: string }) {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [loading, setLoading] = useState(true);
-  const activeSessionId = useUIStore((s) => s.activeSessionId);
   const refreshTick = useUIStore((s) => s.refreshTick);
 
   const fetchSessions = useCallback(async () => {
@@ -90,10 +88,6 @@ export function ChannelView({ channelId }: { channelId: string }) {
     setLoading(true);
     fetchSessions();
   }, [fetchSessions, refreshTick]);
-
-  if (activeSessionId) {
-    return <SessionDetailView sessionId={activeSessionId} />;
-  }
 
   return (
     <div className="flex h-full flex-col">

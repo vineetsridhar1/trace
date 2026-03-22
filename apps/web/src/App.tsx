@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
@@ -6,14 +6,17 @@ import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
+import { SessionPanelSlot } from "./components/session/SessionPanel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
 import { useOrgEvents } from "./hooks/useOrgEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
+import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
+import { cn } from "./lib/utils";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -50,6 +53,24 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   useVisibilityRefresh();
   const activePage = useUIStore((s) => s.activePage);
   const activeChatId = useUIStore((s) => s.activeChatId);
+  const activeSessionId = useUIStore((s) => s.activeSessionId);
+  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const isMobile = useIsMobile();
+
+  const [sessionFullscreen, setSessionFullscreen] = useState(false);
+
+  // Reset fullscreen when session closes
+  useEffect(() => {
+    if (!activeSessionId) setSessionFullscreen(false);
+  }, [activeSessionId]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
+  const toggleFullscreen = useCallback(() => setSessionFullscreen((f) => !f), []);
+  const setFullscreen = useCallback((v: boolean) => setSessionFullscreen(v), []);
+
+  const hasSession = !!activeSessionId;
 
   return (
     <TooltipProvider>
@@ -57,29 +78,51 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         <InstallBanner />
         <SidebarProvider className="min-h-0 flex-1 pl-2 pr-2 pt-2">
           <AppSidebar />
-          <div className="flex w-full flex-1 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background">
-            <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {activePage === "settings" ? (
-                <SettingsPage />
-              ) : activePage === "inbox" ? (
-                <InboxView />
-              ) : activeChatId ? (
-                <ChatView chatId={activeChatId} />
-              ) : activeChannelId ? (
-                <ChannelView channelId={activeChannelId} />
-              ) : (
-                <div className="flex h-full flex-col">
-                  <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-                    <SidebarTrigger />
-                  </header>
-                  <div className="flex flex-1 items-center justify-center">
-                    <p className="text-sm text-muted-foreground">
-                      Select a channel to get started
-                    </p>
-                  </div>
-                </div>
+
+          {/* Two-card container: main content + session panel */}
+          <div ref={containerRef} className="flex w-full flex-1 overflow-hidden">
+            {/* Main content card */}
+            <div
+              className={cn(
+                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex,opacity,border-color] duration-300 ease-in-out",
+                hasSession && sessionFullscreen && !isMobile
+                  ? "flex-[0_0_0%] border-transparent opacity-0"
+                  : "flex-[1_1_0%]",
               )}
-            </SidebarInset>
+            >
+              <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {activePage === "settings" ? (
+                  <SettingsPage />
+                ) : activePage === "inbox" ? (
+                  <InboxView />
+                ) : activeChatId ? (
+                  <ChatView chatId={activeChatId} />
+                ) : activeChannelId ? (
+                  <ChannelView channelId={activeChannelId} />
+                ) : (
+                  <div className="flex h-full flex-col">
+                    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+                      <SidebarTrigger />
+                    </header>
+                    <div className="flex flex-1 items-center justify-center">
+                      <p className="text-sm text-muted-foreground">
+                        Select a channel to get started
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </SidebarInset>
+            </div>
+
+            {/* Session panel card (separate card, same level) */}
+            <SessionPanelSlot
+              sessionId={activeSessionId}
+              isFullscreen={sessionFullscreen}
+              onClose={closePanel}
+              onToggleFullscreen={toggleFullscreen}
+              containerRef={containerRef}
+              onSetFullscreen={setFullscreen}
+            />
           </div>
         </SidebarProvider>
       </div>
