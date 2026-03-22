@@ -1,173 +1,102 @@
-import { useCallback, useEffect, useRef } from "react";
-import { clamp, type SidebarTab } from "../components/sidebar/sidebarTabs";
-import { getNextWheelSamples, isMomentumTail, supportsScrollEnd, type WheelSample } from "./sidebarTabScrollUtils";
-import { useSidebarTabMotion } from "./useSidebarTabMotion";
+import { useCallback, useEffect, useRef, useState } from "react";
+import createScrollSnap from "scroll-snap";
+import { clamp } from "../lib/utils";
+import { getTabFromProgress, getTabIndex, type SidebarTab } from "../components/sidebar/sidebarTabs";
 
-const FALLBACK_SCROLL_END_MS = 300;
-const MOMENTUM_LOCK_MS = 180;
+const SNAP_DURATION_MS = 50;
+const SNAP_TIMEOUT_MS = 80; // minimum the library allows is 50ms
+
+function easeInOut(t: number) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
 
 export function useSidebarTabScroll({
   currentTab,
-  enabled = true,
   onProgressChange,
   onTabCommit,
 }: {
   currentTab: SidebarTab;
-  enabled?: boolean;
   onProgressChange?: (progress: number) => void;
   onTabCommit?: (tab: SidebarTab) => void;
 }) {
-  const fallbackScrollEndRef = useRef<number | null>(null);
-  const wheelSamplesRef = useRef<WheelSample[]>([]);
-  const momentumDirectionRef = useRef(0);
-  const momentumLockUntilRef = useRef(0);
-  const canUseScrollEndRef = useRef(supportsScrollEnd());
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef(getTabIndex(currentTab));
+  const [tabProgress, setTabProgressState] = useState(getTabIndex(currentTab));
+  const hasInitRef = useRef(false);
 
-  const {
-    cancelScrollAnimation,
-    isSettlingRef,
-    jumpToTab: jumpToMotionTab,
-    scrollToTab,
-    settleToNearestTab,
-    syncTabProgress,
-    tabProgress,
-    viewportRef,
-  } = useSidebarTabMotion({ currentTab, onProgressChange, onTabCommit });
+  const setProgress = useCallback((p: number) => {
+    const clamped = clamp(p, 0, 1);
+    progressRef.current = clamped;
+    setTabProgressState(clamped);
+    onProgressChange?.(clamped);
+  }, [onProgressChange]);
 
-  const clearFallbackScrollEnd = useCallback(() => {
-    if (fallbackScrollEndRef.current !== null) {
-      window.clearTimeout(fallbackScrollEndRef.current);
-      fallbackScrollEndRef.current = null;
-    }
-  }, []);
+  // Called by the library after each snap animation completes
+  const commitPosition = useCallback(() => {
+    const tab = getTabFromProgress(progressRef.current);
+    onTabCommit?.(tab);
+    setProgress(getTabIndex(tab));
+  }, [onTabCommit, setProgress]);
 
-  const resetWheelState = useCallback(() => {
-    wheelSamplesRef.current = [];
-    momentumDirectionRef.current = 0;
-    momentumLockUntilRef.current = 0;
-  }, []);
-
-  const scheduleFallbackScrollEnd = useCallback(() => {
-    if (canUseScrollEndRef.current) return;
-
-    clearFallbackScrollEnd();
-    fallbackScrollEndRef.current = window.setTimeout(() => {
-      fallbackScrollEndRef.current = null;
-      settleToNearestTab();
-    }, FALLBACK_SCROLL_END_MS);
-  }, [clearFallbackScrollEnd, settleToNearestTab]);
-
+  // Track scroll progress for background color blending
   const handleScroll = useCallback(() => {
-    if (isSettlingRef.current) return;
-    syncTabProgress();
-    if (enabled) scheduleFallbackScrollEnd();
-  }, [enabled, isSettlingRef, scheduleFallbackScrollEnd, syncTabProgress]);
-
-  const handleTrackpadWheel = useCallback((event: WheelEvent) => {
     const viewport = viewportRef.current;
-    if (!enabled || !viewport) return;
+    if (!viewport) return;
+    setProgress(viewport.scrollLeft / Math.max(viewport.clientWidth, 1));
+  }, [setProgress]);
 
-    const horizontalDelta =
-      Math.abs(event.deltaX) > Math.abs(event.deltaY)
-        ? event.deltaX
-        : event.shiftKey
-          ? event.deltaY
-          : 0;
+  // Bind scroll-snap to the viewport
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
 
-    if (horizontalDelta === 0) return;
+    const { unbind } = createScrollSnap(
+      viewport,
+      {
+        snapDestinationX: "100%",
+        duration: SNAP_DURATION_MS,
+        timeout: SNAP_TIMEOUT_MS,
+        snapStop: true,
+        easing: easeInOut,
+      },
+      commitPosition,
+    );
 
-    event.preventDefault();
-    cancelScrollAnimation();
+    return () => unbind();
+  }, [commitPosition]);
 
-    const now = performance.now();
-    const direction = Math.sign(horizontalDelta);
-
-    if (direction !== 0 && now < momentumLockUntilRef.current && direction === momentumDirectionRef.current) {
-      scheduleFallbackScrollEnd();
-      return;
-    }
-
-    if (now >= momentumLockUntilRef.current) {
-      momentumDirectionRef.current = 0;
-      momentumLockUntilRef.current = 0;
-    }
-
-    const delta = Math.abs(horizontalDelta);
-    const nextSamples = getNextWheelSamples(wheelSamplesRef.current, direction, delta, now);
-    wheelSamplesRef.current = nextSamples;
-
-    if (isMomentumTail(nextSamples)) {
-      momentumDirectionRef.current = direction;
-      momentumLockUntilRef.current = now + MOMENTUM_LOCK_MS;
-      settleToNearestTab();
-      return;
-    }
-
-    viewport.scrollLeft = clamp(viewport.scrollLeft + horizontalDelta, 0, viewport.clientWidth);
-    syncTabProgress();
-    scheduleFallbackScrollEnd();
-  }, [cancelScrollAnimation, enabled, scheduleFallbackScrollEnd, settleToNearestTab, syncTabProgress, viewportRef]);
-
-  const selectTab = useCallback((tab: SidebarTab) => {
-    clearFallbackScrollEnd();
-    resetWheelState();
-    scrollToTab(tab, "smooth", true);
-  }, [clearFallbackScrollEnd, resetWheelState, scrollToTab]);
-
+  // Instant jump — used for init, resize, and external tab changes
   const jumpToTab = useCallback((tab: SidebarTab) => {
-    clearFallbackScrollEnd();
-    resetWheelState();
-    jumpToMotionTab(tab);
-  }, [clearFallbackScrollEnd, jumpToMotionTab, resetWheelState]);
-
-  const handleTouchStart = useCallback(() => {
-    clearFallbackScrollEnd();
-    cancelScrollAnimation();
-    resetWheelState();
-  }, [cancelScrollAnimation, clearFallbackScrollEnd, resetWheelState]);
-
-  const handleTouchEnd = useCallback(() => {
-    clearFallbackScrollEnd();
-    settleToNearestTab();
-  }, [clearFallbackScrollEnd, settleToNearestTab]);
-
-  useEffect(() => {
-    clearFallbackScrollEnd();
-    resetWheelState();
-  }, [clearFallbackScrollEnd, currentTab, resetWheelState]);
-
-  useEffect(() => {
     const viewport = viewportRef.current;
-    if (!enabled || !viewport) return;
+    if (!viewport) return;
+    viewport.scrollLeft = getTabIndex(tab) * viewport.clientWidth;
+    setProgress(getTabIndex(tab));
+  }, [setProgress]);
 
-    const handleScrollEnd = () => settleToNearestTab();
+  // Animated switch — used when user clicks the tab switcher.
+  // scrollTo smooth lets the library detect scroll-end and run its snap animation.
+  const selectTab = useCallback((tab: SidebarTab) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollTo({ left: getTabIndex(tab) * viewport.clientWidth, behavior: "smooth" });
+  }, []);
 
-    viewport.addEventListener("wheel", handleTrackpadWheel, { passive: false });
-
-    if (canUseScrollEndRef.current) {
-      viewport.addEventListener("scrollend", handleScrollEnd);
-    }
-
-    return () => {
-      viewport.removeEventListener("wheel", handleTrackpadWheel);
-      if (canUseScrollEndRef.current) {
-        viewport.removeEventListener("scrollend", handleScrollEnd);
-      }
-    };
-  }, [enabled, handleTrackpadWheel, settleToNearestTab, viewportRef]);
-
+  // Sync scroll position when currentTab changes externally
   useEffect(() => {
-    return () => clearFallbackScrollEnd();
-  }, [clearFallbackScrollEnd]);
+    if (!hasInitRef.current) {
+      jumpToTab(currentTab);
+      hasInitRef.current = true;
+      return;
+    }
+    jumpToTab(currentTab);
+  }, [currentTab, jumpToTab]);
 
-  return {
-    handleScroll,
-    handleTouchEnd,
-    handleTouchStart,
-    jumpToTab,
-    selectTab,
-    settleToNearestTab,
-    tabProgress,
-    viewportRef,
-  };
+  // Re-snap to current tab on resize
+  useEffect(() => {
+    const handleResize = () => jumpToTab(currentTab);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [currentTab, jumpToTab]);
+
+  return { handleScroll, jumpToTab, selectTab, tabProgress, viewportRef };
 }

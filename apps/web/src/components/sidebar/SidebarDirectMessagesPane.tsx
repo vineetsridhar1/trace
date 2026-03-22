@@ -2,14 +2,11 @@ import { ChatItem } from "./ChatItem";
 import { CreateChatDialog } from "./CreateChatDialog";
 import { Skeleton } from "../ui/skeleton";
 import { SidebarMenu, SidebarMenuItem } from "../ui/sidebar";
-import { type SidebarPaneVariant } from "./sidebarTabs";
-
 export interface SidebarDirectMessagesPaneProps {
   activeChatId: string | null;
   chatIds: string[];
   chatsLoading: boolean;
   onChatClick: (id: string) => void;
-  variant?: SidebarPaneVariant;
 }
 
 export function SidebarDirectMessagesPane({
@@ -17,18 +14,16 @@ export function SidebarDirectMessagesPane({
   chatIds,
   chatsLoading,
   onChatClick,
-  variant = "expanded",
 }: SidebarDirectMessagesPaneProps) {
-  const bodyClassName = variant === "overlay" ? "px-2 py-2" : "pt-3";
 
   return (
     <section className="flex h-full min-w-full shrink-0 flex-col overflow-hidden">
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/70 px-3">
+      <div className="mt-2 flex h-[49px] shrink-0 items-center justify-between border-b border-border/70 px-3">
         <p className="truncate text-sm font-semibold text-sidebar-foreground">Direct Messages</p>
         <CreateChatDialog />
       </div>
 
-      <div className={`min-h-0 flex-1 overflow-y-auto ${bodyClassName}`}>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <SidebarMenu>
           {chatsLoading ? (
             Array.from({ length: 3 }).map((_, index) => (
@@ -58,4 +53,3 @@ export function SidebarDirectMessagesPane({
     </section>
   );
 }
-

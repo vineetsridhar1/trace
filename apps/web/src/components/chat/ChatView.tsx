@@ -4,6 +4,7 @@ import { useIsMobile } from "../../hooks/use-mobile";
 import { useThreadPanelLayout } from "../../hooks/useThreadPanelLayout";
 import { ChatHeader } from "./ChatHeader";
 import { ChatMessageList } from "./ChatMessageList";
+import { DmWelcome } from "./DmWelcome";
 import { ChatComposer } from "./ChatComposer";
 import { ThreadPanel } from "./ThreadPanel";
 
@@ -23,7 +24,7 @@ export function ChatView({ chatId }: { chatId: string }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <ChatMessageList
             scopeId={chatId}
-            showWelcome
+            welcome={<DmWelcome chatId={chatId} />}
             messageIds={messageIds}
             loading={loading}
             hasOlder={hasOlder}

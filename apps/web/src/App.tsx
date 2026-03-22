@@ -72,6 +72,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   }, [activeSessionGroupId]);
 
   const hasSession = !!activeSessionGroupId;
+  const isMainContentCollapsed = hasSession && isFullscreen && !isMobile;
 
   return (
     <TooltipProvider>
@@ -86,16 +87,19 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
           {/* Two-card container: main content + session panel */}
           <div
             ref={containerRef}
-            className="flex w-full flex-1 overflow-hidden md:peer-data-[state=collapsed]:pl-2"
+            className="flex w-full flex-1 overflow-hidden pl-2 pr-2 md:pl-0 md:peer-data-[state=collapsed]:pl-2"
           >
             {/* Main content card */}
             <div
               className={cn(
-                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex,border-color] duration-300 ease-in-out",
-                hasSession && isFullscreen && !isMobile
-                  ? "flex-[0_0_0%] border-transparent"
-                  : "flex-[1_1_0%]",
+                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex-grow,border-color] duration-300 ease-in-out",
+                isMainContentCollapsed ? "border-0" : undefined,
               )}
+              style={{
+                flexBasis: "0%",
+                flexGrow: isMainContentCollapsed ? 0 : 1,
+                flexShrink: 1,
+              }}
             >
               <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {activePage === "settings" ? (

@@ -5,6 +5,7 @@ import { useChannelMessages } from "../../hooks/useChannelMessages";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useThreadPanelLayout } from "../../hooks/useThreadPanelLayout";
 import { ChatMessageList } from "../chat/ChatMessageList";
+import { ChannelWelcome } from "./ChannelWelcome";
 import { ChannelComposer } from "./ChannelComposer";
 import { ThreadPanel } from "../chat/ThreadPanel";
 import { SidebarTrigger } from "../ui/sidebar";
@@ -37,6 +38,7 @@ export function TextChannelView({ channelId }: { channelId: string }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <ChatMessageList
             scopeId={channelId}
+            welcome={<ChannelWelcome channelId={channelId} />}
             messageIds={messageIds}
             loading={loading}
             hasOlder={hasOlder}

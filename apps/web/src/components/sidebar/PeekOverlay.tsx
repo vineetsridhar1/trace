@@ -1,15 +1,15 @@
 import { useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useSidebarData } from "../../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
-import { SidebarChannelsPane, type SidebarChannelsPaneProps } from "./SidebarChannelsPane";
-import { SidebarDirectMessagesPane, type SidebarDirectMessagesPaneProps } from "./SidebarDirectMessagesPane";
+import { useUIStore } from "../../stores/ui";
+import { SidebarChannelsPane } from "./SidebarChannelsPane";
+import { SidebarDirectMessagesPane } from "./SidebarDirectMessagesPane";
 import { SidebarTabSwitcher } from "./SidebarTabSwitcher";
 import { UserMenu } from "./UserMenu";
 import { getTabFromProgress, getTabIndex, type SidebarTab } from "./sidebarTabs";
 
-interface PeekOverlayProps
-  extends Omit<SidebarChannelsPaneProps, "variant">,
-    Omit<SidebarDirectMessagesPaneProps, "variant"> {
+interface PeekOverlayProps {
   currentTab: SidebarTab;
   onMouseLeave: () => void;
   onTabCommit: (tab: SidebarTab) => void;
@@ -18,41 +18,23 @@ interface PeekOverlayProps
 }
 
 export function PeekOverlay({
-  activeChannelId,
-  activeChatId,
-  activeOrgId,
-  allChannelIds,
-  channelGroupsById,
-  channelIdsByGroup,
-  channelsById,
-  channelsLoading,
-  chatIds,
-  chatsLoading,
   currentTab,
-  groupIds,
-  onChannelClick,
-  onChatClick,
   onMouseLeave,
   onTabCommit,
   onTabProgressChange,
-  topLevelItems,
   visible,
 }: PeekOverlayProps) {
-  const tabs = useSidebarTabScroll({
+  const sidebarData = useSidebarData();
+  const activeChannelId = useUIStore((s) => s.activeChannelId);
+  const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
+  const activeChatId = useUIStore((s) => s.activeChatId);
+  const setActiveChatId = useUIStore((s) => s.setActiveChatId);
+
+  const { handleScroll, jumpToTab, selectTab, tabProgress, viewportRef } = useSidebarTabScroll({
     currentTab,
-    enabled: visible,
     onProgressChange: onTabProgressChange,
     onTabCommit,
   });
-  const {
-    handleScroll,
-    handleTouchEnd,
-    handleTouchStart,
-    jumpToTab,
-    selectTab,
-    tabProgress,
-    viewportRef,
-  } = tabs;
 
   const prevVisibleRef = useRef(false);
   const isDraggingRef = useRef(false);
@@ -101,30 +83,25 @@ export function PeekOverlay({
               ref={viewportRef}
               className="no-scrollbar flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain"
               onScroll={handleScroll}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-              onTouchCancel={handleTouchEnd}
             >
               <SidebarDirectMessagesPane
                 activeChatId={activeChatId}
-                chatIds={chatIds}
-                chatsLoading={chatsLoading}
-                onChatClick={onChatClick}
-                variant="overlay"
+                chatIds={sidebarData.chatIds}
+                chatsLoading={sidebarData.chatsLoading}
+                onChatClick={setActiveChatId}
               />
               <SidebarChannelsPane
                 activeChannelId={activeChannelId}
-                activeOrgId={activeOrgId}
-                allChannelIds={allChannelIds}
-                channelGroupsById={channelGroupsById}
-                channelIdsByGroup={channelIdsByGroup}
-                channelsById={channelsById}
-                channelsLoading={channelsLoading}
-                groupIds={groupIds}
-                onChannelClick={onChannelClick}
+                activeOrgId={sidebarData.activeOrgId}
+                allChannelIds={sidebarData.allChannelIds}
+                channelGroupsById={sidebarData.channelGroupsById}
+                channelIdsByGroup={sidebarData.channelIdsByGroup}
+                channelsById={sidebarData.channelsById}
+                channelsLoading={sidebarData.channelsLoading}
+                groupIds={sidebarData.groupIds}
+                onChannelClick={setActiveChannelId}
                 onDragActiveChange={handleDragActiveChange}
-                topLevelItems={topLevelItems}
-                variant="overlay"
+                topLevelItems={sidebarData.topLevelItems}
               />
             </div>
 

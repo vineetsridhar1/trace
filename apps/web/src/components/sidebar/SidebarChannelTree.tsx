@@ -40,6 +40,21 @@ function TopLevelDropIndicator({ index, isDragging }: { index: number; isDraggin
   );
 }
 
+export interface SidebarChannelTreeProps {
+  activeChannelId: string | null;
+  activeOrgId: string | null;
+  allChannelIds: string[];
+  channelGroupsById: Record<string, ChannelGroup>;
+  channelIdsByGroup: Record<string, string[]>;
+  channelsById: Record<string, Channel>;
+  channelsLoading: boolean;
+  groupIds: string[];
+  onAddChannel: (groupId: string) => void;
+  onChannelClick: (id: string) => void;
+  onDragActiveChange?: (active: boolean) => void;
+  topLevelItems: TopLevelItem[];
+}
+
 export function SidebarChannelTree({
   activeChannelId,
   activeOrgId,
@@ -53,20 +68,7 @@ export function SidebarChannelTree({
   onChannelClick,
   onDragActiveChange,
   topLevelItems,
-}: {
-  activeChannelId: string | null;
-  activeOrgId: string | null;
-  allChannelIds: string[];
-  channelGroupsById: Record<string, ChannelGroup>;
-  channelIdsByGroup: Record<string, string[]>;
-  channelsById: Record<string, Channel>;
-  channelsLoading: boolean;
-  groupIds: string[];
-  onAddChannel: (groupId: string) => void;
-  onChannelClick: (id: string) => void;
-  onDragActiveChange?: (active: boolean) => void;
-  topLevelItems: TopLevelItem[];
-}) {
+}: SidebarChannelTreeProps) {
   const {
     dragItem,
     dragOverGroupId,

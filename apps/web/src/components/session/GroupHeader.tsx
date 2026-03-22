@@ -4,6 +4,7 @@ import {
   GitPullRequest,
   History,
   Maximize2,
+  MessageSquarePlus,
   Minimize2,
   Plus,
   TerminalSquare,
@@ -12,6 +13,12 @@ import {
 import { cn } from "../../lib/utils";
 import { statusColor, statusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -91,24 +98,32 @@ export function GroupHeader({
         </h2>
       </div>
 
-      <button
-        onClick={onNewChat}
-        disabled={!selectedSessionId}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-50"
-        title="Start a new chat in this group"
-      >
-        <Plus size={14} />
-        New Chat
-      </button>
-
-      <button
-        onClick={onOpenTerminal}
-        disabled={!terminalAllowed}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-50"
-        title="Open terminal"
-      >
-        <TerminalSquare size={14} />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
+            title="New session or terminal"
+          >
+            <Plus size={16} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            disabled={!selectedSessionId}
+            onClick={onNewChat}
+          >
+            <MessageSquarePlus size={14} />
+            Agent
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!terminalAllowed}
+            onClick={onOpenTerminal}
+          >
+            <TerminalSquare size={14} />
+            Terminal
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <div className="relative" ref={historyRef}>
         <button

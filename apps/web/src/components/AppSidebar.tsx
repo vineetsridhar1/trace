@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { useUIStore } from "../stores/ui";
@@ -25,7 +25,6 @@ export function AppSidebar() {
 
   const expandedTabs = useSidebarTabScroll({
     currentTab,
-    enabled: state === "expanded",
     onTabCommit: setCurrentTab,
   });
 
@@ -43,20 +42,18 @@ export function AppSidebar() {
       ? peekTabProgress
       : getTabIndex(currentTab);
 
-  useEffect(() => {
-    const backgroundBlend = tabProgress * 100;
-
+  useLayoutEffect(() => {
     document.documentElement.style.setProperty(
       "--trace-shell-bg",
-      `color-mix(in srgb, var(--th-surface-deep) ${backgroundBlend}%, var(--sidebar-dm))`,
+      `color-mix(in srgb, var(--th-surface-deep) ${tabProgress * 100}%, var(--sidebar-dm))`,
     );
+  }, [tabProgress]);
 
+  useEffect(() => {
     return () => {
       document.documentElement.style.removeProperty("--trace-shell-bg");
     };
-  }, [tabProgress]);
-
-  const backgroundBlend = tabProgress * 100;
+  }, []);
 
   return (
     <>
@@ -64,7 +61,7 @@ export function AppSidebar() {
         <div
           className="flex size-full flex-col"
           style={{
-            backgroundColor: `color-mix(in srgb, var(--sidebar) ${backgroundBlend}%, var(--sidebar-dm))`,
+            backgroundColor: `color-mix(in srgb, var(--sidebar) ${tabProgress * 100}%, var(--sidebar-dm))`,
           }}
         >
           <SidebarContent className="overflow-hidden">
@@ -72,9 +69,6 @@ export function AppSidebar() {
               ref={expandedTabs.viewportRef}
               className="no-scrollbar flex size-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
               onScroll={expandedTabs.handleScroll}
-              onTouchStart={expandedTabs.handleTouchStart}
-              onTouchEnd={expandedTabs.handleTouchEnd}
-              onTouchCancel={expandedTabs.handleTouchEnd}
             >
               <SidebarDirectMessagesPane
                 activeChatId={activeChatId}
@@ -97,7 +91,7 @@ export function AppSidebar() {
             </div>
           </SidebarContent>
 
-          <SidebarFooter className="gap-0 border-t border-border/70 p-0">
+          <SidebarFooter className="gap-0 p-0">
             <div className="px-3 py-2">
               <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
             </div>
@@ -114,24 +108,10 @@ export function AppSidebar() {
 
       <PeekOverlay
         visible={peeking && state === "collapsed"}
-        activeChannelId={activeChannelId}
-        activeChatId={activeChatId}
-        activeOrgId={sidebarData.activeOrgId}
-        allChannelIds={sidebarData.allChannelIds}
-        channelGroupsById={sidebarData.channelGroupsById}
-        channelIdsByGroup={sidebarData.channelIdsByGroup}
-        channelsById={sidebarData.channelsById}
-        chatIds={sidebarData.chatIds}
-        channelsLoading={sidebarData.channelsLoading}
-        chatsLoading={sidebarData.chatsLoading}
         currentTab={currentTab}
-        groupIds={sidebarData.groupIds}
-        onChannelClick={setActiveChannelId}
-        onChatClick={setActiveChatId}
         onMouseLeave={() => setPeeking(false)}
         onTabCommit={setCurrentTab}
         onTabProgressChange={setPeekTabProgress}
-        topLevelItems={sidebarData.topLevelItems}
       />
     </>
   );

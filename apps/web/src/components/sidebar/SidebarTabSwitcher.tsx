@@ -1,6 +1,6 @@
 import { Building2, MessageCircleMore, type LucideIcon } from "lucide-react";
-import { cn } from "../../lib/utils";
-import { clamp, type SidebarTab } from "./sidebarTabs";
+import { clamp, cn } from "../../lib/utils";
+import { type SidebarTab } from "./sidebarTabs";
 
 function SidebarTabButton({
   icon: Icon,

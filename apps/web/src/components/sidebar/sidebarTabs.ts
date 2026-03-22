@@ -1,19 +1,14 @@
 export const DM_TAB_INDEX = 0;
 export const MAIN_TAB_INDEX = 1;
 
-export type SidebarPaneVariant = "expanded" | "overlay";
 export type SidebarTab = "dm" | "main";
-
-export function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
 
 export function getTabIndex(tab: SidebarTab) {
   return tab === "dm" ? DM_TAB_INDEX : MAIN_TAB_INDEX;
 }
 
 export function getTabFromProgress(progress: number): SidebarTab {
-  return progress > 0.5 ? "main" : "dm";
+  return progress > (DM_TAB_INDEX + MAIN_TAB_INDEX) / 2 ? "main" : "dm";
 }
 
 export function getPreferredSidebarTab(
