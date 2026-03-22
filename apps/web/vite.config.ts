@@ -4,6 +4,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+const offset = Number(process.env.TRACE_PORT || 0);
+const api = `http://localhost:${4000 + offset}`;
+
 export default defineConfig({
   appType: "spa",
   plugins: [
@@ -74,16 +77,16 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 3000,
+    port: 3000 + offset,
     proxy: {
-      "/auth": "http://localhost:4000",
-      "/graphql": "http://localhost:4000",
+      "/auth": api,
+      "/graphql": api,
       "/ws": {
-        target: "http://localhost:4000",
+        target: api,
         ws: true,
       },
       "/terminal": {
-        target: "http://localhost:4000",
+        target: api,
         ws: true,
       },
     },
