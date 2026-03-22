@@ -84,6 +84,7 @@ export function ChannelGroupSection({
               id={channelId}
               isActive={channelId === activeChannelId}
               onClick={() => onChannelClick(channelId)}
+              groupId={id}
             />
           ))}
           {channelIds.length === 0 && (
