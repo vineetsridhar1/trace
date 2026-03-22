@@ -1,99 +1,121 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useCallback } from "react";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { SessionDetailView } from "./SessionDetailView";
-
-const PANEL_SPRING = { type: "spring", stiffness: 300, damping: 30 } as const;
+import { cn } from "../../lib/utils";
 
 export function SessionPanel({
   sessionId,
+  isFullscreen,
   onClose,
+  onToggleFullscreen,
 }: {
   sessionId: string;
+  isFullscreen: boolean;
   onClose: () => void;
+  onToggleFullscreen: () => void;
 }) {
   const isMobile = useIsMobile();
-  const [fullscreen, setFullscreen] = useState(false);
 
-  if (fullscreen) {
-    return (
-      <motion.div
-        key="fullscreen"
-        className="fixed inset-0 z-50 bg-background"
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.98 }}
-        transition={{ duration: 0.2 }}
-      >
-        <SessionDetailView
-          sessionId={sessionId}
-          panelMode
-          isFullscreen
-          onClose={onClose}
-          onToggleFullscreen={() => setFullscreen(false)}
-        />
-      </motion.div>
-    );
-  }
+  // Escape key closes panel (or exits fullscreen first)
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (isFullscreen) {
+          onToggleFullscreen();
+        } else {
+          onClose();
+        }
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [isFullscreen, onClose, onToggleFullscreen]);
 
   if (isMobile) {
     return (
-      <motion.div
-        key="mobile"
-        className="fixed inset-0 z-40 bg-background"
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
-        transition={PANEL_SPRING}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-background",
+          "translate-x-0 transition-transform duration-300 ease-out",
+        )}
       >
         <SessionDetailView
           sessionId={sessionId}
           panelMode
           onClose={onClose}
-          onToggleFullscreen={() => setFullscreen(true)}
+          onToggleFullscreen={onToggleFullscreen}
         />
-      </motion.div>
+      </div>
     );
   }
 
-  // Desktop: inline panel that pushes table content
   return (
-    <motion.div
-      key="desktop"
-      className="h-full border-l border-border overflow-hidden flex-shrink-0"
-      initial={{ width: 0 }}
-      animate={{ width: "55%" }}
-      exit={{ width: 0 }}
-      transition={PANEL_SPRING}
-    >
-      <div className="h-full w-full min-w-[400px]">
-        <SessionDetailView
-          sessionId={sessionId}
-          panelMode
-          onClose={onClose}
-          onToggleFullscreen={() => setFullscreen(true)}
-        />
-      </div>
-    </motion.div>
+    <SessionDetailView
+      sessionId={sessionId}
+      panelMode
+      isFullscreen={isFullscreen}
+      onClose={onClose}
+      onToggleFullscreen={onToggleFullscreen}
+    />
   );
 }
 
-export function AnimatedSessionPanel({
+/**
+ * Wrapper that renders the session panel card alongside the main content card.
+ * On desktop: a separate card that sits next to the main content.
+ * On mobile: a fixed full-screen overlay.
+ *
+ * The parent must be a flex container. This component controls the panel card's
+ * width via CSS transitions — no framer-motion needed.
+ */
+export function SessionPanelSlot({
   sessionId,
+  isFullscreen,
   onClose,
+  onToggleFullscreen,
 }: {
   sessionId: string | null;
+  isFullscreen: boolean;
   onClose: () => void;
+  onToggleFullscreen: () => void;
 }) {
+  const isMobile = useIsMobile();
+  const hasSession = !!sessionId;
+
+  // On mobile, render as a fixed overlay outside the flex layout
+  if (isMobile && hasSession && sessionId) {
+    return (
+      <SessionPanel
+        sessionId={sessionId}
+        isFullscreen={false}
+        onClose={onClose}
+        onToggleFullscreen={onToggleFullscreen}
+      />
+    );
+  }
+
+  // Desktop: always render the card container so CSS can transition its width.
+  // When no session, width collapses to 0. When session, expands to target width.
   return (
-    <AnimatePresence>
-      {sessionId && (
-        <SessionPanel
-          key={sessionId}
-          sessionId={sessionId}
-          onClose={onClose}
-        />
+    <div
+      className={cn(
+        "overflow-hidden rounded-tl-lg rounded-tr-lg bg-background transition-[width,flex,border-color,opacity] duration-300 ease-out",
+        hasSession
+          ? "w-[55%] flex-none border opacity-100"
+          : "w-0 flex-none border-transparent opacity-0",
+        hasSession && isFullscreen && "flex-1 w-auto",
       )}
-    </AnimatePresence>
+    >
+      {sessionId && (
+        <div className="h-full min-w-[400px]">
+          <SessionPanel
+            sessionId={sessionId}
+            isFullscreen={isFullscreen}
+            onClose={onClose}
+            onToggleFullscreen={onToggleFullscreen}
+          />
+        </div>
+      )}
+    </div>
   );
 }
