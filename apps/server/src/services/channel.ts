@@ -7,10 +7,9 @@ export class ChannelService {
   private async normalizeMembers(
     tx: Prisma.TransactionClient,
     channelId: string,
-    organizationId: string,
   ): Promise<Array<{ user: { id: string; name: string | null; avatarUrl: string | null }; joinedAt: string }>> {
     const members = await tx.channelMember.findMany({
-      where: { channelId, organizationId, leftAt: null },
+      where: { channelId, leftAt: null },
     });
     const userIds = members.map((m) => m.userId);
     const users = await tx.user.findMany({
@@ -74,11 +73,10 @@ export class ChannelService {
         data: {
           channelId: channel.id,
           userId: actorId,
-          organizationId: input.organizationId,
         },
       });
 
-      const normalizedMembers = await this.normalizeMembers(tx, channel.id, input.organizationId);
+      const normalizedMembers = await this.normalizeMembers(tx, channel.id);
 
       const event = await eventService.create({
         organizationId: input.organizationId,
@@ -104,9 +102,8 @@ export class ChannelService {
       });
 
       // Validate user belongs to the org
-      await tx.user.findFirstOrThrow({
-        where: { id: actorId, organizationId: channel.organizationId },
-        select: { id: true },
+      await tx.orgMember.findUniqueOrThrow({
+        where: { userId_organizationId: { userId: actorId, organizationId: channel.organizationId } },
       });
 
       // Handle existing membership (rejoin)
@@ -122,15 +119,15 @@ export class ChannelService {
       if (existingMembership) {
         await tx.channelMember.update({
           where: { channelId_userId: { channelId, userId: actorId } },
-          data: { organizationId: channel.organizationId, leftAt: null, joinedAt: new Date() },
+          data: { leftAt: null, joinedAt: new Date() },
         });
       } else {
         await tx.channelMember.create({
-          data: { channelId, userId: actorId, organizationId: channel.organizationId },
+          data: { channelId, userId: actorId },
         });
       }
 
-      const normalizedMembers = await this.normalizeMembers(tx, channelId, channel.organizationId);
+      const normalizedMembers = await this.normalizeMembers(tx, channelId);
 
       await eventService.create(
         {
@@ -176,7 +173,7 @@ export class ChannelService {
         data: { leftAt: new Date() },
       });
 
-      const normalizedMembers = await this.normalizeMembers(tx, channelId, channel.organizationId);
+      const normalizedMembers = await this.normalizeMembers(tx, channelId);
 
       await eventService.create(
         {

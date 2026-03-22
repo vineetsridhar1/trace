@@ -388,7 +388,6 @@ model Channel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([id, organizationId])
   @@index([organizationId, position])
 }
 
@@ -403,15 +402,13 @@ model ChannelProject {
 
 model ChannelMember {
   channelId       String
-  organizationId  String
-  channel         Channel  @relation(fields: [channelId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   userId          String
-  user            User     @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   joinedAt        DateTime @default(now())
   leftAt          DateTime?
 
   @@id([channelId, userId])
-  @@index([organizationId])
   @@index([userId])
 }
 
