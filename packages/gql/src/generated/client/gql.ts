@@ -14,7 +14,6 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
-    "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n": typeof types.DeleteChannelGroupDocument,
     "\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n": typeof types.SendChannelMessageDocument,
     "\n  query SessionGroups($channelId: ID!) {\n    sessionGroups(channelId: $channelId) {\n      id\n      name\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n      sessions {\n        id\n        name\n        status\n        tool\n        model\n        hosting\n        branch\n        prUrl\n        worktreeDeleted\n        sessionGroupId\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n        }\n        createdBy {\n          id\n          name\n          avatarUrl\n        }\n        repo {\n          id\n          name\n        }\n        channel {\n          id\n        }\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": typeof types.SessionGroupsDocument,
     "\n  mutation AddChatMember($input: AddChatMemberInput!) {\n    addChatMember(input: $input) {\n      id\n    }\n  }\n": typeof types.AddChatMemberDocument,
@@ -37,6 +36,7 @@ type Documents = {
     "\n  mutation CreateChannel($input: CreateChannelInput!) {\n    createChannel(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChannelDocument,
     "\n  mutation CreateChannelGroup($input: CreateChannelGroupInput!) {\n    createChannelGroup(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChannelGroupDocument,
     "\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChatDocument,
+    "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n": typeof types.DeleteChannelGroupDocument,
     "\n  mutation MoveChannel($input: MoveChannelInput!) {\n    moveChannel(input: $input) { id }\n  }\n": typeof types.MoveChannelDocument,
     "\n  mutation UpdateChannelGroupPosition($id: ID!, $input: UpdateChannelGroupInput!) {\n    updateChannelGroup(id: $id, input: $input) { id }\n  }\n": typeof types.UpdateChannelGroupPositionDocument,
     "\n  mutation ReorderChannels($input: ReorderChannelsInput!) {\n    reorderChannels(input: $input) { id }\n  }\n": typeof types.ReorderChannelsDocument,
@@ -77,7 +77,6 @@ type Documents = {
     "\n  mutation DeleteChannelMessage($messageId: ID!) {\n    deleteChannelMessage(messageId: $messageId) {\n      id\n    }\n  }\n": typeof types.DeleteChannelMessageDocument,
 };
 const documents: Documents = {
-    "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n": types.DeleteChannelGroupDocument,
     "\n  mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {\n    sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {\n      id\n    }\n  }\n": types.SendChannelMessageDocument,
     "\n  query SessionGroups($channelId: ID!) {\n    sessionGroups(channelId: $channelId) {\n      id\n      name\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n      sessions {\n        id\n        name\n        status\n        tool\n        model\n        hosting\n        branch\n        prUrl\n        worktreeDeleted\n        sessionGroupId\n        connection {\n          state\n          runtimeInstanceId\n          runtimeLabel\n          lastError\n          retryCount\n          canRetry\n          canMove\n        }\n        createdBy {\n          id\n          name\n          avatarUrl\n        }\n        repo {\n          id\n          name\n        }\n        channel {\n          id\n        }\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": types.SessionGroupsDocument,
     "\n  mutation AddChatMember($input: AddChatMemberInput!) {\n    addChatMember(input: $input) {\n      id\n    }\n  }\n": types.AddChatMemberDocument,
@@ -100,6 +99,7 @@ const documents: Documents = {
     "\n  mutation CreateChannel($input: CreateChannelInput!) {\n    createChannel(input: $input) {\n      id\n    }\n  }\n": types.CreateChannelDocument,
     "\n  mutation CreateChannelGroup($input: CreateChannelGroupInput!) {\n    createChannelGroup(input: $input) {\n      id\n    }\n  }\n": types.CreateChannelGroupDocument,
     "\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": types.CreateChatDocument,
+    "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n": types.DeleteChannelGroupDocument,
     "\n  mutation MoveChannel($input: MoveChannelInput!) {\n    moveChannel(input: $input) { id }\n  }\n": types.MoveChannelDocument,
     "\n  mutation UpdateChannelGroupPosition($id: ID!, $input: UpdateChannelGroupInput!) {\n    updateChannelGroup(id: $id, input: $input) { id }\n  }\n": types.UpdateChannelGroupPositionDocument,
     "\n  mutation ReorderChannels($input: ReorderChannelsInput!) {\n    reorderChannels(input: $input) { id }\n  }\n": types.ReorderChannelsDocument,
@@ -154,10 +154,6 @@ const documents: Documents = {
  */
 export function graphql(source: string): unknown;
 
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n"): (typeof documents)["\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -246,6 +242,10 @@ export function graphql(source: "\n  mutation CreateChannelGroup($input: CreateC
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n"): (typeof documents)["\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

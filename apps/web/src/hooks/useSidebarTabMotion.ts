@@ -15,6 +15,7 @@ export function useSidebarTabMotion({
   const viewportRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
   const hasInitializedRef = useRef(false);
+  const isSettlingRef = useRef(false);
   const tabProgressRef = useRef(getTabIndex(currentTab));
   const targetTabRef = useRef<SidebarTab>(currentTab);
   const [tabProgress, setTabProgressState] = useState(getTabIndex(currentTab));
@@ -31,6 +32,7 @@ export function useSidebarTabMotion({
       window.cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    isSettlingRef.current = false;
   }, []);
 
   const readProgress = useCallback(() => {
@@ -86,6 +88,7 @@ export function useSidebarTabMotion({
       }
 
       animationFrameRef.current = null;
+      isSettlingRef.current = false;
       viewport.scrollLeft = targetLeft;
       setTabProgress(targetIndex);
     };
@@ -94,6 +97,8 @@ export function useSidebarTabMotion({
   }, [cancelScrollAnimation, onTabCommit, setTabProgress]);
 
   const settleToNearestTab = useCallback(() => {
+    if (isSettlingRef.current) return;
+
     const nextTab = getTabFromProgress(readProgress());
     const targetIndex = getTabIndex(nextTab);
 
@@ -102,6 +107,7 @@ export function useSidebarTabMotion({
       return;
     }
 
+    isSettlingRef.current = true;
     scrollToTab(nextTab, "smooth", true);
   }, [readProgress, scrollToTab, setTabProgress]);
 
@@ -140,6 +146,7 @@ export function useSidebarTabMotion({
 
   return {
     cancelScrollAnimation,
+    isSettlingRef,
     jumpToTab,
     readProgress,
     scrollToTab,

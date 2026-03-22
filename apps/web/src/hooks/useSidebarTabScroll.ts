@@ -25,6 +25,7 @@ export function useSidebarTabScroll({
 
   const {
     cancelScrollAnimation,
+    isSettlingRef,
     jumpToTab: jumpToMotionTab,
     scrollToTab,
     settleToNearestTab,
@@ -57,9 +58,10 @@ export function useSidebarTabScroll({
   }, [clearFallbackScrollEnd, settleToNearestTab]);
 
   const handleScroll = useCallback(() => {
+    if (isSettlingRef.current) return;
     syncTabProgress();
     if (enabled) scheduleFallbackScrollEnd();
-  }, [enabled, scheduleFallbackScrollEnd, syncTabProgress]);
+  }, [enabled, isSettlingRef, scheduleFallbackScrollEnd, syncTabProgress]);
 
   const handleTrackpadWheel = useCallback((event: WheelEvent) => {
     const viewport = viewportRef.current;
