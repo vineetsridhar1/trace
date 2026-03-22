@@ -8,7 +8,8 @@ import { readConfig, writeConfig } from "./config.js";
 const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
-const serverUrl = process.env.TRACE_SERVER_URL ?? "http://localhost:4000";
+const portOffset = Number(process.env.TRACE_PORT || 0);
+const serverUrl = process.env.TRACE_SERVER_URL ?? `http://localhost:${4000 + portOffset}`;
 const bridge = new BridgeClient(serverUrl);
 
 function publishBridgeStatus(status: BridgeConnectionStatus) {
@@ -27,7 +28,7 @@ function createWindow() {
     },
   });
 
-  const webUrl = process.env.TRACE_WEB_URL ?? "http://localhost:3000";
+  const webUrl = process.env.TRACE_WEB_URL ?? `http://localhost:${3000 + portOffset}`;
   mainWindow.loadURL(webUrl);
 
   // Open external links in the user's default browser,

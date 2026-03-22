@@ -7,7 +7,7 @@ const router: RouterType = Router();
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!;
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
-const WEB_URL = process.env.TRACE_WEB_URL || "http://localhost:3000";
+const WEB_URL = process.env.TRACE_WEB_URL || `http://localhost:${3000 + Number(process.env.TRACE_PORT || 0)}`;
 
 // Redirect to GitHub OAuth
 router.get("/auth/github", (req, res) => {
