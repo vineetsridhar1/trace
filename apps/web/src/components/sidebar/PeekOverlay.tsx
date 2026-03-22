@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type WheelEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Building2, MessageCircleMore, type LucideIcon } from "lucide-react";
 import { ChatItem } from "./ChatItem";
@@ -139,7 +139,7 @@ export function PeekOverlay({
     }
 
     const startTime = performance.now();
-    const duration = 130;
+    const duration = 110;
 
     const step = (now: number) => {
       const progress = Math.min((now - startTime) / duration, 1);
@@ -166,17 +166,21 @@ export function PeekOverlay({
     onTabChange(tab);
   }, [onTabChange, scrollToTab]);
 
-  const scheduleTabSnap = useCallback(() => {
+  const snapToNearestTab = useCallback(() => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
+    finalizeTab(viewport.scrollLeft / Math.max(viewport.clientWidth, 1) > 0.5 ? "main" : "dm");
+  }, [finalizeTab]);
+
+  const scheduleTabSnap = useCallback((delay = 56) => {
     clearPendingSnap();
 
     snapTimeoutRef.current = window.setTimeout(() => {
       snapTimeoutRef.current = null;
-      finalizeTab(viewport.scrollLeft / Math.max(viewport.clientWidth, 1) > 0.5 ? "main" : "dm");
-    }, 180);
-  }, [clearPendingSnap, finalizeTab]);
+      snapToNearestTab();
+    }, delay);
+  }, [clearPendingSnap, snapToNearestTab]);
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
@@ -192,6 +196,32 @@ export function PeekOverlay({
       cancelScrollAnimation();
     };
   }, [cancelScrollAnimation, clearPendingSnap]);
+
+  const handleTrackpadWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    const horizontalDelta =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.shiftKey
+          ? event.deltaY
+          : 0;
+
+    if (horizontalDelta === 0) return;
+
+    event.preventDefault();
+    clearPendingSnap();
+    cancelScrollAnimation();
+
+    viewport.scrollLeft = clamp(
+      viewport.scrollLeft + horizontalDelta,
+      0,
+      viewport.clientWidth,
+    );
+    syncTabProgress();
+    scheduleTabSnap();
+  }, [cancelScrollAnimation, clearPendingSnap, scheduleTabSnap, syncTabProgress]);
 
   const handleMouseLeave = useCallback(() => {
     clearPendingSnap();
@@ -226,12 +256,14 @@ export function PeekOverlay({
             <div
               ref={scrollViewportRef}
               className="no-scrollbar flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain"
-              onScroll={() => {
-                syncTabProgress();
-                if (animationFrameRef.current === null) {
-                  scheduleTabSnap();
-                }
+              onScroll={syncTabProgress}
+              onWheel={handleTrackpadWheel}
+              onTouchStart={() => {
+                clearPendingSnap();
+                cancelScrollAnimation();
               }}
+              onTouchEnd={snapToNearestTab}
+              onTouchCancel={snapToNearestTab}
             >
               <section className="flex h-full min-w-full shrink-0 flex-col overflow-hidden">
                 <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
