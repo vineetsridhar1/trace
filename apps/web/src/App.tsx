@@ -75,7 +75,10 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 
   return (
     <TooltipProvider>
-      <div className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] bg-surface-deep">
+      <div
+        className="flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] bg-surface-deep"
+        style={{ backgroundColor: "var(--trace-shell-bg, var(--th-surface-deep))" }}
+      >
         <InstallBanner />
         <SidebarProvider className="min-h-0 flex-1 pl-2 pr-2 pt-2">
           <AppSidebar />

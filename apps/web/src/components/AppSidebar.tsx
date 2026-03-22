@@ -90,12 +90,12 @@ function SidebarTabButton({
       aria-label={label}
       aria-pressed={isPressed}
       onClick={onClick}
-      className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+      className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
       style={{
         color: `color-mix(in srgb, #ffffff ${mix}%, #71717a)`,
       }}
     >
-      <Icon size={18} strokeWidth={2.15} />
+      <Icon size={16} strokeWidth={2.15} />
     </button>
   );
 }
@@ -225,6 +225,17 @@ export function AppSidebar() {
   const dmSelectedness = 1 - tabProgress;
   const mainSelectedness = tabProgress;
 
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--trace-shell-bg",
+      `color-mix(in srgb, var(--th-surface-deep) ${backgroundBlend}%, var(--sidebar-dm))`,
+    );
+
+    return () => {
+      document.documentElement.style.removeProperty("--trace-shell-bg");
+    };
+  }, [backgroundBlend]);
+
   return (
     <>
       <Sidebar collapsible="offcanvas" className="border-none">
@@ -237,7 +248,10 @@ export function AppSidebar() {
           <SidebarContent className="overflow-hidden">
             <div
               ref={scrollViewportRef}
-              className="no-scrollbar flex size-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
+              className={cn(
+                "no-scrollbar flex size-full snap-x snap-mandatory overflow-y-hidden overscroll-x-contain",
+                isMobile ? "overflow-x-auto" : "overflow-x-hidden",
+              )}
               onScroll={syncTabProgress}
               onWheel={handleTabWheel}
             >
@@ -412,7 +426,7 @@ export function AppSidebar() {
 
           <SidebarFooter className="gap-0 border-t border-border/70 p-0">
             <div className="px-3 py-2">
-              <div className="flex items-center justify-center gap-1 rounded-2xl bg-black/10 p-1 ring-1 ring-white/5">
+              <div className="flex items-center justify-center gap-1 rounded-xl bg-black/10 p-1 ring-1 ring-white/5">
                 <SidebarTabButton
                   icon={MessageCircleMore}
                   label="Direct messages"
