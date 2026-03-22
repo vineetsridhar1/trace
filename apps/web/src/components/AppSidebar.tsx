@@ -8,8 +8,11 @@ import {
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
+  type CollisionDetection,
   DragOverlay,
   type DragStartEvent,
+  pointerWithin,
+  rectIntersection,
 } from "@dnd-kit/core";
 import { cn } from "../lib/utils";
 import { useAuthStore } from "../stores/auth";
@@ -122,6 +125,13 @@ const MOVE_CHANNEL_MUTATION = gql`
     }
   }
 `;
+
+/** Use pointerWithin first; fall back to rectIntersection if nothing found */
+const customCollision: CollisionDetection = (args) => {
+  const pw = pointerWithin(args);
+  if (pw.length > 0) return pw;
+  return rectIntersection(args);
+};
 
 function UngroupedDropZone({
   isDropTarget,
@@ -422,6 +432,7 @@ export function AppSidebar() {
               ) : (
                 <DndContext
                   sensors={sensors}
+                  collisionDetection={customCollision}
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
