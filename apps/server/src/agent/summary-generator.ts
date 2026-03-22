@@ -6,7 +6,7 @@
  * factual, structured output — not narrative prose.
  */
 
-import { getAgentLLMAdapter, SUMMARY_MODEL } from "../lib/llm/agent-adapter.js";
+import { aiService, SUMMARY_MODEL } from "../services/ai.js";
 
 export interface SummaryEvent {
   eventType: string;
@@ -99,7 +99,7 @@ function formatPayload(payload: Record<string, unknown>): string {
 export async function generateSummary(
   input: SummaryGenerationInput,
 ): Promise<SummaryGenerationResult> {
-  const adapter = getAgentLLMAdapter();
+  const adapter = aiService.getSystemAdapter(SUMMARY_MODEL);
 
   let userMessage: string;
 

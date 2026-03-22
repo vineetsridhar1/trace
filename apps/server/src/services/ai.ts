@@ -31,9 +31,15 @@ interface ToolLoopParams extends AIRequestParams {
 
 type AdapterCacheKey = `${string}:${LLMProvider}`;
 
+/** Default model for summary generation — cheap and fast. */
+export const SUMMARY_MODEL = "claude-haiku-4-5-20241022";
+
 class AIService {
   private adapterCache = new Map<AdapterCacheKey, LLMAdapter>();
 
+  /**
+   * Get an adapter for a specific user (looks up their stored API key).
+   */
   async getAdapter(userId: string, model: string): Promise<LLMAdapter> {
     const provider = providerForModel(model);
     const cacheKey: AdapterCacheKey = `${userId}:${provider}`;
@@ -58,6 +64,31 @@ class AIService {
       }
     }
 
+    this.adapterCache.set(cacheKey, adapter);
+    return adapter;
+  }
+
+  /**
+   * Get a system-level adapter for background work (agent worker, summary generation).
+   * Uses ANTHROPIC_API_KEY from the environment — no user context needed.
+   */
+  getSystemAdapter(model: string): LLMAdapter {
+    const provider = providerForModel(model);
+    const cacheKey: AdapterCacheKey = `__system__:${provider}`;
+
+    const cached = this.adapterCache.get(cacheKey);
+    if (cached) return cached;
+
+    const envKey = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+    const apiKey = process.env[envKey];
+
+    if (!apiKey) {
+      throw new Error(
+        `${envKey} is required for agent background work. Set it in your environment or .env file.`,
+      );
+    }
+
+    const adapter = createLLMAdapter({ provider, apiKey });
     this.adapterCache.set(cacheKey, adapter);
     return adapter;
   }
