@@ -21,7 +21,7 @@ import type { EntityTableMap } from "../stores/entity";
 import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { gql } from "@urql/core";
-import { Hash } from "lucide-react";
+import { Hash, Folder } from "lucide-react";
 import { OrgSwitcher } from "./sidebar/OrgSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
 import { ChannelItem } from "./sidebar/ChannelItem";
@@ -223,7 +223,7 @@ export function AppSidebar() {
   const [chatsLoading, setChatsLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
-  const [dragChannelName, setDragChannelName] = useState<string | null>(null);
+  const [dragItem, setDragItem] = useState<{ type: "channel" | "group"; name: string } | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const { state } = useSidebar();
 
@@ -353,7 +353,11 @@ export function AppSidebar() {
     if (data?.type === "channel") {
       const channels = useEntityStore.getState().channels;
       const channel = channels[data.id];
-      setDragChannelName((channel as Channel | undefined)?.name ?? null);
+      setDragItem({ type: "channel", name: (channel as Channel | undefined)?.name ?? "Channel" });
+    } else if (data?.type === "group") {
+      const groups = useEntityStore.getState().channelGroups;
+      const group = groups[data.id];
+      setDragItem({ type: "group", name: (group as ChannelGroup | undefined)?.name ?? "Group" });
     }
   }
 
@@ -379,9 +383,8 @@ export function AppSidebar() {
     for (const [index, item] of nextTopLevelItems.entries()) {
       if (item.kind === "channel") {
         const channel = channelsById[item.id];
-        if (!channel) continue;
-        const currentGroupId = (channel as Channel & { groupId?: string | null }).groupId ?? null;
-        const currentPosition = channel.position ?? 0;
+        const currentGroupId = (channel as Channel & { groupId?: string | null } | undefined)?.groupId ?? null;
+        const currentPosition = channel?.position ?? -1;
         if (currentGroupId === null && currentPosition === index) continue;
 
         patch("channels", item.id, { groupId: null, position: index } as Partial<Channel>);
@@ -395,7 +398,7 @@ export function AppSidebar() {
 
       const group = channelGroupsById[item.id];
       if (!group) continue;
-      const currentPosition = group.position ?? 0;
+      const currentPosition = group.position ?? -1;
       if (currentPosition === index) continue;
 
       patch("channelGroups", item.id, { position: index } as Partial<ChannelGroup>);
@@ -423,7 +426,7 @@ export function AppSidebar() {
   }
 
   async function handleDragEnd(event: DragEndEvent) {
-    setDragChannelName(null);
+    setDragItem(null);
     setDragOverGroupId(null);
 
     const { active, over } = event;
@@ -432,6 +435,21 @@ export function AppSidebar() {
     const activeData = active.data.current as { type: string; id: string; groupId?: string | null } | undefined;
     const overData = over.data.current as { type: string; groupId?: string; index?: number } | undefined;
 
+    // --- Group drag: reorder in top-level list ---
+    if (activeData?.type === "group" && overData?.type === "top-level-gap") {
+      const groupId = activeData.id;
+      const insertIndex = Math.max(0, Math.min(overData.index ?? topLevelItems.length, topLevelItems.length));
+      const withoutDragged = topLevelItems.filter((item) => !(item.kind === "group" && item.id === groupId));
+      const nextTopLevelItems = [
+        ...withoutDragged.slice(0, insertIndex),
+        { kind: "group", id: groupId, position: insertIndex } satisfies TopLevelItem,
+        ...withoutDragged.slice(insertIndex),
+      ];
+      await persistTopLevelOrder(nextTopLevelItems);
+      return;
+    }
+
+    // --- Channel drag ---
     if (activeData?.type !== "channel") return;
 
     const channelId = activeData.id;
@@ -473,7 +491,7 @@ export function AppSidebar() {
       return;
     }
 
-    // Dropped on a group
+    // Dropped on a group body
     if (overData?.type === "group") {
       const targetGroupId = overData.groupId ?? null;
       if (sourceGroupId === targetGroupId) return;
@@ -556,7 +574,7 @@ export function AppSidebar() {
                   <div className="py-2">
                     {topLevelItems.length > 0 && (
                       <>
-                        <TopLevelDropIndicator index={0} isDragging={dragChannelName !== null} />
+                        <TopLevelDropIndicator index={0} isDragging={dragItem !== null} />
                         {topLevelItems.map((item, index) => (
                           <Fragment key={`${item.kind}:${item.id}`}>
                             {item.kind === "channel" ? (
@@ -577,10 +595,10 @@ export function AppSidebar() {
                                 onAddChannel={handleAddChannelToGroup}
                                 onDeleteGroup={handleDeleteGroup}
                                 isDropTarget={dragOverGroupId === item.id}
-                                isDragging={dragChannelName !== null}
+                                isDragging={dragItem !== null}
                               />
                             )}
-                            <TopLevelDropIndicator index={index + 1} isDragging={dragChannelName !== null} />
+                            <TopLevelDropIndicator index={index + 1} isDragging={dragItem !== null} />
                           </Fragment>
                         ))}
                       </>
@@ -588,10 +606,14 @@ export function AppSidebar() {
                   </div>
 
                   <DragOverlay dropAnimation={null}>
-                    {dragChannelName ? (
+                    {dragItem ? (
                       <div className="flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-sidebar-accent px-2 text-sm text-sidebar-accent-foreground shadow-lg">
-                        <Hash size={16} className="opacity-50" />
-                        <span className="truncate">{dragChannelName}</span>
+                        {dragItem.type === "channel" ? (
+                          <Hash size={16} className="opacity-50" />
+                        ) : (
+                          <Folder size={16} className="opacity-50" />
+                        )}
+                        <span className="truncate">{dragItem.name}</span>
                       </div>
                     ) : null}
                   </DragOverlay>

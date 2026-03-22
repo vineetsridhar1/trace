@@ -1,6 +1,6 @@
-import { Fragment, useState, useCallback } from "react";
+import { Fragment, useCallback } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
-import { useDroppable } from "@dnd-kit/core";
+import { useDroppable, useDraggable } from "@dnd-kit/core";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import { ChannelItem } from "./ChannelItem";
 import { SidebarMenu } from "../ui/sidebar";
@@ -71,36 +71,51 @@ export function ChannelGroupSection({
   isDragging = false,
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
-  const storedCollapsed = useEntityField("channelGroups", id, "isCollapsed");
-  const [collapsed, setCollapsed] = useState(storedCollapsed ?? false);
+  const collapsed = useEntityField("channelGroups", id, "isCollapsed") ?? false;
 
   const toggleCollapse = useCallback(() => {
     const next = !collapsed;
-    setCollapsed(next);
     // Optimistic update + persist
     useEntityStore.getState().patch("channelGroups", id, { isCollapsed: next } as Partial<ChannelGroup>);
     client.mutation(UPDATE_GROUP_MUTATION, { id, input: { isCollapsed: next } }).toPromise();
   }, [collapsed, id]);
 
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `group:${id}`,
     data: { type: "group", groupId: id },
+  });
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    isDragging: isThisDragging,
+  } = useDraggable({
+    id: `group-drag:${id}`,
+    data: { type: "group", id },
   });
 
   const showDropHighlight = isDropTarget || isOver;
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setDropRef(node);
+        setDragRef(node);
+      }}
+      style={isThisDragging ? { opacity: 0, pointerEvents: "none" } : undefined}
       className={cn(
         "rounded-md transition-all",
         showDropHighlight && "bg-blue-500/10 ring-1 ring-blue-500/50"
       )}
+      {...attributes}
+      {...listeners}
     >
       <div className="flex items-center justify-between pr-1 group/group-header">
         <button
           className="flex flex-1 items-center gap-0.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
           onClick={toggleCollapse}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           <ChevronRight
             size={14}
@@ -112,7 +127,10 @@ export function ChannelGroupSection({
           <span className="truncate">{name}</span>
           <span className="ml-1 text-[10px] text-muted-foreground/60">{channelIds.length}</span>
         </button>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity">
+        <div
+          className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <button
             className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
             title="Add channel to group"

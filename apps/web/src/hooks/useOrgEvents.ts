@@ -193,7 +193,7 @@ export function useOrgEvents() {
         }
 
         // Channel updated (position/group changes, reorder)
-        if (event.eventType === ("channel_updated" as EventType) && payload) {
+        if (event.eventType === "channel_updated" && payload) {
           if (payload.reorder && Array.isArray(payload.channels)) {
             for (const ch of payload.channels) {
               const c = asJsonObject(ch);
@@ -210,13 +210,13 @@ export function useOrgEvents() {
         }
 
         // Channel group events
-        if (event.eventType === ("channel_group_created" as EventType) && payload) {
+        if (event.eventType === "channel_group_created" && payload) {
           const group = asJsonObject(payload.channelGroup);
           if (group && typeof group.id === "string") {
             upsert("channelGroups", group.id, group as unknown as ChannelGroup);
           }
         }
-        if (event.eventType === ("channel_group_updated" as EventType) && payload) {
+        if (event.eventType === "channel_group_updated" && payload) {
           if (payload.reorder && Array.isArray(payload.groups)) {
             for (const g of payload.groups) {
               const group = asJsonObject(g);
@@ -231,7 +231,7 @@ export function useOrgEvents() {
             }
           }
         }
-        if (event.eventType === ("channel_group_deleted" as EventType) && payload) {
+        if (event.eventType === "channel_group_deleted" && payload) {
           if (typeof payload.channelGroupId === "string") {
             remove("channelGroups", payload.channelGroupId);
           }
