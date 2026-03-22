@@ -134,7 +134,16 @@ const UPDATE_CHANNEL_GROUP_POSITION_MUTATION = gql`
   }
 `;
 
+const REORDER_CHANNELS_MUTATION = gql`
+  mutation ReorderChannels($input: ReorderChannelsInput!) {
+    reorderChannels(input: $input) {
+      id
+    }
+  }
+`;
+
 const TOP_LEVEL_GAP_PREFIX = "top-level-gap:";
+const GROUP_GAP_PREFIX = "group-gap:";
 
 type TopLevelItem =
   | { kind: "channel"; id: string; position: number }
@@ -144,14 +153,20 @@ function isTopLevelGapId(id: string | number) {
   return String(id).startsWith(TOP_LEVEL_GAP_PREFIX);
 }
 
+function isGroupGapId(id: string | number) {
+  return String(id).startsWith(GROUP_GAP_PREFIX);
+}
+
 /** Prefer specific group targets; only use insertion gaps when the pointer is actually on a gap. */
 const customCollision: CollisionDetection = (args) => {
   const pw = pointerWithin(args);
-  const nonGapPointer = pw.filter((collision) => !isTopLevelGapId(collision.id));
+  const gapPointer = pw.filter((collision) => isTopLevelGapId(collision.id) || isGroupGapId(collision.id));
+  if (gapPointer.length > 0) return gapPointer;
+  const nonGapPointer = pw.filter((collision) => !isTopLevelGapId(collision.id) && !isGroupGapId(collision.id));
   if (nonGapPointer.length > 0) return nonGapPointer;
   if (pw.length > 0) return pw;
 
-  return rectIntersection(args).filter((collision) => !isTopLevelGapId(collision.id));
+  return rectIntersection(args).filter((collision) => !isTopLevelGapId(collision.id) && !isGroupGapId(collision.id));
 };
 
 function TopLevelDropIndicator({
@@ -395,6 +410,18 @@ export function AppSidebar() {
     await Promise.all(updates);
   }
 
+  async function persistGroupOrder(groupId: string, nextChannelIds: string[]) {
+    const { patch } = useEntityStore.getState();
+
+    nextChannelIds.forEach((id, index) => {
+      patch("channels", id, { groupId, position: index } as Partial<Channel>);
+    });
+
+    await client.mutation(REORDER_CHANNELS_MUTATION, {
+      input: { groupId, channelIds: nextChannelIds },
+    }).toPromise();
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     setDragChannelName(null);
     setDragOverGroupId(null);
@@ -418,7 +445,31 @@ export function AppSidebar() {
         { kind: "channel", id: channelId, position: insertIndex } satisfies TopLevelItem,
         ...withoutDragged.slice(insertIndex),
       ];
-      await persistTopLevelOrder(nextTopLevelItems);
+      await Promise.all([
+        persistTopLevelOrder(nextTopLevelItems),
+        ...(sourceGroupId
+          ? [persistGroupOrder(sourceGroupId, (channelIdsByGroup[sourceGroupId] ?? []).filter((id) => id !== channelId))]
+          : []),
+      ]);
+      return;
+    }
+
+    if (overData?.type === "group-gap" && overData.groupId) {
+      const targetGroupId = overData.groupId;
+      const targetWithoutDragged = (channelIdsByGroup[targetGroupId] ?? []).filter((id) => id !== channelId);
+      const insertIndex = Math.max(0, Math.min(overData.index ?? targetWithoutDragged.length, targetWithoutDragged.length));
+      const nextTargetChannels = [
+        ...targetWithoutDragged.slice(0, insertIndex),
+        channelId,
+        ...targetWithoutDragged.slice(insertIndex),
+      ];
+
+      await Promise.all([
+        persistGroupOrder(targetGroupId, nextTargetChannels),
+        ...(sourceGroupId && sourceGroupId !== targetGroupId
+          ? [persistGroupOrder(sourceGroupId, (channelIdsByGroup[sourceGroupId] ?? []).filter((id) => id !== channelId))]
+          : []),
+      ]);
       return;
     }
 
@@ -433,9 +484,14 @@ export function AppSidebar() {
       const position = targetChannels.length;
       patch("channels", channelId, { groupId: targetGroupId, position } as Partial<Channel>);
 
-      await client.mutation(MOVE_CHANNEL_MUTATION, {
-        input: { channelId, groupId: targetGroupId, position },
-      }).toPromise();
+      await Promise.all([
+        client.mutation(MOVE_CHANNEL_MUTATION, {
+          input: { channelId, groupId: targetGroupId, position },
+        }).toPromise(),
+        ...(sourceGroupId
+          ? [persistGroupOrder(sourceGroupId, (channelIdsByGroup[sourceGroupId] ?? []).filter((id) => id !== channelId))]
+          : []),
+      ]);
     }
   }
 
@@ -521,6 +577,7 @@ export function AppSidebar() {
                                 onAddChannel={handleAddChannelToGroup}
                                 onDeleteGroup={handleDeleteGroup}
                                 isDropTarget={dragOverGroupId === item.id}
+                                isDragging={dragChannelName !== null}
                               />
                             )}
                             <TopLevelDropIndicator index={index + 1} isDragging={dragChannelName !== null} />

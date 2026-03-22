@@ -1,10 +1,42 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
 import { useEntityField } from "../../stores/entity";
 import { ChannelItem } from "./ChannelItem";
 import { SidebarMenu } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
+
+const GROUP_GAP_PREFIX = "group-gap:";
+
+function GroupDropIndicator({
+  groupId,
+  index,
+  isDragging,
+}: {
+  groupId: string;
+  index: number;
+  isDragging: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${GROUP_GAP_PREFIX}${groupId}:${index}`,
+    data: { type: "group-gap", groupId, index },
+  });
+
+  return (
+    <div ref={setNodeRef} className="relative z-10 h-2 -my-1 overflow-visible">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 rounded-full transition-all",
+          isDragging
+            ? isOver
+              ? "h-0.5 bg-blue-500 opacity-100"
+              : "h-px bg-border/80 opacity-100"
+            : "h-px bg-transparent opacity-0"
+        )}
+      />
+    </div>
+  );
+}
 
 interface ChannelGroupSectionProps {
   id: string;
@@ -14,6 +46,7 @@ interface ChannelGroupSectionProps {
   onAddChannel: (groupId: string) => void;
   onDeleteGroup: (groupId: string) => void;
   isDropTarget?: boolean;
+  isDragging?: boolean;
 }
 
 export function ChannelGroupSection({
@@ -24,6 +57,7 @@ export function ChannelGroupSection({
   onAddChannel,
   onDeleteGroup,
   isDropTarget = false,
+  isDragging = false,
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
   const storedCollapsed = useEntityField("channelGroups", id, "isCollapsed");
@@ -78,20 +112,23 @@ export function ChannelGroupSection({
       </div>
       {!collapsed && (
         <div className="ml-3 border-l border-border/60 pl-2">
-          <SidebarMenu>
-            {channelIds.map((channelId) => (
-              <ChannelItem
-                key={channelId}
-                id={channelId}
-                isActive={channelId === activeChannelId}
-                onClick={() => onChannelClick(channelId)}
-                groupId={id}
-              />
-            ))}
-            {channelIds.length === 0 && (
-              <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
-            )}
-          </SidebarMenu>
+          <GroupDropIndicator groupId={id} index={0} isDragging={isDragging} />
+          {channelIds.map((channelId, index) => (
+            <Fragment key={channelId}>
+              <SidebarMenu>
+                <ChannelItem
+                  id={channelId}
+                  isActive={channelId === activeChannelId}
+                  onClick={() => onChannelClick(channelId)}
+                  groupId={id}
+                />
+              </SidebarMenu>
+              <GroupDropIndicator groupId={id} index={index + 1} isDragging={isDragging} />
+            </Fragment>
+          ))}
+          {channelIds.length === 0 && (
+            <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
+          )}
         </div>
       )}
     </div>
