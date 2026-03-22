@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type WheelEvent } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
 import { gql } from "@urql/core";
 import { Building2, Folder, Hash, MessageCircleMore, type LucideIcon } from "lucide-react";
@@ -90,12 +90,12 @@ function SidebarTabButton({
       aria-label={label}
       aria-pressed={isPressed}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+      className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
       style={{
         color: `color-mix(in srgb, #ffffff ${mix}%, #71717a)`,
       }}
     >
-      <Icon size={16} strokeWidth={2.15} />
+      <Icon size={14} strokeWidth={2.15} />
     </button>
   );
 }
@@ -106,7 +106,7 @@ export function AppSidebar() {
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const activeChatId = useUIStore((s) => s.activeChatId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
-  const { isMobile, state } = useSidebar();
+  const { state } = useSidebar();
 
   const [peeking, setPeeking] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -115,6 +115,7 @@ export function AppSidebar() {
 
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const hasInitializedTabsRef = useRef(false);
+  const snapTimeoutRef = useRef<number | null>(null);
 
   const {
     activeOrgId,
@@ -169,6 +170,25 @@ export function AppSidebar() {
     }
   }, []);
 
+  const scheduleTabSnap = useCallback(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    if (snapTimeoutRef.current !== null) {
+      window.clearTimeout(snapTimeoutRef.current);
+    }
+
+    snapTimeoutRef.current = window.setTimeout(() => {
+      snapTimeoutRef.current = null;
+
+      const nextTab =
+        viewport.scrollLeft / Math.max(viewport.clientWidth, 1) > 0.5
+          ? "main"
+          : "dm";
+      scrollToTab(nextTab);
+    }, 90);
+  }, [scrollToTab]);
+
   useEffect(() => {
     if (!hasInitializedTabsRef.current) {
       scrollToTab(activeChatId ? "dm" : "main", "auto");
@@ -195,30 +215,13 @@ export function AppSidebar() {
     return () => window.removeEventListener("resize", handleResize);
   }, [scrollToTab, tabProgress]);
 
-  const handleTabWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
-    if (isMobile) return;
-
-    const horizontalDelta =
-      Math.abs(event.deltaX) > Math.abs(event.deltaY)
-        ? event.deltaX
-        : event.shiftKey
-          ? event.deltaY
-          : 0;
-
-    if (Math.abs(horizontalDelta) < 16) return;
-
-    const currentIndex = tabProgress < 0.5 ? DM_TAB_INDEX : MAIN_TAB_INDEX;
-    const nextIndex = clamp(
-      currentIndex + (horizontalDelta > 0 ? 1 : -1),
-      DM_TAB_INDEX,
-      MAIN_TAB_INDEX,
-    );
-
-    if (nextIndex === currentIndex) return;
-
-    event.preventDefault();
-    scrollToTab(nextIndex === DM_TAB_INDEX ? "dm" : "main");
-  }, [isMobile, scrollToTab, tabProgress]);
+  useEffect(() => {
+    return () => {
+      if (snapTimeoutRef.current !== null) {
+        window.clearTimeout(snapTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const isDragging = dragItem !== null;
   const backgroundBlend = tabProgress * 100;
@@ -248,17 +251,13 @@ export function AppSidebar() {
           <SidebarContent className="overflow-hidden">
             <div
               ref={scrollViewportRef}
-              className={cn(
-                "no-scrollbar flex size-full snap-x snap-mandatory overflow-y-hidden overscroll-x-contain",
-                isMobile ? "overflow-x-auto" : "overflow-x-hidden",
-              )}
-              onScroll={syncTabProgress}
-              onWheel={handleTabWheel}
+              className="no-scrollbar flex size-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
+              onScroll={() => {
+                syncTabProgress();
+                scheduleTabSnap();
+              }}
             >
-              <section
-                className="flex h-full min-w-full snap-start flex-col overflow-hidden"
-                style={{ scrollSnapStop: "always" }}
-              >
+              <section className="flex h-full min-w-full shrink-0 flex-col overflow-hidden">
                 <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/70 px-3">
                   <p className="truncate text-sm font-semibold text-sidebar-foreground">
                     Direct Messages
@@ -301,10 +300,7 @@ export function AppSidebar() {
                 </div>
               </section>
 
-              <section
-                className="flex h-full min-w-full snap-start flex-col overflow-hidden"
-                style={{ scrollSnapStop: "always" }}
-              >
+              <section className="flex h-full min-w-full shrink-0 flex-col overflow-hidden">
                 <div className="h-12 shrink-0 border-b border-border/70">
                   <OrgSwitcher />
                 </div>
@@ -426,7 +422,7 @@ export function AppSidebar() {
 
           <SidebarFooter className="gap-0 border-t border-border/70 p-0">
             <div className="px-3 py-2">
-              <div className="flex items-center justify-center gap-1 rounded-xl bg-black/10 p-1 ring-1 ring-white/5">
+              <div className="flex items-center justify-center gap-1">
                 <SidebarTabButton
                   icon={MessageCircleMore}
                   label="Direct messages"
