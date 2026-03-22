@@ -178,6 +178,11 @@ enum EventType {
   chat_renamed
 }
 
+enum EntitySummaryType {
+  rolling
+  milestone
+}
+
 model Organization {
   id       String   @id @default(uuid())
   name     String
@@ -199,6 +204,7 @@ model Organization {
   executionLogs    AgentExecutionLog[]
   processedEvents  ProcessedAgentEvent[]
   costTrackers     AgentCostTracker[]
+  entitySummaries  EntitySummary[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -609,4 +615,23 @@ model Participant {
   @@id([userId, scopeType, scopeId])
   @@index([scopeType, scopeId])
   @@index([organizationId, userId])
+}
+
+model EntitySummary {
+  id             String            @id @default(uuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  entityType     ScopeType
+  entityId       String
+  summaryType    EntitySummaryType @default(rolling)
+  content        String
+  startEventId   String?
+  endEventId     String?
+  eventCount     Int               @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, entityType, entityId, summaryType])
+  @@index([organizationId, entityType, entityId])
 }
