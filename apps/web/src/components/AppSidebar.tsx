@@ -123,7 +123,13 @@ const MOVE_CHANNEL_MUTATION = gql`
   }
 `;
 
-function UngroupedDropZone({ children, isDropTarget }: { children: React.ReactNode; isDropTarget: boolean }) {
+function UngroupedDropZone({
+  isDropTarget,
+  isDragging,
+}: {
+  isDropTarget: boolean;
+  isDragging: boolean;
+}) {
   const { setNodeRef, isOver } = useDroppable({
     id: "ungrouped",
     data: { type: "ungrouped" },
@@ -135,11 +141,16 @@ function UngroupedDropZone({ children, isDropTarget }: { children: React.ReactNo
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-md transition-all min-h-[8px]",
-        showHighlight && "bg-blue-500/10 ring-1 ring-blue-500/50"
+        "mx-1 mt-1 flex items-center justify-center rounded-md border border-dashed px-2 text-xs transition-all",
+        isDragging ? "py-2" : "py-0 border-transparent",
+        isDragging && showHighlight
+          ? "border-blue-500 bg-blue-500/10 text-blue-400"
+          : isDragging
+            ? "border-border text-muted-foreground"
+            : ""
       )}
     >
-      {children}
+      {isDragging && "Drop here to ungroup"}
     </div>
   );
 }
@@ -411,22 +422,20 @@ export function AppSidebar() {
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
-                  {/* Ungrouped channels drop zone */}
-                  <UngroupedDropZone isDropTarget={dragOverUngrouped}>
-                    {ungroupedChannelIds.length > 0 && (
-                      <SidebarMenu>
-                        {ungroupedChannelIds.map((id) => (
-                          <ChannelItem
-                            key={id}
-                            id={id}
-                            isActive={id === activeChannelId}
-                            onClick={() => setActiveChannelId(id)}
-                            groupId={null}
-                          />
-                        ))}
-                      </SidebarMenu>
-                    )}
-                  </UngroupedDropZone>
+                  {/* Ungrouped channels */}
+                  {ungroupedChannelIds.length > 0 && (
+                    <SidebarMenu>
+                      {ungroupedChannelIds.map((id) => (
+                        <ChannelItem
+                          key={id}
+                          id={id}
+                          isActive={id === activeChannelId}
+                          onClick={() => setActiveChannelId(id)}
+                          groupId={null}
+                        />
+                      ))}
+                    </SidebarMenu>
+                  )}
 
                   {/* Groups */}
                   {groupIds.map((groupId) => (
@@ -441,6 +450,9 @@ export function AppSidebar() {
                       isDropTarget={dragOverGroupId === groupId}
                     />
                   ))}
+
+                  {/* Drop zone to ungroup channels — appears below groups during drag */}
+                  <UngroupedDropZone isDropTarget={dragOverUngrouped} isDragging={dragChannelName !== null} />
 
                   <DragOverlay dropAnimation={null}>
                     {dragChannelName ? (
