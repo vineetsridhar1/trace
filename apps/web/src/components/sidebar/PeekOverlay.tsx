@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type WheelEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Building2, MessageCircleMore, type LucideIcon } from "lucide-react";
 import { ChatItem } from "./ChatItem";
@@ -139,7 +139,7 @@ export function PeekOverlay({
     }
 
     const startTime = performance.now();
-    const duration = 110;
+    const duration = 90;
 
     const step = (now: number) => {
       const progress = Math.min((now - startTime) / duration, 1);
@@ -173,7 +173,7 @@ export function PeekOverlay({
     finalizeTab(viewport.scrollLeft / Math.max(viewport.clientWidth, 1) > 0.5 ? "main" : "dm");
   }, [finalizeTab]);
 
-  const scheduleTabSnap = useCallback((delay = 56) => {
+  const scheduleTabSnap = useCallback((delay = 90) => {
     clearPendingSnap();
 
     snapTimeoutRef.current = window.setTimeout(() => {
@@ -197,7 +197,7 @@ export function PeekOverlay({
     };
   }, [cancelScrollAnimation, clearPendingSnap]);
 
-  const handleTrackpadWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+  const handleTrackpadWheel = useCallback((event: globalThis.WheelEvent) => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
@@ -222,6 +222,14 @@ export function PeekOverlay({
     syncTabProgress();
     scheduleTabSnap();
   }, [cancelScrollAnimation, clearPendingSnap, scheduleTabSnap, syncTabProgress]);
+
+  useEffect(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    viewport.addEventListener("wheel", handleTrackpadWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", handleTrackpadWheel);
+  }, [handleTrackpadWheel]);
 
   const handleMouseLeave = useCallback(() => {
     clearPendingSnap();
@@ -257,7 +265,6 @@ export function PeekOverlay({
               ref={scrollViewportRef}
               className="no-scrollbar flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain"
               onScroll={syncTabProgress}
-              onWheel={handleTrackpadWheel}
               onTouchStart={() => {
                 clearPendingSnap();
                 cancelScrollAnimation();

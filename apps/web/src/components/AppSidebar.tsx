@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type WheelEvent } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
 import { gql } from "@urql/core";
 import { Building2, Folder, Hash, MessageCircleMore, type LucideIcon } from "lucide-react";
@@ -196,7 +196,7 @@ export function AppSidebar() {
     }
 
     const startTime = performance.now();
-    const duration = 110;
+    const duration = 90;
 
     const step = (now: number) => {
       const progress = Math.min((now - startTime) / duration, 1);
@@ -226,7 +226,7 @@ export function AppSidebar() {
     );
   }, [scrollToTab]);
 
-  const scheduleTabSnap = useCallback((delay = 56) => {
+  const scheduleTabSnap = useCallback((delay = 90) => {
     clearPendingSnap();
 
     snapTimeoutRef.current = window.setTimeout(() => {
@@ -268,7 +268,7 @@ export function AppSidebar() {
     };
   }, [cancelScrollAnimation, clearPendingSnap]);
 
-  const handleTrackpadWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+  const handleTrackpadWheel = useCallback((event: globalThis.WheelEvent) => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
@@ -293,6 +293,14 @@ export function AppSidebar() {
     syncTabProgress();
     scheduleTabSnap();
   }, [cancelScrollAnimation, clearPendingSnap, scheduleTabSnap, syncTabProgress]);
+
+  useEffect(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    viewport.addEventListener("wheel", handleTrackpadWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", handleTrackpadWheel);
+  }, [handleTrackpadWheel]);
 
   const isDragging = dragItem !== null;
   const backgroundBlend = tabProgress * 100;
@@ -325,7 +333,6 @@ export function AppSidebar() {
               ref={scrollViewportRef}
               className="no-scrollbar flex size-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
               onScroll={syncTabProgress}
-              onWheel={handleTrackpadWheel}
               onTouchStart={() => {
                 clearPendingSnap();
                 cancelScrollAnimation();
