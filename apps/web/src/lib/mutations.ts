@@ -195,3 +195,19 @@ export const DELETE_CHAT_MESSAGE_MUTATION = gql`
     }
   }
 `;
+
+export const EDIT_CHANNEL_MESSAGE_MUTATION = gql`
+  mutation EditChannelMessage($messageId: ID!, $html: String!) {
+    editChannelMessage(messageId: $messageId, html: $html) {
+      id
+    }
+  }
+`;
+
+export const DELETE_CHANNEL_MESSAGE_MUTATION = gql`
+  mutation DeleteChannelMessage($messageId: ID!) {
+    deleteChannelMessage(messageId: $messageId) {
+      id
+    }
+  }
+`;

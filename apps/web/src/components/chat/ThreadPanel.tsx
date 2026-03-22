@@ -8,6 +8,7 @@ import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { ThreadMessage } from "./ThreadMessage";
 import { ChatComposer } from "./ChatComposer";
+import { ChannelComposer } from "../channel/ChannelComposer";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 
@@ -42,7 +43,7 @@ const THREAD_REPLIES_QUERY = gql`
   }
 `;
 
-export function ThreadPanel({ chatId, rootMessageId }: { chatId: string; rootMessageId: string }) {
+export function ThreadPanel({ chatId, channelId, rootMessageId }: { chatId?: string; channelId?: string; rootMessageId: string }) {
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,10 +92,11 @@ export function ThreadPanel({ chatId, rootMessageId }: { chatId: string; rootMes
     fetchReplies();
   }, [fetchReplies]);
 
+  const scopeId = chatId ?? channelId;
   const replyIds = useEntityIds(
     "messages",
     (message) =>
-      message.chatId === chatId &&
+      (chatId ? message.chatId === chatId : message.channelId === channelId) &&
       message.parentMessageId === rootMessageId &&
       !message.deletedAt,
     (a, b) => a.createdAt.localeCompare(b.createdAt),
@@ -159,7 +161,11 @@ export function ThreadPanel({ chatId, rootMessageId }: { chatId: string; rootMes
         )}
       </div>
 
-      <ChatComposer chatId={chatId} parentId={rootMessageId} />
+      {channelId ? (
+        <ChannelComposer channelId={channelId} parentId={rootMessageId} />
+      ) : chatId ? (
+        <ChatComposer chatId={chatId} parentId={rootMessageId} />
+      ) : null}
     </div>
   );
 }

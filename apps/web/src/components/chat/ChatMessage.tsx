@@ -7,6 +7,8 @@ import { client } from "../../lib/urql";
 import {
   DELETE_CHAT_MESSAGE_MUTATION,
   EDIT_CHAT_MESSAGE_MUTATION,
+  DELETE_CHANNEL_MESSAGE_MUTATION,
+  EDIT_CHANNEL_MESSAGE_MUTATION,
 } from "../../lib/mutations";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import { MessageActionsSheet } from "./MessageActionsSheet";
@@ -35,6 +37,7 @@ export function ChatMessage({
   const threadRepliers = useMessageField(messageId, "threadRepliers");
   const deletedAt = useMessageField(messageId, "deletedAt");
   const editedAt = useMessageField(messageId, "editedAt");
+  const channelId = useMessageField(messageId, "channelId");
   const currentUserId = useAuthStore((s) => s.user?.id);
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);
   const isMobile = useIsMobile();
@@ -52,16 +55,18 @@ export function ChatMessage({
     () => setActiveThreadId(messageId),
     [setActiveThreadId, messageId],
   );
+  const deleteMutation = channelId ? DELETE_CHANNEL_MESSAGE_MUTATION : DELETE_CHAT_MESSAGE_MUTATION;
+  const editMutation = channelId ? EDIT_CHANNEL_MESSAGE_MUTATION : EDIT_CHAT_MESSAGE_MUTATION;
   const handleDelete = useCallback(async () => {
     if (!window.confirm("Delete this message?")) return;
-    await client.mutation(DELETE_CHAT_MESSAGE_MUTATION, { messageId }).toPromise();
-  }, [messageId]);
+    await client.mutation(deleteMutation, { messageId }).toPromise();
+  }, [messageId, deleteMutation]);
   const handleSaveEdit = useCallback(
     async (nextHtml: string) => {
-      await client.mutation(EDIT_CHAT_MESSAGE_MUTATION, { messageId, html: nextHtml }).toPromise();
+      await client.mutation(editMutation, { messageId, html: nextHtml }).toPromise();
       setEditing(false);
     },
-    [messageId],
+    [messageId, editMutation],
   );
 
   useLongPressEvent({ ref: messageRef, onLongPress: openSheet, disabled: !isMobile });
