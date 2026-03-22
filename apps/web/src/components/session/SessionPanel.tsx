@@ -14,6 +14,9 @@ const DEFAULT_RATIO = 0.55;
 /** localStorage key for persisted panel width */
 const STORAGE_KEY = "trace:session-panel-width";
 
+/** CSS properties that actually change between panel states */
+const PANEL_TRANSITION = "transition-[flex-basis,flex-grow,opacity,border-color] duration-300 ease-in-out";
+
 function loadPersistedRatio(): number {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -48,15 +51,18 @@ export function SessionPanel({
 }) {
   const isMobile = useIsMobile();
 
-  // Escape key closes panel (or exits fullscreen first)
+  // Escape key closes panel (or exits fullscreen first).
+  // Skips when focus is inside an input/textarea to avoid interrupting typing.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        if (isFullscreen) {
-          onToggleFullscreen();
-        } else {
-          onClose();
-        }
+      if (e.key !== "Escape") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      if (isFullscreen) {
+        onToggleFullscreen();
+      } else {
+        onClose();
       }
     }
     document.addEventListener("keydown", handleKey);
@@ -115,6 +121,14 @@ export function SessionPanelSlot({
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startRatio: 0 });
 
+  // Ref to clean up drag listeners if the component unmounts mid-drag
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
+
+  // Keep a ref to panelRatio so the drag handler always reads the latest value
+  const panelRatioRef = useRef(panelRatio);
+  panelRatioRef.current = panelRatio;
+
   // Persist ratio on change (but not during drag — too frequent)
   const persistOnDragEnd = useCallback((ratio: number) => {
     setPanelRatio(ratio);
@@ -128,7 +142,7 @@ export function SessionPanelSlot({
       if (!container) return;
 
       const totalWidth = container.offsetWidth;
-      dragRef.current = { startX: e.clientX, startRatio: panelRatio };
+      dragRef.current = { startX: e.clientX, startRatio: panelRatioRef.current };
       setIsDragging(true);
 
       function onMouseMove(ev: MouseEvent) {
@@ -138,9 +152,14 @@ export function SessionPanelSlot({
         setPanelRatio(clamped);
       }
 
-      function onMouseUp(ev: MouseEvent) {
+      function cleanup() {
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
+        dragCleanupRef.current = null;
+      }
+
+      function onMouseUp(ev: MouseEvent) {
+        cleanup();
         setIsDragging(false);
 
         // Snap to fullscreen if past threshold
@@ -156,12 +175,13 @@ export function SessionPanelSlot({
 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
+      dragCleanupRef.current = cleanup;
     },
-    [containerRef, panelRatio, onSetFullscreen, persistOnDragEnd],
+    [containerRef, onSetFullscreen, persistOnDragEnd],
   );
 
   // On mobile, render as a fixed overlay outside the flex layout
-  if (isMobile && hasSession && sessionId) {
+  if (isMobile && hasSession) {
     return (
       <SessionPanel
         sessionId={sessionId}
@@ -201,7 +221,7 @@ export function SessionPanelSlot({
       <div
         className={cn(
           "min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg bg-background",
-          isDragging ? "" : "transition-all duration-300 ease-in-out",
+          isDragging ? "" : PANEL_TRANSITION,
           hasSession ? "border opacity-100" : "border-transparent opacity-0",
         )}
         style={{ flexBasis, flexGrow: isFullscreen ? 1 : 0, flexShrink: 0 }}
