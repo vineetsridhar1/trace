@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatMessageErrorBoundary } from "./ChatMessageErrorBoundary";
-import { DmWelcome } from "./DmWelcome";
 import { useEntityStore } from "../../stores/entity";
 import { useShallow } from "zustand/react/shallow";
 import { Skeleton } from "../ui/skeleton";
@@ -11,14 +10,14 @@ const GROUP_THRESHOLD_MS = 5 * 60 * 1000;
 
 export function ChatMessageList({
   scopeId,
-  showWelcome = false,
+  welcome,
   messageIds,
   loading,
   hasOlder,
   onLoadOlder,
 }: {
   scopeId: string;
-  showWelcome?: boolean;
+  welcome?: React.ReactNode;
   messageIds: string[];
   loading: boolean;
   hasOlder: boolean;
@@ -111,11 +110,11 @@ export function ChatMessageList({
       {messageIds.length === 0 ? (
         <div className="flex h-full flex-col">
           <div className="flex-1" />
-          {showWelcome ? <DmWelcome chatId={scopeId} /> : null}
+          {welcome}
         </div>
       ) : (
         <div className="py-2">
-          {!hasOlder && showWelcome ? <DmWelcome chatId={scopeId} /> : null}
+          {!hasOlder ? welcome : null}
           {messageIds.map((id, idx) => (
             <ChatMessageErrorBoundary key={id}>
               <ChatMessage messageId={id} isGrouped={groupedFlags[idx]} />

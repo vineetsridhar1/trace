@@ -12,9 +12,6 @@ const DEFAULT_RATIO = 0.55;
 /** Default localStorage key (matches the key used by the original SessionPanel) */
 const DEFAULT_STORAGE_KEY = "trace:session-panel-width";
 
-/** CSS properties that actually change between panel states */
-const PANEL_TRANSITION = "transition-[flex-basis,flex-grow,border-color] duration-300 ease-in-out";
-
 function loadPersistedRatio(storageKey: string, minRatio: number, maxRatio: number, defaultRatio: number): number {
   try {
     const stored = localStorage.getItem(storageKey);
@@ -190,7 +187,7 @@ export function DetailPanel({
   // On mobile, render as a fixed overlay
   if (isMobile && isOpen) {
     return (
-      <div className="fixed inset-0 z-40 bg-background pt-[env(safe-area-inset-top)]">
+      <div className="fixed inset-0 z-40 bg-background pl-2 pt-[env(safe-area-inset-top)]">
         {children}
       </div>
     );
@@ -205,6 +202,10 @@ export function DetailPanel({
   } else {
     flexBasis = `${panelRatio * 100}%`;
   }
+
+  const panelTransitionClass = isOpen
+    ? "transition-[flex-basis,flex-grow,border-color] duration-300 ease-in-out"
+    : "transition-[flex-basis,border-color] duration-300 ease-in-out";
 
   return (
     <>
@@ -223,10 +224,10 @@ export function DetailPanel({
         ref={panelRef}
         className={cn(
           "min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg bg-background",
-          isDragging ? "" : PANEL_TRANSITION,
+          isDragging ? "" : panelTransitionClass,
           isOpen ? "border" : "border-transparent",
         )}
-        style={{ flexBasis, flexGrow: isFullscreen ? 1 : 0, flexShrink: 0 }}
+        style={{ flexBasis, flexGrow: isOpen && isFullscreen ? 1 : 0, flexShrink: 0 }}
         onTransitionEnd={(e) => {
           if (e.propertyName === "flex-basis" && !isOpen && e.target === panelRef.current) {
             runCloseCleanup();
@@ -234,7 +235,7 @@ export function DetailPanel({
         }}
       >
         {showContent && (
-          <div className="h-full min-w-[400px]">
+          <div className="ml-auto h-full w-full min-w-[400px]">
             {children}
           </div>
         )}
