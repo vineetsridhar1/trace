@@ -1,5 +1,5 @@
 import { Hash } from "lucide-react";
-import { useSortable } from "@dnd-kit/sortable";
+import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "../../stores/entity";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
@@ -8,13 +8,11 @@ export function ChannelItem({
   id,
   isActive,
   onClick,
-  draggable = false,
   groupId,
 }: {
   id: string;
   isActive: boolean;
   onClick: () => void;
-  draggable?: boolean;
   groupId?: string | null;
 }) {
   const name = useEntityField("channels", id, "name");
@@ -24,32 +22,20 @@ export function ChannelItem({
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
-  } = useSortable({
+  } = useDraggable({
     id: `channel:${id}`,
-    data: { type: "channel", id, groupId },
-    disabled: !draggable,
+    data: { type: "channel", id, groupId: groupId ?? null },
   });
 
-  const style = draggable
+  const style = transform
     ? {
         transform: CSS.Transform.toString(transform),
-        transition,
         opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 50 : undefined,
+        position: "relative" as const,
       }
     : undefined;
-
-  if (!draggable) {
-    return (
-      <SidebarMenuItem>
-        <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
-          <Hash size={16} className="opacity-50" />
-          <span>{name}</span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    );
-  }
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
@@ -63,7 +49,7 @@ export function ChannelItem({
   );
 }
 
-/** Channel item for the peek overlay (no SidebarMenuButton dependency) */
+/** Channel item for the peek overlay (no drag) */
 export function PeekChannelItem({
   id,
   isActive,

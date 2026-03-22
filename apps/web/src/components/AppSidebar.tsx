@@ -2,26 +2,21 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 import {
   DndContext,
-  pointerWithin,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   DragOverlay,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
 import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { gql } from "@urql/core";
+import { Hash } from "lucide-react";
 import { OrgSwitcher } from "./sidebar/OrgSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
 import { ChannelItem } from "./sidebar/ChannelItem";
@@ -126,22 +121,6 @@ const MOVE_CHANNEL_MUTATION = gql`
   }
 `;
 
-const REORDER_GROUPS_MUTATION = gql`
-  mutation ReorderChannelGroups($input: ReorderChannelGroupsInput!) {
-    reorderChannelGroups(input: $input) {
-      id
-    }
-  }
-`;
-
-const REORDER_CHANNELS_MUTATION = gql`
-  mutation ReorderChannels($input: ReorderChannelsInput!) {
-    reorderChannels(input: $input) {
-      id
-    }
-  }
-`;
-
 const DELETE_GROUP_MUTATION = gql`
   mutation DeleteChannelGroup($id: ID!) {
     deleteChannelGroup(id: $id)
@@ -161,12 +140,12 @@ export function AppSidebar() {
   const [chatsLoading, setChatsLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [dragChannelName, setDragChannelName] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const { state } = useSidebar();
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
   const fetchChannels = useCallback(async () => {
@@ -275,108 +254,59 @@ export function AppSidebar() {
     return { ungroupedChannelIds: ungrouped, channelIdsByGroup: byGroup };
   }, [allChannelIds]);
 
-  const sortableGroupIds = useMemo(() => groupIds.map((id) => `group:${id}`), [groupIds]);
-
   function handleDragStart(event: DragStartEvent) {
-    setActiveDragId(event.active.id as string);
+    const data = event.active.data.current as { type: string; id: string } | undefined;
+    if (data?.type === "channel") {
+      const channels = useEntityStore.getState().channels;
+      const channel = channels[data.id];
+      setDragChannelName((channel as Channel | undefined)?.name ?? null);
+    }
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveDragId(null);
-    const { active, over } = event;
-    if (!over || !activeOrgId) return;
-
-    const activeId = active.id as string;
-    const overId = over.id as string;
-
-    if (activeId === overId) return;
-
-    // Group reorder
-    if (activeId.startsWith("group:") && overId.startsWith("group:")) {
-      const fromGroupId = activeId.replace("group:", "");
-      const toGroupId = overId.replace("group:", "");
-      const newOrder = [...groupIds];
-      const fromIndex = newOrder.indexOf(fromGroupId);
-      const toIndex = newOrder.indexOf(toGroupId);
-      if (fromIndex === -1 || toIndex === -1) return;
-      newOrder.splice(fromIndex, 1);
-      newOrder.splice(toIndex, 0, fromGroupId);
-
-      // Optimistic update
-      const { patch } = useEntityStore.getState();
-      newOrder.forEach((id, i) => patch("channelGroups", id, { position: i } as Partial<ChannelGroup>));
-
-      await client.mutation(REORDER_GROUPS_MUTATION, {
-        input: { organizationId: activeOrgId, groupIds: newOrder },
-      }).toPromise();
+  function handleDragOver(event: DragOverEvent) {
+    const { over } = event;
+    if (!over) {
+      setDragOverGroupId(null);
       return;
     }
 
-    // Channel drag — move to a different group or reorder within group
-    if (activeId.startsWith("channel:")) {
-      const channelId = activeId.replace("channel:", "");
-      const activeData = active.data.current as { type: string; groupId?: string | null } | undefined;
-      const sourceGroupId = activeData?.groupId ?? null;
-
-      // Dropped on a group drop target or group header — move into that group
-      if (overId.startsWith("drop-group:") || overId.startsWith("group:")) {
-        const targetGroupId = overId.replace("drop-group:", "").replace("group:", "");
-        if (sourceGroupId === targetGroupId) return;
-
-        // Append to end of target group
-        const targetChannels = channelIdsByGroup[targetGroupId] ?? [];
-        const newOrder = [...targetChannels, channelId];
-
-        // Optimistic update
-        const { patch } = useEntityStore.getState();
-        newOrder.forEach((cid, i) => {
-          patch("channels", cid, { position: i, groupId: targetGroupId } as Partial<Channel>);
-        });
-
-        await client.mutation(REORDER_CHANNELS_MUTATION, {
-          input: { groupId: targetGroupId, channelIds: newOrder },
-        }).toPromise();
-        return;
-      }
-
-      // Dropped on another channel — reorder within group or move between groups
-      if (overId.startsWith("channel:")) {
-        const overChannelId = overId.replace("channel:", "");
-        const overData = over.data.current as { type: string; groupId?: string | null } | undefined;
-        const targetGroupId = overData?.groupId ?? null;
-
-        // Get current channel list for the target group
-        const targetChannelIds = targetGroupId
-          ? (channelIdsByGroup[targetGroupId] ?? [])
-          : ungroupedChannelIds;
-
-        const newOrder = [...targetChannelIds];
-
-        if (sourceGroupId === targetGroupId) {
-          // Reorder within same group
-          const fromIndex = newOrder.indexOf(channelId);
-          const toIndex = newOrder.indexOf(overChannelId);
-          if (fromIndex === -1 || toIndex === -1) return;
-          newOrder.splice(fromIndex, 1);
-          newOrder.splice(toIndex, 0, channelId);
-        } else {
-          // Move from different group — insert at the over channel's position
-          const toIndex = newOrder.indexOf(overChannelId);
-          if (toIndex === -1) return;
-          newOrder.splice(toIndex, 0, channelId);
-        }
-
-        // Optimistic update
-        const { patch } = useEntityStore.getState();
-        newOrder.forEach((cid, i) => {
-          patch("channels", cid, { position: i, groupId: targetGroupId } as Partial<Channel>);
-        });
-
-        await client.mutation(REORDER_CHANNELS_MUTATION, {
-          input: { groupId: targetGroupId, channelIds: newOrder },
-        }).toPromise();
-      }
+    const overData = over.data.current as { type: string; groupId?: string } | undefined;
+    if (overData?.type === "group" && overData.groupId) {
+      setDragOverGroupId(overData.groupId);
+    } else {
+      setDragOverGroupId(null);
     }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setDragChannelName(null);
+    setDragOverGroupId(null);
+
+    const { active, over } = event;
+    if (!over || !activeOrgId) return;
+
+    const activeData = active.data.current as { type: string; id: string; groupId?: string | null } | undefined;
+    const overData = over.data.current as { type: string; groupId?: string } | undefined;
+
+    if (activeData?.type !== "channel" || overData?.type !== "group") return;
+
+    const channelId = activeData.id;
+    const sourceGroupId = activeData.groupId ?? null;
+    const targetGroupId = overData.groupId ?? null;
+
+    // Don't move if already in the target group
+    if (sourceGroupId === targetGroupId) return;
+    if (!targetGroupId) return;
+
+    // Optimistic update
+    const { patch } = useEntityStore.getState();
+    const targetChannels = channelIdsByGroup[targetGroupId] ?? [];
+    const position = targetChannels.length;
+    patch("channels", channelId, { groupId: targetGroupId, position } as Partial<Channel>);
+
+    await client.mutation(MOVE_CHANNEL_MUTATION, {
+      input: { channelId, groupId: targetGroupId, position },
+    }).toPromise();
   }
 
   function handleAddChannelToGroup(groupId: string) {
@@ -432,50 +362,44 @@ export function AppSidebar() {
               ) : (
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={pointerWithin}
                   onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
                   {/* Ungrouped channels */}
                   {ungroupedChannelIds.length > 0 && (
-                    <SortableContext
-                      items={ungroupedChannelIds.map((id) => `channel:${id}`)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <SidebarMenu>
-                        {ungroupedChannelIds.map((id) => (
-                          <ChannelItem
-                            key={id}
-                            id={id}
-                            isActive={id === activeChannelId}
-                            onClick={() => setActiveChannelId(id)}
-                            draggable
-                            groupId={null}
-                          />
-                        ))}
-                      </SidebarMenu>
-                    </SortableContext>
+                    <SidebarMenu>
+                      {ungroupedChannelIds.map((id) => (
+                        <ChannelItem
+                          key={id}
+                          id={id}
+                          isActive={id === activeChannelId}
+                          onClick={() => setActiveChannelId(id)}
+                          groupId={null}
+                        />
+                      ))}
+                    </SidebarMenu>
                   )}
 
                   {/* Groups */}
-                  <SortableContext items={sortableGroupIds} strategy={verticalListSortingStrategy}>
-                    {groupIds.map((groupId) => (
-                      <ChannelGroupSection
-                        key={groupId}
-                        id={groupId}
-                        channelIds={channelIdsByGroup[groupId] ?? []}
-                        activeChannelId={activeChannelId}
-                        onChannelClick={setActiveChannelId}
-                        onAddChannel={handleAddChannelToGroup}
-                        onDeleteGroup={handleDeleteGroup}
-                      />
-                    ))}
-                  </SortableContext>
+                  {groupIds.map((groupId) => (
+                    <ChannelGroupSection
+                      key={groupId}
+                      id={groupId}
+                      channelIds={channelIdsByGroup[groupId] ?? []}
+                      activeChannelId={activeChannelId}
+                      onChannelClick={setActiveChannelId}
+                      onAddChannel={handleAddChannelToGroup}
+                      onDeleteGroup={handleDeleteGroup}
+                      isDropTarget={dragOverGroupId === groupId}
+                    />
+                  ))}
 
-                  <DragOverlay>
-                    {activeDragId ? (
-                      <div className="rounded-md bg-surface-elevated px-2 py-1 text-xs font-semibold text-muted-foreground shadow-md">
-                        {activeDragId.startsWith("group:") ? "Moving group..." : "Moving channel..."}
+                  <DragOverlay dropAnimation={null}>
+                    {dragChannelName ? (
+                      <div className="flex items-center gap-2 rounded-md bg-surface-elevated px-2 py-1.5 text-sm shadow-lg border border-border">
+                        <Hash size={16} className="opacity-50" />
+                        <span>{dragChannelName}</span>
                       </div>
                     ) : null}
                   </DragOverlay>

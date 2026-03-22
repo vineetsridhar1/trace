@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
-import { useSortable } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "../../stores/entity";
 import { ChannelItem } from "./ChannelItem";
 import { SidebarMenu } from "../ui/sidebar";
@@ -16,6 +13,7 @@ interface ChannelGroupSectionProps {
   onChannelClick: (id: string) => void;
   onAddChannel: (groupId: string) => void;
   onDeleteGroup: (groupId: string) => void;
+  isDropTarget?: boolean;
 }
 
 export function ChannelGroupSection({
@@ -25,58 +23,31 @@ export function ChannelGroupSection({
   onChannelClick,
   onAddChannel,
   onDeleteGroup,
+  isDropTarget = false,
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
   const storedCollapsed = useEntityField("channelGroups", id, "isCollapsed");
   const [collapsed, setCollapsed] = useState(storedCollapsed ?? false);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setSortableRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const { setNodeRef, isOver } = useDroppable({
     id: `group:${id}`,
-    data: { type: "group", id },
+    data: { type: "group", groupId: id },
   });
 
-  // Make this group a drop target for channels
-  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
-    id: `drop-group:${id}`,
-    data: { type: "group-drop", groupId: id },
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const sortableChannelIds = channelIds.map((cid) => `channel:${cid}`);
+  const showDropHighlight = isDropTarget || isOver;
 
   return (
     <div
-      ref={(node) => {
-        setSortableRef(node);
-        setDroppableRef(node);
-      }}
-      style={style}
+      ref={setNodeRef}
       className={cn(
-        "rounded-md transition-colors",
-        isOver && "bg-accent/30"
+        "rounded-md transition-all",
+        showDropHighlight && "bg-blue-500/10 ring-1 ring-blue-500/50"
       )}
     >
-      <div
-        className="flex items-center justify-between pr-1 group/group-header"
-        {...attributes}
-        {...listeners}
-      >
+      <div className="flex items-center justify-between pr-1 group/group-header">
         <button
           className="flex flex-1 items-center gap-0.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => setCollapsed(!collapsed)}
-          onPointerDown={(e) => e.stopPropagation()}
         >
           <ChevronRight
             size={14}
@@ -88,10 +59,7 @@ export function ChannelGroupSection({
           <span className="truncate">{name}</span>
           <span className="ml-1 text-[10px] text-muted-foreground/60">{channelIds.length}</span>
         </button>
-        <div
-          className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
+        <div className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity">
           <button
             className="flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
             title="Add channel to group"
@@ -109,23 +77,19 @@ export function ChannelGroupSection({
         </div>
       </div>
       {!collapsed && (
-        <SortableContext items={sortableChannelIds} strategy={verticalListSortingStrategy}>
-          <SidebarMenu>
-            {channelIds.map((channelId) => (
-              <ChannelItem
-                key={channelId}
-                id={channelId}
-                isActive={channelId === activeChannelId}
-                onClick={() => onChannelClick(channelId)}
-                draggable
-                groupId={id}
-              />
-            ))}
-            {channelIds.length === 0 && (
-              <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
-            )}
-          </SidebarMenu>
-        </SortableContext>
+        <SidebarMenu>
+          {channelIds.map((channelId) => (
+            <ChannelItem
+              key={channelId}
+              id={channelId}
+              isActive={channelId === activeChannelId}
+              onClick={() => onChannelClick(channelId)}
+            />
+          ))}
+          {channelIds.length === 0 && (
+            <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
+          )}
+        </SidebarMenu>
       )}
     </div>
   );
