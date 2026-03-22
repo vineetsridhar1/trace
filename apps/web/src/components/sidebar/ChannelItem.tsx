@@ -1,4 +1,4 @@
-import { Hash, GripVertical } from "lucide-react";
+import { Hash } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "../../stores/entity";
@@ -40,29 +40,25 @@ export function ChannelItem({
       }
     : undefined;
 
-  const content = (
-    <SidebarMenuItem>
-      <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
-        {draggable && (
-          <div
-            className="shrink-0 text-muted-foreground/50 cursor-grab active:cursor-grabbing opacity-0 group-hover/menu-item:opacity-100 transition-opacity"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical size={12} />
-          </div>
-        )}
-        <Hash size={16} className="opacity-50" />
-        <span>{name}</span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
-
-  if (!draggable) return content;
+  if (!draggable) {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
+          <Hash size={16} className="opacity-50" />
+          <span>{name}</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  }
 
   return (
-    <div ref={setNodeRef} style={style}>
-      {content}
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <SidebarMenuItem>
+        <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
+          <Hash size={16} className="opacity-50" />
+          <span>{name}</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
     </div>
   );
 }

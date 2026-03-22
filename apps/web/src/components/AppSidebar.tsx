@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 import {
   DndContext,
-  closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -318,17 +318,23 @@ export function AppSidebar() {
       const activeData = active.data.current as { type: string; groupId?: string | null } | undefined;
       const sourceGroupId = activeData?.groupId ?? null;
 
-      // Dropped on a group drop target
-      if (overId.startsWith("drop-group:")) {
-        const targetGroupId = overId.replace("drop-group:", "");
+      // Dropped on a group drop target or group header — move into that group
+      if (overId.startsWith("drop-group:") || overId.startsWith("group:")) {
+        const targetGroupId = overId.replace("drop-group:", "").replace("group:", "");
         if (sourceGroupId === targetGroupId) return;
 
-        // Move channel to new group
-        const { patch } = useEntityStore.getState();
-        patch("channels", channelId, { groupId: targetGroupId, position: 0 } as Partial<Channel>);
+        // Append to end of target group
+        const targetChannels = channelIdsByGroup[targetGroupId] ?? [];
+        const newOrder = [...targetChannels, channelId];
 
-        await client.mutation(MOVE_CHANNEL_MUTATION, {
-          input: { channelId, groupId: targetGroupId, position: 0 },
+        // Optimistic update
+        const { patch } = useEntityStore.getState();
+        newOrder.forEach((cid, i) => {
+          patch("channels", cid, { position: i, groupId: targetGroupId } as Partial<Channel>);
+        });
+
+        await client.mutation(REORDER_CHANNELS_MUTATION, {
+          input: { groupId: targetGroupId, channelIds: newOrder },
         }).toPromise();
         return;
       }
@@ -354,7 +360,7 @@ export function AppSidebar() {
           newOrder.splice(fromIndex, 1);
           newOrder.splice(toIndex, 0, channelId);
         } else {
-          // Move from different group
+          // Move from different group — insert at the over channel's position
           const toIndex = newOrder.indexOf(overChannelId);
           if (toIndex === -1) return;
           newOrder.splice(toIndex, 0, channelId);
@@ -362,8 +368,8 @@ export function AppSidebar() {
 
         // Optimistic update
         const { patch } = useEntityStore.getState();
-        newOrder.forEach((id, i) => {
-          patch("channels", id, { position: i, groupId: targetGroupId } as Partial<Channel>);
+        newOrder.forEach((cid, i) => {
+          patch("channels", cid, { position: i, groupId: targetGroupId } as Partial<Channel>);
         });
 
         await client.mutation(REORDER_CHANNELS_MUTATION, {
@@ -426,7 +432,7 @@ export function AppSidebar() {
               ) : (
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={closestCenter}
+                  collisionDetection={pointerWithin}
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 >
