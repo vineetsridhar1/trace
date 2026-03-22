@@ -427,18 +427,20 @@ export function AppSidebar() {
                     )}
 
                     {/* Groups */}
-                    {groupIds.map((groupId) => (
-                      <ChannelGroupSection
-                        key={groupId}
-                        id={groupId}
-                        channelIds={channelIdsByGroup[groupId] ?? []}
-                        activeChannelId={activeChannelId}
-                        onChannelClick={setActiveChannelId}
-                        onAddChannel={handleAddChannelToGroup}
-                        onDeleteGroup={handleDeleteGroup}
-                        isDropTarget={dragOverGroupId === groupId}
-                      />
-                    ))}
+                    <div className={ungroupedChannelIds.length > 0 ? "mt-2 space-y-2" : "space-y-2"}>
+                      {groupIds.map((groupId) => (
+                        <ChannelGroupSection
+                          key={groupId}
+                          id={groupId}
+                          channelIds={channelIdsByGroup[groupId] ?? []}
+                          activeChannelId={activeChannelId}
+                          onChannelClick={setActiveChannelId}
+                          onAddChannel={handleAddChannelToGroup}
+                          onDeleteGroup={handleDeleteGroup}
+                          isDropTarget={dragOverGroupId === groupId}
+                        />
+                      ))}
+                    </div>
                   </ChannelsDropTarget>
 
                   <DragOverlay dropAnimation={null}>
