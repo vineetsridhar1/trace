@@ -80,7 +80,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         style={{ backgroundColor: "var(--trace-shell-bg, var(--th-surface-deep))" }}
       >
         <InstallBanner />
-        <SidebarProvider className="min-h-0 flex-1 pl-2 pt-2">
+        <SidebarProvider className="min-h-0 flex-1 pt-2">
           <AppSidebar />
 
           {/* Two-card container: main content + session panel */}
