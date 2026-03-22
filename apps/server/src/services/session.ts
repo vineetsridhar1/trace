@@ -162,6 +162,9 @@ function sortSessionsByRecency<
   });
 }
 
+/** Maximum length for session names (prompt-derived or title-tag-extracted). */
+const MAX_SESSION_NAME_LENGTH = 80;
+
 /** Instruction appended to the initial session prompt so the AI generates a title inline. */
 const TITLE_INSTRUCTION = `\n\nIMPORTANT: At the very beginning of your first response, output a short title (5-8 words) for this task wrapped in XML tags like this: <session-title>Your title here</session-title>. Then continue with your normal response.`;
 
@@ -350,7 +353,7 @@ export class SessionService {
       ? validateModelForTool(input.tool, input.model)
       : getDefaultModel(input.tool);
     const name = input.prompt
-      ? input.prompt.slice(0, 80)
+      ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
       : `Session ${new Date().toLocaleString()}`;
 
     const sourceSession = input.sourceSessionId
@@ -1046,7 +1049,7 @@ export class SessionService {
 
       const match = TITLE_TAG_RE.exec(b.text);
       if (match) {
-        const title = match[1].trim().slice(0, 80);
+        const title = match[1].trim().slice(0, MAX_SESSION_NAME_LENGTH);
         // Strip the tag from the text so it doesn't show in the UI
         b.text = b.text.replace(TITLE_TAG_RE, "").trimStart();
         return title || null;

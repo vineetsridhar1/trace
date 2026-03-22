@@ -1,15 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { gql } from "@urql/core";
-import {
-  Circle,
-  GitPullRequest,
-  History,
-  Maximize2,
-  Minimize2,
-  Plus,
-  TerminalSquare,
-  X,
-} from "lucide-react";
 import { client } from "../../lib/urql";
 import {
   CREATE_TERMINAL_MUTATION,
@@ -23,17 +13,14 @@ import type { SessionEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
-import { cn } from "../../lib/utils";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
+import { GroupHeader } from "./GroupHeader";
+import { GroupTabStrip } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
-import { SessionHistory } from "./SessionHistory";
 import { TerminalInstance } from "./TerminalInstance";
 import {
-  getDisplayStatus,
   getSessionGroupDisplayStatus,
   isTerminalStatus,
-  statusColor,
-  statusLabel,
 } from "./sessionStatus";
 import type { Terminal } from "@trace/gql";
 
@@ -137,8 +124,6 @@ export function SessionGroupDetailView({
   const terminals = useSessionGroupTerminals(sessionGroupId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
-  const [showHistory, setShowHistory] = useState(false);
-  const historyRef = useRef<HTMLDivElement>(null);
 
   const groupSessions = useMemo(
     () =>
@@ -164,6 +149,7 @@ export function SessionGroupDetailView({
     });
   }, [groupSessions]);
 
+  // Fetch full group detail and merge into store
   useEffect(() => {
     client
       .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId })
@@ -191,6 +177,7 @@ export function SessionGroupDetailView({
       });
   }, [sessionGroupId, upsert, upsertMany]);
 
+  // Auto-select the most recent session if none is selected
   useEffect(() => {
     if (activeSessionGroupId !== sessionGroupId) return;
     if (sessionsByRecency.length === 0) return;
@@ -198,34 +185,12 @@ export function SessionGroupDetailView({
     setActiveSessionId(sessionsByRecency[0].id);
   }, [activeSessionGroupId, activeSessionId, sessionGroupId, sessionsByRecency, setActiveSessionId]);
 
+  // Clear terminal selection if the terminal was removed
   useEffect(() => {
     if (!activeTerminalId) return;
     if (terminals.some((terminal) => terminal.id === activeTerminalId)) return;
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
-
-  useEffect(() => {
-    if (!showHistory) return;
-
-    function handleClick(event: MouseEvent) {
-      if (historyRef.current && !historyRef.current.contains(event.target as Node)) {
-        setShowHistory(false);
-      }
-    }
-
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setShowHistory(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [showHistory]);
 
   const selectedSession = sessionTabs.find((session) => session.id === activeSessionId)
     ?? sessionsByRecency[0]
@@ -236,6 +201,7 @@ export function SessionGroupDetailView({
     groupSessions.map((session) => session.status),
     groupPrUrl,
   );
+
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
     const hosting = selectedSession.hosting;
@@ -252,9 +218,7 @@ export function SessionGroupDetailView({
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
       const existing = terminals.filter((terminal) => terminal.sessionId === sessionId);
-      if (existing.length > 0) {
-        return existing;
-      }
+      if (existing.length > 0) return existing;
 
       const result = await client.query(SESSION_TERMINALS_QUERY, { sessionId }).toPromise();
       const restored = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
@@ -330,8 +294,6 @@ export function SessionGroupDetailView({
           repoId: groupRepo?.id ?? (selectedSession.repo as { id: string } | null | undefined)?.id,
           branch: groupBranch ?? selectedSession.branch ?? undefined,
           sessionGroupId,
-          // No sourceSessionId — "New Chat" starts a clean tab.
-          // The group already provides workspace identity (repo, branch, workdir).
         },
       })
       .toPromise();
@@ -342,155 +304,40 @@ export function SessionGroupDetailView({
     }
   }, [groupSessions, groupBranch, groupRepo, selectedSession, sessionGroupId, setActiveSessionId]);
 
-  const latestSessionLabel = selectedSession
-    ? statusLabel[selectedStatus] ?? selectedStatus
-    : null;
+  const handleSelectTerminal = useCallback(
+    (sessionId: string | null, terminalId: string) => {
+      if (sessionId) setActiveSessionId(sessionId);
+      setActiveTerminalId(terminalId);
+    },
+    [setActiveSessionId, setActiveTerminalId],
+  );
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
-        <button
-          onClick={() => setActiveSessionId(null)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-          title="Close panel"
-        >
-          <X size={16} />
-        </button>
+      <GroupHeader
+        groupName={groupName as string | undefined}
+        selectedStatus={selectedStatus}
+        selectedSessionId={selectedSession?.id ?? null}
+        groupPrUrl={groupPrUrl}
+        panelMode={panelMode}
+        isFullscreen={isFullscreen}
+        terminalAllowed={terminalAllowed}
+        onClose={() => setActiveSessionId(null)}
+        onNewChat={handleNewChat}
+        onOpenTerminal={handleOpenTerminal}
+        onToggleFullscreen={toggleFullscreen}
+      />
 
-        {selectedSession && (
-          <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", statusColor[selectedStatus])}>
-            <Circle size={6} className="fill-current" />
-            {latestSessionLabel}
-          </span>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-foreground">
-            {groupName ?? "Session Group"}
-          </h2>
-        </div>
-
-        <button
-          onClick={handleNewChat}
-          disabled={!selectedSession}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-50"
-          title="Start a new chat in this group"
-        >
-          <Plus size={14} />
-          New Chat
-        </button>
-
-        <button
-          onClick={handleOpenTerminal}
-          disabled={!terminalAllowed}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:opacity-50"
-          title="Open terminal"
-        >
-          <TerminalSquare size={14} />
-        </button>
-
-        <div className="relative" ref={historyRef}>
-          <button
-            onClick={() => setShowHistory((value) => !value)}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-            title="Group history"
-          >
-            <History size={14} />
-          </button>
-          {showHistory && selectedSession && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
-              <SessionHistory sessionId={selectedSession.id} />
-            </div>
-          )}
-        </div>
-
-        {groupPrUrl && (
-          <a
-            href={groupPrUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-            title="View Pull Request"
-          >
-            <GitPullRequest size={14} />
-          </a>
-        )}
-
-        {panelMode && (
-          <button
-            onClick={toggleFullscreen}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-        )}
-      </div>
-
-      <div className="shrink-0 border-b border-border bg-surface px-2 pt-1 pb-0">
-        <div className="native-scrollbar overflow-x-auto">
-          <div className="flex min-w-max items-center gap-1">
-            {sessionTabs.map((session) => {
-              const displayStatus = getDisplayStatus(session.status, null);
-              return (
-                <button
-                  key={session.id}
-                  onClick={() => setActiveSessionId(session.id)}
-                  className={cn(
-                    "inline-flex max-w-[220px] shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
-                    !activeTerminalId && selectedSession?.id === session.id
-                      ? "bg-surface-elevated text-foreground"
-                      : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-                  )}
-                >
-                  <Circle size={6} className={cn("fill-current", statusColor[displayStatus])} />
-                  <span className="truncate">{session.name}</span>
-                </button>
-              );
-            })}
-
-            {terminals.map((terminal, index) => {
-              const session = groupSessions.find((candidate) => candidate.id === terminal.sessionId);
-              const label = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
-              return (
-                <div
-                  key={terminal.id}
-                  className={cn(
-                    "inline-flex max-w-[260px] shrink-0 items-center rounded-md text-xs transition-colors",
-                    activeTerminalId === terminal.id
-                      ? "bg-surface-elevated text-foreground"
-                      : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (session) {
-                        setActiveSessionId(session.id);
-                      }
-                      setActiveTerminalId(terminal.id);
-                    }}
-                    className="inline-flex min-w-0 items-center gap-2 px-3 py-1.5"
-                  >
-                    <TerminalSquare size={12} />
-                    <span className="truncate">{label}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCloseTerminal(terminal.id);
-                    }}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:opacity-100"
-                    title="Close terminal tab"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <GroupTabStrip
+        sessionTabs={sessionTabs}
+        terminals={terminals}
+        groupSessions={groupSessions}
+        selectedSessionId={selectedSession?.id ?? null}
+        activeTerminalId={activeTerminalId}
+        onSelectSession={setActiveSessionId}
+        onSelectTerminal={handleSelectTerminal}
+        onCloseTerminal={handleCloseTerminal}
+      />
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {activeTerminal ? (
