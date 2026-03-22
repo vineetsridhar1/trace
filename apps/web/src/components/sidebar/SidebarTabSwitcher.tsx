@@ -23,7 +23,7 @@ function SidebarTabButton({
       aria-label={label}
       aria-pressed={isPressed}
       onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+      className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
       style={{ color: `color-mix(in srgb, #ffffff ${mix}%, #71717a)` }}
     >
       <Icon size={14} strokeWidth={2.15} />

@@ -138,16 +138,18 @@ export function useSidebarTabScroll({
     const viewport = viewportRef.current;
     if (!enabled || !viewport) return;
 
+    const handleScrollEnd = () => settleToNearestTab();
+
     viewport.addEventListener("wheel", handleTrackpadWheel, { passive: false });
 
     if (canUseScrollEndRef.current) {
-      viewport.addEventListener("scrollend", settleToNearestTab as EventListener);
+      viewport.addEventListener("scrollend", handleScrollEnd);
     }
 
     return () => {
       viewport.removeEventListener("wheel", handleTrackpadWheel);
       if (canUseScrollEndRef.current) {
-        viewport.removeEventListener("scrollend", settleToNearestTab as EventListener);
+        viewport.removeEventListener("scrollend", handleScrollEnd);
       }
     };
   }, [enabled, handleTrackpadWheel, settleToNearestTab, viewportRef]);

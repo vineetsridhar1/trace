@@ -21,7 +21,7 @@ export function AppSidebar() {
 
   const [peeking, setPeeking] = useState(false);
   const [currentTab, setCurrentTab] = useState<SidebarTab>(activeChatId ? "dm" : "main");
-  const [tabProgress, setTabProgress] = useState(getTabIndex(activeChatId ? "dm" : "main"));
+  const [peekTabProgress, setPeekTabProgress] = useState(getTabIndex(activeChatId ? "dm" : "main"));
 
   const expandedTabs = useSidebarTabScroll({
     currentTab,
@@ -37,16 +37,11 @@ export function AppSidebar() {
     setCurrentTab((previousTab) => getPreferredSidebarTab(activeChatId, activeChannelId, activePage, previousTab));
   }, [activeChannelId, activeChatId, activePage]);
 
-  useEffect(() => {
-    if (state === "expanded") {
-      setTabProgress(expandedTabs.tabProgress);
-      return;
-    }
-
-    if (!peeking) {
-      setTabProgress(getTabIndex(currentTab));
-    }
-  }, [currentTab, expandedTabs.tabProgress, peeking, state]);
+  const tabProgress = state === "expanded"
+    ? expandedTabs.tabProgress
+    : peeking
+      ? peekTabProgress
+      : getTabIndex(currentTab);
 
   useEffect(() => {
     const backgroundBlend = tabProgress * 100;
@@ -135,7 +130,7 @@ export function AppSidebar() {
         onChatClick={setActiveChatId}
         onMouseLeave={() => setPeeking(false)}
         onTabCommit={setCurrentTab}
-        onTabProgressChange={setTabProgress}
+        onTabProgressChange={setPeekTabProgress}
         topLevelItems={sidebarData.topLevelItems}
       />
     </>
