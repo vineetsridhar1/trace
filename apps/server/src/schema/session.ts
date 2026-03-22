@@ -4,6 +4,7 @@ import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { requireOrgContext } from "../lib/require-org.js";
 
 export const sessionQueries = {
   sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }) => {
@@ -20,19 +21,22 @@ export const sessionQueries = {
     return sessionService.listByUser(args.organizationId, ctx.userId, args.status ?? undefined);
   },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
-    return sessionService.listAvailableRuntimes(args.sessionId, ctx.organizationId);
+    const orgId = requireOrgContext(ctx);
+    return sessionService.listAvailableRuntimes(args.sessionId, orgId);
   },
   availableRuntimes: (_: unknown, args: { tool: CodingToolEnum }, ctx: Context) => {
-    return sessionService.listRuntimesForTool(args.tool, ctx.organizationId);
+    const orgId = requireOrgContext(ctx);
+    return sessionService.listRuntimesForTool(args.tool, orgId);
   },
   repoBranches: (
     _: unknown,
     args: { repoId: string; runtimeInstanceId?: string | null },
     ctx: Context,
   ) => {
+    const orgId = requireOrgContext(ctx);
     return sessionService.listBranches(
       args.repoId,
-      ctx.organizationId,
+      orgId,
       args.runtimeInstanceId ?? undefined,
     );
   },
@@ -40,9 +44,10 @@ export const sessionQueries = {
 
 export const sessionMutations = {
   startSession: (_: unknown, args: { input: StartSessionInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
     return sessionService.start({
       ...args.input,
-      organizationId: ctx.organizationId,
+      organizationId: orgId,
       createdById: ctx.userId,
     });
   },
@@ -75,7 +80,7 @@ export const sessionMutations = {
   ) => {
     return sessionService.updateConfig(
       args.sessionId,
-      ctx.organizationId,
+      requireOrgContext(ctx),
       { tool: args.tool ?? undefined, model: args.model ?? undefined },
       ctx.actorType,
       ctx.userId,
@@ -97,7 +102,7 @@ export const sessionMutations = {
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.retryConnection(
       args.sessionId,
-      ctx.organizationId,
+      requireOrgContext(ctx),
       ctx.actorType,
       ctx.userId,
     );
@@ -110,7 +115,7 @@ export const sessionMutations = {
     return sessionService.moveToRuntime(
       args.sessionId,
       args.runtimeInstanceId,
-      ctx.organizationId,
+      requireOrgContext(ctx),
       ctx.actorType,
       ctx.userId,
     );
@@ -122,7 +127,7 @@ export const sessionMutations = {
   ) => {
     return sessionService.moveToCloud(
       args.sessionId,
-      ctx.organizationId,
+      requireOrgContext(ctx),
       ctx.actorType,
       ctx.userId,
     );

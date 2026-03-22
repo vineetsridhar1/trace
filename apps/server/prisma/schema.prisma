@@ -187,7 +187,7 @@ model Organization {
   name     String
   settings Json     @default("{}")
 
-  members  User[]
+  orgMembers OrgMember[]
   repos    Repo[]
   projects Project[]
   channelGroups ChannelGroup[]
@@ -196,8 +196,6 @@ model Organization {
   tickets  Ticket[]
   events        Event[]
   inboxItems    InboxItem[]
-  chats         Chat[]
-  messages      Message[]
   participants  Participant[]
   cloudMachines CloudMachine[]
   agentIdentity    AgentIdentity?
@@ -207,6 +205,18 @@ model Organization {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model OrgMember {
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           UserRole     @default(member)
+  joinedAt       DateTime     @default(now())
+
+  @@id([userId, organizationId])
+  @@index([organizationId])
 }
 
 model AgentIdentity {
@@ -291,10 +301,8 @@ model User {
   name           String
   avatarUrl      String?
   githubId       Int?         @unique
-  role           UserRole     @default(member)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
 
+  orgMemberships    OrgMember[]
   createdSessions   Session[]        @relation("SessionCreator")
   createdTickets    Ticket[]         @relation("TicketCreator")
   ticketAssignments TicketAssignee[] @relation("TicketAssignees")
@@ -306,8 +314,6 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@unique([id, organizationId])
 }
 
 model Repo {
@@ -567,29 +573,21 @@ model Chat {
   id             String       @id @default(uuid())
   type           ChatType
   name           String?
-  dmKey          String?
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  dmKey          String?      @unique
   createdById    String
-  createdBy      User         @relation("ChatCreator", fields: [createdById, organizationId], references: [id, organizationId])
+  createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
 
   members ChatMember[]
   messages Message[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([organizationId])
-  @@unique([id, organizationId])
-  @@unique([organizationId, dmKey])
 }
 
 model Message {
   id              String       @id @default(uuid())
   chatId          String
-  organizationId  String
-  chat            Chat         @relation(fields: [chatId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  chat            Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
   actorType       ActorType
   actorId         String
   text            String
@@ -603,32 +601,29 @@ model Message {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  @@index([organizationId])
   @@index([chatId, createdAt])
   @@index([parentMessageId, createdAt])
 }
 
 model ChatMember {
   chatId          String
-  organizationId  String
-  chat            Chat     @relation(fields: [chatId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  chat            Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   userId          String
-  user            User     @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   joinedAt        DateTime @default(now())
   leftAt          DateTime?
 
   @@id([chatId, userId])
-  @@index([organizationId])
   @@index([userId])
 }
 
 model Participant {
   userId         String
-  user           User         @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   scopeType      ParticipantScope
   scopeId        String
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
   subscribedAt   DateTime     @default(now())
   mutedAt        DateTime?
 

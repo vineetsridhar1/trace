@@ -83,7 +83,6 @@ router.get("/auth/github/callback", async (req, res) => {
     // Upsert user - find by githubId first, then by email
     let user = await prisma.user.findFirst({
       where: { OR: [{ githubId: ghUser.id }, { email }] },
-      include: { organization: true },
     });
 
     if (user) {
@@ -95,10 +94,9 @@ router.get("/auth/github/callback", async (req, res) => {
           avatarUrl: ghUser.avatar_url,
           name: ghUser.name || ghUser.login,
         },
-        include: { organization: true },
       });
     } else {
-      // New user — join the first existing organization
+      // New user — create top-level user and add to first org
       const org = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
 
       if (!org) {
@@ -111,16 +109,22 @@ router.get("/auth/github/callback", async (req, res) => {
           name: ghUser.name || ghUser.login,
           githubId: ghUser.id,
           avatarUrl: ghUser.avatar_url,
-          role: "member",
-          organizationId: org.id,
         },
-        include: { organization: true },
+      });
+
+      // Create org membership
+      await prisma.orgMember.create({
+        data: {
+          userId: user.id,
+          organizationId: org.id,
+          role: "member",
+        },
       });
     }
 
-    // Issue JWT
+    // Issue JWT (only userId — org is selected via header)
     const token = jwt.sign(
-      { userId: user.id, organizationId: user.organizationId },
+      { userId: user.id },
       JWT_SECRET,
       { expiresIn: "7d" },
     );
@@ -159,7 +163,7 @@ router.get("/auth/github/callback", async (req, res) => {
   }
 });
 
-// Get current user
+// Get current user with org memberships
 router.get("/auth/me", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ")
@@ -178,9 +182,14 @@ router.get("/auth/me", async (req, res) => {
         email: true,
         name: true,
         avatarUrl: true,
-        role: true,
-        organizationId: true,
-        organization: { select: { id: true, name: true } },
+        orgMemberships: {
+          select: {
+            organizationId: true,
+            role: true,
+            joinedAt: true,
+            organization: { select: { id: true, name: true } },
+          },
+        },
       },
     });
 

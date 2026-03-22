@@ -168,7 +168,6 @@ export type CreateChannelInput = {
 export type CreateChatInput = {
   memberIds: Array<Scalars['ID']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  organizationId: Scalars['ID']['input'];
 };
 
 export type CreateProjectInput = {
@@ -314,6 +313,7 @@ export type MoveChannelInput = {
 export type Mutation = {
   __typename?: 'Mutation';
   addChatMember: Chat;
+  addOrgMember: OrgMember;
   assignTicket: Ticket;
   commentOnTicket: Event;
   createChannel: Channel;
@@ -340,6 +340,7 @@ export type Mutation = {
   muteScope: Participant;
   pauseSession: Session;
   registerRepoWebhook: Repo;
+  removeOrgMember: Scalars['Boolean']['output'];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
@@ -360,6 +361,7 @@ export type Mutation = {
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
   updateChannelGroup: ChannelGroup;
+  updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -368,6 +370,13 @@ export type Mutation = {
 
 export type MutationAddChatMemberArgs = {
   input: AddChatMemberInput;
+};
+
+
+export type MutationAddOrgMemberArgs = {
+  organizationId: Scalars['ID']['input'];
+  role?: InputMaybe<UserRole>;
+  userId: Scalars['ID']['input'];
 };
 
 
@@ -512,6 +521,12 @@ export type MutationRegisterRepoWebhookArgs = {
 };
 
 
+export type MutationRemoveOrgMemberArgs = {
+  organizationId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
+};
+
+
 export type MutationRenameChatArgs = {
   chatId: Scalars['ID']['input'];
   name: Scalars['String']['input'];
@@ -630,6 +645,13 @@ export type MutationUpdateChannelGroupArgs = {
 };
 
 
+export type MutationUpdateOrgMemberRoleArgs = {
+  organizationId: Scalars['ID']['input'];
+  role: UserRole;
+  userId: Scalars['ID']['input'];
+};
+
+
 export type MutationUpdateRepoArgs = {
   id: Scalars['ID']['input'];
   input: UpdateRepoInput;
@@ -656,11 +678,19 @@ export type Notification = {
   type: Scalars['String']['output'];
 };
 
+export type OrgMember = {
+  __typename?: 'OrgMember';
+  joinedAt: Scalars['DateTime']['output'];
+  organization: Organization;
+  role: UserRole;
+  user: User;
+};
+
 export type Organization = {
   __typename?: 'Organization';
   channels: Array<Channel>;
   id: Scalars['ID']['output'];
-  members: Array<User>;
+  members: Array<OrgMember>;
   name: Scalars['String']['output'];
   projects: Array<Project>;
   repos: Array<Repo>;
@@ -714,6 +744,7 @@ export type Query = {
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
+  myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -773,11 +804,6 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   chatId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryChatsArgs = {
-  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -1031,7 +1057,6 @@ export type SubscriptionChannelEventsArgs = {
 
 export type SubscriptionChatEventsArgs = {
   chatId: Scalars['ID']['input'];
-  organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
@@ -1159,7 +1184,7 @@ export type User = {
   email: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
-  role: UserRole;
+  organizations: Array<OrgMember>;
 };
 
 export type UserRole =
@@ -1279,6 +1304,7 @@ export type ResolversTypes = ResolversObject<{
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
+  OrgMember: ResolverTypeWrapper<OrgMember>;
   Organization: ResolverTypeWrapper<Organization>;
   Participant: ResolverTypeWrapper<Participant>;
   PortEndpoint: ResolverTypeWrapper<PortEndpoint>;
@@ -1344,6 +1370,7 @@ export type ResolversParentTypes = ResolversObject<{
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
   Notification: Notification;
+  OrgMember: OrgMember;
   Organization: Organization;
   Participant: Participant;
   PortEndpoint: PortEndpoint;
@@ -1503,6 +1530,7 @@ export type MessageResolvers<ContextType = Context, ParentType extends Resolvers
 
 export type MutationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
   addChatMember?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationAddChatMemberArgs, 'input'>>;
+  addOrgMember?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationAddOrgMemberArgs, 'organizationId' | 'userId'>>;
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
@@ -1529,6 +1557,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   muteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationMuteScopeArgs, 'scopeId' | 'scopeType'>>;
   pauseSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationPauseSessionArgs, 'id'>>;
   registerRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationRegisterRepoWebhookArgs, 'repoId'>>;
+  removeOrgMember?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRemoveOrgMemberArgs, 'organizationId' | 'userId'>>;
   renameChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationRenameChatArgs, 'chatId' | 'name'>>;
   reorderChannelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<MutationReorderChannelGroupsArgs, 'input'>>;
   reorderChannels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<MutationReorderChannelsArgs, 'input'>>;
@@ -1549,6 +1578,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;
+  updateOrgMemberRole?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationUpdateOrgMemberRoleArgs, 'organizationId' | 'role' | 'userId'>>;
   updateRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUpdateRepoArgs, 'id' | 'input'>>;
   updateSessionConfig?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionConfigArgs, 'sessionId'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
@@ -1562,10 +1592,18 @@ export type NotificationResolvers<ContextType = Context, ParentType extends Reso
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type OrgMemberResolvers<ContextType = Context, ParentType extends ResolversParentTypes['OrgMember'] = ResolversParentTypes['OrgMember']> = ResolversObject<{
+  joinedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  organization?: Resolver<ResolversTypes['Organization'], ParentType, ContextType>;
+  role?: Resolver<ResolversTypes['UserRole'], ParentType, ContextType>;
+  user?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type OrganizationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Organization'] = ResolversParentTypes['Organization']> = ResolversObject<{
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  members?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
+  members?: Resolver<Array<ResolversTypes['OrgMember']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType>;
@@ -1609,10 +1647,11 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelsArgs, 'organizationId'>>;
   chat?: Resolver<Maybe<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatArgs, 'id'>>;
   chatMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChatMessagesArgs, 'chatId'>>;
-  chats?: Resolver<Array<ResolversTypes['Chat']>, ParentType, ContextType, RequireFields<QueryChatsArgs, 'organizationId'>>;
+  chats?: Resolver<Array<ResolversTypes['Chat']>, ParentType, ContextType>;
   events?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, RequireFields<QueryEventsArgs, 'organizationId'>>;
   inboxItems?: Resolver<Array<ResolversTypes['InboxItem']>, ParentType, ContextType, RequireFields<QueryInboxItemsArgs, 'organizationId'>>;
   myApiTokens?: Resolver<Array<ResolversTypes['ApiTokenStatus']>, ParentType, ContextType>;
+  myOrganizations?: Resolver<Array<ResolversTypes['OrgMember']>, ParentType, ContextType>;
   mySessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QueryMySessionsArgs, 'organizationId'>>;
   organization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<QueryOrganizationArgs, 'id'>>;
   participants?: Resolver<Array<ResolversTypes['Participant']>, ParentType, ContextType, RequireFields<QueryParticipantsArgs, 'scopeId' | 'scopeType'>>;
@@ -1699,7 +1738,7 @@ export type SessionRuntimeInstanceResolvers<ContextType = Context, ParentType ex
 
 export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
   channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId' | 'organizationId'>>;
-  chatEvents?: SubscriptionResolver<ResolversTypes['Event'], "chatEvents", ParentType, ContextType, RequireFields<SubscriptionChatEventsArgs, 'chatId' | 'organizationId'>>;
+  chatEvents?: SubscriptionResolver<ResolversTypes['Event'], "chatEvents", ParentType, ContextType, RequireFields<SubscriptionChatEventsArgs, 'chatId'>>;
   orgEvents?: SubscriptionResolver<ResolversTypes['Event'], "orgEvents", ParentType, ContextType, RequireFields<SubscriptionOrgEventsArgs, 'organizationId'>>;
   sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'organizationId' | 'sessionId'>>;
   sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'organizationId' | 'sessionId'>>;
@@ -1760,7 +1799,7 @@ export type UserResolvers<ContextType = Context, ParentType extends ResolversPar
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  role?: Resolver<ResolversTypes['UserRole'], ParentType, ContextType>;
+  organizations?: Resolver<Array<ResolversTypes['OrgMember']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1780,6 +1819,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Message?: MessageResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
+  OrgMember?: OrgMemberResolvers<ContextType>;
   Organization?: OrganizationResolvers<ContextType>;
   Participant?: ParticipantResolvers<ContextType>;
   PortEndpoint?: PortEndpointResolvers<ContextType>;

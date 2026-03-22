@@ -16,12 +16,12 @@ export const participantQueries = {
   participants: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
     const scopeType = validateScope(args.scopeType);
     if (scopeType === "thread") {
-      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+      await assertThreadAccess(args.scopeId, ctx.userId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
     }
 
-    return participantService.getParticipants(scopeType, args.scopeId, ctx.organizationId);
+    return participantService.getParticipants(scopeType, args.scopeId);
   },
 };
 
@@ -29,7 +29,7 @@ export const participantMutations = {
   subscribe: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
     const scopeType = validateScope(args.scopeType);
     if (scopeType === "thread") {
-      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+      await assertThreadAccess(args.scopeId, ctx.userId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
     }
@@ -47,14 +47,13 @@ export const participantMutations = {
       userId: ctx.userId,
       scopeType,
       scopeId: args.scopeId,
-      organizationId: ctx.organizationId,
     });
     return true;
   },
   muteScope: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
     const scopeType = validateScope(args.scopeType);
     if (scopeType === "thread") {
-      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+      await assertThreadAccess(args.scopeId, ctx.userId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
     }
@@ -63,13 +62,12 @@ export const participantMutations = {
       userId: ctx.userId,
       scopeType,
       scopeId: args.scopeId,
-      organizationId: ctx.organizationId,
     });
   },
   unmuteScope: async (_: unknown, args: { scopeType: string; scopeId: string }, ctx: Context) => {
     const scopeType = validateScope(args.scopeType);
     if (scopeType === "thread") {
-      await assertThreadAccess(args.scopeId, ctx.userId, ctx.organizationId);
+      await assertThreadAccess(args.scopeId, ctx.userId);
     } else {
       await assertScopeAccess(args.scopeType, args.scopeId, ctx.userId, ctx.organizationId);
     }
@@ -78,7 +76,6 @@ export const participantMutations = {
       userId: ctx.userId,
       scopeType,
       scopeId: args.scopeId,
-      organizationId: ctx.organizationId,
     });
   },
 };

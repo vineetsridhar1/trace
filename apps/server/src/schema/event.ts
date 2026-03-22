@@ -4,6 +4,7 @@ import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { assertChatAccess, isActiveChatMember } from "../services/access.js";
+import { requireOrgContext } from "../lib/require-org.js";
 
 export const eventQueries = {
   events: async (
@@ -18,12 +19,13 @@ export const eventQueries = {
     },
     ctx: Context,
   ) => {
-    if (ctx.organizationId !== args.organizationId) {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.organizationId) {
       throw new Error("Not authorized for this organization");
     }
 
     if (args.scope?.type === "chat") {
-      await assertChatAccess(args.scope.id, ctx.userId, ctx.organizationId);
+      await assertChatAccess(args.scope.id, ctx.userId);
     }
 
     const events = await eventService.query(args.organizationId, {
@@ -42,7 +44,7 @@ export const eventQueries = {
     const visibility = await Promise.all(
       events.map(async (event) => {
         if (event.scopeType !== "chat") return true;
-        return isActiveChatMember(event.scopeId, ctx.userId, ctx.organizationId);
+        return isActiveChatMember(event.scopeId, ctx.userId);
       }),
     );
 
@@ -53,7 +55,8 @@ export const eventQueries = {
 export const eventSubscriptions = {
   orgEvents: {
     subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
-      if (ctx.organizationId !== args.organizationId) {
+      const orgId = requireOrgContext(ctx);
+      if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");
       }
 
@@ -64,14 +67,15 @@ export const eventSubscriptions = {
         async (payload) => {
           const event = payload.orgEvents;
           if (event.scopeType !== "chat") return true;
-          return isActiveChatMember(event.scopeId, ctx.userId, ctx.organizationId);
+          return isActiveChatMember(event.scopeId, ctx.userId);
         },
       );
     },
   },
   userNotifications: {
     subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
-      if (ctx.organizationId !== args.organizationId) {
+      const orgId = requireOrgContext(ctx);
+      if (orgId !== args.organizationId) {
         throw new Error("Not authorized for this organization");
       }
       return pubsub.asyncIterator(topics.userNotifications(args.organizationId, ctx.userId));

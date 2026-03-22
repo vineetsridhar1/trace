@@ -58,12 +58,9 @@ export class ExecutionLoggingService {
           {}) as Prisma.InputJsonValue,
         disposition: input.disposition,
         confidence: input.confidence,
-        plannedActions: (input.plannedActions ??
-          []) as Prisma.InputJsonValue,
-        policyDecision: (input.policyDecision ??
-          {}) as Prisma.InputJsonValue,
-        finalActions: (input.finalActions ??
-          []) as Prisma.InputJsonValue,
+        plannedActions: (input.plannedActions ?? []) as Prisma.InputJsonValue,
+        policyDecision: (input.policyDecision ?? {}) as Prisma.InputJsonValue,
+        finalActions: (input.finalActions ?? []) as Prisma.InputJsonValue,
         status: input.status,
         inboxItemId: input.inboxItemId,
         latencyMs: input.latencyMs,

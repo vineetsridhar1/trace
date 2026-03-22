@@ -40,8 +40,8 @@ const CHAT_MESSAGES_QUERY = gql`
 `;
 
 const CHAT_EVENTS_SUBSCRIPTION = gql`
-  subscription ChatEventsSubscription($chatId: ID!, $organizationId: ID!, $types: [String!]) {
-    chatEvents(chatId: $chatId, organizationId: $organizationId, types: $types) {
+  subscription ChatEventsSubscription($chatId: ID!, $types: [String!]) {
+    chatEvents(chatId: $chatId, types: $types) {
       id
       scopeType
       scopeId
@@ -199,12 +199,9 @@ export function useChatMessages(chatId: string) {
   }, [fetchMessages]);
 
   useEffect(() => {
-    if (!activeOrgId) return;
-
     const subscription = client
       .subscription(CHAT_EVENTS_SUBSCRIPTION, {
         chatId,
-        organizationId: activeOrgId,
         types: ["message_sent", "message_edited", "message_deleted"],
       })
       .subscribe((result) => {
@@ -213,7 +210,7 @@ export function useChatMessages(chatId: string) {
       });
 
     return () => subscription.unsubscribe();
-  }, [activeOrgId, chatId]);
+  }, [chatId]);
 
   const fetchOlderMessages = useCallback(async () => {
     if (!oldestCreatedAtRef.current || loadingOlderRef.current || !hasOlderRef.current) {

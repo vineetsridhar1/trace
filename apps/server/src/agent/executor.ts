@@ -228,7 +228,6 @@ export class ActionExecutor {
           case "sendMessage":
             return svc.sendMessage({
               chatId: args.chatId as string,
-              organizationId: orgId,
               text: args.text as string | undefined,
               html: args.html as string | undefined,
               parentId: args.parentId as string | undefined,

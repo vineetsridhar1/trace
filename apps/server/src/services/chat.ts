@@ -58,14 +58,30 @@ function buildMessageEventPayload(message: DbMessage) {
   };
 }
 
+/**
+ * Resolve the organizationId to use for event storage.
+ * Chat events are not org-scoped, but the Event model requires an orgId.
+ * We use the actor's first org membership as a storage key.
+ */
+async function resolveEventOrgId(actorId: string): Promise<string> {
+  const membership = await prisma.orgMember.findFirst({
+    where: { userId: actorId },
+    orderBy: { joinedAt: "asc" },
+    select: { organizationId: true },
+  });
+  if (!membership) {
+    throw new Error("Actor must belong to at least one organization");
+  }
+  return membership.organizationId;
+}
+
 export class ChatService {
   private async normalizeMembers(
     tx: Prisma.TransactionClient,
     chatId: string,
-    organizationId: string,
   ): Promise<Array<{ user: { id: string; name: string | null; avatarUrl: string | null }; joinedAt: string }>> {
     const members = await tx.chatMember.findMany({
-      where: { chatId, organizationId, leftAt: null },
+      where: { chatId, leftAt: null },
     });
     const userIds = members.map((m) => m.userId);
     const users = await tx.user.findMany({
@@ -90,15 +106,13 @@ export class ChatService {
       ? [actorId, memberIds[0]]
       : [actorId, ...memberIds.filter((id) => id !== actorId)];
 
+    // Validate all members exist (any user can chat with any user)
     const validMembers = await prisma.user.findMany({
-      where: {
-        id: { in: allMemberIds },
-        organizationId: input.organizationId,
-      },
+      where: { id: { in: allMemberIds } },
       select: { id: true, name: true },
     });
     if (validMembers.length !== allMemberIds.length) {
-      throw new Error("All chat members must belong to the organization");
+      throw new Error("One or more users not found");
     }
 
     // Deduplication: check for existing chat with the same members
@@ -114,7 +128,6 @@ export class ChatService {
     const existing = await prisma.chat.findFirst({
       where: {
         type: isDM ? "dm" : "group",
-        organizationId: input.organizationId,
         dmKey: memberKey,
       },
       include: {
@@ -134,13 +147,14 @@ export class ChatService {
             .map((m) => m.name ?? "Unknown")
             .join(", "));
 
+    const eventOrgId = await resolveEventOrgId(actorId);
+
     const createChatInTx = async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.create({
         data: {
           type: isDM ? "dm" : "group",
           name: groupName,
           dmKey: memberKey,
-          organizationId: input.organizationId,
           createdById: actorId,
           members: {
             create: allMemberIds.map((userId) => ({ userId })),
@@ -151,24 +165,23 @@ export class ChatService {
         },
       });
 
-      // Auto-subscribe all members as participants
+      // Auto-subscribe all members as participants (no org for chat participants)
       for (const userId of allMemberIds) {
         await tx.participant.create({
           data: {
             userId,
             scopeType: "chat",
             scopeId: chat.id,
-            organizationId: input.organizationId,
           },
         });
       }
 
       // Fetch members with user data for the event payload
-      const normalizedMembers = await this.normalizeMembers(tx, chat.id, input.organizationId);
+      const normalizedMembers = await this.normalizeMembers(tx, chat.id);
 
       const event = await eventService.create(
         {
-          organizationId: input.organizationId,
+          organizationId: eventOrgId,
           scopeType: "chat",
           scopeId: chat.id,
           eventType: "chat_created",
@@ -199,7 +212,6 @@ export class ChatService {
         return prisma.chat.findFirstOrThrow({
           where: {
             type: isDM ? "dm" : "group",
-            organizationId: input.organizationId,
             dmKey: memberKey,
           },
           include: {
@@ -294,7 +306,6 @@ export class ChatService {
 
   async sendMessage({
     chatId,
-    organizationId,
     text,
     html,
     parentId,
@@ -302,7 +313,6 @@ export class ChatService {
     actorId,
   }: {
     chatId: string;
-    organizationId: string;
     text?: string;
     html?: string;
     parentId?: string;
@@ -311,14 +321,15 @@ export class ChatService {
   }) {
     const normalized = normalizeMessageInput(text, html);
 
+    const eventOrgId = await resolveEventOrgId(actorId);
+
     const message = await prisma.$transaction(async (tx) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
-          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
         },
-        select: { id: true, organizationId: true },
+        select: { id: true },
       });
 
       let validatedParentId: string | null = null;
@@ -327,16 +338,12 @@ export class ChatService {
           where: { id: parentId },
           select: {
             id: true,
-            organizationId: true,
             chatId: true,
             parentMessageId: true,
           },
         });
 
-        if (
-          parentMessage.organizationId !== chat.organizationId ||
-          parentMessage.chatId !== chat.id
-        ) {
+        if (parentMessage.chatId !== chat.id) {
           throw new Error("Thread parent must belong to this chat");
         }
 
@@ -350,7 +357,6 @@ export class ChatService {
       const createdMessage = await tx.message.create({
         data: {
           chatId: chat.id,
-          organizationId: chat.organizationId,
           actorType,
           actorId,
           text: normalized.text,
@@ -369,7 +375,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: chat.organizationId,
+          organizationId: eventOrgId,
           scopeType: "chat",
           scopeId: chat.id,
           eventType: "message_sent",
@@ -388,7 +394,6 @@ export class ChatService {
         userId: actorId,
         scopeType: "thread",
         scopeId: message.parentMessageId,
-        organizationId: message.organizationId,
       });
     }
 
@@ -404,13 +409,11 @@ export class ChatService {
   async editMessage({
     messageId,
     html,
-    organizationId,
     actorType,
     actorId,
   }: {
     messageId: string;
     html: string;
-    organizationId: string;
     actorType: ActorType;
     actorId: string;
   }) {
@@ -419,7 +422,6 @@ export class ChatService {
     const existing = await prisma.message.findFirstOrThrow({
       where: {
         id: messageId,
-        organizationId,
         chat: {
           members: { some: { userId: actorId, leftAt: null } },
         },
@@ -443,6 +445,7 @@ export class ChatService {
       return hydratedExisting;
     }
 
+    const eventOrgId = await resolveEventOrgId(actorId);
     const editedAt = new Date();
     const updated = await prisma.$transaction(async (tx) => {
       const updatedMessage = await tx.message.update({
@@ -464,7 +467,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: updatedMessage.organizationId,
+          organizationId: eventOrgId,
           scopeType: "chat",
           scopeId: updatedMessage.chatId,
           eventType: "message_edited",
@@ -484,19 +487,16 @@ export class ChatService {
 
   async deleteMessage({
     messageId,
-    organizationId,
     actorType,
     actorId,
   }: {
     messageId: string;
-    organizationId: string;
     actorType: ActorType;
     actorId: string;
   }) {
     const existing = await prisma.message.findFirstOrThrow({
       where: {
         id: messageId,
-        organizationId,
         chat: {
           members: { some: { userId: actorId, leftAt: null } },
         },
@@ -512,6 +512,7 @@ export class ChatService {
       return hydratedExisting;
     }
 
+    const eventOrgId = await resolveEventOrgId(actorId);
     const deletedAt = new Date();
     const updated = await prisma.$transaction(async (tx) => {
       const deletedMessage = await tx.message.update({
@@ -531,7 +532,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: deletedMessage.organizationId,
+          organizationId: eventOrgId,
           scopeType: "chat",
           scopeId: deletedMessage.chatId,
           eventType: "message_deleted",
@@ -556,14 +557,12 @@ export class ChatService {
 
   async getMessages(
     chatId: string,
-    organizationId: string,
     userId: string,
     opts?: { after?: Date; before?: Date; limit?: number },
   ) {
     await prisma.chat.findFirstOrThrow({
       where: {
         id: chatId,
-        organizationId,
         members: { some: { userId, leftAt: null } },
       },
       select: { id: true },
@@ -577,7 +576,6 @@ export class ChatService {
     const messages = await prisma.message.findMany({
       where: {
         chatId,
-        organizationId,
         parentMessageId: null,
         ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
       },
@@ -591,14 +589,12 @@ export class ChatService {
 
   async getReplies(
     rootMessageId: string,
-    organizationId: string,
     userId: string,
     opts?: { after?: Date; limit?: number },
   ) {
     const rootMessage = await prisma.message.findFirstOrThrow({
       where: {
         id: rootMessageId,
-        organizationId,
         chat: {
           members: { some: { userId, leftAt: null } },
         },
@@ -628,30 +624,31 @@ export class ChatService {
   async addMember(
     chatId: string,
     userId: string,
-    organizationId: string,
     actorType: ActorType,
     actorId: string,
   ) {
+    const eventOrgId = await resolveEventOrgId(actorId);
+
     await prisma.$transaction(async (tx) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
-          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
         },
-        select: { type: true, organizationId: true },
+        select: { type: true },
       });
 
       if (chat.type !== "group") {
         throw new Error("Cannot add members to a DM");
       }
 
+      // Validate target user exists
       const targetUser = await tx.user.findFirst({
-        where: { id: userId, organizationId: chat.organizationId },
+        where: { id: userId },
         select: { id: true },
       });
       if (!targetUser) {
-        throw new Error("User must belong to the chat organization");
+        throw new Error("User not found");
       }
 
       const existingMembership = await tx.chatMember.findUnique({
@@ -665,11 +662,11 @@ export class ChatService {
       if (existingMembership) {
         await tx.chatMember.update({
           where: { chatId_userId: { chatId, userId } },
-          data: { organizationId: chat.organizationId, leftAt: null, joinedAt: new Date() },
+          data: { leftAt: null, joinedAt: new Date() },
         });
       } else {
         await tx.chatMember.create({
-          data: { chatId, userId, organizationId: chat.organizationId },
+          data: { chatId, userId },
         });
       }
 
@@ -681,17 +678,16 @@ export class ChatService {
           userId,
           scopeType: "chat",
           scopeId: chatId,
-          organizationId: chat.organizationId,
         },
-        update: { organizationId: chat.organizationId },
+        update: {},
       });
 
       // Fetch updated members with user data for the event payload
-      const normalizedMembers = await this.normalizeMembers(tx, chatId, chat.organizationId);
+      const normalizedMembers = await this.normalizeMembers(tx, chatId);
 
       await eventService.create(
         {
-          organizationId: chat.organizationId,
+          organizationId: eventOrgId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_member_added",
@@ -704,20 +700,21 @@ export class ChatService {
     });
 
     return prisma.chat.findFirstOrThrow({
-      where: { id: chatId, organizationId },
+      where: { id: chatId },
       include: { members: { where: { leftAt: null } } },
     });
   }
 
-  async leave(chatId: string, organizationId: string, actorType: ActorType, actorId: string) {
+  async leave(chatId: string, actorType: ActorType, actorId: string) {
+    const eventOrgId = await resolveEventOrgId(actorId);
+
     await prisma.$transaction(async (tx) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
-          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
         },
-        select: { type: true, organizationId: true },
+        select: { type: true },
       });
 
       if (chat.type !== "group") {
@@ -734,7 +731,6 @@ export class ChatService {
           userId: actorId,
           scopeType: "chat",
           scopeId: chatId,
-          organizationId: chat.organizationId,
         },
       });
 
@@ -749,11 +745,11 @@ export class ChatService {
       `;
 
       // Fetch remaining members with user data for the event payload
-      const normalizedMembers = await this.normalizeMembers(tx, chatId, chat.organizationId);
+      const normalizedMembers = await this.normalizeMembers(tx, chatId);
 
       await eventService.create(
         {
-          organizationId: chat.organizationId,
+          organizationId: eventOrgId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_member_removed",
@@ -766,7 +762,7 @@ export class ChatService {
     });
 
     return prisma.chat.findFirstOrThrow({
-      where: { id: chatId, organizationId },
+      where: { id: chatId },
       include: { members: { where: { leftAt: null } } },
     });
   }
@@ -774,18 +770,18 @@ export class ChatService {
   async rename(
     chatId: string,
     name: string,
-    organizationId: string,
     actorType: ActorType,
     actorId: string,
   ) {
+    const eventOrgId = await resolveEventOrgId(actorId);
+
     return prisma.$transaction(async (tx) => {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
-          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
         },
-        select: { type: true, organizationId: true },
+        select: { type: true },
       });
 
       if (chat.type !== "group") {
@@ -800,7 +796,7 @@ export class ChatService {
 
       await eventService.create(
         {
-          organizationId: chat.organizationId,
+          organizationId: eventOrgId,
           scopeType: "chat",
           scopeId: chatId,
           eventType: "chat_renamed",
@@ -815,10 +811,9 @@ export class ChatService {
     });
   }
 
-  async getChats(organizationId: string, userId: string) {
+  async getChats(userId: string) {
     return prisma.chat.findMany({
       where: {
-        organizationId,
         members: { some: { userId, leftAt: null } },
       },
       include: {
@@ -830,11 +825,10 @@ export class ChatService {
     });
   }
 
-  async getChat(chatId: string, organizationId: string, userId: string) {
+  async getChat(chatId: string, userId: string) {
     return prisma.chat.findFirst({
       where: {
         id: chatId,
-        organizationId,
         members: { some: { userId, leftAt: null } },
       },
       include: {

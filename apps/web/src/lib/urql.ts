@@ -13,7 +13,11 @@ const wsClient = createWSClient({
   url: `${wsBase}/ws`,
   connectionParams: () => {
     const token = localStorage.getItem("trace_token");
-    return token ? { token } : {};
+    const organizationId = localStorage.getItem("trace_active_org");
+    return {
+      ...(token ? { token } : {}),
+      ...(organizationId ? { organizationId } : {}),
+    };
   },
   shouldRetry: () => true,
   retryAttempts: Infinity,

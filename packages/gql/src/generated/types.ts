@@ -165,7 +165,6 @@ export type CreateChannelInput = {
 export type CreateChatInput = {
   memberIds: Array<Scalars['ID']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
-  organizationId: Scalars['ID']['input'];
 };
 
 export type CreateProjectInput = {
@@ -311,6 +310,7 @@ export type MoveChannelInput = {
 export type Mutation = {
   __typename?: 'Mutation';
   addChatMember: Chat;
+  addOrgMember: OrgMember;
   assignTicket: Ticket;
   commentOnTicket: Event;
   createChannel: Channel;
@@ -337,6 +337,7 @@ export type Mutation = {
   muteScope: Participant;
   pauseSession: Session;
   registerRepoWebhook: Repo;
+  removeOrgMember: Scalars['Boolean']['output'];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
@@ -357,6 +358,7 @@ export type Mutation = {
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
   updateChannelGroup: ChannelGroup;
+  updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
@@ -365,6 +367,13 @@ export type Mutation = {
 
 export type MutationAddChatMemberArgs = {
   input: AddChatMemberInput;
+};
+
+
+export type MutationAddOrgMemberArgs = {
+  organizationId: Scalars['ID']['input'];
+  role?: InputMaybe<UserRole>;
+  userId: Scalars['ID']['input'];
 };
 
 
@@ -509,6 +518,12 @@ export type MutationRegisterRepoWebhookArgs = {
 };
 
 
+export type MutationRemoveOrgMemberArgs = {
+  organizationId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
+};
+
+
 export type MutationRenameChatArgs = {
   chatId: Scalars['ID']['input'];
   name: Scalars['String']['input'];
@@ -627,6 +642,13 @@ export type MutationUpdateChannelGroupArgs = {
 };
 
 
+export type MutationUpdateOrgMemberRoleArgs = {
+  organizationId: Scalars['ID']['input'];
+  role: UserRole;
+  userId: Scalars['ID']['input'];
+};
+
+
 export type MutationUpdateRepoArgs = {
   id: Scalars['ID']['input'];
   input: UpdateRepoInput;
@@ -653,11 +675,19 @@ export type Notification = {
   type: Scalars['String']['output'];
 };
 
+export type OrgMember = {
+  __typename?: 'OrgMember';
+  joinedAt: Scalars['DateTime']['output'];
+  organization: Organization;
+  role: UserRole;
+  user: User;
+};
+
 export type Organization = {
   __typename?: 'Organization';
   channels: Array<Channel>;
   id: Scalars['ID']['output'];
-  members: Array<User>;
+  members: Array<OrgMember>;
   name: Scalars['String']['output'];
   projects: Array<Project>;
   repos: Array<Repo>;
@@ -711,6 +741,7 @@ export type Query = {
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
   myApiTokens: Array<ApiTokenStatus>;
+  myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -770,11 +801,6 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars['DateTime']['input']>;
   chatId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryChatsArgs = {
-  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -1028,7 +1054,6 @@ export type SubscriptionChannelEventsArgs = {
 
 export type SubscriptionChatEventsArgs = {
   chatId: Scalars['ID']['input'];
-  organizationId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
@@ -1156,7 +1181,7 @@ export type User = {
   email: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
-  role: UserRole;
+  organizations: Array<OrgMember>;
 };
 
 export type UserRole =

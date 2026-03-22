@@ -167,11 +167,14 @@ export const ORG_MEMBERS_QUERY = gql`
     organization(id: $id) {
       id
       members {
-        id
-        name
-        email
-        avatarUrl
+        user {
+          id
+          name
+          email
+          avatarUrl
+        }
         role
+        joinedAt
       }
     }
   }

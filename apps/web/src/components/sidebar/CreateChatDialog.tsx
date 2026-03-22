@@ -43,7 +43,8 @@ export function CreateChatDialog() {
     if (!activeOrgId) return;
     const result = await client.query(ORG_MEMBERS_QUERY, { id: activeOrgId }).toPromise();
     if (result.data?.organization?.members) {
-      setMembers(result.data.organization.members as OrgMember[]);
+      const rawMembers = result.data.organization.members as Array<{ user: OrgMember }>;
+      setMembers(rawMembers.map((m) => m.user));
     }
   }, [activeOrgId]);
 
@@ -75,7 +76,6 @@ export function CreateChatDialog() {
       const result = await client
         .mutation(CREATE_CHAT_MUTATION, {
           input: {
-            organizationId: activeOrgId,
             memberIds: [...selectedIds],
           },
         })
