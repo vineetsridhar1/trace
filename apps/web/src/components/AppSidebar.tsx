@@ -170,8 +170,7 @@ function TopLevelDropIndicator({
     <div
       ref={setNodeRef}
       className={cn(
-        "relative overflow-visible transition-[height] duration-150",
-        isDragging ? "h-3" : "h-0"
+        "relative h-2 -my-1 overflow-visible"
       )}
     >
       <div
