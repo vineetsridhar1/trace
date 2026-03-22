@@ -78,10 +78,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   return (
     <div className="max-h-72 overflow-y-auto py-1">
       {groupSessions.map((entry) => {
-        const displayStatus = getDisplayStatus(
-          entry.status,
-          entry.prUrl as string | null | undefined,
-        );
+        const displayStatus = getDisplayStatus(entry.status, null);
         const channelId = (entry.channel as { id: string } | null | undefined)?.id ?? null;
 
         return (

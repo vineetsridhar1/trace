@@ -241,6 +241,10 @@ type SessionGroup {
   name: String!
   channel: Channel
   sessions: [Session!]!
+  workdir: String
+  connection: SessionConnection
+  prUrl: String
+  worktreeDeleted: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
 }

@@ -161,7 +161,10 @@ export function useOrgEvents() {
             upsert(
               "sessionGroups",
               sessionGroup.id,
-              (existing ? { ...existing, ...sessionGroup } : sessionGroup) as SessionGroupEntity,
+              {
+                ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
+                _sortTimestamp: event.timestamp,
+              } as SessionGroupEntity,
             );
           }
         };
@@ -333,6 +336,7 @@ export function useOrgEvents() {
 
         // Route session status events
         if (SESSION_STATUS_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
+          upsertSessionGroupFromPayload();
           const status = statusFromEvent(event.eventType, payload);
           if (status) {
             const sessionPatch: Record<string, unknown> = {
@@ -340,9 +344,6 @@ export function useOrgEvents() {
               updatedAt: event.timestamp,
               _sortTimestamp: event.timestamp,
             };
-            if (typeof payload.prUrl === "string") {
-              sessionPatch.prUrl = payload.prUrl;
-            }
             if (payload.worktreeDeleted === true) {
               sessionPatch.worktreeDeleted = true;
             }
@@ -350,10 +351,9 @@ export function useOrgEvents() {
           }
         }
 
-        // Route PR lifecycle events — only patch prUrl, not status
+        // Route PR lifecycle events — only patch the owning session group
         if (SESSION_PR_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
-          const prUrl = payload && typeof payload.prUrl === "string" ? payload.prUrl : null;
-          patch("sessions", event.scopeId, { prUrl, updatedAt: event.timestamp, _sortTimestamp: event.timestamp });
+          upsertSessionGroupFromPayload();
         }
 
         // Handle session_output subtypes that update session fields

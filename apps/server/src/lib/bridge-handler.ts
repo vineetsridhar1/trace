@@ -88,7 +88,9 @@ export function handleBridgeConnection(ws: WebSocket) {
           );
           if (activeTerminals.length > 0) {
             runtimeDebug("restoring terminals from bridge", { runtimeId, count: activeTerminals.length });
-            terminalRelay.restoreTerminals(activeTerminals);
+            terminalRelay.restoreTerminals(activeTerminals).catch((err) => {
+              console.error("[bridge] error restoring terminals:", err);
+            });
           }
         }
         return;

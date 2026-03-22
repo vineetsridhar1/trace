@@ -421,6 +421,10 @@ model SessionGroup {
   organization   Organization @relation(fields: [organizationId], references: [id])
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
+  workdir        String?
+  connection     Json?
+  prUrl          String?
+  worktreeDeleted Boolean     @default(false)
 
   sessions Session[]
 

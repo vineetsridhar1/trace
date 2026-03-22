@@ -42,6 +42,13 @@ type PendingSessionCommand =
       interactionMode?: string | null;
     };
 
+type GroupWorkspaceStatePatch = {
+  workdir?: string | null;
+  connection?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
+  prUrl?: string | null;
+  worktreeDeleted?: boolean;
+};
+
 function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
   return {
     state: "connected",
@@ -61,6 +68,10 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
   channelId: true,
+  workdir: true,
+  connection: true,
+  prUrl: true,
+  worktreeDeleted: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -334,12 +345,15 @@ export class SessionService {
             id: true,
             organizationId: true,
             sessionGroupId: true,
-            workdir: true,
             repoId: true,
             branch: true,
+            hosting: true,
             channelId: true,
             projects: {
               select: { projectId: true },
+            },
+            sessionGroup: {
+              select: SESSION_GROUP_SUMMARY_SELECT,
             },
           },
         })
@@ -363,10 +377,7 @@ export class SessionService {
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
-          select: {
-            ...SESSION_GROUP_SUMMARY_SELECT,
-            name: true,
-          },
+          select: SESSION_GROUP_SUMMARY_SELECT,
         })
       : null;
 
@@ -374,11 +385,18 @@ export class SessionService {
       throw new Error("Session group not found");
     }
 
+    const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
+
     const resolvedChannelId =
-      input.channelId ?? existingGroup?.channelId ?? sourceSession?.channelId ?? undefined;
+      input.channelId ?? resolvedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
     const resolvedRepoId = input.repoId ?? sourceSession?.repoId ?? undefined;
     const resolvedBranch = input.branch ?? sourceSession?.branch ?? undefined;
-    const sourceWorkdir = sourceSession?.workdir ?? null;
+    const sharedWorkdir = resolvedGroup?.workdir ?? null;
+    const sharedConnection = resolvedGroup?.connection ?? null;
+    const sharedRuntimeInstanceId =
+      sharedConnection && typeof sharedConnection === "object" && "runtimeInstanceId" in sharedConnection
+        ? (sharedConnection as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null
+        : null;
     const sourceProjectIds = sourceSession?.projects.map((project) => project.projectId) ?? [];
     const sourceTicketLinks = input.sourceSessionId
       ? await prisma.ticketLink.findMany({
@@ -387,12 +405,8 @@ export class SessionService {
         })
       : [];
 
-    // Only need workspace creation if repo is selected and the source session
-    // does not already have a workdir we can reuse.
-    const needsWorkspace = !!resolvedRepoId && !sourceWorkdir;
-
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
-    let hosting = input.hosting ?? "cloud";
+    let hosting = input.hosting ?? sourceSession?.hosting ?? "cloud";
     let runtimeLabel: string | undefined;
     if (input.runtimeInstanceId) {
       const runtime = sessionRouter.getRuntime(input.runtimeInstanceId);
@@ -408,8 +422,21 @@ export class SessionService {
       }
     }
 
-    // Cloud sessions always start as "creating" — the VM needs time to boot
-    const initialStatus = needsWorkspace || hosting === "cloud" ? "creating" : "pending";
+    const needsRuntimeProvisioning =
+      !sharedRuntimeInstanceId
+      && !sharedWorkdir
+      && (!!resolvedRepoId || hosting === "cloud");
+    const initialConnection = sharedConnection
+      ? sharedConnection
+      : connJson(
+          defaultConnection({
+            ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
+            ...(runtimeLabel && { runtimeLabel }),
+          }),
+        );
+
+    // New sessions can immediately reuse a group's existing workspace/runtime when present.
+    const initialStatus = needsRuntimeProvisioning ? "creating" : "pending";
 
     const [session] = await prisma.$transaction(async (tx) => {
       const sessionGroup = existingGroup
@@ -419,11 +446,9 @@ export class SessionService {
               name,
               organizationId: input.organizationId,
               channelId: resolvedChannelId,
+              connection: initialConnection,
             },
-            select: {
-              ...SESSION_GROUP_SUMMARY_SELECT,
-              name: true,
-            },
+            select: SESSION_GROUP_SUMMARY_SELECT,
           });
 
       const projectIds =
@@ -442,15 +467,11 @@ export class SessionService {
           createdById: input.createdById,
           repoId: resolvedRepoId ?? undefined,
           branch: resolvedBranch ?? undefined,
-          workdir: sourceWorkdir ?? undefined,
+          workdir: sessionGroup.workdir ?? undefined,
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
-          connection: connJson(
-            defaultConnection({
-              ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
-              ...(runtimeLabel && { runtimeLabel }),
-            }),
-          ),
+          connection: sessionGroup.connection ?? initialConnection,
+          worktreeDeleted: sessionGroup.worktreeDeleted,
           ...(projectIds.length > 0 && {
             projects: {
               create: projectIds.map((projectId) => ({ projectId })),
@@ -492,12 +513,13 @@ export class SessionService {
       return [session, event] as const;
     });
 
-    // Pre-bind to the requested runtime so subsequent commands route to it
-    if (input.runtimeInstanceId) {
-      sessionRouter.bindSession(session.id, input.runtimeInstanceId);
+    // Reuse the group's runtime binding when a shared workspace already exists.
+    const runtimeToBind = input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? null;
+    if (runtimeToBind) {
+      sessionRouter.bindSession(session.id, runtimeToBind);
     }
 
-    if (needsWorkspace || session.hosting === "cloud") {
+    if (needsRuntimeProvisioning) {
       sessionRouter.createRuntime({
         sessionId: session.id,
         hosting: session.hosting as "cloud" | "local",
@@ -630,13 +652,17 @@ export class SessionService {
       },
       include: SESSION_INCLUDE,
     });
+    const sessionGroup = await this.syncGroupWorkspaceState(updated.sessionGroupId, {
+      connection: updated.connection as Prisma.InputJsonValue,
+      worktreeDeleted: false,
+    });
 
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: id,
       eventType: "session_resumed",
-      payload: { sessionId: id },
+      payload: { sessionId: id, ...(sessionGroup ? { sessionGroup } : {}) },
       actorType: "user",
       actorId: session.createdById,
     });
@@ -695,11 +721,32 @@ export class SessionService {
       resolution: "Session deleted",
     });
 
-    // Clean up terminal relay entries and notify attached frontends
-    terminalRelay.destroyAllForSession(id);
+    const remainingCount = session.sessionGroupId
+      ? await prisma.session.count({
+          where: {
+            sessionGroupId: session.sessionGroupId,
+            id: { not: id },
+          },
+        })
+      : 0;
 
-    // Clean up runtime (bridge + cloud VM for cloud, bridge + worktree for local)
-    await sessionRouter.destroyRuntime(id, session);
+    if (remainingCount === 0) {
+      if (session.sessionGroupId) {
+        terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
+      } else {
+        terminalRelay.destroyAllForSession(id);
+      }
+      await sessionRouter.destroyRuntime(id, session);
+    } else {
+      terminalRelay.destroyAllForSession(id);
+      try {
+        await sessionRouter.transitionRuntime(id, session.hosting, "terminate");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[session-service] failed to terminate session ${id} before delete: ${message}`);
+      }
+      sessionRouter.unbindSession(id);
+    }
 
     let deletedSessionGroupId: string | null = null;
     await prisma.$transaction(async (tx) => {
@@ -707,14 +754,9 @@ export class SessionService {
       await tx.ticketLink.deleteMany({ where: { entityType: "session", entityId: id } });
       await tx.session.delete({ where: { id } });
 
-      if (session.sessionGroupId) {
-        const remainingCount = await tx.session.count({
-          where: { sessionGroupId: session.sessionGroupId },
-        });
-        if (remainingCount === 0) {
+      if (session.sessionGroupId && remainingCount === 0) {
           await tx.sessionGroup.delete({ where: { id: session.sessionGroupId } });
           deletedSessionGroupId = session.sessionGroupId;
-        }
       }
     });
 
@@ -1154,7 +1196,7 @@ export class SessionService {
     // Only mark active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
     const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
-    await prisma.session.update({
+    const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
         status: "active",
@@ -1168,6 +1210,11 @@ export class SessionService {
         }),
         pendingRun: Prisma.DbNull,
       },
+      include: SESSION_INCLUDE,
+    });
+    const sessionGroup = await this.syncGroupWorkspaceState(updatedSession.sessionGroupId, {
+      connection: updatedSession.connection as Prisma.InputJsonValue,
+      worktreeDeleted: false,
     });
 
     // Resolve any inbox items for this session (leaving needs_input)
@@ -1184,7 +1231,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_resumed",
-      payload: { sessionId },
+      payload: { sessionId, ...(sessionGroup ? { sessionGroup } : {}) },
       actorType,
       actorId,
     });
@@ -1218,13 +1265,22 @@ export class SessionService {
 
       return [updated, prev.pendingRun] as const;
     });
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      workdir,
+      connection: session.connection as Prisma.InputJsonValue,
+      worktreeDeleted: false,
+    });
 
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
-      payload: { type: "workspace_ready", workdir },
+      payload: {
+        type: "workspace_ready",
+        workdir,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
       actorType: "system",
       actorId: "system",
     });
@@ -1248,11 +1304,17 @@ export class SessionService {
       where: { id: sessionId },
       data: {
         status: "failed",
+        workdir: null,
         worktreeDeleted: true,
         pendingRun: Prisma.DbNull,
         connection: connJson(defaultConnection({ state: "disconnected", lastError: error })),
       },
       include: SESSION_INCLUDE,
+    });
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      workdir: null,
+      connection: session.connection as Prisma.InputJsonValue,
+      worktreeDeleted: true,
     });
 
     await eventService.create({
@@ -1260,7 +1322,13 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_terminated",
-      payload: { sessionId, reason: "workspace_failed", error, worktreeDeleted: true },
+      payload: {
+        sessionId,
+        reason: "workspace_failed",
+        error,
+        worktreeDeleted: true,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
       actorType: "system",
       actorId: "system",
     });
@@ -1271,7 +1339,7 @@ export class SessionService {
   async markConnectionLost(sessionId: string, reason: string, runtimeInstanceId?: string) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true, status: true, connection: true },
+      select: { organizationId: true, status: true, connection: true, sessionGroupId: true },
     });
     if (!session) return;
 
@@ -1292,6 +1360,9 @@ export class SessionService {
       where: { id: sessionId },
       data: { connection: connJson(updated) },
     });
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      connection: connJson(updated),
+    });
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1304,6 +1375,7 @@ export class SessionService {
         runtimeInstanceId,
         connection: connJson(updated),
         sessionStatus: session.status,
+        ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "system",
@@ -1313,7 +1385,7 @@ export class SessionService {
   async markConnectionRestored(sessionId: string, runtimeInstanceId: string) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true, connection: true },
+      select: { organizationId: true, connection: true, sessionGroupId: true },
     });
     if (!session) return;
 
@@ -1333,6 +1405,10 @@ export class SessionService {
       where: { id: sessionId },
       data: { connection: connJson(updated) },
     });
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      connection: connJson(updated),
+      worktreeDeleted: false,
+    });
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1343,6 +1419,7 @@ export class SessionService {
         type: "connection_restored",
         runtimeInstanceId,
         connection: connJson(updated),
+        ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "system",
@@ -1437,6 +1514,9 @@ export class SessionService {
         where: { id: sessionId },
         data: { connection: connJson(failedConn) },
       });
+      const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+        connection: connJson(failedConn),
+      });
 
       await eventService.create({
         organizationId: session.organizationId,
@@ -1447,6 +1527,7 @@ export class SessionService {
           type: "recovery_failed",
           reason: "no_runtime",
           connection: connJson(failedConn),
+          ...(sessionGroup ? { sessionGroup } : {}),
         },
         actorType: "system",
         actorId: "system",
@@ -1505,6 +1586,10 @@ export class SessionService {
         },
         include: SESSION_INCLUDE,
       });
+      const sessionGroup = await this.syncGroupWorkspaceState(updated.sessionGroupId, {
+        connection: connJson(restoredConn),
+        worktreeDeleted: false,
+      });
 
       await eventService.create({
         organizationId: session.organizationId,
@@ -1515,6 +1600,7 @@ export class SessionService {
           type: "connection_restored",
           runtimeInstanceId: runtime.id,
           connection: connJson(restoredConn),
+          ...(sessionGroup ? { sessionGroup } : {}),
         },
         actorType: "system",
         actorId: "system",
@@ -1542,6 +1628,10 @@ export class SessionService {
       },
       include: SESSION_INCLUDE,
     });
+    const sessionGroup = await this.syncGroupWorkspaceState(updated.sessionGroupId, {
+      connection: connJson(restoredConn),
+      worktreeDeleted: false,
+    });
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1552,6 +1642,7 @@ export class SessionService {
         type: "connection_restored",
         runtimeInstanceId: runtime.id,
         connection: connJson(restoredConn),
+        ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "system",
@@ -1627,6 +1718,7 @@ export class SessionService {
           branch: session.branch ?? undefined,
           channelId: session.channelId ?? undefined,
           sessionGroupId: session.sessionGroupId ?? undefined,
+          workdir: session.repoId ? undefined : session.workdir ?? undefined,
           pendingRun: {
             type: "run",
             prompt: bootstrapPrompt,
@@ -1661,6 +1753,11 @@ export class SessionService {
       }
 
       return child;
+    });
+    await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      workdir: childSession.repo ? null : session.workdir ?? null,
+      connection: childSession.connection as Prisma.InputJsonValue,
+      worktreeDeleted: false,
     });
 
     // Bind the child session to the target runtime
@@ -1718,23 +1815,6 @@ export class SessionService {
       }
     }
 
-    // Mark the old session as disconnected with context about the move
-    const oldConn = this.parseConnection(session.connection);
-    const rehomedConnection = {
-      ...oldConn,
-      state: "disconnected",
-      lastError: `Moved to new session ${childSession.id}`,
-      canRetry: false,
-      canMove: true,
-    } satisfies SessionConnectionData;
-
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        connection: connJson(rehomedConnection),
-      },
-    });
-
     // Emit rehome event on old session
     await eventService.create({
       organizationId: session.organizationId,
@@ -1745,7 +1825,6 @@ export class SessionService {
         type: "session_rehomed",
         newSessionId: childSession.id,
         runtimeInstanceId,
-        connection: connJson(rehomedConnection),
       },
       actorType,
       actorId,
@@ -1797,6 +1876,7 @@ export class SessionService {
           branch: session.branch ?? undefined,
           channelId: session.channelId ?? undefined,
           sessionGroupId: session.sessionGroupId ?? undefined,
+          workdir: session.repoId ? undefined : session.workdir ?? undefined,
           pendingRun: {
             type: "run",
             prompt: bootstrapPrompt,
@@ -1826,6 +1906,11 @@ export class SessionService {
       }
 
       return child;
+    });
+    await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      workdir: childSession.repo ? null : session.workdir ?? null,
+      connection: childSession.connection as Prisma.InputJsonValue,
+      worktreeDeleted: false,
     });
 
     // Emit session_started for the child
@@ -1866,23 +1951,6 @@ export class SessionService {
       onWorkspaceReady: (workdir) => this.workspaceReady(childSession.id, workdir),
     });
 
-    // Mark the old session as disconnected with context about the move
-    const oldConn = this.parseConnection(session.connection);
-    const rehomedConnection = {
-      ...oldConn,
-      state: "disconnected",
-      lastError: `Moved to new session ${childSession.id}`,
-      canRetry: false,
-      canMove: true,
-    } satisfies SessionConnectionData;
-
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        connection: connJson(rehomedConnection),
-      },
-    });
-
     // Emit rehome event on old session
     await eventService.create({
       organizationId: session.organizationId,
@@ -1893,7 +1961,6 @@ export class SessionService {
         type: "session_rehomed",
         newSessionId: childSession.id,
         runtimeInstanceId: null,
-        connection: connJson(rehomedConnection),
       },
       actorType,
       actorId,
@@ -2029,6 +2096,55 @@ export class SessionService {
     return defaultConnection(raw as Partial<SessionConnectionData>);
   }
 
+  private async syncGroupWorkspaceState(
+    sessionGroupId: string | null | undefined,
+    patch: GroupWorkspaceStatePatch,
+  ) {
+    if (!sessionGroupId) return null;
+
+    const groupData: Prisma.SessionGroupUpdateInput = {};
+    const sessionData: Prisma.SessionUpdateManyMutationInput = {};
+
+    if (Object.prototype.hasOwnProperty.call(patch, "workdir")) {
+      groupData.workdir = patch.workdir ?? null;
+      sessionData.workdir = patch.workdir ?? null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "connection")) {
+      const connectionValue = patch.connection ?? Prisma.DbNull;
+      groupData.connection = connectionValue;
+      sessionData.connection = connectionValue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "prUrl")) {
+      groupData.prUrl = patch.prUrl ?? null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "worktreeDeleted")) {
+      groupData.worktreeDeleted = patch.worktreeDeleted ?? false;
+      sessionData.worktreeDeleted = patch.worktreeDeleted ?? false;
+    }
+
+    const shouldMirrorToSessions = Object.keys(sessionData).length > 0;
+
+    return prisma.$transaction(async (tx) => {
+      const sessionGroup = await tx.sessionGroup.update({
+        where: { id: sessionGroupId },
+        data: groupData,
+        select: SESSION_GROUP_SUMMARY_SELECT,
+      });
+
+      if (shouldMirrorToSessions) {
+        await tx.session.updateMany({
+          where: { sessionGroupId },
+          data: sessionData,
+        });
+      }
+
+      return sessionGroup;
+    });
+  }
+
   private mergeConnection(
     existing: unknown,
     patch: Partial<SessionConnectionData>,
@@ -2083,6 +2199,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         connection: true,
+        sessionGroupId: true,
       },
     });
 
@@ -2127,7 +2244,7 @@ export class SessionService {
     }
 
     const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
-    await prisma.session.update({
+    const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
         status: "active",
@@ -2142,6 +2259,11 @@ export class SessionService {
           }),
         }),
       },
+      include: SESSION_INCLUDE,
+    });
+    const sessionGroup = await this.syncGroupWorkspaceState(updatedSession.sessionGroupId, {
+      connection: updatedSession.connection as Prisma.InputJsonValue,
+      worktreeDeleted: false,
     });
 
     await eventService.create({
@@ -2149,7 +2271,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_resumed",
-      payload: { sessionId },
+      payload: { sessionId, ...(sessionGroup ? { sessionGroup } : {}) },
       actorType: "system",
       actorId: "system",
     });
@@ -2165,7 +2287,7 @@ export class SessionService {
   ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { status: true, connection: true },
+      select: { status: true, connection: true, sessionGroupId: true },
     });
     if (session?.status && isFullyUnloadedSessionStatus(session.status)) return;
     const conn = this.parseConnection(session?.connection);
@@ -2184,6 +2306,9 @@ export class SessionService {
       where: { id: sessionId },
       data: { connection: connJson(updated) },
     });
+    const sessionGroup = await this.syncGroupWorkspaceState(session?.sessionGroupId, {
+      connection: connJson(updated),
+    });
 
     await eventService.create({
       organizationId,
@@ -2195,6 +2320,7 @@ export class SessionService {
         reason: deliveryResult,
         operation,
         connection: connJson(updated),
+        ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
       actorId: "system",
@@ -2204,11 +2330,21 @@ export class SessionService {
   private async fullyUnloadSession(sessionId: string) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { hosting: true, workdir: true, repoId: true, connection: true },
+      select: {
+        hosting: true,
+        workdir: true,
+        repoId: true,
+        connection: true,
+        sessionGroupId: true,
+      },
     });
     if (!session) return;
 
-    terminalRelay.destroyAllForSession(sessionId);
+    if (session.sessionGroupId) {
+      terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
+    } else {
+      terminalRelay.destroyAllForSession(sessionId);
+    }
 
     try {
       await sessionRouter.destroyRuntime(sessionId, session);
@@ -2217,9 +2353,9 @@ export class SessionService {
       console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
     }
 
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { worktreeDeleted: true },
+    await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      workdir: null,
+      worktreeDeleted: true,
     });
   }
 
@@ -2227,20 +2363,24 @@ export class SessionService {
   async markPrOpened(params: { sessionId: string; prUrl: string; organizationId: string }) {
     const { sessionId, prUrl, organizationId } = params;
 
-    // Don't overwrite prUrl on merged sessions
-    const { count } = await prisma.session.updateMany({
-      where: { id: sessionId, status: { not: "merged" } },
-      data: { prUrl },
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { sessionGroupId: true, status: true },
+    });
+    if (!session?.sessionGroupId || session.status === "merged") return;
+
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      prUrl,
     });
 
-    if (count === 0) return;
+    if (!sessionGroup) return;
 
     await eventService.create({
       organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_pr_opened",
-      payload: { sessionId, prUrl },
+      payload: { sessionId, prUrl, sessionGroup },
       actorType: "system",
       actorId: "github-webhook",
     });
@@ -2250,19 +2390,24 @@ export class SessionService {
   async markPrClosed(params: { sessionId: string; organizationId: string }) {
     const { sessionId, organizationId } = params;
 
-    const { count } = await prisma.session.updateMany({
-      where: { id: sessionId, status: { not: "merged" } },
-      data: { prUrl: null },
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { sessionGroupId: true, status: true },
+    });
+    if (!session?.sessionGroupId || session.status === "merged") return;
+
+    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+      prUrl: null,
     });
 
-    if (count === 0) return;
+    if (!sessionGroup) return;
 
     await eventService.create({
       organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_pr_closed",
-      payload: { sessionId },
+      payload: { sessionId, sessionGroup },
       actorType: "system",
       actorId: "github-webhook",
     });
@@ -2272,10 +2417,15 @@ export class SessionService {
   async markPrMerged(params: { sessionId: string; prUrl: string; organizationId: string }) {
     const { sessionId, prUrl, organizationId } = params;
 
+    const existingSession = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { sessionGroupId: true },
+    });
+
     // Atomic conditional update — skip if already merged
     const { count } = await prisma.session.updateMany({
       where: { id: sessionId, status: { not: "merged" } },
-      data: { status: "merged", prUrl },
+      data: { status: "merged" },
     });
 
     if (count === 0) {
@@ -2289,12 +2439,24 @@ export class SessionService {
       return;
     }
 
+    const sessionGroup = await this.syncGroupWorkspaceState(existingSession?.sessionGroupId, {
+      prUrl,
+      workdir: null,
+      worktreeDeleted: true,
+    });
+
     await eventService.create({
       organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_pr_merged",
-      payload: { sessionId, prUrl, status: "merged", worktreeDeleted: true },
+      payload: {
+        sessionId,
+        prUrl,
+        status: "merged",
+        worktreeDeleted: true,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
       actorType: "system",
       actorId: "github-webhook",
     });

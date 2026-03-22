@@ -16,9 +16,8 @@ interface SessionLinkCardProps {
 export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: SessionLinkCardProps) {
   const name = useEntityField("sessions", sessionId, "name");
   const rawStatus = useEntityField("sessions", sessionId, "status") as string | undefined;
-  const prUrl = useEntityField("sessions", sessionId, "prUrl") as string | null | undefined;
 
-  const displayStatus = getDisplayStatus(rawStatus, prUrl);
+  const displayStatus = getDisplayStatus(rawStatus, null);
   const color = statusColor[displayStatus] ?? "text-muted-foreground";
   const label = statusLabel[displayStatus] ?? displayStatus;
 

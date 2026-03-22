@@ -1058,11 +1058,15 @@ export type SessionFilters = {
 export type SessionGroup = {
   __typename?: 'SessionGroup';
   channel?: Maybe<Channel>;
+  connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
+  prUrl?: Maybe<Scalars['String']['output']>;
   sessions: Array<Session>;
   updatedAt: Scalars['DateTime']['output'];
+  workdir?: Maybe<Scalars['String']['output']>;
+  worktreeDeleted: Scalars['Boolean']['output'];
 };
 
 export type SessionRuntimeInstance = {

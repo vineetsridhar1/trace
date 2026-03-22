@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
 import {
   Circle,
+  GitPullRequest,
   History,
-  Loader2,
   Maximize2,
   Minimize2,
   Plus,
@@ -29,7 +29,7 @@ import { SessionHistory } from "./SessionHistory";
 import { TerminalInstance } from "./TerminalInstance";
 import {
   getDisplayStatus,
-  isReviewAndActive,
+  getSessionGroupDisplayStatus,
   isTerminalStatus,
   statusColor,
   statusLabel,
@@ -41,6 +41,18 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
     sessionGroup(id: $id) {
       id
       name
+      prUrl
+      workdir
+      worktreeDeleted
+      connection {
+        state
+        runtimeInstanceId
+        runtimeLabel
+        lastError
+        retryCount
+        canRetry
+        canMove
+      }
       channel {
         id
       }
@@ -54,7 +66,6 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         model
         hosting
         branch
-        prUrl
         worktreeDeleted
         sessionGroupId
         connection {
@@ -93,6 +104,14 @@ export function SessionGroupDetailView({
   panelMode?: boolean;
 }) {
   const groupName = useEntityField("sessionGroups", sessionGroupId, "name");
+  const groupPrUrl = useEntityField("sessionGroups", sessionGroupId, "prUrl") as string | null | undefined;
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const groupWorktreeDeleted = useEntityField("sessionGroups", sessionGroupId, "worktreeDeleted") as
+    | boolean
+    | undefined;
   const activeSessionId = useUIStore((s) => s.activeSessionId);
   const activeTerminalId = useUIStore((s) => s.activeTerminalId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
@@ -172,21 +191,21 @@ export function SessionGroupDetailView({
   const selectedSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0] ?? null;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
-  const selectedStatus = selectedSession
-    ? getDisplayStatus(selectedSession.status, selectedSession.prUrl as string | null | undefined)
-    : "pending";
+  const selectedStatus = getSessionGroupDisplayStatus(
+    sessions.map((session) => session.status),
+    groupPrUrl,
+  );
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
     const hosting = selectedSession.hosting;
     const createdBy = selectedSession.createdBy as { id: string } | undefined;
-    const connection = selectedSession.connection as Record<string, unknown> | null | undefined;
     const isCloud = hosting === "cloud";
     const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
-    const isConnected = !connection || connection.state !== "disconnected";
+    const isConnected = !groupConnection || groupConnection.state !== "disconnected";
     return (isCloud || isLocalOwner)
       && isConnected
       && !isTerminalStatus(selectedSession.status)
-      && !selectedSession.worktreeDeleted;
+      && !groupWorktreeDeleted;
   })();
 
   const ensureSessionTerminals = useCallback(
@@ -292,11 +311,7 @@ export function SessionGroupDetailView({
 
         {selectedSession && (
           <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", statusColor[selectedStatus])}>
-            {isReviewAndActive(selectedSession.status, selectedSession.prUrl as string | null | undefined) ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <Circle size={6} className="fill-current" />
-            )}
+            <Circle size={6} className="fill-current" />
             {latestSessionLabel}
           </span>
         )}
@@ -341,6 +356,18 @@ export function SessionGroupDetailView({
           )}
         </div>
 
+        {groupPrUrl && (
+          <a
+            href={groupPrUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
+            title="View Pull Request"
+          >
+            <GitPullRequest size={14} />
+          </a>
+        )}
+
         {panelMode && (
           <button
             onClick={toggleFullscreen}
@@ -354,10 +381,7 @@ export function SessionGroupDetailView({
 
       <div className="flex shrink-0 items-center gap-1 border-b border-border bg-surface px-2 py-1">
         {sessions.map((session) => {
-          const displayStatus = getDisplayStatus(
-            session.status,
-            session.prUrl as string | null | undefined,
-          );
+          const displayStatus = getDisplayStatus(session.status, null);
           return (
             <button
               key={session.id}

@@ -52,6 +52,18 @@ const SESSION_DETAIL_QUERY = gql`
       sessionGroup {
         id
         name
+        prUrl
+        workdir
+        worktreeDeleted
+        connection {
+          state
+          runtimeInstanceId
+          runtimeLabel
+          lastError
+          retryCount
+          canRetry
+          canMove
+        }
       }
       channel {
         id
@@ -98,6 +110,10 @@ export function SessionDetailView({
         if (result.data?.session) {
           const { upsert, sessions } = useEntityStore.getState();
           const existing = sessions[sessionId];
+          const sessionGroup = result.data.session.sessionGroup;
+          if (sessionGroup?.id) {
+            upsert("sessionGroups", sessionGroup.id, sessionGroup);
+          }
           upsert(
             "sessions",
             sessionId,

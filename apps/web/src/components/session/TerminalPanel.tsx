@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, X, TerminalSquare } from "lucide-react";
-import { useTerminalStore } from "../../stores/terminal";
+import { useSessionGroupTerminals, useTerminalStore } from "../../stores/terminal";
 import { useEntityField } from "../../stores/entity";
 import { TerminalInstance } from "./TerminalInstance";
 import { client } from "../../lib/urql";
@@ -20,15 +20,14 @@ export function TerminalPanel({
   onClose: () => void;
 }) {
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
-  const terminalsById = useTerminalStore((s) => s.terminals);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+  const groupTerminals = useSessionGroupTerminals(sessionGroupId ?? "");
 
   const terminals = useMemo(
-    () =>
-      Object.values(terminalsById).filter((terminal) => terminal.sessionId === sessionId),
-    [terminalsById, sessionId],
+    () => (sessionGroupId ? groupTerminals : []),
+    [groupTerminals, sessionGroupId],
   );
 
   useEffect(() => {

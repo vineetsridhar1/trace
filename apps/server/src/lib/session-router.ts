@@ -88,7 +88,7 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
           });
 
           // Store cloudMachineId and runtimeInstanceId in session connection
-          await prisma.session.update({
+          const updatedSession = await prisma.session.update({
             where: { id: options.sessionId },
             data: {
               connection: {
@@ -100,7 +100,17 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
                 runtimeInstanceId: machine.runtimeInstanceId,
               } satisfies Prisma.InputJsonValue,
             },
+            select: { sessionGroupId: true, connection: true },
           });
+          if (updatedSession.sessionGroupId) {
+            await prisma.sessionGroup.update({
+              where: { id: updatedSession.sessionGroupId },
+              data: {
+                connection: updatedSession.connection ?? Prisma.DbNull,
+                worktreeDeleted: false,
+              },
+            });
+          }
 
           // Wait for bridge to connect. Pass runtimeId so if the bridge already
           // connected (race: restoreSessionsForRuntime ran before we wrote connection),

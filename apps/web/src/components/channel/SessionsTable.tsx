@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { Circle, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo } from "react";
+import { Circle } from "lucide-react";
 import type {
   ColDef,
   FilterChangedEvent,
@@ -14,8 +14,7 @@ import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import {
-  getDisplayStatus,
-  isReviewAndActive,
+  getSessionGroupDisplayStatus,
   statusColor,
   statusLabel,
 } from "../session/sessionStatus";
@@ -24,65 +23,72 @@ import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
 type SessionGroupRow = SessionGroupEntity & {
   id: string;
+  status: string;
   latestSession?: SessionEntity;
-  chatCount: number;
-  _displayStatus: string;
-  _reviewActive: boolean;
+  createdBySession?: SessionEntity;
+  _lastMessageAt?: string;
+  _sortTimestamp?: string;
 };
 
 const BUCKET_MS = 2 * 60 * 1000;
 function bucketize(ts: string | undefined): number {
   if (!ts) return 0;
-  const time = new Date(ts).getTime();
-  return Math.floor(time / BUCKET_MS) * BUCKET_MS;
+  const t = new Date(ts).getTime();
+  return Math.floor(t / BUCKET_MS) * BUCKET_MS;
 }
 
 const collapsedByDefault = new Set(["merged", "failed"]);
-const FILTER_STORAGE_KEY_PREFIX = "trace:session-groups-filter:";
+const FILTER_STORAGE_KEY_PREFIX = "trace:sessions-filter:";
+
+const statusGroupOrder: Record<string, number> = {
+  needs_input: 0,
+  creating: 1,
+  active: 2,
+  completed: 3,
+  paused: 4,
+  pending: 5,
+  in_review: 6,
+  merged: 7,
+  failed: 8,
+  unreachable: 9,
+};
 
 const columns: ColDef<SessionGroupRow>[] = [
   {
     headerName: "Name",
     field: "name",
     flex: 2,
-    minWidth: 220,
+    minWidth: 200,
     filter: true,
     cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const row = params.data;
-      if (!row) return null;
-      const color = statusColor[row._displayStatus] ?? "text-muted-foreground";
+      const { data } = params;
+      if (!data) return null;
+      const color = statusColor[data.status ?? "active"];
       return (
         <div className="flex h-full items-center gap-2">
-          {row._reviewActive ? (
-            <Loader2 size={8} className={`shrink-0 animate-spin ${color}`} />
-          ) : (
-            <Circle size={8} className={`shrink-0 fill-current ${color}`} />
-          )}
-          <span className="truncate text-sm text-foreground">{row.name}</span>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
-            {row.chatCount} chats
-          </span>
+          <Circle size={8} className={`shrink-0 fill-current ${color}`} />
+          <span className="truncate text-sm text-foreground">{data.name}</span>
         </div>
       );
     },
   },
   {
     headerName: "Status",
-    field: "_displayStatus",
+    field: "status",
     rowGroup: true,
     hide: true,
   },
   {
     headerName: "Repo",
-    colId: "repo",
-    width: 150,
+    field: "repo" as keyof SessionGroupRow,
+    width: 140,
     filter: true,
     valueGetter: (params) => {
-      const repo = params.data?.latestSession?.repo as { name: string } | null | undefined;
+      const repo = params.data?.latestSession?.repo as { id: string; name: string } | null | undefined;
       return repo?.name ?? "";
     },
     cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const repo = params.data?.latestSession?.repo as { name: string } | null | undefined;
+      const repo = params.data?.latestSession?.repo as { id: string; name: string } | null | undefined;
       if (!repo) return null;
       return <span className="truncate text-xs text-muted-foreground">{repo.name}</span>;
     },
@@ -90,14 +96,14 @@ const columns: ColDef<SessionGroupRow>[] = [
   {
     headerName: "Created by",
     colId: "createdBy",
-    width: 160,
+    width: 150,
     filter: true,
     filterValueGetter: (params) => {
-      const createdBy = params.data?.latestSession?.createdBy as { name: string } | undefined;
+      const createdBy = params.data?.createdBySession?.createdBy as { name: string } | undefined;
       return createdBy?.name ?? "";
     },
     cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const createdBy = params.data?.latestSession?.createdBy as
+      const createdBy = params.data?.createdBySession?.createdBy as
         | { id: string; name: string; avatarUrl?: string | null }
         | undefined;
       if (!createdBy) return null;
@@ -124,34 +130,22 @@ const columns: ColDef<SessionGroupRow>[] = [
     },
   },
   {
-    headerName: "Latest Chat",
-    colId: "latestChat",
-    width: 220,
-    filter: true,
-    valueGetter: (params) => params.data?.latestSession?.name ?? "",
-    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const latestSession = params.data?.latestSession;
-      if (!latestSession) return null;
-      return <span className="truncate text-xs text-muted-foreground">{latestSession.name}</span>;
-    },
-  },
-  {
-    headerName: "Last activity",
+    headerName: "Last message",
     colId: "lastActivityAt",
-    width: 130,
+    width: 120,
     filter: true,
-    valueGetter: (params) => params.data?._sortTimestamp ?? params.data?.updatedAt,
+    valueGetter: (params) => params.data?._lastMessageAt ?? params.data?.updatedAt,
     cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const lastActivityAt = (params.value as string | undefined) ?? undefined;
-      if (!lastActivityAt) return null;
-      return <span className="text-xs text-muted-foreground">{timeAgo(lastActivityAt)}</span>;
+      const lastMessageAt = (params.value as string | undefined) ?? undefined;
+      if (!lastMessageAt) return null;
+      return <span className="text-xs text-muted-foreground">{timeAgo(lastMessageAt)}</span>;
     },
     comparator: (a: string | undefined, b: string | undefined) => bucketize(a) - bucketize(b),
   },
 ];
 
 const { Table, useTable } = createTable<SessionGroupRow>({
-  id: "session-groups",
+  id: "sessions",
   columns,
 });
 
@@ -159,7 +153,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const sessions = useEntityStore((s) => s.sessions);
 
-  const rows = useMemo(() => {
+  const filteredGroups = useMemo(() => {
     return (Object.values(sessionGroups) as SessionGroupEntity[])
       .filter((group) => {
         const channel = group.channel as { id: string } | null | undefined;
@@ -169,42 +163,80 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         const groupSessions = (Object.values(sessions) as SessionEntity[])
           .filter((session) => session.sessionGroupId === group.id)
           .sort((a, b) => {
-            const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+            const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
+            const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
+            const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
             if (diff !== 0) return diff;
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            return a.id.localeCompare(b.id);
           });
         const latestSession = groupSessions[0];
-        const displayStatus = getDisplayStatus(
-          latestSession?.status,
-          latestSession?.prUrl as string | null | undefined,
+        const createdBySession = [...groupSessions].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        )[0];
+        const status = getSessionGroupDisplayStatus(
+          groupSessions.map((session) => session.status),
+          group.prUrl as string | null | undefined,
         );
+
         return {
           ...group,
           latestSession,
-          chatCount: groupSessions.length,
-          _displayStatus: displayStatus,
-          _reviewActive: !!latestSession
-            && isReviewAndActive(latestSession.status, latestSession.prUrl as string | null | undefined),
-          _sortTimestamp: latestSession?._sortTimestamp ?? latestSession?.updatedAt ?? group.updatedAt,
-        };
+          createdBySession,
+          status,
+          _lastMessageAt:
+            latestSession?._lastMessageAt
+            ?? latestSession?._sortTimestamp
+            ?? latestSession?.updatedAt
+            ?? group.updatedAt,
+          _sortTimestamp:
+            latestSession?._sortTimestamp
+            ?? latestSession?._lastMessageAt
+            ?? latestSession?.updatedAt
+            ?? group._sortTimestamp
+            ?? group.updatedAt,
+        } as SessionGroupRow;
       })
       .sort((a, b) => {
-        const diff = new Date(b._sortTimestamp ?? b.updatedAt).getTime()
-          - new Date(a._sortTimestamp ?? a.updatedAt).getTime();
+        const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
+        const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
+        const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
         if (diff !== 0) return diff;
         return a.id.localeCompare(b.id);
-      }) as SessionGroupRow[];
+      });
   }, [channelId, sessionGroups, sessions]);
 
   useEffect(() => {
-    useTable.getState().setRows(rows);
-  }, [rows]);
+    useTable.getState().setRows(filteredGroups);
+  }, [filteredGroups]);
+
+  const getContextMenuItems = useCallback(
+    (params: GetContextMenuItemsParams<SessionGroupRow>): MenuItemDef<SessionGroupRow>[] => {
+      if (!params.node?.data) return [];
+      const group = params.node.data;
+      const sessionId = group.latestSession?.id;
+      return [
+        {
+          name: "Copy Workspace Link",
+          action: () => {
+            const path = sessionId
+              ? `/c/${channelId}/g/${group.id}/s/${sessionId}`
+              : `/c/${channelId}/g/${group.id}`;
+            navigator.clipboard.writeText(`${window.location.origin}${path}`);
+          },
+        },
+      ];
+    },
+    [channelId],
+  );
 
   const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}`;
 
   const agGridOptions = useMemo(
     () => ({
-      onRowClicked: (event: { node: { group?: boolean; expanded?: boolean; setExpanded: (value: boolean) => void }; data?: SessionGroupRow }) => {
+      onRowClicked: (event: {
+        node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void };
+        data?: SessionGroupRow;
+      }) => {
         if (event.node.group) {
           event.node.setExpanded(!event.node.expanded);
           return;
@@ -215,48 +247,62 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         }
       },
       onGridReady: (event: GridReadyEvent<SessionGroupRow>) => {
-        const savedFilters = localStorage.getItem(filterStorageKey);
-        if (savedFilters) {
-          event.api.setFilterModel(JSON.parse(savedFilters));
+        try {
+          const saved = localStorage.getItem(filterStorageKey);
+          if (saved) {
+            event.api.setFilterModel(JSON.parse(saved));
+          }
+        } catch {
+          // ignore corrupt data
         }
       },
       onFilterChanged: (event: FilterChangedEvent<SessionGroupRow>) => {
-        localStorage.setItem(filterStorageKey, JSON.stringify(event.api.getFilterModel()));
+        const model = event.api.getFilterModel();
+        if (Object.keys(model).length === 0) {
+          localStorage.removeItem(filterStorageKey);
+        } else {
+          localStorage.setItem(filterStorageKey, JSON.stringify(model));
+        }
       },
-      getContextMenuItems: (params: GetContextMenuItemsParams<SessionGroupRow>): MenuItemDef<SessionGroupRow>[] => {
-        if (!params.node?.data) return [];
-        const group = params.node.data;
-        const sessionId = group.latestSession?.id;
-        return [
-          {
-            name: "Copy Workspace Link",
-            action: () => {
-              const path = sessionId
-                ? `/c/${channelId}/g/${group.id}/s/${sessionId}`
-                : `/c/${channelId}/g/${group.id}`;
-              navigator.clipboard.writeText(`${window.location.origin}${path}`);
-            },
-          },
-        ];
+      rowHeight: 40,
+      headerHeight: 32,
+      suppressCellFocus: true,
+      getContextMenuItems,
+      getRowHeight: (params: { node: { group?: boolean } }) => {
+        if (params.node.group) return 40;
+        return undefined;
       },
-      autoGroupColumnDef: {
-        headerName: "Status",
-        minWidth: 200,
-        cellRendererParams: {
-          suppressCount: false,
-        },
-        valueFormatter: (params: { value: string }) => statusLabel[params.value] ?? params.value,
-      },
-      groupDefaultExpanded: 1,
+      groupDisplayType: "groupRows" as const,
       isGroupOpenByDefault: (params: IsGroupOpenByDefaultParams<SessionGroupRow>) => {
-        const key = params.rowNode.key as string;
-        return !collapsedByDefault.has(key);
+        return !collapsedByDefault.has(params.key ?? "");
+      },
+      groupRowRendererParams: {
+        suppressCount: true,
+        innerRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+          const status = params.value as string;
+          const color = statusColor[status] ?? "text-muted-foreground";
+          const label = statusLabel[status] ?? status;
+          const count = params.node.allChildrenCount ?? 0;
+          return (
+            <div className={`flex items-center gap-2 ${color}`}>
+              <Circle size={8} className="shrink-0 fill-current" />
+              <span className="text-sm font-semibold">{label}</span>
+              <span className="text-xs text-muted-foreground">{count}</span>
+            </div>
+          );
+        },
+      },
+      initialGroupOrderComparator: (params: {
+        nodeA: { key?: string | null };
+        nodeB: { key?: string | null };
+      }) => {
+        const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
+        const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
+        return a - b;
       },
     }),
-    [channelId, filterStorageKey],
+    [channelId, filterStorageKey, getContextMenuItems],
   );
 
-  return (
-    <Table className="h-full" agGridOptions={agGridOptions} />
-  );
+  return <Table className="h-full" agGridOptions={agGridOptions} />;
 }

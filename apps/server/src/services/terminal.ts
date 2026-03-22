@@ -24,22 +24,35 @@ class TerminalService {
   }): Promise<{ id: string; sessionId: string }> {
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, workdir: true, hosting: true, createdById: true, status: true, worktreeDeleted: true },
+      select: {
+        id: true,
+        sessionGroupId: true,
+        hosting: true,
+        createdById: true,
+        status: true,
+        sessionGroup: {
+          select: {
+            workdir: true,
+            worktreeDeleted: true,
+          },
+        },
+      },
     });
     if (!session) throw new Error("Session not found");
     if (isFullyUnloadedSessionStatus(session.status)) {
       throw new Error(`Cannot create terminal on a ${session.status} session`);
     }
-    if (session.worktreeDeleted) {
+    if (session.sessionGroup?.worktreeDeleted) {
       throw new Error("Cannot create terminal: session worktree has been deleted");
     }
     this.assertLocalOwnership(session, userId);
 
     const terminalId = terminalRelay.createTerminal(
       sessionId,
+      session.sessionGroupId ?? null,
       cols,
       rows,
-      session.workdir ?? undefined,
+      session.sessionGroup?.workdir ?? undefined,
     );
     return { id: terminalId, sessionId };
   }
@@ -55,13 +68,15 @@ class TerminalService {
   }): Promise<Array<{ id: string; sessionId: string }>> {
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, hosting: true, createdById: true },
+      select: { id: true, sessionGroupId: true, hosting: true, createdById: true },
     });
     if (!session) throw new Error("Session not found");
     this.assertLocalOwnership(session, userId);
 
-    const terminalIds = terminalRelay.getTerminalsForSession(sessionId);
-    return terminalIds.map((id) => ({ id, sessionId }));
+    const terminalIds = session.sessionGroupId
+      ? terminalRelay.getTerminalsForSessionGroup(session.sessionGroupId)
+      : terminalRelay.getTerminalsForSession(sessionId);
+    return terminalIds.map((id) => ({ id, sessionId: terminalRelay.getSessionId(id) ?? sessionId }));
   }
 
   async destroy({

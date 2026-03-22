@@ -34,6 +34,7 @@ vi.mock("../lib/session-router.js", () => ({
 vi.mock("../lib/terminal-relay.js", () => ({
   terminalRelay: {
     destroyAllForSession: vi.fn(),
+    destroyAllForSessionGroup: vi.fn(),
   },
 }));
 
@@ -69,6 +70,10 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     name: "Implement dashboard filters",
     organizationId: "org-1",
     channelId: "channel-1",
+    workdir: null,
+    connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+    prUrl: null,
+    worktreeDeleted: false,
     channel: { id: "channel-1", name: "Backend" },
     createdAt: new Date("2024-01-01T00:00:00.000Z"),
     updatedAt: new Date("2024-01-01T00:00:00.000Z"),
@@ -191,6 +196,7 @@ describe("SessionService", () => {
           name: "Implement dashboard filters",
           organizationId: "org-1",
           channelId: "channel-1",
+          connection: expect.any(Object),
         },
         select: expect.any(Object),
       });
@@ -219,13 +225,16 @@ describe("SessionService", () => {
         id: "source-1",
         organizationId: "org-1",
         sessionGroupId: "group-1",
-        workdir: "/tmp/trace/source",
         repoId: "repo-1",
         branch: "feature/source",
+        hosting: "cloud",
         channelId: "channel-1",
         projects: [{ projectId: "project-1" }],
+        sessionGroup: makeSessionGroup({ workdir: "/tmp/trace/source" }),
       });
-      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(makeSessionGroup());
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({ workdir: "/tmp/trace/source" }),
+      );
       prismaMock.ticketLink.findMany.mockResolvedValueOnce([{ ticketId: "ticket-1" }]);
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
@@ -301,7 +310,7 @@ describe("SessionService", () => {
       const result = await service.delete("session-1");
 
       expect(result.id).toBe("session-1");
-      expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
       expect(prismaMock.sessionGroup.delete).toHaveBeenCalledWith({
         where: { id: "group-1" },
       });
