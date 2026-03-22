@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 import {
   DndContext,
@@ -14,6 +14,7 @@ import {
   pointerWithin,
   rectIntersection,
 } from "@dnd-kit/core";
+import { cn } from "../lib/utils";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
@@ -125,27 +126,46 @@ const MOVE_CHANNEL_MUTATION = gql`
   }
 `;
 
-const UNGROUPED_DROP_ID = "ungrouped";
+const UNGROUPED_DROP_PREFIX = "ungrouped-gap:";
+
+function isUngroupedDropId(id: string | number) {
+  return String(id).startsWith(UNGROUPED_DROP_PREFIX);
+}
 
 /** Prefer specific group targets; only use the top-level ungrouped zone in whitespace/gaps. */
 const customCollision: CollisionDetection = (args) => {
   const pw = pointerWithin(args);
-  const nonUngroupedPointer = pw.filter((collision) => collision.id !== UNGROUPED_DROP_ID);
+  const nonUngroupedPointer = pw.filter((collision) => !isUngroupedDropId(collision.id));
   if (nonUngroupedPointer.length > 0) return nonUngroupedPointer;
   if (pw.length > 0) return pw;
 
-  return rectIntersection(args).filter((collision) => collision.id !== UNGROUPED_DROP_ID);
+  return rectIntersection(args).filter((collision) => !isUngroupedDropId(collision.id));
 };
 
-function ChannelsDropTarget({ children }: { children: ReactNode }) {
-  const { setNodeRef } = useDroppable({
-    id: UNGROUPED_DROP_ID,
+function UngroupedGapDropTarget({
+  id,
+  isDragging,
+}: {
+  id: string;
+  isDragging: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${UNGROUPED_DROP_PREFIX}${id}`,
     data: { type: "ungrouped" },
   });
 
   return (
-    <div ref={setNodeRef} className="py-2">
-      {children}
+    <div ref={setNodeRef} className="relative h-4">
+      <div
+        className={cn(
+          "absolute inset-x-2 top-1/2 -translate-y-1/2 border-t transition-all",
+          isDragging
+            ? isOver
+              ? "border-blue-500 opacity-100"
+              : "border-border/60 opacity-100"
+            : "border-transparent opacity-0"
+        )}
+      />
     </div>
   );
 }
@@ -410,7 +430,7 @@ export function AppSidebar() {
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
-                  <ChannelsDropTarget>
+                  <div className="py-2">
                     {/* Ungrouped channels */}
                     {ungroupedChannelIds.length > 0 && (
                       <SidebarMenu>
@@ -427,21 +447,26 @@ export function AppSidebar() {
                     )}
 
                     {/* Groups */}
-                    <div className={ungroupedChannelIds.length > 0 ? "mt-2 space-y-2" : "space-y-2"}>
-                      {groupIds.map((groupId) => (
-                        <ChannelGroupSection
-                          key={groupId}
-                          id={groupId}
-                          channelIds={channelIdsByGroup[groupId] ?? []}
-                          activeChannelId={activeChannelId}
-                          onChannelClick={setActiveChannelId}
-                          onAddChannel={handleAddChannelToGroup}
-                          onDeleteGroup={handleDeleteGroup}
-                          isDropTarget={dragOverGroupId === groupId}
-                        />
-                      ))}
-                    </div>
-                  </ChannelsDropTarget>
+                    {groupIds.length > 0 && (
+                      <div className={ungroupedChannelIds.length > 0 ? "mt-2" : ""}>
+                        <UngroupedGapDropTarget id="before-groups" isDragging={dragChannelName !== null} />
+                        {groupIds.map((groupId) => (
+                          <Fragment key={groupId}>
+                            <ChannelGroupSection
+                              id={groupId}
+                              channelIds={channelIdsByGroup[groupId] ?? []}
+                              activeChannelId={activeChannelId}
+                              onChannelClick={setActiveChannelId}
+                              onAddChannel={handleAddChannelToGroup}
+                              onDeleteGroup={handleDeleteGroup}
+                              isDropTarget={dragOverGroupId === groupId}
+                            />
+                            <UngroupedGapDropTarget id={`after-${groupId}`} isDragging={dragChannelName !== null} />
+                          </Fragment>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <DragOverlay dropAnimation={null}>
                     {dragChannelName ? (
