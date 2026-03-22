@@ -144,7 +144,7 @@ function ChannelsDropTarget({ children }: { children: ReactNode }) {
   });
 
   return (
-    <div ref={setNodeRef}>
+    <div ref={setNodeRef} className="py-2">
       {children}
     </div>
   );
