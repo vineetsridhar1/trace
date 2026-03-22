@@ -209,6 +209,28 @@ export function useOrgEvents() {
           }
         }
 
+        // Channel membership events
+        if ((event.eventType === "channel_member_added" || event.eventType === "channel_member_removed") && payload) {
+          const userId = payload.userId as string | undefined;
+          const currentUserId = useAuthStore.getState().userId;
+          const channel = asJsonObject(payload.channel);
+
+          if (event.eventType === "channel_member_added" && userId === currentUserId && channel && typeof channel.id === "string") {
+            // Current user joined — add channel to store
+            upsert("channels", channel.id, channel as unknown as Channel);
+          } else if (event.eventType === "channel_member_removed" && userId === currentUserId) {
+            // Current user left — remove channel from store
+            remove("channels", event.scopeId);
+            const activeChannelId = useUIStore.getState().activeChannelId;
+            if (activeChannelId === event.scopeId) {
+              useUIStore.getState().setActiveChannelId(null);
+            }
+          } else if (channel && typeof channel.id === "string") {
+            // Another user joined/left — update channel members
+            patch("channels", channel.id, { members: channel.members } as Partial<Channel>);
+          }
+        }
+
         // Channel group events
         if (event.eventType === "channel_group_created" && payload) {
           const group = asJsonObject(payload.channelGroup);
