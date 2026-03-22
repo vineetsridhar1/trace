@@ -55,21 +55,15 @@ export class ExecutionLoggingService {
         outputTokens: input.outputTokens,
         estimatedCostCents: input.estimatedCostCents,
         contextTokenAllocation: (input.contextTokenAllocation ??
-          {}) as unknown as Record<string, unknown>,
+          {}) as Prisma.InputJsonValue,
         disposition: input.disposition,
         confidence: input.confidence,
-        plannedActions: (input.plannedActions ?? []) as unknown as Record<
-          string,
-          unknown
-        >,
-        policyDecision: (input.policyDecision ?? {}) as unknown as Record<
-          string,
-          unknown
-        >,
-        finalActions: (input.finalActions ?? []) as unknown as Record<
-          string,
-          unknown
-        >,
+        plannedActions: (input.plannedActions ??
+          []) as Prisma.InputJsonValue,
+        policyDecision: (input.policyDecision ??
+          {}) as Prisma.InputJsonValue,
+        finalActions: (input.finalActions ??
+          []) as Prisma.InputJsonValue,
         status: input.status,
         inboxItemId: input.inboxItemId,
         latencyMs: input.latencyMs,
