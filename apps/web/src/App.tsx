@@ -84,7 +84,10 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
           <AppSidebar />
 
           {/* Two-card container: main content + session panel */}
-          <div ref={containerRef} className="flex w-full flex-1 overflow-hidden">
+          <div
+            ref={containerRef}
+            className="flex w-full flex-1 overflow-hidden md:peer-data-[state=collapsed]:pl-2"
+          >
             {/* Main content card */}
             <div
               className={cn(
