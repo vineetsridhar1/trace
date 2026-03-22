@@ -70,15 +70,9 @@ const SESSION_DETAIL_QUERY = gql`
 export function SessionDetailView({
   sessionId,
   panelMode,
-  isFullscreen,
-  onClose,
-  onToggleFullscreen,
 }: {
   sessionId: string;
   panelMode?: boolean;
-  isFullscreen?: boolean;
-  onClose?: () => void;
-  onToggleFullscreen?: () => void;
 }) {
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
     useSessionEvents(sessionId);
@@ -179,9 +173,6 @@ export function SessionDetailView({
           onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
           terminalOpen={showTerminal}
           panelMode={panelMode}
-          isFullscreen={isFullscreen}
-          onClose={onClose}
-          onToggleFullscreen={onToggleFullscreen}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden">
