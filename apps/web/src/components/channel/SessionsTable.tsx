@@ -12,7 +12,7 @@ import type {
 import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
-import { navigateToSession } from "../../stores/ui";
+import { navigateToSessionGroup } from "../../stores/ui";
 import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   getSessionGroupDisplayStatus,
@@ -246,9 +246,9 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           event.node.setExpanded(!event.node.expanded);
           return;
         }
-        const sessionId = event.data?.latestSession?.id;
-        if (event.data?.id && sessionId) {
-          navigateToSession(channelId, event.data.id, sessionId);
+        const latestSessionId = event.data?.latestSession?.id ?? null;
+        if (event.data?.id) {
+          navigateToSessionGroup(channelId, event.data.id, latestSessionId);
         }
       },
       onGridReady: (event: GridReadyEvent<SessionGroupRow>) => {

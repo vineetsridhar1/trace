@@ -21,6 +21,7 @@ interface UIState {
   setActiveThreadId: (id: string | null) => void;
   refreshTick: number;
   triggerRefresh: () => void;
+  lastSelectedSessionIdsByGroup: Record<string, string>;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -111,6 +112,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTerminalId: null,
   activeThreadId: null,
   refreshTick: 0,
+  lastSelectedSessionIdsByGroup: {},
   unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
@@ -196,17 +198,26 @@ export const useUIStore = create<UIState>((set, get) => ({
       return;
     }
 
-    const nextSessionId = sessionId ?? get().activeSessionId;
+    const nextSessionId =
+      sessionId
+      ?? getPreferredSessionIdForGroup(
+        groupId,
+        get().activeSessionGroupId === groupId ? get().activeSessionId : null,
+      );
     const channelId = resolveChannelIdForSessionGroup(groupId, currentChannelId);
     persistActiveChannelId(channelId);
-    set({
+    set((state) => ({
       activePage: "main",
       activeChatId: null,
       activeChannelId: channelId,
       activeSessionGroupId: groupId,
       activeSessionId: nextSessionId,
       activeTerminalId: null,
-    });
+      lastSelectedSessionIdsByGroup:
+        nextSessionId
+          ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
+          : state.lastSelectedSessionIdsByGroup,
+    }));
     pushNav(channelId, groupId, nextSessionId);
   },
 
@@ -229,12 +240,16 @@ export const useUIStore = create<UIState>((set, get) => ({
       resolveChannelIdForSession(id, currentChannelId),
     );
     persistActiveChannelId(channelId);
-    set({
+    set((state) => ({
       activeChannelId: channelId,
       activeSessionGroupId: sessionGroupId,
       activeSessionId: id,
       activeTerminalId: null,
-    });
+      lastSelectedSessionIdsByGroup:
+        sessionGroupId
+          ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
+          : state.lastSelectedSessionIdsByGroup,
+    }));
     pushNav(channelId, sessionGroupId, id);
   },
 
@@ -248,7 +263,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId) => {
     persistActiveChannelId(channelId);
-    set({
+    set((state) => ({
       activePage: page ?? "main",
       activeChannelId: channelId,
       activeSessionGroupId: sessionGroupId,
@@ -256,9 +271,47 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeTerminalId: null,
       activeChatId: chatId ?? null,
       activeThreadId: null,
-    });
+      lastSelectedSessionIdsByGroup:
+        sessionGroupId && sessionId
+          ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
+          : state.lastSelectedSessionIdsByGroup,
+    }));
   },
 }));
+
+export function getPreferredSessionIdForGroup(
+  sessionGroupId: string,
+  fallbackSessionId: string | null = null,
+): string | null {
+  const rememberedSessionId = useUIStore.getState().lastSelectedSessionIdsByGroup[sessionGroupId] ?? null;
+  if (rememberedSessionId) {
+    const rememberedSession = useEntityStore.getState().sessions[rememberedSessionId];
+    if (rememberedSession?.sessionGroupId === sessionGroupId) {
+      return rememberedSessionId;
+    }
+  }
+  return fallbackSessionId;
+}
+
+export function navigateToSessionGroup(
+  channelId: string | null,
+  sessionGroupId: string,
+  fallbackSessionId: string | null = null,
+): void {
+  const fallbackChannelId = useUIStore.getState().activeChannelId;
+  const sessionId = getPreferredSessionIdForGroup(sessionGroupId, fallbackSessionId);
+  const resolvedChannelId = resolveChannelIdForSessionGroup(
+    sessionGroupId,
+    channelId ?? fallbackChannelId,
+  );
+  useUIStore.getState()._restoreNav(resolvedChannelId, sessionGroupId, sessionId, "main", null);
+  const path = buildPath(resolvedChannelId, sessionGroupId, sessionId, "main");
+  history.pushState(
+    { channelId: resolvedChannelId, sessionGroupId, sessionId, page: "main", chatId: null },
+    "",
+    path,
+  );
+}
 
 export function navigateToSession(
   channelId: string | null,

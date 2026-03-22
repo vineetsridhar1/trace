@@ -426,7 +426,7 @@ export function SessionGroupDetailView({
         )}
       </div>
 
-      <div className="shrink-0 border-b border-border bg-surface px-2 py-1">
+      <div className="shrink-0 border-b border-border bg-surface px-2 pt-1 pb-0">
         <div className="native-scrollbar overflow-x-auto">
           <div className="flex min-w-max items-center gap-1">
             {sessionTabs.map((session) => {
