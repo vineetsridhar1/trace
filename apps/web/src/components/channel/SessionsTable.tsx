@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Circle, Loader2 } from "lucide-react";
 import type {
   ColDef,
@@ -11,121 +11,93 @@ import type {
 } from "ag-grid-community";
 import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
-import type { SessionEntity } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
-import { statusColor, statusLabel, getDisplayStatus, isReviewAndActive } from "../session/sessionStatus";
+import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
+import { navigateToSession } from "../../stores/ui";
+import {
+  getDisplayStatus,
+  isReviewAndActive,
+  statusColor,
+  statusLabel,
+} from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
-import { DeleteSessionDialog } from "../session/DeleteSessionDialog";
-import { useLongPress } from "../../hooks/useLongPress";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 
-type SessionRow = SessionEntity & { id: string; _reviewActive?: boolean };
+type SessionGroupRow = SessionGroupEntity & {
+  id: string;
+  latestSession?: SessionEntity;
+  chatCount: number;
+  _displayStatus: string;
+  _reviewActive: boolean;
+};
 
-/** Round a timestamp down to a 2-minute bucket so sort order stays stable
- *  while messages stream in — rows only reorder when they cross a boundary. */
 const BUCKET_MS = 2 * 60 * 1000;
 function bucketize(ts: string | undefined): number {
   if (!ts) return 0;
-  const t = new Date(ts).getTime();
-  return Math.floor(t / BUCKET_MS) * BUCKET_MS;
+  const time = new Date(ts).getTime();
+  return Math.floor(time / BUCKET_MS) * BUCKET_MS;
 }
 
-/** Statuses whose groups should start collapsed. */
 const collapsedByDefault = new Set(["merged", "failed"]);
+const FILTER_STORAGE_KEY_PREFIX = "trace:session-groups-filter:";
 
-const FILTER_STORAGE_KEY_PREFIX = "trace:sessions-filter:";
-
-/** Group ordering — attention-needed first, then active, then done. */
-const statusGroupOrder: Record<string, number> = {
-  needs_input: 0,
-  creating: 1,
-  active: 2,
-  completed: 3,
-  paused: 4,
-  pending: 5,
-  in_review: 6,
-  merged: 7,
-  failed: 8,
-  unreachable: 9,
-};
-
-const columns: ColDef<SessionRow>[] = [
+const columns: ColDef<SessionGroupRow>[] = [
   {
     headerName: "Name",
     field: "name",
     flex: 2,
-    minWidth: 200,
+    minWidth: 220,
     filter: true,
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const { data } = params;
-      if (!data) return null;
-      const color = statusColor[data.status ?? "active"];
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const row = params.data;
+      if (!row) return null;
+      const color = statusColor[row._displayStatus] ?? "text-muted-foreground";
       return (
-        <div className="flex items-center gap-2 h-full">
-          {data._reviewActive ? (
+        <div className="flex h-full items-center gap-2">
+          {row._reviewActive ? (
             <Loader2 size={8} className={`shrink-0 animate-spin ${color}`} />
           ) : (
             <Circle size={8} className={`shrink-0 fill-current ${color}`} />
           )}
-          <span className="truncate text-sm text-foreground">{data.name}</span>
+          <span className="truncate text-sm text-foreground">{row.name}</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">
+            {row.chatCount} chats
+          </span>
         </div>
       );
     },
   },
   {
     headerName: "Status",
-    field: "status",
+    field: "_displayStatus",
     rowGroup: true,
     hide: true,
   },
   {
     headerName: "Repo",
-    field: "repo" as keyof SessionRow,
-    width: 140,
+    colId: "repo",
+    width: 150,
     filter: true,
     valueGetter: (params) => {
-      const repo = params.data?.repo as { id: string; name: string } | null | undefined;
+      const repo = params.data?.latestSession?.repo as { name: string } | null | undefined;
       return repo?.name ?? "";
     },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const repo = params.data?.repo as { id: string; name: string } | null | undefined;
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const repo = params.data?.latestSession?.repo as { name: string } | null | undefined;
       if (!repo) return null;
-      return <span className="text-xs text-muted-foreground truncate">{repo.name}</span>;
-    },
-  },
-  {
-    headerName: "Bridge",
-    colId: "bridge",
-    width: 140,
-    filter: true,
-    valueGetter: (params) => {
-      const connection = params.data?.connection as
-        | { runtimeLabel?: string | null }
-        | null
-        | undefined;
-      return connection?.runtimeLabel ?? "";
-    },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const connection = params.data?.connection as
-        | { runtimeLabel?: string | null }
-        | null
-        | undefined;
-      const label = connection?.runtimeLabel;
-      if (!label) return null;
-      return <span className="text-xs text-muted-foreground truncate">{label}</span>;
+      return <span className="truncate text-xs text-muted-foreground">{repo.name}</span>;
     },
   },
   {
     headerName: "Created by",
-    field: "createdBy",
-    width: 150,
+    colId: "createdBy",
+    width: 160,
     filter: true,
     filterValueGetter: (params) => {
-      const createdBy = params.data?.createdBy as { name: string } | undefined;
+      const createdBy = params.data?.latestSession?.createdBy as { name: string } | undefined;
       return createdBy?.name ?? "";
     },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const createdBy = params.data?.createdBy as
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const createdBy = params.data?.latestSession?.createdBy as
         | { id: string; name: string; avatarUrl?: string | null }
         | undefined;
       if (!createdBy) return null;
@@ -135,7 +107,7 @@ const columns: ColDef<SessionRow>[] = [
           fallbackName={createdBy.name}
           fallbackAvatarUrl={createdBy.avatarUrl}
         >
-          <div className="flex items-center gap-1.5 h-full cursor-pointer">
+          <div className="flex h-full cursor-pointer items-center gap-1.5">
             {createdBy.avatarUrl && (
               <img
                 src={createdBy.avatarUrl}
@@ -152,189 +124,139 @@ const columns: ColDef<SessionRow>[] = [
     },
   },
   {
-    headerName: "Last message",
-    colId: "lastActivityAt",
-    width: 120,
+    headerName: "Latest Chat",
+    colId: "latestChat",
+    width: 220,
     filter: true,
-    valueGetter: (params) => {
-      return params.data?._lastMessageAt ?? params.data?.updatedAt;
+    valueGetter: (params) => params.data?.latestSession?.name ?? "",
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const latestSession = params.data?.latestSession;
+      if (!latestSession) return null;
+      return <span className="truncate text-xs text-muted-foreground">{latestSession.name}</span>;
     },
-    cellRenderer: (params: ICellRendererParams<SessionRow>) => {
-      const lastMessageAt = (params.value as string | undefined) ?? undefined;
-      if (!lastMessageAt) return null;
-      return <span className="text-xs text-muted-foreground">{timeAgo(lastMessageAt)}</span>;
+  },
+  {
+    headerName: "Last activity",
+    colId: "lastActivityAt",
+    width: 130,
+    filter: true,
+    valueGetter: (params) => params.data?._sortTimestamp ?? params.data?.updatedAt,
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const lastActivityAt = (params.value as string | undefined) ?? undefined;
+      if (!lastActivityAt) return null;
+      return <span className="text-xs text-muted-foreground">{timeAgo(lastActivityAt)}</span>;
     },
-    comparator: (a: string | undefined, b: string | undefined) => {
-      return bucketize(a) - bucketize(b);
-    },
+    comparator: (a: string | undefined, b: string | undefined) => bucketize(a) - bucketize(b),
   },
 ];
 
-const { Table, useTable } = createTable<SessionRow>({
-  id: "sessions",
+const { Table, useTable } = createTable<SessionGroupRow>({
+  id: "session-groups",
   columns,
 });
 
 export function SessionsTable({ channelId }: { channelId: string }) {
+  const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const sessions = useEntityStore((s) => s.sessions);
-  const activeSessionId = useUIStore((s) => s.activeSessionId);
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
 
-  const filteredSessions = useMemo(() => {
-    return (Object.values(sessions) as SessionRow[])
-      .filter((s) => {
-        const ch = s.channel as { id: string } | null | undefined;
-        return ch?.id === channelId;
+  const rows = useMemo(() => {
+    return (Object.values(sessionGroups) as SessionGroupEntity[])
+      .filter((group) => {
+        const channel = group.channel as { id: string } | null | undefined;
+        return channel?.id === channelId;
       })
-      .map((s) => ({
-        ...s,
-        status: getDisplayStatus(s.status, s.prUrl as string | null | undefined),
-        _reviewActive: isReviewAndActive(s.status, s.prUrl as string | null | undefined),
-      } as SessionRow))
+      .map((group) => {
+        const groupSessions = (Object.values(sessions) as SessionEntity[])
+          .filter((session) => session.sessionGroupId === group.id)
+          .sort((a, b) => {
+            const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+            if (diff !== 0) return diff;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+        const latestSession = groupSessions[0];
+        const displayStatus = getDisplayStatus(
+          latestSession?.status,
+          latestSession?.prUrl as string | null | undefined,
+        );
+        return {
+          ...group,
+          latestSession,
+          chatCount: groupSessions.length,
+          _displayStatus: displayStatus,
+          _reviewActive: !!latestSession
+            && isReviewAndActive(latestSession.status, latestSession.prUrl as string | null | undefined),
+          _sortTimestamp: latestSession?._sortTimestamp ?? latestSession?.updatedAt ?? group.updatedAt,
+        };
+      })
       .sort((a, b) => {
-        const aSort = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
-        const bSort = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
-        const diff = new Date(bSort).getTime() - new Date(aSort).getTime();
+        const diff = new Date(b._sortTimestamp ?? b.updatedAt).getTime()
+          - new Date(a._sortTimestamp ?? a.updatedAt).getTime();
         if (diff !== 0) return diff;
         return a.id.localeCompare(b.id);
-      });
-  }, [sessions, channelId]);
+      }) as SessionGroupRow[];
+  }, [channelId, sessionGroups, sessions]);
 
   useEffect(() => {
-    useTable.getState().setRows(filteredSessions);
-  }, [filteredSessions]);
-
-  const setDeleteFromRowId = useCallback(
-    (rowId: string) => {
-      const session = filteredSessions.find((s) => s.id === rowId);
-      if (session) setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" });
-    },
-    [filteredSessions],
-  );
-
-  const longPressFired = useLongPress({ ref: gridRef, onLongPress: setDeleteFromRowId });
-
-  const getContextMenuItems = useCallback(
-    (params: GetContextMenuItemsParams<SessionRow>): MenuItemDef<SessionRow>[] => {
-      if (!params.node?.data) return [];
-      const session = params.node.data;
-      return [
-        {
-          name: "Copy Session Link",
-          action: () => {
-            const url = `${window.location.origin}/c/${channelId}/s/${session.id}`;
-            navigator.clipboard.writeText(url);
-          },
-        },
-        {
-          name: "Delete Session",
-          action: () => setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" }),
-          cssClasses: ["text-destructive"],
-        },
-      ];
-    },
-    [channelId],
-  );
+    useTable.getState().setRows(rows);
+  }, [rows]);
 
   const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}`;
 
   const agGridOptions = useMemo(
     () => ({
-      onRowClicked: (event: {
-        node: { group?: boolean; expanded?: boolean; setExpanded: (v: boolean) => void };
-        data?: SessionRow;
-      }) => {
-        if (longPressFired.current) {
-          longPressFired.current = false;
-          return;
-        }
+      onRowClicked: (event: { node: { group?: boolean; expanded?: boolean; setExpanded: (value: boolean) => void }; data?: SessionGroupRow }) => {
         if (event.node.group) {
           event.node.setExpanded(!event.node.expanded);
           return;
         }
-        if (event.data?.id) {
-          setActiveSessionId(event.data.id);
+        const sessionId = event.data?.latestSession?.id;
+        if (event.data?.id && sessionId) {
+          navigateToSession(channelId, event.data.id, sessionId);
         }
       },
-      onGridReady: (event: GridReadyEvent<SessionRow>) => {
-        try {
-          const saved = localStorage.getItem(filterStorageKey);
-          if (saved) {
-            event.api.setFilterModel(JSON.parse(saved));
-          }
-        } catch {
-          // ignore corrupt data
+      onGridReady: (event: GridReadyEvent<SessionGroupRow>) => {
+        const savedFilters = localStorage.getItem(filterStorageKey);
+        if (savedFilters) {
+          event.api.setFilterModel(JSON.parse(savedFilters));
         }
       },
-      onFilterChanged: (event: FilterChangedEvent<SessionRow>) => {
-        const model = event.api.getFilterModel();
-        if (Object.keys(model).length === 0) {
-          localStorage.removeItem(filterStorageKey);
-        } else {
-          localStorage.setItem(filterStorageKey, JSON.stringify(model));
-        }
+      onFilterChanged: (event: FilterChangedEvent<SessionGroupRow>) => {
+        localStorage.setItem(filterStorageKey, JSON.stringify(event.api.getFilterModel()));
       },
-      rowHeight: 40,
-      headerHeight: 32,
-      suppressCellFocus: true,
-      getContextMenuItems,
-      getRowHeight: (params: { node: { group?: boolean } }) => {
-        if (params.node.group) return 40;
-        return undefined;
+      getContextMenuItems: (params: GetContextMenuItemsParams<SessionGroupRow>): MenuItemDef<SessionGroupRow>[] => {
+        if (!params.node?.data) return [];
+        const group = params.node.data;
+        const sessionId = group.latestSession?.id;
+        return [
+          {
+            name: "Copy Workspace Link",
+            action: () => {
+              const path = sessionId
+                ? `/c/${channelId}/g/${group.id}/s/${sessionId}`
+                : `/c/${channelId}/g/${group.id}`;
+              navigator.clipboard.writeText(`${window.location.origin}${path}`);
+            },
+          },
+        ];
       },
-      groupDisplayType: "groupRows" as const,
-      isGroupOpenByDefault: (params: IsGroupOpenByDefaultParams) => {
-        return !collapsedByDefault.has(params.key ?? "");
-      },
-      groupRowRendererParams: {
-        suppressCount: true,
-        innerRenderer: (params: ICellRendererParams) => {
-          const status = params.value as string;
-          const color = statusColor[status] ?? "text-muted-foreground";
-          const label = statusLabel[status] ?? status;
-          const count = params.node.allChildrenCount ?? 0;
-          return (
-            <div className={`flex items-center gap-2 ${color}`}>
-              <Circle size={8} className="shrink-0 fill-current" />
-              <span className="text-sm font-semibold">{label}</span>
-              <span className="text-xs text-muted-foreground">{count}</span>
-            </div>
-          );
+      autoGroupColumnDef: {
+        headerName: "Status",
+        minWidth: 200,
+        cellRendererParams: {
+          suppressCount: false,
         },
+        valueFormatter: (params: { value: string }) => statusLabel[params.value] ?? params.value,
       },
-      initialGroupOrderComparator: (params: {
-        nodeA: { key?: string | null };
-        nodeB: { key?: string | null };
-      }) => {
-        const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
-        const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
-        return a - b;
+      groupDefaultExpanded: 1,
+      isGroupOpenByDefault: (params: IsGroupOpenByDefaultParams<SessionGroupRow>) => {
+        const key = params.rowNode.key as string;
+        return !collapsedByDefault.has(key);
       },
     }),
-    [setActiveSessionId, getContextMenuItems, filterStorageKey],
+    [channelId, filterStorageKey],
   );
 
   return (
-    <>
-      <div ref={gridRef} className="h-full">
-        <Table
-          className="h-full"
-          agGridOptions={agGridOptions}
-          selectedRowIds={activeSessionId ? [activeSessionId] : undefined}
-        />
-      </div>
-      {deleteTarget && (
-        <DeleteSessionDialog
-          sessionId={deleteTarget.id}
-          sessionName={deleteTarget.name}
-          open={true}
-          onOpenChange={(open) => {
-            if (!open) setDeleteTarget(null);
-          }}
-        />
-      )}
-    </>
+    <Table className="h-full" agGridOptions={agGridOptions} />
   );
 }

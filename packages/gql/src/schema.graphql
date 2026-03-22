@@ -236,6 +236,15 @@ type ChannelGroup {
   channels: [Channel!]!
 }
 
+type SessionGroup {
+  id: ID!
+  name: String!
+  channel: Channel
+  sessions: [Session!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 type Session {
   id: ID!
   name: String!
@@ -249,8 +258,8 @@ type Session {
   workdir: String
   toolSessionId: String
   channel: Channel
-  parentSession: Session
-  childSessions: [Session!]!
+  sessionGroupId: ID
+  sessionGroup: SessionGroup
   projects: [Project!]!
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
@@ -488,8 +497,9 @@ input StartSessionInput {
   branch: String
   ticketId: ID
   channelId: ID
+  sessionGroupId: ID
+  sourceSessionId: ID
   projectId: ID
-  parentSessionId: ID
   prompt: String
 }
 
@@ -583,6 +593,8 @@ type Query {
   channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
+  sessionGroups(channelId: ID!): [SessionGroup!]!
+  sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
   mySessions(organizationId: ID!, status: SessionStatus): [Session!]!

@@ -7,6 +7,7 @@ import type {
   Project,
   Channel,
   ChannelGroup,
+  SessionGroup,
   Chat,
   Session,
   Ticket,
@@ -22,6 +23,10 @@ export type SessionEntity = Session & {
   _sortTimestamp?: string;
 };
 
+export type SessionGroupEntity = SessionGroup & {
+  _sortTimestamp?: string;
+};
+
 /** Entity types that the store manages, keyed by ID */
 export type EntityTableMap = {
   organizations: Organization;
@@ -30,6 +35,7 @@ export type EntityTableMap = {
   projects: Project;
   channels: Channel;
   channelGroups: ChannelGroup;
+  sessionGroups: SessionGroupEntity;
   chats: Chat;
   sessions: SessionEntity;
   tickets: Ticket;
@@ -70,6 +76,7 @@ export const useEntityStore = create<EntityState>((set) => ({
   projects: {},
   channels: {},
   channelGroups: {},
+  sessionGroups: {},
   chats: {},
   sessions: {},
   tickets: {},

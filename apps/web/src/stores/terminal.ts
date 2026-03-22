@@ -6,29 +6,31 @@ export type TerminalStatus = "connecting" | "active" | "exited";
 export interface TerminalEntry {
   id: string;
   sessionId: string;
+  sessionGroupId: string;
   status: TerminalStatus;
 }
 
 interface TerminalState {
-  /** terminalId → entry */
   terminals: Record<string, TerminalEntry>;
-  /** sessionId → active terminalId */
-  activeTerminalId: Record<string, string>;
-
-  addTerminal: (id: string, sessionId: string, status?: TerminalStatus) => void;
+  addTerminal: (
+    id: string,
+    sessionId: string,
+    sessionGroupId: string,
+    status?: TerminalStatus,
+  ) => void;
   setTerminalStatus: (id: string, status: TerminalStatus) => void;
   removeTerminal: (id: string) => void;
-  setActiveTerminal: (sessionId: string, terminalId: string) => void;
 }
 
-export const useTerminalStore = create<TerminalState>((set, get) => ({
+export const useTerminalStore = create<TerminalState>((set) => ({
   terminals: {},
-  activeTerminalId: {},
 
-  addTerminal: (id, sessionId, status) =>
+  addTerminal: (id, sessionId, sessionGroupId, status) =>
     set((state) => ({
-      terminals: { ...state.terminals, [id]: { id, sessionId, status: status ?? "connecting" } },
-      activeTerminalId: { ...state.activeTerminalId, [sessionId]: id },
+      terminals: {
+        ...state.terminals,
+        [id]: { id, sessionId, sessionGroupId, status: status ?? "connecting" },
+      },
     })),
 
   setTerminalStatus: (id, status) =>
@@ -40,31 +42,15 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   removeTerminal: (id) =>
     set((state) => {
-      const { [id]: removed, ...rest } = state.terminals;
-      const activeTerminalId = { ...state.activeTerminalId };
-      if (removed && activeTerminalId[removed.sessionId] === id) {
-        // Switch to another terminal or clear
-        const remaining = Object.values(rest).filter((t) => t.sessionId === removed.sessionId);
-        if (remaining.length > 0) {
-          activeTerminalId[removed.sessionId] = remaining[remaining.length - 1].id;
-        } else {
-          delete activeTerminalId[removed.sessionId];
-        }
-      }
-      return { terminals: rest, activeTerminalId };
+      const { [id]: _, ...rest } = state.terminals;
+      return { terminals: rest };
     }),
-
-  setActiveTerminal: (sessionId, terminalId) =>
-    set((state) => ({
-      activeTerminalId: { ...state.activeTerminalId, [sessionId]: terminalId },
-    })),
 }));
 
-/** Memoized selector: returns stable array of terminal entries for a session. */
-export function useSessionTerminals(sessionId: string): TerminalEntry[] {
+export function useSessionGroupTerminals(sessionGroupId: string): TerminalEntry[] {
   return useTerminalStore(
-    useShallow((s) =>
-      Object.values(s.terminals).filter((t) => t.sessionId === sessionId),
+    useShallow((state) =>
+      Object.values(state.terminals).filter((terminal) => terminal.sessionGroupId === sessionGroupId),
     ),
   );
 }

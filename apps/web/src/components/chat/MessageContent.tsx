@@ -10,20 +10,28 @@ DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
   }
 });
 
-/** Match internal session URLs: /c/{channelId}/s/{sessionId} */
-const SESSION_URL_RE = /\/c\/([a-f0-9-]+)\/s\/([a-f0-9-]+)\/?$/;
+/** Match internal session URLs: /c/{channelId}/g/{groupId}/s/{sessionId} or /g/{groupId}/s/{sessionId} */
+const SESSION_URL_RE = /(?:\/c\/([a-f0-9-]+))?\/g\/([a-f0-9-]+)\/s\/([a-f0-9-]+)\/?$/;
 
 /** Match session URLs in plain text (not already inside an <a> tag) and wrap them */
 const SESSION_URL_LINKIFY_RE =
-  /(https?:\/\/[^\s<]+\/c\/[a-f0-9-]+\/s\/[a-f0-9-]+\/?)/g;
+  /(https?:\/\/[^\s<]+(?:\/c\/[a-f0-9-]+)?\/g\/[a-f0-9-]+\/s\/[a-f0-9-]+\/?)/g;
 
-function parseSessionUrl(href: string | undefined): { channelId: string; sessionId: string } | null {
+function parseSessionUrl(
+  href: string | undefined,
+): { channelId: string | null; sessionGroupId: string; sessionId: string } | null {
   if (!href) return null;
   // Handle both absolute (https://...) and relative (/c/...) URLs
   try {
     const pathname = href.startsWith("http") ? new URL(href).pathname : href;
     const match = pathname.match(SESSION_URL_RE);
-    if (match) return { channelId: match[1], sessionId: match[2] };
+    if (match) {
+      return {
+        channelId: match[1] ?? null,
+        sessionGroupId: match[2],
+        sessionId: match[3],
+      };
+    }
   } catch {
     // Invalid URL — ignore
   }
@@ -55,6 +63,7 @@ const parserOptions: HTMLReactParserOptions = {
           <SessionLinkCard
             sessionId={session.sessionId}
             channelId={session.channelId}
+            sessionGroupId={session.sessionGroupId}
           />
         );
       }

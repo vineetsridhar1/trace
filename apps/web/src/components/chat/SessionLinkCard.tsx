@@ -9,10 +9,11 @@ import { SessionPreviewModal } from "./SessionPreviewModal";
 
 interface SessionLinkCardProps {
   sessionId: string;
-  channelId: string;
+  channelId: string | null;
+  sessionGroupId: string;
 }
 
-export function SessionLinkCard({ sessionId, channelId }: SessionLinkCardProps) {
+export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: SessionLinkCardProps) {
   const name = useEntityField("sessions", sessionId, "name");
   const rawStatus = useEntityField("sessions", sessionId, "status") as string | undefined;
   const prUrl = useEntityField("sessions", sessionId, "prUrl") as string | null | undefined;
@@ -23,7 +24,11 @@ export function SessionLinkCard({ sessionId, channelId }: SessionLinkCardProps) 
 
   if (!name) {
     return (
-      <SessionPreviewModal sessionId={sessionId} channelId={channelId}>
+      <SessionPreviewModal
+        sessionId={sessionId}
+        channelId={channelId}
+        sessionGroupId={sessionGroupId}
+      >
         <span className="inline-flex items-center gap-1.5 text-blue-400 hover:underline cursor-pointer text-sm">
           <ExternalLink size={12} />
           Session
@@ -33,7 +38,11 @@ export function SessionLinkCard({ sessionId, channelId }: SessionLinkCardProps) 
   }
 
   return (
-    <SessionPreviewModal sessionId={sessionId} channelId={channelId}>
+    <SessionPreviewModal
+      sessionId={sessionId}
+      channelId={channelId}
+      sessionGroupId={sessionGroupId}
+    >
       <div className="my-1 flex w-full max-w-sm items-center gap-3 rounded-lg border border-border bg-surface-deep px-3 py-2 text-left transition-colors hover:bg-muted/50 cursor-pointer">
         <Circle size={8} className={`shrink-0 fill-current ${color}`} />
         <div className="min-w-0 flex-1">

@@ -3,7 +3,7 @@ import { gql } from "@urql/core";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { client } from "../lib/urql";
 import { useEntityStore, eventScopeKey } from "../stores/entity";
-import type { SessionEntity } from "../stores/entity";
+import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
@@ -151,6 +151,21 @@ export function useOrgEvents() {
         const { upsert, patch, remove, upsertScopedEvent } = useEntityStore.getState();
         const payload = asJsonObject(event.payload);
 
+        const upsertSessionGroupFromPayload = () => {
+          const sessionFromPayload = asJsonObject(payload?.session);
+          const sessionGroup =
+            asJsonObject(payload?.sessionGroup)
+            ?? asJsonObject(sessionFromPayload?.sessionGroup);
+          if (sessionGroup && typeof sessionGroup.id === "string") {
+            const existing = useEntityStore.getState().sessionGroups[sessionGroup.id];
+            upsert(
+              "sessionGroups",
+              sessionGroup.id,
+              (existing ? { ...existing, ...sessionGroup } : sessionGroup) as SessionGroupEntity,
+            );
+          }
+        };
+
         // Always upsert the raw event into its scoped bucket
         upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
 
@@ -272,37 +287,47 @@ export function useOrgEvents() {
         if (event.eventType === "session_started" && payload) {
           const session = asJsonObject(payload.session);
           if (session && typeof session.id === "string") {
+            upsertSessionGroupFromPayload();
             upsert(
               "sessions",
               session.id,
               { ...session, _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp } as unknown as SessionEntity,
             );
-
-            // If this session has a parent, update the parent's childSessions
-            const parent = asJsonObject(session.parentSession);
-            if (parent && typeof parent.id === "string") {
-              const { sessions } = useEntityStore.getState();
-              const parentEntity = sessions[parent.id];
-              if (parentEntity) {
-                const existing = (parentEntity.childSessions ?? []) as SessionEntity[];
-                const alreadyLinked = existing.some((c) => c.id === session.id);
-                if (!alreadyLinked) {
-                  patch("sessions", parent.id, {
-                    childSessions: [...existing, session as unknown as SessionEntity],
-                  });
-                }
-              }
-            }
           }
         }
 
         // Session deleted — remove from store and navigate away if active
         if (event.eventType === "session_deleted" && event.scopeType === ("session" satisfies ScopeType)) {
           const deletedId = event.scopeId;
+          const deletedSessionGroupId =
+            payload && typeof payload.deletedSessionGroupId === "string"
+              ? payload.deletedSessionGroupId
+              : null;
+          const sessionGroupId =
+            payload && typeof payload.sessionGroupId === "string"
+              ? payload.sessionGroupId
+              : null;
           remove("sessions", deletedId);
-          const activeSessionId = useUIStore.getState().activeSessionId;
-          if (activeSessionId === deletedId) {
-            useUIStore.getState().setActiveSessionId(null);
+          if (deletedSessionGroupId) {
+            remove("sessionGroups", deletedSessionGroupId);
+          }
+
+          const ui = useUIStore.getState();
+          if (deletedSessionGroupId && ui.activeSessionGroupId === deletedSessionGroupId) {
+            ui.setActiveSessionId(null);
+          } else if (ui.activeSessionId === deletedId) {
+            const remaining = Object.values(useEntityStore.getState().sessions)
+              .filter((session) => session.sessionGroupId === sessionGroupId)
+              .sort((a, b) => {
+                const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+                if (diff !== 0) return diff;
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+              });
+            if (remaining[0]) {
+              ui.setActiveSessionId(remaining[0].id);
+            } else {
+              ui.setActiveSessionId(null);
+            }
           }
         }
 
@@ -333,6 +358,7 @@ export function useOrgEvents() {
 
         // Handle session_output subtypes that update session fields
         if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType) && payload) {
+          upsertSessionGroupFromPayload();
           const sessionPatch = sessionPatchFromOutput(payload);
           if (sessionPatch) {
             patch("sessions", event.scopeId, {

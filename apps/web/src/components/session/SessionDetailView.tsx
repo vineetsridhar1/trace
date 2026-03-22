@@ -48,18 +48,13 @@ const SESSION_DETAIL_QUERY = gql`
         name
         avatarUrl
       }
+      sessionGroupId
+      sessionGroup {
+        id
+        name
+      }
       channel {
         id
-      }
-      parentSession {
-        id
-        name
-        status
-      }
-      childSessions {
-        id
-        name
-        status
       }
       createdAt
       updatedAt
@@ -70,9 +65,11 @@ const SESSION_DETAIL_QUERY = gql`
 export function SessionDetailView({
   sessionId,
   panelMode,
+  hideHeader,
 }: {
   sessionId: string;
   panelMode?: boolean;
+  hideHeader?: boolean;
 }) {
   const { eventIds, loading, loadingOlder, hasOlder, error, fetchOlderEvents } =
     useSessionEvents(sessionId);
@@ -92,7 +89,7 @@ export function SessionDetailView({
   const isConnected = !connection || connection.state !== "disconnected";
   const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(status) && !worktreeDeleted;
 
-  // Fetch full session with lineage data — merge to avoid wiping fields set by events
+  // Fetch full session detail — merge to avoid wiping fields set by events
   useEffect(() => {
     client
       .query(SESSION_DETAIL_QUERY, { id: sessionId })
@@ -168,12 +165,14 @@ export function SessionDetailView({
   return (
     <EventScopeContext.Provider value={scopeKey}>
       <div className="flex h-full flex-col overflow-hidden">
-        <SessionHeader
-          sessionId={sessionId}
-          onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
-          terminalOpen={showTerminal}
-          panelMode={panelMode}
-        />
+        {!hideHeader && (
+          <SessionHeader
+            sessionId={sessionId}
+            onToggleTerminal={canAccessTerminal ? () => setShowTerminal((v) => !v) : undefined}
+            terminalOpen={showTerminal}
+            panelMode={panelMode}
+          />
+        )}
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-hidden">
@@ -205,7 +204,7 @@ export function SessionDetailView({
             )}
           </div>
 
-          {showTerminal && canAccessTerminal && (
+          {!hideHeader && showTerminal && canAccessTerminal && (
             <TerminalPanel sessionId={sessionId} onClose={() => setShowTerminal(false)} />
           )}
         </div>

@@ -7,6 +7,7 @@ import {
   RUN_SESSION_MUTATION,
   DISMISS_SESSION_MUTATION,
   DISMISS_INBOX_ITEM_MUTATION,
+  TERMINATE_SESSION_MUTATION,
 } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
@@ -43,6 +44,9 @@ export function InboxItemRow({ id }: { id: string }) {
   const sessionHosting = useEntityField("sessions", sourceId ?? "", "hosting") as
     | string
     | undefined;
+  const sessionGroupId = useEntityField("sessions", sourceId ?? "", "sessionGroupId") as
+    | string
+    | undefined;
   const sessionRepo = useEntityField("sessions", sourceId ?? "", "repo") as
     | { id: string }
     | null
@@ -61,12 +65,12 @@ export function InboxItemRow({ id }: { id: string }) {
   const resolution = (payload?.resolution as string) ?? "";
 
   const handleNavigate = useCallback(() => {
-    if (!sourceId) return;
-    navigateToSession(sessionChannel?.id ?? null, sourceId);
-  }, [sourceId, sessionChannel?.id]);
+    if (!sourceId || !sessionGroupId) return;
+    navigateToSession(sessionChannel?.id ?? null, sessionGroupId, sourceId);
+  }, [sourceId, sessionChannel?.id, sessionGroupId]);
 
   const handleApproveNewSession = useCallback(async () => {
-    if (sending || !sourceId) return;
+    if (sending || !sourceId || !sessionGroupId) return;
     setSending(true);
     try {
       const prompt = planContent
@@ -80,7 +84,8 @@ export function InboxItemRow({ id }: { id: string }) {
             channelId: sessionChannel?.id,
             repoId: sessionRepo?.id,
             branch: sessionBranch ?? undefined,
-            parentSessionId: sourceId,
+            sessionGroupId,
+            sourceSessionId: sourceId,
             prompt,
           },
         })
@@ -89,7 +94,8 @@ export function InboxItemRow({ id }: { id: string }) {
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
-        navigateToSession(sessionChannel?.id ?? null, newSessionId);
+        navigateToSession(sessionChannel?.id ?? null, sessionGroupId, newSessionId);
+        await client.mutation(TERMINATE_SESSION_MUTATION, { id: sourceId }).toPromise();
       }
     } finally {
       setSending(false);
@@ -103,6 +109,7 @@ export function InboxItemRow({ id }: { id: string }) {
     sessionChannel?.id,
     sessionRepo?.id,
     sessionBranch,
+    sessionGroupId,
   ]);
 
   const handleApproveKeepContext = useCallback(async () => {

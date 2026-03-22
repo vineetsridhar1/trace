@@ -192,6 +192,7 @@ model Organization {
   projects Project[]
   channelGroups ChannelGroup[]
   channels Channel[]
+  sessionGroups SessionGroup[]
   sessions Session[]
   tickets  Ticket[]
   events        Event[]
@@ -380,6 +381,7 @@ model Channel {
   group          ChannelGroup? @relation(fields: [groupId], references: [id])
 
   projects ChannelProject[]
+  sessionGroups SessionGroup[]
   sessions Session[]
   tickets  Ticket[]
   members  ChannelMember[]
@@ -412,6 +414,23 @@ model ChannelMember {
   @@index([userId])
 }
 
+model SessionGroup {
+  id             String       @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  channelId      String?
+  channel        Channel?     @relation(fields: [channelId], references: [id])
+
+  sessions Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, updatedAt])
+  @@index([channelId, updatedAt])
+}
+
 model Session {
   id             String       @id @default(uuid())
   name           String
@@ -429,9 +448,8 @@ model Session {
   branch         String?
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
-  parentSessionId String?
-  parentSession   Session?  @relation("SessionLineage", fields: [parentSessionId], references: [id])
-  childSessions   Session[] @relation("SessionLineage")
+  sessionGroupId String?
+  sessionGroup   SessionGroup? @relation(fields: [sessionGroupId], references: [id])
   workdir         String?
   toolSessionId   String?
   pendingRun      Json?
@@ -444,6 +462,8 @@ model Session {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([sessionGroupId, updatedAt])
 }
 
 model SessionProject {

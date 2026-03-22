@@ -793,6 +793,8 @@ export type Query = {
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
   session?: Maybe<Session>;
+  sessionGroup?: Maybe<SessionGroup>;
+  sessionGroups: Array<SessionGroup>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
   threadReplies: Array<Message>;
@@ -920,6 +922,16 @@ export type QuerySessionArgs = {
 };
 
 
+export type QuerySessionGroupArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupsArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
 export type QuerySessionTerminalsArgs = {
   sessionId: Scalars['ID']['input'];
 };
@@ -990,7 +1002,6 @@ export type Session = {
   __typename?: 'Session';
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
-  childSessions: Array<Session>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
@@ -999,10 +1010,11 @@ export type Session = {
   id: Scalars['ID']['output'];
   model?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
-  parentSession?: Maybe<Session>;
   prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
+  sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupId?: Maybe<Scalars['ID']['output']>;
   status: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
@@ -1043,6 +1055,16 @@ export type SessionFilters = {
   tool?: InputMaybe<CodingTool>;
 };
 
+export type SessionGroup = {
+  __typename?: 'SessionGroup';
+  channel?: Maybe<Channel>;
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  sessions: Array<Session>;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
 export type SessionRuntimeInstance = {
   __typename?: 'SessionRuntimeInstance';
   connected: Scalars['Boolean']['output'];
@@ -1075,11 +1097,12 @@ export type StartSessionInput = {
   channelId?: InputMaybe<Scalars['ID']['input']>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars['String']['input']>;
-  parentSessionId?: InputMaybe<Scalars['ID']['input']>;
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
   runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
+  sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
+  sourceSessionId?: InputMaybe<Scalars['ID']['input']>;
   ticketId?: InputMaybe<Scalars['ID']['input']>;
   tool: CodingTool;
 };

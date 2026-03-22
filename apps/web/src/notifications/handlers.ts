@@ -83,11 +83,16 @@ function handleSessionStatusChange(event: Event): void {
   const sessionName = session.name || "Untitled session";
   const label = statusLabel[newStatus] ?? newStatus;
   const channelId = (session.channel as { id: string } | null)?.id ?? null;
+  const sessionGroupId = session.sessionGroupId as string | undefined;
   const sessionId = event.scopeId;
 
   notify(`"${sessionName}" moved to "${label}"`, {
     tag: `session-status-${sessionId}`,
-    onClick: () => navigateToSession(channelId, sessionId),
+    onClick: () => {
+      if (sessionGroupId) {
+        navigateToSession(channelId, sessionGroupId, sessionId);
+      }
+    },
   });
 }
 
@@ -166,12 +171,17 @@ function handlePrEvent(event: Event): void {
 
   const sessionName = session.name || "Untitled session";
   const channelId = (session.channel as { id: string } | null)?.id ?? null;
+  const sessionGroupId = session.sessionGroupId as string | undefined;
   const sessionId = event.scopeId;
   const label = event.eventType === "session_pr_opened" ? "PR opened" : "PR closed";
 
   notify(`"${sessionName}" — ${label}`, {
     tag: `session-pr-${sessionId}`,
-    onClick: () => navigateToSession(channelId, sessionId),
+    onClick: () => {
+      if (sessionGroupId) {
+        navigateToSession(channelId, sessionGroupId, sessionId);
+      }
+    },
   });
 }
 

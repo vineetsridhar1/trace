@@ -1,114 +1,128 @@
-import { useMemo } from "react";
-import { Circle, ArrowDown } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { Circle, Plus } from "lucide-react";
+import { client } from "../../lib/urql";
+import { START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityStore } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
-import { statusColor } from "./sessionStatus";
+import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
+import { getDisplayStatus, statusColor } from "./sessionStatus";
 
 interface SessionHistoryProps {
   sessionId: string;
 }
 
-interface ChainEntry {
-  id: string;
-  name: string;
-  status: string;
-}
-
 export function SessionHistory({ sessionId }: SessionHistoryProps) {
   const sessions = useEntityStore((s) => s.sessions);
-  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
 
-  const chain = useMemo(() => {
-    const entries: ChainEntry[] = [];
-    const sessionsMap = sessions;
+  const currentSession = sessions[sessionId];
+  const sessionGroupId = currentSession?.sessionGroupId as string | undefined;
 
-    // Walk up to find the root
-    let current = sessionsMap[sessionId];
-    const ancestors: ChainEntry[] = [];
-    while (current) {
-      const parent = current.parentSession as { id: string } | null | undefined;
-      if (!parent?.id) break;
-      const parentSession = sessionsMap[parent.id];
-      if (!parentSession) break;
-      ancestors.unshift({
-        id: parentSession.id as string,
-        name: (parentSession.name as string) ?? "Session",
-        status: (parentSession.status as string) ?? "completed",
+  const groupSessions = useMemo(() => {
+    if (!sessionGroupId) return [];
+    return Object.values(sessions)
+      .filter((session) => session.sessionGroupId === sessionGroupId)
+      .sort((a, b) => {
+        const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        if (diff !== 0) return diff;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-      current = parentSession;
-    }
+  }, [sessionGroupId, sessions]);
 
-    entries.push(...ancestors);
+  const handleSeedNewChat = useCallback(
+    async (sourceId: string) => {
+      if (!sessionGroupId) return;
+      const source = sessions[sourceId];
+      if (!source) return;
 
-    // Add current session
-    const self = sessionsMap[sessionId];
-    if (self) {
-      entries.push({
-        id: sessionId,
-        name: (self.name as string) ?? "Session",
-        status: (self.status as string) ?? "active",
-      });
-    }
+      setCreatingFromId(sourceId);
+      try {
+        const result = await client
+          .mutation(START_SESSION_MUTATION, {
+            input: {
+              tool: source.tool,
+              model: source.model ?? undefined,
+              hosting: source.hosting,
+              channelId: (source.channel as { id: string } | null | undefined)?.id,
+              repoId: (source.repo as { id: string } | null | undefined)?.id,
+              branch: source.branch ?? undefined,
+              sessionGroupId,
+              sourceSessionId: sourceId,
+            },
+          })
+          .toPromise();
 
-    // Walk down to find children (only direct chain — follow first child)
-    current = sessionsMap[sessionId];
-    while (current) {
-      const children = current.childSessions as Array<{ id: string }> | undefined;
-      if (!children?.length) break;
-      const child = sessionsMap[children[0].id];
-      if (!child) break;
-      entries.push({
-        id: child.id as string,
-        name: (child.name as string) ?? "Session",
-        status: (child.status as string) ?? "pending",
-      });
-      current = child;
-    }
+        const newSessionId = result.data?.startSession?.id;
+        if (newSessionId) {
+          navigateToSession(
+            (source.channel as { id: string } | null | undefined)?.id ?? null,
+            sessionGroupId,
+            newSessionId,
+          );
+        }
+      } finally {
+        setCreatingFromId(null);
+      }
+    },
+    [sessionGroupId, sessions],
+  );
 
-    return entries;
-  }, [sessions, sessionId]);
-
-  if (chain.length <= 1) {
+  if (!sessionGroupId || groupSessions.length === 0) {
     return (
       <div className="px-3 py-4 text-center">
-        <p className="text-xs text-muted-foreground">No linked sessions</p>
+        <p className="text-xs text-muted-foreground">No group history</p>
       </div>
     );
   }
 
   return (
-    <div className="max-h-64 overflow-y-auto py-1">
-      {chain.map((entry, i) => (
-        <div key={entry.id}>
-          <button
-            type="button"
-            onClick={() => setActiveSessionId(entry.id)}
+    <div className="max-h-72 overflow-y-auto py-1">
+      {groupSessions.map((entry) => {
+        const displayStatus = getDisplayStatus(
+          entry.status,
+          entry.prUrl as string | null | undefined,
+        );
+        const channelId = (entry.channel as { id: string } | null | undefined)?.id ?? null;
+
+        return (
+          <div
+            key={entry.id}
             className={cn(
-              "flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-surface-elevated",
+              "flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-surface-elevated",
               entry.id === sessionId && "bg-surface-elevated/50",
             )}
           >
-            <Circle
-              size={6}
-              className={cn("shrink-0 fill-current", statusColor[entry.status])}
-            />
-            <span
-              className={cn(
-                "min-w-0 flex-1 truncate",
-                entry.id === sessionId ? "font-semibold text-foreground" : "text-muted-foreground",
-              )}
+            <button
+              type="button"
+              onClick={() => navigateToSession(channelId, sessionGroupId, entry.id)}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
-              {entry.name}
-            </span>
-          </button>
-          {i < chain.length - 1 && (
-            <div className="flex justify-center py-0.5">
-              <ArrowDown size={10} className="text-muted-foreground/50" />
-            </div>
-          )}
-        </div>
-      ))}
+              <Circle
+                size={6}
+                className={cn("shrink-0 fill-current", statusColor[displayStatus])}
+              />
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate",
+                  entry.id === sessionId ? "font-semibold text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {entry.name}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSeedNewChat(entry.id)}
+              disabled={creatingFromId !== null}
+              className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
+              title="New chat from this session"
+            >
+              <Plus size={12} className={creatingFromId === entry.id ? "animate-pulse" : ""} />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
