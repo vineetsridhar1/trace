@@ -170,17 +170,17 @@ function TopLevelDropIndicator({
     <div
       ref={setNodeRef}
       className={cn(
-        "relative h-2 -my-1 overflow-visible"
+        "relative z-10 h-2 -my-1 overflow-visible"
       )}
     >
       <div
         className={cn(
-          "absolute inset-x-2 top-1/2 -translate-y-1/2 border-t transition-all",
+          "pointer-events-none absolute inset-x-2 top-1/2 z-10 -translate-y-1/2 rounded-full transition-all",
           isDragging
             ? isOver
-              ? "border-blue-500 opacity-100"
-              : "border-border/60 opacity-100"
-            : "border-transparent opacity-0"
+              ? "h-0.5 bg-blue-500 opacity-100"
+              : "h-px bg-border/80 opacity-100"
+            : "h-px bg-transparent opacity-0"
         )}
       />
     </div>
