@@ -8,13 +8,21 @@ import { client } from "../lib/urql";
 import { gql } from "@urql/core";
 
 const CHANNELS_QUERY = gql`
-  query Channels($organizationId: ID!) {
-    channels(organizationId: $organizationId) {
+  query Channels($organizationId: ID!, $memberOnly: Boolean) {
+    channels(organizationId: $organizationId, memberOnly: $memberOnly) {
       id
       name
       type
       position
       groupId
+      members {
+        user {
+          id
+          name
+          avatarUrl
+        }
+        joinedAt
+      }
     }
   }
 `;
@@ -95,7 +103,7 @@ export function useSidebarData() {
 
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
-    const result = await client.query(CHANNELS_QUERY, { organizationId: activeOrgId }).toPromise();
+    const result = await client.query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true }).toPromise();
     if (result.data?.channels) {
       upsertMany("channels", result.data.channels as Array<Channel & { id: string }>);
     }

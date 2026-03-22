@@ -11,6 +11,7 @@ import { ChannelItem } from "./sidebar/ChannelItem";
 import { ChatItem } from "./sidebar/ChatItem";
 import { ChannelGroupSection } from "./sidebar/ChannelGroupSection";
 import { CreateChannelDialog } from "./sidebar/CreateChannelDialog";
+import { BrowseChannelsDialog } from "./sidebar/BrowseChannelsDialog";
 import { CreateChatDialog } from "./sidebar/CreateChatDialog";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
 import { InboxButton } from "./sidebar/InboxButton";
@@ -115,12 +116,15 @@ export function AppSidebar() {
               <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Channels
               </SidebarGroupLabel>
-              <CreateChannelDialog
-                open={createDialogOpen}
-                onOpenChange={setCreateDialogOpen}
-                defaultGroupId={createForGroupId}
-                onTriggerClick={() => { setCreateForGroupId(null); setCreateDialogOpen(true); }}
-              />
+              <div className="flex items-center gap-0.5">
+                <BrowseChannelsDialog />
+                <CreateChannelDialog
+                  open={createDialogOpen}
+                  onOpenChange={setCreateDialogOpen}
+                  defaultGroupId={createForGroupId}
+                  onTriggerClick={() => { setCreateForGroupId(null); setCreateDialogOpen(true); }}
+                />
+              </div>
             </div>
             <SidebarGroupContent>
               {channelsLoading ? (

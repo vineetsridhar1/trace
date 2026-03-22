@@ -1,8 +1,13 @@
-import { Hash } from "lucide-react";
+import { MessageSquare, Code } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { useEntityField } from "../../stores/entity";
 import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
+
+function ChannelIcon({ type, className }: { type: string | undefined; className?: string }) {
+  if (type === "text") return <MessageSquare size={16} className={className} />;
+  return <Code size={16} className={className} />;
+}
 
 export function ChannelItem({
   id,
@@ -16,6 +21,7 @@ export function ChannelItem({
   groupId?: string | null;
 }) {
   const name = useEntityField("channels", id, "name");
+  const type = useEntityField("channels", id, "type");
 
   const {
     attributes,
@@ -36,7 +42,7 @@ export function ChannelItem({
     >
       <SidebarMenuItem>
         <SidebarMenuButton isActive={isActive} onClick={onClick} tooltip={name ?? ""}>
-          <Hash size={16} className="opacity-50" />
+          <ChannelIcon type={type} className="opacity-50" />
           <span>{name}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -55,6 +61,7 @@ export function PeekChannelItem({
   onClick: () => void;
 }) {
   const name = useEntityField("channels", id, "name");
+  const type = useEntityField("channels", id, "type");
 
   return (
     <button
@@ -66,7 +73,7 @@ export function PeekChannelItem({
           : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground"
       )}
     >
-      <Hash size={16} className="shrink-0 opacity-50" />
+      <ChannelIcon type={type} className="shrink-0 opacity-50" />
       <span className="truncate">{name}</span>
     </button>
   );

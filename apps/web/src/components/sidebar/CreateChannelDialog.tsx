@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Plus, Hash, FolderPlus } from "lucide-react";
+import { Plus, Code, MessageSquare, FolderPlus } from "lucide-react";
+import type { ChannelType } from "@trace/gql";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
@@ -30,6 +31,11 @@ const CREATE_GROUP_MUTATION = gql`
   }
 `;
 
+const TYPE_OPTIONS: Array<{ value: ChannelType; label: string; description: string; icon: typeof Code }> = [
+  { value: "coding", label: "Coding", description: "For AI coding sessions", icon: Code },
+  { value: "text", label: "Text", description: "For team messaging", icon: MessageSquare },
+];
+
 type CreateMode = "choose" | "channel" | "group";
 
 interface CreateChannelDialogProps {
@@ -51,6 +57,7 @@ export function CreateChannelDialog({
 
   const [mode, setMode] = useState<CreateMode>("choose");
   const [name, setName] = useState("");
+  const [channelType, setChannelType] = useState<ChannelType>("coding");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const isMobile = useIsMobile();
@@ -64,6 +71,7 @@ export function CreateChannelDialog({
         setMode("choose");
       }
       setName("");
+      setChannelType("coding");
     }
   }, [open, defaultGroupId]);
 
@@ -78,6 +86,7 @@ export function CreateChannelDialog({
           input: {
             organizationId: activeOrgId,
             name: name.trim(),
+            type: channelType,
             groupId: defaultGroupId ?? null,
           },
         })
@@ -85,6 +94,7 @@ export function CreateChannelDialog({
 
       if (result.data?.createChannel) {
         setName("");
+        setChannelType("coding");
         setOpen(false);
       }
     } finally {
@@ -144,10 +154,10 @@ export function CreateChannelDialog({
                 className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-elevated"
                 onClick={() => setMode("channel")}
               >
-                <Hash size={20} className="text-muted-foreground" />
+                <Code size={20} className="text-muted-foreground" />
                 <div>
                   <p className="text-sm font-medium">Channel</p>
-                  <p className="text-xs text-muted-foreground">Create a new channel for messaging and sessions</p>
+                  <p className="text-xs text-muted-foreground">Create a new channel for messaging or sessions</p>
                 </div>
               </button>
               <button
@@ -169,14 +179,41 @@ export function CreateChannelDialog({
             <DialogHeader>
               <DialogTitle>Create Channel</DialogTitle>
             </DialogHeader>
-            <div className="py-4">
-              <label className="mb-1.5 block text-sm text-muted-foreground">Channel name</label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. general"
-                autoFocus={!isMobile}
-              />
+            <div className="space-y-4 py-4">
+              <div>
+                <label className="mb-1.5 block text-sm text-muted-foreground">Channel name</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. general"
+                  autoFocus={!isMobile}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm text-muted-foreground">Channel type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TYPE_OPTIONS.map((opt) => {
+                    const Icon = opt.icon;
+                    const selected = channelType === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setChannelType(opt.value)}
+                        className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors ${
+                          selected
+                            ? "border-primary bg-primary/5 text-foreground"
+                            : "border-border text-muted-foreground hover:border-primary/50"
+                        }`}
+                      >
+                        <Icon size={20} />
+                        <span className="font-medium">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <DialogFooter>
               {!defaultGroupId && (
