@@ -291,10 +291,14 @@ export function useOrgEvents() {
           const session = asJsonObject(payload.session);
           if (session && typeof session.id === "string") {
             upsertSessionGroupFromPayload();
+            const existingSession = useEntityStore.getState().sessions[session.id];
             upsert(
               "sessions",
               session.id,
-              { ...session, _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp } as unknown as SessionEntity,
+              {
+                ...(existingSession ? { ...existingSession, ...session } : session),
+                _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
+              } as unknown as SessionEntity,
             );
           }
         }

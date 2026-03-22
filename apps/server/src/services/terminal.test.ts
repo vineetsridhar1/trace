@@ -217,9 +217,15 @@ describe("TerminalService", () => {
         createdById: "user-1",
       });
       terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
-      terminalRelayMock.getSessionId
-        .mockReturnValueOnce("session-1")
-        .mockReturnValueOnce("session-2");
+      terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
+        if (terminalId === "term-1") return "session-1";
+        if (terminalId === "term-2") return "session-2";
+        return undefined;
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", hosting: "cloud", createdById: "user-1" },
+        { id: "session-2", hosting: "cloud", createdById: "user-2" },
+      ]);
 
       const result = await terminalService.listForSession({
         sessionId: "session-1",
@@ -278,6 +284,33 @@ describe("TerminalService", () => {
       });
 
       expect(result).toEqual([]);
+    });
+
+    it("filters out local terminals owned by a different user in the same group", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        sessionGroupId: "group-1",
+        hosting: "cloud",
+        createdById: "user-1",
+      });
+      terminalRelayMock.getTerminalsForSessionGroup.mockReturnValueOnce(["term-1", "term-2"]);
+      terminalRelayMock.getSessionId.mockImplementation((terminalId: string) => {
+        if (terminalId === "term-1") return "session-1";
+        if (terminalId === "term-2") return "session-2";
+        return undefined;
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", hosting: "cloud", createdById: "user-1" },
+        { id: "session-2", hosting: "local", createdById: "user-2" },
+      ]);
+
+      const result = await terminalService.listForSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(result).toEqual([{ id: "term-1", sessionId: "session-1" }]);
     });
   });
 

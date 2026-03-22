@@ -24,6 +24,7 @@ import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
+import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
 import { SessionDetailView } from "./SessionDetailView";
 import { SessionHistory } from "./SessionHistory";
 import { TerminalInstance } from "./TerminalInstance";
@@ -41,9 +42,14 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
     sessionGroup(id: $id) {
       id
       name
+      branch
       prUrl
       workdir
       worktreeDeleted
+      repo {
+        id
+        name
+      }
       connection {
         state
         runtimeInstanceId
@@ -104,6 +110,11 @@ export function SessionGroupDetailView({
   panelMode?: boolean;
 }) {
   const groupName = useEntityField("sessionGroups", sessionGroupId, "name");
+  const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
+    | { id: string; name: string }
+    | null
+    | undefined;
+  const groupBranch = useEntityField("sessionGroups", sessionGroupId, "branch") as string | null | undefined;
   const groupPrUrl = useEntityField("sessionGroups", sessionGroupId, "prUrl") as string | null | undefined;
   const groupConnection = useEntityField("sessionGroups", sessionGroupId, "connection") as
     | Record<string, unknown>
@@ -160,10 +171,22 @@ export function SessionGroupDetailView({
       .then((result) => {
         if (!result.data?.sessionGroup) return;
         const fetchedGroup = result.data.sessionGroup;
-        upsert("sessionGroups", fetchedGroup.id, fetchedGroup);
+        const existingGroup = useEntityStore.getState().sessionGroups[fetchedGroup.id];
+        upsert(
+          "sessionGroups",
+          fetchedGroup.id,
+          existingGroup ? { ...existingGroup, ...fetchedGroup } : fetchedGroup,
+        );
         const fetchedSessions = fetchedGroup.sessions;
         if (Array.isArray(fetchedSessions)) {
-          upsertMany("sessions", fetchedSessions as Array<SessionEntity & { id: string }>);
+          const existingSessions = useEntityStore.getState().sessions;
+          upsertMany(
+            "sessions",
+            fetchedSessions.map((session) => ({
+              ...(existingSessions[session.id] ?? {}),
+              ...session,
+            })) as Array<SessionEntity & { id: string }>,
+          );
         }
       });
   }, [sessionGroupId, upsert, upsertMany]);
@@ -291,15 +314,21 @@ export function SessionGroupDetailView({
 
   const handleNewChat = useCallback(async () => {
     if (!selectedSession) return;
+    const resolvedChannelId =
+      getSessionGroupChannelId(
+        useEntityStore.getState().sessionGroups[sessionGroupId] ?? null,
+        groupSessions,
+      )
+      ?? getSessionChannelId(selectedSession);
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
           tool: selectedSession.tool,
           model: selectedSession.model ?? undefined,
           hosting: selectedSession.hosting,
-          channelId: (selectedSession.channel as { id: string } | null | undefined)?.id,
-          repoId: (selectedSession.repo as { id: string } | null | undefined)?.id,
-          branch: selectedSession.branch ?? undefined,
+          channelId: resolvedChannelId ?? undefined,
+          repoId: groupRepo?.id ?? (selectedSession.repo as { id: string } | null | undefined)?.id,
+          branch: groupBranch ?? selectedSession.branch ?? undefined,
           sessionGroupId,
           sourceSessionId: selectedSession.id,
         },
@@ -310,7 +339,7 @@ export function SessionGroupDetailView({
     if (newSessionId) {
       setActiveSessionId(newSessionId);
     }
-  }, [selectedSession, sessionGroupId, setActiveSessionId]);
+  }, [groupSessions, groupBranch, groupRepo, selectedSession, sessionGroupId, setActiveSessionId]);
 
   const latestSessionLabel = selectedSession
     ? statusLabel[selectedStatus] ?? selectedStatus
@@ -423,32 +452,39 @@ export function SessionGroupDetailView({
               const session = groupSessions.find((candidate) => candidate.id === terminal.sessionId);
               const label = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
               return (
-                <button
+                <div
                   key={terminal.id}
-                  onClick={() => {
-                    if (session) {
-                      setActiveSessionId(session.id);
-                    }
-                    setActiveTerminalId(terminal.id);
-                  }}
                   className={cn(
-                    "inline-flex max-w-[260px] shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
+                    "inline-flex max-w-[260px] shrink-0 items-center rounded-md text-xs transition-colors",
                     activeTerminalId === terminal.id
                       ? "bg-surface-elevated text-foreground"
                       : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
                   )}
                 >
-                  <TerminalSquare size={12} />
-                  <span className="truncate">{label}</span>
-                  <X
-                    size={12}
-                    className="opacity-60 hover:opacity-100"
-                    onClick={(event) => {
-                      event.stopPropagation();
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (session) {
+                        setActiveSessionId(session.id);
+                      }
+                      setActiveTerminalId(terminal.id);
+                    }}
+                    className="inline-flex min-w-0 items-center gap-2 px-3 py-1.5"
+                  >
+                    <TerminalSquare size={12} />
+                    <span className="truncate">{label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
                       handleCloseTerminal(terminal.id);
                     }}
-                  />
-                </button>
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:opacity-100"
+                    title="Close terminal tab"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               );
             })}
           </div>

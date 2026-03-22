@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useEntityStore } from "./entity";
+import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
 export type ActivePage = "main" | "settings" | "inbox";
 
@@ -74,9 +75,11 @@ function resolveChannelIdForSessionGroup(
   fallback: string | null,
 ): string | null {
   if (!sessionGroupId) return fallback;
+  const sessions = Object.values(useEntityStore.getState().sessions).filter(
+    (session) => session.sessionGroupId === sessionGroupId,
+  );
   const sessionGroup = useEntityStore.getState().sessionGroups[sessionGroupId];
-  const channel = sessionGroup?.channel as { id: string } | null | undefined;
-  return channel?.id ?? fallback;
+  return getSessionGroupChannelId(sessionGroup, sessions) ?? fallback;
 }
 
 function resolveChannelIdForSession(
@@ -85,8 +88,8 @@ function resolveChannelIdForSession(
 ): string | null {
   if (!sessionId) return fallback;
   const session = useEntityStore.getState().sessions[sessionId];
-  const channel = session?.channel as { id: string } | null | undefined;
-  if (channel?.id) return channel.id;
+  const channelId = getSessionChannelId(session);
+  if (channelId) return channelId;
   return resolveChannelIdForSessionGroup(session?.sessionGroupId ?? null, fallback);
 }
 

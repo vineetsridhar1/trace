@@ -47,6 +47,8 @@ type GroupWorkspaceStatePatch = {
   connection?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
   prUrl?: string | null;
   worktreeDeleted?: boolean;
+  repoId?: string | null;
+  branch?: string | null;
 };
 
 function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionConnectionData {
@@ -68,6 +70,10 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
   channelId: true,
+  channel: true,
+  repoId: true,
+  repo: true,
+  branch: true,
   workdir: true,
   connection: true,
   prUrl: true,
@@ -85,6 +91,7 @@ const SESSION_INCLUDE = {
 
 const SESSION_GROUP_INCLUDE = {
   channel: true,
+  repo: true,
   sessions: {
     orderBy: [
       { updatedAt: "desc" },
@@ -104,10 +111,14 @@ function serializeSession(
     hosting: string;
     createdBy: unknown;
     repo: unknown;
+    repoId?: string | null;
     branch: string | null;
+    workdir?: string | null;
     channel: unknown;
+    channelId?: string | null;
     sessionGroup: unknown;
     connection: Prisma.JsonValue | null;
+    worktreeDeleted?: boolean;
     createdAt: Date;
     updatedAt: Date;
   },
@@ -121,14 +132,18 @@ function serializeSession(
     hosting: session.hosting,
     createdBy: session.createdBy,
     repo: session.repo ?? null,
+    repoId: session.repoId ?? null,
     branch: session.branch ?? null,
+    workdir: session.workdir ?? null,
     channel: session.channel ?? null,
+    channelId: session.channelId ?? null,
     sessionGroupId:
       session.sessionGroup && typeof session.sessionGroup === "object" && "id" in session.sessionGroup
         ? (session.sessionGroup as { id: string }).id
         : null,
     sessionGroup: session.sessionGroup ?? null,
     connection: session.connection,
+    worktreeDeleted: session.worktreeDeleted ?? false,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -440,12 +455,33 @@ export class SessionService {
 
     const [session] = await prisma.$transaction(async (tx) => {
       const sessionGroup = existingGroup
-        ? existingGroup
+        ? await (async () => {
+            const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
+            if (resolvedChannelId !== undefined && existingGroup.channelId !== resolvedChannelId) {
+              nextGroupData.channelId = resolvedChannelId;
+            }
+            if (resolvedRepoId !== undefined && existingGroup.repoId !== resolvedRepoId) {
+              nextGroupData.repoId = resolvedRepoId;
+            }
+            if (resolvedBranch !== undefined && existingGroup.branch !== resolvedBranch) {
+              nextGroupData.branch = resolvedBranch;
+            }
+            if (Object.keys(nextGroupData).length === 0) {
+              return existingGroup;
+            }
+            return tx.sessionGroup.update({
+              where: { id: existingGroup.id },
+              data: nextGroupData,
+              select: SESSION_GROUP_SUMMARY_SELECT,
+            });
+          })()
         : await tx.sessionGroup.create({
             data: {
               name,
               organizationId: input.organizationId,
               channelId: resolvedChannelId,
+              repoId: resolvedRepoId ?? undefined,
+              branch: resolvedBranch ?? undefined,
               connection: initialConnection,
             },
             select: SESSION_GROUP_SUMMARY_SELECT,
@@ -1269,6 +1305,8 @@ export class SessionService {
       workdir,
       connection: session.connection as Prisma.InputJsonValue,
       worktreeDeleted: false,
+      repoId: session.repoId ?? null,
+      ...(branch !== undefined ? { branch } : {}),
     });
 
     await eventService.create({
@@ -2102,7 +2140,7 @@ export class SessionService {
   ) {
     if (!sessionGroupId) return null;
 
-    const groupData: Prisma.SessionGroupUpdateInput = {};
+    const groupData: Prisma.SessionGroupUncheckedUpdateInput = {};
     const sessionData: Prisma.SessionUpdateManyMutationInput = {};
 
     if (Object.prototype.hasOwnProperty.call(patch, "workdir")) {
@@ -2118,6 +2156,15 @@ export class SessionService {
 
     if (Object.prototype.hasOwnProperty.call(patch, "prUrl")) {
       groupData.prUrl = patch.prUrl ?? null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "repoId")) {
+      groupData.repoId = patch.repoId ?? null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "branch")) {
+      groupData.branch = patch.branch ?? null;
+      sessionData.branch = patch.branch ?? null;
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, "worktreeDeleted")) {
@@ -2359,17 +2406,16 @@ export class SessionService {
     });
   }
 
-  /** Set prUrl on a session when a PR is opened for its branch. */
-  async markPrOpened(params: { sessionId: string; prUrl: string; organizationId: string }) {
-    const { sessionId, prUrl, organizationId } = params;
+  /** Set prUrl on the active session group when a PR is opened for its current branch. */
+  async markPrOpened(params: {
+    sessionGroupId: string;
+    eventSessionId: string;
+    prUrl: string;
+    organizationId: string;
+  }) {
+    const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
 
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { sessionGroupId: true, status: true },
-    });
-    if (!session?.sessionGroupId || session.status === "merged") return;
-
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+    const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl,
     });
 
@@ -2378,25 +2424,30 @@ export class SessionService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: sessionId,
+      scopeId: eventSessionId,
       eventType: "session_pr_opened",
-      payload: { sessionId, prUrl, sessionGroup },
+      payload: { sessionId: eventSessionId, prUrl, sessionGroup },
       actorType: "system",
       actorId: "github-webhook",
     });
   }
 
-  /** Clear prUrl on a session when its PR is closed without merging. */
-  async markPrClosed(params: { sessionId: string; organizationId: string }) {
-    const { sessionId, organizationId } = params;
+  /** Clear prUrl on the active session group when its current PR is closed without merging. */
+  async markPrClosed(params: {
+    sessionGroupId: string;
+    eventSessionId: string;
+    prUrl: string;
+    organizationId: string;
+  }) {
+    const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
 
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { sessionGroupId: true, status: true },
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { prUrl: true },
     });
-    if (!session?.sessionGroupId || session.status === "merged") return;
+    if (!group?.prUrl || group.prUrl !== prUrl) return;
 
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
+    const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl: null,
     });
 
@@ -2405,41 +2456,47 @@ export class SessionService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: sessionId,
+      scopeId: eventSessionId,
       eventType: "session_pr_closed",
-      payload: { sessionId, sessionGroup },
+      payload: { sessionId: eventSessionId, sessionGroup },
       actorType: "system",
       actorId: "github-webhook",
     });
   }
 
-  /** Transition a session to "merged" when its PR is merged. */
-  async markPrMerged(params: { sessionId: string; prUrl: string; organizationId: string }) {
-    const { sessionId, prUrl, organizationId } = params;
+  /** Transition the active session group to merged when its current PR is merged. */
+  async markPrMerged(params: {
+    sessionGroupId: string;
+    eventSessionId: string;
+    prUrl: string;
+    organizationId: string;
+  }) {
+    const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
 
-    const existingSession = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { sessionGroupId: true },
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { prUrl: true },
     });
+    if (group?.prUrl && group.prUrl !== prUrl) return;
 
     // Atomic conditional update — skip if already merged
     const { count } = await prisma.session.updateMany({
-      where: { id: sessionId, status: { not: "merged" } },
+      where: { id: eventSessionId, status: { not: "merged" } },
       data: { status: "merged" },
     });
 
     if (count === 0) {
       const existing = await prisma.session.findUnique({
-        where: { id: sessionId },
+        where: { id: eventSessionId },
         select: { status: true },
       });
       if (existing?.status === "merged") {
-        await this.fullyUnloadSession(sessionId);
+        await this.fullyUnloadSession(eventSessionId);
       }
       return;
     }
 
-    const sessionGroup = await this.syncGroupWorkspaceState(existingSession?.sessionGroupId, {
+    const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl,
       workdir: null,
       worktreeDeleted: true,
@@ -2448,10 +2505,10 @@ export class SessionService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: sessionId,
+      scopeId: eventSessionId,
       eventType: "session_pr_merged",
       payload: {
-        sessionId,
+        sessionId: eventSessionId,
         prUrl,
         status: "merged",
         worktreeDeleted: true,
@@ -2461,7 +2518,7 @@ export class SessionService {
       actorId: "github-webhook",
     });
 
-    await this.fullyUnloadSession(sessionId);
+    await this.fullyUnloadSession(eventSessionId);
   }
 }
 

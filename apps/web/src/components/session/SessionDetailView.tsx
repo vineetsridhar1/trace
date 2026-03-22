@@ -52,11 +52,16 @@ const SESSION_DETAIL_QUERY = gql`
       sessionGroup {
         id
         name
+        branch
         prUrl
         workdir
         worktreeDeleted
         channel {
           id
+        }
+        repo {
+          id
+          name
         }
         connection {
           state

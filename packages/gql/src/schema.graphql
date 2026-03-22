@@ -240,6 +240,8 @@ type SessionGroup {
   id: ID!
   name: String!
   channel: Channel
+  repo: Repo
+  branch: String
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection

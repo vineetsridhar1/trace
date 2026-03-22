@@ -70,11 +70,19 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
     name: "Implement dashboard filters",
     organizationId: "org-1",
     channelId: "channel-1",
+    repoId: "repo-1",
+    branch: "main",
     workdir: null,
     connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
     prUrl: null,
     worktreeDeleted: false,
     channel: { id: "channel-1", name: "Backend" },
+    repo: {
+      id: "repo-1",
+      name: "trace",
+      remoteUrl: "git@github.com:trace/trace.git",
+      defaultBranch: "main",
+    },
     createdAt: new Date("2024-01-01T00:00:00.000Z"),
     updatedAt: new Date("2024-01-01T00:00:00.000Z"),
     sessions: [],
@@ -230,10 +238,18 @@ describe("SessionService", () => {
         hosting: "cloud",
         channelId: "channel-1",
         projects: [{ projectId: "project-1" }],
-        sessionGroup: makeSessionGroup({ workdir: "/tmp/trace/source" }),
+        sessionGroup: makeSessionGroup({
+          workdir: "/tmp/trace/source",
+          repoId: "repo-1",
+          branch: "feature/source",
+        }),
       });
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
-        makeSessionGroup({ workdir: "/tmp/trace/source" }),
+        makeSessionGroup({
+          workdir: "/tmp/trace/source",
+          repoId: "repo-1",
+          branch: "feature/source",
+        }),
       );
       prismaMock.ticketLink.findMany.mockResolvedValueOnce([{ ticketId: "ticket-1" }]);
       prismaMock.session.create.mockResolvedValueOnce(
@@ -423,6 +439,40 @@ describe("SessionService", () => {
           hosting: "cloud",
         }),
       );
+    });
+  });
+
+  describe("pr lifecycle", () => {
+    it("ignores stale PR close events from an old session in the group", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        prUrl: "https://github.com/trace/trace/pull/100",
+      });
+
+      await service.markPrClosed({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/trace/trace/pull/99",
+        organizationId: "org-1",
+      });
+
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("ignores stale PR merge events from an old session in the group", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        prUrl: "https://github.com/trace/trace/pull/100",
+      });
+
+      await service.markPrMerged({
+        sessionGroupId: "group-1",
+        eventSessionId: "session-1",
+        prUrl: "https://github.com/trace/trace/pull/99",
+        organizationId: "org-1",
+      });
+
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
   });
 });

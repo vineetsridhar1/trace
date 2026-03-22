@@ -5,6 +5,7 @@ import { START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityStore } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
+import { getSessionChannelId } from "../../lib/session-group";
 import { getDisplayStatus, statusColor } from "./sessionStatus";
 
 interface SessionHistoryProps {
@@ -43,7 +44,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
               tool: source.tool,
               model: source.model ?? undefined,
               hosting: source.hosting,
-              channelId: (source.channel as { id: string } | null | undefined)?.id,
+              channelId: getSessionChannelId(source) ?? undefined,
               repoId: (source.repo as { id: string } | null | undefined)?.id,
               branch: source.branch ?? undefined,
               sessionGroupId,
@@ -79,7 +80,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
     <div className="max-h-72 overflow-y-auto py-1">
       {groupSessions.map((entry) => {
         const displayStatus = getDisplayStatus(entry.status, null);
-        const channelId = (entry.channel as { id: string } | null | undefined)?.id ?? null;
+        const channelId = getSessionChannelId(entry);
 
         return (
           <div

@@ -76,7 +76,27 @@ class TerminalService {
     const terminalIds = session.sessionGroupId
       ? terminalRelay.getTerminalsForSessionGroup(session.sessionGroupId)
       : terminalRelay.getTerminalsForSession(sessionId);
-    return terminalIds.map((id) => ({ id, sessionId: terminalRelay.getSessionId(id) ?? sessionId }));
+    const terminalSessionIds = terminalIds
+      .map((id) => terminalRelay.getSessionId(id))
+      .filter((id): id is string => !!id);
+
+    const owningSessions = terminalSessionIds.length === 0
+      ? []
+      : await prisma.session.findMany({
+          where: { id: { in: terminalSessionIds }, organizationId },
+          select: { id: true, hosting: true, createdById: true },
+        });
+    const owningSessionMap = new Map(owningSessions.map((item) => [item.id, item]));
+
+    return terminalIds.flatMap((id) => {
+      const ownerSessionId = terminalRelay.getSessionId(id) ?? sessionId;
+      const ownerSession = owningSessionMap.get(ownerSessionId);
+      if (!ownerSession) return [];
+      if (ownerSession.hosting === "local" && ownerSession.createdById !== userId) {
+        return [];
+      }
+      return [{ id, sessionId: ownerSessionId }];
+    });
   }
 
   async destroy({

@@ -328,6 +328,7 @@ model Repo {
 
   projects Project[]
   sessions Session[]
+  sessionGroups SessionGroup[]
 
   webhookId     String?
   webhookSecret String?
@@ -421,6 +422,9 @@ model SessionGroup {
   organization   Organization @relation(fields: [organizationId], references: [id])
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
+  repoId         String?
+  repo           Repo?        @relation(fields: [repoId], references: [id])
+  branch         String?
   workdir        String?
   connection     Json?
   prUrl          String?
@@ -433,6 +437,7 @@ model SessionGroup {
 
   @@index([organizationId, updatedAt])
   @@index([channelId, updatedAt])
+  @@index([repoId, branch, updatedAt])
 }
 
 model Session {

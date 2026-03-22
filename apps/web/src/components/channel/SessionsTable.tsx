@@ -13,6 +13,7 @@ import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
+import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   getSessionGroupDisplayStatus,
   statusColor,
@@ -84,11 +85,15 @@ const columns: ColDef<SessionGroupRow>[] = [
     width: 140,
     filter: true,
     valueGetter: (params) => {
-      const repo = params.data?.latestSession?.repo as { id: string; name: string } | null | undefined;
+      const repo =
+        (params.data?.repo as { id: string; name: string } | null | undefined)
+        ?? (params.data?.latestSession?.repo as { id: string; name: string } | null | undefined);
       return repo?.name ?? "";
     },
     cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const repo = params.data?.latestSession?.repo as { id: string; name: string } | null | undefined;
+      const repo =
+        (params.data?.repo as { id: string; name: string } | null | undefined)
+        ?? (params.data?.latestSession?.repo as { id: string; name: string } | null | undefined);
       if (!repo) return null;
       return <span className="truncate text-xs text-muted-foreground">{repo.name}</span>;
     },
@@ -155,10 +160,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
 
   const filteredGroups = useMemo(() => {
     return (Object.values(sessionGroups) as SessionGroupEntity[])
-      .filter((group) => {
-        const channel = group.channel as { id: string } | null | undefined;
-        return channel?.id === channelId;
-      })
       .map((group) => {
         const groupSessions = (Object.values(sessions) as SessionEntity[])
           .filter((session) => session.sessionGroupId === group.id)
@@ -169,6 +170,10 @@ export function SessionsTable({ channelId }: { channelId: string }) {
             if (diff !== 0) return diff;
             return a.id.localeCompare(b.id);
           });
+        return { group, groupSessions };
+      })
+      .filter(({ group, groupSessions }) => getSessionGroupChannelId(group, groupSessions) === channelId)
+      .map(({ group, groupSessions }) => {
         const latestSession = groupSessions[0];
         const createdBySession = [...groupSessions].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
