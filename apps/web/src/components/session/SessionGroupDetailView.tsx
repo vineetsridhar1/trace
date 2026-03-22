@@ -128,15 +128,29 @@ export function SessionGroupDetailView({
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
 
-  const sessions = useMemo(() => {
-    return (Object.values(sessionsMap) as SessionEntity[])
-      .filter((session) => session.sessionGroupId === sessionGroupId)
-      .sort((a, b) => {
-        const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        if (diff !== 0) return diff;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-  }, [sessionGroupId, sessionsMap]);
+  const groupSessions = useMemo(
+    () =>
+      (Object.values(sessionsMap) as SessionEntity[]).filter(
+        (session) => session.sessionGroupId === sessionGroupId,
+      ),
+    [sessionGroupId, sessionsMap],
+  );
+
+  const sessionsByRecency = useMemo(() => {
+    return [...groupSessions].sort((a, b) => {
+      const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      if (diff !== 0) return diff;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [groupSessions]);
+
+  const sessionTabs = useMemo(() => {
+    return [...groupSessions].sort((a, b) => {
+      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (diff !== 0) return diff;
+      return a.id.localeCompare(b.id);
+    });
+  }, [groupSessions]);
 
   useEffect(() => {
     client
@@ -154,10 +168,10 @@ export function SessionGroupDetailView({
   }, [sessionGroupId, upsert, upsertMany]);
 
   useEffect(() => {
-    if (sessions.length === 0) return;
-    if (activeSessionId && sessions.some((session) => session.id === activeSessionId)) return;
-    setActiveSessionId(sessions[0].id);
-  }, [activeSessionId, sessions, setActiveSessionId]);
+    if (sessionsByRecency.length === 0) return;
+    if (activeSessionId && sessionsByRecency.some((session) => session.id === activeSessionId)) return;
+    setActiveSessionId(sessionsByRecency[0].id);
+  }, [activeSessionId, sessionsByRecency, setActiveSessionId]);
 
   useEffect(() => {
     if (!activeTerminalId) return;
@@ -188,11 +202,13 @@ export function SessionGroupDetailView({
     };
   }, [showHistory]);
 
-  const selectedSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0] ?? null;
+  const selectedSession = sessionTabs.find((session) => session.id === activeSessionId)
+    ?? sessionsByRecency[0]
+    ?? null;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
   const selectedStatus = getSessionGroupDisplayStatus(
-    sessions.map((session) => session.status),
+    groupSessions.map((session) => session.status),
     groupPrUrl,
   );
   const terminalAllowed = (() => {
@@ -379,58 +395,62 @@ export function SessionGroupDetailView({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1 border-b border-border bg-surface px-2 py-1">
-        {sessions.map((session) => {
-          const displayStatus = getDisplayStatus(session.status, null);
-          return (
-            <button
-              key={session.id}
-              onClick={() => setActiveSessionId(session.id)}
-              className={cn(
-                "inline-flex max-w-[220px] items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
-                !activeTerminalId && selectedSession?.id === session.id
-                  ? "bg-surface-elevated text-foreground"
-                  : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-              )}
-            >
-              <Circle size={6} className={cn("fill-current", statusColor[displayStatus])} />
-              <span className="truncate">{session.name}</span>
-            </button>
-          );
-        })}
+      <div className="shrink-0 border-b border-border bg-surface px-2 py-1">
+        <div className="overflow-x-auto">
+          <div className="flex min-w-max items-center gap-1">
+            {sessionTabs.map((session) => {
+              const displayStatus = getDisplayStatus(session.status, null);
+              return (
+                <button
+                  key={session.id}
+                  onClick={() => setActiveSessionId(session.id)}
+                  className={cn(
+                    "inline-flex max-w-[220px] shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
+                    !activeTerminalId && selectedSession?.id === session.id
+                      ? "bg-surface-elevated text-foreground"
+                      : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+                  )}
+                >
+                  <Circle size={6} className={cn("fill-current", statusColor[displayStatus])} />
+                  <span className="truncate">{session.name}</span>
+                </button>
+              );
+            })}
 
-        {terminals.map((terminal, index) => {
-          const session = sessions.find((candidate) => candidate.id === terminal.sessionId);
-          const label = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
-          return (
-            <button
-              key={terminal.id}
-              onClick={() => {
-                if (session) {
-                  setActiveSessionId(session.id);
-                }
-                setActiveTerminalId(terminal.id);
-              }}
-              className={cn(
-                "inline-flex max-w-[260px] items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
-                activeTerminalId === terminal.id
-                  ? "bg-surface-elevated text-foreground"
-                  : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-              )}
-            >
-              <TerminalSquare size={12} />
-              <span className="truncate">{label}</span>
-              <X
-                size={12}
-                className="opacity-60 hover:opacity-100"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleCloseTerminal(terminal.id);
-                }}
-              />
-            </button>
-          );
-        })}
+            {terminals.map((terminal, index) => {
+              const session = groupSessions.find((candidate) => candidate.id === terminal.sessionId);
+              const label = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
+              return (
+                <button
+                  key={terminal.id}
+                  onClick={() => {
+                    if (session) {
+                      setActiveSessionId(session.id);
+                    }
+                    setActiveTerminalId(terminal.id);
+                  }}
+                  className={cn(
+                    "inline-flex max-w-[260px] shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
+                    activeTerminalId === terminal.id
+                      ? "bg-surface-elevated text-foreground"
+                      : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+                  )}
+                >
+                  <TerminalSquare size={12} />
+                  <span className="truncate">{label}</span>
+                  <X
+                    size={12}
+                    className="opacity-60 hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleCloseTerminal(terminal.id);
+                    }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
