@@ -162,7 +162,7 @@ async function main() {
   // Restore cloud machine state from DB
   await cloudMachineService.restoreFromDb();
 
-  const PORT = process.env.PORT ?? 4000;
+  const PORT = process.env.PORT ?? 4000 + Number(process.env.TRACE_PORT || 0);
   httpServer.listen(PORT, () => {
     console.log(`Server ready at http://localhost:${PORT}/graphql`);
     console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
