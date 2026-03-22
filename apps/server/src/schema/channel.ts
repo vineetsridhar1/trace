@@ -2,10 +2,17 @@ import type { Context } from "../context.js";
 import type { CreateChannelInput } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { channelService } from "../services/channel.js";
+import { assertChannelAccess } from "../services/access.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { requireOrgContext } from "../lib/require-org.js";
 
 export const channelQueries = {
   channels: (_: unknown, args: { organizationId: string; projectId?: string; memberOnly?: boolean }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
+
     const where: Record<string, unknown> = { organizationId: args.organizationId };
 
     if (args.projectId) {
@@ -18,7 +25,8 @@ export const channelQueries = {
 
     return prisma.channel.findMany({ where });
   },
-  channel: (_: unknown, args: { id: string }, _ctx: Context) => {
+  channel: async (_: unknown, args: { id: string }, ctx: Context) => {
+    await assertChannelAccess(args.id, ctx.userId);
     return prisma.channel.findUnique({ where: { id: args.id } });
   },
   channelMessages: (
@@ -36,6 +44,10 @@ export const channelQueries = {
 
 export const channelMutations = {
   createChannel: (_: unknown, args: { input: CreateChannelInput }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    if (orgId !== args.input.organizationId) {
+      throw new Error("Not authorized for this organization");
+    }
     return channelService.create(args.input, ctx.actorType, ctx.userId);
   },
   joinChannel: (_: unknown, args: { channelId: string }, ctx: Context) => {
@@ -80,7 +92,12 @@ export const channelMutations = {
 
 export const channelSubscriptions = {
   channelEvents: {
-    subscribe: (_: unknown, args: { channelId: string; organizationId: string }) => {
+    subscribe: async (_: unknown, args: { channelId: string; organizationId: string }, ctx: Context) => {
+      const orgId = requireOrgContext(ctx);
+      if (orgId !== args.organizationId) {
+        throw new Error("Not authorized for this organization");
+      }
+      await assertChannelAccess(args.channelId, ctx.userId);
       return pubsub.asyncIterator(topics.channelEvents(args.channelId));
     },
   },

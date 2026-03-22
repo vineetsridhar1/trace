@@ -42,6 +42,15 @@ export async function isActiveChatMember(chatId: string, userId: string) {
   return member !== null;
 }
 
+export async function isActiveChannelMember(channelId: string, userId: string) {
+  const member = await prisma.channelMember.findFirst({
+    where: { channelId, userId, leftAt: null },
+    select: { channelId: true },
+  });
+
+  return member !== null;
+}
+
 export async function assertChatAccess(chatId: string, userId: string) {
   const chat = await prisma.chat.findFirst({
     where: {
@@ -59,19 +68,13 @@ export async function assertChatAccess(chatId: string, userId: string) {
 }
 
 export async function assertChannelAccess(channelId: string, userId: string) {
-  const channel = await prisma.channel.findFirst({
-    where: {
-      id: channelId,
-      members: { some: { userId, leftAt: null } },
-    },
-    select: { id: true },
-  });
+  const isMember = await isActiveChannelMember(channelId, userId);
 
-  if (!channel) {
+  if (!isMember) {
     throw new Error("Not authorized for this channel");
   }
 
-  return channel;
+  return { id: channelId };
 }
 
 export async function assertScopeAccess(

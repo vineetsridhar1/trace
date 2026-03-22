@@ -3,8 +3,14 @@ import type { ScopeInput, EventType } from "@trace/gql";
 import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
-import { assertChatAccess, isActiveChatMember } from "../services/access.js";
+import { assertChannelAccess, assertChatAccess, isActiveChannelMember, isActiveChatMember } from "../services/access.js";
 import { requireOrgContext } from "../lib/require-org.js";
+
+const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
+  "message_sent",
+  "message_edited",
+  "message_deleted",
+]);
 
 export const eventQueries = {
   events: async (
@@ -27,6 +33,9 @@ export const eventQueries = {
     if (args.scope?.type === "chat") {
       await assertChatAccess(args.scope.id, ctx.userId);
     }
+    if (args.scope?.type === "channel") {
+      await assertChannelAccess(args.scope.id, ctx.userId);
+    }
 
     const events = await eventService.query(args.organizationId, {
       scopeType: args.scope?.type,
@@ -43,8 +52,13 @@ export const eventQueries = {
 
     const visibility = await Promise.all(
       events.map(async (event) => {
-        if (event.scopeType !== "chat") return true;
-        return isActiveChatMember(event.scopeId, ctx.userId);
+        if (event.scopeType === "chat") {
+          return isActiveChatMember(event.scopeId, ctx.userId);
+        }
+        if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
+          return isActiveChannelMember(event.scopeId, ctx.userId);
+        }
+        return true;
       }),
     );
 
@@ -61,13 +75,18 @@ export const eventSubscriptions = {
       }
 
       return filterAsyncIterator(
-        pubsub.asyncIterator<{ orgEvents: { scopeType: string; scopeId: string } }>(
+        pubsub.asyncIterator<{ orgEvents: { scopeType: string; scopeId: string; eventType: EventType } }>(
           topics.orgEvents(args.organizationId),
         ),
         async (payload) => {
           const event = payload.orgEvents;
-          if (event.scopeType !== "chat") return true;
-          return isActiveChatMember(event.scopeId, ctx.userId);
+          if (event.scopeType === "chat") {
+            return isActiveChatMember(event.scopeId, ctx.userId);
+          }
+          if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
+            return isActiveChannelMember(event.scopeId, ctx.userId);
+          }
+          return true;
         },
       );
     },

@@ -11,6 +11,7 @@ import {
   assertChannelAccess,
   assertScopeAccess,
   assertThreadAccess,
+  isActiveChannelMember,
   isActiveChatMember,
 } from "./access.js";
 
@@ -23,10 +24,18 @@ describe("access service", () => {
 
   it("checks active chat membership", async () => {
     prismaMock.chatMember.findFirst.mockResolvedValueOnce({ chatId: "chat-1" });
-    await expect(isActiveChatMember("chat-1", "user-1", "org-1")).resolves.toBe(true);
+    await expect(isActiveChatMember("chat-1", "user-1")).resolves.toBe(true);
 
     prismaMock.chatMember.findFirst.mockResolvedValueOnce(null);
-    await expect(isActiveChatMember("chat-1", "user-1", "org-1")).resolves.toBe(false);
+    await expect(isActiveChatMember("chat-1", "user-1")).resolves.toBe(false);
+  });
+
+  it("checks active channel membership", async () => {
+    prismaMock.channelMember.findFirst.mockResolvedValueOnce({ channelId: "channel-1" });
+    await expect(isActiveChannelMember("channel-1", "user-1")).resolves.toBe(true);
+
+    prismaMock.channelMember.findFirst.mockResolvedValueOnce(null);
+    await expect(isActiveChannelMember("channel-1", "user-1")).resolves.toBe(false);
   });
 
   it("asserts chat access and rejects missing membership", async () => {
@@ -42,19 +51,19 @@ describe("access service", () => {
   });
 
   it("asserts channel access and rejects missing membership", async () => {
-    prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1" });
+    prismaMock.channelMember.findFirst.mockResolvedValueOnce({ channelId: "channel-1" });
     await expect(assertChannelAccess("channel-1", "user-1")).resolves.toEqual({
       id: "channel-1",
     });
 
-    prismaMock.channel.findFirst.mockResolvedValueOnce(null);
+    prismaMock.channelMember.findFirst.mockResolvedValueOnce(null);
     await expect(assertChannelAccess("channel-1", "user-1")).rejects.toThrow(
       "Not authorized for this channel",
     );
   });
 
   it("dispatches scope access checks by scope type", async () => {
-    prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1" });
+    prismaMock.channelMember.findFirst.mockResolvedValueOnce({ channelId: "channel-1" });
 
     await expect(assertScopeAccess("channel", "channel-1", "user-1", "org-1")).resolves.toBeUndefined();
     await expect(assertScopeAccess("unknown", "id", "user-1", "org-1")).rejects.toThrow(
@@ -86,7 +95,7 @@ describe("access service", () => {
       channelId: "channel-1",
       parentMessageId: null,
     });
-    prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1" });
+    prismaMock.channelMember.findFirst.mockResolvedValueOnce({ channelId: "channel-1" });
 
     await expect(assertThreadAccess("message-1", "user-1")).resolves.toEqual({
       id: "message-1",

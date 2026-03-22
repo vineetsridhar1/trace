@@ -39,6 +39,7 @@ const participantServiceMock = participantService as any;
 describe("ChatService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.orgMember.findFirst.mockResolvedValue({ organizationId: "org-1" });
   });
 
   it("rejects chats without members", async () => {
@@ -147,7 +148,6 @@ describe("ChatService", () => {
     const service = new ChatService();
     const message = await service.sendMessage({
       chatId: "chat-1",
-      organizationId: "org-1",
       text: "hello",
       parentId: "message-root",
       actorType: "user",
@@ -163,7 +163,6 @@ describe("ChatService", () => {
       userId: "user-1",
       scopeType: "thread",
       scopeId: "message-root",
-      organizationId: "org-1",
     });
     expect(eventServiceMock.create).toHaveBeenCalled();
   });
@@ -187,7 +186,6 @@ describe("ChatService", () => {
     const message = await service.editMessage({
       messageId: "message-1",
       html: "<p>hello</p>",
-      organizationId: "org-1",
       actorType: "user",
       actorId: "user-1",
     });
@@ -227,7 +225,6 @@ describe("ChatService", () => {
     const service = new ChatService();
     const message = await service.deleteMessage({
       messageId: "message-1",
-      organizationId: "org-1",
       actorType: "user",
       actorId: "user-1",
     });
@@ -251,7 +248,7 @@ describe("ChatService", () => {
       .mockResolvedValueOnce([]);
 
     const service = new ChatService();
-    const messages = await service.getMessages("chat-1", "org-1", "user-1", {
+    const messages = await service.getMessages("chat-1", "user-1", {
       before: new Date("2026-03-21T00:00:00.000Z"),
       limit: 2,
     });
@@ -272,7 +269,7 @@ describe("ChatService", () => {
 
     const service = new ChatService();
     await expect(
-      service.rename("chat-1", "Renamed", "org-1", "user", "user-1"),
+      service.rename("chat-1", "Renamed", "user", "user-1"),
     ).resolves.toEqual({
       id: "chat-1",
       name: "Renamed",

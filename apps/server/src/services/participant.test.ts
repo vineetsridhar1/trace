@@ -21,7 +21,6 @@ describe("ParticipantService", () => {
       userId: "user-1",
       scopeType: "chat",
       scopeId: "chat-1",
-      organizationId: "org-1",
     });
 
     expect(prismaMock.participant.upsert).toHaveBeenCalledWith({
@@ -32,9 +31,8 @@ describe("ParticipantService", () => {
         userId: "user-1",
         scopeType: "chat",
         scopeId: "chat-1",
-        organizationId: "org-1",
       },
-      update: { organizationId: "org-1" },
+      update: {},
     });
   });
 
@@ -44,13 +42,11 @@ describe("ParticipantService", () => {
       userId: "user-1",
       scopeType: "chat",
       scopeId: "chat-1",
-      organizationId: "org-1",
     });
     await service.unmute({
       userId: "user-1",
       scopeType: "chat",
       scopeId: "chat-1",
-      organizationId: "org-1",
     });
 
     expect(prismaMock.participant.update).toHaveBeenCalledTimes(2);
@@ -65,9 +61,9 @@ describe("ParticipantService", () => {
   it("checks participant membership", async () => {
     prismaMock.participant.findFirst.mockResolvedValueOnce({ id: "p1" });
     const service = new ParticipantService();
-    await expect(service.isParticipant("user-1", "chat", "chat-1", "org-1")).resolves.toBe(true);
+    await expect(service.isParticipant("user-1", "chat", "chat-1")).resolves.toBe(true);
 
     prismaMock.participant.findFirst.mockResolvedValueOnce(null);
-    await expect(service.isParticipant("user-1", "chat", "chat-1", "org-1")).resolves.toBe(false);
+    await expect(service.isParticipant("user-1", "chat", "chat-1")).resolves.toBe(false);
   });
 });

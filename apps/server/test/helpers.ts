@@ -38,6 +38,11 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    orgMember: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+    },
     agentIdentity: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -148,6 +153,19 @@ export function createPrismaMock() {
       findFirst: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
+      update: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    channelMember: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    channelGroup: {
+      findFirst: vi.fn(),
     },
     channelProject: {
       create: vi.fn(),

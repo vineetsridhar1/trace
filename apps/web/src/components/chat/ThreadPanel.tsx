@@ -17,6 +17,7 @@ const THREAD_REPLIES_QUERY = gql`
     threadReplies(rootMessageId: $rootMessageId, limit: $limit) {
       id
       chatId
+      channelId
       text
       html
       mentions

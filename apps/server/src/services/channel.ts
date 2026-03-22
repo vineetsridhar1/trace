@@ -32,6 +32,10 @@ export class ChannelService {
 
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
     const [channel, _event] = await prisma.$transaction(async (tx) => {
+      await tx.orgMember.findUniqueOrThrow({
+        where: { userId_organizationId: { userId: actorId, organizationId: input.organizationId } },
+      });
+
       let position = input.position ?? null;
       if (position === null) {
         if (input.groupId) {
@@ -194,8 +198,12 @@ export class ChannelService {
 
     const channel = await prisma.channel.findFirstOrThrow({
       where: { id: channelId, members: { some: { userId: actorId, leftAt: null } } },
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true, type: true },
     });
+
+    if (channel.type !== "text") {
+      throw new Error("Channel messages are only supported for text channels");
+    }
 
     const message = await prisma.$transaction(async (tx) => {
       let validatedParentId: string | null = null;
@@ -278,7 +286,7 @@ export class ChannelService {
       where: {
         id: messageId,
         channelId: { not: null },
-        channel: { members: { some: { userId: actorId, leftAt: null } } },
+        channel: { type: "text", members: { some: { userId: actorId, leftAt: null } } },
       },
     });
 
@@ -357,7 +365,7 @@ export class ChannelService {
       where: {
         id: messageId,
         channelId: { not: null },
-        channel: { members: { some: { userId: actorId, leftAt: null } } },
+        channel: { type: "text", members: { some: { userId: actorId, leftAt: null } } },
       },
     });
 
@@ -419,7 +427,7 @@ export class ChannelService {
     opts?: { after?: Date; before?: Date; limit?: number },
   ) {
     await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, members: { some: { userId, leftAt: null } } },
+      where: { id: channelId, type: "text", members: { some: { userId, leftAt: null } } },
       select: { id: true },
     });
 
@@ -451,7 +459,7 @@ export class ChannelService {
       where: {
         id: rootMessageId,
         channelId: { not: null },
-        channel: { members: { some: { userId, leftAt: null } } },
+        channel: { type: "text", members: { some: { userId, leftAt: null } } },
       },
       select: { id: true },
     });
@@ -459,7 +467,7 @@ export class ChannelService {
     const createdAtFilter: Record<string, Date> = {};
     if (opts?.after) createdAtFilter.gt = opts.after;
 
-    return prisma.message.findMany({
+    const replies = await prisma.message.findMany({
       where: {
         parentMessageId: rootMessage.id,
         ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
@@ -467,6 +475,8 @@ export class ChannelService {
       orderBy: { createdAt: "asc" },
       take: opts?.limit ?? 200,
     });
+
+    return hydrateMessages(replies);
   }
 
   // --- Legacy event-based sendMessage (used by coding channels) ---
@@ -478,8 +488,8 @@ export class ChannelService {
     actorType: ActorType,
     actorId: string,
   ) {
-    const channel = await prisma.channel.findUniqueOrThrow({
-      where: { id: channelId },
+    const channel = await prisma.channel.findFirstOrThrow({
+      where: { id: channelId, type: "coding", members: { some: { userId: actorId, leftAt: null } } },
       select: { organizationId: true },
     });
 
