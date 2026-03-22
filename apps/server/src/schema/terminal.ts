@@ -1,6 +1,7 @@
 import type { Context } from "../context.js";
 import { terminalService } from "../services/terminal.js";
 import { AuthenticationError } from "../lib/errors.js";
+import { requireOrgContext } from "../lib/require-org.js";
 
 export const terminalQueries = {
   sessionTerminals: async (
@@ -11,7 +12,7 @@ export const terminalQueries = {
     if (!ctx.userId) throw new AuthenticationError();
     return terminalService.listForSession({
       sessionId: args.sessionId,
-      organizationId: ctx.organizationId,
+      organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
     });
   },
@@ -28,7 +29,7 @@ export const terminalMutations = {
       sessionId: args.sessionId,
       cols: args.cols,
       rows: args.rows,
-      organizationId: ctx.organizationId,
+      organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
     });
   },
@@ -41,7 +42,7 @@ export const terminalMutations = {
     if (!ctx.userId) throw new AuthenticationError();
     return terminalService.destroy({
       terminalId: args.terminalId,
-      organizationId: ctx.organizationId,
+      organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
     });
   },

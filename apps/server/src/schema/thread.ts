@@ -8,14 +8,14 @@ export const threadQueries = {
     args: { rootMessageId: string; after?: string; limit?: number },
     ctx: Context,
   ) => {
-    await assertThreadAccess(args.rootMessageId, ctx.userId, ctx.organizationId);
-    return threadService.getReplies(args.rootMessageId, ctx.organizationId, ctx.userId, {
+    await assertThreadAccess(args.rootMessageId, ctx.userId);
+    return threadService.getReplies(args.rootMessageId, ctx.userId, {
       after: args.after ? new Date(args.after) : undefined,
       limit: args.limit,
     });
   },
   threadSummary: async (_: unknown, args: { rootMessageId: string }, ctx: Context) => {
-    await assertThreadAccess(args.rootMessageId, ctx.userId, ctx.organizationId);
+    await assertThreadAccess(args.rootMessageId, ctx.userId);
     return threadService.getSummary(args.rootMessageId);
   },
 };

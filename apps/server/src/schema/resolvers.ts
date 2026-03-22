@@ -1,5 +1,6 @@
 import { DateTimeScalar, JSONScalar } from "./scalars.js";
-import { organizationQueries, organizationMutations, repoResolvers } from "./organization.js";
+import { organizationQueries, organizationMutations, organizationTypeResolvers, repoResolvers } from "./organization.js";
+import { orgMemberService } from "../services/org-member.js";
 import { channelQueries, channelMutations, channelSubscriptions } from "./channel.js";
 import { channelGroupQueries, channelGroupMutations } from "./channelGroup.js";
 import { sessionQueries, sessionMutations, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
@@ -20,11 +21,16 @@ export const resolvers = {
   JSON: JSONScalar,
 
   ...repoResolvers,
+  ...organizationTypeResolvers,
   ...chatTypeResolvers,
   ...participantTypeResolvers,
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
   ...agentIdentityTypeResolvers,
+
+  User: {
+    organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),
+  },
 
   Event: {
     actor: (event: { actorType: string; actorId: string }, _args: unknown, ctx: Context) =>

@@ -1,13 +1,12 @@
 import type { Context } from "../context.js";
 import { prisma } from "../lib/db.js";
 import { agentIdentityService } from "../services/agent-identity.js";
+import { orgMemberService } from "../services/org-member.js";
 import type { AgentIdentity as PrismaAgentIdentity } from "@prisma/client";
 
 export const agentIdentityQueries = {
-  agentIdentity: (_: unknown, args: { organizationId: string }, ctx: Context) => {
-    if (args.organizationId !== ctx.organizationId) {
-      throw new Error("Not authorized for this organization");
-    }
+  agentIdentity: async (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
     return prisma.agentIdentity.findUnique({
       where: { organizationId: args.organizationId },
     });
@@ -29,10 +28,8 @@ export const agentIdentityMutations = {
     },
     ctx: Context,
   ) => {
-    if (args.organizationId !== ctx.organizationId) {
-      throw new Error("Not authorized for this organization");
-    }
-    if (ctx.role !== "admin") {
+    const membership = await orgMemberService.assertMembership(ctx.userId, args.organizationId);
+    if (membership.role !== "admin") {
       throw new Error("Only admins can update agent settings");
     }
 

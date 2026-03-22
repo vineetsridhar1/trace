@@ -4,11 +4,10 @@ import { chatService } from "./chat.js";
 export class ThreadService {
   async getReplies(
     rootMessageId: string,
-    organizationId: string,
     userId: string,
     opts?: { after?: Date; limit?: number },
   ) {
-    return chatService.getReplies(rootMessageId, organizationId, userId, opts);
+    return chatService.getReplies(rootMessageId, userId, opts);
   }
 
   async getSummary(rootMessageId: string) {
