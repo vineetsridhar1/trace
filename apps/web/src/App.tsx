@@ -81,7 +81,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
             {/* Main content card */}
             <div
               className={cn(
-                "overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex,width,opacity,border-color] duration-300 ease-out",
+                "flex overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex,width,opacity,border-color] duration-300 ease-out",
                 hasSession && sessionFullscreen && !isMobile
                   ? "w-0 flex-none border-transparent opacity-0"
                   : "flex-1 min-w-0",
