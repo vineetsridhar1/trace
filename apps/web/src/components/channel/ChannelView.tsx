@@ -9,7 +9,7 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { StartSessionDialog } from "./StartSessionDialog";
 import { SessionsTable } from "./SessionsTable";
-import { SessionDetailView } from "../session/SessionDetailView";
+import { AnimatedSessionPanel } from "../session/SessionPanel";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
@@ -91,38 +91,41 @@ export function ChannelView({ channelId }: { channelId: string }) {
     fetchSessions();
   }, [fetchSessions, refreshTick]);
 
-  if (activeSessionId) {
-    return <SessionDetailView sessionId={activeSessionId} />;
-  }
+  const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-        <SidebarTrigger />
-        <Hash size={16} className="text-muted-foreground" />
-        <h2 className="text-sm font-semibold text-foreground">
-          {channelName ?? "Channel"}
-        </h2>
-        <ConnectionStatus />
-        <StartSessionDialog channelId={channelId} />
+    <div className="flex h-full">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+          <SidebarTrigger />
+          <Hash size={16} className="text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">
+            {channelName ?? "Channel"}
+          </h2>
+          <ConnectionStatus />
+          <StartSessionDialog channelId={channelId} />
+        </div>
+
+        <div className="flex-1 overflow-hidden">
+          {loading ? (
+            <div className="px-4 pt-2 space-y-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 h-10 px-2">
+                  <Skeleton className="h-2 w-2 rounded-full shrink-0" />
+                  <Skeleton className="h-3.5 w-[40%]" />
+                  <Skeleton className="h-3.5 w-[15%]" />
+                  <Skeleton className="h-3.5 w-[10%] ml-auto" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <SessionsTable channelId={channelId} />
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        {loading ? (
-          <div className="px-4 pt-2 space-y-1">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 h-10 px-2">
-                <Skeleton className="h-2 w-2 rounded-full shrink-0" />
-                <Skeleton className="h-3.5 w-[40%]" />
-                <Skeleton className="h-3.5 w-[15%]" />
-                <Skeleton className="h-3.5 w-[10%] ml-auto" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <SessionsTable channelId={channelId} />
-        )}
-      </div>
+      <AnimatedSessionPanel sessionId={activeSessionId} onClose={closePanel} />
     </div>
   );
 }

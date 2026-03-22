@@ -317,8 +317,8 @@ export function SessionsTable({ channelId }: { channelId: string }) {
 
   return (
     <>
-      <div ref={gridRef}>
-        <Table className="h-[calc(100dvh-48px)]" agGridOptions={agGridOptions} />
+      <div ref={gridRef} className="h-full">
+        <Table className="h-full" agGridOptions={agGridOptions} />
       </div>
       {deleteTarget && (
         <DeleteSessionDialog

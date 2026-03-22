@@ -9,6 +9,9 @@ import {
   TerminalSquare,
   GitPullRequest,
   Loader2,
+  Maximize2,
+  Minimize2,
+  X,
 } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
@@ -19,10 +22,18 @@ export function SessionHeader({
   sessionId,
   onToggleTerminal,
   terminalOpen,
+  panelMode,
+  isFullscreen,
+  onClose,
+  onToggleFullscreen,
 }: {
   sessionId: string;
   onToggleTerminal?: () => void;
   terminalOpen?: boolean;
+  panelMode?: boolean;
+  isFullscreen?: boolean;
+  onClose?: () => void;
+  onToggleFullscreen?: () => void;
 }) {
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
@@ -64,13 +75,23 @@ export function SessionHeader({
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
-      <button
-        onClick={() => setActiveSessionId(null)}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
-        title="Back to sessions"
-      >
-        <ArrowLeft size={16} />
-      </button>
+      {panelMode && onClose ? (
+        <button
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+          title="Close panel"
+        >
+          <X size={16} />
+        </button>
+      ) : (
+        <button
+          onClick={() => setActiveSessionId(null)}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
+          title="Back to sessions"
+        >
+          <ArrowLeft size={16} />
+        </button>
+      )}
 
       {disconnected ? (
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
@@ -100,6 +121,16 @@ export function SessionHeader({
       )}
 
       <div className="flex shrink-0 items-center gap-1">
+        {panelMode && onToggleFullscreen && (
+          <button
+            onClick={onToggleFullscreen}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+        )}
+
         {onToggleTerminal && (
           <button
             onClick={onToggleTerminal}
