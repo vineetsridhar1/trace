@@ -55,10 +55,8 @@ enum CodingTool {
 }
 
 enum ChannelType {
-  default
-  announcement
-  triage
-  feed
+  text
+  coding
 }
 
 enum ChatType {
@@ -151,6 +149,8 @@ enum EventType {
   repo_updated
   channel_created
   channel_updated
+  channel_member_added
+  channel_member_removed
   channel_group_created
   channel_group_updated
   channel_group_deleted
@@ -218,9 +218,14 @@ type Channel {
   type: ChannelType!
   position: Int!
   groupId: ID
-  members: [User!]!
+  members: [ChannelMember!]!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
+}
+
+type ChannelMember {
+  user: User!
+  joinedAt: DateTime!
 }
 
 type ChannelGroup {
@@ -574,7 +579,7 @@ type Query {
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!
   project(id: ID!): Project
-  channels(organizationId: ID!, projectId: ID): [Channel!]!
+  channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
@@ -614,6 +619,8 @@ type Terminal {
 
 type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
+  joinChannel(channelId: ID!): Channel!
+  leaveChannel(channelId: ID!): Channel!
   createChannelGroup(input: CreateChannelGroupInput!): ChannelGroup!
   updateChannelGroup(id: ID!, input: UpdateChannelGroupInput!): ChannelGroup!
   deleteChannelGroup(id: ID!): Boolean!

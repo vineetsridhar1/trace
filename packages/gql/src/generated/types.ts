@@ -79,7 +79,7 @@ export type Channel = {
   __typename?: 'Channel';
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
-  members: Array<User>;
+  members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars['String']['output'];
   position: Scalars['Int']['output'];
@@ -102,11 +102,15 @@ export type ChannelGroup = {
   position: Scalars['Int']['output'];
 };
 
+export type ChannelMember = {
+  __typename?: 'ChannelMember';
+  joinedAt: Scalars['DateTime']['output'];
+  user: User;
+};
+
 export type ChannelType =
-  | 'announcement'
-  | 'default'
-  | 'feed'
-  | 'triage';
+  | 'coding'
+  | 'text';
 
 export type Chat = {
   __typename?: 'Chat';
@@ -223,6 +227,8 @@ export type EventType =
   | 'channel_group_created'
   | 'channel_group_deleted'
   | 'channel_group_updated'
+  | 'channel_member_added'
+  | 'channel_member_removed'
   | 'channel_updated'
   | 'chat_created'
   | 'chat_member_added'
@@ -328,6 +334,8 @@ export type Mutation = {
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChatMessage: Message;
+  joinChannel: Channel;
+  leaveChannel: Channel;
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkTicket: Ticket;
@@ -464,6 +472,16 @@ export type MutationDismissSessionArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationJoinChannelArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type MutationLeaveChannelArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -786,6 +804,7 @@ export type QueryChannelGroupsArgs = {
 
 
 export type QueryChannelsArgs = {
+  memberOnly?: InputMaybe<Scalars['Boolean']['input']>;
   organizationId: Scalars['ID']['input'];
   projectId?: InputMaybe<Scalars['ID']['input']>;
 };

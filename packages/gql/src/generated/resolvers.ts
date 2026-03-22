@@ -82,7 +82,7 @@ export type Channel = {
   __typename?: 'Channel';
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
-  members: Array<User>;
+  members: Array<ChannelMember>;
   messages: Array<Event>;
   name: Scalars['String']['output'];
   position: Scalars['Int']['output'];
@@ -105,11 +105,15 @@ export type ChannelGroup = {
   position: Scalars['Int']['output'];
 };
 
+export type ChannelMember = {
+  __typename?: 'ChannelMember';
+  joinedAt: Scalars['DateTime']['output'];
+  user: User;
+};
+
 export type ChannelType =
-  | 'announcement'
-  | 'default'
-  | 'feed'
-  | 'triage';
+  | 'coding'
+  | 'text';
 
 export type Chat = {
   __typename?: 'Chat';
@@ -226,6 +230,8 @@ export type EventType =
   | 'channel_group_created'
   | 'channel_group_deleted'
   | 'channel_group_updated'
+  | 'channel_member_added'
+  | 'channel_member_removed'
   | 'channel_updated'
   | 'chat_created'
   | 'chat_member_added'
@@ -331,6 +337,8 @@ export type Mutation = {
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChatMessage: Message;
+  joinChannel: Channel;
+  leaveChannel: Channel;
   leaveChat: Chat;
   linkEntityToProject: Project;
   linkTicket: Ticket;
@@ -467,6 +475,16 @@ export type MutationDismissSessionArgs = {
 export type MutationEditChatMessageArgs = {
   html: Scalars['String']['input'];
   messageId: Scalars['ID']['input'];
+};
+
+
+export type MutationJoinChannelArgs = {
+  channelId: Scalars['ID']['input'];
+};
+
+
+export type MutationLeaveChannelArgs = {
+  channelId: Scalars['ID']['input'];
 };
 
 
@@ -789,6 +807,7 @@ export type QueryChannelGroupsArgs = {
 
 
 export type QueryChannelsArgs = {
+  memberOnly?: InputMaybe<Scalars['Boolean']['input']>;
   organizationId: Scalars['ID']['input'];
   projectId?: InputMaybe<Scalars['ID']['input']>;
 };
@@ -1276,6 +1295,7 @@ export type ResolversTypes = ResolversObject<{
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
+  ChannelMember: ResolverTypeWrapper<ChannelMember>;
   ChannelType: ChannelType;
   Chat: ResolverTypeWrapper<Chat>;
   ChatMember: ResolverTypeWrapper<ChatMember>;
@@ -1351,6 +1371,7 @@ export type ResolversParentTypes = ResolversObject<{
   Boolean: Scalars['Boolean']['output'];
   Channel: Channel;
   ChannelGroup: ChannelGroup;
+  ChannelMember: ChannelMember;
   Chat: Chat;
   ChatMember: ChatMember;
   CostBudget: CostBudget;
@@ -1433,7 +1454,7 @@ export type ApiTokenStatusResolvers<ContextType = Context, ParentType extends Re
 export type ChannelResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Channel'] = ResolversParentTypes['Channel']> = ResolversObject<{
   groupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
-  members?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
+  members?: Resolver<Array<ResolversTypes['ChannelMember']>, ParentType, ContextType>;
   messages?: Resolver<Array<ResolversTypes['Event']>, ParentType, ContextType, Partial<ChannelMessagesArgs>>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   position?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
@@ -1448,6 +1469,12 @@ export type ChannelGroupResolvers<ContextType = Context, ParentType extends Reso
   isCollapsed?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   position?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ChannelMemberResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ChannelMember'] = ResolversParentTypes['ChannelMember']> = ResolversObject<{
+  joinedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  user?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1548,6 +1575,8 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
   dismissSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDismissSessionArgs, 'id'>>;
   editChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChatMessageArgs, 'html' | 'messageId'>>;
+  joinChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationJoinChannelArgs, 'channelId'>>;
+  leaveChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationLeaveChannelArgs, 'channelId'>>;
   leaveChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationLeaveChatArgs, 'chatId'>>;
   linkEntityToProject?: Resolver<ResolversTypes['Project'], ParentType, ContextType, RequireFields<MutationLinkEntityToProjectArgs, 'entityId' | 'entityType' | 'projectId'>>;
   linkTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationLinkTicketArgs, 'entityId' | 'entityType' | 'ticketId'>>;
@@ -1809,6 +1838,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
+  ChannelMember?: ChannelMemberResolvers<ContextType>;
   Chat?: ChatResolvers<ContextType>;
   ChatMember?: ChatMemberResolvers<ContextType>;
   CostBudget?: CostBudgetResolvers<ContextType>;
