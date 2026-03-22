@@ -75,7 +75,6 @@ export function CreateChatDialog() {
       const result = await client
         .mutation(CREATE_CHAT_MUTATION, {
           input: {
-            organizationId: activeOrgId,
             memberIds: [...selectedIds],
           },
         })

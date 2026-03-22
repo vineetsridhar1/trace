@@ -1,16 +1,15 @@
 import { ChevronDown, Check } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
-import { useEntityStore } from "../../stores/entity";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
 
 export function OrgSwitcher({ large }: { large?: boolean }) {
-  const organizations = useEntityStore((s) => s.organizations);
+  const orgMemberships = useAuthStore((s) => s.orgMemberships);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const setActiveOrg = useAuthStore((s) => s.setActiveOrg);
 
-  const activeOrg = activeOrgId ? organizations[activeOrgId] : null;
-  const orgList = Object.values(organizations);
+  const activeOrg = orgMemberships.find((m) => m.organizationId === activeOrgId)?.organization;
+  const orgList = orgMemberships.map((m) => m.organization);
 
   return (
     <Popover>

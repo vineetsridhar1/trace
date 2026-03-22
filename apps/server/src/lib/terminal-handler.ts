@@ -89,14 +89,18 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
           try {
             const user = await prisma.user.findUnique({
               where: { id: userId },
-              select: { organizationId: true },
+              select: { id: true },
             });
             if (!user) {
               ws.send(JSON.stringify({ type: "error", message: "Access denied" }));
               return;
             }
+            // Check session exists and user has org membership for the session's org
             const session = await prisma.session.findFirst({
-              where: { id: sessionId, organizationId: user.organizationId },
+              where: {
+                id: sessionId,
+                organization: { orgMembers: { some: { userId: user.id } } },
+              },
               select: { id: true, hosting: true, createdById: true },
             });
             if (!session) {

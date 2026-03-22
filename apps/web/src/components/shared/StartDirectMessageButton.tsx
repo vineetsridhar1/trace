@@ -30,7 +30,6 @@ export function StartDirectMessageButton({ userId }: { userId: string }) {
       const result = await client
         .mutation(CREATE_CHAT_MUTATION, {
           input: {
-            organizationId: activeOrgId,
             memberIds: [userId],
           },
         })

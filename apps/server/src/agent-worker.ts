@@ -166,7 +166,6 @@ async function seedChatMembershipGate(): Promise<void> {
     try {
       const memberships = await prisma.chatMember.findMany({
         where: {
-          organizationId: orgId,
           userId: settings.agentId,
           leftAt: null,
         },
