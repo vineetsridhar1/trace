@@ -18,6 +18,7 @@ export interface SidebarChannelsPaneProps {
   channelsLoading: boolean;
   groupIds: string[];
   onChannelClick: (id: string) => void;
+  onDragActiveChange?: (active: boolean) => void;
   topLevelItems: TopLevelItem[];
   variant?: SidebarPaneVariant;
 }
@@ -32,6 +33,7 @@ export function SidebarChannelsPane({
   channelsLoading,
   groupIds,
   onChannelClick,
+  onDragActiveChange,
   topLevelItems,
   variant = "expanded",
 }: SidebarChannelsPaneProps) {
@@ -83,6 +85,7 @@ export function SidebarChannelsPane({
             setCreateDialogOpen(true);
           }}
           onChannelClick={onChannelClick}
+          onDragActiveChange={onDragActiveChange}
           topLevelItems={topLevelItems}
         />
       </div>

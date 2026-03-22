@@ -3,7 +3,7 @@ import { clamp, type SidebarTab } from "../components/sidebar/sidebarTabs";
 import { getNextWheelSamples, isMomentumTail, supportsScrollEnd, type WheelSample } from "./sidebarTabScrollUtils";
 import { useSidebarTabMotion } from "./useSidebarTabMotion";
 
-const FALLBACK_SCROLL_END_MS = 160;
+const FALLBACK_SCROLL_END_MS = 300;
 const MOMENTUM_LOCK_MS = 180;
 
 export function useSidebarTabScroll({

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
 import { SidebarChannelsPane, type SidebarChannelsPaneProps } from "./SidebarChannelsPane";
@@ -54,13 +54,25 @@ export function PeekOverlay({
     viewportRef,
   } = tabs;
 
+  const prevVisibleRef = useRef(false);
+  const isDraggingRef = useRef(false);
+
   useEffect(() => {
-    if (visible) {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+
+    if (visible && !wasVisible) {
       jumpToTab(currentTab);
     }
   }, [currentTab, jumpToTab, visible]);
 
+  const handleDragActiveChange = useCallback((active: boolean) => {
+    isDraggingRef.current = active;
+  }, []);
+
   const handleOverlayMouseLeave = useCallback(() => {
+    if (isDraggingRef.current) return;
+
     const nextTab = getTabFromProgress(tabProgress);
     onTabCommit(nextTab);
     onTabProgressChange(getTabIndex(nextTab));
@@ -110,6 +122,7 @@ export function PeekOverlay({
                 channelsLoading={channelsLoading}
                 groupIds={groupIds}
                 onChannelClick={onChannelClick}
+                onDragActiveChange={handleDragActiveChange}
                 topLevelItems={topLevelItems}
                 variant="overlay"
               />

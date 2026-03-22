@@ -51,6 +51,7 @@ export function SidebarChannelTree({
   groupIds,
   onAddChannel,
   onChannelClick,
+  onDragActiveChange,
   topLevelItems,
 }: {
   activeChannelId: string | null;
@@ -63,6 +64,7 @@ export function SidebarChannelTree({
   groupIds: string[];
   onAddChannel: (groupId: string) => void;
   onChannelClick: (id: string) => void;
+  onDragActiveChange?: (active: boolean) => void;
   topLevelItems: TopLevelItem[];
 }) {
   const {
@@ -96,9 +98,18 @@ export function SidebarChannelTree({
       <DndContext
         sensors={sensors}
         collisionDetection={customCollision}
-        onDragStart={handleDragStart}
+        onDragStart={(event) => {
+          handleDragStart(event);
+          onDragActiveChange?.(true);
+        }}
         onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
+        onDragEnd={(event) => {
+          handleDragEnd(event);
+          onDragActiveChange?.(false);
+        }}
+        onDragCancel={() => {
+          onDragActiveChange?.(false);
+        }}
       >
         <div className="py-2">
           {topLevelItems.length > 0 && (
