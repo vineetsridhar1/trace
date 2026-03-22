@@ -1,10 +1,21 @@
-import { Fragment, useState } from "react";
+import { Fragment, useState, useCallback } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField, useEntityStore } from "../../stores/entity";
 import { ChannelItem } from "./ChannelItem";
 import { SidebarMenu } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
+import { client } from "../../lib/urql";
+import { gql } from "@urql/core";
+import type { ChannelGroup } from "@trace/gql";
+
+const UPDATE_GROUP_MUTATION = gql`
+  mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {
+    updateChannelGroup(id: $id, input: $input) {
+      id
+    }
+  }
+`;
 
 const GROUP_GAP_PREFIX = "group-gap:";
 
@@ -63,6 +74,14 @@ export function ChannelGroupSection({
   const storedCollapsed = useEntityField("channelGroups", id, "isCollapsed");
   const [collapsed, setCollapsed] = useState(storedCollapsed ?? false);
 
+  const toggleCollapse = useCallback(() => {
+    const next = !collapsed;
+    setCollapsed(next);
+    // Optimistic update + persist
+    useEntityStore.getState().patch("channelGroups", id, { isCollapsed: next } as Partial<ChannelGroup>);
+    client.mutation(UPDATE_GROUP_MUTATION, { id, input: { isCollapsed: next } }).toPromise();
+  }, [collapsed, id]);
+
   const { setNodeRef, isOver } = useDroppable({
     id: `group:${id}`,
     data: { type: "group", groupId: id },
@@ -81,7 +100,7 @@ export function ChannelGroupSection({
       <div className="flex items-center justify-between pr-1 group/group-header">
         <button
           className="flex flex-1 items-center gap-0.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapse}
         >
           <ChevronRight
             size={14}

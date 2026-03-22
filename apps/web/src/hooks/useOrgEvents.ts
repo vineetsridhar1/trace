@@ -235,6 +235,15 @@ export function useOrgEvents() {
           if (typeof payload.channelGroupId === "string") {
             remove("channelGroups", payload.channelGroupId);
           }
+          // Patch channels that were ungrouped by this deletion
+          if (Array.isArray(payload.ungroupedChannels)) {
+            for (const ch of payload.ungroupedChannels) {
+              const c = asJsonObject(ch);
+              if (c && typeof c.id === "string") {
+                patch("channels", c.id, c as Partial<Channel>);
+              }
+            }
+          }
         }
 
         // New session — upsert directly from payload

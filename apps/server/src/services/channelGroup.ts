@@ -5,15 +5,21 @@ import { eventService } from "./event.js";
 export class ChannelGroupService {
   async create(input: { organizationId: string; name: string; position?: number | null }, actorType: ActorType, actorId: string) {
     const [group] = await prisma.$transaction(async (tx) => {
-      // If no position specified, append to the end
+      // If no position specified, append after all top-level items (ungrouped channels + groups)
       let position = input.position ?? null;
       if (position === null) {
-        const last = await tx.channelGroup.findFirst({
+        const lastGroup = await tx.channelGroup.findFirst({
           where: { organizationId: input.organizationId },
           orderBy: { position: "desc" },
           select: { position: true },
         });
-        position = (last?.position ?? -1) + 1;
+        const lastUngroupedChannel = await tx.channel.findFirst({
+          where: { organizationId: input.organizationId, groupId: null },
+          orderBy: { position: "desc" },
+          select: { position: true },
+        });
+        const maxPos = Math.max(lastGroup?.position ?? -1, lastUngroupedChannel?.position ?? -1);
+        position = maxPos + 1;
       }
 
       const group = await tx.channelGroup.create({
@@ -74,6 +80,12 @@ export class ChannelGroupService {
     await prisma.$transaction(async (tx) => {
       const group = await tx.channelGroup.findUniqueOrThrow({ where: { id } });
 
+      // Find channels in this group before ungrouping
+      const affectedChannels = await tx.channel.findMany({
+        where: { groupId: id },
+        select: { id: true, name: true, type: true, position: true },
+      });
+
       // Ungroup all channels in this group
       await tx.channel.updateMany({
         where: { groupId: id },
@@ -82,12 +94,16 @@ export class ChannelGroupService {
 
       await tx.channelGroup.delete({ where: { id } });
 
+      // Emit channel_group_deleted with the affected channel IDs so clients can patch them
       await eventService.create({
         organizationId: group.organizationId,
         scopeType: "system",
         scopeId: group.organizationId,
         eventType: "channel_group_deleted",
-        payload: { channelGroupId: id },
+        payload: {
+          channelGroupId: id,
+          ungroupedChannels: affectedChannels.map((c) => ({ id: c.id, name: c.name, type: c.type, position: c.position, groupId: null })),
+        },
         actorType,
         actorId,
       }, tx);

@@ -5,11 +5,39 @@ import { eventService } from "./event.js";
 export class ChannelService {
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
     const [channel, _event] = await prisma.$transaction(async (tx) => {
+      // Auto-position: if no position specified, append after all items in the target scope
+      let position = input.position ?? null;
+      if (position === null) {
+        if (input.groupId) {
+          // Position within the group
+          const lastInGroup = await tx.channel.findFirst({
+            where: { groupId: input.groupId },
+            orderBy: { position: "desc" },
+            select: { position: true },
+          });
+          position = (lastInGroup?.position ?? -1) + 1;
+        } else {
+          // Position among all top-level items (ungrouped channels + groups)
+          const lastUngroupedChannel = await tx.channel.findFirst({
+            where: { organizationId: input.organizationId, groupId: null },
+            orderBy: { position: "desc" },
+            select: { position: true },
+          });
+          const lastGroup = await tx.channelGroup.findFirst({
+            where: { organizationId: input.organizationId },
+            orderBy: { position: "desc" },
+            select: { position: true },
+          });
+          const maxPos = Math.max(lastUngroupedChannel?.position ?? -1, lastGroup?.position ?? -1);
+          position = maxPos + 1;
+        }
+      }
+
       const channel = await tx.channel.create({
         data: {
           name: input.name,
           type: input.type ?? "default",
-          position: input.position ?? 0,
+          position,
           organizationId: input.organizationId,
           groupId: input.groupId ?? null,
           ...(input.projectIds?.length && {
