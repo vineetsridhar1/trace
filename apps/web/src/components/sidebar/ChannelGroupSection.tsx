@@ -75,15 +75,9 @@ export function ChannelGroupSection({
 
   return (
     <div
-      ref={(node) => {
-        setSortableRef(node);
-        setDropRef(node);
-      }}
+      ref={setSortableRef}
       style={style}
-      className={cn(
-        "rounded-md transition-colors",
-        isOver && !isThisDragging && "bg-blue-500/10 ring-1 ring-blue-500/50"
-      )}
+      className="rounded-md transition-colors"
     >
       <div
         className="flex items-center justify-between pr-1 group/group-header"
@@ -126,7 +120,13 @@ export function ChannelGroupSection({
         </div>
       </div>
       {!collapsed && (
-        <div className="ml-3 border-l border-border/60 pl-2">
+        <div
+          ref={setDropRef}
+          className={cn(
+            "ml-3 border-l border-border/60 pl-2 rounded-md transition-colors",
+            isOver && !isThisDragging && "bg-blue-500/10 ring-1 ring-blue-500/50"
+          )}
+        >
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
             {channelIds.map((channelId) => (
               <SidebarMenu key={channelId}>

@@ -419,14 +419,72 @@ export function useChannelDnd({
     originalRef.current = null;
   }, []);
 
-  /** Custom collision that prefers items inside groups */
+  /** Custom collision detection for nested sortable containers.
+   *
+   *  pointerWithin sorts ascending by intersection-ratio, so the largest
+   *  droppable (the group wrapper) wins over individual channel items.
+   *  When a channel is being dragged over a group we drill into the group
+   *  to find the closest channel item — this makes both cross-container
+   *  moves and within-group reordering work correctly.
+   */
   const collisionDetection: CollisionDetection = useCallback((args) => {
-    // First try pointer-within for precise targeting
     const pw = pointerWithin(args);
-    if (pw.length > 0) return pw;
-    // Fall back to closest center
-    return closestCenter(args);
-  }, []);
+    if (pw.length === 0) return closestCenter(args);
+
+    const overId = getFirstCollision(pw, "id");
+    if (overId == null) return closestCenter(args);
+
+    const overIdStr = String(overId);
+    const activeParsed = parseSortableId(String(args.active.id));
+
+    // When a channel is dragged over a group area, resolve to the closest
+    // channel inside that group (or the container itself if the group is empty).
+    //
+    // We only drill into a group when the pointer is actually over the group
+    // body (droppable).  The droppable ref lives on the body div, so
+    // "group-container:xxx" only appears in pointerWithin results when the
+    // pointer is over the body.  If only "group:xxx" (the sortable outer div)
+    // is hit — e.g. the pointer is over the header — we return it as-is so
+    // handleDragOver sees a top-level item and can move the channel OUT.
+    if (activeParsed?.type === "channel") {
+      const pointerOverBody = (groupId: string) =>
+        pw.some((c) => String(c.id) === groupContainerId(groupId));
+
+      let targetGroupId: string | null = null;
+
+      if (overIdStr.startsWith("group-container:")) {
+        targetGroupId = overIdStr.replace("group-container:", "");
+      } else if (overIdStr.startsWith("group:")) {
+        const gid = overIdStr.replace("group:", "");
+        // Only drill in when the pointer is over the body droppable
+        if (pointerOverBody(gid)) {
+          targetGroupId = gid;
+        }
+        // Otherwise fall through — return group:xxx as a top-level hit
+      }
+
+      if (targetGroupId) {
+        const groupChannels =
+          (activeGroupChannels ?? channelIdsByGroup)[targetGroupId] ?? [];
+
+        if (groupChannels.length > 0) {
+          const channelSortableIds = groupChannels.map((id) => `channel:${id}`);
+          const closest = closestCenter({
+            ...args,
+            droppableContainers: args.droppableContainers.filter((c) =>
+              channelSortableIds.includes(String(c.id))
+            ),
+          });
+          if (closest.length > 0) return closest;
+        }
+
+        // Empty group — return the container so handleDragOver can move into it
+        return [{ id: groupContainerId(targetGroupId) }];
+      }
+    }
+
+    return [{ id: overId }];
+  }, [activeGroupChannels, channelIdsByGroup]);
 
   return {
     dragItem,
