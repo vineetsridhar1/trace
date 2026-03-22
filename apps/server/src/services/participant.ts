@@ -11,7 +11,7 @@ export class ParticipantService {
     userId: string;
     scopeType: ParticipantScope;
     scopeId: string;
-    organizationId: string;
+    organizationId?: string | null;
   }) {
     return prisma.participant.upsert({
       where: {
@@ -26,15 +26,13 @@ export class ParticipantService {
     userId,
     scopeType,
     scopeId,
-    organizationId,
   }: {
     userId: string;
     scopeType: ParticipantScope;
     scopeId: string;
-    organizationId: string;
   }) {
     await prisma.participant.deleteMany({
-      where: { userId, scopeType, scopeId, organizationId },
+      where: { userId, scopeType, scopeId },
     });
   }
 
@@ -46,7 +44,6 @@ export class ParticipantService {
     userId: string;
     scopeType: ParticipantScope;
     scopeId: string;
-    organizationId: string;
   }) {
     return prisma.participant.update({
       where: {
@@ -64,7 +61,6 @@ export class ParticipantService {
     userId: string;
     scopeType: ParticipantScope;
     scopeId: string;
-    organizationId: string;
   }) {
     return prisma.participant.update({
       where: {
@@ -74,15 +70,15 @@ export class ParticipantService {
     });
   }
 
-  async getParticipants(scopeType: ParticipantScope, scopeId: string, organizationId: string) {
+  async getParticipants(scopeType: ParticipantScope, scopeId: string) {
     return prisma.participant.findMany({
-      where: { scopeType, scopeId, organizationId },
+      where: { scopeType, scopeId },
     });
   }
 
-  async isParticipant(userId: string, scopeType: ParticipantScope, scopeId: string, organizationId: string) {
+  async isParticipant(userId: string, scopeType: ParticipantScope, scopeId: string) {
     const p = await prisma.participant.findFirst({
-      where: { userId, scopeType, scopeId, organizationId },
+      where: { userId, scopeType, scopeId },
     });
     return p !== null;
   }

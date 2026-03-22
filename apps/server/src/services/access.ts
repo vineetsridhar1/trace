@@ -33,23 +33,22 @@ async function assertOrgEntityExists(
   }
 }
 
-export async function isActiveChatMember(chatId: string, userId: string, organizationId: string) {
+export async function isActiveChatMember(chatId: string, userId: string) {
   const member = await prisma.chatMember.findFirst({
-    where: { chatId, userId, organizationId, leftAt: null },
+    where: { chatId, userId, leftAt: null },
     select: { chatId: true },
   });
 
   return member !== null;
 }
 
-export async function assertChatAccess(chatId: string, userId: string, organizationId: string) {
+export async function assertChatAccess(chatId: string, userId: string) {
   const chat = await prisma.chat.findFirst({
     where: {
       id: chatId,
-      organizationId,
       members: { some: { userId, leftAt: null } },
     },
-    select: { id: true, organizationId: true },
+    select: { id: true },
   });
 
   if (!chat) {
@@ -63,19 +62,22 @@ export async function assertScopeAccess(
   scopeType: string,
   scopeId: string,
   userId: string,
-  organizationId: string,
+  organizationId: string | null,
 ) {
   switch (scopeType) {
     case "chat":
-      await assertChatAccess(scopeId, userId, organizationId);
+      await assertChatAccess(scopeId, userId);
       return;
     case "channel":
+      if (!organizationId) throw new Error("Organization context required for channel access");
       await assertOrgEntityExists("channel", scopeId, organizationId);
       return;
     case "session":
+      if (!organizationId) throw new Error("Organization context required for session access");
       await assertOrgEntityExists("session", scopeId, organizationId);
       return;
     case "ticket":
+      if (!organizationId) throw new Error("Organization context required for ticket access");
       await assertOrgEntityExists("ticket", scopeId, organizationId);
       return;
     default:
@@ -86,27 +88,21 @@ export async function assertScopeAccess(
 export async function assertThreadAccess(
   rootMessageId: string,
   userId: string,
-  organizationId: string,
 ) {
   const rootMessage = await prisma.message.findUniqueOrThrow({
     where: { id: rootMessageId },
     select: {
       id: true,
-      organizationId: true,
       chatId: true,
       parentMessageId: true,
     },
   });
 
-  if (rootMessage.organizationId !== organizationId) {
-    throw new Error("Not authorized for this thread");
-  }
-
   if (rootMessage.parentMessageId) {
     throw new Error("Thread root must be a top-level message");
   }
 
-  await assertChatAccess(rootMessage.chatId, userId, organizationId);
+  await assertChatAccess(rootMessage.chatId, userId);
 
   return rootMessage;
 }

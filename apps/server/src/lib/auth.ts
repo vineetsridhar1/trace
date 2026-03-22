@@ -23,6 +23,29 @@ export function verifyToken(token: string): string | null {
   }
 }
 
+/**
+ * Look up the user's role in an organization via OrgMember.
+ * Returns null if the user is not a member.
+ */
+async function resolveOrgMembership(userId: string, organizationId: string) {
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId } },
+    select: { role: true },
+  });
+  return membership;
+}
+
+/**
+ * Get the user's first org membership (fallback when no org header is provided).
+ */
+async function getFirstOrgMembership(userId: string) {
+  return prisma.orgMember.findFirst({
+    where: { userId },
+    orderBy: { joinedAt: "asc" },
+    select: { organizationId: true, role: true },
+  });
+}
+
 export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
 
@@ -49,17 +72,40 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, organizationId: true, role: true },
+    select: { id: true },
   });
 
   if (!user) {
     throw new AuthenticationError("User not found");
   }
 
+  // Resolve organization from X-Organization-Id header
+  const orgHeader = req.headers["x-organization-id"];
+  const requestedOrgId = Array.isArray(orgHeader) ? orgHeader[0] : orgHeader;
+
+  let organizationId: string | null = null;
+  let role: Context["role"] = null;
+
+  if (requestedOrgId) {
+    const membership = await resolveOrgMembership(user.id, requestedOrgId);
+    if (!membership) {
+      throw new AuthenticationError("Not a member of this organization");
+    }
+    organizationId = requestedOrgId;
+    role = membership.role as Context["role"];
+  } else {
+    // Fall back to first org membership
+    const firstMembership = await getFirstOrgMembership(user.id);
+    if (firstMembership) {
+      organizationId = firstMembership.organizationId;
+      role = firstMembership.role as Context["role"];
+    }
+  }
+
   return {
     userId: user.id,
-    organizationId: user.organizationId,
-    role: user.role as Context["role"],
+    organizationId,
+    role,
     actorType: "user",
     userLoader: createUserLoader(),
   };
@@ -81,14 +127,34 @@ export async function buildWsContext(connectionParams?: Record<string, unknown>,
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, organizationId: true, role: true },
+    select: { id: true },
   });
   if (!user) throw new AuthenticationError("User not found");
 
+  // Resolve organization from connectionParams
+  const requestedOrgId = connectionParams?.organizationId as string | undefined;
+
+  let organizationId: string | null = null;
+  let role: Context["role"] = null;
+
+  if (requestedOrgId) {
+    const membership = await resolveOrgMembership(user.id, requestedOrgId);
+    if (membership) {
+      organizationId = requestedOrgId;
+      role = membership.role as Context["role"];
+    }
+  } else {
+    const firstMembership = await getFirstOrgMembership(user.id);
+    if (firstMembership) {
+      organizationId = firstMembership.organizationId;
+      role = firstMembership.role as Context["role"];
+    }
+  }
+
   return {
     userId: user.id,
-    organizationId: user.organizationId,
-    role: user.role as Context["role"],
+    organizationId,
+    role,
     actorType: "user",
     userLoader: createUserLoader(),
   };
