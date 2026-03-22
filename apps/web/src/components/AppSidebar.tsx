@@ -284,10 +284,12 @@ export function AppSidebar() {
   async function handleDragEnd(event: DragEndEvent) {
     setActiveDragId(null);
     const { active, over } = event;
-    if (!over || active.id === over.id || !activeOrgId) return;
+    if (!over || !activeOrgId) return;
 
     const activeId = active.id as string;
     const overId = over.id as string;
+
+    if (activeId === overId) return;
 
     // Group reorder
     if (activeId.startsWith("group:") && overId.startsWith("group:")) {
@@ -307,6 +309,67 @@ export function AppSidebar() {
       await client.mutation(REORDER_GROUPS_MUTATION, {
         input: { organizationId: activeOrgId, groupIds: newOrder },
       }).toPromise();
+      return;
+    }
+
+    // Channel drag — move to a different group or reorder within group
+    if (activeId.startsWith("channel:")) {
+      const channelId = activeId.replace("channel:", "");
+      const activeData = active.data.current as { type: string; groupId?: string | null } | undefined;
+      const sourceGroupId = activeData?.groupId ?? null;
+
+      // Dropped on a group drop target
+      if (overId.startsWith("drop-group:")) {
+        const targetGroupId = overId.replace("drop-group:", "");
+        if (sourceGroupId === targetGroupId) return;
+
+        // Move channel to new group
+        const { patch } = useEntityStore.getState();
+        patch("channels", channelId, { groupId: targetGroupId, position: 0 } as Partial<Channel>);
+
+        await client.mutation(MOVE_CHANNEL_MUTATION, {
+          input: { channelId, groupId: targetGroupId, position: 0 },
+        }).toPromise();
+        return;
+      }
+
+      // Dropped on another channel — reorder within group or move between groups
+      if (overId.startsWith("channel:")) {
+        const overChannelId = overId.replace("channel:", "");
+        const overData = over.data.current as { type: string; groupId?: string | null } | undefined;
+        const targetGroupId = overData?.groupId ?? null;
+
+        // Get current channel list for the target group
+        const targetChannelIds = targetGroupId
+          ? (channelIdsByGroup[targetGroupId] ?? [])
+          : ungroupedChannelIds;
+
+        const newOrder = [...targetChannelIds];
+
+        if (sourceGroupId === targetGroupId) {
+          // Reorder within same group
+          const fromIndex = newOrder.indexOf(channelId);
+          const toIndex = newOrder.indexOf(overChannelId);
+          if (fromIndex === -1 || toIndex === -1) return;
+          newOrder.splice(fromIndex, 1);
+          newOrder.splice(toIndex, 0, channelId);
+        } else {
+          // Move from different group
+          const toIndex = newOrder.indexOf(overChannelId);
+          if (toIndex === -1) return;
+          newOrder.splice(toIndex, 0, channelId);
+        }
+
+        // Optimistic update
+        const { patch } = useEntityStore.getState();
+        newOrder.forEach((id, i) => {
+          patch("channels", id, { position: i, groupId: targetGroupId } as Partial<Channel>);
+        });
+
+        await client.mutation(REORDER_CHANNELS_MUTATION, {
+          input: { groupId: targetGroupId, channelIds: newOrder },
+        }).toPromise();
+      }
     }
   }
 
@@ -369,16 +432,23 @@ export function AppSidebar() {
                 >
                   {/* Ungrouped channels */}
                   {ungroupedChannelIds.length > 0 && (
-                    <SidebarMenu>
-                      {ungroupedChannelIds.map((id) => (
-                        <ChannelItem
-                          key={id}
-                          id={id}
-                          isActive={id === activeChannelId}
-                          onClick={() => setActiveChannelId(id)}
-                        />
-                      ))}
-                    </SidebarMenu>
+                    <SortableContext
+                      items={ungroupedChannelIds.map((id) => `channel:${id}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <SidebarMenu>
+                        {ungroupedChannelIds.map((id) => (
+                          <ChannelItem
+                            key={id}
+                            id={id}
+                            isActive={id === activeChannelId}
+                            onClick={() => setActiveChannelId(id)}
+                            draggable
+                            groupId={null}
+                          />
+                        ))}
+                      </SidebarMenu>
+                    </SortableContext>
                   )}
 
                   {/* Groups */}
@@ -397,9 +467,9 @@ export function AppSidebar() {
                   </SortableContext>
 
                   <DragOverlay>
-                    {activeDragId?.startsWith("group:") ? (
+                    {activeDragId ? (
                       <div className="rounded-md bg-surface-elevated px-2 py-1 text-xs font-semibold text-muted-foreground shadow-md">
-                        Moving group...
+                        {activeDragId.startsWith("group:") ? "Moving group..." : "Moving channel..."}
                       </div>
                     ) : null}
                   </DragOverlay>

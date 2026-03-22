@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { ChevronRight, Plus, GripVertical, Trash2 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEntityField } from "../../stores/entity";
 import { ChannelItem } from "./ChannelItem";
-import { SidebarMenu, SidebarMenuItem } from "../ui/sidebar";
+import { SidebarMenu } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
 
 interface ChannelGroupSectionProps {
@@ -25,13 +27,13 @@ export function ChannelGroupSection({
   onDeleteGroup,
 }: ChannelGroupSectionProps) {
   const name = useEntityField("channelGroups", id, "name");
-  const isCollapsed = useEntityField("channelGroups", id, "isCollapsed");
-  const [collapsed, setCollapsed] = useState(isCollapsed ?? false);
+  const storedCollapsed = useEntityField("channelGroups", id, "isCollapsed");
+  const [collapsed, setCollapsed] = useState(storedCollapsed ?? false);
 
   const {
     attributes,
     listeners,
-    setNodeRef,
+    setNodeRef: setSortableRef,
     transform,
     transition,
     isDragging,
@@ -40,14 +42,32 @@ export function ChannelGroupSection({
     data: { type: "group", id },
   });
 
+  // Make this group a drop target for channels
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: `drop-group:${id}`,
+    data: { type: "group-drop", groupId: id },
+  });
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const sortableChannelIds = channelIds.map((cid) => `channel:${cid}`);
+
   return (
-    <div ref={setNodeRef} style={style}>
+    <div
+      ref={(node) => {
+        setSortableRef(node);
+        setDroppableRef(node);
+      }}
+      style={style}
+      className={cn(
+        "rounded-md transition-colors",
+        isOver && "bg-accent/30"
+      )}
+    >
       <div className="flex items-center justify-between pr-1 group/group-header">
         <button
           className="flex flex-1 items-center gap-0.5 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
@@ -61,6 +81,7 @@ export function ChannelGroupSection({
             )}
           />
           <span className="truncate">{name}</span>
+          <span className="ml-1 text-[10px] text-muted-foreground/60">{channelIds.length}</span>
         </button>
         <div className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity">
           <button
@@ -87,19 +108,23 @@ export function ChannelGroupSection({
         </div>
       </div>
       {!collapsed && (
-        <SidebarMenu>
-          {channelIds.map((channelId) => (
-            <ChannelItem
-              key={channelId}
-              id={channelId}
-              isActive={channelId === activeChannelId}
-              onClick={() => onChannelClick(channelId)}
-            />
-          ))}
-          {channelIds.length === 0 && (
-            <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
-          )}
-        </SidebarMenu>
+        <SortableContext items={sortableChannelIds} strategy={verticalListSortingStrategy}>
+          <SidebarMenu>
+            {channelIds.map((channelId) => (
+              <ChannelItem
+                key={channelId}
+                id={channelId}
+                isActive={channelId === activeChannelId}
+                onClick={() => onChannelClick(channelId)}
+                draggable
+                groupId={id}
+              />
+            ))}
+            {channelIds.length === 0 && (
+              <p className="px-4 py-1 text-xs text-muted-foreground/60 italic">No channels</p>
+            )}
+          </SidebarMenu>
+        </SortableContext>
       )}
     </div>
   );
