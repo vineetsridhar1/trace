@@ -352,6 +352,26 @@ export function useOrgEvents() {
               sessionPatch.worktreeDeleted = true;
             }
             patch("sessions", event.scopeId, sessionPatch);
+
+            // PR merge transitions ALL sessions in the group, not just the event session.
+            // Patch sibling sessions so their tab indicators update immediately.
+            if (event.eventType === "session_pr_merged") {
+              const mergedSession = useEntityStore.getState().sessions[event.scopeId];
+              const groupId = mergedSession?.sessionGroupId;
+              if (groupId) {
+                const allSessions = useEntityStore.getState().sessions;
+                for (const [siblingId, sibling] of Object.entries(allSessions)) {
+                  if (siblingId !== event.scopeId && sibling.sessionGroupId === groupId && sibling.status !== "merged") {
+                    patch("sessions", siblingId, {
+                      status: "merged" as SessionStatus,
+                      worktreeDeleted: true,
+                      updatedAt: event.timestamp,
+                      _sortTimestamp: event.timestamp,
+                    });
+                  }
+                }
+              }
+            }
           }
         }
 
