@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 import {
   DndContext,
@@ -14,7 +14,6 @@ import {
   pointerWithin,
   rectIntersection,
 } from "@dnd-kit/core";
-import { cn } from "../lib/utils";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
@@ -126,45 +125,27 @@ const MOVE_CHANNEL_MUTATION = gql`
   }
 `;
 
-/** Use pointerWithin first; fall back to rectIntersection if nothing found */
+const UNGROUPED_DROP_ID = "ungrouped";
+
+/** Prefer specific group targets; only use the top-level ungrouped zone in whitespace/gaps. */
 const customCollision: CollisionDetection = (args) => {
   const pw = pointerWithin(args);
+  const nonUngroupedPointer = pw.filter((collision) => collision.id !== UNGROUPED_DROP_ID);
+  if (nonUngroupedPointer.length > 0) return nonUngroupedPointer;
   if (pw.length > 0) return pw;
-  return rectIntersection(args);
+
+  return rectIntersection(args).filter((collision) => collision.id !== UNGROUPED_DROP_ID);
 };
 
-function UngroupedDropZone({
-  isDropTarget,
-  isDragging,
-  hasGroups,
-}: {
-  isDropTarget: boolean;
-  isDragging: boolean;
-  hasGroups: boolean;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: "ungrouped",
+function ChannelsDropTarget({ children }: { children: ReactNode }) {
+  const { setNodeRef } = useDroppable({
+    id: UNGROUPED_DROP_ID,
     data: { type: "ungrouped" },
   });
 
-  // Only show when there are groups (otherwise nothing to ungroup from)
-  if (!hasGroups) return null;
-
-  const showHighlight = isDropTarget || isOver;
-
   return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "mx-1 mt-1 flex items-center justify-center rounded-md border border-dashed px-2 py-2 text-xs",
-        isDragging
-          ? showHighlight
-            ? "border-blue-500 bg-blue-500/10 text-blue-400"
-            : "border-border text-muted-foreground"
-          : "border-transparent text-transparent select-none"
-      )}
-    >
-      Drop here to ungroup
+    <div ref={setNodeRef}>
+      {children}
     </div>
   );
 }
@@ -191,7 +172,6 @@ export function AppSidebar() {
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
   const [dragChannelName, setDragChannelName] = useState<string | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
-  const [dragOverUngrouped, setDragOverUngrouped] = useState(false);
   const { state } = useSidebar();
 
   const sensors = useSensors(
@@ -316,27 +296,20 @@ export function AppSidebar() {
     const { over } = event;
     if (!over) {
       setDragOverGroupId(null);
-      setDragOverUngrouped(false);
       return;
     }
 
     const overData = over.data.current as { type: string; groupId?: string } | undefined;
     if (overData?.type === "group" && overData.groupId) {
       setDragOverGroupId(overData.groupId);
-      setDragOverUngrouped(false);
-    } else if (overData?.type === "ungrouped") {
-      setDragOverGroupId(null);
-      setDragOverUngrouped(true);
     } else {
       setDragOverGroupId(null);
-      setDragOverUngrouped(false);
     }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     setDragChannelName(null);
     setDragOverGroupId(null);
-    setDragOverUngrouped(false);
 
     const { active, over } = event;
     if (!over || !activeOrgId) return;
@@ -437,37 +410,36 @@ export function AppSidebar() {
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
-                  {/* Ungrouped channels */}
-                  {ungroupedChannelIds.length > 0 && (
-                    <SidebarMenu>
-                      {ungroupedChannelIds.map((id) => (
-                        <ChannelItem
-                          key={id}
-                          id={id}
-                          isActive={id === activeChannelId}
-                          onClick={() => setActiveChannelId(id)}
-                          groupId={null}
-                        />
-                      ))}
-                    </SidebarMenu>
-                  )}
+                  <ChannelsDropTarget>
+                    {/* Ungrouped channels */}
+                    {ungroupedChannelIds.length > 0 && (
+                      <SidebarMenu>
+                        {ungroupedChannelIds.map((id) => (
+                          <ChannelItem
+                            key={id}
+                            id={id}
+                            isActive={id === activeChannelId}
+                            onClick={() => setActiveChannelId(id)}
+                            groupId={null}
+                          />
+                        ))}
+                      </SidebarMenu>
+                    )}
 
-                  {/* Groups */}
-                  {groupIds.map((groupId) => (
-                    <ChannelGroupSection
-                      key={groupId}
-                      id={groupId}
-                      channelIds={channelIdsByGroup[groupId] ?? []}
-                      activeChannelId={activeChannelId}
-                      onChannelClick={setActiveChannelId}
-                      onAddChannel={handleAddChannelToGroup}
-                      onDeleteGroup={handleDeleteGroup}
-                      isDropTarget={dragOverGroupId === groupId}
-                    />
-                  ))}
-
-                  {/* Drop zone to ungroup channels — appears below groups during drag */}
-                  <UngroupedDropZone isDropTarget={dragOverUngrouped} isDragging={dragChannelName !== null} hasGroups={groupIds.length > 0} />
+                    {/* Groups */}
+                    {groupIds.map((groupId) => (
+                      <ChannelGroupSection
+                        key={groupId}
+                        id={groupId}
+                        channelIds={channelIdsByGroup[groupId] ?? []}
+                        activeChannelId={activeChannelId}
+                        onChannelClick={setActiveChannelId}
+                        onAddChannel={handleAddChannelToGroup}
+                        onDeleteGroup={handleDeleteGroup}
+                        isDropTarget={dragOverGroupId === groupId}
+                      />
+                    ))}
+                  </ChannelsDropTarget>
 
                   <DragOverlay dropAnimation={null}>
                     {dragChannelName ? (
