@@ -1,12 +1,11 @@
-import { Fragment } from "react";
-import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
+import { DndContext, DragOverlay } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { gql } from "@urql/core";
 import type { Channel, ChannelGroup } from "@trace/gql";
 import { Folder, Hash } from "lucide-react";
-import { useChannelDnd, customCollision, TOP_LEVEL_GAP_PREFIX } from "../../hooks/useChannelDnd";
+import { useChannelDnd, topLevelSortableIds } from "../../hooks/useChannelDnd";
 import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { client } from "../../lib/urql";
-import { cn } from "../../lib/utils";
 import { ChannelGroupSection } from "./ChannelGroupSection";
 import { ChannelItem } from "./ChannelItem";
 import { Skeleton } from "../ui/skeleton";
@@ -17,28 +16,6 @@ const DELETE_GROUP_MUTATION = gql`
     deleteChannelGroup(id: $id)
   }
 `;
-
-function TopLevelDropIndicator({ index, isDragging }: { index: number; isDragging: boolean }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `${TOP_LEVEL_GAP_PREFIX}${index}`,
-    data: { type: "top-level-gap", index },
-  });
-
-  return (
-    <div ref={setNodeRef} className="relative z-10 h-2 -my-1 overflow-visible">
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-2 top-1/2 z-10 -translate-y-1/2 rounded-full transition-all",
-          isDragging
-            ? isOver
-              ? "h-0.5 bg-blue-500 opacity-100"
-              : "h-px bg-border/80 opacity-100"
-            : "h-px bg-transparent opacity-0",
-        )}
-      />
-    </div>
-  );
-}
 
 export interface SidebarChannelTreeProps {
   activeChannelId: string | null;
@@ -71,11 +48,14 @@ export function SidebarChannelTree({
 }: SidebarChannelTreeProps) {
   const {
     dragItem,
-    dragOverGroupId,
     sensors,
-    handleDragEnd,
-    handleDragOver,
+    currentTopLevel,
+    currentGroupChannels,
+    collisionDetection,
     handleDragStart,
+    handleDragOver,
+    handleDragEnd,
+    handleDragCancel,
   } = useChannelDnd({ activeOrgId, topLevelItems, channelIdsByGroup, channelsById, channelGroupsById });
 
   if (channelsLoading) {
@@ -93,13 +73,13 @@ export function SidebarChannelTree({
     );
   }
 
-  const isDragging = dragItem !== null;
+  const topLevelIds = topLevelSortableIds(currentTopLevel);
 
   return (
     <>
       <DndContext
         sensors={sensors}
-        collisionDetection={customCollision}
+        collisionDetection={collisionDetection}
         onDragStart={(event) => {
           handleDragStart(event);
           onDragActiveChange?.(true);
@@ -110,44 +90,38 @@ export function SidebarChannelTree({
           onDragActiveChange?.(false);
         }}
         onDragCancel={() => {
+          handleDragCancel();
           onDragActiveChange?.(false);
         }}
       >
-        <div className="py-2">
-          {topLevelItems.length > 0 && (
-            <>
-              <TopLevelDropIndicator index={0} isDragging={isDragging} />
-              {topLevelItems.map((item, index) => (
-                <Fragment key={`${item.kind}:${item.id}`}>
-                  {item.kind === "channel" ? (
-                    <SidebarMenu>
-                      <ChannelItem
-                        id={item.id}
-                        isActive={item.id === activeChannelId}
-                        onClick={() => onChannelClick(item.id)}
-                        groupId={null}
-                      />
-                    </SidebarMenu>
-                  ) : (
-                    <ChannelGroupSection
-                      id={item.id}
-                      channelIds={channelIdsByGroup[item.id] ?? []}
-                      activeChannelId={activeChannelId}
-                      onChannelClick={onChannelClick}
-                      onAddChannel={onAddChannel}
-                      onDeleteGroup={(groupId) =>
-                        client.mutation(DELETE_GROUP_MUTATION, { id: groupId }).toPromise()
-                      }
-                      isDropTarget={dragOverGroupId === item.id}
-                      isDragging={isDragging}
-                    />
-                  )}
-                  <TopLevelDropIndicator index={index + 1} isDragging={isDragging} />
-                </Fragment>
-              ))}
-            </>
-          )}
-        </div>
+        <SortableContext items={topLevelIds} strategy={verticalListSortingStrategy}>
+          <div className="py-2">
+            {currentTopLevel.map((item) =>
+              item.kind === "channel" ? (
+                <SidebarMenu key={`channel:${item.id}`}>
+                  <ChannelItem
+                    id={item.id}
+                    isActive={item.id === activeChannelId}
+                    onClick={() => onChannelClick(item.id)}
+                    groupId={null}
+                  />
+                </SidebarMenu>
+              ) : (
+                <ChannelGroupSection
+                  key={`group:${item.id}`}
+                  id={item.id}
+                  channelIds={currentGroupChannels[item.id] ?? []}
+                  activeChannelId={activeChannelId}
+                  onChannelClick={onChannelClick}
+                  onAddChannel={onAddChannel}
+                  onDeleteGroup={(groupId) =>
+                    client.mutation(DELETE_GROUP_MUTATION, { id: groupId }).toPromise()
+                  }
+                />
+              ),
+            )}
+          </div>
+        </SortableContext>
 
         <DragOverlay dropAnimation={null}>
           {dragItem ? (
@@ -169,4 +143,3 @@ export function SidebarChannelTree({
     </>
   );
 }
-
