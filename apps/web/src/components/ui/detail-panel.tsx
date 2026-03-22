@@ -190,7 +190,7 @@ export function DetailPanel({
   // On mobile, render as a fixed overlay
   if (isMobile && isOpen) {
     return (
-      <div className="fixed inset-0 z-40 bg-background">
+      <div className="fixed inset-0 z-40 bg-background pt-[env(safe-area-inset-top)]">
         {children}
       </div>
     );
