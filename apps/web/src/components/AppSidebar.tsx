@@ -183,6 +183,7 @@ export function AppSidebar() {
   const activeChatId = useUIStore((s) => s.activeChatId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const refreshTick = useUIStore((s) => s.refreshTick);
+  const channelsById = useEntityStore((s) => s.channels);
   const [peeking, setPeeking] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [chatsLoading, setChatsLoading] = useState(true);
@@ -284,12 +285,11 @@ export function AppSidebar() {
 
   // Derive ungrouped channels and channel-to-group mapping
   const { ungroupedChannelIds, channelIdsByGroup } = useMemo(() => {
-    const channels = useEntityStore.getState().channels;
     const byGroup: Record<string, string[]> = {};
     const ungrouped: string[] = [];
 
     for (const id of allChannelIds) {
-      const channel = channels[id];
+      const channel = channelsById[id];
       if (!channel) continue;
       const gId = (channel as Channel & { groupId?: string | null }).groupId;
       if (gId) {
@@ -301,7 +301,7 @@ export function AppSidebar() {
     }
 
     return { ungroupedChannelIds: ungrouped, channelIdsByGroup: byGroup };
-  }, [allChannelIds]);
+  }, [allChannelIds, channelsById]);
 
   function handleDragStart(event: DragStartEvent) {
     const data = event.active.data.current as { type: string; id: string } | undefined;
