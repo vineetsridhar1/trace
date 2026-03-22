@@ -1,7 +1,7 @@
 import { DateTimeScalar, JSONScalar } from "./scalars.js";
 import { organizationQueries, organizationMutations, organizationTypeResolvers, repoResolvers } from "./organization.js";
 import { orgMemberService } from "../services/org-member.js";
-import { channelQueries, channelMutations, channelSubscriptions } from "./channel.js";
+import { channelQueries, channelMutations, channelSubscriptions, channelTypeResolvers } from "./channel.js";
 import { channelGroupQueries, channelGroupMutations } from "./channelGroup.js";
 import { sessionQueries, sessionMutations, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
 import { ticketQueries, ticketMutations, ticketSubscriptions, ticketTypeResolvers } from "./ticket.js";
@@ -22,6 +22,7 @@ export const resolvers = {
 
   ...repoResolvers,
   ...organizationTypeResolvers,
+  ...channelTypeResolvers,
   ...chatTypeResolvers,
   ...participantTypeResolvers,
   ...ticketTypeResolvers,
