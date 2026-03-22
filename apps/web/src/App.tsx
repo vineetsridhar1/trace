@@ -81,10 +81,10 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
             {/* Main content card */}
             <div
               className={cn(
-                "flex overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex,width,opacity,border-color] duration-300 ease-out",
+                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-all duration-300 ease-out",
                 hasSession && sessionFullscreen && !isMobile
-                  ? "w-0 flex-none border-transparent opacity-0"
-                  : "flex-1 min-w-0",
+                  ? "flex-[0_0_0%] border-transparent opacity-0"
+                  : "flex-[1_1_0%]",
               )}
             >
               <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">

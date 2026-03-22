@@ -99,11 +99,11 @@ export function SessionPanelSlot({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-tl-lg rounded-tr-lg bg-background transition-[width,flex,border-color,opacity] duration-300 ease-out",
+        "min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg bg-background transition-all duration-300 ease-out",
         hasSession
-          ? "w-[55%] flex-none border opacity-100"
-          : "w-0 flex-none border-transparent opacity-0",
-        hasSession && isFullscreen && "flex-1 w-auto",
+          ? "flex-[1.2_1_0%] border opacity-100"
+          : "flex-[0_0_0%] border-transparent opacity-0",
+        hasSession && isFullscreen && "flex-[1_1_0%]",
       )}
     >
       {sessionId && (
