@@ -330,7 +330,8 @@ export function SessionGroupDetailView({
           repoId: groupRepo?.id ?? (selectedSession.repo as { id: string } | null | undefined)?.id,
           branch: groupBranch ?? selectedSession.branch ?? undefined,
           sessionGroupId,
-          sourceSessionId: selectedSession.id,
+          // No sourceSessionId — "New Chat" starts a clean tab.
+          // The group already provides workspace identity (repo, branch, workdir).
         },
       })
       .toPromise();

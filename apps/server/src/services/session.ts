@@ -2206,7 +2206,8 @@ export class SessionService {
     if (Object.prototype.hasOwnProperty.call(patch, "connection")) {
       const connectionValue = patch.connection ?? Prisma.DbNull;
       groupData.connection = connectionValue;
-      sessionData.connection = connectionValue;
+      // Do NOT mirror connection to sessions — each session keeps its own connection state.
+      // Only the group's connection represents the shared workspace runtime state.
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, "prUrl")) {
@@ -2429,7 +2430,13 @@ export class SessionService {
     });
   }
 
-  private async fullyUnloadSession(sessionId: string) {
+  /**
+   * Fully unload a session's runtime resources.
+   * When `isGroupUnload` is true, destroys all group terminals and the shared runtime.
+   * When false (single session), only destroys that session's terminals and checks
+   * whether siblings are still active before touching group resources.
+   */
+  private async fullyUnloadSession(sessionId: string, isGroupUnload = false) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
@@ -2442,23 +2449,57 @@ export class SessionService {
     });
     if (!session) return;
 
-    if (session.sessionGroupId) {
+    if (isGroupUnload && session.sessionGroupId) {
+      // Group-level unload: destroy all terminals and the shared runtime
       terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
+      try {
+        await sessionRouter.destroyRuntime(sessionId, session);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[session-service] failed to unload group via session ${sessionId}: ${message}`);
+      }
+      await this.syncGroupWorkspaceState(session.sessionGroupId, {
+        workdir: null,
+        worktreeDeleted: true,
+      });
+      return;
+    }
+
+    // Single-session unload: only destroy this session's terminals
+    terminalRelay.destroyAllForSession(sessionId);
+
+    if (session.sessionGroupId) {
+      // Check whether any siblings are still active before touching group resources
+      const activeSiblingCount = await prisma.session.count({
+        where: {
+          sessionGroupId: session.sessionGroupId,
+          id: { not: sessionId },
+          status: { notIn: [...FULLY_UNLOADED_SESSION_STATUSES] },
+        },
+      });
+
+      if (activeSiblingCount === 0) {
+        // Last session in the group — tear down the shared runtime
+        try {
+          await sessionRouter.destroyRuntime(sessionId, session);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
+        }
+        await this.syncGroupWorkspaceState(session.sessionGroupId, {
+          workdir: null,
+          worktreeDeleted: true,
+        });
+      }
     } else {
-      terminalRelay.destroyAllForSession(sessionId);
+      // No group — just destroy the runtime
+      try {
+        await sessionRouter.destroyRuntime(sessionId, session);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
+      }
     }
-
-    try {
-      await sessionRouter.destroyRuntime(sessionId, session);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[session-service] failed to unload session ${sessionId}: ${message}`);
-    }
-
-    await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir: null,
-      worktreeDeleted: true,
-    });
   }
 
   /** Set prUrl on the active session group when a PR is opened for its current branch. */
@@ -2519,7 +2560,7 @@ export class SessionService {
     });
   }
 
-  /** Transition the active session group to merged when its current PR is merged. */
+  /** Transition all sessions in the group to merged when the group's PR is merged. */
   async markPrMerged(params: {
     sessionGroupId: string;
     eventSessionId: string;
@@ -2534,22 +2575,13 @@ export class SessionService {
     });
     if (group?.prUrl && group.prUrl !== prUrl) return;
 
-    // Atomic conditional update — skip if already merged
+    // Transition ALL sessions in the group to merged, not just the event session
     const { count } = await prisma.session.updateMany({
-      where: { id: eventSessionId, status: { not: "merged" } },
+      where: { sessionGroupId, status: { not: "merged" } },
       data: { status: "merged" },
     });
 
-    if (count === 0) {
-      const existing = await prisma.session.findUnique({
-        where: { id: eventSessionId },
-        select: { status: true },
-      });
-      if (existing?.status === "merged") {
-        await this.fullyUnloadSession(eventSessionId);
-      }
-      return;
-    }
+    if (count === 0) return;
 
     const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl,
@@ -2573,7 +2605,7 @@ export class SessionService {
       actorId: "github-webhook",
     });
 
-    await this.fullyUnloadSession(eventSessionId);
+    await this.fullyUnloadSession(eventSessionId, true);
   }
 }
 

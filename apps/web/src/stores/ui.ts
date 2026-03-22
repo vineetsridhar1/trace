@@ -290,7 +290,17 @@ export function getPreferredSessionIdForGroup(
       return rememberedSessionId;
     }
   }
-  return fallbackSessionId;
+  if (fallbackSessionId) return fallbackSessionId;
+
+  // Fall through to the most recent session in the group
+  const mostRecent = Object.values(useEntityStore.getState().sessions)
+    .filter((s) => s.sessionGroupId === sessionGroupId)
+    .sort((a, b) => {
+      const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      if (diff !== 0) return diff;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })[0];
+  return mostRecent?.id ?? null;
 }
 
 export function navigateToSessionGroup(
