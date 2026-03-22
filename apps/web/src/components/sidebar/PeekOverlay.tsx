@@ -85,6 +85,7 @@ export function PeekOverlay({
   const [tabProgress, setTabProgress] = useState(getTabIndex(currentTab));
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const snapTimeoutRef = useRef<number | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const wasVisibleRef = useRef(false);
 
   const syncTabProgress = useCallback(() => {
@@ -96,21 +97,69 @@ export function PeekOverlay({
     onTabProgressChange(nextProgress);
   }, [onTabProgressChange]);
 
+  const clearPendingSnap = useCallback(() => {
+    if (snapTimeoutRef.current !== null) {
+      window.clearTimeout(snapTimeoutRef.current);
+      snapTimeoutRef.current = null;
+    }
+  }, []);
+
+  const cancelScrollAnimation = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  }, []);
+
   const scrollToTab = useCallback((tab: "dm" | "main", behavior: ScrollBehavior = "smooth") => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
     const targetIndex = getTabIndex(tab);
-    viewport.scrollTo({
-      left: viewport.clientWidth * targetIndex,
-      behavior,
-    });
+    const targetLeft = viewport.clientWidth * targetIndex;
+
+    clearPendingSnap();
+    cancelScrollAnimation();
 
     if (behavior === "auto") {
+      viewport.scrollLeft = targetLeft;
       setTabProgress(targetIndex);
       onTabProgressChange(targetIndex);
+      return;
     }
-  }, [onTabProgressChange]);
+
+    const startLeft = viewport.scrollLeft;
+    const distance = targetLeft - startLeft;
+
+    if (Math.abs(distance) < 1) {
+      viewport.scrollLeft = targetLeft;
+      setTabProgress(targetIndex);
+      onTabProgressChange(targetIndex);
+      return;
+    }
+
+    const startTime = performance.now();
+    const duration = 130;
+
+    const step = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 4);
+
+      viewport.scrollLeft = startLeft + distance * eased;
+
+      if (progress < 1) {
+        animationFrameRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+
+      animationFrameRef.current = null;
+      viewport.scrollLeft = targetLeft;
+      setTabProgress(targetIndex);
+      onTabProgressChange(targetIndex);
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(step);
+  }, [cancelScrollAnimation, clearPendingSnap, onTabProgressChange]);
 
   const finalizeTab = useCallback((tab: "dm" | "main") => {
     scrollToTab(tab);
@@ -121,15 +170,13 @@ export function PeekOverlay({
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
-    if (snapTimeoutRef.current !== null) {
-      window.clearTimeout(snapTimeoutRef.current);
-    }
+    clearPendingSnap();
 
     snapTimeoutRef.current = window.setTimeout(() => {
       snapTimeoutRef.current = null;
       finalizeTab(viewport.scrollLeft / Math.max(viewport.clientWidth, 1) > 0.5 ? "main" : "dm");
-    }, 90);
-  }, [finalizeTab]);
+    }, 180);
+  }, [clearPendingSnap, finalizeTab]);
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
@@ -141,23 +188,19 @@ export function PeekOverlay({
 
   useEffect(() => {
     return () => {
-      if (snapTimeoutRef.current !== null) {
-        window.clearTimeout(snapTimeoutRef.current);
-      }
+      clearPendingSnap();
+      cancelScrollAnimation();
     };
-  }, []);
+  }, [cancelScrollAnimation, clearPendingSnap]);
 
   const handleMouseLeave = useCallback(() => {
-    if (snapTimeoutRef.current !== null) {
-      window.clearTimeout(snapTimeoutRef.current);
-      snapTimeoutRef.current = null;
-    }
+    clearPendingSnap();
 
     const nextTab = tabProgress > 0.5 ? "main" : "dm";
     onTabProgressChange(getTabIndex(nextTab));
     onTabChange(nextTab);
     onMouseLeave();
-  }, [onMouseLeave, onTabChange, onTabProgressChange, tabProgress]);
+  }, [clearPendingSnap, onMouseLeave, onTabChange, onTabProgressChange, tabProgress]);
 
   const dmSelectedness = 1 - tabProgress;
   const mainSelectedness = tabProgress;
@@ -185,7 +228,9 @@ export function PeekOverlay({
               className="no-scrollbar flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain"
               onScroll={() => {
                 syncTabProgress();
-                scheduleTabSnap();
+                if (animationFrameRef.current === null) {
+                  scheduleTabSnap();
+                }
               }}
             >
               <section className="flex h-full min-w-full shrink-0 flex-col overflow-hidden">

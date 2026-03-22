@@ -116,6 +116,7 @@ export function AppSidebar() {
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const hasInitializedTabsRef = useRef(false);
   const snapTimeoutRef = useRef<number | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   const {
     activeOrgId,
@@ -155,28 +156,72 @@ export function AppSidebar() {
     setTabProgress(nextProgress);
   }, []);
 
+  const clearPendingSnap = useCallback(() => {
+    if (snapTimeoutRef.current !== null) {
+      window.clearTimeout(snapTimeoutRef.current);
+      snapTimeoutRef.current = null;
+    }
+  }, []);
+
+  const cancelScrollAnimation = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  }, []);
+
   const scrollToTab = useCallback((tab: "dm" | "main", behavior: ScrollBehavior = "smooth") => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
     const targetIndex = getTabIndex(tab);
-    viewport.scrollTo({
-      left: viewport.clientWidth * targetIndex,
-      behavior,
-    });
+    const targetLeft = viewport.clientWidth * targetIndex;
+
+    clearPendingSnap();
+    cancelScrollAnimation();
 
     if (behavior === "auto") {
+      viewport.scrollLeft = targetLeft;
       setTabProgress(targetIndex);
+      return;
     }
-  }, []);
+
+    const startLeft = viewport.scrollLeft;
+    const distance = targetLeft - startLeft;
+
+    if (Math.abs(distance) < 1) {
+      viewport.scrollLeft = targetLeft;
+      setTabProgress(targetIndex);
+      return;
+    }
+
+    const startTime = performance.now();
+    const duration = 130;
+
+    const step = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 4);
+
+      viewport.scrollLeft = startLeft + distance * eased;
+
+      if (progress < 1) {
+        animationFrameRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+
+      animationFrameRef.current = null;
+      viewport.scrollLeft = targetLeft;
+      setTabProgress(targetIndex);
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(step);
+  }, [cancelScrollAnimation, clearPendingSnap]);
 
   const scheduleTabSnap = useCallback(() => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
-    if (snapTimeoutRef.current !== null) {
-      window.clearTimeout(snapTimeoutRef.current);
-    }
+    clearPendingSnap();
 
     snapTimeoutRef.current = window.setTimeout(() => {
       snapTimeoutRef.current = null;
@@ -186,8 +231,8 @@ export function AppSidebar() {
           ? "main"
           : "dm";
       scrollToTab(nextTab);
-    }, 90);
-  }, [scrollToTab]);
+    }, 180);
+  }, [clearPendingSnap, scrollToTab]);
 
   useEffect(() => {
     if (!hasInitializedTabsRef.current) {
@@ -217,11 +262,10 @@ export function AppSidebar() {
 
   useEffect(() => {
     return () => {
-      if (snapTimeoutRef.current !== null) {
-        window.clearTimeout(snapTimeoutRef.current);
-      }
+      clearPendingSnap();
+      cancelScrollAnimation();
     };
-  }, []);
+  }, [cancelScrollAnimation, clearPendingSnap]);
 
   const isDragging = dragItem !== null;
   const backgroundBlend = tabProgress * 100;
@@ -255,7 +299,9 @@ export function AppSidebar() {
               className="no-scrollbar flex size-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
               onScroll={() => {
                 syncTabProgress();
-                scheduleTabSnap();
+                if (animationFrameRef.current === null) {
+                  scheduleTabSnap();
+                }
               }}
             >
               <section className="flex h-full min-w-full shrink-0 flex-col overflow-hidden">
