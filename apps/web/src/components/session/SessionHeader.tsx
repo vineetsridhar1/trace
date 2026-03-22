@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
+import { useDetailPanelStore } from "../../stores/detail-panel";
 import { statusColor, statusLabel, isDisconnected, getDisplayStatus, isReviewAndActive } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 
@@ -23,17 +24,11 @@ export function SessionHeader({
   onToggleTerminal,
   terminalOpen,
   panelMode,
-  isFullscreen,
-  onClose,
-  onToggleFullscreen,
 }: {
   sessionId: string;
   onToggleTerminal?: () => void;
   terminalOpen?: boolean;
   panelMode?: boolean;
-  isFullscreen?: boolean;
-  onClose?: () => void;
-  onToggleFullscreen?: () => void;
 }) {
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
@@ -44,6 +39,8 @@ export function SessionHeader({
     | null
     | undefined;
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
+  const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
 
@@ -75,9 +72,9 @@ export function SessionHeader({
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
-      {panelMode && onClose ? (
+      {panelMode ? (
         <button
-          onClick={onClose}
+          onClick={() => setActiveSessionId(null)}
           className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
           title="Close panel"
         >
@@ -121,9 +118,9 @@ export function SessionHeader({
       )}
 
       <div className="flex shrink-0 items-center gap-1">
-        {panelMode && onToggleFullscreen && (
+        {panelMode && (
           <button
-            onClick={onToggleFullscreen}
+            onClick={toggleFullscreen}
             className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-elevated transition-colors"
             title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >

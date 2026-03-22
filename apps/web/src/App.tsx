@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
+import { useDetailPanelStore } from "./stores/detail-panel";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
-import { SessionPanelSlot } from "./components/session/SessionPanel";
+import { SessionDetailView } from "./components/session/SessionDetailView";
+import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Button } from "./components/ui/button";
@@ -55,20 +57,20 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const activeChatId = useUIStore((s) => s.activeChatId);
   const activeSessionId = useUIStore((s) => s.activeSessionId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const isMobile = useIsMobile();
-
-  const [sessionFullscreen, setSessionFullscreen] = useState(false);
-
-  // Reset fullscreen when session closes
-  useEffect(() => {
-    if (!activeSessionId) setSessionFullscreen(false);
-  }, [activeSessionId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
   const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
-  const toggleFullscreen = useCallback(() => setSessionFullscreen((f) => !f), []);
-  const setFullscreen = useCallback((v: boolean) => setSessionFullscreen(v), []);
+
+  // Keep session ID around during close animation so children don't unmount early
+  const [displayedSessionId, setDisplayedSessionId] = useState<string | null>(activeSessionId);
+  useEffect(() => {
+    if (activeSessionId) {
+      setDisplayedSessionId(activeSessionId);
+    }
+  }, [activeSessionId]);
 
   const hasSession = !!activeSessionId;
 
@@ -84,9 +86,9 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
             {/* Main content card */}
             <div
               className={cn(
-                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex,opacity,border-color] duration-300 ease-in-out",
-                hasSession && sessionFullscreen && !isMobile
-                  ? "flex-[0_0_0%] border-transparent opacity-0"
+                "flex min-w-0 overflow-hidden rounded-tl-lg rounded-tr-lg border bg-background transition-[flex,border-color] duration-300 ease-in-out",
+                hasSession && isFullscreen && !isMobile
+                  ? "flex-[0_0_0%] border-transparent"
                   : "flex-[1_1_0%]",
               )}
             >
@@ -115,14 +117,16 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
             </div>
 
             {/* Session panel card (separate card, same level) */}
-            <SessionPanelSlot
-              sessionId={activeSessionId}
-              isFullscreen={sessionFullscreen}
+            <DetailPanel
+              isOpen={hasSession}
               onClose={closePanel}
-              onToggleFullscreen={toggleFullscreen}
               containerRef={containerRef}
-              onSetFullscreen={setFullscreen}
-            />
+              onClosed={() => setDisplayedSessionId(null)}
+            >
+              {displayedSessionId && (
+                <SessionDetailView sessionId={displayedSessionId} panelMode />
+              )}
+            </DetailPanel>
           </div>
         </SidebarProvider>
       </div>
