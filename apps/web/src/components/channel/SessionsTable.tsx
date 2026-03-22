@@ -221,13 +221,20 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       const session = params.node.data;
       return [
         {
+          name: "Copy Session Link",
+          action: () => {
+            const url = `${window.location.origin}/c/${channelId}/s/${session.id}`;
+            navigator.clipboard.writeText(url);
+          },
+        },
+        {
           name: "Delete Session",
           action: () => setDeleteTarget({ id: session.id, name: session.name ?? "Untitled" }),
           cssClasses: ["text-destructive"],
         },
       ];
     },
-    [],
+    [channelId],
   );
 
   const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}`;
