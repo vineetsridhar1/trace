@@ -3,6 +3,7 @@ import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 import {
   DndContext,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -10,6 +11,7 @@ import {
   DragOverlay,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { cn } from "../lib/utils";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
@@ -121,6 +123,27 @@ const MOVE_CHANNEL_MUTATION = gql`
   }
 `;
 
+function UngroupedDropZone({ children, isDropTarget }: { children: React.ReactNode; isDropTarget: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: "ungrouped",
+    data: { type: "ungrouped" },
+  });
+
+  const showHighlight = isDropTarget || isOver;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "rounded-md transition-all min-h-[8px]",
+        showHighlight && "bg-blue-500/10 ring-1 ring-blue-500/50"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 const DELETE_GROUP_MUTATION = gql`
   mutation DeleteChannelGroup($id: ID!) {
     deleteChannelGroup(id: $id)
@@ -142,6 +165,7 @@ export function AppSidebar() {
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
   const [dragChannelName, setDragChannelName] = useState<string | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  const [dragOverUngrouped, setDragOverUngrouped] = useState(false);
   const { state } = useSidebar();
 
   const sensors = useSensors(
@@ -267,20 +291,27 @@ export function AppSidebar() {
     const { over } = event;
     if (!over) {
       setDragOverGroupId(null);
+      setDragOverUngrouped(false);
       return;
     }
 
     const overData = over.data.current as { type: string; groupId?: string } | undefined;
     if (overData?.type === "group" && overData.groupId) {
       setDragOverGroupId(overData.groupId);
+      setDragOverUngrouped(false);
+    } else if (overData?.type === "ungrouped") {
+      setDragOverGroupId(null);
+      setDragOverUngrouped(true);
     } else {
       setDragOverGroupId(null);
+      setDragOverUngrouped(false);
     }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     setDragChannelName(null);
     setDragOverGroupId(null);
+    setDragOverUngrouped(false);
 
     const { active, over } = event;
     if (!over || !activeOrgId) return;
@@ -288,25 +319,39 @@ export function AppSidebar() {
     const activeData = active.data.current as { type: string; id: string; groupId?: string | null } | undefined;
     const overData = over.data.current as { type: string; groupId?: string } | undefined;
 
-    if (activeData?.type !== "channel" || overData?.type !== "group") return;
+    if (activeData?.type !== "channel") return;
 
     const channelId = activeData.id;
     const sourceGroupId = activeData.groupId ?? null;
-    const targetGroupId = overData.groupId ?? null;
 
-    // Don't move if already in the target group
-    if (sourceGroupId === targetGroupId) return;
-    if (!targetGroupId) return;
+    // Dropped on ungrouped zone — move to top level
+    if (overData?.type === "ungrouped") {
+      if (sourceGroupId === null) return; // already ungrouped
+      const { patch } = useEntityStore.getState();
+      const position = ungroupedChannelIds.length;
+      patch("channels", channelId, { groupId: null, position } as Partial<Channel>);
 
-    // Optimistic update
-    const { patch } = useEntityStore.getState();
-    const targetChannels = channelIdsByGroup[targetGroupId] ?? [];
-    const position = targetChannels.length;
-    patch("channels", channelId, { groupId: targetGroupId, position } as Partial<Channel>);
+      await client.mutation(MOVE_CHANNEL_MUTATION, {
+        input: { channelId, groupId: null, position },
+      }).toPromise();
+      return;
+    }
 
-    await client.mutation(MOVE_CHANNEL_MUTATION, {
-      input: { channelId, groupId: targetGroupId, position },
-    }).toPromise();
+    // Dropped on a group
+    if (overData?.type === "group") {
+      const targetGroupId = overData.groupId ?? null;
+      if (sourceGroupId === targetGroupId) return;
+      if (!targetGroupId) return;
+
+      const { patch } = useEntityStore.getState();
+      const targetChannels = channelIdsByGroup[targetGroupId] ?? [];
+      const position = targetChannels.length;
+      patch("channels", channelId, { groupId: targetGroupId, position } as Partial<Channel>);
+
+      await client.mutation(MOVE_CHANNEL_MUTATION, {
+        input: { channelId, groupId: targetGroupId, position },
+      }).toPromise();
+    }
   }
 
   function handleAddChannelToGroup(groupId: string) {
@@ -366,20 +411,22 @@ export function AppSidebar() {
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
-                  {/* Ungrouped channels */}
-                  {ungroupedChannelIds.length > 0 && (
-                    <SidebarMenu>
-                      {ungroupedChannelIds.map((id) => (
-                        <ChannelItem
-                          key={id}
-                          id={id}
-                          isActive={id === activeChannelId}
-                          onClick={() => setActiveChannelId(id)}
-                          groupId={null}
-                        />
-                      ))}
-                    </SidebarMenu>
-                  )}
+                  {/* Ungrouped channels drop zone */}
+                  <UngroupedDropZone isDropTarget={dragOverUngrouped}>
+                    {ungroupedChannelIds.length > 0 && (
+                      <SidebarMenu>
+                        {ungroupedChannelIds.map((id) => (
+                          <ChannelItem
+                            key={id}
+                            id={id}
+                            isActive={id === activeChannelId}
+                            onClick={() => setActiveChannelId(id)}
+                            groupId={null}
+                          />
+                        ))}
+                      </SidebarMenu>
+                    )}
+                  </UngroupedDropZone>
 
                   {/* Groups */}
                   {groupIds.map((groupId) => (
