@@ -117,6 +117,11 @@ export function AppSidebar() {
   const hasInitializedTabsRef = useRef(false);
   const snapTimeoutRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const lastWheelTimeRef = useRef(0);
+  const lastWheelDeltaRef = useRef(0);
+  const lastWheelDirectionRef = useRef(0);
+  const decelerationStreakRef = useRef(0);
+  const momentumLockRef = useRef(false);
 
   const {
     activeOrgId,
@@ -226,7 +231,7 @@ export function AppSidebar() {
     );
   }, [scrollToTab]);
 
-  const scheduleTabSnap = useCallback((delay = 90) => {
+  const scheduleTabSnap = useCallback((delay = 72) => {
     clearPendingSnap();
 
     snapTimeoutRef.current = window.setTimeout(() => {
@@ -282,6 +287,43 @@ export function AppSidebar() {
     if (horizontalDelta === 0) return;
 
     event.preventDefault();
+
+    const now = performance.now();
+    const currentDelta = Math.abs(horizontalDelta);
+    const currentDirection = Math.sign(horizontalDelta);
+    const timeSinceLastEvent = now - lastWheelTimeRef.current;
+    const sameDirection =
+      lastWheelDirectionRef.current !== 0 && currentDirection === lastWheelDirectionRef.current;
+
+    if (momentumLockRef.current) {
+      if (!sameDirection || timeSinceLastEvent > 120) {
+        momentumLockRef.current = false;
+        decelerationStreakRef.current = 0;
+      } else {
+        lastWheelTimeRef.current = now;
+        lastWheelDeltaRef.current = currentDelta;
+        lastWheelDirectionRef.current = currentDirection;
+        return;
+      }
+    }
+
+    if (timeSinceLastEvent < 80 && sameDirection && currentDelta <= lastWheelDeltaRef.current) {
+      decelerationStreakRef.current += 1;
+    } else {
+      decelerationStreakRef.current = 0;
+    }
+
+    if (decelerationStreakRef.current >= 3) {
+      momentumLockRef.current = true;
+      clearPendingSnap();
+      cancelScrollAnimation();
+      snapToNearestTab();
+      lastWheelTimeRef.current = now;
+      lastWheelDeltaRef.current = currentDelta;
+      lastWheelDirectionRef.current = currentDirection;
+      return;
+    }
+
     clearPendingSnap();
     cancelScrollAnimation();
 
@@ -292,6 +334,9 @@ export function AppSidebar() {
     );
     syncTabProgress();
     scheduleTabSnap();
+    lastWheelTimeRef.current = now;
+    lastWheelDeltaRef.current = currentDelta;
+    lastWheelDirectionRef.current = currentDirection;
   }, [cancelScrollAnimation, clearPendingSnap, scheduleTabSnap, syncTabProgress]);
 
   useEffect(() => {
