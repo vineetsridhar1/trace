@@ -1,5 +1,6 @@
 import type { StartSessionInput, ActorType } from "@trace/gql";
-import type { SessionStatus, EventType, CodingTool } from "@prisma/client";
+import type { SessionStatus, EventType as PrismaEventType, CodingTool } from "@prisma/client";
+import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { getDefaultModel, hasQuestionBlock, hasPlanBlock, isSupportedModel } from "@trace/shared";
 import { prisma } from "../lib/db.js";
