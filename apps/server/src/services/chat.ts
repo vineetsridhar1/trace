@@ -3,76 +3,16 @@ import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { participantService } from "./participant.js";
-import { sanitizeHtml, extractMentions, stripHtml } from "./mention.js";
-import { resolveActors, type ActorSummary } from "./actor.js";
+import {
+  normalizeMessageInput,
+  buildMessageEventPayload,
+  resolveEventOrgId,
+  hydrateMessages,
+  type MessageWithSummary,
+} from "./message-utils.js";
 
 function buildMemberKey(...userIds: string[]) {
   return userIds.sort().join(":");
-}
-
-type DbMessage = Prisma.MessageGetPayload<Record<string, never>>;
-
-type MessageWithSummary = DbMessage & {
-  replyCount: number;
-  latestReplyAt: Date | null;
-  threadRepliers: ActorSummary[];
-};
-
-const MAX_MESSAGE_LENGTH = 65536; // 64KB
-
-function normalizeMessageInput(text?: string, html?: string) {
-  if (!text && !html) {
-    throw new Error("Either text or html must be provided");
-  }
-
-  if (text && text.length > MAX_MESSAGE_LENGTH) {
-    throw new Error("Message text exceeds maximum length");
-  }
-  if (html && html.length > MAX_MESSAGE_LENGTH) {
-    throw new Error("Message HTML exceeds maximum length");
-  }
-
-  if (html) {
-    const cleanHtml = sanitizeHtml(html);
-    return {
-      text: text || stripHtml(cleanHtml),
-      html: cleanHtml,
-      mentions: extractMentions(cleanHtml),
-    };
-  }
-
-  return {
-    text: text!,
-    html: null,
-    mentions: [] as Array<{ userId: string; name: string }>,
-  };
-}
-
-function buildMessageEventPayload(message: DbMessage) {
-  return {
-    messageId: message.id,
-    parentMessageId: message.parentMessageId,
-    text: message.text,
-    html: message.html,
-    mentions: message.mentions,
-  };
-}
-
-/**
- * Resolve the organizationId to use for event storage.
- * Chat events are not org-scoped, but the Event model requires an orgId.
- * We use the actor's first org membership as a storage key.
- */
-async function resolveEventOrgId(actorId: string): Promise<string> {
-  const membership = await prisma.orgMember.findFirst({
-    where: { userId: actorId },
-    orderBy: { joinedAt: "asc" },
-    select: { organizationId: true },
-  });
-  if (!membership) {
-    throw new Error("Actor must belong to at least one organization");
-  }
-  return membership.organizationId;
 }
 
 export class ChatService {
@@ -229,81 +169,6 @@ export class ChatService {
     return chat;
   }
 
-  private async hydrateMessages(messages: DbMessage[]): Promise<MessageWithSummary[]> {
-    if (messages.length === 0) return [];
-
-    const rootIds = messages.filter((message) => !message.parentMessageId).map((message) => message.id);
-    const replies = rootIds.length
-      ? await prisma.message.findMany({
-          where: { parentMessageId: { in: rootIds } },
-          orderBy: { createdAt: "desc" },
-          select: {
-            parentMessageId: true,
-            actorType: true,
-            actorId: true,
-            createdAt: true,
-          },
-        })
-      : [];
-
-    const actorMap = await resolveActors(replies.map((reply) => ({
-      actorType: reply.actorType,
-      actorId: reply.actorId,
-    })));
-
-    const summaries = new Map<string, {
-      replyCount: number;
-      latestReplyAt: Date | null;
-      threadRepliers: ActorSummary[];
-      seenActors: Set<string>;
-    }>();
-
-    for (const reply of replies) {
-      if (!reply.parentMessageId) continue;
-
-      let summary = summaries.get(reply.parentMessageId);
-      if (!summary) {
-        summary = {
-          replyCount: 0,
-          latestReplyAt: null,
-          threadRepliers: [],
-          seenActors: new Set<string>(),
-        };
-        summaries.set(reply.parentMessageId, summary);
-      }
-
-      summary.replyCount += 1;
-      if (!summary.latestReplyAt) {
-        summary.latestReplyAt = reply.createdAt;
-      }
-
-      const actorKey = `${reply.actorType}:${reply.actorId}`;
-      if (summary.seenActors.has(actorKey) || summary.threadRepliers.length >= 3) {
-        continue;
-      }
-
-      summary.seenActors.add(actorKey);
-      summary.threadRepliers.push(
-        actorMap.get(actorKey) ?? {
-          type: reply.actorType,
-          id: reply.actorId,
-          name: null,
-          avatarUrl: null,
-        },
-      );
-    }
-
-    return messages.map((message) => {
-      const summary = message.parentMessageId ? null : summaries.get(message.id);
-      return {
-        ...message,
-        replyCount: summary?.replyCount ?? 0,
-        latestReplyAt: summary?.latestReplyAt ?? null,
-        threadRepliers: summary?.threadRepliers ?? [],
-      };
-    });
-  }
-
   async sendMessage({
     chatId,
     text,
@@ -441,8 +306,13 @@ export class ChatService {
       existing.html === normalized.html &&
       JSON.stringify(existing.mentions ?? null) === JSON.stringify(normalized.mentions)
     ) {
-      const [hydratedExisting] = await this.hydrateMessages([existing]);
+      const [hydratedExisting] = await hydrateMessages([existing]);
       return hydratedExisting;
+    }
+
+    const chatId = existing.chatId;
+    if (!chatId) {
+      throw new Error("Message is not a chat message");
     }
 
     const eventOrgId = await resolveEventOrgId(actorId);
@@ -461,7 +331,7 @@ export class ChatService {
       });
 
       await tx.chat.update({
-        where: { id: updatedMessage.chatId },
+        where: { id: chatId },
         data: { updatedAt: editedAt },
       });
 
@@ -469,7 +339,7 @@ export class ChatService {
         {
           organizationId: eventOrgId,
           scopeType: "chat",
-          scopeId: updatedMessage.chatId,
+          scopeId: chatId,
           eventType: "message_edited",
           payload: buildMessageEventPayload(updatedMessage) as unknown as PrismaTypes.InputJsonValue,
           actorType,
@@ -481,7 +351,7 @@ export class ChatService {
       return updatedMessage;
     });
 
-    const [hydratedMessage] = await this.hydrateMessages([updated]);
+    const [hydratedMessage] = await hydrateMessages([updated]);
     return hydratedMessage;
   }
 
@@ -508,8 +378,13 @@ export class ChatService {
     }
 
     if (existing.deletedAt) {
-      const [hydratedExisting] = await this.hydrateMessages([existing]);
+      const [hydratedExisting] = await hydrateMessages([existing]);
       return hydratedExisting;
+    }
+
+    const chatId = existing.chatId;
+    if (!chatId) {
+      throw new Error("Message is not a chat message");
     }
 
     const eventOrgId = await resolveEventOrgId(actorId);
@@ -526,7 +401,7 @@ export class ChatService {
       });
 
       await tx.chat.update({
-        where: { id: deletedMessage.chatId },
+        where: { id: chatId },
         data: { updatedAt: deletedAt },
       });
 
@@ -534,7 +409,7 @@ export class ChatService {
         {
           organizationId: eventOrgId,
           scopeType: "chat",
-          scopeId: deletedMessage.chatId,
+          scopeId: chatId,
           eventType: "message_deleted",
           payload: {
             messageId: deletedMessage.id,
@@ -551,7 +426,7 @@ export class ChatService {
       return deletedMessage;
     });
 
-    const [hydratedMessage] = await this.hydrateMessages([updated]);
+    const [hydratedMessage] = await hydrateMessages([updated]);
     return hydratedMessage;
   }
 
@@ -584,7 +459,7 @@ export class ChatService {
     });
 
     const orderedMessages = isBefore ? messages.reverse() : messages;
-    return this.hydrateMessages(orderedMessages);
+    return hydrateMessages(orderedMessages);
   }
 
   async getReplies(
@@ -618,7 +493,7 @@ export class ChatService {
       take: opts?.limit ?? 200,
     });
 
-    return this.hydrateMessages(replies);
+    return hydrateMessages(replies);
   }
 
   async addMember(

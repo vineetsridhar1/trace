@@ -15,14 +15,6 @@ const CHANNELS_QUERY = gql`
       type
       position
       groupId
-      members {
-        user {
-          id
-          name
-          avatarUrl
-        }
-        joinedAt
-      }
     }
   }
 `;

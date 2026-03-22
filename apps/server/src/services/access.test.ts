@@ -8,6 +8,7 @@ vi.mock("../lib/db.js", async () => {
 import { prisma } from "../lib/db.js";
 import {
   assertChatAccess,
+  assertChannelAccess,
   assertScopeAccess,
   assertThreadAccess,
   isActiveChatMember,
@@ -29,15 +30,26 @@ describe("access service", () => {
   });
 
   it("asserts chat access and rejects missing membership", async () => {
-    prismaMock.chat.findFirst.mockResolvedValueOnce({ id: "chat-1", organizationId: "org-1" });
-    await expect(assertChatAccess("chat-1", "user-1", "org-1")).resolves.toEqual({
+    prismaMock.chat.findFirst.mockResolvedValueOnce({ id: "chat-1" });
+    await expect(assertChatAccess("chat-1", "user-1")).resolves.toEqual({
       id: "chat-1",
-      organizationId: "org-1",
     });
 
     prismaMock.chat.findFirst.mockResolvedValueOnce(null);
-    await expect(assertChatAccess("chat-1", "user-1", "org-1")).rejects.toThrow(
+    await expect(assertChatAccess("chat-1", "user-1")).rejects.toThrow(
       "Not authorized for this chat",
+    );
+  });
+
+  it("asserts channel access and rejects missing membership", async () => {
+    prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1" });
+    await expect(assertChannelAccess("channel-1", "user-1")).resolves.toEqual({
+      id: "channel-1",
+    });
+
+    prismaMock.channel.findFirst.mockResolvedValueOnce(null);
+    await expect(assertChannelAccess("channel-1", "user-1")).rejects.toThrow(
+      "Not authorized for this channel",
     );
   });
 
@@ -53,16 +65,33 @@ describe("access service", () => {
   it("validates thread access through the root message and chat membership", async () => {
     prismaMock.message.findUniqueOrThrow.mockResolvedValueOnce({
       id: "message-1",
-      organizationId: "org-1",
       chatId: "chat-1",
+      channelId: null,
       parentMessageId: null,
     });
-    prismaMock.chat.findFirst.mockResolvedValueOnce({ id: "chat-1", organizationId: "org-1" });
+    prismaMock.chat.findFirst.mockResolvedValueOnce({ id: "chat-1" });
 
-    await expect(assertThreadAccess("message-1", "user-1", "org-1")).resolves.toEqual({
+    await expect(assertThreadAccess("message-1", "user-1")).resolves.toEqual({
       id: "message-1",
-      organizationId: "org-1",
       chatId: "chat-1",
+      channelId: null,
+      parentMessageId: null,
+    });
+  });
+
+  it("validates thread access through channel membership for channel threads", async () => {
+    prismaMock.message.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "message-1",
+      chatId: null,
+      channelId: "channel-1",
+      parentMessageId: null,
+    });
+    prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1" });
+
+    await expect(assertThreadAccess("message-1", "user-1")).resolves.toEqual({
+      id: "message-1",
+      chatId: null,
+      channelId: "channel-1",
       parentMessageId: null,
     });
   });

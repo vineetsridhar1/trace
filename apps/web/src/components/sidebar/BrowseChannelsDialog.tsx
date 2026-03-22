@@ -63,9 +63,10 @@ export function BrowseChannelsDialog() {
   const [channels, setChannels] = useState<BrowseChannel[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadedOrgId, setLoadedOrgId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const userId = useAuthStore((s) => s.userId);
+  const userId = useAuthStore((s) => s.user?.id);
 
   const fetchChannels = useCallback(async () => {
     if (!activeOrgId) return;
@@ -73,15 +74,24 @@ export function BrowseChannelsDialog() {
     const result = await client.query(ALL_CHANNELS_QUERY, { organizationId: activeOrgId }).toPromise();
     if (result.data?.channels) {
       setChannels(result.data.channels as BrowseChannel[]);
+      setLoadedOrgId(activeOrgId);
     }
     setLoading(false);
   }, [activeOrgId]);
 
   useEffect(() => {
-    if (open) {
+    if (open && activeOrgId && loadedOrgId !== activeOrgId) {
       fetchChannels();
     }
-  }, [open, fetchChannels]);
+  }, [open, activeOrgId, loadedOrgId, fetchChannels]);
+
+  useEffect(() => {
+    if (activeOrgId === loadedOrgId) {
+      return;
+    }
+    setChannels([]);
+    setLoadedOrgId(null);
+  }, [activeOrgId, loadedOrgId]);
 
   const handleJoin = async (channelId: string) => {
     setPendingAction(channelId);

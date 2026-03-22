@@ -11,12 +11,20 @@ vi.mock("./chat.js", () => ({
   },
 }));
 
+vi.mock("./channel.js", () => ({
+  channelService: {
+    getChannelThreadReplies: vi.fn(),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { chatService } from "./chat.js";
+import { channelService } from "./channel.js";
 import { ThreadService } from "./thread.js";
 
 const prismaMock = prisma as any;
 const chatServiceMock = chatService as any;
+const channelServiceMock = channelService as any;
 
 describe("ThreadService", () => {
   beforeEach(() => {
@@ -24,10 +32,29 @@ describe("ThreadService", () => {
   });
 
   it("delegates reply loading to ChatService", async () => {
+    prismaMock.message.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "msg-1",
+      chatId: "chat-1",
+      channelId: null,
+      parentMessageId: null,
+    });
     chatServiceMock.getReplies.mockResolvedValueOnce([{ id: "reply-1" }]);
 
     const service = new ThreadService();
-    await expect(service.getReplies("msg-1", "org-1", "user-1")).resolves.toEqual([{ id: "reply-1" }]);
+    await expect(service.getReplies("msg-1", "user-1")).resolves.toEqual([{ id: "reply-1" }]);
+  });
+
+  it("delegates channel thread reply loading to ChannelService", async () => {
+    prismaMock.message.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "msg-1",
+      chatId: null,
+      channelId: "channel-1",
+      parentMessageId: null,
+    });
+    channelServiceMock.getChannelThreadReplies.mockResolvedValueOnce([{ id: "reply-1" }]);
+
+    const service = new ThreadService();
+    await expect(service.getReplies("msg-1", "user-1")).resolves.toEqual([{ id: "reply-1" }]);
   });
 
   it("summarizes replies with deduplicated participants", async () => {

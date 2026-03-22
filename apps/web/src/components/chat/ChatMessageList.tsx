@@ -10,13 +10,15 @@ import { Skeleton } from "../ui/skeleton";
 const GROUP_THRESHOLD_MS = 5 * 60 * 1000;
 
 export function ChatMessageList({
-  chatId,
+  scopeId,
+  showWelcome = false,
   messageIds,
   loading,
   hasOlder,
   onLoadOlder,
 }: {
-  chatId: string;
+  scopeId: string;
+  showWelcome?: boolean;
   messageIds: string[];
   loading: boolean;
   hasOlder: boolean;
@@ -52,14 +54,14 @@ export function ChatMessageList({
   }, [messages]);
 
   // Scroll to bottom instantly when entering a chat
-  const prevChatIdRef = useRef(chatId);
+  const prevScopeIdRef = useRef(scopeId);
   useEffect(() => {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView();
     }
-    prevChatIdRef.current = chatId;
+    prevScopeIdRef.current = scopeId;
     wasAtBottomRef.current = true;
-  }, [chatId, loading]);
+  }, [scopeId, loading]);
 
   // Auto-scroll to bottom smoothly when new messages arrive
   useEffect(() => {
@@ -109,11 +111,11 @@ export function ChatMessageList({
       {messageIds.length === 0 ? (
         <div className="flex h-full flex-col">
           <div className="flex-1" />
-          <DmWelcome chatId={chatId} />
+          {showWelcome ? <DmWelcome chatId={scopeId} /> : null}
         </div>
       ) : (
         <div className="py-2">
-          {!hasOlder && <DmWelcome chatId={chatId} />}
+          {!hasOlder && showWelcome ? <DmWelcome chatId={scopeId} /> : null}
           {messageIds.map((id, idx) => (
             <ChatMessageErrorBoundary key={id}>
               <ChatMessage messageId={id} isGrouped={groupedFlags[idx]} />

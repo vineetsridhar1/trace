@@ -58,6 +58,22 @@ export async function assertChatAccess(chatId: string, userId: string) {
   return chat;
 }
 
+export async function assertChannelAccess(channelId: string, userId: string) {
+  const channel = await prisma.channel.findFirst({
+    where: {
+      id: channelId,
+      members: { some: { userId, leftAt: null } },
+    },
+    select: { id: true },
+  });
+
+  if (!channel) {
+    throw new Error("Not authorized for this channel");
+  }
+
+  return channel;
+}
+
 export async function assertScopeAccess(
   scopeType: string,
   scopeId: string,
@@ -69,8 +85,7 @@ export async function assertScopeAccess(
       await assertChatAccess(scopeId, userId);
       return;
     case "channel":
-      if (!organizationId) throw new Error("Organization context required for channel access");
-      await assertOrgEntityExists("channel", scopeId, organizationId);
+      await assertChannelAccess(scopeId, userId);
       return;
     case "session":
       if (!organizationId) throw new Error("Organization context required for session access");
@@ -94,6 +109,7 @@ export async function assertThreadAccess(
     select: {
       id: true,
       chatId: true,
+      channelId: true,
       parentMessageId: true,
     },
   });
@@ -102,7 +118,13 @@ export async function assertThreadAccess(
     throw new Error("Thread root must be a top-level message");
   }
 
-  await assertChatAccess(rootMessage.chatId, userId);
+  if (rootMessage.chatId) {
+    await assertChatAccess(rootMessage.chatId, userId);
+  } else if (rootMessage.channelId) {
+    await assertChannelAccess(rootMessage.channelId, userId);
+  } else {
+    throw new Error("Thread root must belong to a chat or channel");
+  }
 
   return rootMessage;
 }

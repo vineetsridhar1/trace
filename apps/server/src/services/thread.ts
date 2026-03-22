@@ -1,5 +1,6 @@
 import { prisma } from "../lib/db.js";
 import { chatService } from "./chat.js";
+import { channelService } from "./channel.js";
 
 export class ThreadService {
   async getReplies(
@@ -7,7 +8,29 @@ export class ThreadService {
     userId: string,
     opts?: { after?: Date; limit?: number },
   ) {
-    return chatService.getReplies(rootMessageId, userId, opts);
+    const rootMessage = await prisma.message.findUniqueOrThrow({
+      where: { id: rootMessageId },
+      select: {
+        id: true,
+        chatId: true,
+        channelId: true,
+        parentMessageId: true,
+      },
+    });
+
+    if (rootMessage.parentMessageId) {
+      throw new Error("Thread root must be a top-level message");
+    }
+
+    if (rootMessage.chatId) {
+      return chatService.getReplies(rootMessageId, userId, opts);
+    }
+
+    if (rootMessage.channelId) {
+      return channelService.getChannelThreadReplies(rootMessageId, userId, opts);
+    }
+
+    throw new Error("Thread root must belong to a chat or channel");
   }
 
   async getSummary(rootMessageId: string) {

@@ -3,41 +3,12 @@ import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { participantService } from "./participant.js";
-import { sanitizeHtml, extractMentions, stripHtml } from "./mention.js";
-import { resolveActors, type ActorSummary } from "./actor.js";
-
-type DbMessage = Prisma.MessageGetPayload<Record<string, never>>;
-
-type MessageWithSummary = DbMessage & {
-  replyCount: number;
-  latestReplyAt: Date | null;
-  threadRepliers: ActorSummary[];
-};
-
-const MAX_MESSAGE_LENGTH = 65536;
-
-function normalizeMessageInput(text?: string, html?: string) {
-  if (!text && !html) throw new Error("Either text or html must be provided");
-  if (text && text.length > MAX_MESSAGE_LENGTH) throw new Error("Message text exceeds maximum length");
-  if (html && html.length > MAX_MESSAGE_LENGTH) throw new Error("Message HTML exceeds maximum length");
-
-  if (html) {
-    const cleanHtml = sanitizeHtml(html);
-    return { text: text || stripHtml(cleanHtml), html: cleanHtml, mentions: extractMentions(cleanHtml) };
-  }
-  return { text: text!, html: null, mentions: [] as Array<{ userId: string; name: string }> };
-}
-
-function buildMessageEventPayload(message: DbMessage) {
-  return {
-    messageId: message.id,
-    channelId: message.channelId,
-    parentMessageId: message.parentMessageId,
-    text: message.text,
-    html: message.html,
-    mentions: message.mentions,
-  };
-}
+import {
+  normalizeMessageInput,
+  buildMessageEventPayload,
+  hydrateMessages,
+  type MessageWithSummary,
+} from "./message-utils.js";
 
 export class ChannelService {
   private async normalizeMembers(
@@ -57,57 +28,6 @@ export class ChannelService {
       user: userMap.get(m.userId) ?? { id: m.userId, name: "Unknown", avatarUrl: null },
       joinedAt: m.joinedAt.toISOString(),
     }));
-  }
-
-  private async hydrateMessages(messages: DbMessage[]): Promise<MessageWithSummary[]> {
-    if (messages.length === 0) return [];
-
-    const rootIds = messages.filter((m) => !m.parentMessageId).map((m) => m.id);
-    const replies = rootIds.length
-      ? await prisma.message.findMany({
-          where: { parentMessageId: { in: rootIds } },
-          orderBy: { createdAt: "desc" },
-          select: { parentMessageId: true, actorType: true, actorId: true, createdAt: true },
-        })
-      : [];
-
-    const actorMap = await resolveActors(replies.map((r) => ({ actorType: r.actorType, actorId: r.actorId })));
-
-    const summaries = new Map<string, {
-      replyCount: number;
-      latestReplyAt: Date | null;
-      threadRepliers: ActorSummary[];
-      seenActors: Set<string>;
-    }>();
-
-    for (const reply of replies) {
-      if (!reply.parentMessageId) continue;
-      let summary = summaries.get(reply.parentMessageId);
-      if (!summary) {
-        summary = { replyCount: 0, latestReplyAt: null, threadRepliers: [], seenActors: new Set() };
-        summaries.set(reply.parentMessageId, summary);
-      }
-      summary.replyCount += 1;
-      if (!summary.latestReplyAt) summary.latestReplyAt = reply.createdAt;
-
-      const actorKey = `${reply.actorType}:${reply.actorId}`;
-      if (!summary.seenActors.has(actorKey) && summary.threadRepliers.length < 3) {
-        summary.seenActors.add(actorKey);
-        summary.threadRepliers.push(
-          actorMap.get(actorKey) ?? { type: reply.actorType, id: reply.actorId, name: null, avatarUrl: null },
-        );
-      }
-    }
-
-    return messages.map((m) => {
-      const summary = m.parentMessageId ? null : summaries.get(m.id);
-      return {
-        ...m,
-        replyCount: summary?.replyCount ?? 0,
-        latestReplyAt: summary?.latestReplyAt ?? null,
-        threadRepliers: summary?.threadRepliers ?? [],
-      };
-    });
   }
 
   async create(input: CreateChannelInput, actorType: ActorType, actorId: string) {
@@ -374,12 +294,17 @@ export class ChannelService {
       existing.html === normalized.html &&
       JSON.stringify(existing.mentions ?? null) === JSON.stringify(normalized.mentions)
     ) {
-      const [hydrated] = await this.hydrateMessages([existing]);
+      const [hydrated] = await hydrateMessages([existing]);
       return hydrated;
     }
 
+    const channelId = existing.channelId;
+    if (!channelId) {
+      throw new Error("Message is not a channel message");
+    }
+
     const channel = await prisma.channel.findUniqueOrThrow({
-      where: { id: existing.channelId! },
+      where: { id: channelId },
       select: { organizationId: true },
     });
 
@@ -398,14 +323,14 @@ export class ChannelService {
       });
 
       await tx.channel.update({
-        where: { id: existing.channelId! },
+        where: { id: channelId },
         data: { updatedAt: editedAt },
       });
 
       await eventService.create({
         organizationId: channel.organizationId,
         scopeType: "channel",
-        scopeId: existing.channelId!,
+        scopeId: channelId,
         eventType: "message_edited",
         payload: buildMessageEventPayload(updatedMessage) as unknown as PrismaTypes.InputJsonValue,
         actorType,
@@ -415,7 +340,7 @@ export class ChannelService {
       return updatedMessage;
     });
 
-    const [hydrated] = await this.hydrateMessages([updated]);
+    const [hydrated] = await hydrateMessages([updated]);
     return hydrated;
   }
 
@@ -440,12 +365,17 @@ export class ChannelService {
       throw new Error("Only the original author can delete this message");
     }
     if (existing.deletedAt) {
-      const [hydrated] = await this.hydrateMessages([existing]);
+      const [hydrated] = await hydrateMessages([existing]);
       return hydrated;
     }
 
+    const channelId = existing.channelId;
+    if (!channelId) {
+      throw new Error("Message is not a channel message");
+    }
+
     const channel = await prisma.channel.findUniqueOrThrow({
-      where: { id: existing.channelId! },
+      where: { id: channelId },
       select: { organizationId: true },
     });
 
@@ -457,14 +387,14 @@ export class ChannelService {
       });
 
       await tx.channel.update({
-        where: { id: existing.channelId! },
+        where: { id: channelId },
         data: { updatedAt: deletedAt },
       });
 
       await eventService.create({
         organizationId: channel.organizationId,
         scopeType: "channel",
-        scopeId: existing.channelId!,
+        scopeId: channelId,
         eventType: "message_deleted",
         payload: {
           messageId: deletedMessage.id,
@@ -479,7 +409,7 @@ export class ChannelService {
       return deletedMessage;
     });
 
-    const [hydrated] = await this.hydrateMessages([updated]);
+    const [hydrated] = await hydrateMessages([updated]);
     return hydrated;
   }
 
@@ -509,7 +439,7 @@ export class ChannelService {
     });
 
     const orderedMessages = isBefore ? messages.reverse() : messages;
-    return this.hydrateMessages(orderedMessages);
+    return hydrateMessages(orderedMessages);
   }
 
   async getChannelThreadReplies(

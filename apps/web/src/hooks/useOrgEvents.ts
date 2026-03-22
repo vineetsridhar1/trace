@@ -212,7 +212,7 @@ export function useOrgEvents() {
         // Channel membership events
         if ((event.eventType === "channel_member_added" || event.eventType === "channel_member_removed") && payload) {
           const userId = payload.userId as string | undefined;
-          const currentUserId = useAuthStore.getState().userId;
+          const currentUserId = useAuthStore.getState().user?.id;
           const channel = asJsonObject(payload.channel);
 
           if (event.eventType === "channel_member_added" && userId === currentUserId && channel && typeof channel.id === "string") {
