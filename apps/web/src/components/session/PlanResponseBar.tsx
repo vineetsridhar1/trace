@@ -27,8 +27,10 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
+  const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const repo = useEntityField("sessions", sessionId, "repo") as { id: string } | null | undefined;
+  const branch = useEntityField("sessions", sessionId, "branch") as string | undefined;
 
   const handleClearContext = useCallback(async () => {
     if (sending || !sessionGroupId) return;
@@ -39,11 +41,12 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
         .mutation(START_SESSION_MUTATION, {
           input: {
             tool: tool ?? "claude_code",
+            model,
             hosting: hosting ?? "cloud",
             channelId: channel?.id,
             repoId: repo?.id,
+            branch,
             sessionGroupId,
-            sourceSessionId: sessionId,
             prompt,
           },
         })
@@ -58,7 +61,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
     } finally {
       setSending(false);
     }
-  }, [sending, sessionGroupId, planContent, tool, hosting, channel?.id, repo?.id, sessionId]);
+  }, [sending, sessionGroupId, planContent, tool, model, hosting, channel?.id, repo?.id, branch, sessionId]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;

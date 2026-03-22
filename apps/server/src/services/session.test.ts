@@ -23,6 +23,7 @@ vi.mock("../lib/session-router.js", () => ({
     destroyRuntime: vi.fn().mockResolvedValue(undefined),
     transitionRuntime: vi.fn().mockResolvedValue("delivered"),
     bindSession: vi.fn(),
+    unbindSession: vi.fn(),
     getRuntime: vi.fn().mockReturnValue(null),
     getRuntimeForSession: vi.fn().mockReturnValue(null),
     getRuntimeDiagnostics: vi.fn().mockReturnValue({}),
@@ -293,6 +294,41 @@ describe("SessionService", () => {
         skipDuplicates: true,
       });
     });
+
+    it("inherits repo and branch from the existing group for a clean new chat", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          workdir: "/tmp/trace/shared",
+          repoId: "repo-1",
+          branch: "feature/shared",
+        }),
+      );
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          workdir: "/tmp/trace/shared",
+          branch: "feature/shared",
+        }),
+      );
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        sessionGroupId: "group-1",
+      } as any);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sessionGroupId: "group-1",
+            repoId: "repo-1",
+            branch: "feature/shared",
+            workdir: "/tmp/trace/shared",
+          }),
+        }),
+      );
+    });
   });
 
   describe("updateName", () => {
@@ -395,6 +431,12 @@ describe("SessionService", () => {
         }),
       );
       expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-2", "runtime-1");
+      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
+        "session-1",
+        "cloud",
+        "terminate",
+      );
+      expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
     });
   });
 
@@ -439,6 +481,12 @@ describe("SessionService", () => {
           hosting: "cloud",
         }),
       );
+      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
+        "session-1",
+        "cloud",
+        "terminate",
+      );
+      expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
     });
   });
 

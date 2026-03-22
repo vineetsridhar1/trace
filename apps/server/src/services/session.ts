@@ -404,8 +404,8 @@ export class SessionService {
 
     const resolvedChannelId =
       input.channelId ?? resolvedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
-    const resolvedRepoId = input.repoId ?? sourceSession?.repoId ?? undefined;
-    const resolvedBranch = input.branch ?? sourceSession?.branch ?? undefined;
+    const resolvedRepoId = input.repoId ?? resolvedGroup?.repoId ?? sourceSession?.repoId ?? undefined;
+    const resolvedBranch = input.branch ?? resolvedGroup?.branch ?? sourceSession?.branch ?? undefined;
     const sharedWorkdir = resolvedGroup?.workdir ?? null;
     const sharedConnection = resolvedGroup?.connection ?? null;
     const sharedRuntimeInstanceId =
@@ -1709,6 +1709,45 @@ export class SessionService {
     return updated;
   }
 
+  private async completeRehomedSourceSession(params: {
+    sessionId: string;
+    hosting: "cloud" | "local";
+    organizationId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    const { sessionId, hosting, organizationId, actorType, actorId } = params;
+
+    terminalRelay.destroyAllForSession(sessionId);
+
+    try {
+      await sessionRouter.transitionRuntime(sessionId, hosting, "terminate");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[session-service] failed to terminate rehomed session ${sessionId}: ${message}`);
+    }
+
+    sessionRouter.unbindSession(sessionId);
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: "completed" },
+    });
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_terminated",
+      payload: {
+        sessionId,
+        status: "completed",
+      },
+      actorType,
+      actorId,
+    });
+  }
+
   async moveToRuntime(
     sessionId: string,
     runtimeInstanceId: string,
@@ -1868,6 +1907,14 @@ export class SessionService {
       actorId,
     });
 
+    await this.completeRehomedSourceSession({
+      sessionId,
+      hosting: session.hosting as "cloud" | "local",
+      organizationId: session.organizationId,
+      actorType,
+      actorId,
+    });
+
     return childSession;
   }
 
@@ -2000,6 +2047,14 @@ export class SessionService {
         newSessionId: childSession.id,
         runtimeInstanceId: null,
       },
+      actorType,
+      actorId,
+    });
+
+    await this.completeRehomedSourceSession({
+      sessionId,
+      hosting: session.hosting as "cloud" | "local",
+      organizationId: session.organizationId,
       actorType,
       actorId,
     });

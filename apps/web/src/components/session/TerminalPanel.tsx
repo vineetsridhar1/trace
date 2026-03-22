@@ -99,29 +99,34 @@ export function TerminalPanel({
         <TerminalSquare size={14} className="mr-1.5 text-muted-foreground" />
 
         {terminals.map((terminal, index) => (
-          <button
+          <div
             key={terminal.id}
-            onClick={() => setActiveTerminalId(terminal.id)}
             className={cn(
-              "flex items-center gap-1.5 rounded px-2 py-0.5 text-xs transition-colors",
+              "flex items-center rounded text-xs transition-colors",
               activeTerminalId === terminal.id
                 ? "bg-surface-elevated text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <span>Terminal {index + 1}</span>
-            {terminal.status === "exited" && (
-              <span className="text-[10px] text-muted-foreground">(exited)</span>
-            )}
-            <X
-              size={12}
-              className="opacity-50 hover:opacity-100"
-              onClick={(event) => {
-                event.stopPropagation();
-                destroyTerminal(terminal.id);
-              }}
-            />
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTerminalId(terminal.id)}
+              className="flex items-center gap-1.5 px-2 py-0.5"
+            >
+              <span>Terminal {index + 1}</span>
+              {terminal.status === "exited" && (
+                <span className="text-[10px] text-muted-foreground">(exited)</span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => destroyTerminal(terminal.id)}
+              className="flex h-5 w-5 items-center justify-center rounded opacity-50 transition-opacity hover:opacity-100"
+              title="Close terminal"
+            >
+              <X size={12} />
+            </button>
+          </div>
         ))}
 
         <button
