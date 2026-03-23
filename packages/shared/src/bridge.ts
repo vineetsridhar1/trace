@@ -68,13 +68,13 @@ export interface BridgeListBranchesCommand {
 export interface BridgeListFilesCommand {
   type: "list_files";
   requestId: string;
-  workdir: string;
+  sessionId: string;
 }
 
 export interface BridgeReadFileCommand {
   type: "read_file";
   requestId: string;
-  workdir: string;
+  sessionId: string;
   relativePath: string;
 }
 

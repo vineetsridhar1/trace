@@ -2146,23 +2146,20 @@ export class SessionService {
   ): Promise<string[]> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
-      select: { id: true, workdir: true },
-      });
+      select: { id: true },
+    });
     if (!group) throw new Error("Session group not found");
-    if (!group.workdir) throw new Error("Session group has no working directory");
 
-    // Find a runtime that has a session in this group
+    // Find a session bound to a connected runtime
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId, organizationId },
       select: { id: true },
     });
-    let runtimeId: string | undefined;
     for (const session of sessions) {
       const rt = sessionRouter.getRuntimeForSession(session.id);
-      if (rt) { runtimeId = rt.id; break; }
+      if (rt) return sessionRouter.listFiles(rt.id, session.id);
     }
-    if (!runtimeId) throw new Error("No connected runtime available for this session group");
-    return sessionRouter.listFiles(runtimeId, group.workdir);
+    throw new Error("No connected runtime available for this session group");
   }
 
   /** Read a file's content from a session group's working directory. */
@@ -2171,29 +2168,26 @@ export class SessionService {
     filePath: string,
     organizationId: string,
   ): Promise<string> {
-    const group = await prisma.sessionGroup.findFirst({
-      where: { id: sessionGroupId, organizationId },
-      select: { id: true, workdir: true },
-    });
-    if (!group) throw new Error("Session group not found");
-    if (!group.workdir) throw new Error("Session group has no working directory");
-
-    // Prevent path traversal — filePath must be relative and stay within workdir
+    // Prevent path traversal
     if (filePath.startsWith("/") || filePath.includes("..")) {
       throw new Error("Invalid file path");
     }
+
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true },
+    });
+    if (!group) throw new Error("Session group not found");
 
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId, organizationId },
       select: { id: true },
     });
-    let runtimeId: string | undefined;
     for (const session of sessions) {
       const rt = sessionRouter.getRuntimeForSession(session.id);
-      if (rt) { runtimeId = rt.id; break; }
+      if (rt) return sessionRouter.readFile(rt.id, session.id, filePath);
     }
-    if (!runtimeId) throw new Error("No connected runtime available for this session group");
-    return sessionRouter.readFile(runtimeId, group.workdir, filePath);
+    throw new Error("No connected runtime available for this session group");
   }
 
   // ─── Helpers ───
