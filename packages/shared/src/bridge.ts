@@ -69,6 +69,8 @@ export interface BridgeListFilesCommand {
   type: "list_files";
   requestId: string;
   sessionId: string;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
 }
 
 export interface BridgeReadFileCommand {
@@ -76,6 +78,8 @@ export interface BridgeReadFileCommand {
   requestId: string;
   sessionId: string;
   relativePath: string;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
 }
 
 // --- Terminal commands (Server → Bridge) ---

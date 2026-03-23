@@ -347,8 +347,8 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "list_files": {
-        const { requestId, sessionId } = cmd;
-        const workdir = this.sessionWorkdirs.get(sessionId);
+        const { requestId, sessionId, workdirHint } = cmd;
+        const workdir = this.sessionWorkdirs.get(sessionId) ?? workdirHint;
         if (!workdir) {
           this.send({ type: "files_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
           break;
@@ -367,8 +367,8 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "read_file": {
-        const { requestId, sessionId, relativePath } = cmd;
-        const workdir = this.sessionWorkdirs.get(sessionId);
+        const { requestId, sessionId, relativePath, workdirHint } = cmd;
+        const workdir = this.sessionWorkdirs.get(sessionId) ?? workdirHint;
         if (!workdir) {
           this.send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
           break;

@@ -596,9 +596,9 @@ export class SessionRouter {
    * Ask a runtime to list files in a working directory.
    * Returns a promise that resolves when the bridge responds with files_result.
    */
-  listFiles(runtimeId: string, sessionId: string, timeoutMs = 15_000): Promise<string[]> {
+  listFiles(runtimeId: string, sessionId: string, workdirHint?: string, timeoutMs = 15_000): Promise<string[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "list_files", requestId, sessionId });
+    const result = this.sendToRuntime(runtimeId, { type: "list_files", requestId, sessionId, workdirHint });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
@@ -632,9 +632,9 @@ export class SessionRouter {
    * Ask a runtime to read a file's contents.
    * Returns a promise that resolves when the bridge responds with file_content_result.
    */
-  readFile(runtimeId: string, sessionId: string, relativePath: string, timeoutMs = 15_000): Promise<string> {
+  readFile(runtimeId: string, sessionId: string, relativePath: string, workdirHint?: string, timeoutMs = 15_000): Promise<string> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "read_file", requestId, sessionId, relativePath });
+    const result = this.sendToRuntime(runtimeId, { type: "read_file", requestId, sessionId, relativePath, workdirHint });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }

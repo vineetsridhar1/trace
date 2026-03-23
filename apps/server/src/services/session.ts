@@ -2146,18 +2146,21 @@ export class SessionService {
   ): Promise<string[]> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
-      select: { id: true },
+      select: { id: true, workdir: true },
     });
     if (!group) throw new Error("Session group not found");
 
     // Find a session bound to a connected runtime
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId, organizationId },
-      select: { id: true },
+      select: { id: true, workdir: true },
     });
     for (const session of sessions) {
       const rt = sessionRouter.getRuntimeForSession(session.id);
-      if (rt) return sessionRouter.listFiles(rt.id, session.id);
+      if (rt) {
+        const workdirHint = session.workdir ?? group.workdir ?? undefined;
+        return sessionRouter.listFiles(rt.id, session.id, workdirHint);
+      }
     }
     throw new Error("No connected runtime available for this session group");
   }
@@ -2175,17 +2178,20 @@ export class SessionService {
 
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
-      select: { id: true },
+      select: { id: true, workdir: true },
     });
     if (!group) throw new Error("Session group not found");
 
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId, organizationId },
-      select: { id: true },
+      select: { id: true, workdir: true },
     });
     for (const session of sessions) {
       const rt = sessionRouter.getRuntimeForSession(session.id);
-      if (rt) return sessionRouter.readFile(rt.id, session.id, filePath);
+      if (rt) {
+        const workdirHint = session.workdir ?? group.workdir ?? undefined;
+        return sessionRouter.readFile(rt.id, session.id, filePath, workdirHint);
+      }
     }
     throw new Error("No connected runtime available for this session group");
   }
