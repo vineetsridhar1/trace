@@ -4,6 +4,7 @@ import {
   Files,
   GitPullRequest,
   History,
+  Loader2,
   Maximize2,
   MessageSquarePlus,
   Minimize2,
@@ -24,6 +25,7 @@ import {
 interface GroupHeaderProps {
   groupName: string | undefined;
   selectedStatus: string;
+  reviewAndActive?: boolean;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
@@ -40,6 +42,7 @@ interface GroupHeaderProps {
 export function GroupHeader({
   groupName,
   selectedStatus,
+  reviewAndActive,
   selectedSessionId,
   groupPrUrl,
   panelMode,
@@ -92,7 +95,11 @@ export function GroupHeader({
 
       {selectedSessionId && (
         <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", statusColor[selectedStatus])}>
-          <Circle size={6} className="fill-current" />
+          {reviewAndActive ? (
+            <Loader2 size={10} className="animate-spin" />
+          ) : (
+            <Circle size={6} className="fill-current" />
+          )}
           {label}
         </span>
       )}

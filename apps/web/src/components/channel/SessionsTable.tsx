@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { Circle } from "lucide-react";
+import { Circle, Loader2 } from "lucide-react";
 import type {
   ColDef,
   FilterChangedEvent,
@@ -16,6 +16,7 @@ import { navigateToSessionGroup } from "../../stores/ui";
 import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   getSessionGroupDisplayStatus,
+  isGroupReviewAndActive,
   statusColor,
   statusLabel,
 } from "../session/sessionStatus";
@@ -25,6 +26,7 @@ import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 type SessionGroupRow = SessionGroupEntity & {
   id: string;
   status: string;
+  reviewAndActive?: boolean;
   latestSession?: SessionEntity;
   createdBySession?: SessionEntity;
   _lastMessageAt?: string;
@@ -67,7 +69,11 @@ const columns: ColDef<SessionGroupRow>[] = [
       const color = statusColor[data.status ?? "active"];
       return (
         <div className="flex h-full items-center gap-2">
-          <Circle size={8} className={`shrink-0 fill-current ${color}`} />
+          {data.reviewAndActive ? (
+            <Loader2 size={12} className={`shrink-0 animate-spin ${color}`} />
+          ) : (
+            <Circle size={8} className={`shrink-0 fill-current ${color}`} />
+          )}
           <span className="truncate text-sm text-foreground">{data.name}</span>
         </div>
       );
@@ -178,16 +184,17 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         const createdBySession = [...groupSessions].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )[0];
-        const status = getSessionGroupDisplayStatus(
-          groupSessions.map((session) => session.status),
-          group.prUrl as string | null | undefined,
-        );
+        const sessionStatuses = groupSessions.map((session) => session.status);
+        const prUrl = group.prUrl as string | null | undefined;
+        const status = getSessionGroupDisplayStatus(sessionStatuses, prUrl);
+        const reviewAndActive = isGroupReviewAndActive(sessionStatuses, prUrl);
 
         return {
           ...group,
           latestSession,
           createdBySession,
           status,
+          reviewAndActive,
           _lastMessageAt:
             latestSession?._lastMessageAt
             ?? latestSession?._sortTimestamp
@@ -288,9 +295,15 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           const color = statusColor[status] ?? "text-muted-foreground";
           const label = statusLabel[status] ?? status;
           const count = params.node.allChildrenCount ?? 0;
+          const hasReviewAndActive = status === "in_review"
+            && params.node.allLeafChildren?.some((child) => child.data?.reviewAndActive);
           return (
             <div className={`flex items-center gap-2 ${color}`}>
-              <Circle size={8} className="shrink-0 fill-current" />
+              {hasReviewAndActive ? (
+                <Loader2 size={12} className="shrink-0 animate-spin" />
+              ) : (
+                <Circle size={8} className="shrink-0 fill-current" />
+              )}
               <span className="text-sm font-semibold">{label}</span>
               <span className="text-xs text-muted-foreground">{count}</span>
             </div>

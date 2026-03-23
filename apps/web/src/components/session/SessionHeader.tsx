@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   History,
   Circle,
+  Loader2,
   WifiOff,
   Monitor,
   Cloud,
@@ -20,6 +21,8 @@ import {
   statusColor,
   statusLabel,
   isDisconnected,
+  isReviewAndActive,
+  isGroupReviewAndActive,
   getDisplayStatus,
   getSessionGroupDisplayStatus,
 } from "./sessionStatus";
@@ -76,6 +79,9 @@ export function SessionHeader({
   const displayStatus = sessionGroupId
     ? getSessionGroupDisplayStatus(groupStatuses, prUrl)
     : getDisplayStatus(status, prUrl);
+  const reviewAndActive = sessionGroupId
+    ? isGroupReviewAndActive(groupStatuses, prUrl)
+    : isReviewAndActive(status, prUrl);
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
@@ -126,7 +132,11 @@ export function SessionHeader({
         <span
           className={`flex shrink-0 items-center gap-1.5 text-xs ${statusColor[displayStatus]}`}
         >
-          <Circle size={6} className="fill-current" />
+          {reviewAndActive ? (
+            <Loader2 size={10} className="animate-spin" />
+          ) : (
+            <Circle size={6} className="fill-current" />
+          )}
           {statusLabel[displayStatus]}
         </span>
       )}

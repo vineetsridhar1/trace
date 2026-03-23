@@ -66,14 +66,22 @@ export function getSessionGroupDisplayStatus(
   prUrl: string | null | undefined,
 ): string {
   if (statuses.some((status) => status === "needs_input")) return "needs_input";
+  if (statuses.some((status) => status === "merged")) return "merged";
+  if (prUrl) return "in_review";
   if (statuses.some((status) => status != null && GROUP_IN_PROGRESS_STATUSES.has(status))) {
     return "active";
   }
-  if (statuses.some((status) => status === "merged")) return "merged";
-  if (prUrl) return "in_review";
   if (statuses.some((status) => status === "completed")) return "completed";
   if (statuses.some((status) => status === "failed")) return "failed";
   return "pending";
+}
+
+/** Whether the session group is "in review" but still has active/in-progress sessions. */
+export function isGroupReviewAndActive(
+  statuses: Array<string | null | undefined>,
+  prUrl: string | null | undefined,
+): boolean {
+  return !!prUrl && statuses.some((status) => status != null && GROUP_IN_PROGRESS_STATUSES.has(status));
 }
 
 /** Check if a session's connection is in a disconnected state */
