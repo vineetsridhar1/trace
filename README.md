@@ -1,204 +1,199 @@
 # Trace
 
-A unified AI-native platform that collapses project management, team communication, and AI-assisted development into a single product built on a shared event log.
+Trace is an AI-native collaboration stack that combines chat, tickets, repos, and coding sessions on top of a shared event stream.
 
-## Core Idea
+## System Overview
 
-The distinction between chat, project management, and AI coding is artificial. Trace unifies them into a single event stream where humans and AI agents are first-class citizens operating through the same interfaces. Every action — a message sent, a session started, a ticket created — produces an immutable event in a shared log that powers real-time sync across all clients.
-
-## Architecture
-
+```text
+Web app / Electron shell
+          |
+          v
+Apollo GraphQL API + service layer
+          |
+          +--> PostgreSQL (domain state + event log)
+          |
+          +--> Redis (org-scoped event streams / agent worker)
+          |
+          +--> Local bridge (Electron) or cloud bridge (Fly Machines)
 ```
-Web / Desktop / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime
-                                              ↓
-                                         Event Store (PostgreSQL)
-```
 
-- **Service layer is the product.** GraphQL resolvers are thin wrappers. The agent runtime calls services directly.
-- **Events are the source of truth.** Mutations produce events; clients subscribe to events for state updates.
-- **Agents are first-class.** No separate "agent mode" — agents use the same service layer as human users, distinguished only by `actor_type`.
+- Humans and agents operate through the same service layer.
+- The server owns session lifecycle, auth, GraphQL, websocket transport, and runtime routing.
+- The background agent worker consumes org events from Redis Streams.
+- Sessions can run locally through the desktop bridge or remotely through the container bridge.
 
-## Monorepo Structure
+## Workspace Layout
 
-```
+```text
 apps/
-├── server/        Apollo + Express, service layer, Prisma, WebSocket endpoints
-├── web/           React + Vite + urql + Zustand, Tailwind CSS, shadcn/ui
-└── desktop/       Electron shell + bridge client for local sessions
+  server/            Apollo Server + Express, Prisma, auth, websocket endpoints
+  web/               React 19 + Vite PWA client
+  desktop/           Electron shell for local session bridging
+  container-bridge/  Runtime image used for cloud-hosted coding sessions
 
 packages/
-├── gql/           GraphQL schema, codegen, generated TypeScript types
-└── shared/        CodingToolAdapter interfaces (Claude Code, Codex)
+  gql/               GraphQL schema and generated TypeScript types
+  shared/            Shared adapter/runtime utilities
+
+tickets/
+  ai-agent/          Design notes and implementation tracking for the agent runtime
 ```
 
-## Key Features
+## Requirements
 
-- **Channels** — Real-time messaging with multiple channel types (default, announcement, triage, feed)
-- **Sessions** — AI coding sessions that run in the cloud (Fly.io) or locally (Electron bridge), with full lifecycle control (start, pause, resume, terminate)
-- **Tickets** — Issue tracking with priority, status, and project linking
-- **Event Log** — Immutable, append-only log powering all state changes and real-time sync
-- **Session Lineage** — Fork and branch sessions with parent/child relationships
-- **Multi-Repo Projects** — Link Git repositories to projects, link sessions and tickets to projects
-- **Pluggable Adapters** — Swap coding tools (Claude Code, Codex), hosting modes (cloud, local), and LLM providers without changing core code
+| Tool       | Version  |
+| ---------- | -------- |
+| Node.js    | 22.14.0+ |
+| pnpm       | 10+      |
+| PostgreSQL | 14+      |
+| Redis      | 7+       |
 
-## Prerequisites
+`docker-compose.yml` provisions Redis for local development. PostgreSQL is expected separately.
 
-| Requirement | Version |
-|-------------|---------|
-| Node.js     | >= 22   |
-| pnpm        | >= 10   |
-| PostgreSQL  | >= 14   |
+## Configuration
 
-## Getting Started
-
-### 1. Clone and install
-
-```bash
-git clone <repo-url> && cd trace
-pnpm install
-```
-
-### 2. Set up environment variables
+Copy the checked-in example to the server app before starting the API or agent worker:
 
 ```bash
 cp .env.example apps/server/.env
 ```
 
-Edit `apps/server/.env` with your values:
+The checked-in example only includes the local DB/Redis/web defaults. Add the rest of the values below to `apps/server/.env` as needed.
 
-```env
-# Required
-DATABASE_URL="postgresql://user:password@localhost:5432/trace"
-GITHUB_CLIENT_ID="your-github-oauth-app-id"
-GITHUB_CLIENT_SECRET="your-github-oauth-app-secret"
+### Required for local sign-in and API startup
 
-# Optional (defaults shown)
-PORT=4000
-JWT_SECRET="trace-dev-secret"
-TRACE_WEB_URL="http://localhost:3000"
-CORS_ALLOWED_ORIGINS=""                # Comma-separated origins for cross-origin deployments
-```
+| Variable               | Required | Notes                                                       |
+| ---------------------- | -------- | ----------------------------------------------------------- |
+| `DATABASE_URL`         | Yes      | PostgreSQL connection string used by Prisma                 |
+| `REDIS_URL`            | Yes      | Redis connection used by pub/sub and the agent worker       |
+| `GITHUB_CLIENT_ID`     | Yes      | GitHub OAuth app client ID                                  |
+| `GITHUB_CLIENT_SECRET` | Yes      | GitHub OAuth app client secret                              |
+| `PORT`                 | No       | Defaults to `4000`                                          |
+| `TRACE_WEB_URL`        | No       | Defaults to `http://localhost:3000`; used by auth redirects |
+| `JWT_SECRET`           | No       | Defaults to `trace-dev-secret`                              |
+| `CORS_ALLOWED_ORIGINS` | No       | Comma-separated list; defaults to permissive local CORS     |
 
-**GitHub OAuth App setup:** Create a GitHub OAuth App at [github.com/settings/developers](https://github.com/settings/developers) with:
-- **Homepage URL:** `http://localhost:3000`
-- **Authorization callback URL:** `http://localhost:4000/auth/github/callback`
+### Optional for cloud sessions, stored tokens, and integrations
 
-### 3. Set up the database
+| Variable                  | When to set it                              | Notes                                                |
+| ------------------------- | ------------------------------------------- | ---------------------------------------------------- |
+| `TOKEN_ENCRYPTION_KEY`    | If users will save provider tokens in Trace | Must be a 64-character hex key for AES-256-GCM       |
+| `WEBHOOK_BASE_URL`        | If registering GitHub PR webhooks           | Public base URL for `/webhooks/github`               |
+| `TRACE_SERVER_PUBLIC_URL` | If enabling cloud-hosted sessions           | Used to build the public websocket bridge URL        |
+| `FLY_API_TOKEN`           | If enabling cloud-hosted sessions           | Fly Machines API token                               |
+| `FLY_APP_NAME`            | If enabling cloud-hosted sessions           | Fly app that hosts the bridge containers             |
+| `CONTAINER_IMAGE`         | If enabling cloud-hosted sessions           | Image deployed for `apps/container-bridge`           |
+| `ANTHROPIC_API_KEY`       | Optional fallback for cloud runtimes        | Used when the user has not stored an Anthropic token |
+| `OPENAI_API_KEY`          | Optional fallback for cloud runtimes        | Used when the user has not stored an OpenAI token    |
+| `GITHUB_TOKEN`            | Optional fallback for cloud runtimes        | Used for git operations in cloud sessions            |
 
-```bash
-pnpm db:migrate    # Run Prisma migrations
-pnpm db:generate   # Generate Prisma client
-```
+### Shell env overrides used by the desktop or web dev servers
 
-### 4. Generate types
+| Variable           | Notes                                                                     |
+| ------------------ | ------------------------------------------------------------------------- |
+| `TRACE_PORT`       | Applies a shared port offset: web `3000 + offset`, server `4000 + offset` |
+| `TRACE_SERVER_URL` | Overrides the server URL used by the Electron app                         |
+| `TRACE_WEB_URL`    | Overrides the web URL loaded by Electron                                  |
 
-```bash
-pnpm gql:codegen   # Generate TypeScript types from GraphQL schema
-```
+### GitHub OAuth app
 
-Or run all codegen in one step:
+Create a GitHub OAuth app with:
 
-```bash
-pnpm codegen       # Prisma generate + GraphQL codegen + build types package
-```
+- Homepage URL: `http://localhost:3000`
+- Authorization callback URL: `http://localhost:4000/auth/github/callback`
 
-### 5. Run the development servers
+## Local Development
 
-```bash
-pnpm dev           # Start all apps in parallel
-```
-
-Or run them individually:
-
-```bash
-pnpm dev:server    # Apollo server on http://localhost:4000
-pnpm dev:web       # Vite dev server on http://localhost:3000 (proxies API to :4000)
-pnpm dev:desktop   # Electron app (loads web from :3000)
-```
-
-Open [http://localhost:3000](http://localhost:3000) and sign in with GitHub.
-
-### Running against production
-
-For developing the web or desktop app against the production server:
+### 1. Install dependencies
 
 ```bash
-pnpm dev:web:prod      # Web app → production API
-pnpm dev:desktop:prod  # Desktop → production API + local web
+pnpm install
 ```
 
-## Tech Stack
-
-### Server
-
-| Layer | Technology |
-|-------|-----------|
-| API | Apollo Server 4, Express 5 |
-| Database | PostgreSQL via Prisma ORM |
-| Real-time | WebSocket (graphql-ws for subscriptions, ws for bridge) |
-| Auth | GitHub OAuth + JWT (httpOnly cookies) |
-| Schema | Single GraphQL schema with codegen |
-
-### Web
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | React 19, Vite 6 |
-| State | Zustand 5 (single source of truth, no urql cache) |
-| Transport | urql 4 (GraphQL client, cache disabled) |
-| Styling | Tailwind CSS 4, shadcn/ui components |
-| Animation | framer-motion |
-
-### Desktop
-
-| Layer | Technology |
-|-------|-----------|
-| Shell | Electron 33 (electron-forge) |
-| Bridge | WebSocket client to server for local session control |
-| Local tools | CodingToolAdapter (Claude Code, Codex) |
-
-## GraphQL API
-
-The schema lives in `packages/gql/src/schema.graphql`. Key operations:
-
-**Queries** — `organization`, `channels`, `sessions`, `tickets`, `events`, `repos`, `projects`
-
-**Mutations** — `sendMessage`, `startSession`, `pauseSession`, `resumeSession`, `terminateSession`, `createTicket`, `updateTicket`, `createChannel`, `createRepo`, `createProject`, `linkEntityToProject`
-
-**Subscriptions** — `orgEvents` (org-wide event stream), `channelEvents`, `ticketEvents`, `sessionStatusChanged`, `sessionPortsChanged`
-
-## Data Model
-
-All entities are scoped to an **Organization** and are flat peers — no nesting. Relationships are links.
-
-- **User** — GitHub-authenticated members with roles (admin, member, observer)
-- **Channel** — Communication groups with typed messages
-- **Session** — AI coding sessions with full lifecycle and cloud/local hosting
-- **Ticket** — Issues with priority (urgent/high/medium/low) and kanban status
-- **Event** — Immutable log entries with actor, scope, and type metadata
-- **Repo** / **Project** — Git repositories and project groupings that link to channels, sessions, and tickets
-
-## Available Scripts
+### 2. Start Redis and prepare Postgres
 
 ```bash
-pnpm dev              # Run all apps in parallel
-pnpm build            # Build all packages
-pnpm lint             # Typecheck all apps
-pnpm lint:eslint      # Run ESLint
-pnpm format           # Format with Prettier
-pnpm format:check     # Check formatting
-pnpm gql:codegen      # Regenerate GraphQL types
-pnpm codegen          # Full codegen (Prisma + GraphQL + build)
-pnpm db:migrate       # Run Prisma migrations
-pnpm db:generate      # Generate Prisma client
+docker compose up -d redis
+createdb tracev2
 ```
 
-## CI
+If your Postgres database already exists, skip `createdb`.
 
-GitHub Actions runs on every push and PR (`.github/workflows/ci.yml`):
+### 3. Configure env
 
-1. Install dependencies (frozen lockfile)
-2. Generate GraphQL and Prisma types
-3. Typecheck all packages
-4. Validate Prisma schema
-5. ESLint + Prettier checks
+```bash
+cp .env.example apps/server/.env
+```
+
+Then add your OAuth and optional integration values to `apps/server/.env`.
+
+### 4. Run migrations and code generation
+
+```bash
+pnpm db:migrate
+pnpm codegen
+```
+
+### 5. Start the stack
+
+Recommended web-first workflow:
+
+```bash
+pnpm dev:server
+pnpm dev:agent
+pnpm dev:web
+```
+
+Desktop app:
+
+```bash
+pnpm dev:desktop
+```
+
+Full workspace mode:
+
+```bash
+pnpm dev
+```
+
+`pnpm dev` starts all workspace `dev` scripts plus the dedicated agent worker, which means it also launches Electron and the `container-bridge` watcher.
+
+Open `http://localhost:3000` and sign in with GitHub.
+
+## Scripts
+
+| Command                     | What it does                                                      |
+| --------------------------- | ----------------------------------------------------------------- |
+| `pnpm dev`                  | Starts all workspace dev processes plus the server agent worker   |
+| `pnpm dev:server`           | Starts the GraphQL/API server                                     |
+| `pnpm dev:agent`            | Starts the Redis-backed agent worker                              |
+| `pnpm dev:web`              | Starts the Vite web app on port `3000`                            |
+| `pnpm dev:desktop`          | Starts the Electron shell                                         |
+| `pnpm dev:web:prod`         | Runs the web app against the hosted API                           |
+| `pnpm dev:desktop:prod`     | Runs Electron against the hosted API and local web                |
+| `pnpm dev:desktop:prod-web` | Runs Electron against hosted API and hosted web                   |
+| `pnpm build`                | Builds all workspaces                                             |
+| `pnpm lint`                 | Typechecks all workspaces                                         |
+| `pnpm lint:eslint`          | Runs ESLint across the repo                                       |
+| `pnpm format`               | Formats the repo with Prettier                                    |
+| `pnpm format:check`         | Checks Prettier formatting                                        |
+| `pnpm test`                 | Runs all available tests                                          |
+| `pnpm test:coverage`        | Runs coverage-enabled test targets where present                  |
+| `pnpm test:server`          | Runs server unit tests                                            |
+| `pnpm test:server:coverage` | Runs server unit tests with coverage enforcement                  |
+| `pnpm gql:codegen`          | Regenerates GraphQL types                                         |
+| `pnpm db:migrate`           | Runs Prisma migrations in `apps/server`                           |
+| `pnpm db:generate`          | Regenerates the Prisma client                                     |
+| `pnpm codegen`              | Runs Prisma generate, GraphQL codegen, and the `@trace/gql` build |
+
+## Runtime Notes
+
+- The GraphQL schema lives in `packages/gql/src/schema.graphql`.
+- The API server exposes GraphQL over `/graphql`, subscriptions over `/ws`, the runtime bridge over `/bridge`, and terminal relay over `/terminal`.
+- `apps/container-bridge` is the runtime image deployed to Fly for cloud sessions.
+- `apps/desktop` maintains a bridge connection back to the server so local repos can back coding sessions.
+
+## CI and Deployment
+
+- `.github/workflows/ci.yml` installs dependencies, regenerates GraphQL and Prisma artifacts, typechecks, validates Prisma, runs ESLint, and checks formatting.
+- `.github/workflows/deploy-container-bridge.yml` deploys the cloud runtime image when the bridge or shared adapter code changes on `main`.
