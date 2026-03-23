@@ -15,6 +15,7 @@ interface RepoSectionProps {
   branch: string;
   runtimeInfo: RuntimeInfo | null;
   runtimeInstanceId: string | undefined;
+  lockedRepoId?: string;
   onRepoChange: (repoId: string | undefined) => void;
   onBranchChange: (branch: string) => void;
 }
@@ -24,17 +25,19 @@ export function RepoSection({
   branch,
   runtimeInfo,
   runtimeInstanceId,
+  lockedRepoId,
   onRepoChange,
   onBranchChange,
 }: RepoSectionProps) {
   const repoIds = useEntityIds("repos");
+  const effectiveRepoId = lockedRepoId ?? repoId;
   // Called unconditionally (rules of hooks); returns undefined when repoId is absent
-  const selectedRepoName = useEntityField("repos", repoId ?? "", "name");
+  const selectedRepoName = useEntityField("repos", effectiveRepoId ?? "", "name");
   const isDeviceBridge = runtimeInfo?.hostingMode === "local";
 
   if (repoIds.length === 0) return null;
 
-  const triggerLabel = repoId ? (selectedRepoName ?? repoId) : "No repo";
+  const triggerLabel = effectiveRepoId ? (selectedRepoName ?? effectiveRepoId) : "No repo";
 
   return (
     <>
@@ -42,39 +45,45 @@ export function RepoSection({
         <label className="mb-1.5 block text-sm text-muted-foreground">
           Repository
         </label>
-        <Select
-          value={repoId ?? "__none__"}
-          onValueChange={(v) => {
-            if (v) {
-              onRepoChange(v === "__none__" ? undefined : v);
-              onBranchChange("");
-            }
-          }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue>{triggerLabel}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">No repo</SelectItem>
-            {repoIds.map((id) => (
-              <RepoOption
-                key={id}
-                id={id}
-                isDeviceBridge={isDeviceBridge}
-                registeredRepoIds={runtimeInfo?.registeredRepoIds}
-              />
-            ))}
-          </SelectContent>
-        </Select>
+        {lockedRepoId ? (
+          <div className="flex h-9 items-center rounded-md border border-border bg-muted px-3 text-sm text-muted-foreground">
+            {triggerLabel}
+          </div>
+        ) : (
+          <Select
+            value={effectiveRepoId ?? "__none__"}
+            onValueChange={(v) => {
+              if (v) {
+                onRepoChange(v === "__none__" ? undefined : v);
+                onBranchChange("");
+              }
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue>{triggerLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">No repo</SelectItem>
+              {repoIds.map((id) => (
+                <RepoOption
+                  key={id}
+                  id={id}
+                  isDeviceBridge={isDeviceBridge}
+                  registeredRepoIds={runtimeInfo?.registeredRepoIds}
+                />
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
-      {repoId && (
+      {effectiveRepoId && (
         <div className="col-span-2">
           <label className="mb-1.5 block text-sm text-muted-foreground">
             Branch
           </label>
           <BranchCombobox
-            repoId={repoId}
+            repoId={effectiveRepoId}
             runtimeInstanceId={runtimeInstanceId}
             value={branch}
             onChange={onBranchChange}

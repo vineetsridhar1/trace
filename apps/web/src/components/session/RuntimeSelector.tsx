@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, Monitor, Loader2 } from "lucide-react";
+import { AlertTriangle, Cloud, Monitor, Loader2 } from "lucide-react";
 import type { SessionRuntimeInstance } from "@trace/gql";
 import {
   Select,
@@ -25,9 +25,10 @@ interface RuntimeSelectorProps {
   open: boolean;
   value: string | undefined;
   onChange: (runtimeId: string | undefined, info: RuntimeInfo | null) => void;
+  channelRepoId?: string;
 }
 
-export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelectorProps) {
+export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: RuntimeSelectorProps) {
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -41,11 +42,15 @@ export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelector
         const fetched = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
         setRuntimes(fetched);
         const connected = fetched.filter((r) => r.connected);
-        if (connected.length === 1 && !value) {
-          const rt = connected[0];
+        // Filter to runtimes that have the channel's repo (if set)
+        const eligible = channelRepoId
+          ? connected.filter((r) => r.hostingMode === "cloud" || r.registeredRepoIds.includes(channelRepoId))
+          : connected;
+        if (eligible.length === 1 && !value) {
+          const rt = eligible[0];
           onChange(rt.id, { hostingMode: rt.hostingMode, registeredRepoIds: rt.registeredRepoIds });
-        } else if (connected.length === 0 && !value) {
-          // Auto-select cloud when no local runtimes are available
+        } else if (eligible.length === 0 && !value) {
+          // Auto-select cloud when no eligible local runtimes are available
           onChange(CLOUD_RUNTIME_ID, { hostingMode: "cloud", registeredRepoIds: [] });
         } else if (value && value !== CLOUD_RUNTIME_ID && !fetched.find((r) => r.id === value)) {
           onChange(undefined, null);
@@ -99,17 +104,26 @@ export function RuntimeSelector({ tool, open, value, onChange }: RuntimeSelector
             <span className="text-xs text-muted-foreground">(on-demand)</span>
           </span>
         </SelectItem>
-        {connectedRuntimes.map((rt) => (
-          <SelectItem key={rt.id} value={rt.id}>
-            <span className="flex items-center gap-1.5">
-              <RuntimeIcon hostingMode={rt.hostingMode} />
-              {rt.label}
-              <span className="text-xs text-muted-foreground">
-                ({rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""})
+        {connectedRuntimes.map((rt) => {
+          const lacksRepo = !!channelRepoId && rt.hostingMode === "local" && !rt.registeredRepoIds.includes(channelRepoId);
+          return (
+            <SelectItem key={rt.id} value={rt.id} disabled={lacksRepo}>
+              <span className="flex items-center gap-1.5">
+                <RuntimeIcon hostingMode={rt.hostingMode} />
+                {rt.label}
+                <span className="text-xs text-muted-foreground">
+                  ({rt.sessionCount} session{rt.sessionCount !== 1 ? "s" : ""})
+                </span>
+                {lacksRepo && (
+                  <span className="flex items-center gap-0.5 text-xs text-amber-500">
+                    <AlertTriangle size={10} />
+                    repo not linked
+                  </span>
+                )}
               </span>
-            </span>
-          </SelectItem>
-        ))}
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );

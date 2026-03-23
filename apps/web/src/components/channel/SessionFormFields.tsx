@@ -21,6 +21,7 @@ interface SessionFormFieldsProps {
   branch: string;
   mode: InteractionMode;
   dialogOpen: boolean;
+  channelRepoId?: string;
   onToolChange: (tool: string) => void;
   onModelChange: (model: string) => void;
   onRuntimeChange: (id: string | undefined, info: RuntimeInfo | null) => void;
@@ -30,7 +31,7 @@ interface SessionFormFieldsProps {
 }
 
 export function SessionFormFields({
-  tool, model, runtimeInstanceId, runtimeInfo, repoId, branch, mode, dialogOpen,
+  tool, model, runtimeInstanceId, runtimeInfo, repoId, branch, mode, dialogOpen, channelRepoId,
   onToolChange, onModelChange, onRuntimeChange, onRepoChange, onBranchChange,
   onModeChange,
 }: SessionFormFieldsProps) {
@@ -65,13 +66,14 @@ export function SessionFormFields({
       )}
       <div>
         <label className="mb-1.5 block text-sm text-muted-foreground">Runtime</label>
-        <RuntimeSelector tool={tool} open={dialogOpen} value={runtimeInstanceId} onChange={onRuntimeChange} />
+        <RuntimeSelector tool={tool} open={dialogOpen} value={runtimeInstanceId} onChange={onRuntimeChange} channelRepoId={channelRepoId} />
       </div>
       <RepoSection
-        repoId={repoId}
+        repoId={channelRepoId ?? repoId}
         branch={branch}
         runtimeInfo={runtimeInfo}
         runtimeInstanceId={runtimeInstanceId}
+        lockedRepoId={channelRepoId}
         onRepoChange={onRepoChange}
         onBranchChange={onBranchChange}
       />

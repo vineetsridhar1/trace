@@ -218,6 +218,7 @@ type Channel {
   type: ChannelType!
   position: Int!
   groupId: ID
+  repo: Repo
   members: [ChannelMember!]!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
@@ -461,6 +462,7 @@ input CreateChannelInput {
   organizationId: ID!
   name: String!
   type: ChannelType
+  repoId: ID
   projectIds: [ID!]
   groupId: ID
   position: Int

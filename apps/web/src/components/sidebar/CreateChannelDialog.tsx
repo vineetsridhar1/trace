@@ -4,6 +4,7 @@ import type { ChannelType } from "@trace/gql";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
+import { useEntityIds, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import {
@@ -13,6 +14,13 @@ import {
   ResponsiveDialogTitle as DialogTitle,
   ResponsiveDialogFooter as DialogFooter,
 } from "../ui/responsive-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
@@ -59,8 +67,10 @@ export function CreateChannelDialog({
   const [mode, setMode] = useState<CreateMode>("choose");
   const [name, setName] = useState("");
   const [channelType, setChannelType] = useState<ChannelType>("coding");
+  const [repoId, setRepoId] = useState<string | undefined>(undefined);
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const repoIds = useEntityIds("repos");
   const isMobile = useIsMobile();
 
   // When opening with a defaultGroupId, go straight to channel creation
@@ -73,6 +83,7 @@ export function CreateChannelDialog({
       }
       setName("");
       setChannelType("coding");
+      setRepoId(undefined);
     }
   }, [open, defaultGroupId]);
 
@@ -88,6 +99,7 @@ export function CreateChannelDialog({
             organizationId: activeOrgId,
             name: name.trim(),
             type: channelType,
+            repoId: repoId ?? undefined,
             groupId: defaultGroupId ?? null,
           },
         })
@@ -97,6 +109,7 @@ export function CreateChannelDialog({
         const newChannelId = result.data.createChannel.id as string;
         setName("");
         setChannelType("coding");
+        setRepoId(undefined);
         setOpen(false);
         useUIStore.getState().setActiveChannelId(newChannelId);
       }
@@ -202,7 +215,7 @@ export function CreateChannelDialog({
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setChannelType(opt.value)}
+                        onClick={() => { setChannelType(opt.value); if (opt.value === "text") setRepoId(undefined); }}
                         className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors ${
                           selected
                             ? "border-primary bg-primary/5 text-foreground"
@@ -217,6 +230,24 @@ export function CreateChannelDialog({
                   })}
                 </div>
               </div>
+              {channelType === "coding" && repoIds.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">Repository</label>
+                  <Select
+                    value={repoId ?? ""}
+                    onValueChange={(v) => setRepoId(v || undefined)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a repo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {repoIds.map((id) => (
+                        <RepoOptionItem key={id} id={id} />
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <DialogFooter>
               {!defaultGroupId && (
@@ -224,7 +255,7 @@ export function CreateChannelDialog({
                   Back
                 </Button>
               )}
-              <Button type="submit" disabled={!name.trim() || creating}>
+              <Button type="submit" disabled={!name.trim() || creating || (channelType === "coding" && !repoId)}>
                 {creating ? "Creating..." : "Create"}
               </Button>
             </DialogFooter>
@@ -258,4 +289,9 @@ export function CreateChannelDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function RepoOptionItem({ id }: { id: string }) {
+  const name = useEntityField("repos", id, "name");
+  return <SelectItem value={id}>{name ?? id}</SelectItem>;
 }

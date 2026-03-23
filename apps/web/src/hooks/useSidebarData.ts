@@ -15,6 +15,7 @@ const CHANNELS_QUERY = gql`
       type
       position
       groupId
+      repo { id name }
     }
   }
 `;

@@ -18,6 +18,7 @@ import { getDefaultModel } from "../session/modelOptions";
 import { CLOUD_RUNTIME_ID } from "../session/RuntimeSelector";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
 import { usePreferencesStore } from "../../stores/preferences";
+import { useEntityField } from "../../stores/entity";
 import { SessionFormFields } from "./SessionFormFields";
 
 export function StartSessionDialog({ channelId }: { channelId: string }) {
@@ -38,6 +39,8 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [mode, setMode] = useState<InteractionMode>("code");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
+  const channelRepo = useEntityField("channels", channelId, "repo") as { id: string; name: string } | null | undefined;
+  const channelRepoId = channelRepo?.id ?? undefined;
   const isMobile = useIsMobile();
 
   const cycleMode = useCallback(() => {
@@ -85,7 +88,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             hosting: isCloud ? "cloud" : undefined,
             runtimeInstanceId: isCloud ? undefined : (runtimeInstanceId ?? undefined),
             channelId,
-            repoId: repoId ?? undefined,
+            repoId: channelRepoId ?? repoId ?? undefined,
             branch: branch.trim() || undefined,
             prompt: prompt.trim(),
           },
@@ -132,6 +135,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
               branch={branch}
               mode={mode}
               dialogOpen={open}
+              channelRepoId={channelRepoId}
               onToolChange={handleToolChange}
               onModelChange={setModel}
               onRuntimeChange={handleRuntimeChange}

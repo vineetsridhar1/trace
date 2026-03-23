@@ -329,6 +329,7 @@ model Repo {
   projects Project[]
   sessions Session[]
   sessionGroups SessionGroup[]
+  channels Channel[]
 
   webhookId     String?
   webhookSecret String?
@@ -380,6 +381,8 @@ model Channel {
   organization   Organization @relation(fields: [organizationId], references: [id])
   groupId        String?
   group          ChannelGroup? @relation(fields: [groupId], references: [id])
+  repoId         String?
+  repo           Repo?         @relation(fields: [repoId], references: [id])
 
   projects ChannelProject[]
   sessionGroups SessionGroup[]
