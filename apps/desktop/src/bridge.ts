@@ -162,9 +162,9 @@ export class BridgeClient implements IBridgeClient {
 
   private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string; toolSessionId?: string }) {
     if (!cwd) {
-      console.warn(`[bridge] No cwd provided for session ${sessionId}, falling back to process.cwd()`);
+      console.warn(`[bridge] No cwd provided for session ${sessionId}, falling back to home directory`);
     }
-    const workdir = cwd ?? process.cwd();
+    const workdir = cwd ?? os.homedir();
 
     // If tool changed, abort old adapter and create a fresh one
     const prevTool = this.sessionTools.get(sessionId);
