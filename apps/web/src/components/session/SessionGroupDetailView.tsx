@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { client } from "../../lib/urql";
 import {
   CREATE_TERMINAL_MUTATION,
@@ -24,7 +24,7 @@ import {
 } from "./sessionStatus";
 import type { Terminal } from "@trace/gql";
 
-const SESSION_GROUP_DETAIL_QUERY = gql`
+const SESSION_GROUP_DETAIL_QUERY = graphql(`
   query SessionGroupDetail($id: ID!) {
     sessionGroup(id: $id) {
       id
@@ -87,7 +87,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       }
     }
   }
-`;
+`);
 
 export function SessionGroupDetailView({
   sessionGroupId,

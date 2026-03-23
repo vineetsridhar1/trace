@@ -9,6 +9,7 @@ import {
   DISMISS_INBOX_ITEM_MUTATION,
   TERMINATE_SESSION_MUTATION,
 } from "../../lib/mutations";
+import type { CodingTool, HostingMode } from "@trace/gql";
 import { useEntityField } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { InboxPlanBody } from "./InboxPlanBody";
@@ -79,8 +80,8 @@ export function InboxItemRow({ id }: { id: string }) {
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
-            tool: sessionTool ?? "claude_code",
-            hosting: sessionHosting ?? "cloud",
+            tool: (sessionTool ?? "claude_code") as CodingTool,
+            hosting: (sessionHosting ?? "cloud") as HostingMode,
             channelId: sessionChannel?.id,
             repoId: sessionRepo?.id,
             branch: sessionBranch ?? undefined,

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Hash, Pencil } from "lucide-react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { client } from "../../lib/urql";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
@@ -8,14 +8,14 @@ import type { Chat } from "@trace/gql";
 import { SidebarTrigger } from "../ui/sidebar";
 import { AddMemberDialog } from "./AddMemberDialog";
 
-const RENAME_CHAT_MUTATION = gql`
+const RENAME_CHAT_MUTATION = graphql(`
   mutation RenameChat($chatId: ID!, $name: String!) {
     renameChat(chatId: $chatId, name: $name) {
       id
       name
     }
   }
-`;
+`);
 
 export function ChatHeader({ chatId }: { chatId: string }) {
   const name = useEntityField("chats", chatId, "name");

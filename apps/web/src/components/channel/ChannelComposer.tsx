@@ -1,20 +1,20 @@
 import { useRef, useState, useCallback } from "react";
 import { Send } from "lucide-react";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { toast } from "sonner";
 import { useAuthStore } from "../../stores/auth";
 import { useOrgMembers } from "../../hooks/useOrgMembers";
 import { Button } from "../ui/button";
 import { ChatEditor, type ChatEditorHandle } from "../chat/ChatEditor";
 
-const SEND_CHANNEL_MESSAGE = gql`
+const SEND_CHANNEL_MESSAGE = graphql(`
   mutation SendChannelMessage($channelId: ID!, $html: String, $parentId: ID) {
     sendChannelMessage(channelId: $channelId, html: $html, parentId: $parentId) {
       id
     }
   }
-`;
+`);
 
 export function ChannelComposer({ channelId, parentId }: { channelId: string; parentId?: string }) {
   const [sending, setSending] = useState(false);

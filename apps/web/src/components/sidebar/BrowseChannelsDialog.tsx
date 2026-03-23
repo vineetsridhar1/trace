@@ -3,7 +3,7 @@ import { Search, Code, MessageSquare, LogIn, LogOut } from "lucide-react";
 import type { ChannelType } from "@trace/gql";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -14,7 +14,7 @@ import {
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
-const ALL_CHANNELS_QUERY = gql`
+const ALL_CHANNELS_QUERY = graphql(`
   query AllChannels($organizationId: ID!) {
     channels(organizationId: $organizationId) {
       id
@@ -28,23 +28,23 @@ const ALL_CHANNELS_QUERY = gql`
       }
     }
   }
-`;
+`);
 
-const JOIN_CHANNEL_MUTATION = gql`
+const JOIN_CHANNEL_MUTATION = graphql(`
   mutation JoinChannel($channelId: ID!) {
     joinChannel(channelId: $channelId) {
       id
     }
   }
-`;
+`);
 
-const LEAVE_CHANNEL_MUTATION = gql`
+const LEAVE_CHANNEL_MUTATION = graphql(`
   mutation LeaveChannel($channelId: ID!) {
     leaveChannel(channelId: $channelId) {
       id
     }
   }
-`;
+`);
 
 interface BrowseChannel {
   id: string;

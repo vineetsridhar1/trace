@@ -5,9 +5,9 @@ import { useEntityStore, useEntityIds } from "../stores/entity";
 import type { EntityTableMap } from "../stores/entity";
 import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 
-const CHANNELS_QUERY = gql`
+const CHANNELS_QUERY = graphql(`
   query Channels($organizationId: ID!, $memberOnly: Boolean) {
     channels(organizationId: $organizationId, memberOnly: $memberOnly) {
       id
@@ -17,9 +17,9 @@ const CHANNELS_QUERY = gql`
       groupId
     }
   }
-`;
+`);
 
-const CHANNEL_GROUPS_QUERY = gql`
+const CHANNEL_GROUPS_QUERY = graphql(`
   query ChannelGroups($organizationId: ID!) {
     channelGroups(organizationId: $organizationId) {
       id
@@ -28,9 +28,9 @@ const CHANNEL_GROUPS_QUERY = gql`
       isCollapsed
     }
   }
-`;
+`);
 
-const REPOS_QUERY = gql`
+const REPOS_QUERY = graphql(`
   query Repos($organizationId: ID!) {
     repos(organizationId: $organizationId) {
       id
@@ -40,9 +40,9 @@ const REPOS_QUERY = gql`
       webhookActive
     }
   }
-`;
+`);
 
-const CHATS_QUERY = gql`
+const CHATS_QUERY = graphql(`
   query Chats {
     chats {
       id
@@ -60,9 +60,9 @@ const CHATS_QUERY = gql`
       updatedAt
     }
   }
-`;
+`);
 
-const INBOX_ITEMS_QUERY = gql`
+const INBOX_ITEMS_QUERY = graphql(`
   query InboxItems($organizationId: ID!) {
     inboxItems(organizationId: $organizationId) {
       id
@@ -78,7 +78,7 @@ const INBOX_ITEMS_QUERY = gql`
       resolvedAt
     }
   }
-`;
+`);
 
 export type TopLevelItem =
   | { kind: "channel"; id: string; position: number }

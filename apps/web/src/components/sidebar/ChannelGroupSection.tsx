@@ -8,17 +8,17 @@ import { ChannelItem } from "./ChannelItem";
 import { SidebarMenu } from "../ui/sidebar";
 import { cn } from "../../lib/utils";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { ChannelGroup } from "@trace/gql";
 import { groupContainerId, groupSortableIds } from "../../hooks/useChannelDnd";
 
-const UPDATE_GROUP_MUTATION = gql`
+const UPDATE_GROUP_MUTATION = graphql(`
   mutation UpdateChannelGroupCollapse($id: ID!, $input: UpdateChannelGroupInput!) {
     updateChannelGroup(id: $id, input: $input) {
       id
     }
   }
-`;
+`);
 
 interface ChannelGroupSectionProps {
   id: string;

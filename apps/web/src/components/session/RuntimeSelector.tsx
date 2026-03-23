@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Cloud, Monitor, Loader2 } from "lucide-react";
-import type { SessionRuntimeInstance } from "@trace/gql";
+import type { SessionRuntimeInstance, CodingTool } from "@trace/gql";
 import {
   Select,
   SelectContent,
@@ -21,7 +21,7 @@ export interface RuntimeInfo {
 }
 
 interface RuntimeSelectorProps {
-  tool: string;
+  tool: CodingTool;
   open: boolean;
   value: string | undefined;
   onChange: (runtimeId: string | undefined, info: RuntimeInfo | null) => void;

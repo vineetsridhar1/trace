@@ -3,7 +3,7 @@ import { UserPlus } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { ORG_MEMBERS_QUERY } from "../../lib/mutations";
 import {
   ResponsiveDialog as Dialog,
@@ -13,13 +13,13 @@ import {
   ResponsiveDialogTrigger as DialogTrigger,
 } from "../ui/responsive-dialog";
 
-const ADD_CHAT_MEMBER_MUTATION = gql`
+const ADD_CHAT_MEMBER_MUTATION = graphql(`
   mutation AddChatMember($input: AddChatMemberInput!) {
     addChatMember(input: $input) {
       id
     }
   }
-`;
+`);
 
 interface OrgMember {
   id: string;
@@ -42,7 +42,14 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
     if (!activeOrgId) return;
     const result = await client.query(ORG_MEMBERS_QUERY, { id: activeOrgId }).toPromise();
     if (result.data?.organization?.members) {
-      setMembers(result.data.organization.members as OrgMember[]);
+      setMembers(
+        result.data.organization.members.map((m) => ({
+          id: m.user.id,
+          name: m.user.name,
+          email: m.user.email,
+          avatarUrl: m.user.avatarUrl ?? null,
+        })),
+      );
     }
   }, [activeOrgId]);
 

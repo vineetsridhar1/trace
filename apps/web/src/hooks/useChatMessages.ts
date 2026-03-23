@@ -1,11 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { Event } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
 import { upsertScopedMessageFromEvent } from "./message-event-utils";
 import { useScopedMessages } from "./useScopedMessages";
 
-const CHAT_MESSAGES_QUERY = gql`
+const CHAT_MESSAGES_QUERY = graphql(`
   query ChatMessages($chatId: ID!, $limit: Int, $before: DateTime) {
     chatMessages(chatId: $chatId, limit: $limit, before: $before) {
       id
@@ -34,9 +34,9 @@ const CHAT_MESSAGES_QUERY = gql`
       deletedAt
     }
   }
-`;
+`);
 
-const CHAT_EVENTS_SUBSCRIPTION = gql`
+const CHAT_EVENTS_SUBSCRIPTION = graphql(`
   subscription ChatEventsSubscription($chatId: ID!, $types: [String!]) {
     chatEvents(chatId: $chatId, types: $types) {
       id
@@ -55,7 +55,7 @@ const CHAT_EVENTS_SUBSCRIPTION = gql`
       metadata
     }
   }
-`;
+`);
 
 
 export function useChatMessages(chatId: string) {

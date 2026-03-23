@@ -17,6 +17,7 @@ import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "../session/interac
 import { getDefaultModel } from "../session/modelOptions";
 import { CLOUD_RUNTIME_ID } from "../session/RuntimeSelector";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
+import type { CodingTool, HostingMode } from "@trace/gql";
 import { usePreferencesStore } from "../../stores/preferences";
 import { SessionFormFields } from "./SessionFormFields";
 
@@ -24,12 +25,12 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const prefTool = usePreferencesStore((s) => s.defaultTool);
   const prefModel = usePreferencesStore((s) => s.defaultModel);
 
-  const initialTool = prefTool ?? "claude_code";
+  const initialTool = (prefTool ?? "claude_code") as CodingTool;
   const initialModel = prefModel ?? getDefaultModel(initialTool);
 
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
-  const [tool, setTool] = useState<string>(initialTool);
+  const [tool, setTool] = useState<CodingTool>(initialTool);
   const [model, setModel] = useState<string | undefined>(initialModel);
   const [runtimeInstanceId, setRuntimeInstanceId] = useState<string | undefined>(undefined);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
@@ -44,7 +45,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     setMode((prev) => MODE_CYCLE[(MODE_CYCLE.indexOf(prev) + 1) % MODE_CYCLE.length]);
   }, []);
 
-  const handleToolChange = useCallback((v: string) => {
+  const handleToolChange = useCallback((v: CodingTool) => {
     setTool(v);
     setModel(getDefaultModel(v));
   }, []);
@@ -59,7 +60,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (!next) {
-      const resetTool = prefTool ?? "claude_code";
+      const resetTool: CodingTool = prefTool ?? "claude_code";
       setTool(resetTool);
       setModel(prefModel ?? getDefaultModel(resetTool));
       setRepoId(undefined);
@@ -82,7 +83,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
           input: {
             tool,
             model: model ?? undefined,
-            hosting: isCloud ? "cloud" : undefined,
+            hosting: isCloud ? ("cloud" as HostingMode) : undefined,
             runtimeInstanceId: isCloud ? undefined : (runtimeInstanceId ?? undefined),
             channelId,
             repoId: repoId ?? undefined,

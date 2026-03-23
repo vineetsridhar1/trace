@@ -315,6 +315,9 @@ importers:
 
   packages/gql:
     dependencies:
+      '@graphql-typed-document-node/core':
+        specifier: ^3.2.0
+        version: 3.2.0(graphql@16.13.1)
       dataloader:
         specifier: ^2.2.3
         version: 2.2.3

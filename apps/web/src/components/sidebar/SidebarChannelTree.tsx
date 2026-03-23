@@ -1,6 +1,6 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { Channel, ChannelGroup } from "@trace/gql";
 import { Folder, Hash } from "lucide-react";
 import { useChannelDnd, topLevelSortableIds } from "../../hooks/useChannelDnd";
@@ -11,11 +11,11 @@ import { ChannelItem } from "./ChannelItem";
 import { Skeleton } from "../ui/skeleton";
 import { SidebarMenu, SidebarMenuItem } from "../ui/sidebar";
 
-const DELETE_GROUP_MUTATION = gql`
+const DELETE_GROUP_MUTATION = graphql(`
   mutation DeleteChannelGroup($id: ID!) {
     deleteChannelGroup(id: $id)
   }
-`;
+`);
 
 export interface SidebarChannelTreeProps {
   activeChannelId: string | null;

@@ -6,7 +6,7 @@ import { useEntityStore, useEntityIds } from "../../stores/entity";
 import type { EntityTableMap } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { Button } from "../ui/button";
 import { RepoCard } from "./RepoCard";
 import { CreateRepoDialog } from "./CreateRepoDialog";
@@ -14,7 +14,7 @@ import { ApiTokensSection } from "./ApiTokensSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
 import { NotificationsSection } from "./NotificationsSection";
 
-const REPOS_QUERY = gql`
+const REPOS_QUERY = graphql(`
   query SettingsRepos($organizationId: ID!) {
     repos(organizationId: $organizationId) {
       id
@@ -24,7 +24,7 @@ const REPOS_QUERY = gql`
       webhookActive
     }
   }
-`;
+`);
 
 export function SettingsPage() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);

@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from "react";
 import { Code } from "lucide-react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { SessionGroup } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
@@ -12,7 +12,7 @@ import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
 
-const SESSION_GROUPS_QUERY = gql`
+const SESSION_GROUPS_QUERY = graphql(`
   query SessionGroups($channelId: ID!) {
     sessionGroups(channelId: $channelId) {
       id
@@ -59,7 +59,7 @@ const SESSION_GROUPS_QUERY = gql`
       }
     }
   }
-`;
+`);
 
 export function CodingChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");

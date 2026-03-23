@@ -4,7 +4,7 @@ import type { ChannelType } from "@trace/gql";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -15,21 +15,21 @@ import {
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
-const CREATE_CHANNEL_MUTATION = gql`
+const CREATE_CHANNEL_MUTATION = graphql(`
   mutation CreateChannel($input: CreateChannelInput!) {
     createChannel(input: $input) {
       id
     }
   }
-`;
+`);
 
-const CREATE_GROUP_MUTATION = gql`
+const CREATE_GROUP_MUTATION = graphql(`
   mutation CreateChannelGroup($input: CreateChannelGroupInput!) {
     createChannelGroup(input: $input) {
       id
     }
   }
-`;
+`);
 
 const TYPE_OPTIONS: Array<{ value: ChannelType; label: string; description: string; icon: typeof Code }> = [
   { value: "coding", label: "Coding", description: "For AI coding sessions", icon: Code },

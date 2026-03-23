@@ -15,26 +15,26 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import { useEntityStore } from "../stores/entity";
 import { client } from "../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { TopLevelItem } from "./useSidebarData";
 
-const MOVE_CHANNEL_MUTATION = gql`
+const MOVE_CHANNEL_MUTATION = graphql(`
   mutation MoveChannel($input: MoveChannelInput!) {
     moveChannel(input: $input) { id }
   }
-`;
+`);
 
-const UPDATE_CHANNEL_GROUP_POSITION_MUTATION = gql`
+const UPDATE_CHANNEL_GROUP_POSITION_MUTATION = graphql(`
   mutation UpdateChannelGroupPosition($id: ID!, $input: UpdateChannelGroupInput!) {
     updateChannelGroup(id: $id, input: $input) { id }
   }
-`;
+`);
 
-const REORDER_CHANNELS_MUTATION = gql`
+const REORDER_CHANNELS_MUTATION = graphql(`
   mutation ReorderChannels($input: ReorderChannelsInput!) {
     reorderChannels(input: $input) { id }
   }
-`;
+`);
 
 /** Container IDs */
 export const TOP_LEVEL_CONTAINER = "top-level";

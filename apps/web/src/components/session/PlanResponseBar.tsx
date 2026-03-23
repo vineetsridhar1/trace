@@ -7,6 +7,7 @@ import {
   RUN_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
 } from "../../lib/mutations";
+import type { CodingTool, HostingMode } from "@trace/gql";
 import { useEntityField } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
@@ -40,9 +41,9 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
       const result = await client
         .mutation(START_SESSION_MUTATION, {
           input: {
-            tool: tool ?? "claude_code",
+            tool: (tool ?? "claude_code") as CodingTool,
             model,
-            hosting: hosting ?? "cloud",
+            hosting: (hosting ?? "cloud") as HostingMode,
             channelId: channel?.id,
             repoId: repo?.id,
             branch,

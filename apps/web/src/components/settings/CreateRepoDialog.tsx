@@ -3,7 +3,7 @@ import { FolderOpen, Plus } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -16,13 +16,13 @@ import {
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 
-const CREATE_REPO_MUTATION = gql`
+const CREATE_REPO_MUTATION = graphql(`
   mutation CreateRepo($input: CreateRepoInput!) {
     createRepo(input: $input) {
       id
     }
   }
-`;
+`);
 
 const isElectron = typeof window.trace?.pickFolder === "function";
 

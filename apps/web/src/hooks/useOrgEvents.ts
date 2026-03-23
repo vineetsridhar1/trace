@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { client } from "../lib/urql";
 import { useEntityStore, eventScopeKey } from "../stores/entity";
@@ -9,7 +9,7 @@ import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
 import type { Event, EventType, ScopeType, SessionStatus, Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 
-const ORG_EVENTS_SUBSCRIPTION = gql`
+const ORG_EVENTS_SUBSCRIPTION = graphql(`
   subscription OrgEvents($organizationId: ID!) {
     orgEvents(organizationId: $organizationId) {
       id
@@ -28,7 +28,7 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
       metadata
     }
   }
-`;
+`);
 
 const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
   "session_started",

@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { Key, Trash2, Check, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
+import type { ApiTokenProvider } from "@trace/gql";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 
-const API_TOKENS_QUERY = gql`
+const API_TOKENS_QUERY = graphql(`
   query MyApiTokens {
     myApiTokens {
       provider
@@ -15,9 +16,9 @@ const API_TOKENS_QUERY = gql`
       updatedAt
     }
   }
-`;
+`);
 
-const SET_API_TOKEN = gql`
+const SET_API_TOKEN = graphql(`
   mutation SetApiToken($input: SetApiTokenInput!) {
     setApiToken(input: $input) {
       provider
@@ -25,13 +26,13 @@ const SET_API_TOKEN = gql`
       updatedAt
     }
   }
-`;
+`);
 
-const DELETE_API_TOKEN = gql`
+const DELETE_API_TOKEN = graphql(`
   mutation DeleteApiToken($provider: ApiTokenProvider!) {
     deleteApiToken(provider: $provider)
   }
-`;
+`);
 
 interface TokenStatus {
   provider: string;
@@ -86,13 +87,14 @@ export function ApiTokensSection() {
     if (!inputValue.trim()) return;
     setSaving(true);
     const result = await client
-      .mutation(SET_API_TOKEN, { input: { provider, token: provider === "ssh_key" ? inputValue : inputValue.trim() } })
+      .mutation(SET_API_TOKEN, { input: { provider: provider as ApiTokenProvider, token: provider === "ssh_key" ? inputValue : inputValue.trim() } })
       .toPromise();
     setSaving(false);
 
     if (result.data?.setApiToken) {
+      const updated = result.data.setApiToken;
       setTokens((prev) =>
-        prev.map((t) => (t.provider === provider ? (result.data.setApiToken as TokenStatus) : t)),
+        prev.map((t) => (t.provider === provider ? (updated as TokenStatus) : t)),
       );
       setEditing(null);
       setInputValue("");
@@ -101,7 +103,7 @@ export function ApiTokensSection() {
   }
 
   async function handleDelete(provider: string) {
-    await client.mutation(DELETE_API_TOKEN, { provider }).toPromise();
+    await client.mutation(DELETE_API_TOKEN, { provider: provider as ApiTokenProvider }).toPromise();
     setTokens((prev) =>
       prev.map((t) => (t.provider === provider ? { ...t, isSet: false, updatedAt: null } : t)),
     );

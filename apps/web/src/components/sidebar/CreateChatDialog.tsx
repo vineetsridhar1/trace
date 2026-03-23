@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { ORG_MEMBERS_QUERY } from "../../lib/mutations";
 import {
   ResponsiveDialog as Dialog,
@@ -15,13 +15,13 @@ import {
 } from "../ui/responsive-dialog";
 import { Button } from "../ui/button";
 
-const CREATE_CHAT_MUTATION = gql`
+const CREATE_CHAT_MUTATION = graphql(`
   mutation CreateChat($input: CreateChatInput!) {
     createChat(input: $input) {
       id
     }
   }
-`;
+`);
 
 interface OrgMember {
   id: string;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X } from "lucide-react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { Message } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { useEntityStore, useEntityIds } from "../../stores/entity";
@@ -12,7 +12,7 @@ import { ChannelComposer } from "../channel/ChannelComposer";
 import { Skeleton } from "../ui/skeleton";
 import { Button } from "../ui/button";
 
-const THREAD_REPLIES_QUERY = gql`
+const THREAD_REPLIES_QUERY = graphql(`
   query ThreadReplies($rootMessageId: ID!, $limit: Int) {
     threadReplies(rootMessageId: $rootMessageId, limit: $limit) {
       id
@@ -42,7 +42,7 @@ const THREAD_REPLIES_QUERY = gql`
       deletedAt
     }
   }
-`;
+`);
 
 export function ThreadPanel({ chatId, channelId, rootMessageId }: { chatId?: string; channelId?: string; rootMessageId: string }) {
   const setActiveThreadId = useUIStore((s) => s.setActiveThreadId);

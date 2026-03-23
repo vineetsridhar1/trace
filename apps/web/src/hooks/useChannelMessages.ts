@@ -1,11 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { Event } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
 import { upsertScopedMessageFromEvent } from "./message-event-utils";
 import { useScopedMessages } from "./useScopedMessages";
 
-const CHANNEL_MESSAGES_QUERY = gql`
+const CHANNEL_MESSAGES_QUERY = graphql(`
   query ChannelMessages($channelId: ID!, $limit: Int, $before: DateTime) {
     channelMessages(channelId: $channelId, limit: $limit, before: $before) {
       id
@@ -35,9 +35,9 @@ const CHANNEL_MESSAGES_QUERY = gql`
       deletedAt
     }
   }
-`;
+`);
 
-const CHANNEL_EVENTS_SUBSCRIPTION = gql`
+const CHANNEL_EVENTS_SUBSCRIPTION = graphql(`
   subscription ChannelEventsForMessages($channelId: ID!, $organizationId: ID!, $types: [String!]) {
     channelEvents(channelId: $channelId, organizationId: $organizationId, types: $types) {
       id
@@ -56,7 +56,7 @@ const CHANNEL_EVENTS_SUBSCRIPTION = gql`
       metadata
     }
   }
-`;
+`);
 
 
 export function useChannelMessages(channelId: string) {

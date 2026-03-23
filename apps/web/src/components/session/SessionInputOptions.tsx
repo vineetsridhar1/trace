@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { CodingTool } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -17,7 +17,7 @@ import {
 import { getModelsForTool, getDefaultModel } from "./modelOptions";
 import { cn } from "../../lib/utils";
 
-const UPDATE_SESSION_CONFIG_MUTATION = gql`
+const UPDATE_SESSION_CONFIG_MUTATION = graphql(`
   mutation UpdateSessionConfig($sessionId: ID!, $tool: CodingTool, $model: String) {
     updateSessionConfig(sessionId: $sessionId, tool: $tool, model: $model) {
       id
@@ -25,7 +25,7 @@ const UPDATE_SESSION_CONFIG_MUTATION = gql`
       model
     }
   }
-`;
+`);
 
 interface SessionInputOptionsProps {
   sessionId: string;
@@ -51,7 +51,7 @@ export function SessionInputOptions({
     if (!newTool) return;
     const newDefault = getDefaultModel(newTool);
     useEntityStore.getState().patch("sessions", sessionId, { tool: newTool as CodingTool, model: newDefault ?? null });
-    await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool, model: newDefault }).toPromise();
+    await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool as CodingTool, model: newDefault }).toPromise();
   }, [sessionId]);
 
   const handleModelChange = useCallback(async (newModel: string | null) => {

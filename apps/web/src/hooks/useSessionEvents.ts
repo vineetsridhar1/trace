@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import type { Event } from "@trace/gql";
 import { client } from "../lib/urql";
 import { useEntityStore, useScopedEventIds, eventScopeKey } from "../stores/entity";
@@ -7,7 +7,7 @@ import { useAuthStore } from "../stores/auth";
 
 const PAGE_SIZE = 100;
 
-const SESSION_EVENTS_QUERY = gql`
+const SESSION_EVENTS_QUERY = graphql(`
   query SessionEvents($organizationId: ID!, $scope: ScopeInput, $limit: Int, $before: DateTime) {
     events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) {
       id
@@ -26,7 +26,7 @@ const SESSION_EVENTS_QUERY = gql`
       metadata
     }
   }
-`;
+`);
 
 export function useSessionEvents(sessionId: string) {
   const [loading, setLoading] = useState(true);

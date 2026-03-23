@@ -9,6 +9,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./client": {
+      "types": "./src/generated/client/index.ts",
+      "default": "./src/generated/client/index.ts"
+    },
     "./schema.graphql": "./src/schema.graphql"
   },
   "scripts": {
@@ -17,6 +21,7 @@
     "lint": "pnpm codegen && tsc -b"
   },
   "dependencies": {
+    "@graphql-typed-document-node/core": "^3.2.0",
     "dataloader": "^2.2.3",
     "graphql": "^16.10.0"
   },

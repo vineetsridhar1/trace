@@ -1,19 +1,19 @@
 import { useCallback, useState } from "react";
 import { MessageSquare } from "lucide-react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { Button } from "../ui/button";
 
-const CREATE_CHAT_MUTATION = gql`
+const CREATE_CHAT_MUTATION = graphql(`
   mutation CreateDM($input: CreateChatInput!) {
     createChat(input: $input) {
       id
     }
   }
-`;
+`);
 
 export function StartDirectMessageButton({ userId }: { userId: string }) {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);

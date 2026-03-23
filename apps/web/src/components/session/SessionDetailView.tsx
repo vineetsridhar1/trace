@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { gql } from "@urql/core";
+import { graphql } from "@trace/gql/client";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey } from "../../stores/entity";
 import { EventScopeContext } from "./EventScopeContext";
@@ -17,7 +17,7 @@ import { Skeleton } from "../ui/skeleton";
 import { client } from "../../lib/urql";
 import { DISMISS_SESSION_MUTATION, SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 
-const SESSION_DETAIL_QUERY = gql`
+const SESSION_DETAIL_QUERY = graphql(`
   query SessionDetail($id: ID!) {
     session(id: $id) {
       id
@@ -82,7 +82,7 @@ const SESSION_DETAIL_QUERY = gql`
       updatedAt
     }
   }
-`;
+`);
 
 export function SessionDetailView({
   sessionId,
