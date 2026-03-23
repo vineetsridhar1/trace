@@ -162,7 +162,7 @@ export class BridgeClient implements IBridgeClient {
 
   private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string; toolSessionId?: string }) {
     if (!cwd) {
-      console.warn(`[bridge] No cwd provided for session ${sessionId}, falling back to home directory`);
+      console.warn(`[bridge] No cwd provided for session ${sessionId}, falling back to home directory (${os.homedir()})`);
     }
     const workdir = cwd ?? os.homedir();
 
@@ -327,7 +327,7 @@ export class BridgeClient implements IBridgeClient {
       }
       case "terminal_create": {
         const { terminalId, sessionId, cols, rows, cwd } = cmd;
-        const workdir = cwd || this.sessionWorkdirs.get(sessionId) || process.cwd();
+        const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();
         try {
           this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
           this.send({ type: "terminal_ready", terminalId });
