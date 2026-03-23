@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Circle, TerminalSquare, X } from "lucide-react";
+import { Circle, FileCode, TerminalSquare, X } from "lucide-react";
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
 import { getDisplayStatus, statusColor } from "./sessionStatus";
+
+export interface OpenFileTab {
+  filePath: string;
+  fileName: string;
+}
 
 interface GroupTabStripProps {
   sessionTabs: SessionEntity[];
@@ -11,9 +16,13 @@ interface GroupTabStripProps {
   groupSessions: SessionEntity[];
   selectedSessionId: string | null;
   activeTerminalId: string | null;
+  openFiles: OpenFileTab[];
+  activeFilePath: string | null;
   onSelectSession: (sessionId: string) => void;
   onSelectTerminal: (sessionId: string | null, terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
+  onSelectFile: (filePath: string) => void;
+  onCloseFile: (filePath: string) => void;
 }
 
 const tabBase =
@@ -30,9 +39,13 @@ export function GroupTabStrip({
   groupSessions,
   selectedSessionId,
   activeTerminalId,
+  openFiles,
+  activeFilePath,
   onSelectSession,
   onSelectTerminal,
   onCloseTerminal,
+  onSelectFile,
+  onCloseFile,
 }: GroupTabStripProps) {
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -43,7 +56,7 @@ export function GroupTabStrip({
   }, []);
 
   // Scroll the active tab into view when selection changes
-  const activeKey = activeTerminalId ?? selectedSessionId;
+  const activeKey = activeFilePath ?? activeTerminalId ?? selectedSessionId;
   useEffect(() => {
     if (!activeKey) return;
     const el = tabRefs.current.get(activeKey);
@@ -56,7 +69,7 @@ export function GroupTabStrip({
         <div className="flex min-w-max">
           {sessionTabs.map((session) => {
             const displayStatus = getDisplayStatus(session.status, null);
-            const isActive = !activeTerminalId && selectedSessionId === session.id;
+            const isActive = !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
             return (
               <button
                 key={session.id}
@@ -97,6 +110,38 @@ export function GroupTabStrip({
                   onClick={() => onCloseTerminal(terminal.id)}
                   className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
                   title="Close terminal tab"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          })}
+
+          {openFiles.map((file) => {
+            const isActive = activeFilePath === file.filePath;
+            return (
+              <div
+                key={file.filePath}
+                ref={(el) => setTabRef(file.filePath, el)}
+                className={cn(
+                  tabBase,
+                  "max-w-[260px] gap-0 p-0",
+                  isActive ? tabActive : tabInactive,
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectFile(file.filePath)}
+                  className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                >
+                  <FileCode size={12} className="shrink-0" />
+                  <span className="truncate">{file.fileName}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCloseFile(file.filePath)}
+                  className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
+                  title="Close file tab"
                 >
                   <X size={12} />
                 </button>

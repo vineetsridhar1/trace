@@ -65,6 +65,23 @@ export interface BridgeListBranchesCommand {
   repoId: string;
 }
 
+export interface BridgeListFilesCommand {
+  type: "list_files";
+  requestId: string;
+  sessionId: string;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
+}
+
+export interface BridgeReadFileCommand {
+  type: "read_file";
+  requestId: string;
+  sessionId: string;
+  relativePath: string;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -103,6 +120,8 @@ export type BridgeCommand =
   | BridgeResumeCommand
   | BridgeDeleteCommand
   | BridgeListBranchesCommand
+  | BridgeListFilesCommand
+  | BridgeReadFileCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -175,6 +194,20 @@ export interface BridgeBranchesResult {
   error?: string;
 }
 
+export interface BridgeFilesResult {
+  type: "files_result";
+  requestId: string;
+  files: string[];
+  error?: string;
+}
+
+export interface BridgeFileContentResult {
+  type: "file_content_result";
+  requestId: string;
+  content: string;
+  error?: string;
+}
+
 // --- Terminal messages (Bridge → Server) ---
 
 export interface BridgeTerminalReady {
@@ -211,6 +244,8 @@ export type BridgeMessage =
   | BridgeToolSessionId
   | BridgeRepoLinked
   | BridgeBranchesResult
+  | BridgeFilesResult
+  | BridgeFileContentResult
   | BridgeTerminalReady
   | BridgeTerminalOutput
   | BridgeTerminalExit
@@ -227,6 +262,119 @@ export function parseBranchOutput(stdout: string): string[] {
     .map((b) => b.replace(/^origin\//, ""))
     .filter((b) => b !== "HEAD" && !b.includes(" -> "));
   return [...new Set(branches)];
+}
+
+/** Directories to skip when walking a filesystem tree. */
+export const WALK_IGNORE = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".venv", "vendor", ".cache", "coverage"]);
+
+/**
+ * Recursively walk a directory, returning relative file paths.
+ * Requires Node `fs` and `path` — only usable in bridge/server contexts, not browser.
+ */
+export async function walkDir(
+  root: string,
+  dir: string,
+  maxDepth: number,
+  fsModule: { promises: { readdir: (p: string, opts: { withFileTypes: true }) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>> } },
+  pathModule: { join: (...p: string[]) => string; relative: (from: string, to: string) => string },
+): Promise<string[]> {
+  if (maxDepth <= 0) return [];
+  const entries = await fsModule.promises.readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    if (WALK_IGNORE.has(entry.name) || entry.name.startsWith(".DS_Store")) continue;
+    const full = pathModule.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = await walkDir(root, full, maxDepth - 1, fsModule, pathModule);
+      results.push(...sub);
+    } else if (entry.isFile()) {
+      results.push(pathModule.relative(root, full));
+    }
+  }
+  return results;
+}
+
+// --- Shared bridge file operation handlers ---
+
+/** Minimal fs/path interfaces needed by the shared file handlers (Node compatible). */
+export interface BridgeFsLike {
+  readFile: (path: string, encoding: BufferEncoding, cb: (err: NodeJS.ErrnoException | null, data: string) => void) => void;
+  promises: { readdir: (p: string, opts: { withFileTypes: true }) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>> };
+}
+export interface BridgePathLike {
+  resolve: (...p: string[]) => string;
+  join: (...p: string[]) => string;
+  relative: (from: string, to: string) => string;
+  sep: string;
+}
+/** Callback-based git ls-files runner, injected by bridges to avoid Node child_process type issues. */
+export type GitLsFilesFn = (
+  cwd: string,
+  cb: (err: Error | null, files: string[]) => void,
+) => void;
+
+/**
+ * Handle a `list_files` bridge command. Shared between desktop and container bridges
+ * to avoid code duplication.
+ */
+export function handleListFiles(
+  cmd: BridgeListFilesCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { gitLsFiles: GitLsFilesFn; fs: BridgeFsLike; path: BridgePathLike },
+): void {
+  const { requestId, sessionId, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({ type: "files_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
+    return;
+  }
+  deps.gitLsFiles(workdir, (err, files) => {
+    if (err) {
+      walkDir(workdir, workdir, 6, deps.fs, deps.path).then(
+        (walked) => send({ type: "files_result", requestId, files: walked }),
+        (walkErr) => send({ type: "files_result", requestId, files: [], error: walkErr.message }),
+      );
+      return;
+    }
+    send({ type: "files_result", requestId, files });
+  });
+}
+
+/**
+ * Handle a `read_file` bridge command. Shared between desktop and container bridges.
+ * Includes defense-in-depth path traversal checks.
+ */
+export function handleReadFile(
+  cmd: BridgeReadFileCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { fs: BridgeFsLike; path: BridgePathLike },
+): void {
+  const { requestId, sessionId, relativePath, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
+    return;
+  }
+  // Defense-in-depth: reject absolute paths and .. traversal at the bridge level too
+  if (relativePath.startsWith("/") || relativePath.includes("..")) {
+    send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
+    return;
+  }
+  const normalizedWorkdir = deps.path.resolve(workdir);
+  const fullPath = deps.path.resolve(normalizedWorkdir, relativePath);
+  if (!fullPath.startsWith(normalizedWorkdir + deps.path.sep) && fullPath !== normalizedWorkdir) {
+    send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
+    return;
+  }
+  deps.fs.readFile(fullPath, "utf-8", (err, content) => {
+    if (err) {
+      send({ type: "file_content_result", requestId, content: "", error: err.message });
+      return;
+    }
+    send({ type: "file_content_result", requestId, content });
+  });
 }
 
 // --- Bridge client interface ---

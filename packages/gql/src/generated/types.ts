@@ -794,6 +794,8 @@ export type Query = {
   repos: Array<Repo>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupFileContent: Scalars['String']['output'];
+  sessionGroupFiles: Array<Scalars['String']['output']>;
   sessionGroups: Array<SessionGroup>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
@@ -924,6 +926,17 @@ export type QuerySessionArgs = {
 
 export type QuerySessionGroupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupFileContentArgs = {
+  filePath: Scalars['String']['input'];
+  sessionGroupId: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupFilesArgs = {
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 

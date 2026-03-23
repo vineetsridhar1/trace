@@ -2139,6 +2139,63 @@ export class SessionService {
     return sessionRouter.listBranches(runtimeId, repoId);
   }
 
+  /** List files in a session group's working directory by delegating to the bridge runtime. */
+  async listFiles(
+    sessionGroupId: string,
+    organizationId: string,
+  ): Promise<string[]> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, workdir: true },
+    });
+    if (!group) throw new Error("Session group not found");
+
+    // Find a session bound to a connected runtime
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true, workdir: true },
+    });
+    for (const session of sessions) {
+      const rt = sessionRouter.getRuntimeForSession(session.id);
+      if (rt) {
+        const workdirHint = session.workdir ?? group.workdir ?? undefined;
+        return sessionRouter.listFiles(rt.id, session.id, workdirHint);
+      }
+    }
+    throw new Error("No connected runtime available for this session group");
+  }
+
+  /** Read a file's content from a session group's working directory. */
+  async readFile(
+    sessionGroupId: string,
+    filePath: string,
+    organizationId: string,
+  ): Promise<string> {
+    // Prevent path traversal
+    if (filePath.startsWith("/") || filePath.includes("..")) {
+      throw new Error("Invalid file path");
+    }
+
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, workdir: true },
+    });
+    if (!group) throw new Error("Session group not found");
+
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true, workdir: true },
+    });
+    for (const session of sessions) {
+      const rt = sessionRouter.getRuntimeForSession(session.id);
+      if (rt) {
+        const workdirHint = session.workdir ?? group.workdir ?? undefined;
+        return sessionRouter.readFile(rt.id, session.id, filePath, workdirHint);
+      }
+    }
+    throw new Error("No connected runtime available for this session group");
+  }
+
   // ─── Helpers ───
 
   /**

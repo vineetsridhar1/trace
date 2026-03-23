@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import {
@@ -16,8 +16,11 @@ import { useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
+import type { OpenFileTab } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
+import { FileExplorer } from "./FileExplorer";
+import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
   getSessionGroupDisplayStatus,
   isTerminalStatus,
@@ -122,6 +125,9 @@ export function SessionGroupDetailView({
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
+  const [showFiles, setShowFiles] = useState(false);
+  const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
@@ -308,9 +314,36 @@ export function SessionGroupDetailView({
     (sessionId: string | null, terminalId: string) => {
       if (sessionId) setActiveSessionId(sessionId);
       setActiveTerminalId(terminalId);
+      setActiveFilePath(null);
     },
     [setActiveSessionId, setActiveTerminalId],
   );
+
+  const handleFileClick = useCallback((filePath: string) => {
+    setOpenFiles((prev) => {
+      if (prev.some((f) => f.filePath === filePath)) return prev;
+      const fileName = filePath.split("/").pop() ?? filePath;
+      return [...prev, { filePath, fileName }];
+    });
+    setActiveFilePath(filePath);
+    setActiveTerminalId(null);
+  }, [setActiveTerminalId]);
+
+  const handleSelectFile = useCallback((filePath: string) => {
+    setActiveFilePath(filePath);
+    setActiveTerminalId(null);
+  }, [setActiveTerminalId]);
+
+  const handleCloseFile = useCallback((filePath: string) => {
+    setOpenFiles((prev) => prev.filter((f) => f.filePath !== filePath));
+    setActiveFilePath((prev) => prev === filePath ? null : prev);
+  }, []);
+
+  const handleSelectSession = useCallback((sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setActiveTerminalId(null);
+    setActiveFilePath(null);
+  }, [setActiveSessionId, setActiveTerminalId]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -322,10 +355,12 @@ export function SessionGroupDetailView({
         panelMode={panelMode}
         isFullscreen={isFullscreen}
         terminalAllowed={terminalAllowed}
+        showFiles={showFiles}
         onClose={() => setActiveSessionId(null)}
         onNewChat={handleNewChat}
         onOpenTerminal={handleOpenTerminal}
         onToggleFullscreen={toggleFullscreen}
+        onToggleFiles={() => setShowFiles((v) => !v)}
       />
 
       <GroupTabStrip
@@ -334,23 +369,42 @@ export function SessionGroupDetailView({
         groupSessions={groupSessions}
         selectedSessionId={selectedSession?.id ?? null}
         activeTerminalId={activeTerminalId}
-        onSelectSession={setActiveSessionId}
+        openFiles={openFiles}
+        activeFilePath={activeFilePath}
+        onSelectSession={handleSelectSession}
         onSelectTerminal={handleSelectTerminal}
         onCloseTerminal={handleCloseTerminal}
+        onSelectFile={handleSelectFile}
+        onCloseFile={handleCloseFile}
       />
 
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {activeTerminal ? (
-          <div className="h-full bg-[#0a0a0a]">
-            <TerminalInstance terminalId={activeTerminal.id} visible />
-          </div>
-        ) : selectedSession ? (
-          <SessionDetailView sessionId={selectedSession.id} hideHeader />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Select a chat tab to continue.
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {showFiles && (
+          <div className="h-full w-[260px] shrink-0 border-r border-[#2d2d2d]">
+            <FileExplorer sessionGroupId={sessionGroupId} onFileClick={handleFileClick} />
           </div>
         )}
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          {activeFilePath ? (
+            <div className="h-full">
+              <MonacoFileViewer
+                key={activeFilePath}
+                sessionGroupId={sessionGroupId}
+                filePath={activeFilePath}
+              />
+            </div>
+          ) : activeTerminal ? (
+            <div className="h-full bg-[#0a0a0a]">
+              <TerminalInstance terminalId={activeTerminal.id} visible />
+            </div>
+          ) : selectedSession ? (
+            <SessionDetailView sessionId={selectedSession.id} hideHeader />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Select a chat tab to continue.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

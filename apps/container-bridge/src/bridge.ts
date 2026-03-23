@@ -1,8 +1,10 @@
 import WebSocket from "ws";
 import os from "os";
+import fs from "fs";
+import path from "path";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
-import { parseBranchOutput } from "@trace/shared";
+import { parseBranchOutput, handleListFiles, handleReadFile } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
@@ -278,6 +280,22 @@ export class ContainerBridge implements IBridgeClient {
           }
           this.send({ type: "branches_result", requestId, branches: parseBranchOutput(stdout) });
         });
+        break;
+      }
+
+      case "list_files": {
+        handleListFiles(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+          gitLsFiles: (cwd, cb) => execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+            if (err) return cb(err, []);
+            cb(null, stdout.split("\n").filter(Boolean));
+          }),
+          fs, path,
+        });
+        break;
+      }
+
+      case "read_file": {
+        handleReadFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
         break;
       }
 

@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import {
   Circle,
+  Files,
   GitPullRequest,
   History,
   Maximize2,
@@ -28,10 +29,12 @@ interface GroupHeaderProps {
   panelMode?: boolean;
   isFullscreen: boolean;
   terminalAllowed: boolean;
+  showFiles: boolean;
   onClose: () => void;
   onNewChat: () => void;
   onOpenTerminal: () => void;
   onToggleFullscreen: () => void;
+  onToggleFiles: () => void;
 }
 
 export function GroupHeader({
@@ -42,10 +45,12 @@ export function GroupHeader({
   panelMode,
   isFullscreen,
   terminalAllowed,
+  showFiles,
   onClose,
   onNewChat,
   onOpenTerminal,
   onToggleFullscreen,
+  onToggleFiles,
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -124,6 +129,19 @@ export function GroupHeader({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <button
+        onClick={onToggleFiles}
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+          showFiles
+            ? "bg-surface-elevated text-foreground"
+            : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+        )}
+        title="Toggle file explorer"
+      >
+        <Files size={14} />
+      </button>
 
       <div className="relative" ref={historyRef}>
         <button
