@@ -99,7 +99,7 @@ export function CreateChannelDialog({
             organizationId: activeOrgId,
             name: name.trim(),
             type: channelType,
-            repoId: repoId ?? undefined,
+            repoId,
             groupId: defaultGroupId ?? null,
           },
         })
@@ -230,22 +230,28 @@ export function CreateChannelDialog({
                   })}
                 </div>
               </div>
-              {channelType === "coding" && repoIds.length > 0 && (
+              {channelType === "coding" && (
                 <div>
                   <label className="mb-1.5 block text-sm text-muted-foreground">Repository</label>
-                  <Select
-                    value={repoId ?? ""}
-                    onValueChange={(v) => setRepoId(v || undefined)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a repo..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {repoIds.map((id) => (
-                        <RepoOptionItem key={id} id={id} />
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {repoIds.length > 0 ? (
+                    <Select
+                      value={repoId ?? ""}
+                      onValueChange={(v) => setRepoId(v || undefined)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a repo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {repoIds.map((id) => (
+                          <RepoOptionItem key={id} id={id} />
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Link a repository to your organization first.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
