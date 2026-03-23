@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { GitCheckpoint } from "@trace/gql";
 import { Circle, GitCommitHorizontal, Plus, RotateCcw } from "lucide-react";
+import { shortSha } from "@trace/shared";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityStore } from "../../stores/entity";
@@ -11,10 +12,6 @@ import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 
 interface SessionHistoryProps {
   sessionId: string;
-}
-
-function shortSha(commitSha: string): string {
-  return commitSha.slice(0, 7);
 }
 
 function formatCheckpointTime(committedAt: string): string {
@@ -80,6 +77,11 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           })
           .toPromise();
 
+        if (result.error) {
+          console.error("[SessionHistory] mutation failed:", result.error);
+          return;
+        }
+
         const newSessionId = result.data?.startSession?.id;
         const newSessionGroupId = result.data?.startSession?.sessionGroupId ?? sessionGroupId;
         if (newSessionId) {
@@ -114,6 +116,11 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
             },
           })
           .toPromise();
+
+        if (result.error) {
+          console.error("[SessionHistory] mutation failed:", result.error);
+          return;
+        }
 
         const newSessionId = result.data?.startSession?.id;
         const newSessionGroupId = result.data?.startSession?.sessionGroupId;

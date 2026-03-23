@@ -3,6 +3,41 @@ import type { ToolOutput } from "./adapters/coding-tool.js";
 
 export type GitCheckpointTrigger = "commit" | "push" | "commit_and_push";
 
+export const GIT_SHOW_ARGS = ["show", "-s", "--format=%H%n%P%n%T%n%s%n%an <%ae>%n%cI", "HEAD"] as const;
+export const GIT_DIFF_TREE_ARGS = ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD"] as const;
+
+export function parseGitShowOutput(
+  showStdout: string,
+  diffStdout: string,
+  trigger: GitCheckpointTrigger,
+  command: string,
+  observedAt: string,
+): GitCheckpointBridgePayload {
+  const [commitSha = "", parents = "", treeSha = "", subject = "", author = "", committedAt = ""] =
+    showStdout.trimEnd().split("\n");
+
+  if (!commitSha || !treeSha || !committedAt) {
+    throw new Error("Incomplete git checkpoint metadata");
+  }
+
+  return {
+    trigger,
+    command,
+    observedAt,
+    commitSha,
+    parentShas: parents ? parents.split(" ").filter(Boolean) : [],
+    treeSha,
+    subject,
+    author,
+    committedAt,
+    filesChanged: diffStdout.split("\n").filter(Boolean).length,
+  };
+}
+
+export function shortSha(commitSha: string): string {
+  return commitSha.slice(0, 7);
+}
+
 export interface GitCheckpointBridgePayload {
   trigger: GitCheckpointTrigger;
   command: string;

@@ -64,6 +64,16 @@ export async function createWorktree(
   const branchName = `trace/${sessionId}`;
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
+  // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
+  if (checkpointSha) {
+    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], { cwd: repoPath })
+      .then(() => true)
+      .catch(() => false);
+    if (!reachable) {
+      await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+    }
+  }
+
   // Check if the branch already exists
   const branchExists = await execFileAsync(
     "git", ["rev-parse", "--verify", branchName],

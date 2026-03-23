@@ -1,9 +1,6 @@
 import type { GitCheckpoint } from "@trace/gql";
 import { GitCommitHorizontal } from "lucide-react";
-
-function shortSha(commitSha: string): string {
-  return commitSha.slice(0, 7);
-}
+import { shortSha } from "@trace/shared";
 
 export function GitCheckpointChips({
   checkpoints,
