@@ -304,10 +304,23 @@ export class ContainerBridge implements IBridgeClient {
 
       case "list_files": {
         const { requestId, workdir } = cmd;
+        // Resolve effective workdir — fall back to known session workdir if sent path doesn't exist
+        let effectiveDir = workdir;
+        try {
+          fs.accessSync(effectiveDir);
+        } catch {
+          const knownDir = [...this.sessionWorkdirs.values()][0];
+          if (knownDir) {
+            effectiveDir = knownDir;
+          } else {
+            this.send({ type: "files_result", requestId, files: [], error: `Working directory not found: ${workdir}` });
+            break;
+          }
+        }
         // Try git ls-files first for tracked files, fall back to fs walk
-        execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+        execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: effectiveDir, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
           if (err) {
-            walkDir(workdir, workdir, 6).then(
+            walkDir(effectiveDir, effectiveDir, 6).then(
               (files) => this.send({ type: "files_result", requestId, files }),
               (walkErr) => this.send({ type: "files_result", requestId, files: [], error: walkErr.message }),
             );
@@ -320,8 +333,22 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "read_file": {
-        const { requestId, filePath } = cmd;
-        fs.readFile(filePath, "utf-8", (err, content) => {
+        const { requestId, workdir: sentWorkdir, relativePath } = cmd;
+        // Resolve workdir — fall back to known session workdir if sent path doesn't exist
+        let resolvedDir = sentWorkdir;
+        try {
+          fs.accessSync(resolvedDir);
+        } catch {
+          const knownDir = [...this.sessionWorkdirs.values()][0];
+          if (knownDir) {
+            resolvedDir = knownDir;
+          } else {
+            this.send({ type: "file_content_result", requestId, content: "", error: `Working directory not found: ${sentWorkdir}` });
+            break;
+          }
+        }
+        const fullPath = path.join(resolvedDir, relativePath);
+        fs.readFile(fullPath, "utf-8", (err, content) => {
           if (err) {
             this.send({ type: "file_content_result", requestId, content: "", error: err.message });
             return;

@@ -632,9 +632,9 @@ export class SessionRouter {
    * Ask a runtime to read a file's contents.
    * Returns a promise that resolves when the bridge responds with file_content_result.
    */
-  readFile(runtimeId: string, filePath: string, timeoutMs = 15_000): Promise<string> {
+  readFile(runtimeId: string, workdir: string, relativePath: string, timeoutMs = 15_000): Promise<string> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "read_file", requestId, filePath });
+    const result = this.sendToRuntime(runtimeId, { type: "read_file", requestId, workdir, relativePath });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }

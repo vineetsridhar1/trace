@@ -2183,8 +2183,6 @@ export class SessionService {
       throw new Error("Invalid file path");
     }
 
-    const absolutePath = `${group.workdir}/${filePath}`;
-
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId, organizationId },
       select: { id: true },
@@ -2195,7 +2193,7 @@ export class SessionService {
       if (rt) { runtimeId = rt.id; break; }
     }
     if (!runtimeId) throw new Error("No connected runtime available for this session group");
-    return sessionRouter.readFile(runtimeId, absolutePath);
+    return sessionRouter.readFile(runtimeId, group.workdir, filePath);
   }
 
   // ─── Helpers ───

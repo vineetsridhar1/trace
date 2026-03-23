@@ -74,7 +74,8 @@ export interface BridgeListFilesCommand {
 export interface BridgeReadFileCommand {
   type: "read_file";
   requestId: string;
-  filePath: string;
+  workdir: string;
+  relativePath: string;
 }
 
 // --- Terminal commands (Server → Bridge) ---
