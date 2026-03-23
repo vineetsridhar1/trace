@@ -18,6 +18,7 @@ import { prisma } from "./db.js";
  *     { type: "exit", exitCode: number }
  *     { type: "error", message: string }
  */
+
 /** Interval between server→client pings to keep the WebSocket alive. */
 const PING_INTERVAL_MS = 30_000;
 

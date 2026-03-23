@@ -54,6 +54,8 @@ export class TerminalSocket {
       const isReconnect = this.reconnectAttempts > 0;
       this.reconnectAttempts = 0;
       this.ws?.send(JSON.stringify({ type: "attach", terminalId: this.terminalId }));
+      // Emit reconnected eagerly — the attach may still fail, but the server
+      // replays scrollback on attach so the UI recovers quickly either way.
       if (isReconnect) {
         this.emit({ type: "reconnected" });
       }
@@ -63,7 +65,8 @@ export class TerminalSocket {
       try {
         const msg = JSON.parse(event.data as string) as TerminalSocketEvent;
 
-        // Fatal errors — don't reconnect when the terminal is gone or auth fails
+        // Fatal errors — don't reconnect when the terminal is gone or auth fails.
+        // NOTE: these strings must match the server error messages in terminal-handler.ts
         if (msg.type === "error" && (msg.message === "Terminal not found" || msg.message === "Access denied")) {
           this.closed = true;
         }
