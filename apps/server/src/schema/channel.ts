@@ -112,5 +112,9 @@ export const channelTypeResolvers = {
       });
       return members.map((m) => ({ user: m.user, joinedAt: m.joinedAt }));
     },
+    repo: (channel: { repoId?: string | null }) => {
+      if (!channel.repoId) return null;
+      return prisma.repo.findUnique({ where: { id: channel.repoId } });
+    },
   },
 };

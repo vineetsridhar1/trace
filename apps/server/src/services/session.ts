@@ -408,7 +408,10 @@ export class SessionService {
 
     const resolvedChannelId =
       input.channelId ?? resolvedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
-    const resolvedRepoId = input.repoId ?? resolvedGroup?.repoId ?? sourceSession?.repoId ?? undefined;
+    const channel = resolvedChannelId
+      ? await prisma.channel.findUnique({ where: { id: resolvedChannelId }, select: { repoId: true } })
+      : null;
+    const resolvedRepoId = input.repoId ?? resolvedGroup?.repoId ?? channel?.repoId ?? sourceSession?.repoId ?? undefined;
     const resolvedBranch = input.branch ?? resolvedGroup?.branch ?? sourceSession?.branch ?? undefined;
     const sharedWorkdir = resolvedGroup?.workdir ?? null;
     const sharedConnection = resolvedGroup?.connection ?? null;

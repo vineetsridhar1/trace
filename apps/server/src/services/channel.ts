@@ -36,6 +36,20 @@ export class ChannelService {
         where: { userId_organizationId: { userId: actorId, organizationId: input.organizationId } },
       });
 
+      const channelType = input.type ?? "coding";
+      if (channelType === "coding" && !input.repoId) {
+        throw new Error("Coding channels require a linked repository");
+      }
+      let repoName: string | null = null;
+      if (input.repoId) {
+        const repo = await tx.repo.findFirst({
+          where: { id: input.repoId, organizationId: input.organizationId },
+          select: { name: true },
+        });
+        if (!repo) throw new Error("Repo not found in this organization");
+        repoName = repo.name;
+      }
+
       let position = input.position ?? null;
       if (position === null) {
         if (input.groupId) {
@@ -64,10 +78,11 @@ export class ChannelService {
       const channel = await tx.channel.create({
         data: {
           name: input.name,
-          type: input.type ?? "coding",
+          type: channelType,
           position,
           organizationId: input.organizationId,
           groupId: input.groupId ?? null,
+          repoId: input.repoId ?? null,
           ...(input.projectIds?.length && {
             projects: { create: input.projectIds.map((projectId) => ({ projectId })) },
           }),
@@ -82,7 +97,14 @@ export class ChannelService {
         scopeType: "channel",
         scopeId: channel.id,
         eventType: "channel_created",
-        payload: { channel: { id: channel.id, name: channel.name, type: channel.type, position: channel.position, groupId: channel.groupId, members: normalizedMembers } },
+        payload: {
+          channel: {
+            id: channel.id, name: channel.name, type: channel.type, position: channel.position,
+            groupId: channel.groupId, repoId: channel.repoId,
+            ...(channel.repoId && repoName ? { repo: { id: channel.repoId, name: repoName } } : {}),
+            members: normalizedMembers,
+          },
+        },
         actorType,
         actorId,
       }, tx);

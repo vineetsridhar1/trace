@@ -87,6 +87,7 @@ export type Channel = {
   name: Scalars['String']['output'];
   position: Scalars['Int']['output'];
   projects: Array<Project>;
+  repo?: Maybe<Repo>;
   type: ChannelType;
 };
 
@@ -166,6 +167,7 @@ export type CreateChannelInput = {
   organizationId: Scalars['ID']['input'];
   position?: InputMaybe<Scalars['Int']['input']>;
   projectIds?: InputMaybe<Array<Scalars['ID']['input']>>;
+  repoId?: InputMaybe<Scalars['ID']['input']>;
   type?: InputMaybe<ChannelType>;
 };
 
@@ -1535,6 +1537,7 @@ export type ChannelResolvers<ContextType = Context, ParentType extends Resolvers
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   position?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
+  repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['ChannelType'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
