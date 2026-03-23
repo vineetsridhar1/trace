@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
+import path from "path";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { parseBranchOutput } from "@trace/shared";
@@ -8,6 +9,25 @@ import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
+
+const WALK_IGNORE = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".venv", "vendor", ".cache", "coverage"]);
+
+async function walkDir(root: string, dir: string, maxDepth: number): Promise<string[]> {
+  if (maxDepth <= 0) return [];
+  const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    if (WALK_IGNORE.has(entry.name) || entry.name.startsWith(".DS_Store")) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = await walkDir(root, full, maxDepth - 1);
+      results.push(...sub);
+    } else if (entry.isFile()) {
+      results.push(path.relative(root, full));
+    }
+  }
+  return results;
+}
 
 /**
  * Multi-session container bridge — runs inside a Fly Machine (one per user per org).
@@ -284,18 +304,13 @@ export class ContainerBridge implements IBridgeClient {
 
       case "list_files": {
         const { requestId, workdir } = cmd;
-        // Try git ls-files first for tracked files, fall back to find
+        // Try git ls-files first for tracked files, fall back to fs walk
         execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
           if (err) {
-            // Fallback: use find with reasonable excludes
-            execFile("find", [".", "-maxdepth", "6", "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.git/*", "-not", "-path", "*/dist/*", "-not", "-path", "*/.next/*", "-type", "f"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (findErr, findStdout) => {
-              if (findErr) {
-                this.send({ type: "files_result", requestId, files: [], error: findErr.message });
-                return;
-              }
-              const files = findStdout.split("\n").map((f) => f.replace(/^\.\//, "")).filter(Boolean);
-              this.send({ type: "files_result", requestId, files });
-            });
+            walkDir(workdir, workdir, 6).then(
+              (files) => this.send({ type: "files_result", requestId, files }),
+              (walkErr) => this.send({ type: "files_result", requestId, files: [], error: walkErr.message }),
+            );
             return;
           }
           const files = stdout.split("\n").filter(Boolean);

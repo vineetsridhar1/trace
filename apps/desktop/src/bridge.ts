@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import os from "os";
 import fs from "fs";
+import path from "path";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { parseBranchOutput } from "@trace/shared";
@@ -11,6 +12,25 @@ import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
+
+const WALK_IGNORE = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".venv", "vendor", ".cache", "coverage"]);
+
+async function walkDir(root: string, dir: string, maxDepth: number): Promise<string[]> {
+  if (maxDepth <= 0) return [];
+  const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    if (WALK_IGNORE.has(entry.name) || entry.name.startsWith(".DS_Store")) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = await walkDir(root, full, maxDepth - 1);
+      results.push(...sub);
+    } else if (entry.isFile()) {
+      results.push(path.relative(root, full));
+    }
+  }
+  return results;
+}
 
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -330,14 +350,11 @@ export class BridgeClient implements IBridgeClient {
         const { requestId, workdir } = cmd;
         execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
           if (err) {
-            execFile("find", [".", "-maxdepth", "6", "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.git/*", "-not", "-path", "*/dist/*", "-not", "-path", "*/.next/*", "-type", "f"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (findErr, findStdout) => {
-              if (findErr) {
-                this.send({ type: "files_result", requestId, files: [], error: findErr.message });
-                return;
-              }
-              const files = findStdout.split("\n").map((f) => f.replace(/^\.\//, "")).filter(Boolean);
-              this.send({ type: "files_result", requestId, files });
-            });
+            // Fallback: walk with Node fs (no dependency on find/ls)
+            walkDir(workdir, workdir, 6).then(
+              (files) => this.send({ type: "files_result", requestId, files }),
+              (walkErr) => this.send({ type: "files_result", requestId, files: [], error: walkErr.message }),
+            );
             return;
           }
           const files = stdout.split("\n").filter(Boolean);
