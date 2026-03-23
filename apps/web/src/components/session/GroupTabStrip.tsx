@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from "react";
 import { Circle, TerminalSquare, X } from "lucide-react";
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
@@ -15,6 +16,14 @@ interface GroupTabStripProps {
   onCloseTerminal: (terminalId: string) => void;
 }
 
+const tabBase =
+  "inline-flex max-w-[220px] shrink-0 items-center gap-2 border-r border-border/40 px-3 py-2 text-xs transition-colors";
+
+const tabActive = "bg-surface-elevated text-foreground";
+
+const tabInactive =
+  "bg-surface-deep text-muted-foreground hover:text-foreground";
+
 export function GroupTabStrip({
   sessionTabs,
   terminals,
@@ -25,54 +34,68 @@ export function GroupTabStrip({
   onSelectTerminal,
   onCloseTerminal,
 }: GroupTabStripProps) {
+  const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
+  const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
+
+  const setTabRef = useCallback((key: string, el: HTMLElement | null) => {
+    if (el) tabRefs.current.set(key, el);
+    else tabRefs.current.delete(key);
+  }, []);
+
+  // Scroll the active tab into view when selection changes
+  const activeKey = activeTerminalId ?? selectedSessionId;
+  useEffect(() => {
+    if (!activeKey) return;
+    const el = tabRefs.current.get(activeKey);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [activeKey]);
+
   return (
-    <div className="shrink-0 border-b border-border bg-surface px-2 pt-1 pb-0">
+    <div className="shrink-0 bg-surface-deep">
       <div className="native-scrollbar overflow-x-auto">
-        <div className="flex min-w-max items-center gap-1">
+        <div className="flex min-w-max">
           {sessionTabs.map((session) => {
             const displayStatus = getDisplayStatus(session.status, null);
+            const isActive = !activeTerminalId && selectedSessionId === session.id;
             return (
               <button
                 key={session.id}
+                ref={(el) => setTabRef(session.id, el)}
                 onClick={() => onSelectSession(session.id)}
-                className={cn(
-                  "inline-flex max-w-[220px] shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
-                  !activeTerminalId && selectedSessionId === session.id
-                    ? "bg-surface-elevated text-foreground"
-                    : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-                )}
+                className={cn(tabBase, isActive ? tabActive : tabInactive)}
               >
-                <Circle size={6} className={cn("fill-current", statusColor[displayStatus])} />
+                <Circle size={6} className={cn("shrink-0 fill-current", statusColor[displayStatus])} />
                 <span className="truncate">{session.name}</span>
               </button>
             );
           })}
 
           {terminals.map((terminal, index) => {
-            const session = groupSessions.find((candidate) => candidate.id === terminal.sessionId);
+            const session = sessionById.get(terminal.sessionId);
             const label = session ? `Terminal ${index + 1} · ${session.name}` : `Terminal ${index + 1}`;
+            const isActive = activeTerminalId === terminal.id;
             return (
               <div
                 key={terminal.id}
+                ref={(el) => setTabRef(terminal.id, el)}
                 className={cn(
-                  "inline-flex max-w-[260px] shrink-0 items-center rounded-md text-xs transition-colors",
-                  activeTerminalId === terminal.id
-                    ? "bg-surface-elevated text-foreground"
-                    : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+                  tabBase,
+                  "max-w-[260px] gap-0 p-0",
+                  isActive ? tabActive : tabInactive,
                 )}
               >
                 <button
                   type="button"
                   onClick={() => onSelectTerminal(session?.id ?? null, terminal.id)}
-                  className="inline-flex min-w-0 items-center gap-2 px-3 py-1.5"
+                  className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
                 >
-                  <TerminalSquare size={12} />
+                  <TerminalSquare size={12} className="shrink-0" />
                   <span className="truncate">{label}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onCloseTerminal(terminal.id)}
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:opacity-100"
+                  className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
                   title="Close terminal tab"
                 >
                   <X size={12} />

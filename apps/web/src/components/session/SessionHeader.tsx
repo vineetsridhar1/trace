@@ -14,8 +14,15 @@ import {
 } from "lucide-react";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
+import { useShallow } from "zustand/react/shallow";
 import { useDetailPanelStore } from "../../stores/detail-panel";
-import { statusColor, statusLabel, isDisconnected, getDisplayStatus, getSessionGroupDisplayStatus } from "./sessionStatus";
+import {
+  statusColor,
+  statusLabel,
+  isDisconnected,
+  getDisplayStatus,
+  getSessionGroupDisplayStatus,
+} from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 
 export function SessionHeader({
@@ -32,7 +39,9 @@ export function SessionHeader({
   const name = useEntityField("sessions", sessionId, "name");
   const status = useEntityField("sessions", sessionId, "status");
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
-  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
   const groupPrUrl = useEntityField("sessionGroups", sessionGroupId ?? "", "prUrl") as
     | string
     | null
@@ -41,12 +50,17 @@ export function SessionHeader({
     | Record<string, unknown>
     | null
     | undefined;
-  const groupStatuses = useEntityStore((state) => {
-    if (!sessionGroupId) return [status];
-    return Object.values(state.sessions)
-      .filter((session) => session.sessionGroupId === sessionGroupId)
-      .map((session) => session.status);
-  });
+  const groupStatuses = useEntityStore(
+    useShallow((state) => {
+      if (!sessionGroupId) {
+        const s = state.sessions[sessionId]?.status;
+        return s ? [s] : [];
+      }
+      return Object.values(state.sessions)
+        .filter((session) => session.sessionGroupId === sessionGroupId)
+        .map((session) => session.status);
+    }),
+  );
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
@@ -109,7 +123,9 @@ export function SessionHeader({
           Connection Lost
         </span>
       ) : (
-        <span className={`flex shrink-0 items-center gap-1.5 text-xs ${statusColor[displayStatus]}`}>
+        <span
+          className={`flex shrink-0 items-center gap-1.5 text-xs ${statusColor[displayStatus]}`}
+        >
           <Circle size={6} className="fill-current" />
           {statusLabel[displayStatus]}
         </span>
