@@ -1,24 +1,41 @@
 import { useCallback, useMemo, useState } from "react";
-import { Circle, Plus } from "lucide-react";
+import type { GitCheckpoint } from "@trace/gql";
+import { Circle, GitCommitHorizontal, Plus, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityStore } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
-import { getSessionChannelId } from "../../lib/session-group";
+import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 
 interface SessionHistoryProps {
   sessionId: string;
 }
 
+function shortSha(commitSha: string): string {
+  return commitSha.slice(0, 7);
+}
+
+function formatCheckpointTime(committedAt: string): string {
+  return new Date(committedAt).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function SessionHistory({ sessionId }: SessionHistoryProps) {
   const sessions = useEntityStore((s) => s.sessions);
   const openSessionTab = useUIStore((s) => s.openSessionTab);
+  const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
+  const [restoringCheckpointId, setRestoringCheckpointId] = useState<string | null>(null);
 
   const currentSession = sessions[sessionId];
   const sessionGroupId = currentSession?.sessionGroupId as string | undefined;
+  const sessionGroup = sessionGroupId ? sessionGroups[sessionGroupId] : null;
 
   const groupSessions = useMemo(() => {
     if (!sessionGroupId) return [];
@@ -30,6 +47,15 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [sessionGroupId, sessions]);
+
+  const gitCheckpoints = useMemo(() => {
+    const checkpoints = Array.isArray(sessionGroup?.gitCheckpoints)
+      ? (sessionGroup.gitCheckpoints as GitCheckpoint[])
+      : [];
+    return [...checkpoints].sort((a, b) => b.committedAt.localeCompare(a.committedAt));
+  }, [sessionGroup?.gitCheckpoints]);
+
+  const channelId = getSessionGroupChannelId(sessionGroup ?? null, groupSessions);
 
   const handleSeedNewChat = useCallback(
     async (sourceId: string) => {
@@ -55,11 +81,12 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           .toPromise();
 
         const newSessionId = result.data?.startSession?.id;
+        const newSessionGroupId = result.data?.startSession?.sessionGroupId ?? sessionGroupId;
         if (newSessionId) {
           openSessionTab(sessionGroupId, newSessionId);
           navigateToSession(
             (source.channel as { id: string } | null | undefined)?.id ?? null,
-            sessionGroupId,
+            newSessionGroupId,
             newSessionId,
           );
         }
@@ -68,6 +95,36 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
       }
     },
     [openSessionTab, sessionGroupId, sessions],
+  );
+
+  const handleRestoreCheckpoint = useCallback(
+    async (checkpointId: string) => {
+      if (!currentSession) return;
+
+      setRestoringCheckpointId(checkpointId);
+      try {
+        const result = await client
+          .mutation(START_SESSION_MUTATION, {
+            input: {
+              tool: currentSession.tool,
+              model: currentSession.model ?? undefined,
+              hosting: currentSession.hosting,
+              channelId: channelId ?? undefined,
+              restoreCheckpointId: checkpointId,
+            },
+          })
+          .toPromise();
+
+        const newSessionId = result.data?.startSession?.id;
+        const newSessionGroupId = result.data?.startSession?.sessionGroupId;
+        if (newSessionId && newSessionGroupId) {
+          navigateToSession(channelId, newSessionGroupId, newSessionId);
+        }
+      } finally {
+        setRestoringCheckpointId(null);
+      }
+    },
+    [channelId, currentSession],
   );
 
   if (!sessionGroupId || groupSessions.length === 0) {
@@ -79,11 +136,14 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   }
 
   return (
-    <div className="max-h-72 overflow-y-auto py-1">
+    <div className="max-h-96 overflow-y-auto py-1">
+      <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Sessions
+      </div>
       {groupSessions.map((entry) => {
         const displayAgentStatus = getDisplayAgentStatus(entry.agentStatus, entry.sessionStatus);
         const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
-        const channelId = getSessionChannelId(entry);
+        const entryChannelId = getSessionChannelId(entry);
 
         return (
           <div
@@ -118,7 +178,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
             <button
               type="button"
               onClick={() => handleSeedNewChat(entry.id)}
-              disabled={creatingFromId !== null}
+              disabled={creatingFromId !== null || restoringCheckpointId !== null}
               className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
               title="New chat from this session"
             >
@@ -127,6 +187,53 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           </div>
         );
       })}
+
+      <div className="mx-3 my-2 h-px bg-border" />
+      <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Git
+      </div>
+
+      {gitCheckpoints.length === 0 ? (
+        <div className="px-3 py-3 text-xs text-muted-foreground">No checkpoints yet</div>
+      ) : (
+        gitCheckpoints.map((checkpoint) => {
+          const checkpointSession = sessions[checkpoint.sessionId];
+          return (
+            <div
+              key={checkpoint.id}
+              className="flex items-start gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-surface-elevated"
+            >
+              <div className="flex min-w-0 flex-1 gap-2">
+                <GitCommitHorizontal size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] text-foreground">
+                      {shortSha(checkpoint.commitSha)}
+                    </span>
+                    <span className="truncate text-foreground">{checkpoint.subject}</span>
+                  </div>
+                  <div className="mt-1 truncate text-[11px] text-muted-foreground">
+                    {(checkpointSession?.name ?? "Session")} · {formatCheckpointTime(checkpoint.committedAt)}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleRestoreCheckpoint(checkpoint.id)}
+                disabled={creatingFromId !== null || restoringCheckpointId !== null}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
+                title="Restore as new session"
+              >
+                <RotateCcw
+                  size={12}
+                  className={restoringCheckpointId === checkpoint.id ? "animate-spin" : ""}
+                />
+              </button>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }

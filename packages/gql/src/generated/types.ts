@@ -266,6 +266,27 @@ export type EventType =
   | 'ticket_unlinked'
   | 'ticket_updated';
 
+export type GitCheckpoint = {
+  __typename?: 'GitCheckpoint';
+  author: Scalars['String']['output'];
+  commitSha: Scalars['String']['output'];
+  committedAt: Scalars['DateTime']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  filesChanged: Scalars['Int']['output'];
+  id: Scalars['ID']['output'];
+  parentShas: Array<Scalars['String']['output']>;
+  promptEvent?: Maybe<Event>;
+  promptEventId: Scalars['ID']['output'];
+  repo?: Maybe<Repo>;
+  repoId: Scalars['ID']['output'];
+  session?: Maybe<Session>;
+  sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupId: Scalars['ID']['output'];
+  sessionId: Scalars['ID']['output'];
+  subject: Scalars['String']['output'];
+  treeSha: Scalars['String']['output'];
+};
+
 export type HostingMode =
   | 'cloud'
   | 'local';
@@ -1023,6 +1044,7 @@ export type Session = {
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   endpoints?: Maybe<SessionEndpoints>;
+  gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
   model?: Maybe<Scalars['String']['output']>;
@@ -1078,6 +1100,7 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
+  gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
@@ -1127,6 +1150,7 @@ export type StartSessionInput = {
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
+  restoreCheckpointId?: InputMaybe<Scalars['ID']['input']>;
   runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
   sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
   sourceSessionId?: InputMaybe<Scalars['ID']['input']>;

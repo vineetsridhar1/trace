@@ -4,6 +4,7 @@ export const START_SESSION_MUTATION = gql`
   mutation StartSession($input: StartSessionInput!) {
     startSession(input: $input) {
       id
+      sessionGroupId
     }
   }
 `;

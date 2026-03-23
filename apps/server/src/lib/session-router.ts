@@ -51,6 +51,7 @@ export interface SessionAdapterCreateOptions {
   model?: string;
   repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
   branch?: string;
+  checkpointSha?: string;
   createdById: string;
   organizationId: string;
 }
@@ -129,6 +130,7 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
               repoRemoteUrl: options.repo.remoteUrl,
               defaultBranch: options.repo.defaultBranch,
               branch: options.branch,
+              checkpointSha: options.checkpointSha,
             });
           } else {
             // No repo — signal workspace_ready with home directory so session transitions to pending
@@ -207,6 +209,7 @@ const localAdapter: SessionAdapter = {
       repoRemoteUrl: options.repo.remoteUrl,
       defaultBranch: options.repo.defaultBranch,
       branch: options.branch,
+      checkpointSha: options.checkpointSha,
     });
     if (result !== "delivered") {
       ctx.onFailed(`prepare: ${result}`);

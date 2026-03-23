@@ -110,7 +110,7 @@ export function GroupHeader({
           <History size={14} />
         </button>
         {showHistory && selectedSessionId && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
+          <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
             <SessionHistory sessionId={selectedSessionId} />
           </div>
         )}

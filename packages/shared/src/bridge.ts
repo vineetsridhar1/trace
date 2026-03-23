@@ -3,6 +3,8 @@
  * Defines the wire protocol between bridge clients and the server's /bridge WebSocket.
  */
 
+import type { GitCheckpointBridgePayload } from "./git-checkpoint.js";
+
 // --- Server → Bridge commands ---
 
 export interface BridgeRunCommand {
@@ -35,6 +37,7 @@ export interface BridgePrepareCommand {
   repoRemoteUrl: string;
   defaultBranch: string;
   branch?: string;
+  checkpointSha?: string;
 }
 
 export interface BridgeTerminateCommand {
@@ -181,6 +184,12 @@ export interface BridgeToolSessionId {
   toolSessionId: string;
 }
 
+export interface BridgeGitCheckpoint {
+  type: "git_checkpoint";
+  sessionId: string;
+  checkpoint: GitCheckpointBridgePayload;
+}
+
 /** Sent when a device bridge links a new repo (e.g. via saveRepoPath). Updates server-side registeredRepoIds. */
 export interface BridgeRepoLinked {
   type: "repo_linked";
@@ -242,6 +251,7 @@ export type BridgeMessage =
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
   | BridgeToolSessionId
+  | BridgeGitCheckpoint
   | BridgeRepoLinked
   | BridgeBranchesResult
   | BridgeFilesResult

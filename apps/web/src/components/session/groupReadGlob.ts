@@ -15,7 +15,7 @@ export interface BuildSessionNodesResult {
 }
 
 /** Payload types that render as nothing in SessionMessage — these should not break a Read/Glob bucket */
-const INVISIBLE_PAYLOAD_TYPES = new Set(["result"]);
+const INVISIBLE_PAYLOAD_TYPES = new Set(["result", "git_checkpoint"]);
 
 export type SessionNode =
   | { kind: "event"; id: string }
@@ -126,14 +126,22 @@ function extractCommandResult(
       } else {
         const result = asJsonObject(content);
         if (!result) return null;
-        if (typeof result.command === "string" && result.command.trim()) command = result.command;
+        if (typeof result.command === "string" && result.command.trim()) {
+          command = result.command;
+        } else if (typeof result.cmd === "string" && result.cmd.trim()) {
+          command = result.cmd;
+        }
         if (typeof result.output === "string") {
           output = result.output;
         } else {
           const nestedOutput = asJsonObject(result.output);
           if (nestedOutput) output = nestedOutput;
         }
-        if (typeof result.exitCode === "number") exitCode = result.exitCode;
+        if (typeof result.exitCode === "number") {
+          exitCode = result.exitCode;
+        } else if (typeof result.exit_code === "number") {
+          exitCode = result.exit_code;
+        }
       }
     }
   }

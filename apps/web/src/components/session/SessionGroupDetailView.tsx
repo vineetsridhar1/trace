@@ -38,6 +38,17 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       prUrl
       workdir
       worktreeDeleted
+      gitCheckpoints {
+        id
+        sessionId
+        promptEventId
+        commitSha
+        subject
+        author
+        committedAt
+        filesChanged
+        createdAt
+      }
       repo {
         id
         name

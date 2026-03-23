@@ -49,6 +49,7 @@ export async function createWorktree(
   sessionId: string,
   defaultBranch: string,
   branch?: string,
+  checkpointSha?: string,
 ): Promise<{ workdir: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
   const worktreePath = `${WORKSPACES_DIR}/${sessionId}`;
@@ -61,7 +62,7 @@ export async function createWorktree(
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
   const branchName = `trace/${sessionId}`;
-  const baseBranch = `origin/${branch ?? defaultBranch}`;
+  const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
 
   // Check if the branch already exists
   const branchExists = await execFileAsync(
@@ -72,7 +73,7 @@ export async function createWorktree(
   if (branchExists) {
     await execFileAsync("git", ["worktree", "add", worktreePath, branchName], { cwd: repoPath });
   } else {
-    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseBranch], { cwd: repoPath });
+    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
   }
 
   return { workdir: worktreePath };

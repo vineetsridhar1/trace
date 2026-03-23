@@ -36,6 +36,7 @@ export type {
   BridgeWorkspaceReady,
   BridgeWorkspaceFailed,
   BridgeToolSessionId,
+  BridgeGitCheckpoint,
   BridgeRepoLinked,
   BridgeBranchesResult,
   BridgeListFilesCommand,
@@ -48,6 +49,8 @@ export type {
   BridgeTerminalDestroyCommand,
 } from "./bridge.js";
 export { parseBranchOutput, walkDir, handleListFiles, handleReadFile } from "./bridge.js";
+export type { GitCheckpointBridgePayload, GitCheckpointTrigger } from "./git-checkpoint.js";
+export { extractGitCheckpointTrigger } from "./git-checkpoint.js";
 export type {
   LLMRole,
   LLMProvider,

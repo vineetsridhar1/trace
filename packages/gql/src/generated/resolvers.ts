@@ -269,6 +269,27 @@ export type EventType =
   | 'ticket_unlinked'
   | 'ticket_updated';
 
+export type GitCheckpoint = {
+  __typename?: 'GitCheckpoint';
+  author: Scalars['String']['output'];
+  commitSha: Scalars['String']['output'];
+  committedAt: Scalars['DateTime']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  filesChanged: Scalars['Int']['output'];
+  id: Scalars['ID']['output'];
+  parentShas: Array<Scalars['String']['output']>;
+  promptEvent?: Maybe<Event>;
+  promptEventId: Scalars['ID']['output'];
+  repo?: Maybe<Repo>;
+  repoId: Scalars['ID']['output'];
+  session?: Maybe<Session>;
+  sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupId: Scalars['ID']['output'];
+  sessionId: Scalars['ID']['output'];
+  subject: Scalars['String']['output'];
+  treeSha: Scalars['String']['output'];
+};
+
 export type HostingMode =
   | 'cloud'
   | 'local';
@@ -1026,6 +1047,7 @@ export type Session = {
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   endpoints?: Maybe<SessionEndpoints>;
+  gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
   model?: Maybe<Scalars['String']['output']>;
@@ -1081,6 +1103,7 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars['DateTime']['output'];
+  gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
@@ -1130,6 +1153,7 @@ export type StartSessionInput = {
   projectId?: InputMaybe<Scalars['ID']['input']>;
   prompt?: InputMaybe<Scalars['String']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
+  restoreCheckpointId?: InputMaybe<Scalars['ID']['input']>;
   runtimeInstanceId?: InputMaybe<Scalars['ID']['input']>;
   sessionGroupId?: InputMaybe<Scalars['ID']['input']>;
   sourceSessionId?: InputMaybe<Scalars['ID']['input']>;
@@ -1395,6 +1419,7 @@ export type ResolversTypes = ResolversObject<{
   EntityType: EntityType;
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
+  GitCheckpoint: ResolverTypeWrapper<GitCheckpoint>;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   InboxItem: ResolverTypeWrapper<InboxItem>;
@@ -1468,6 +1493,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars['DateTime']['output'];
   Event: Event;
+  GitCheckpoint: GitCheckpoint;
   ID: Scalars['ID']['output'];
   InboxItem: InboxItem;
   Int: Scalars['Int']['output'];
@@ -1602,6 +1628,27 @@ export type EventResolvers<ContextType = Context, ParentType extends ResolversPa
   scopeId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   scopeType?: Resolver<ResolversTypes['ScopeType'], ParentType, ContextType>;
   timestamp?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type GitCheckpointResolvers<ContextType = Context, ParentType extends ResolversParentTypes['GitCheckpoint'] = ResolversParentTypes['GitCheckpoint']> = ResolversObject<{
+  author?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  commitSha?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  committedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  filesChanged?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  parentShas?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType>;
+  promptEvent?: Resolver<Maybe<ResolversTypes['Event']>, ParentType, ContextType>;
+  promptEventId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
+  repoId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType>;
+  sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  subject?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  treeSha?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1812,6 +1859,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   endpoints?: Resolver<Maybe<ResolversTypes['SessionEndpoints']>, ParentType, ContextType>;
+  gitCheckpoints?: Resolver<Array<ResolversTypes['GitCheckpoint']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -1855,6 +1903,7 @@ export type SessionGroupResolvers<ContextType = Context, ParentType extends Reso
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  gitCheckpoints?: Resolver<Array<ResolversTypes['GitCheckpoint']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -1957,6 +2006,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   CostBudget?: CostBudgetResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   Event?: EventResolvers<ContextType>;
+  GitCheckpoint?: GitCheckpointResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   Message?: MessageResolvers<ContextType>;
