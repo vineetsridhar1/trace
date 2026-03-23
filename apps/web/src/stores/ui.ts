@@ -80,6 +80,19 @@ function persistActiveChatId(chatId: string | null) {
   }
 }
 
+function persistActiveSessionNav(sessionGroupId: string | null, sessionId: string | null) {
+  if (sessionGroupId) {
+    localStorage.setItem("trace:activeSessionGroupId", sessionGroupId);
+  } else {
+    localStorage.removeItem("trace:activeSessionGroupId");
+  }
+  if (sessionId) {
+    localStorage.setItem("trace:activeSessionId", sessionId);
+  } else {
+    localStorage.removeItem("trace:activeSessionId");
+  }
+}
+
 function resolveChannelIdForSessionGroup(
   sessionGroupId: string | null,
   fallback: string | null,
@@ -147,6 +160,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveChannelId: (id) => {
     persistActiveChannelId(id);
+    persistActiveSessionNav(null, null);
     set({
       activePage: "main",
       activeChannelId: id,
@@ -216,6 +230,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       );
     const channelId = resolveChannelIdForSessionGroup(groupId, currentChannelId);
     persistActiveChannelId(channelId);
+    persistActiveSessionNav(groupId, nextSessionId);
     set((state) => ({
       activePage: "main",
       activeChatId: null,
@@ -235,6 +250,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     const currentChannelId = get().activeChannelId;
     const currentSessionGroupId = get().activeSessionGroupId;
     if (id === null) {
+      persistActiveSessionNav(null, null);
       set({
         activeSessionGroupId: null,
         activeSessionId: null,
@@ -250,6 +266,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       resolveChannelIdForSession(id, currentChannelId),
     );
     persistActiveChannelId(channelId);
+    persistActiveSessionNav(sessionGroupId, id);
     set((state) => ({
       activeChannelId: channelId,
       activeSessionGroupId: sessionGroupId,
@@ -277,13 +294,19 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (chatId) get().setActiveChatId(chatId);
     } else {
       const channelId = localStorage.getItem("trace:activeChannelId");
-      if (channelId) get().setActiveChannelId(channelId);
+      const sessionGroupId = localStorage.getItem("trace:activeSessionGroupId");
+      const sessionId = localStorage.getItem("trace:activeSessionId");
+      if (channelId || sessionGroupId) {
+        get()._restoreNav(channelId, sessionGroupId, sessionId, "main", null);
+        pushNav(channelId, sessionGroupId, sessionId);
+      }
     }
   },
 
   _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId) => {
     persistActiveChannelId(channelId);
     if (chatId) persistActiveChatId(chatId);
+    if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
     set((state) => ({
       activePage: page ?? "main",
       activeChannelId: channelId,

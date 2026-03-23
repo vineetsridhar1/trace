@@ -100,6 +100,14 @@ export function useHistorySync() {
       (page === "settings" || page === "inbox" || initialChat)
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
+    const initialSessionGroupId =
+      (page === "settings" || page === "inbox" || initialChat)
+        ? null
+        : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
+    const initialSessionId =
+      (page === "settings" || page === "inbox" || initialChat)
+        ? null
+        : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 
     let path: string;
     if (page === "settings") {
@@ -108,14 +116,14 @@ export function useHistorySync() {
       path = "/inbox";
     } else if (initialChat) {
       path = `/dm/${initialChat}`;
-    } else if (initialChannel && sessionGroupId && sessionId) {
-      path = `/c/${initialChannel}/g/${sessionGroupId}/s/${sessionId}`;
-    } else if (initialChannel && sessionGroupId) {
-      path = `/c/${initialChannel}/g/${sessionGroupId}`;
-    } else if (sessionGroupId && sessionId) {
-      path = `/g/${sessionGroupId}/s/${sessionId}`;
-    } else if (sessionGroupId) {
-      path = `/g/${sessionGroupId}`;
+    } else if (initialChannel && initialSessionGroupId && initialSessionId) {
+      path = `/c/${initialChannel}/g/${initialSessionGroupId}/s/${initialSessionId}`;
+    } else if (initialChannel && initialSessionGroupId) {
+      path = `/c/${initialChannel}/g/${initialSessionGroupId}`;
+    } else if (initialSessionGroupId && initialSessionId) {
+      path = `/g/${initialSessionGroupId}/s/${initialSessionId}`;
+    } else if (initialSessionGroupId) {
+      path = `/g/${initialSessionGroupId}`;
     } else if (initialChannel) {
       path = `/c/${initialChannel}`;
     } else {
@@ -123,12 +131,12 @@ export function useHistorySync() {
     }
 
     history.replaceState(
-      { channelId: initialChannel, sessionGroupId, sessionId, page, chatId: initialChat },
+      { channelId: initialChannel, sessionGroupId: initialSessionGroupId, sessionId: initialSessionId, page, chatId: initialChat },
       "",
       path,
     );
 
-    restoreNav(initialChannel, sessionGroupId, sessionId, page, initialChat);
+    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
