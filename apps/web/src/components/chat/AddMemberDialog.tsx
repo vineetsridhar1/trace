@@ -42,7 +42,8 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
     if (!activeOrgId) return;
     const result = await client.query(ORG_MEMBERS_QUERY, { id: activeOrgId }).toPromise();
     if (result.data?.organization?.members) {
-      setMembers(result.data.organization.members as OrgMember[]);
+      const rawMembers = result.data.organization.members as Array<{ user: OrgMember }>;
+      setMembers(rawMembers.map((m) => m.user));
     }
   }, [activeOrgId]);
 
@@ -94,7 +95,7 @@ export function AddMemberDialog({ chatId }: { chatId: string }) {
                 <img src={member.avatarUrl} alt="" className="h-6 w-6 rounded-full" />
               ) : (
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs">
-                  {member.name[0]}
+                  {member.name[0]?.toUpperCase() ?? "?"}
                 </div>
               )}
               <span>{member.name}</span>
