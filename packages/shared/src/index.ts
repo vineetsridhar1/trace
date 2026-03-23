@@ -50,7 +50,7 @@ export type {
 } from "./bridge.js";
 export { parseBranchOutput, walkDir, handleListFiles, handleReadFile } from "./bridge.js";
 export type { GitCheckpointBridgePayload, GitCheckpointTrigger } from "./git-checkpoint.js";
-export { extractGitCheckpointTrigger } from "./git-checkpoint.js";
+export { extractGitCheckpointTrigger, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput, shortSha } from "./git-checkpoint.js";
 export type {
   LLMRole,
   LLMProvider,

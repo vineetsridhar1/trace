@@ -5,15 +5,13 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter, GitCheckpointBridgePayload, GitCheckpointTrigger } from "@trace/shared";
-import { extractGitCheckpointTrigger, parseBranchOutput, handleListFiles, handleReadFile } from "@trace/shared";
+import { extractGitCheckpointTrigger, parseBranchOutput, handleListFiles, handleReadFile, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
 const execFileAsync = promisify(execFile);
-const GIT_SHOW_ARGS = ["show", "-s", "--format=%H%n%P%n%T%n%s%n%an <%ae>%n%cI", "HEAD"];
-const GIT_DIFF_TREE_ARGS = ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD"];
 
 async function inspectGitCheckpoint(
   cwd: string,
@@ -21,29 +19,10 @@ async function inspectGitCheckpoint(
   command: string,
 ): Promise<GitCheckpointBridgePayload> {
   const [{ stdout: showStdout }, { stdout: diffStdout }] = await Promise.all([
-    execFileAsync("git", GIT_SHOW_ARGS, { cwd, maxBuffer: 1024 * 1024 }),
-    execFileAsync("git", GIT_DIFF_TREE_ARGS, { cwd, maxBuffer: 5 * 1024 * 1024 }),
+    execFileAsync("git", [...GIT_SHOW_ARGS], { cwd, maxBuffer: 1024 * 1024 }),
+    execFileAsync("git", [...GIT_DIFF_TREE_ARGS], { cwd, maxBuffer: 5 * 1024 * 1024 }),
   ]);
-
-  const [commitSha = "", parents = "", treeSha = "", subject = "", author = "", committedAt = ""] =
-    showStdout.trimEnd().split("\n");
-
-  if (!commitSha || !treeSha || !committedAt) {
-    throw new Error("Incomplete git checkpoint metadata");
-  }
-
-  return {
-    trigger,
-    command,
-    observedAt: new Date().toISOString(),
-    commitSha,
-    parentShas: parents ? parents.split(" ").filter(Boolean) : [],
-    treeSha,
-    subject,
-    author,
-    committedAt,
-    filesChanged: diffStdout.split("\n").filter(Boolean).length,
-  };
+  return parseGitShowOutput(showStdout, diffStdout, trigger, command, new Date().toISOString());
 }
 
 /**

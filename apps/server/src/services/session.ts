@@ -1757,7 +1757,12 @@ export class SessionService {
     });
   }
 
-  async recordGitCheckpoint(sessionId: string, rawCheckpoint: Record<string, unknown>) {
+  async recordGitCheckpoint(sessionId: string, checkpoint: GitCheckpointBridgePayload) {
+    if (Number.isNaN(new Date(checkpoint.committedAt).getTime())) {
+      console.warn(`[checkpoint] invalid committedAt for session ${sessionId}: ${checkpoint.committedAt}`);
+      return;
+    }
+
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: {
@@ -1768,9 +1773,6 @@ export class SessionService {
       },
     });
     if (!session?.sessionGroupId || !session.repoId) return;
-
-    const checkpoint = this.parseGitCheckpointPayload(rawCheckpoint);
-    if (!checkpoint) return;
 
     const existing = await prisma.gitCheckpoint.findUnique({
       where: {
@@ -2549,78 +2551,30 @@ export class SessionService {
     return defaultConnection(raw as Partial<SessionConnectionData>);
   }
 
-  private parseGitCheckpointPayload(raw: Record<string, unknown>): GitCheckpointBridgePayload | null {
-    const commitSha = typeof raw.commitSha === "string" ? raw.commitSha.trim() : "";
-    const treeSha = typeof raw.treeSha === "string" ? raw.treeSha.trim() : "";
-    const subject = typeof raw.subject === "string" ? raw.subject.trim() : "";
-    const author = typeof raw.author === "string" ? raw.author.trim() : "";
-    const committedAt = typeof raw.committedAt === "string" ? raw.committedAt : "";
-    const observedAt = typeof raw.observedAt === "string" ? raw.observedAt : new Date().toISOString();
-    const filesChanged = typeof raw.filesChanged === "number" ? raw.filesChanged : NaN;
-    const parentShas = Array.isArray(raw.parentShas)
-      ? raw.parentShas.filter((value): value is string => typeof value === "string")
-      : [];
-    const trigger = raw.trigger;
-    const command = raw.command;
-
-    if (
-      !commitSha
-      || !treeSha
-      || !subject
-      || !author
-      || Number.isNaN(new Date(committedAt).getTime())
-      || Number.isNaN(new Date(observedAt).getTime())
-      || Number.isNaN(filesChanged)
-      || (trigger !== "commit" && trigger !== "push" && trigger !== "commit_and_push")
-      || typeof command !== "string"
-    ) {
+  private async findPromptEventIdForCheckpoint(sessionId: string, observedAt: string) {
+    const observedDate = new Date(observedAt);
+    if (Number.isNaN(observedDate.getTime())) {
+      console.warn(`[checkpoint] invalid observedAt for session ${sessionId}: ${observedAt}`);
       return null;
     }
 
-    return {
-      trigger,
-      command,
-      observedAt,
-      commitSha,
-      parentShas,
-      treeSha,
-      subject,
-      author,
-      committedAt,
-      filesChanged,
-    };
-  }
-
-  private async findPromptEventIdForCheckpoint(sessionId: string, observedAt: string) {
-    const observedDate = new Date(observedAt);
-    const promptWhere: Prisma.EventWhereInput = {
-      scopeId: sessionId,
-      scopeType: "session",
-      eventType: { in: ["session_started", "message_sent"] },
-    };
-
-    if (!Number.isNaN(observedDate.getTime())) {
-      promptWhere.timestamp = { lte: observedDate };
-    }
-
     const latestPrompt = await prisma.event.findFirst({
-      where: promptWhere,
-      orderBy: { timestamp: "desc" },
-      select: { id: true },
-    });
-    if (latestPrompt) return latestPrompt.id;
-
-    const fallbackPrompt = await prisma.event.findFirst({
       where: {
         scopeId: sessionId,
         scopeType: "session",
         eventType: { in: ["session_started", "message_sent"] },
+        timestamp: { lte: observedDate },
       },
-      orderBy: { timestamp: "asc" },
+      orderBy: { timestamp: "desc" },
       select: { id: true },
     });
 
-    return fallbackPrompt?.id ?? null;
+    if (!latestPrompt) {
+      console.warn(`[checkpoint] no prompt event found before ${observedAt} for session ${sessionId}`);
+      return null;
+    }
+
+    return latestPrompt.id;
   }
 
   private async syncGroupWorkspaceState(

@@ -175,7 +175,7 @@ export function handleBridgeConnection(ws: WebSocket) {
         enqueueEvent(msg.sessionId, async () => {
           await sessionService.recordGitCheckpoint(
             msg.sessionId as string,
-            msg.checkpoint as Record<string, unknown>,
+            msg.checkpoint,
           );
         });
       }

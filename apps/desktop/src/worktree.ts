@@ -63,6 +63,14 @@ export async function createWorktree({
   // Fetch latest so origin refs are up to date
   if (!checkpointSha) {
     await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+  } else {
+    // Verify the checkpoint SHA is reachable locally; fetch if not
+    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], { cwd: repoPath })
+      .then(() => true)
+      .catch(() => false);
+    if (!reachable) {
+      await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+    }
   }
 
   // Resolve base branch with fallback chain (remote → local → default)
