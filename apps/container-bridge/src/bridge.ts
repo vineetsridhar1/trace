@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import os from "os";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { parseBranchOutput } from "@trace/shared";
@@ -190,7 +191,7 @@ export class ContainerBridge implements IBridgeClient {
         this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt ?? "",
-          cwd: cmd.cwd ?? "/workspace",
+          cwd: cmd.cwd ?? os.homedir(),
           tool: cmd.tool,
           model: cmd.model,
           interactionMode: cmd.interactionMode,
@@ -282,7 +283,7 @@ export class ContainerBridge implements IBridgeClient {
 
       case "terminal_create": {
         const { terminalId, sessionId, cols, rows, cwd } = cmd;
-        const workdir = cwd || this.sessionWorkdirs.get(sessionId) || "/workspace";
+        const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();
         try {
           this.terminalManager.create(terminalId, sessionId, workdir, cols, rows);
           this.send({ type: "terminal_ready", terminalId });

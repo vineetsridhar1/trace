@@ -129,8 +129,9 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
               branch: options.branch,
             });
           } else {
-            // No repo — signal workspace_ready so session transitions to pending
-            ctx.onWorkspaceReady("/workspace");
+            // No repo — signal workspace_ready with home directory so session transitions to pending
+            // Must match USER in apps/container-bridge/Dockerfile (currently "coder")
+            ctx.onWorkspaceReady("/home/coder");
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
