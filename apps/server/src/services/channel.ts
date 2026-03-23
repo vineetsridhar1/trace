@@ -38,7 +38,7 @@ export class ChannelService {
 
       const channelType = input.type ?? "coding";
       if (channelType === "coding" && !input.repoId) {
-        throw new Error("Coding channels require a linked repository");
+        throw new Error("repoId is required for coding channels");
       }
       let repoName: string | null = null;
       if (input.repoId) {

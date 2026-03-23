@@ -39,8 +39,10 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [mode, setMode] = useState<InteractionMode>("code");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const channelRepo = useEntityField("channels", channelId, "repo") as { id: string; name: string } | null | undefined;
-  const channelRepoId = channelRepo?.id ?? undefined;
+  const channelRepoRaw = useEntityField("channels", channelId, "repo");
+  const channelRepoId = channelRepoRaw && typeof channelRepoRaw === "object" && "id" in channelRepoRaw
+    ? (channelRepoRaw as { id: string }).id
+    : undefined;
   const isMobile = useIsMobile();
 
   const cycleMode = useCallback(() => {

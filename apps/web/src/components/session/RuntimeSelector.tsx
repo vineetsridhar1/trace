@@ -57,7 +57,7 @@ export function RuntimeSelector({ tool, open, value, onChange, channelRepoId }: 
         }
       })
       .finally(() => setLoading(false));
-  }, [open, tool]); // eslint-disable-line react-hooks/exhaustive-deps -- value is only used for stale-check, not as a trigger
+  }, [open, tool, channelRepoId]); // eslint-disable-line react-hooks/exhaustive-deps -- value is only used for stale-check, not as a trigger
 
   const connectedRuntimes = runtimes.filter((r) => r.connected);
   const selectedRuntime = value === CLOUD_RUNTIME_ID ? null : runtimes.find((r) => r.id === value);
