@@ -63,8 +63,8 @@ export class TerminalSocket {
       try {
         const msg = JSON.parse(event.data as string) as TerminalSocketEvent;
 
-        // "Terminal not found" means the server no longer has this terminal — don't reconnect
-        if (msg.type === "error" && msg.message === "Terminal not found") {
+        // Fatal errors — don't reconnect when the terminal is gone or auth fails
+        if (msg.type === "error" && (msg.message === "Terminal not found" || msg.message === "Access denied")) {
           this.closed = true;
         }
 

@@ -20,8 +20,6 @@ import { prisma } from "./db.js";
  */
 /** Interval between server→client pings to keep the WebSocket alive. */
 const PING_INTERVAL_MS = 30_000;
-/** If the client doesn't respond to a ping within this window, close the connection. */
-const PONG_TIMEOUT_MS = 10_000;
 
 export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie?: string }; url?: string }) {
   let attachedTerminalId: string | null = null;
