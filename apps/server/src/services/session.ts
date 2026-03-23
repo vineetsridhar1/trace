@@ -835,6 +835,15 @@ export class SessionService {
     // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
     if (sessions.length === 0) {
       await prisma.sessionGroup.delete({ where: { id: groupId } });
+      await eventService.create({
+        organizationId: group.organizationId,
+        scopeType: "session",
+        scopeId: groupId,
+        eventType: "session_deleted",
+        payload: { deletedSessionGroupId: groupId },
+        actorType,
+        actorId,
+      });
     }
 
     return true;
