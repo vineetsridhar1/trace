@@ -92,8 +92,12 @@ export function useHistorySync() {
     const { channelId, sessionGroupId, sessionId, chatId, page } = parseNavFromPath(
       window.location.pathname,
     );
+    const initialChat =
+      (page === "settings" || page === "inbox" || channelId)
+        ? null
+        : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      (page === "settings" || page === "inbox" || chatId)
+      (page === "settings" || page === "inbox" || initialChat)
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
 
@@ -102,8 +106,8 @@ export function useHistorySync() {
       path = "/settings";
     } else if (page === "inbox") {
       path = "/inbox";
-    } else if (chatId) {
-      path = `/dm/${chatId}`;
+    } else if (initialChat) {
+      path = `/dm/${initialChat}`;
     } else if (initialChannel && sessionGroupId && sessionId) {
       path = `/c/${initialChannel}/g/${sessionGroupId}/s/${sessionId}`;
     } else if (initialChannel && sessionGroupId) {
@@ -119,12 +123,12 @@ export function useHistorySync() {
     }
 
     history.replaceState(
-      { channelId: initialChannel, sessionGroupId, sessionId, page, chatId },
+      { channelId: initialChannel, sessionGroupId, sessionId, page, chatId: initialChat },
       "",
       path,
     );
 
-    restoreNav(initialChannel, sessionGroupId, sessionId, page, chatId);
+    restoreNav(initialChannel, sessionGroupId, sessionId, page, initialChat);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {

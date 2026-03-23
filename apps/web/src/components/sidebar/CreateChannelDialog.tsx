@@ -3,6 +3,7 @@ import { Plus, Code, MessageSquare, FolderPlus } from "lucide-react";
 import type { ChannelType } from "@trace/gql";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useAuthStore } from "../../stores/auth";
+import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import {
@@ -93,9 +94,11 @@ export function CreateChannelDialog({
         .toPromise();
 
       if (result.data?.createChannel) {
+        const newChannelId = result.data.createChannel.id as string;
         setName("");
         setChannelType("coding");
         setOpen(false);
+        useUIStore.getState().setActiveChannelId(newChannelId);
       }
     } finally {
       setCreating(false);

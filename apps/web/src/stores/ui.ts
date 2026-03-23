@@ -22,6 +22,7 @@ interface UIState {
   refreshTick: number;
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
+  restoreLastVisited: (tab: "dm" | "main") => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -68,6 +69,14 @@ function persistActiveChannelId(channelId: string | null) {
     localStorage.setItem("trace:activeChannelId", channelId);
   } else {
     localStorage.removeItem("trace:activeChannelId");
+  }
+}
+
+function persistActiveChatId(chatId: string | null) {
+  if (chatId) {
+    localStorage.setItem("trace:activeChatId", chatId);
+  } else {
+    localStorage.removeItem("trace:activeChatId");
   }
 }
 
@@ -166,6 +175,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setActiveChatId: (id) => {
+    persistActiveChatId(id);
     set((s) => {
       let unreadChatIds = s.unreadChatIds;
       if (id && unreadChatIds[id]) {
@@ -261,8 +271,19 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ activeThreadId: id });
   },
 
+  restoreLastVisited: (tab) => {
+    if (tab === "dm") {
+      const chatId = localStorage.getItem("trace:activeChatId");
+      if (chatId) get().setActiveChatId(chatId);
+    } else {
+      const channelId = localStorage.getItem("trace:activeChannelId");
+      if (channelId) get().setActiveChannelId(channelId);
+    }
+  },
+
   _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId) => {
     persistActiveChannelId(channelId);
+    if (chatId) persistActiveChatId(chatId);
     set((state) => ({
       activePage: page ?? "main",
       activeChannelId: channelId,

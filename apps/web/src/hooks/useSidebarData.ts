@@ -154,6 +154,15 @@ export function useSidebarData() {
     },
   );
 
+  useEffect(() => {
+    if (channelsLoading) return;
+    const { activeChannelId, activeChatId, activePage } = useUIStore.getState();
+    if (activeChannelId || activeChatId || activePage !== "main") return;
+    if (allChannelIds.length > 0) {
+      useUIStore.getState().setActiveChannelId(allChannelIds[0]);
+    }
+  }, [channelsLoading, allChannelIds]);
+
   const groupIds = useEntityIds(
     "channelGroups",
     undefined,
