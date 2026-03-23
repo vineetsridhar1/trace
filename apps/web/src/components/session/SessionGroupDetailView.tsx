@@ -348,7 +348,7 @@ export function SessionGroupDetailView({
 
   return (
     <FileOpenContext.Provider value={handleFileClick}>
-    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-full flex-col overflow-hidden">
       <GroupHeader
         groupName={groupName as string | undefined}
         selectedStatus={selectedStatus}
@@ -408,7 +408,7 @@ export function SessionGroupDetailView({
           )}
         </div>
       </div>
-    </div>
+      </div>
     </FileOpenContext.Provider>
   );
 }
