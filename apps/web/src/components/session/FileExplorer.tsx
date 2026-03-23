@@ -32,6 +32,8 @@ interface FileTreeNode {
 
 function buildTree(files: string[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
+  // Map path → node for O(1) lookups instead of O(n) find per segment
+  const nodeMap = new Map<string, FileTreeNode>();
 
   for (const filePath of files) {
     const parts = filePath.split("/");
@@ -40,11 +42,13 @@ function buildTree(files: string[]): FileTreeNode[] {
     for (let i = 0; i < parts.length; i++) {
       const name = parts[i];
       const isLast = i === parts.length - 1;
-      const path = parts.slice(0, i + 1).join("/");
+      const nodePath = parts.slice(0, i + 1).join("/");
+      const key = isLast ? `f:${nodePath}` : `d:${nodePath}`;
 
-      let existing = current.find((n) => n.name === name && n.isDirectory === !isLast);
+      let existing = nodeMap.get(key);
       if (!existing) {
-        existing = { name, path, isDirectory: !isLast, children: [] };
+        existing = { name, path: nodePath, isDirectory: !isLast, children: [] };
+        nodeMap.set(key, existing);
         current.push(existing);
       }
       current = existing.children;
@@ -259,21 +263,10 @@ export function FileExplorer({
 
   const tree = useMemo(() => buildTree(files), [files]);
 
-  // Auto-expand single-child directories on initial load
+  // Auto-expand first level + single-child directory chains on initial load
   useEffect(() => {
     if (tree.length === 0) return;
     const autoExpand = new Set<string>();
-    const walk = (nodes: FileTreeNode[]) => {
-      for (const node of nodes) {
-        if (node.isDirectory) {
-          autoExpand.add(node.path);
-          if (node.children.length <= 3) {
-            walk(node.children);
-          }
-        }
-      }
-    };
-    // Only expand first level + single-child paths
     for (const node of tree) {
       if (node.isDirectory) {
         autoExpand.add(node.path);

@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
-import { parseBranchOutput } from "@trace/shared";
+import { parseBranchOutput, walkDir } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
@@ -12,25 +12,6 @@ import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
-
-const WALK_IGNORE = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".venv", "vendor", ".cache", "coverage"]);
-
-async function walkDir(root: string, dir: string, maxDepth: number): Promise<string[]> {
-  if (maxDepth <= 0) return [];
-  const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-  const results: string[] = [];
-  for (const entry of entries) {
-    if (WALK_IGNORE.has(entry.name) || entry.name.startsWith(".DS_Store")) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const sub = await walkDir(root, full, maxDepth - 1);
-      results.push(...sub);
-    } else if (entry.isFile()) {
-      results.push(path.relative(root, full));
-    }
-  }
-  return results;
-}
 
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -355,7 +336,7 @@ export class BridgeClient implements IBridgeClient {
         }
         execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
           if (err) {
-            walkDir(workdir, workdir, 6).then(
+            walkDir(workdir, workdir, 6, fs, path).then(
               (files) => this.send({ type: "files_result", requestId, files }),
               (walkErr) => this.send({ type: "files_result", requestId, files: [], error: walkErr.message }),
             );
@@ -373,7 +354,11 @@ export class BridgeClient implements IBridgeClient {
           this.send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
           break;
         }
-        const fullPath = path.join(workdir, relativePath);
+        const fullPath = path.resolve(workdir, relativePath);
+        if (!fullPath.startsWith(workdir + path.sep) && fullPath !== workdir) {
+          this.send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
+          break;
+        }
         fs.readFile(fullPath, "utf-8", (err, content) => {
           if (err) {
             this.send({ type: "file_content_result", requestId, content: "", error: err.message });

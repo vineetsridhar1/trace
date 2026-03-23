@@ -264,6 +264,36 @@ export function parseBranchOutput(stdout: string): string[] {
   return [...new Set(branches)];
 }
 
+/** Directories to skip when walking a filesystem tree. */
+export const WALK_IGNORE = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".venv", "vendor", ".cache", "coverage"]);
+
+/**
+ * Recursively walk a directory, returning relative file paths.
+ * Requires Node `fs` and `path` — only usable in bridge/server contexts, not browser.
+ */
+export async function walkDir(
+  root: string,
+  dir: string,
+  maxDepth: number,
+  fsModule: { promises: { readdir: (p: string, opts: { withFileTypes: true }) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>> } },
+  pathModule: { join: (...p: string[]) => string; relative: (from: string, to: string) => string },
+): Promise<string[]> {
+  if (maxDepth <= 0) return [];
+  const entries = await fsModule.promises.readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    if (WALK_IGNORE.has(entry.name) || entry.name.startsWith(".DS_Store")) continue;
+    const full = pathModule.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = await walkDir(root, full, maxDepth - 1, fsModule, pathModule);
+      results.push(...sub);
+    } else if (entry.isFile()) {
+      results.push(pathModule.relative(root, full));
+    }
+  }
+  return results;
+}
+
 // --- Bridge client interface ---
 
 /** Common interface for all bridge implementations (desktop, cloud container). */

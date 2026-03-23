@@ -336,10 +336,8 @@ export function SessionGroupDetailView({
 
   const handleCloseFile = useCallback((filePath: string) => {
     setOpenFiles((prev) => prev.filter((f) => f.filePath !== filePath));
-    if (activeFilePath === filePath) {
-      setActiveFilePath(null);
-    }
-  }, [activeFilePath]);
+    setActiveFilePath((prev) => prev === filePath ? null : prev);
+  }, []);
 
   const handleSelectSession = useCallback((sessionId: string) => {
     setActiveSessionId(sessionId);
@@ -390,6 +388,7 @@ export function SessionGroupDetailView({
           {activeFilePath ? (
             <div className="h-full">
               <MonacoFileViewer
+                key={activeFilePath}
                 sessionGroupId={sessionGroupId}
                 filePath={activeFilePath}
               />
