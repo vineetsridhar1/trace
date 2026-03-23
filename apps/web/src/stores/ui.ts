@@ -160,7 +160,6 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveChannelId: (id) => {
     persistActiveChannelId(id);
-    persistActiveSessionNav(null, null);
     set({
       activePage: "main",
       activeChannelId: id,
@@ -293,11 +292,30 @@ export const useUIStore = create<UIState>((set, get) => ({
       const chatId = localStorage.getItem("trace:activeChatId");
       if (chatId) get().setActiveChatId(chatId);
     } else {
-      const channelId = localStorage.getItem("trace:activeChannelId");
+      const storedChannelId = localStorage.getItem("trace:activeChannelId");
       const sessionGroupId = localStorage.getItem("trace:activeSessionGroupId");
       const sessionId = localStorage.getItem("trace:activeSessionId");
+      // Resolve channel from session context so it's consistent even if
+      // a plain channel click updated activeChannelId in localStorage
+      const channelId = sessionGroupId
+        ? resolveChannelIdForSessionGroup(sessionGroupId, storedChannelId)
+        : storedChannelId;
       if (channelId || sessionGroupId) {
-        get()._restoreNav(channelId, sessionGroupId, sessionId, "main", null);
+        // Set Zustand state directly — don't re-persist to localStorage
+        // since we're reading from it and don't want cross-tab clearing
+        set((state) => ({
+          activePage: "main" as ActivePage,
+          activeChannelId: channelId,
+          activeSessionGroupId: sessionGroupId,
+          activeSessionId: sessionId,
+          activeTerminalId: null,
+          activeChatId: null,
+          activeThreadId: null,
+          lastSelectedSessionIdsByGroup:
+            sessionGroupId && sessionId
+              ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
+              : state.lastSelectedSessionIdsByGroup,
+        }));
         pushNav(channelId, sessionGroupId, sessionId);
       }
     }
