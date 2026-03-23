@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import os from "os";
+import fs from "fs";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
 import { parseBranchOutput } from "@trace/shared";
@@ -299,6 +300,18 @@ export class ContainerBridge implements IBridgeClient {
           }
           const files = stdout.split("\n").filter(Boolean);
           this.send({ type: "files_result", requestId, files });
+        });
+        break;
+      }
+
+      case "read_file": {
+        const { requestId, filePath } = cmd;
+        fs.readFile(filePath, "utf-8", (err, content) => {
+          if (err) {
+            this.send({ type: "file_content_result", requestId, content: "", error: err.message });
+            return;
+          }
+          this.send({ type: "file_content_result", requestId, content });
         });
         break;
       }

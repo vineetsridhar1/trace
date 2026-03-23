@@ -54,6 +54,14 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.listFiles(args.sessionGroupId, orgId);
   },
+  sessionGroupFileContent: (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.readFile(args.sessionGroupId, args.filePath, orgId);
+  },
 };
 
 export const sessionMutations = {

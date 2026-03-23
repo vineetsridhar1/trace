@@ -153,11 +153,13 @@ function FileTreeItem({
   depth,
   expandedPaths,
   onToggle,
+  onFileClick,
 }: {
   node: FileTreeNode;
   depth: number;
   expandedPaths: Set<string>;
   onToggle: (path: string) => void;
+  onFileClick: (path: string) => void;
 }) {
   const isExpanded = expandedPaths.has(node.path);
   const Icon = node.isDirectory
@@ -171,10 +173,16 @@ function FileTreeItem({
     <>
       <button
         type="button"
-        onClick={() => node.isDirectory && onToggle(node.path)}
+        onClick={() => {
+          if (node.isDirectory) {
+            onToggle(node.path);
+          } else {
+            onFileClick(node.path);
+          }
+        }}
         className={cn(
           "flex w-full items-center gap-1 py-[1px] pr-2 text-left text-[13px] leading-[22px] hover:bg-[#2a2d2e]",
-          node.isDirectory ? "cursor-pointer" : "cursor-default",
+          "cursor-pointer",
         )}
         style={{ paddingLeft: `${depth * 8 + 4}px` }}
       >
@@ -197,6 +205,7 @@ function FileTreeItem({
               depth={depth + 1}
               expandedPaths={expandedPaths}
               onToggle={onToggle}
+              onFileClick={onFileClick}
             />
           ))}
           {node.children.length === 0 && (
@@ -213,7 +222,13 @@ function FileTreeItem({
   );
 }
 
-export function FileExplorer({ sessionGroupId }: { sessionGroupId: string }) {
+export function FileExplorer({
+  sessionGroupId,
+  onFileClick,
+}: {
+  sessionGroupId: string;
+  onFileClick: (filePath: string) => void;
+}) {
   const [files, setFiles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -337,6 +352,7 @@ export function FileExplorer({ sessionGroupId }: { sessionGroupId: string }) {
             depth={0}
             expandedPaths={expandedPaths}
             onToggle={handleToggle}
+            onFileClick={onFileClick}
           />
         ))}
       </div>

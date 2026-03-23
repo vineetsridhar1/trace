@@ -2165,6 +2165,39 @@ export class SessionService {
     return sessionRouter.listFiles(runtimeId, group.workdir);
   }
 
+  /** Read a file's content from a session group's working directory. */
+  async readFile(
+    sessionGroupId: string,
+    filePath: string,
+    organizationId: string,
+  ): Promise<string> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, workdir: true },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (!group.workdir) throw new Error("Session group has no working directory");
+
+    // Prevent path traversal — filePath must be relative and stay within workdir
+    if (filePath.startsWith("/") || filePath.includes("..")) {
+      throw new Error("Invalid file path");
+    }
+
+    const absolutePath = `${group.workdir}/${filePath}`;
+
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true },
+    });
+    let runtimeId: string | undefined;
+    for (const session of sessions) {
+      const rt = sessionRouter.getRuntimeForSession(session.id);
+      if (rt) { runtimeId = rt.id; break; }
+    }
+    if (!runtimeId) throw new Error("No connected runtime available for this session group");
+    return sessionRouter.readFile(runtimeId, absolutePath);
+  }
+
   // ─── Helpers ───
 
   /**

@@ -2,7 +2,7 @@ import type WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
-import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand } from "@trace/shared";
+import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -17,6 +17,7 @@ interface BaseSessionCommand {
 export type SessionCommand =
   | BaseSessionCommand
   | BridgeListFilesCommand
+  | BridgeReadFileCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -238,6 +239,8 @@ export class SessionRouter {
   private pendingBranchRequests = new Map<string, { resolve: (branches: string[]) => void; reject: (err: Error) => void }>();
   /** Pending file list requests: requestId → resolve/reject */
   private pendingFileRequests = new Map<string, { resolve: (files: string[]) => void; reject: (err: Error) => void }>();
+  /** Pending file content requests: requestId → resolve/reject */
+  private pendingFileContentRequests = new Map<string, { resolve: (content: string) => void; reject: (err: Error) => void }>();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -622,6 +625,42 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(files);
+    }
+  }
+
+  /**
+   * Ask a runtime to read a file's contents.
+   * Returns a promise that resolves when the bridge responds with file_content_result.
+   */
+  readFile(runtimeId: string, filePath: string, timeoutMs = 15_000): Promise<string> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, { type: "read_file", requestId, filePath });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFileContentRequests.delete(requestId);
+        reject(new Error("File read request timed out"));
+      }, timeoutMs);
+
+      this.pendingFileContentRequests.set(requestId, {
+        resolve: (content) => { clearTimeout(timer); resolve(content); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+    });
+  }
+
+  /** Resolve a pending file content request (called from bridge handler). */
+  resolveFileContentRequest(requestId: string, content: string, error?: string): void {
+    const pending = this.pendingFileContentRequests.get(requestId);
+    if (!pending) return;
+    this.pendingFileContentRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(content);
     }
   }
 

@@ -1,8 +1,13 @@
-import { Circle, TerminalSquare, X } from "lucide-react";
+import { Circle, FileCode, TerminalSquare, X } from "lucide-react";
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
 import { getDisplayStatus, statusColor } from "./sessionStatus";
+
+export interface OpenFileTab {
+  filePath: string;
+  fileName: string;
+}
 
 interface GroupTabStripProps {
   sessionTabs: SessionEntity[];
@@ -10,9 +15,13 @@ interface GroupTabStripProps {
   groupSessions: SessionEntity[];
   selectedSessionId: string | null;
   activeTerminalId: string | null;
+  openFiles: OpenFileTab[];
+  activeFilePath: string | null;
   onSelectSession: (sessionId: string) => void;
   onSelectTerminal: (sessionId: string | null, terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
+  onSelectFile: (filePath: string) => void;
+  onCloseFile: (filePath: string) => void;
 }
 
 export function GroupTabStrip({
@@ -21,9 +30,13 @@ export function GroupTabStrip({
   groupSessions,
   selectedSessionId,
   activeTerminalId,
+  openFiles,
+  activeFilePath,
   onSelectSession,
   onSelectTerminal,
   onCloseTerminal,
+  onSelectFile,
+  onCloseFile,
 }: GroupTabStripProps) {
   return (
     <div className="shrink-0 border-b border-border bg-surface px-2 pt-1 pb-0">
@@ -37,7 +50,7 @@ export function GroupTabStrip({
                 onClick={() => onSelectSession(session.id)}
                 className={cn(
                   "inline-flex max-w-[220px] shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
-                  !activeTerminalId && selectedSessionId === session.id
+                  !activeTerminalId && !activeFilePath && selectedSessionId === session.id
                     ? "bg-surface-elevated text-foreground"
                     : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
                 )}
@@ -80,6 +93,35 @@ export function GroupTabStrip({
               </div>
             );
           })}
+
+          {openFiles.map((file) => (
+            <div
+              key={file.filePath}
+              className={cn(
+                "inline-flex max-w-[260px] shrink-0 items-center rounded-md text-xs transition-colors",
+                activeFilePath === file.filePath
+                  ? "bg-surface-elevated text-foreground"
+                  : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onSelectFile(file.filePath)}
+                className="inline-flex min-w-0 items-center gap-2 px-3 py-1.5"
+              >
+                <FileCode size={12} />
+                <span className="truncate">{file.fileName}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onCloseFile(file.filePath)}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:opacity-100"
+                title="Close file tab"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

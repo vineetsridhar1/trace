@@ -16,9 +16,11 @@ import { useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
+import type { OpenFileTab } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import { FileExplorer } from "./FileExplorer";
+import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
   getSessionGroupDisplayStatus,
   isTerminalStatus,
@@ -124,6 +126,8 @@ export function SessionGroupDetailView({
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
   const [showFiles, setShowFiles] = useState(false);
+  const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
@@ -310,9 +314,38 @@ export function SessionGroupDetailView({
     (sessionId: string | null, terminalId: string) => {
       if (sessionId) setActiveSessionId(sessionId);
       setActiveTerminalId(terminalId);
+      setActiveFilePath(null);
     },
     [setActiveSessionId, setActiveTerminalId],
   );
+
+  const handleFileClick = useCallback((filePath: string) => {
+    setOpenFiles((prev) => {
+      if (prev.some((f) => f.filePath === filePath)) return prev;
+      const fileName = filePath.split("/").pop() ?? filePath;
+      return [...prev, { filePath, fileName }];
+    });
+    setActiveFilePath(filePath);
+    setActiveTerminalId(null);
+  }, [setActiveTerminalId]);
+
+  const handleSelectFile = useCallback((filePath: string) => {
+    setActiveFilePath(filePath);
+    setActiveTerminalId(null);
+  }, [setActiveTerminalId]);
+
+  const handleCloseFile = useCallback((filePath: string) => {
+    setOpenFiles((prev) => prev.filter((f) => f.filePath !== filePath));
+    if (activeFilePath === filePath) {
+      setActiveFilePath(null);
+    }
+  }, [activeFilePath]);
+
+  const handleSelectSession = useCallback((sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setActiveTerminalId(null);
+    setActiveFilePath(null);
+  }, [setActiveSessionId, setActiveTerminalId]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -338,19 +371,30 @@ export function SessionGroupDetailView({
         groupSessions={groupSessions}
         selectedSessionId={selectedSession?.id ?? null}
         activeTerminalId={activeTerminalId}
-        onSelectSession={setActiveSessionId}
+        openFiles={openFiles}
+        activeFilePath={activeFilePath}
+        onSelectSession={handleSelectSession}
         onSelectTerminal={handleSelectTerminal}
         onCloseTerminal={handleCloseTerminal}
+        onSelectFile={handleSelectFile}
+        onCloseFile={handleCloseFile}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {showFiles && (
           <div className="h-full w-[260px] shrink-0 border-r border-[#2d2d2d]">
-            <FileExplorer sessionGroupId={sessionGroupId} />
+            <FileExplorer sessionGroupId={sessionGroupId} onFileClick={handleFileClick} />
           </div>
         )}
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          {activeTerminal ? (
+          {activeFilePath ? (
+            <div className="h-full">
+              <MonacoFileViewer
+                sessionGroupId={sessionGroupId}
+                filePath={activeFilePath}
+              />
+            </div>
+          ) : activeTerminal ? (
             <div className="h-full bg-[#0a0a0a]">
               <TerminalInstance terminalId={activeTerminal.id} visible />
             </div>
