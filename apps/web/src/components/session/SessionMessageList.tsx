@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Loader2 } from "lucide-react";
+import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
 import { ReadGlobGroup } from "./messages/ReadGlobGroup";
 import { PlanReviewCard } from "./messages/PlanReviewCard";
@@ -9,6 +10,7 @@ import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 
 interface SessionMessageListProps {
   nodes: SessionNode[];
+  gitCheckpoints: GitCheckpoint[];
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
@@ -17,6 +19,7 @@ interface SessionMessageListProps {
 
 export function SessionMessageList({
   nodes,
+  gitCheckpoints,
   hasOlder,
   loadingOlder,
   onLoadOlder,
@@ -30,6 +33,18 @@ export function SessionMessageList({
   const wasLoadingOlderRef = useRef(false);
   const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
+  const gitCheckpointsByPromptEventId = useMemo(() => {
+    const byPromptEventId = new Map<string, GitCheckpoint[]>();
+    for (const checkpoint of gitCheckpoints) {
+      const existing = byPromptEventId.get(checkpoint.promptEventId) ?? [];
+      existing.push(checkpoint);
+      byPromptEventId.set(checkpoint.promptEventId, existing);
+    }
+    for (const checkpoints of byPromptEventId.values()) {
+      checkpoints.sort((a, b) => a.committedAt.localeCompare(b.committedAt));
+    }
+    return byPromptEventId;
+  }, [gitCheckpoints]);
 
   // Track whether the user is near the bottom via scroll events
   const handleScroll = useCallback(() => {
@@ -138,7 +153,12 @@ export function SessionMessageList({
 
         {nodes.map((node) =>
           node.kind === "event" ? (
-            <SessionMessage key={node.id} id={node.id} completedAgentTools={completedAgentTools} />
+            <SessionMessage
+              key={node.id}
+              id={node.id}
+              gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+              completedAgentTools={completedAgentTools}
+            />
           ) : node.kind === "command-execution" ? (
             <CommandExecutionRow
               key={node.id}

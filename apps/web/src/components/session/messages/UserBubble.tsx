@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { formatTime } from "./utils";
 import { stripPromptWrapping } from "../interactionModes";
 import { useAuthStore } from "../../../stores/auth";
@@ -8,11 +9,13 @@ export function UserBubble({
   timestamp,
   actorId,
   actorName,
+  footer,
 }: {
   text: string;
   timestamp: string;
   actorId?: string;
   actorName?: string | null;
+  footer?: ReactNode;
 }) {
   const currentUserId = useAuthStore((s) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
@@ -29,6 +32,7 @@ export function UserBubble({
         <div className="text-sm leading-relaxed break-words">
           <Markdown>{displayText}</Markdown>
         </div>
+        {footer}
       </div>
     </div>
   );

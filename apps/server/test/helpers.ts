@@ -63,6 +63,7 @@ export function createPrismaMock() {
       create: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
     },
     ticket: {
       create: vi.fn(),
@@ -156,6 +157,11 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+    },
+    gitCheckpoint: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
     },
     sessionProject: {
       create: vi.fn(),

@@ -3,8 +3,9 @@ import os from "os";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
-import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
-import { parseBranchOutput, handleListFiles, handleReadFile } from "@trace/shared";
+import { promisify } from "util";
+import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter, GitCheckpointBridgePayload, GitCheckpointTrigger } from "@trace/shared";
+import { extractGitCheckpointTrigger, parseBranchOutput, handleListFiles, handleReadFile } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
@@ -12,6 +13,40 @@ import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
+const execFileAsync = promisify(execFile);
+const GIT_SHOW_ARGS = ["show", "-s", "--format=%H%n%P%n%T%n%s%n%an <%ae>%n%cI", "HEAD"];
+const GIT_DIFF_TREE_ARGS = ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD"];
+
+async function inspectGitCheckpoint(
+  cwd: string,
+  trigger: GitCheckpointTrigger,
+  command: string,
+): Promise<GitCheckpointBridgePayload> {
+  const [{ stdout: showStdout }, { stdout: diffStdout }] = await Promise.all([
+    execFileAsync("git", GIT_SHOW_ARGS, { cwd, maxBuffer: 1024 * 1024 }),
+    execFileAsync("git", GIT_DIFF_TREE_ARGS, { cwd, maxBuffer: 5 * 1024 * 1024 }),
+  ]);
+
+  const [commitSha = "", parents = "", treeSha = "", subject = "", author = "", committedAt = ""] =
+    showStdout.trimEnd().split("\n");
+
+  if (!commitSha || !treeSha || !committedAt) {
+    throw new Error("Incomplete git checkpoint metadata");
+  }
+
+  return {
+    trigger,
+    command,
+    observedAt: new Date().toISOString(),
+    commitSha,
+    parentShas: parents ? parents.split(" ").filter(Boolean) : [],
+    treeSha,
+    subject,
+    author,
+    committedAt,
+    filesChanged: diffStdout.split("\n").filter(Boolean).length,
+  };
+}
 
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -194,6 +229,17 @@ export class BridgeClient implements IBridgeClient {
       onOutput: (output) => {
         if (this.adapters.get(sessionId) !== activeAdapter) return;
         this.send({ type: "session_output", sessionId, data: output });
+        const gitTrigger = extractGitCheckpointTrigger(output);
+        if (gitTrigger) {
+          inspectGitCheckpoint(workdir, gitTrigger.trigger, gitTrigger.command)
+            .then((checkpoint) => {
+              if (this.adapters.get(sessionId) !== activeAdapter) return;
+              this.send({ type: "git_checkpoint", sessionId, checkpoint });
+            })
+            .catch((err: Error) => {
+              console.warn(`[bridge] failed to inspect git checkpoint for ${sessionId}:`, err.message);
+            });
+        }
         // When the adapter discovers its tool session ID, report it to the server
         // so it can be passed back on retry/resume
         if (adapter.getSessionId) {
@@ -241,7 +287,7 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "prepare": {
-        const { sessionId, repoId, repoName, defaultBranch, branch } = cmd;
+        const { sessionId, repoId, repoName, defaultBranch, branch, checkpointSha } = cmd;
 
         const config = readConfig();
         const repoPath = config.repos[repoId];
@@ -255,7 +301,14 @@ export class BridgeClient implements IBridgeClient {
           break;
         }
 
-        createWorktree({ repoPath, repoId, sessionId, defaultBranch, startBranch: branch })
+        createWorktree({
+          repoPath,
+          repoId,
+          sessionId,
+          defaultBranch,
+          startBranch: branch,
+          checkpointSha,
+        })
           .then(({ workdir, branch: worktreeBranch }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
             this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch });

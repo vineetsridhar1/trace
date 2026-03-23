@@ -111,13 +111,11 @@ export function GroupHeader({
       </div>
 
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-            title="New session or terminal"
-          >
-            <Plus size={16} />
-          </button>
+        <DropdownMenuTrigger
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
+          title="New session or terminal"
+        >
+          <Plus size={16} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
@@ -159,7 +157,7 @@ export function GroupHeader({
           <History size={14} />
         </button>
         {showHistory && selectedSessionId && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
+          <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
             <SessionHistory sessionId={selectedSessionId} />
           </div>
         )}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import createScrollSnap from "scroll-snap";
+import createScrollSnap from "scroll-snap/dist/scroll-snap.esm.js";
 import { clamp } from "../lib/utils";
 import { getTabFromProgress, getTabIndex, type SidebarTab } from "../components/sidebar/sidebarTabs";
 

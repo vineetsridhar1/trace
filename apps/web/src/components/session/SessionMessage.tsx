@@ -1,3 +1,4 @@
+import type { GitCheckpoint } from "@trace/gql";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { useScopedEventField } from "../../stores/entity";
 import { useEventScopeKey } from "./EventScopeContext";
@@ -8,6 +9,7 @@ import { ToolResultRow } from "./messages/ToolResultRow";
 import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
+import { GitCheckpointChips } from "./messages/GitCheckpointChips";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
 
@@ -115,9 +117,11 @@ function renderSessionOutput(
 
 export function SessionMessage({
   id,
+  gitCheckpointsByPromptEventId,
   completedAgentTools,
 }: {
   id: string;
+  gitCheckpointsByPromptEventId: Map<string, GitCheckpoint[]>;
   completedAgentTools: Map<string, AgentToolResult>;
 }) {
   const scopeKey = useEventScopeKey();
@@ -127,6 +131,7 @@ export function SessionMessage({
   const actor = useScopedEventField(scopeKey, id, "actor") as
     | { type: string; id: string; name?: string | null }
     | undefined;
+  const promptGitCheckpoints = gitCheckpointsByPromptEventId.get(id) ?? [];
 
   if (!eventType || !timestamp) return null;
 
@@ -138,6 +143,7 @@ export function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
+          footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       ) : (
         <SystemBadge text="Session started" />
@@ -153,6 +159,7 @@ export function SessionMessage({
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
+          footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );
 

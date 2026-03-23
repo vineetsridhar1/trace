@@ -186,7 +186,7 @@ export function SessionHeader({
             <History size={14} />
           </button>
           {showHistory && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
               <SessionHistory sessionId={sessionId} />
             </div>
           )}

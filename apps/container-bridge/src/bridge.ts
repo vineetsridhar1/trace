@@ -3,12 +3,48 @@ import os from "os";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
-import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
-import { parseBranchOutput, handleListFiles, handleReadFile } from "@trace/shared";
+import { promisify } from "util";
+import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter, GitCheckpointBridgePayload, GitCheckpointTrigger } from "@trace/shared";
+import { extractGitCheckpointTrigger, parseBranchOutput, handleListFiles, handleReadFile } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { ensureRepo, createWorktree, removeWorktree, getRepoPath } from "./workspace.js";
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
+
+const execFileAsync = promisify(execFile);
+const GIT_SHOW_ARGS = ["show", "-s", "--format=%H%n%P%n%T%n%s%n%an <%ae>%n%cI", "HEAD"];
+const GIT_DIFF_TREE_ARGS = ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD"];
+
+async function inspectGitCheckpoint(
+  cwd: string,
+  trigger: GitCheckpointTrigger,
+  command: string,
+): Promise<GitCheckpointBridgePayload> {
+  const [{ stdout: showStdout }, { stdout: diffStdout }] = await Promise.all([
+    execFileAsync("git", GIT_SHOW_ARGS, { cwd, maxBuffer: 1024 * 1024 }),
+    execFileAsync("git", GIT_DIFF_TREE_ARGS, { cwd, maxBuffer: 5 * 1024 * 1024 }),
+  ]);
+
+  const [commitSha = "", parents = "", treeSha = "", subject = "", author = "", committedAt = ""] =
+    showStdout.trimEnd().split("\n");
+
+  if (!commitSha || !treeSha || !committedAt) {
+    throw new Error("Incomplete git checkpoint metadata");
+  }
+
+  return {
+    trigger,
+    command,
+    observedAt: new Date().toISOString(),
+    commitSha,
+    parentShas: parents ? parents.split(" ").filter(Boolean) : [],
+    treeSha,
+    subject,
+    author,
+    committedAt,
+    filesChanged: diffStdout.split("\n").filter(Boolean).length,
+  };
+}
 
 /**
  * Multi-session container bridge — runs inside a Fly Machine (one per user per org).
@@ -207,13 +243,19 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare": {
-        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
+        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha } = cmd;
 
         // Ensure repo is cloned, then create worktree for this session
         (async () => {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
-            const { workdir } = await createWorktree(repoId, sessionId, defaultBranch, branch);
+            const { workdir } = await createWorktree(
+              repoId,
+              sessionId,
+              defaultBranch,
+              branch,
+              checkpointSha,
+            );
             this.sessionWorkdirs.set(sessionId, workdir);
             // Register this session with the server
             this.send({ type: "register_session", sessionId });
@@ -362,6 +404,20 @@ export class ContainerBridge implements IBridgeClient {
       onOutput: (output) => {
         if (this.adapters.get(sessionId) !== activeAdapter) return;
         this.send({ type: "session_output", sessionId, data: output });
+        const gitTrigger = extractGitCheckpointTrigger(output);
+        if (gitTrigger) {
+          inspectGitCheckpoint(cwd, gitTrigger.trigger, gitTrigger.command)
+            .then((checkpoint) => {
+              if (this.adapters.get(sessionId) !== activeAdapter) return;
+              this.send({ type: "git_checkpoint", sessionId, checkpoint });
+            })
+            .catch((err: Error) => {
+              console.warn(
+                `[container-bridge] failed to inspect git checkpoint for ${sessionId}:`,
+                err.message,
+              );
+            });
+        }
         if (adapter.getSessionId) {
           const sid = adapter.getSessionId();
           if (sid && sid !== this.reportedToolSessionIds.get(sessionId)) {

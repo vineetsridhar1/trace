@@ -37,6 +37,7 @@ export async function createWorktree({
   sessionId,
   defaultBranch,
   startBranch,
+  checkpointSha,
 }: {
   repoPath: string;
   repoId: string;
@@ -44,8 +45,11 @@ export async function createWorktree({
   defaultBranch: string;
   /** Branch to base the new worktree on (e.g. from the parent session). Falls back to defaultBranch. */
   startBranch?: string;
+  /** Commit SHA to restore from instead of branching from origin/{startBranch|defaultBranch}. */
+  checkpointSha?: string;
 }): Promise<{ workdir: string; branch: string }> {
   const branch = `trace/${sessionId}`;
+  const baseRef = checkpointSha ?? `origin/${startBranch ?? defaultBranch}`;
   const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
 
   // If the worktree directory already exists, reuse it
@@ -57,7 +61,9 @@ export async function createWorktree({
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
 
   // Fetch latest so origin refs are up to date
-  await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+  if (!checkpointSha) {
+    await execFileAsync("git", ["fetch", "origin"], { cwd: repoPath });
+  }
 
   // Resolve base branch with fallback chain (remote → local → default)
   const baseBranch = await resolveBaseBranch(repoPath, startBranch, defaultBranch);
@@ -75,7 +81,7 @@ export async function createWorktree({
   } else {
     await execFileAsync(
       "git",
-      ["worktree", "add", "-b", branch, targetPath, baseBranch],
+      ["worktree", "add", "-b", branch, targetPath, baseRef],
       { cwd: repoPath },
     );
   }

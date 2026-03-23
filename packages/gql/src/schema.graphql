@@ -243,6 +243,7 @@ type SessionGroup {
   channel: Channel
   repo: Repo
   branch: String
+  gitCheckpoints: [GitCheckpoint!]!
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection
@@ -267,6 +268,7 @@ type Session {
   channel: Channel
   sessionGroupId: ID
   sessionGroup: SessionGroup
+  gitCheckpoints: [GitCheckpoint!]!
   projects: [Project!]!
   tickets: [Ticket!]!
   endpoints: SessionEndpoints
@@ -275,6 +277,26 @@ type Session {
   worktreeDeleted: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type GitCheckpoint {
+  id: ID!
+  sessionId: ID!
+  session: Session
+  sessionGroupId: ID!
+  sessionGroup: SessionGroup
+  repoId: ID!
+  repo: Repo
+  promptEventId: ID!
+  promptEvent: Event
+  commitSha: String!
+  parentShas: [String!]!
+  treeSha: String!
+  subject: String!
+  author: String!
+  committedAt: DateTime!
+  filesChanged: Int!
+  createdAt: DateTime!
 }
 
 type Ticket {
@@ -507,6 +529,7 @@ input StartSessionInput {
   channelId: ID
   sessionGroupId: ID
   sourceSessionId: ID
+  restoreCheckpointId: ID
   projectId: ID
   prompt: String
 }

@@ -174,6 +174,9 @@ export const sessionTypeResolvers = {
         },
       });
     },
+    gitCheckpoints: async (group: { id: string }) => {
+      return sessionService.listGitCheckpointsForGroup(group.id);
+    },
   },
   Session: {
     tickets: async (session: { id: string }) => {
@@ -185,6 +188,46 @@ export const sessionTypeResolvers = {
       return prisma.ticket.findMany({
         where: { id: { in: links.map((l: { ticketId: string }) => l.ticketId) } },
       });
+    },
+    gitCheckpoints: async (session: { id: string }) => {
+      return sessionService.listGitCheckpointsForSession(session.id);
+    },
+  },
+  GitCheckpoint: {
+    session: async (checkpoint: { sessionId: string }) => {
+      return prisma.session.findUnique({
+        where: { id: checkpoint.sessionId },
+        include: {
+          createdBy: true,
+          repo: true,
+          channel: true,
+          sessionGroup: true,
+        },
+      });
+    },
+    sessionGroup: async (checkpoint: { sessionGroupId: string }) => {
+      return prisma.sessionGroup.findUnique({
+        where: { id: checkpoint.sessionGroupId },
+        include: {
+          channel: true,
+          repo: true,
+          sessions: {
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            include: {
+              createdBy: true,
+              repo: true,
+              channel: true,
+              sessionGroup: true,
+            },
+          },
+        },
+      });
+    },
+    repo: async (checkpoint: { repoId: string }) => {
+      return prisma.repo.findUnique({ where: { id: checkpoint.repoId } });
+    },
+    promptEvent: async (checkpoint: { promptEventId: string }) => {
+      return prisma.event.findUnique({ where: { id: checkpoint.promptEventId } });
     },
   },
 };
