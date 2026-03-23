@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Editor, { loader } from "@monaco-editor/react";
 import { gql } from "@urql/core";
 import { Loader2 } from "lucide-react";
@@ -79,28 +79,41 @@ export function MonacoFileViewer({
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchContent = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchContent = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const result = await client
         .query(SESSION_GROUP_FILE_CONTENT_QUERY, { sessionGroupId, filePath })
         .toPromise();
       if (result.error) {
-        setError(result.error.message);
+        if (!silent) setError(result.error.message);
       } else {
         setContent(result.data?.sessionGroupFileContent ?? "");
+        if (!silent) setError(null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load file");
+      if (!silent) setError(err instanceof Error ? err.message : "Failed to load file");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [sessionGroupId, filePath]);
 
+  // Initial fetch
   useEffect(() => {
-    fetchContent();
+    fetchContent(false);
+  }, [fetchContent]);
+
+  // Poll every 3s for changes
+  useEffect(() => {
+    pollRef.current = setInterval(() => fetchContent(true), 3000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [fetchContent]);
 
   if (loading) {
