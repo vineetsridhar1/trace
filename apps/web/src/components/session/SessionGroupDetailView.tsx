@@ -20,6 +20,7 @@ import type { OpenFileTab } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import { FileExplorer } from "./FileExplorer";
+import { FileOpenContext } from "./FileOpenContext";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
   getSessionGroupDisplayStatus,
@@ -346,6 +347,7 @@ export function SessionGroupDetailView({
   }, [setActiveSessionId, setActiveTerminalId]);
 
   return (
+    <FileOpenContext.Provider value={handleFileClick}>
     <div className="flex h-full flex-col overflow-hidden">
       <GroupHeader
         groupName={groupName as string | undefined}
@@ -407,5 +409,6 @@ export function SessionGroupDetailView({
         </div>
       </div>
     </div>
+    </FileOpenContext.Provider>
   );
 }
