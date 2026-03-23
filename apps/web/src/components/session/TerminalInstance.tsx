@@ -65,6 +65,12 @@ export function TerminalInstance({ terminalId, visible }: { terminalId: string; 
           setTerminalStatus(terminalId, "exited");
           term.write(`\r\n\x1b[31m[Error: ${event.message}]\x1b[0m\r\n`);
           break;
+        case "reconnecting":
+          term.write("\r\n\x1b[33m[Reconnecting...]\x1b[0m\r\n");
+          break;
+        case "reconnected":
+          setTerminalStatus(terminalId, "active");
+          break;
         case "disconnected":
           setTerminalStatus(terminalId, "exited");
           term.write("\r\n\x1b[33m[Connection lost]\x1b[0m\r\n");

@@ -18,6 +18,10 @@ import { prisma } from "./db.js";
  *     { type: "exit", exitCode: number }
  *     { type: "error", message: string }
  */
+
+/** Interval between server→client pings to keep the WebSocket alive. */
+const PING_INTERVAL_MS = 30_000;
+
 export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie?: string }; url?: string }) {
   let attachedTerminalId: string | null = null;
   let attachPending = false;
@@ -37,6 +41,23 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
     ws.close();
     return;
   }
+
+  // Keep-alive: periodically ping the client to prevent idle timeout
+  let pongReceived = true;
+  const pingInterval = setInterval(() => {
+    if (!pongReceived) {
+      // Client didn't respond to last ping — connection is dead
+      clearInterval(pingInterval);
+      ws.terminate();
+      return;
+    }
+    pongReceived = false;
+    ws.ping();
+  }, PING_INTERVAL_MS);
+
+  ws.on("pong", () => {
+    pongReceived = true;
+  });
 
   // Buffer messages received while attach auth is in-flight
   let pendingMessages: Array<{ type: string; [key: string]: unknown }> = [];
@@ -146,6 +167,7 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
   });
 
   ws.on("close", () => {
+    clearInterval(pingInterval);
     pendingMessages = [];
     terminalRelay.detachAllForFrontend(ws);
   });
