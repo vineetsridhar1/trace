@@ -116,6 +116,16 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
+      if (msg.type === "files_result" && typeof msg.requestId === "string" && Array.isArray(msg.files)) {
+        const files = (msg.files as unknown[]).filter((f): f is string => typeof f === "string");
+        sessionRouter.resolveFileRequest(
+          msg.requestId,
+          files,
+          typeof msg.error === "string" ? msg.error : undefined,
+        );
+        return;
+      }
+
       // Terminal messages — relay directly to frontend, no event store
       if (msg.type === "terminal_ready" || msg.type === "terminal_output" ||
           msg.type === "terminal_exit" || msg.type === "terminal_error") {

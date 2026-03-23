@@ -65,6 +65,12 @@ export interface BridgeListBranchesCommand {
   repoId: string;
 }
 
+export interface BridgeListFilesCommand {
+  type: "list_files";
+  requestId: string;
+  workdir: string;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -103,6 +109,7 @@ export type BridgeCommand =
   | BridgeResumeCommand
   | BridgeDeleteCommand
   | BridgeListBranchesCommand
+  | BridgeListFilesCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -175,6 +182,13 @@ export interface BridgeBranchesResult {
   error?: string;
 }
 
+export interface BridgeFilesResult {
+  type: "files_result";
+  requestId: string;
+  files: string[];
+  error?: string;
+}
+
 // --- Terminal messages (Bridge → Server) ---
 
 export interface BridgeTerminalReady {
@@ -211,6 +225,7 @@ export type BridgeMessage =
   | BridgeToolSessionId
   | BridgeRepoLinked
   | BridgeBranchesResult
+  | BridgeFilesResult
   | BridgeTerminalReady
   | BridgeTerminalOutput
   | BridgeTerminalExit

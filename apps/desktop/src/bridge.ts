@@ -325,6 +325,25 @@ export class BridgeClient implements IBridgeClient {
         });
         break;
       }
+      case "list_files": {
+        const { requestId, workdir } = cmd;
+        execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+          if (err) {
+            execFile("find", [".", "-maxdepth", "6", "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.git/*", "-not", "-path", "*/dist/*", "-not", "-path", "*/.next/*", "-type", "f"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (findErr, findStdout) => {
+              if (findErr) {
+                this.send({ type: "files_result", requestId, files: [], error: findErr.message });
+                return;
+              }
+              const files = findStdout.split("\n").map((f) => f.replace(/^\.\//, "")).filter(Boolean);
+              this.send({ type: "files_result", requestId, files });
+            });
+            return;
+          }
+          const files = stdout.split("\n").filter(Boolean);
+          this.send({ type: "files_result", requestId, files });
+        });
+        break;
+      }
       case "terminal_create": {
         const { terminalId, sessionId, cols, rows, cwd } = cmd;
         const workdir = cwd || this.sessionWorkdirs.get(sessionId) || os.homedir();

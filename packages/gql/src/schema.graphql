@@ -617,6 +617,7 @@ type Query {
   availableSessionRuntimes(sessionId: ID!): [SessionRuntimeInstance!]!
   availableRuntimes(tool: CodingTool!): [SessionRuntimeInstance!]!
   repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
+  sessionGroupFiles(sessionGroupId: ID!): [String!]!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
   chat(id: ID!): Chat

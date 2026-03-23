@@ -797,6 +797,7 @@ export type Query = {
   repos: Array<Repo>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupFiles: Array<Scalars['String']['output']>;
   sessionGroups: Array<SessionGroup>;
   sessionTerminals: Array<Terminal>;
   sessions: Array<Session>;
@@ -927,6 +928,11 @@ export type QuerySessionArgs = {
 
 export type QuerySessionGroupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupFilesArgs = {
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -1759,6 +1765,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupArgs, 'id'>>;
+  sessionGroupFiles?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QuerySessionGroupFilesArgs, 'sessionGroupId'>>;
   sessionGroups?: Resolver<Array<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupsArgs, 'channelId'>>;
   sessionTerminals?: Resolver<Array<ResolversTypes['Terminal']>, ParentType, ContextType, RequireFields<QuerySessionTerminalsArgs, 'sessionId'>>;
   sessions?: Resolver<Array<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionsArgs, 'organizationId'>>;

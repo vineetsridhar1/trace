@@ -2139,6 +2139,32 @@ export class SessionService {
     return sessionRouter.listBranches(runtimeId, repoId);
   }
 
+  /** List files in a session group's working directory by delegating to the bridge runtime. */
+  async listFiles(
+    sessionGroupId: string,
+    organizationId: string,
+  ): Promise<string[]> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, workdir: true },
+      });
+    if (!group) throw new Error("Session group not found");
+    if (!group.workdir) throw new Error("Session group has no working directory");
+
+    // Find a runtime that has a session in this group
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true },
+    });
+    let runtimeId: string | undefined;
+    for (const session of sessions) {
+      const rt = sessionRouter.getRuntimeForSession(session.id);
+      if (rt) { runtimeId = rt.id; break; }
+    }
+    if (!runtimeId) throw new Error("No connected runtime available for this session group");
+    return sessionRouter.listFiles(runtimeId, group.workdir);
+  }
+
   // ─── Helpers ───
 
   /**

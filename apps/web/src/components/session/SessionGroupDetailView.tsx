@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import {
@@ -18,6 +18,7 @@ import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
+import { FileExplorer } from "./FileExplorer";
 import {
   getSessionGroupDisplayStatus,
   isTerminalStatus,
@@ -122,6 +123,7 @@ export function SessionGroupDetailView({
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
+  const [showFiles, setShowFiles] = useState(false);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
@@ -322,10 +324,12 @@ export function SessionGroupDetailView({
         panelMode={panelMode}
         isFullscreen={isFullscreen}
         terminalAllowed={terminalAllowed}
+        showFiles={showFiles}
         onClose={() => setActiveSessionId(null)}
         onNewChat={handleNewChat}
         onOpenTerminal={handleOpenTerminal}
         onToggleFullscreen={toggleFullscreen}
+        onToggleFiles={() => setShowFiles((v) => !v)}
       />
 
       <GroupTabStrip
@@ -339,18 +343,25 @@ export function SessionGroupDetailView({
         onCloseTerminal={handleCloseTerminal}
       />
 
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {activeTerminal ? (
-          <div className="h-full bg-[#0a0a0a]">
-            <TerminalInstance terminalId={activeTerminal.id} visible />
-          </div>
-        ) : selectedSession ? (
-          <SessionDetailView sessionId={selectedSession.id} hideHeader />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Select a chat tab to continue.
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {showFiles && (
+          <div className="h-full w-[260px] shrink-0 border-r border-[#2d2d2d]">
+            <FileExplorer sessionGroupId={sessionGroupId} />
           </div>
         )}
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          {activeTerminal ? (
+            <div className="h-full bg-[#0a0a0a]">
+              <TerminalInstance terminalId={activeTerminal.id} visible />
+            </div>
+          ) : selectedSession ? (
+            <SessionDetailView sessionId={selectedSession.id} hideHeader />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Select a chat tab to continue.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
