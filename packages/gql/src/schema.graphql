@@ -657,6 +657,7 @@ type Mutation {
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
+  deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String): Session!
   sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
   retrySessionConnection(sessionId: ID!): Session!
