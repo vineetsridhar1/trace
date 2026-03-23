@@ -294,6 +294,89 @@ export async function walkDir(
   return results;
 }
 
+// --- Shared bridge file operation handlers ---
+
+/** Minimal fs/path interfaces needed by the shared file handlers (Node compatible). */
+export interface BridgeFsLike {
+  readFile: (path: string, encoding: BufferEncoding, cb: (err: NodeJS.ErrnoException | null, data: string) => void) => void;
+  promises: { readdir: (p: string, opts: { withFileTypes: true }) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>> };
+}
+export interface BridgePathLike {
+  resolve: (...p: string[]) => string;
+  join: (...p: string[]) => string;
+  relative: (from: string, to: string) => string;
+  sep: string;
+}
+/** Callback-based git ls-files runner, injected by bridges to avoid Node child_process type issues. */
+export type GitLsFilesFn = (
+  cwd: string,
+  cb: (err: Error | null, files: string[]) => void,
+) => void;
+
+/**
+ * Handle a `list_files` bridge command. Shared between desktop and container bridges
+ * to avoid code duplication.
+ */
+export function handleListFiles(
+  cmd: BridgeListFilesCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { gitLsFiles: GitLsFilesFn; fs: BridgeFsLike; path: BridgePathLike },
+): void {
+  const { requestId, sessionId, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({ type: "files_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
+    return;
+  }
+  deps.gitLsFiles(workdir, (err, files) => {
+    if (err) {
+      walkDir(workdir, workdir, 6, deps.fs, deps.path).then(
+        (walked) => send({ type: "files_result", requestId, files: walked }),
+        (walkErr) => send({ type: "files_result", requestId, files: [], error: walkErr.message }),
+      );
+      return;
+    }
+    send({ type: "files_result", requestId, files });
+  });
+}
+
+/**
+ * Handle a `read_file` bridge command. Shared between desktop and container bridges.
+ * Includes defense-in-depth path traversal checks.
+ */
+export function handleReadFile(
+  cmd: BridgeReadFileCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  deps: { fs: BridgeFsLike; path: BridgePathLike },
+): void {
+  const { requestId, sessionId, relativePath, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
+    return;
+  }
+  // Defense-in-depth: reject absolute paths and .. traversal at the bridge level too
+  if (relativePath.startsWith("/") || relativePath.includes("..")) {
+    send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
+    return;
+  }
+  const normalizedWorkdir = deps.path.resolve(workdir);
+  const fullPath = deps.path.resolve(normalizedWorkdir, relativePath);
+  if (!fullPath.startsWith(normalizedWorkdir + deps.path.sep) && fullPath !== normalizedWorkdir) {
+    send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
+    return;
+  }
+  deps.fs.readFile(fullPath, "utf-8", (err, content) => {
+    if (err) {
+      send({ type: "file_content_result", requestId, content: "", error: err.message });
+      return;
+    }
+    send({ type: "file_content_result", requestId, content });
+  });
+}
+
 // --- Bridge client interface ---
 
 /** Common interface for all bridge implementations (desktop, cloud container). */

@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter } from "@trace/shared";
-import { parseBranchOutput, walkDir } from "@trace/shared";
+import { parseBranchOutput, handleListFiles, handleReadFile } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
@@ -328,44 +328,17 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "list_files": {
-        const { requestId, sessionId, workdirHint } = cmd;
-        const workdir = this.sessionWorkdirs.get(sessionId) ?? workdirHint;
-        if (!workdir) {
-          this.send({ type: "files_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
-          break;
-        }
-        execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: workdir, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
-          if (err) {
-            walkDir(workdir, workdir, 6, fs, path).then(
-              (files) => this.send({ type: "files_result", requestId, files }),
-              (walkErr) => this.send({ type: "files_result", requestId, files: [], error: walkErr.message }),
-            );
-            return;
-          }
-          const files = stdout.split("\n").filter(Boolean);
-          this.send({ type: "files_result", requestId, files });
+        handleListFiles(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+          gitLsFiles: (cwd, cb) => execFile("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+            if (err) return cb(err, []);
+            cb(null, stdout.split("\n").filter(Boolean));
+          }),
+          fs, path,
         });
         break;
       }
       case "read_file": {
-        const { requestId, sessionId, relativePath, workdirHint } = cmd;
-        const workdir = this.sessionWorkdirs.get(sessionId) ?? workdirHint;
-        if (!workdir) {
-          this.send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
-          break;
-        }
-        const fullPath = path.resolve(workdir, relativePath);
-        if (!fullPath.startsWith(workdir + path.sep) && fullPath !== workdir) {
-          this.send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
-          break;
-        }
-        fs.readFile(fullPath, "utf-8", (err, content) => {
-          if (err) {
-            this.send({ type: "file_content_result", requestId, content: "", error: err.message });
-            return;
-          }
-          this.send({ type: "file_content_result", requestId, content });
-        });
+        handleReadFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
         break;
       }
       case "terminal_create": {

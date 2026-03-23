@@ -130,7 +130,7 @@ export function MonacoFileViewer({
         <p className="text-sm text-red-400">Failed to load file</p>
         <p className="text-xs text-muted-foreground">{error}</p>
         <button
-          onClick={fetchContent}
+          onClick={() => fetchContent(false)}
           className="mt-2 text-xs text-blue-400 hover:underline"
         >
           Retry

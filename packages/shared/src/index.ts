@@ -38,12 +38,16 @@ export type {
   BridgeToolSessionId,
   BridgeRepoLinked,
   BridgeBranchesResult,
+  BridgeListFilesCommand,
+  BridgeReadFileCommand,
+  BridgeFilesResult,
+  BridgeFileContentResult,
   BridgeTerminalCreateCommand,
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
 } from "./bridge.js";
-export { parseBranchOutput } from "./bridge.js";
+export { parseBranchOutput, walkDir, handleListFiles, handleReadFile } from "./bridge.js";
 export type {
   LLMRole,
   LLMProvider,

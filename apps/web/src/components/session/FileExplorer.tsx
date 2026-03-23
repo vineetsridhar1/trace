@@ -55,17 +55,17 @@ function buildTree(files: string[]): FileTreeNode[] {
     }
   }
 
-  // Sort: directories first, then alphabetically
-  const sortNodes = (nodes: FileTreeNode[]): FileTreeNode[] => {
-    return nodes
-      .map((n) => ({ ...n, children: sortNodes(n.children) }))
-      .sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
+  // Sort in place: directories first, then alphabetically
+  const sortNodes = (nodes: FileTreeNode[]): void => {
+    for (const n of nodes) sortNodes(n.children);
+    nodes.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
   };
 
-  return sortNodes(root);
+  sortNodes(root);
+  return root;
 }
 
 function getFileIcon(name: string) {
