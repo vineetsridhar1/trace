@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { useUIStore } from "../stores/ui";
@@ -19,13 +19,22 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const sidebarData = useSidebarData();
 
+  const restoreLastVisited = useUIStore((s) => s.restoreLastVisited);
+
   const [peeking, setPeeking] = useState(false);
   const [currentTab, setCurrentTab] = useState<SidebarTab>(activeChatId ? "dm" : "main");
   const [peekTabProgress, setPeekTabProgress] = useState(getTabIndex(activeChatId ? "dm" : "main"));
 
+  const handleTabCommit = useCallback((tab: SidebarTab) => {
+    setCurrentTab(tab);
+    if (activePage === "main") {
+      restoreLastVisited(tab);
+    }
+  }, [restoreLastVisited, activePage]);
+
   const expandedTabs = useSidebarTabScroll({
     currentTab,
-    onTabCommit: setCurrentTab,
+    onTabCommit: handleTabCommit,
   });
 
   useEffect(() => {
@@ -110,7 +119,7 @@ export function AppSidebar() {
         visible={peeking && state === "collapsed"}
         currentTab={currentTab}
         onMouseLeave={() => setPeeking(false)}
-        onTabCommit={setCurrentTab}
+        onTabCommit={handleTabCommit}
         onTabProgressChange={setPeekTabProgress}
       />
     </>

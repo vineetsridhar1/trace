@@ -22,6 +22,7 @@ interface UIState {
   refreshTick: number;
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
+  restoreLastVisited: (tab: "dm" | "main") => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -68,6 +69,27 @@ function persistActiveChannelId(channelId: string | null) {
     localStorage.setItem("trace:activeChannelId", channelId);
   } else {
     localStorage.removeItem("trace:activeChannelId");
+  }
+}
+
+function persistActiveChatId(chatId: string | null) {
+  if (chatId) {
+    localStorage.setItem("trace:activeChatId", chatId);
+  } else {
+    localStorage.removeItem("trace:activeChatId");
+  }
+}
+
+function persistActiveSessionNav(sessionGroupId: string | null, sessionId: string | null) {
+  if (sessionGroupId) {
+    localStorage.setItem("trace:activeSessionGroupId", sessionGroupId);
+  } else {
+    localStorage.removeItem("trace:activeSessionGroupId");
+  }
+  if (sessionId) {
+    localStorage.setItem("trace:activeSessionId", sessionId);
+  } else {
+    localStorage.removeItem("trace:activeSessionId");
   }
 }
 
@@ -166,6 +188,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setActiveChatId: (id) => {
+    persistActiveChatId(id);
     set((s) => {
       let unreadChatIds = s.unreadChatIds;
       if (id && unreadChatIds[id]) {
@@ -206,6 +229,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       );
     const channelId = resolveChannelIdForSessionGroup(groupId, currentChannelId);
     persistActiveChannelId(channelId);
+    persistActiveSessionNav(groupId, nextSessionId);
     set((state) => ({
       activePage: "main",
       activeChatId: null,
@@ -225,6 +249,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     const currentChannelId = get().activeChannelId;
     const currentSessionGroupId = get().activeSessionGroupId;
     if (id === null) {
+      persistActiveSessionNav(null, null);
       set({
         activeSessionGroupId: null,
         activeSessionId: null,
@@ -240,6 +265,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       resolveChannelIdForSession(id, currentChannelId),
     );
     persistActiveChannelId(channelId);
+    persistActiveSessionNav(sessionGroupId, id);
     set((state) => ({
       activeChannelId: channelId,
       activeSessionGroupId: sessionGroupId,
@@ -261,8 +287,44 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ activeThreadId: id });
   },
 
+  restoreLastVisited: (tab) => {
+    if (tab === "dm") {
+      const chatId = localStorage.getItem("trace:activeChatId");
+      if (chatId) get().setActiveChatId(chatId);
+    } else {
+      const storedChannelId = localStorage.getItem("trace:activeChannelId");
+      const sessionGroupId = localStorage.getItem("trace:activeSessionGroupId");
+      const sessionId = localStorage.getItem("trace:activeSessionId");
+      // Resolve channel from session context so it's consistent even if
+      // a plain channel click updated activeChannelId in localStorage
+      const channelId = sessionGroupId
+        ? resolveChannelIdForSessionGroup(sessionGroupId, storedChannelId)
+        : storedChannelId;
+      if (channelId || sessionGroupId) {
+        // Set Zustand state directly — don't re-persist to localStorage
+        // since we're reading from it and don't want cross-tab clearing
+        set((state) => ({
+          activePage: "main" as ActivePage,
+          activeChannelId: channelId,
+          activeSessionGroupId: sessionGroupId,
+          activeSessionId: sessionId,
+          activeTerminalId: null,
+          activeChatId: null,
+          activeThreadId: null,
+          lastSelectedSessionIdsByGroup:
+            sessionGroupId && sessionId
+              ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: sessionId }
+              : state.lastSelectedSessionIdsByGroup,
+        }));
+        pushNav(channelId, sessionGroupId, sessionId);
+      }
+    }
+  },
+
   _restoreNav: (channelId, sessionGroupId, sessionId, page, chatId) => {
     persistActiveChannelId(channelId);
+    if (chatId) persistActiveChatId(chatId);
+    if (page === "main" && !chatId) persistActiveSessionNav(sessionGroupId, sessionId);
     set((state) => ({
       activePage: page ?? "main",
       activeChannelId: channelId,

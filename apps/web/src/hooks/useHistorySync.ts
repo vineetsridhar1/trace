@@ -92,26 +92,38 @@ export function useHistorySync() {
     const { channelId, sessionGroupId, sessionId, chatId, page } = parseNavFromPath(
       window.location.pathname,
     );
+    const initialChat =
+      (page === "settings" || page === "inbox" || channelId)
+        ? null
+        : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      (page === "settings" || page === "inbox" || chatId)
+      (page === "settings" || page === "inbox" || initialChat)
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
+    const initialSessionGroupId =
+      (page === "settings" || page === "inbox" || initialChat)
+        ? null
+        : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
+    const initialSessionId =
+      (page === "settings" || page === "inbox" || initialChat)
+        ? null
+        : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 
     let path: string;
     if (page === "settings") {
       path = "/settings";
     } else if (page === "inbox") {
       path = "/inbox";
-    } else if (chatId) {
-      path = `/dm/${chatId}`;
-    } else if (initialChannel && sessionGroupId && sessionId) {
-      path = `/c/${initialChannel}/g/${sessionGroupId}/s/${sessionId}`;
-    } else if (initialChannel && sessionGroupId) {
-      path = `/c/${initialChannel}/g/${sessionGroupId}`;
-    } else if (sessionGroupId && sessionId) {
-      path = `/g/${sessionGroupId}/s/${sessionId}`;
-    } else if (sessionGroupId) {
-      path = `/g/${sessionGroupId}`;
+    } else if (initialChat) {
+      path = `/dm/${initialChat}`;
+    } else if (initialChannel && initialSessionGroupId && initialSessionId) {
+      path = `/c/${initialChannel}/g/${initialSessionGroupId}/s/${initialSessionId}`;
+    } else if (initialChannel && initialSessionGroupId) {
+      path = `/c/${initialChannel}/g/${initialSessionGroupId}`;
+    } else if (initialSessionGroupId && initialSessionId) {
+      path = `/g/${initialSessionGroupId}/s/${initialSessionId}`;
+    } else if (initialSessionGroupId) {
+      path = `/g/${initialSessionGroupId}`;
     } else if (initialChannel) {
       path = `/c/${initialChannel}`;
     } else {
@@ -119,12 +131,12 @@ export function useHistorySync() {
     }
 
     history.replaceState(
-      { channelId: initialChannel, sessionGroupId, sessionId, page, chatId },
+      { channelId: initialChannel, sessionGroupId: initialSessionGroupId, sessionId: initialSessionId, page, chatId: initialChat },
       "",
       path,
     );
 
-    restoreNav(initialChannel, sessionGroupId, sessionId, page, chatId);
+    restoreNav(initialChannel, initialSessionGroupId, initialSessionId, page, initialChat);
 
     function onPopState(e: PopStateEvent) {
       const state = e.state as {
