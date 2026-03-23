@@ -89,6 +89,18 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
             ref={containerRef}
             className="flex w-full flex-1 overflow-hidden pl-2 pr-2 md:pl-0 md:peer-data-[state=collapsed]:pl-2"
           >
+            {/* Session panel card (separate card, same level) */}
+            <DetailPanel
+              isOpen={hasSession}
+              onClose={closePanel}
+              containerRef={containerRef}
+              onClosed={() => setDisplayedSessionGroupId(null)}
+            >
+              {displayedSessionGroupId && (
+                <SessionGroupDetailView sessionGroupId={displayedSessionGroupId} panelMode />
+              )}
+            </DetailPanel>
+
             {/* Main content card */}
             <div
               className={cn(
@@ -124,18 +136,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                 )}
               </SidebarInset>
             </div>
-
-            {/* Session panel card (separate card, same level) */}
-            <DetailPanel
-              isOpen={hasSession}
-              onClose={closePanel}
-              containerRef={containerRef}
-              onClosed={() => setDisplayedSessionGroupId(null)}
-            >
-              {displayedSessionGroupId && (
-                <SessionGroupDetailView sessionGroupId={displayedSessionGroupId} panelMode />
-              )}
-            </DetailPanel>
           </div>
         </SidebarProvider>
       </div>

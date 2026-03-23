@@ -150,7 +150,7 @@ export function DetailPanel({
       setIsDragging(true);
 
       function onMouseMove(ev: MouseEvent) {
-        const dx = dragRef.current.startX - ev.clientX;
+        const dx = ev.clientX - dragRef.current.startX;
         const newRatio = dragRef.current.startRatio + dx / totalWidth;
         const clamped = Math.max(minRatio, Math.min(maxRatio, newRatio));
         setPanelRatio(clamped);
@@ -167,7 +167,7 @@ export function DetailPanel({
         setIsDragging(false);
 
         // Snap to fullscreen if past threshold
-        const dx = dragRef.current.startX - ev.clientX;
+        const dx = ev.clientX - dragRef.current.startX;
         const finalRatio = dragRef.current.startRatio + dx / totalWidth;
         if (finalRatio > fullscreenSnapRatio) {
           setFullscreen(true);
@@ -209,17 +209,6 @@ export function DetailPanel({
 
   return (
     <>
-      {/* Drag handle — only visible when panel is open and not fullscreen */}
-      {isOpen && !isFullscreen && !isMobile && (
-        <div
-          onMouseDown={onDragStart}
-          className={cn(
-            "flex-none w-1 cursor-col-resize rounded-full hover:bg-border active:bg-accent",
-            isDragging ? "bg-accent" : "bg-transparent",
-          )}
-        />
-      )}
-
       <div
         ref={panelRef}
         className={cn(
@@ -235,11 +224,22 @@ export function DetailPanel({
         }}
       >
         {showContent && (
-          <div className="ml-auto h-full w-full min-w-[400px]">
+          <div className="h-full w-full min-w-[400px]">
             {children}
           </div>
         )}
       </div>
+
+      {/* Drag handle — only visible when panel is open and not fullscreen */}
+      {isOpen && !isFullscreen && !isMobile && (
+        <div
+          onMouseDown={onDragStart}
+          className={cn(
+            "flex-none w-1 cursor-col-resize rounded-full hover:bg-border active:bg-accent",
+            isDragging ? "bg-accent" : "bg-transparent",
+          )}
+        />
+      )}
     </>
   );
 }
