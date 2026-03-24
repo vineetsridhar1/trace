@@ -5,21 +5,12 @@ import {
   GitPullRequest,
   History,
   Maximize2,
-  MessageSquarePlus,
   Minimize2,
-  Plus,
-  TerminalSquare,
   X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 
 interface GroupHeaderProps {
   groupName: string | undefined;
@@ -28,11 +19,8 @@ interface GroupHeaderProps {
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
   isFullscreen: boolean;
-  terminalAllowed: boolean;
   showFiles: boolean;
   onClose: () => void;
-  onNewChat: () => void;
-  onOpenTerminal: () => void;
   onToggleFullscreen: () => void;
   onToggleFiles: () => void;
 }
@@ -44,11 +32,8 @@ export function GroupHeader({
   groupPrUrl,
   panelMode,
   isFullscreen,
-  terminalAllowed,
   showFiles,
   onClose,
-  onNewChat,
-  onOpenTerminal,
   onToggleFullscreen,
   onToggleFiles,
 }: GroupHeaderProps) {
@@ -102,33 +87,6 @@ export function GroupHeader({
           {groupName ?? "Session Group"}
         </h2>
       </div>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-            title="New session or terminal"
-          >
-            <Plus size={16} />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            disabled={!selectedSessionId}
-            onClick={onNewChat}
-          >
-            <MessageSquarePlus size={14} />
-            Agent
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!terminalAllowed}
-            onClick={onOpenTerminal}
-          >
-            <TerminalSquare size={14} />
-            Terminal
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
 
       <button
         onClick={onToggleFiles}

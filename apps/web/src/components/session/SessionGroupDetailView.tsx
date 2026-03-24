@@ -403,11 +403,8 @@ export function SessionGroupDetailView({
           groupPrUrl={groupPrUrl}
           panelMode={panelMode}
           isFullscreen={isFullscreen}
-          terminalAllowed={terminalAllowed}
           showFiles={showFiles}
           onClose={() => setActiveSessionId(null)}
-          onNewChat={handleNewChat}
-          onOpenTerminal={handleOpenTerminal}
           onToggleFullscreen={toggleFullscreen}
           onToggleFiles={() => setShowFiles((v) => !v)}
         />
@@ -427,6 +424,10 @@ export function SessionGroupDetailView({
           onCloseTerminal={handleCloseTerminal}
           onSelectFile={handleSelectFile}
           onCloseFile={handleCloseFile}
+          onNewChat={handleNewChat}
+          onOpenTerminal={handleOpenTerminal}
+          canNewChat={!!selectedSession}
+          canOpenTerminal={terminalAllowed}
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
