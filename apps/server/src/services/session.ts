@@ -62,6 +62,10 @@ function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionC
   };
 }
 
+function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
+  return sessionStatus === "in_review" ? "in_review" : "not_started";
+}
+
 /** Cast connection data to Prisma-compatible JSON */
 function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
@@ -548,8 +552,8 @@ export class SessionService {
           }),
         );
 
-    // New sessions stay idle unless a runtime/workspace still needs provisioning.
-    const initialAgentStatus: AgentStatus = needsRuntimeProvisioning ? "active" : "done";
+    // Sessions stay idle until a command is actually delivered to the coding tool.
+    const initialAgentStatus: AgentStatus = "done";
     const initialSessionStatus: SessionStatus = "not_started";
 
     const [session] = await prisma.$transaction(async (tx) => {
@@ -1440,12 +1444,18 @@ export class SessionService {
     const [session, pendingRun] = await prisma.$transaction(async (tx) => {
       const prev = await tx.session.findUniqueOrThrow({
         where: { id: sessionId },
-        select: { pendingRun: true },
+        select: { pendingRun: true, sessionStatus: true },
       });
 
       const updated = await tx.session.update({
         where: { id: sessionId },
-        data: { agentStatus: "active", sessionStatus: "in_progress", workdir, ...(branch && { branch }), pendingRun: Prisma.DbNull },
+        data: {
+          agentStatus: "done",
+          sessionStatus: getIdleSessionStatus(prev.sessionStatus),
+          workdir,
+          ...(branch && { branch }),
+          pendingRun: Prisma.DbNull,
+        },
         include: SESSION_INCLUDE,
       });
 
@@ -1467,6 +1477,8 @@ export class SessionService {
       payload: {
         type: "workspace_ready",
         workdir,
+        agentStatus: session.agentStatus,
+        sessionStatus: session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
@@ -1548,7 +1560,11 @@ export class SessionService {
 
     await prisma.session.update({
       where: { id: sessionId },
-      data: { connection: connJson(updated) },
+      data: {
+        agentStatus: "done",
+        sessionStatus: getIdleSessionStatus(session.sessionStatus),
+        connection: connJson(updated),
+      },
     });
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
       connection: connJson(updated),
@@ -1609,6 +1625,8 @@ export class SessionService {
         type: "connection_restored",
         runtimeInstanceId,
         connection: connJson(updated),
+        agentStatus: "done",
+        sessionStatus: getIdleSessionStatus(session.sessionStatus),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
@@ -1772,7 +1790,8 @@ export class SessionService {
       const updated = await prisma.session.update({
         where: { id: sessionId },
         data: {
-          agentStatus: "active",
+          agentStatus: "done",
+          sessionStatus: getIdleSessionStatus(session.sessionStatus),
           connection: connJson(restoredConn),
         },
         include: SESSION_INCLUDE,
@@ -1791,6 +1810,8 @@ export class SessionService {
           type: "connection_restored",
           runtimeInstanceId: runtime.id,
           connection: connJson(restoredConn),
+          agentStatus: updated.agentStatus,
+          sessionStatus: updated.sessionStatus,
           ...(sessionGroup ? { sessionGroup } : {}),
         },
         actorType: "system",
@@ -1814,7 +1835,8 @@ export class SessionService {
     const updated = await prisma.session.update({
       where: { id: sessionId },
       data: {
-        agentStatus: "active",
+        agentStatus: "done",
+        sessionStatus: getIdleSessionStatus(session.sessionStatus),
         connection: connJson(restoredConn),
       },
       include: SESSION_INCLUDE,
@@ -1833,6 +1855,8 @@ export class SessionService {
         type: "connection_restored",
         runtimeInstanceId: runtime.id,
         connection: connJson(restoredConn),
+        agentStatus: updated.agentStatus,
+        sessionStatus: updated.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
@@ -1940,8 +1964,8 @@ export class SessionService {
       const child = await tx.session.create({
         data: {
           name: session.name,
-          agentStatus: "active",
-          sessionStatus: session.sessionStatus,
+          agentStatus: "done",
+          sessionStatus: "not_started",
           tool: session.tool,
           model: session.model ?? undefined,
           hosting: targetRuntime.hostingMode,
@@ -2107,8 +2131,8 @@ export class SessionService {
       const child = await tx.session.create({
         data: {
           name: session.name,
-          agentStatus: "active",
-          sessionStatus: session.sessionStatus,
+          agentStatus: "done",
+          sessionStatus: "not_started",
           tool: session.tool,
           model: session.model ?? undefined,
           hosting: "cloud",

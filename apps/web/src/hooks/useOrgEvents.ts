@@ -119,8 +119,15 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
   // Connection state events carry a full connection patch
   if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
     const connection = asJsonObject(payload.connection);
+    const sessionPatch: Partial<SessionEntity> = {
+      ...(payload.agentStatus && { agentStatus: payload.agentStatus as AgentStatus }),
+      ...(payload.sessionStatus && { sessionStatus: payload.sessionStatus as SessionStatus }),
+    };
     if (connection) {
-      return { connection } as Partial<SessionEntity>;
+      sessionPatch.connection = connection as SessionEntity["connection"];
+    }
+    if (Object.keys(sessionPatch).length > 0) {
+      return sessionPatch;
     }
   }
   return undefined;

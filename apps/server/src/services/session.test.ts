@@ -142,6 +142,7 @@ describe("SessionService", () => {
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
     sessionRouterMock.getRuntime.mockReturnValue(null);
+    sessionRouterMock.getDefaultRuntime?.mockReturnValue?.(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
     prismaMock.channel.findFirst.mockResolvedValue({
       id: "channel-1",
@@ -232,7 +233,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            agentStatus: "active",
+            agentStatus: "done",
             sessionStatus: "not_started",
             sessionGroupId: "group-1",
             channelId: "channel-1",
@@ -529,6 +530,50 @@ describe("SessionService", () => {
     });
   });
 
+  describe("workspaceReady", () => {
+    it("keeps a session not_started until a queued command is actually delivered", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        sessionStatus: "not_started",
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          sessionStatus: "not_started",
+          workdir: "/tmp/trace/workspace",
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ workdir: "/tmp/trace/workspace" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/workspace");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: {
+          agentStatus: "done",
+          sessionStatus: "not_started",
+          workdir: "/tmp/trace/workspace",
+          pendingRun: expect.anything(),
+        },
+        include: expect.any(Object),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "workspace_ready",
+            workdir: "/tmp/trace/workspace",
+            agentStatus: "done",
+            sessionStatus: "not_started",
+          }),
+        }),
+      );
+    });
+  });
+
   describe("delete", () => {
     it("removes the session group when the last session is deleted", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());
@@ -566,7 +611,7 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-2",
-          agentStatus: "active",
+          agentStatus: "done",
           sessionStatus: "not_started",
           hosting: "local",
           sessionGroupId: "group-1",
@@ -602,6 +647,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            agentStatus: "done",
+            sessionStatus: "not_started",
             sessionGroupId: "group-1",
           }),
         }),
@@ -629,7 +676,7 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-3",
-          agentStatus: "active",
+          agentStatus: "done",
           sessionStatus: "not_started",
           hosting: "cloud",
           sessionGroupId: "group-1",
@@ -648,6 +695,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            agentStatus: "done",
+            sessionStatus: "not_started",
             sessionGroupId: "group-1",
           }),
         }),
