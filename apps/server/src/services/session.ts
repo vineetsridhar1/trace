@@ -465,73 +465,39 @@ export class SessionService {
     const resolvedChannelId =
       input.channelId ?? resolvedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
     const resolvedChannel = resolvedChannelId
-      ? await prisma.channel.findFirst({
-          where: { id: resolvedChannelId, organizationId: input.organizationId },
-          select: {
-            id: true,
-            type: true,
-            sessionGroups: {
-              where: { repoId: { not: null } },
-              orderBy: [
-                { updatedAt: "desc" },
-                { createdAt: "desc" },
-              ],
-              take: 1,
-              select: { repoId: true, branch: true },
-            },
-          },
+      ? await prisma.channel.findUnique({
+          where: { id: resolvedChannelId },
+          select: { id: true, organizationId: true, type: true, repoId: true },
         })
       : null;
 
     if (resolvedChannelId && !resolvedChannel) {
       throw new Error("Channel not found");
     }
+    if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
+      throw new Error("Channel does not belong to this organization");
+    }
 
-    const channelWorkspaceIdentity =
-      resolvedChannel?.type === "coding"
-        ? (resolvedChannel.sessionGroups[0] ?? null)
-        : null;
+    const authoritativeChannelRepoId =
+      resolvedChannel?.type === "coding" ? resolvedChannel.repoId ?? null : null;
+
+    if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
+      throw new Error("Coding channel sessions must use the channel's linked repo");
+    }
+    if (authoritativeChannelRepoId && resolvedGroup?.repoId && resolvedGroup.repoId !== authoritativeChannelRepoId) {
+      throw new Error("Session group repo does not match the channel's linked repo");
+    }
+    if (authoritativeChannelRepoId && sourceSession?.repoId && sourceSession.repoId !== authoritativeChannelRepoId) {
+      throw new Error("Source session repo does not match the channel's linked repo");
+    }
+
     const resolvedRepoId =
-      input.repoId
+      authoritativeChannelRepoId
+      ?? input.repoId
       ?? resolvedGroup?.repoId
       ?? sourceSession?.repoId
-      ?? channelWorkspaceIdentity?.repoId
       ?? undefined;
-    const resolvedBranch =
-      input.branch
-      ?? resolvedGroup?.branch
-      ?? sourceSession?.branch
-      ?? channelWorkspaceIdentity?.branch
-      ?? undefined;
-
-    if (
-      resolvedGroup?.repoId
-      && resolvedRepoId !== undefined
-      && resolvedGroup.repoId !== resolvedRepoId
-    ) {
-      throw new Error("Session group is locked to a different repo");
-    }
-    if (
-      resolvedGroup?.branch
-      && resolvedBranch !== undefined
-      && resolvedGroup.branch !== resolvedBranch
-    ) {
-      throw new Error("Session group is locked to a different branch");
-    }
-    if (
-      channelWorkspaceIdentity?.repoId
-      && resolvedRepoId !== undefined
-      && channelWorkspaceIdentity.repoId !== resolvedRepoId
-    ) {
-      throw new Error("Channel is locked to a different repo");
-    }
-    if (
-      channelWorkspaceIdentity?.branch
-      && resolvedBranch !== undefined
-      && channelWorkspaceIdentity.branch !== resolvedBranch
-    ) {
-      throw new Error("Channel is locked to a different branch");
-    }
+    const resolvedBranch = input.branch ?? resolvedGroup?.branch ?? sourceSession?.branch ?? undefined;
     const sharedWorkdir = resolvedGroup?.workdir ?? null;
     const sharedConnection = resolvedGroup?.connection ?? null;
     const sharedRuntimeInstanceId =
@@ -557,10 +523,14 @@ export class SessionService {
         requestedHosting: input.hosting ?? null,
         runtimeFoundInRouter: !!runtime,
       });
-      if (runtime) {
-        hosting = runtime.hostingMode;
-        runtimeLabel = runtime.label;
+      if (!runtime) {
+        throw new Error("Requested runtime not found");
       }
+      if (runtime.hostingMode === "local" && resolvedRepoId && !runtime.registeredRepoIds.includes(resolvedRepoId)) {
+        throw new Error("Selected runtime does not have this repo linked");
+      }
+      hosting = runtime.hostingMode;
+      runtimeLabel = runtime.label;
     }
 
     const needsRuntimeProvisioning =

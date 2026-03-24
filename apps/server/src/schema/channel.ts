@@ -23,11 +23,11 @@ export const channelQueries = {
       where.members = { some: { userId: ctx.userId, leftAt: null } };
     }
 
-    return prisma.channel.findMany({ where });
+    return prisma.channel.findMany({ where, include: { repo: true } });
   },
   channel: async (_: unknown, args: { id: string }, ctx: Context) => {
     await assertChannelAccess(args.id, ctx.userId);
-    return prisma.channel.findUnique({ where: { id: args.id } });
+    return prisma.channel.findUnique({ where: { id: args.id }, include: { repo: true } });
   },
   channelMessages: (
     _: unknown,
@@ -112,7 +112,10 @@ export const channelTypeResolvers = {
       });
       return members.map((m) => ({ user: m.user, joinedAt: m.joinedAt }));
     },
-    repo: (channel: { repoId?: string | null }) => {
+    repo: (channel: { repo?: unknown; repoId?: string | null }) => {
+      if ("repo" in channel) {
+        return channel.repo ?? null;
+      }
       if (!channel.repoId) return null;
       return prisma.repo.findUnique({ where: { id: channel.repoId } });
     },

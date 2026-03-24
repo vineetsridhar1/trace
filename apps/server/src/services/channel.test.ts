@@ -59,6 +59,106 @@ describe("ChannelService", () => {
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
   });
 
+  it("requires a repo when creating a coding channel", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+
+    const service = new ChannelService();
+
+    await expect(
+      service.create(
+        {
+          organizationId: "org-1",
+          name: "backend",
+          type: "coding",
+        } as any,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("repoId is required for coding channels");
+
+    expect(prismaMock.channel.create).not.toHaveBeenCalled();
+  });
+
+  it("includes repo metadata in the join event payload", async () => {
+    const joinedAt = new Date("2026-03-22T00:00:00.000Z");
+    prismaMock.channel.findUniqueOrThrow
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        name: "backend",
+        type: "coding",
+        position: 3,
+        groupId: "group-1",
+        organizationId: "org-1",
+        repoId: "repo-1",
+        repo: { name: "trace" },
+      })
+      .mockResolvedValueOnce({
+        id: "channel-1",
+        members: [{ userId: "user-1", leftAt: null }],
+      });
+    prismaMock.orgMember.findUniqueOrThrow.mockResolvedValueOnce({
+      userId: "user-1",
+      organizationId: "org-1",
+    });
+    prismaMock.channelMember.findUnique.mockResolvedValueOnce(null);
+    prismaMock.channelMember.create.mockResolvedValueOnce({
+      channelId: "channel-1",
+      userId: "user-1",
+      joinedAt,
+    });
+    prismaMock.channelMember.findMany.mockResolvedValueOnce([
+      {
+        channelId: "channel-1",
+        userId: "user-1",
+        joinedAt,
+        leftAt: null,
+      },
+    ]);
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      {
+        id: "user-1",
+        name: "User One",
+        avatarUrl: null,
+      },
+    ]);
+
+    const service = new ChannelService();
+    await service.join("channel-1", "user", "user-1");
+
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        scopeType: "channel",
+        scopeId: "channel-1",
+        eventType: "channel_member_added",
+        payload: {
+          userId: "user-1",
+          channel: {
+            id: "channel-1",
+            name: "backend",
+            type: "coding",
+            position: 3,
+            groupId: "group-1",
+            repoId: "repo-1",
+            repo: { id: "repo-1", name: "trace" },
+            members: [
+              {
+                user: { id: "user-1", name: "User One", avatarUrl: null },
+                joinedAt: joinedAt.toISOString(),
+              },
+            ],
+          },
+        },
+        actorType: "user",
+        actorId: "user-1",
+      },
+      expect.anything(),
+    );
+  });
+
   it("rejects message-model sends for coding channels", async () => {
     prismaMock.channel.findFirstOrThrow.mockResolvedValueOnce({
       id: "channel-1",
