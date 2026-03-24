@@ -29,8 +29,14 @@ export function handleBridgeConnection(ws: WebSocket) {
   }
 
   ws.on("message", (raw) => {
+    let msg: Record<string, unknown>;
     try {
-      const msg = JSON.parse(raw.toString());
+      msg = JSON.parse(raw.toString());
+    } catch (err) {
+      console.error("[bridge] malformed message, ignoring:", err);
+      return;
+    }
+    try {
 
       if (msg.type === "runtime_hello") {
         // Bridge is announcing its identity. Re-register with the real info.
