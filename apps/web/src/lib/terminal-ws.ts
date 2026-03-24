@@ -3,6 +3,13 @@ const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsBase = API_URL
   ? API_URL.replace(/^https?:/, wsProtocol)
   : `${wsProtocol}//${window.location.host}`;
+const FATAL_TERMINAL_ERRORS = new Set([
+  "Unauthorized",
+  "Invalid token",
+  "Terminal not found",
+  "Access denied",
+]);
+const FATAL_TERMINAL_CLOSE_CODES = new Set([1008]);
 
 function getToken(): string | null {
   return localStorage.getItem("trace_token");
@@ -35,11 +42,13 @@ export class TerminalSocket {
   private closed = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private awaitingReconnectReady = false;
 
   constructor(private terminalId: string) {}
 
   connect(): void {
     this.closed = false;
+    this.awaitingReconnectReady = false;
     this.openSocket();
   }
 
@@ -51,14 +60,8 @@ export class TerminalSocket {
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
-      const isReconnect = this.reconnectAttempts > 0;
-      this.reconnectAttempts = 0;
+      this.awaitingReconnectReady = this.reconnectAttempts > 0;
       this.ws?.send(JSON.stringify({ type: "attach", terminalId: this.terminalId }));
-      // Emit reconnected eagerly — the attach may still fail, but the server
-      // replays scrollback on attach so the UI recovers quickly either way.
-      if (isReconnect) {
-        this.emit({ type: "reconnected" });
-      }
     };
 
     this.ws.onmessage = (event) => {
@@ -67,20 +70,36 @@ export class TerminalSocket {
 
         // Fatal errors — don't reconnect when the terminal is gone or auth fails.
         // NOTE: these strings must match the server error messages in terminal-handler.ts
-        if (msg.type === "error" && (msg.message === "Terminal not found" || msg.message === "Access denied")) {
+        if (msg.type === "error" && FATAL_TERMINAL_ERRORS.has(msg.message)) {
           this.closed = true;
         }
 
-        for (const listener of this.listeners) {
-          listener(msg);
+        if (msg.type === "ready") {
+          const isReconnect = this.awaitingReconnectReady;
+          this.awaitingReconnectReady = false;
+          this.reconnectAttempts = 0;
+          this.emit(msg);
+          if (isReconnect) {
+            this.emit({ type: "reconnected" });
+          }
+          return;
         }
+
+        this.emit(msg);
       } catch {
         // Ignore parse errors
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
+      if (
+        FATAL_TERMINAL_CLOSE_CODES.has(event.code)
+        || FATAL_TERMINAL_ERRORS.has(event.reason)
+      ) {
+        this.closed = true;
+      }
       if (this.closed) {
+        this.awaitingReconnectReady = false;
         this.emit({ type: "disconnected" });
         return;
       }
@@ -132,6 +151,7 @@ export class TerminalSocket {
 
   close(): void {
     this.closed = true;
+    this.awaitingReconnectReady = false;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

@@ -23,6 +23,11 @@ import { prisma } from "./db.js";
 const PING_INTERVAL_MS = 30_000;
 
 export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie?: string }; url?: string }) {
+  const sendFatalError = (message: string): void => {
+    ws.send(JSON.stringify({ type: "error", message }));
+    ws.close(1008, message);
+  };
+
   let attachedTerminalId: string | null = null;
   let attachPending = false;
 
@@ -30,15 +35,13 @@ export function handleTerminalConnection(ws: WebSocket, req: { headers: { cookie
   const url = new URL(req.url ?? "", "http://localhost");
   const token = url.searchParams.get("token") ?? parseCookieToken(req.headers.cookie);
   if (!token) {
-    ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
-    ws.close();
+    sendFatalError("Unauthorized");
     return;
   }
 
   const userId = verifyToken(token);
   if (!userId) {
-    ws.send(JSON.stringify({ type: "error", message: "Invalid token" }));
-    ws.close();
+    sendFatalError("Invalid token");
     return;
   }
 

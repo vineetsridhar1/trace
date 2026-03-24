@@ -102,6 +102,10 @@ const SESSION_GROUP_INCLUDE = {
   },
 } satisfies Prisma.SessionGroupInclude;
 
+const INVALID_FILE_PATH_ERROR = "Invalid file path";
+const LOCAL_FILE_ACCESS_DENIED_ERROR =
+  "Access denied: you can only access files on your own local sessions";
+
 function serializeSession(
   session: {
     id: string;
@@ -287,6 +291,59 @@ export function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
 }
 
 export class SessionService {
+  private assertLocalFileOwnership(
+    sessions: Array<{ hosting: string | null; createdById: string }>,
+    userId: string,
+  ): void {
+    if (sessions.some((session) => session.hosting === "local" && session.createdById !== userId)) {
+      throw new Error(LOCAL_FILE_ACCESS_DENIED_ERROR);
+    }
+  }
+
+  private normalizeFilePath(filePath: string): string {
+    if (!filePath || filePath.startsWith("/") || filePath.includes("\\")) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
+    }
+    const parts = filePath.split("/");
+    if (parts.some((part) => part.length === 0 || part === "." || part === "..")) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
+    }
+    return parts.join("/");
+  }
+
+  private async resolveAccessibleSessionGroupRuntime(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<{ runtimeId: string; sessionId: string; workdirHint?: string }> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, workdir: true, worktreeDeleted: true },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.worktreeDeleted) {
+      throw new Error("Cannot access files: session worktree has been deleted");
+    }
+
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true, workdir: true, hosting: true, createdById: true },
+    });
+    this.assertLocalFileOwnership(sessions, userId);
+
+    for (const session of sessions) {
+      const runtime = sessionRouter.getRuntimeForSession(session.id);
+      if (!runtime) continue;
+      return {
+        runtimeId: runtime.id,
+        sessionId: session.id,
+        workdirHint: session.workdir ?? group.workdir ?? undefined,
+      };
+    }
+
+    throw new Error("No connected runtime available for this session group");
+  }
+
   async listGroups(channelId: string, organizationId: string) {
     const groups = await prisma.sessionGroup.findMany({
       where: { channelId, organizationId },
@@ -405,11 +462,76 @@ export class SessionService {
     }
 
     const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
-
     const resolvedChannelId =
       input.channelId ?? resolvedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
-    const resolvedRepoId = input.repoId ?? resolvedGroup?.repoId ?? sourceSession?.repoId ?? undefined;
-    const resolvedBranch = input.branch ?? resolvedGroup?.branch ?? sourceSession?.branch ?? undefined;
+    const resolvedChannel = resolvedChannelId
+      ? await prisma.channel.findFirst({
+          where: { id: resolvedChannelId, organizationId: input.organizationId },
+          select: {
+            id: true,
+            type: true,
+            sessionGroups: {
+              where: { repoId: { not: null } },
+              orderBy: [
+                { updatedAt: "desc" },
+                { createdAt: "desc" },
+              ],
+              take: 1,
+              select: { repoId: true, branch: true },
+            },
+          },
+        })
+      : null;
+
+    if (resolvedChannelId && !resolvedChannel) {
+      throw new Error("Channel not found");
+    }
+
+    const channelWorkspaceIdentity =
+      resolvedChannel?.type === "coding"
+        ? (resolvedChannel.sessionGroups[0] ?? null)
+        : null;
+    const resolvedRepoId =
+      input.repoId
+      ?? resolvedGroup?.repoId
+      ?? sourceSession?.repoId
+      ?? channelWorkspaceIdentity?.repoId
+      ?? undefined;
+    const resolvedBranch =
+      input.branch
+      ?? resolvedGroup?.branch
+      ?? sourceSession?.branch
+      ?? channelWorkspaceIdentity?.branch
+      ?? undefined;
+
+    if (
+      resolvedGroup?.repoId
+      && resolvedRepoId !== undefined
+      && resolvedGroup.repoId !== resolvedRepoId
+    ) {
+      throw new Error("Session group is locked to a different repo");
+    }
+    if (
+      resolvedGroup?.branch
+      && resolvedBranch !== undefined
+      && resolvedGroup.branch !== resolvedBranch
+    ) {
+      throw new Error("Session group is locked to a different branch");
+    }
+    if (
+      channelWorkspaceIdentity?.repoId
+      && resolvedRepoId !== undefined
+      && channelWorkspaceIdentity.repoId !== resolvedRepoId
+    ) {
+      throw new Error("Channel is locked to a different repo");
+    }
+    if (
+      channelWorkspaceIdentity?.branch
+      && resolvedBranch !== undefined
+      && channelWorkspaceIdentity.branch !== resolvedBranch
+    ) {
+      throw new Error("Channel is locked to a different branch");
+    }
     const sharedWorkdir = resolvedGroup?.workdir ?? null;
     const sharedConnection = resolvedGroup?.connection ?? null;
     const sharedRuntimeInstanceId =
@@ -464,10 +586,10 @@ export class SessionService {
             if (resolvedChannelId !== undefined && existingGroup.channelId !== resolvedChannelId) {
               nextGroupData.channelId = resolvedChannelId;
             }
-            if (resolvedRepoId !== undefined && existingGroup.repoId !== resolvedRepoId) {
+            if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
               nextGroupData.repoId = resolvedRepoId;
             }
-            if (resolvedBranch !== undefined && existingGroup.branch !== resolvedBranch) {
+            if (existingGroup.branch == null && resolvedBranch !== undefined) {
               nextGroupData.branch = resolvedBranch;
             }
             if (Object.keys(nextGroupData).length === 0) {
@@ -2174,26 +2296,14 @@ export class SessionService {
   async listFiles(
     sessionGroupId: string,
     organizationId: string,
+    userId: string,
   ): Promise<string[]> {
-    const group = await prisma.sessionGroup.findFirst({
-      where: { id: sessionGroupId, organizationId },
-      select: { id: true, workdir: true },
-    });
-    if (!group) throw new Error("Session group not found");
-
-    // Find a session bound to a connected runtime
-    const sessions = await prisma.session.findMany({
-      where: { sessionGroupId, organizationId },
-      select: { id: true, workdir: true },
-    });
-    for (const session of sessions) {
-      const rt = sessionRouter.getRuntimeForSession(session.id);
-      if (rt) {
-        const workdirHint = session.workdir ?? group.workdir ?? undefined;
-        return sessionRouter.listFiles(rt.id, session.id, workdirHint);
-      }
-    }
-    throw new Error("No connected runtime available for this session group");
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.listFiles(runtime.runtimeId, runtime.sessionId, runtime.workdirHint);
   }
 
   /** Read a file's content from a session group's working directory. */
@@ -2201,30 +2311,28 @@ export class SessionService {
     sessionGroupId: string,
     filePath: string,
     organizationId: string,
+    userId: string,
   ): Promise<string> {
-    // Prevent path traversal
-    if (filePath.startsWith("/") || filePath.includes("..")) {
-      throw new Error("Invalid file path");
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    const allowedFiles = await sessionRouter.listFiles(
+      runtime.runtimeId,
+      runtime.sessionId,
+      runtime.workdirHint,
+    );
+    if (!allowedFiles.includes(normalizedPath)) {
+      throw new Error(INVALID_FILE_PATH_ERROR);
     }
-
-    const group = await prisma.sessionGroup.findFirst({
-      where: { id: sessionGroupId, organizationId },
-      select: { id: true, workdir: true },
-    });
-    if (!group) throw new Error("Session group not found");
-
-    const sessions = await prisma.session.findMany({
-      where: { sessionGroupId, organizationId },
-      select: { id: true, workdir: true },
-    });
-    for (const session of sessions) {
-      const rt = sessionRouter.getRuntimeForSession(session.id);
-      if (rt) {
-        const workdirHint = session.workdir ?? group.workdir ?? undefined;
-        return sessionRouter.readFile(rt.id, session.id, filePath, workdirHint);
-      }
-    }
-    throw new Error("No connected runtime available for this session group");
+    return sessionRouter.readFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      runtime.workdirHint,
+    );
   }
 
   // ─── Helpers ───

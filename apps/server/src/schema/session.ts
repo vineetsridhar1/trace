@@ -52,7 +52,7 @@ export const sessionQueries = {
     ctx: Context,
   ) => {
     const orgId = requireOrgContext(ctx);
-    return sessionService.listFiles(args.sessionGroupId, orgId);
+    return sessionService.listFiles(args.sessionGroupId, orgId, ctx.userId);
   },
   sessionGroupFileContent: (
     _: unknown,
@@ -60,7 +60,7 @@ export const sessionQueries = {
     ctx: Context,
   ) => {
     const orgId = requireOrgContext(ctx);
-    return sessionService.readFile(args.sessionGroupId, args.filePath, orgId);
+    return sessionService.readFile(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
 };
 

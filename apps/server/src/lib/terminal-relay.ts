@@ -163,6 +163,7 @@ class TerminalRelay {
     const entry = this.terminals.get(terminalId);
     if (!entry) return false;
     entry.frontendWs = ws;
+    const hadBufferedReady = entry.buffer.some((msg) => msg.includes("\"type\":\"ready\""));
 
     // Cancel orphan cleanup — a frontend has attached
     this.cancelOrphanCleanup(terminalId);
@@ -177,6 +178,9 @@ class TerminalRelay {
       ws.send(msg);
     }
     entry.buffer.length = 0;
+    if (entry.ready && !hadBufferedReady) {
+      ws.send(JSON.stringify({ type: "ready" }));
+    }
 
     // If the terminal already exited/errored while buffered, clean up now
     if (entry.terminated) {

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Editor, { loader } from "@monaco-editor/react";
 import { gql } from "@urql/core";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
 
 // Configure Monaco to load workers from CDN
@@ -79,7 +79,6 @@ export function MonacoFileViewer({
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchContent = useCallback(async (silent = false) => {
     if (!silent) {
@@ -108,14 +107,6 @@ export function MonacoFileViewer({
     fetchContent(false);
   }, [fetchContent]);
 
-  // Poll every 3s for changes
-  useEffect(() => {
-    pollRef.current = setInterval(() => fetchContent(true), 3000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [fetchContent]);
-
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
@@ -142,32 +133,42 @@ export function MonacoFileViewer({
   const language = getLanguageFromPath(filePath);
 
   return (
-    <Editor
-      height="100%"
-      language={language}
-      value={content ?? ""}
-      theme="vs-dark"
-      options={{
-        readOnly: true,
-        minimap: { enabled: true },
-        scrollBeyondLastLine: false,
-        fontSize: 13,
-        lineNumbers: "on",
-        renderLineHighlight: "line",
-        folding: true,
-        wordWrap: "off",
-        automaticLayout: true,
-        padding: { top: 8 },
-        scrollbar: {
-          verticalScrollbarSize: 10,
-          horizontalScrollbarSize: 10,
-        },
-      }}
-      loading={
-        <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
-          <Loader2 size={20} className="animate-spin text-muted-foreground" />
-        </div>
-      }
-    />
+    <div className="relative h-full bg-[#1e1e1e]">
+      <button
+        type="button"
+        onClick={() => fetchContent(false)}
+        className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded border border-[#3c3c3c] bg-[#252526] text-[#cccccc] transition-colors hover:bg-[#2f3030]"
+        title="Refresh file"
+      >
+        <RefreshCw size={14} />
+      </button>
+      <Editor
+        height="100%"
+        language={language}
+        value={content ?? ""}
+        theme="vs-dark"
+        options={{
+          readOnly: true,
+          minimap: { enabled: true },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          lineNumbers: "on",
+          renderLineHighlight: "line",
+          folding: true,
+          wordWrap: "off",
+          automaticLayout: true,
+          padding: { top: 8 },
+          scrollbar: {
+            verticalScrollbarSize: 10,
+            horizontalScrollbarSize: 10,
+          },
+        }}
+        loading={
+          <div className="flex h-full items-center justify-center bg-[#1e1e1e]">
+            <Loader2 size={20} className="animate-spin text-muted-foreground" />
+          </div>
+        }
+      />
+    </div>
   );
 }

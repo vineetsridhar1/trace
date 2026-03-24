@@ -29,6 +29,8 @@ vi.mock("../lib/session-router.js", () => ({
     getRuntimeDiagnostics: vi.fn().mockReturnValue({}),
     listRuntimes: vi.fn().mockReturnValue([]),
     listBranches: vi.fn().mockResolvedValue([]),
+    listFiles: vi.fn().mockResolvedValue([]),
+    readFile: vi.fn().mockResolvedValue(""),
   },
 }));
 
@@ -140,6 +142,11 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
+    prismaMock.channel.findFirst.mockResolvedValue({
+      id: "channel-1",
+      type: "coding",
+      sessionGroups: [],
+    });
   });
 
   describe("isFullyUnloadedSessionStatus", () => {
@@ -227,6 +234,31 @@ describe("SessionService", () => {
         }),
         expect.anything(),
       );
+    });
+
+    it("rejects changing an existing session group's repo", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-1",
+          channelId: "channel-1",
+          repoId: "repo-1",
+          branch: "main",
+        }),
+      );
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          sessionGroupId: "group-1",
+          repoId: "repo-2",
+          prompt: "Keep going",
+        } as any),
+      ).rejects.toThrow("Session group is locked to a different repo");
+
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
     it("creates a new chat inside an existing group and copies workdir plus links from the source session", async () => {
@@ -328,6 +360,52 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+  });
+
+  describe("file access", () => {
+    it("rejects local file access for non-owners", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          hosting: "local",
+          createdById: "user-2",
+        },
+      ]);
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
+        "Access denied: you can only access files on your own local sessions",
+      );
+      expect(sessionRouterMock.listFiles).not.toHaveBeenCalled();
+    });
+
+    it("rejects file reads for paths outside the enumerated file list", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          hosting: "cloud",
+          createdById: "user-1",
+        },
+      ]);
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce({ id: "runtime-1" });
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
+
+      await expect(
+        service.readFile("group-1", "secrets.txt", "org-1", "user-1"),
+      ).rejects.toThrow("Invalid file path");
+      expect(sessionRouterMock.readFile).not.toHaveBeenCalled();
     });
   });
 

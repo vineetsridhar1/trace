@@ -266,6 +266,8 @@ export function parseBranchOutput(stdout: string): string[] {
 
 /** Directories to skip when walking a filesystem tree. */
 export const WALK_IGNORE = new Set(["node_modules", ".git", "dist", ".next", "__pycache__", ".venv", "vendor", ".cache", "coverage"]);
+export const MAX_FILE_VIEW_BYTES = 512 * 1024;
+const BINARY_DETECTION_SAMPLE_BYTES = 8 * 1024;
 
 /**
  * Recursively walk a directory, returning relative file paths.
@@ -298,8 +300,18 @@ export async function walkDir(
 
 /** Minimal fs/path interfaces needed by the shared file handlers (Node compatible). */
 export interface BridgeFsLike {
-  readFile: (path: string, encoding: BufferEncoding, cb: (err: NodeJS.ErrnoException | null, data: string) => void) => void;
-  promises: { readdir: (p: string, opts: { withFileTypes: true }) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>> };
+  readFile: (
+    path: string,
+    cb: (err: NodeJS.ErrnoException | null, data: Buffer) => void,
+  ) => void;
+  promises: {
+    readdir: (
+      p: string,
+      opts: { withFileTypes: true },
+    ) => Promise<Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>>;
+    realpath: (p: string) => Promise<string>;
+    stat: (p: string) => Promise<{ size: number; isFile: () => boolean }>;
+  };
 }
 export interface BridgePathLike {
   resolve: (...p: string[]) => string;
@@ -312,6 +324,33 @@ export type GitLsFilesFn = (
   cwd: string,
   cb: (err: Error | null, files: string[]) => void,
 ) => void;
+
+function isPathInsideRoot(root: string, target: string, pathModule: BridgePathLike): boolean {
+  return target === root || target.startsWith(root + pathModule.sep);
+}
+
+function hasInvalidRelativePathSegments(relativePath: string): boolean {
+  if (!relativePath || relativePath.startsWith("/") || relativePath.includes("\\")) {
+    return true;
+  }
+  return relativePath
+    .split("/")
+    .some((part) => part.length === 0 || part === "." || part === "..");
+}
+
+function isLikelyBinaryFile(buffer: Buffer): boolean {
+  const sample = buffer.subarray(0, BINARY_DETECTION_SAMPLE_BYTES);
+  if (sample.includes(0)) return true;
+
+  let suspiciousBytes = 0;
+  for (const byte of sample) {
+    const isAllowedControl = byte === 9 || byte === 10 || byte === 13;
+    if (!isAllowedControl && (byte < 32 || byte === 127)) {
+      suspiciousBytes += 1;
+    }
+  }
+  return sample.length > 0 && suspiciousBytes / sample.length > 0.3;
+}
 
 /**
  * Handle a `list_files` bridge command. Shared between desktop and container bridges
@@ -357,24 +396,67 @@ export function handleReadFile(
     send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
     return;
   }
-  // Defense-in-depth: reject absolute paths and .. traversal at the bridge level too
-  if (relativePath.startsWith("/") || relativePath.includes("..")) {
+  // Defense-in-depth: reject absolute paths and suspicious relative paths at the bridge level too.
+  if (hasInvalidRelativePathSegments(relativePath)) {
     send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
     return;
   }
   const normalizedWorkdir = deps.path.resolve(workdir);
   const fullPath = deps.path.resolve(normalizedWorkdir, relativePath);
-  if (!fullPath.startsWith(normalizedWorkdir + deps.path.sep) && fullPath !== normalizedWorkdir) {
+  if (!isPathInsideRoot(normalizedWorkdir, fullPath, deps.path)) {
     send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
     return;
   }
-  deps.fs.readFile(fullPath, "utf-8", (err, content) => {
-    if (err) {
-      send({ type: "file_content_result", requestId, content: "", error: err.message });
-      return;
+
+  void (async () => {
+    try {
+      const realWorkdir = await deps.fs.promises.realpath(normalizedWorkdir);
+      const realPath = await deps.fs.promises.realpath(fullPath);
+      if (!isPathInsideRoot(realWorkdir, realPath, deps.path)) {
+        send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
+        return;
+      }
+
+      const stats = await deps.fs.promises.stat(realPath);
+      if (!stats.isFile()) {
+        send({ type: "file_content_result", requestId, content: "", error: "Not a file" });
+        return;
+      }
+      if (stats.size > MAX_FILE_VIEW_BYTES) {
+        send({
+          type: "file_content_result",
+          requestId,
+          content: "",
+          error: `File too large to preview (${Math.ceil(MAX_FILE_VIEW_BYTES / 1024)} KB max)`,
+        });
+        return;
+      }
+
+      deps.fs.readFile(realPath, (err, content) => {
+        if (err) {
+          send({ type: "file_content_result", requestId, content: "", error: err.message });
+          return;
+        }
+        if (isLikelyBinaryFile(content)) {
+          send({
+            type: "file_content_result",
+            requestId,
+            content: "",
+            error: "Binary files are not supported in the file viewer",
+          });
+          return;
+        }
+        send({ type: "file_content_result", requestId, content: content.toString("utf-8") });
+      });
+    } catch (err) {
+      send({
+        type: "file_content_result",
+        requestId,
+        content: "",
+        error: err instanceof Error ? err.message : "Failed to read file",
+      });
     }
-    send({ type: "file_content_result", requestId, content });
-  });
+  })();
 }
 
 // --- Bridge client interface ---
