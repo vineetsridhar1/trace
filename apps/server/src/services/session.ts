@@ -1232,7 +1232,12 @@ export class SessionService {
     });
 
     const newAgentStatus: AgentStatus = "done";
-    const newSessionStatus: SessionStatus = hasPendingPlan || hasQuestion ? "needs_input" : current.sessionStatus;
+    const newSessionStatus: SessionStatus =
+      hasPendingPlan || hasQuestion
+        ? "needs_input"
+        : current.sessionStatus === "in_review"
+          ? "in_review"
+          : "not_started";
 
     const session = await prisma.session.update({
       where: { id },

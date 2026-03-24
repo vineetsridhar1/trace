@@ -98,14 +98,14 @@ export function getSessionGroupDisplayStatus(
   agentStatuses: Array<string | null | undefined>,
   prUrl: string | null | undefined,
 ): string {
-  if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
-  if (prUrl) return "in_review";
   if (
     agentStatuses.some((s) => s === "active") ||
     sessionStatuses.some((s) => s === "in_progress")
   ) {
     return "in_progress";
   }
+  if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
+  if (prUrl) return "in_review";
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
@@ -120,9 +120,9 @@ export function getSessionGroupAgentStatus(
   agentStatuses: Array<string | null | undefined>,
 ): string {
   if (agentStatuses.some((s) => s === "active")) return "active";
-  if (agentStatuses.some((s) => s === "done")) return "done";
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
+  if (agentStatuses.some((s) => s === "done")) return "done";
   return "done";
 }
 
