@@ -19,6 +19,7 @@ const SESSION_GROUPS_QUERY = gql`
       name
       status
       prUrl
+      worktreeDeleted
       channel {
         id
       }

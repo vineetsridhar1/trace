@@ -17,6 +17,9 @@ export function deriveSessionGroupStatus(
   sessions: Array<SessionGroupStatusSource | null | undefined>,
   prUrl: string | null | undefined,
 ): SessionGroupStatus {
+  // Merged is terminal and takes priority over all other states,
+  // including needs_input and in_review (which depends on prUrl).
+  if (sessions.some((session) => session?.sessionStatus === "merged")) return "merged";
   if (sessions.some((session) => session?.sessionStatus === "needs_input")) {
     return "needs_input";
   }
@@ -31,6 +34,5 @@ export function deriveSessionGroupStatus(
   }
   if (sessions.some((session) => session?.agentStatus === "failed")) return "failed";
   if (sessions.some((session) => session?.agentStatus === "stopped")) return "stopped";
-  if (sessions.some((session) => session?.sessionStatus === "merged")) return "merged";
   return "in_progress";
 }

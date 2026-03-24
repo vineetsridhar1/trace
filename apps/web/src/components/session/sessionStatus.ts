@@ -96,6 +96,9 @@ export function getSessionGroupDisplayStatus(
   agentStatuses: Array<string | null | undefined>,
   prUrl: string | null | undefined,
 ): string {
+  // Merged is terminal and takes priority over all other states,
+  // including needs_input and in_review (which depends on prUrl).
+  if (sessionStatuses.some((s) => s === "merged")) return "merged";
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
   if (prUrl) return "in_review";
   if (
@@ -106,7 +109,6 @@ export function getSessionGroupDisplayStatus(
   }
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
-  if (sessionStatuses.some((s) => s === "merged")) return "merged";
   return "in_progress";
 }
 
