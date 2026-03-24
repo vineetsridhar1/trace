@@ -4,7 +4,7 @@ import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
-import { useEntityStore } from "../../stores/entity";
+import { useEntityField, useEntityStore } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "../../lib/session-group";
@@ -24,37 +24,61 @@ function formatCheckpointTime(committedAt: string): string {
 
 interface CheckpointPanelProps {
   sessionGroupId: string;
+  activeSessionId: string | null;
   highlightCheckpointId?: string | null;
 }
 
 export function CheckpointPanel({
   sessionGroupId,
+  activeSessionId,
   highlightCheckpointId,
 }: CheckpointPanelProps) {
+  const gitCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
+    | GitCheckpoint[]
+    | undefined;
   const sessionGroup = useEntityStore(
     (s) => s.sessionGroups[sessionGroupId],
   );
-  const sessions = useEntityStore((s) => s.sessions);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [pendingCheckpoint, setPendingCheckpoint] = useState<GitCheckpoint | null>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
 
   const checkpoints = useMemo(() => {
-    const raw = Array.isArray(sessionGroup?.gitCheckpoints)
-      ? (sessionGroup.gitCheckpoints as GitCheckpoint[])
-      : [];
+    const raw = Array.isArray(gitCheckpoints) ? gitCheckpoints : [];
     return [...raw].sort((a, b) => b.committedAt.localeCompare(a.committedAt));
-  }, [sessionGroup?.gitCheckpoints]);
+  }, [gitCheckpoints]);
+
+  // Build a minimal map of session id → name for display only
+  const sessionNameById = useEntityStore((s) => {
+    const names: Record<string, string> = {};
+    for (const cp of checkpoints) {
+      const session = s.sessions[cp.sessionId];
+      if (session) names[cp.sessionId] = session.name;
+    }
+    return names;
+  });
 
   const groupSessions = useMemo(
     () =>
-      Object.values(sessions).filter(
+      Object.values(useEntityStore.getState().sessions).filter(
         (s) => s.sessionGroupId === sessionGroupId,
       ),
-    [sessionGroupId, sessions],
+    [sessionGroupId, sessionNameById], // eslint-disable-line react-hooks/exhaustive-deps -- sessionNameById changes when sessions change
   );
 
   const channelId = getSessionGroupChannelId(sessionGroup ?? null, groupSessions);
+
+  // Use the active session (or fall back to most recently updated) for restore config
+  const restoreSession = useMemo(() => {
+    if (!groupSessions.length) return null;
+    if (activeSessionId) {
+      const active = groupSessions.find((s) => s.id === activeSessionId);
+      if (active) return active;
+    }
+    return [...groupSessions].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )[0];
+  }, [activeSessionId, groupSessions]);
 
   useEffect(() => {
     if (highlightCheckpointId && highlightRef.current) {
@@ -64,17 +88,16 @@ export function CheckpointPanel({
 
   const handleRestore = useCallback(
     async (checkpoint: GitCheckpoint) => {
-      const currentSession = groupSessions[0];
-      if (!currentSession) return;
+      if (!restoreSession) return;
 
       setRestoringId(checkpoint.id);
       try {
         const result = await client
           .mutation(START_SESSION_MUTATION, {
             input: {
-              tool: currentSession.tool,
-              model: currentSession.model ?? undefined,
-              hosting: currentSession.hosting,
+              tool: restoreSession.tool,
+              model: restoreSession.model ?? undefined,
+              hosting: restoreSession.hosting,
               channelId: channelId ?? undefined,
               restoreCheckpointId: checkpoint.id,
             },
@@ -95,7 +118,7 @@ export function CheckpointPanel({
         setRestoringId(null);
       }
     },
-    [channelId, groupSessions],
+    [channelId, restoreSession],
   );
 
   const requestRestore = useCallback(
@@ -120,7 +143,7 @@ export function CheckpointPanel({
   return (
     <div className="h-full overflow-y-auto">
       {checkpoints.map((checkpoint, index) => {
-        const session = sessions[checkpoint.sessionId];
+        const sessionName = sessionNameById[checkpoint.sessionId] ?? "Session";
         const isHighlighted = checkpoint.id === highlightCheckpointId;
         const isCurrent = index === 0;
 
@@ -156,7 +179,7 @@ export function CheckpointPanel({
               </p>
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <span className="truncate">
-                  {session?.name ?? "Session"}
+                  {sessionName}
                 </span>
                 <span>·</span>
                 <span className="shrink-0">
@@ -191,16 +214,18 @@ export function CheckpointPanel({
         );
       })}
 
-      <RestoreCheckpointDialog
-        open={pendingCheckpoint !== null}
-        commitSha={pendingCheckpoint ? shortSha(pendingCheckpoint.commitSha) : ""}
-        subject={pendingCheckpoint?.subject ?? ""}
-        onConfirm={() => {
-          if (pendingCheckpoint) handleRestore(pendingCheckpoint);
-          setPendingCheckpoint(null);
-        }}
-        onCancel={() => setPendingCheckpoint(null)}
-      />
+      {pendingCheckpoint && (
+        <RestoreCheckpointDialog
+          open
+          commitSha={shortSha(pendingCheckpoint.commitSha)}
+          subject={pendingCheckpoint.subject}
+          onConfirm={() => {
+            handleRestore(pendingCheckpoint);
+            setPendingCheckpoint(null);
+          }}
+          onCancel={() => setPendingCheckpoint(null)}
+        />
+      )}
     </div>
   );
 }

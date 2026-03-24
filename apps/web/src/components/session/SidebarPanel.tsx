@@ -7,6 +7,7 @@ export type SidebarTab = "files" | "git";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
+  activeSessionId: string | null;
   activeTab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
   onFileClick: (filePath: string) => void;
@@ -21,6 +22,7 @@ const tabInactive =
 
 export function SidebarPanel({
   sessionGroupId,
+  activeSessionId,
   activeTab,
   onTabChange,
   onFileClick,
@@ -56,6 +58,7 @@ export function SidebarPanel({
         ) : (
           <CheckpointPanel
             sessionGroupId={sessionGroupId}
+            activeSessionId={activeSessionId}
             highlightCheckpointId={highlightCheckpointId}
           />
         )}

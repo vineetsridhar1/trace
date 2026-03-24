@@ -277,6 +277,18 @@ export function SessionGroupDetailView({
     [],
   );
 
+  const handleSidebarTabChange = useCallback((tab: SidebarTab) => {
+    setSidebarTab(tab);
+    if (tab !== "git") setHighlightCheckpointId(null);
+  }, []);
+
+  const handleToggleSidebar = useCallback(() => {
+    setShowSidebar((prev) => {
+      if (prev) setHighlightCheckpointId(null);
+      return !prev;
+    });
+  }, []);
+
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
       const existing = terminals.filter((terminal) => terminal.sessionId === sessionId);
@@ -431,7 +443,7 @@ export function SessionGroupDetailView({
           showSidebar={showSidebar}
           onClose={() => setActiveSessionId(null)}
           onToggleFullscreen={toggleFullscreen}
-          onToggleSidebar={() => setShowSidebar((v) => !v)}
+          onToggleSidebar={handleToggleSidebar}
         />
 
         <GroupTabStrip
@@ -481,8 +493,9 @@ export function SessionGroupDetailView({
             <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
               <SidebarPanel
                 sessionGroupId={sessionGroupId}
+                activeSessionId={selectedSession?.id ?? null}
                 activeTab={sidebarTab}
-                onTabChange={setSidebarTab}
+                onTabChange={handleSidebarTabChange}
                 onFileClick={handleFileClick}
                 highlightCheckpointId={highlightCheckpointId}
               />
