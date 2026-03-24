@@ -355,6 +355,7 @@ export type Mutation = {
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
   deleteSession: Session;
+  deleteSessionGroup: Scalars['Boolean']['output'];
   destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
@@ -482,6 +483,11 @@ export type MutationDeleteChatMessageArgs = {
 
 
 export type MutationDeleteSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteSessionGroupArgs = {
   id: Scalars['ID']['input'];
 };
 

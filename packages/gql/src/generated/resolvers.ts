@@ -358,6 +358,7 @@ export type Mutation = {
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
   deleteSession: Session;
+  deleteSessionGroup: Scalars['Boolean']['output'];
   destroyTerminal: Scalars['Boolean']['output'];
   dismissInboxItem: InboxItem;
   dismissSession: Session;
@@ -485,6 +486,11 @@ export type MutationDeleteChatMessageArgs = {
 
 
 export type MutationDeleteSessionArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteSessionGroupArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -1699,6 +1705,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   deleteChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChannelMessageArgs, 'messageId'>>;
   deleteChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationDeleteChatMessageArgs, 'messageId'>>;
   deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
+  deleteSessionGroup?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSessionGroupArgs, 'id'>>;
   destroyTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDestroyTerminalArgs, 'terminalId'>>;
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
   dismissSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDismissSessionArgs, 'id'>>;

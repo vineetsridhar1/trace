@@ -1,10 +1,31 @@
 import { asJsonObject } from "./json.js";
 import type { ToolOutput } from "./adapters/coding-tool.js";
 
-export type GitCheckpointTrigger = "commit" | "push" | "commit_and_push";
+export type GitCheckpointTrigger = "commit" | "push" | "commit_and_push" | "rewrite";
 
-export const GIT_SHOW_ARGS = ["show", "-s", "--format=%H%n%P%n%T%n%s%n%an <%ae>%n%cI", "HEAD"] as const;
-export const GIT_DIFF_TREE_ARGS = ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD"] as const;
+const GIT_SHOW_FORMAT = "%H%n%P%n%T%n%s%n%an <%ae>%n%cI";
+const TRACE_CHECKPOINT_TRAILER_RE = /^Trace-Checkpoint:\s*(.+)\s*$/im;
+
+export interface GitCheckpointContext {
+  checkpointContextId: string;
+  promptEventId?: string | null;
+  sessionId: string;
+  sessionGroupId: string;
+  repoId: string;
+  updatedAt: string;
+}
+
+export function buildGitShowArgs(ref: string = "HEAD"): string[] {
+  return ["show", "-s", `--format=${GIT_SHOW_FORMAT}`, ref];
+}
+
+export function buildGitDiffTreeArgs(ref: string = "HEAD"): string[] {
+  return ["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", ref];
+}
+
+export const GIT_SHOW_ARGS = buildGitShowArgs();
+export const GIT_DIFF_TREE_ARGS = buildGitDiffTreeArgs();
+export const TRACE_CHECKPOINT_TRAILER = "Trace-Checkpoint";
 
 export function parseGitShowOutput(
   showStdout: string,
@@ -31,6 +52,7 @@ export function parseGitShowOutput(
     author,
     committedAt,
     filesChanged: diffStdout.split("\n").filter(Boolean).length,
+    source: "bridge_parser",
   };
 }
 
@@ -49,6 +71,28 @@ export interface GitCheckpointBridgePayload {
   author: string;
   committedAt: string;
   filesChanged: number;
+  source?: "bridge_parser" | "git_hook";
+  checkpointContextId?: string | null;
+  promptEventId?: string | null;
+  hookName?: "post-commit" | "post-rewrite";
+  rewrittenFromCommitSha?: string | null;
+}
+
+export function parseTraceCheckpointContextId(message: string): string | null {
+  const match = TRACE_CHECKPOINT_TRAILER_RE.exec(message);
+  return match?.[1]?.trim() || null;
+}
+
+export function addTraceCheckpointTrailer(
+  message: string,
+  checkpointContextId: string,
+): string {
+  if (!checkpointContextId.trim()) return message;
+  if (parseTraceCheckpointContextId(message)) return message;
+
+  const trimmed = message.replace(/\s+$/u, "");
+  const separator = trimmed.length === 0 ? "" : "\n\n";
+  return `${trimmed}${separator}${TRACE_CHECKPOINT_TRAILER}: ${checkpointContextId}\n`;
 }
 
 const GIT_CHECKPOINT_RE = /\bgit\s+(commit|push)\b/gi;

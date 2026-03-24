@@ -49,8 +49,25 @@ export type {
   BridgeTerminalDestroyCommand,
 } from "./bridge.js";
 export { parseBranchOutput, walkDir, handleListFiles, handleReadFile } from "./bridge.js";
-export type { GitCheckpointBridgePayload, GitCheckpointTrigger } from "./git-checkpoint.js";
-export { extractGitCheckpointTrigger, extractGitToolUsePending, extractGitToolResultTrigger, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput, shortSha } from "./git-checkpoint.js";
+export type {
+  GitCheckpointBridgePayload,
+  GitCheckpointContext,
+  GitCheckpointTrigger,
+} from "./git-checkpoint.js";
+export {
+  addTraceCheckpointTrailer,
+  buildGitDiffTreeArgs,
+  buildGitShowArgs,
+  extractGitCheckpointTrigger,
+  extractGitToolUsePending,
+  extractGitToolResultTrigger,
+  GIT_SHOW_ARGS,
+  GIT_DIFF_TREE_ARGS,
+  parseGitShowOutput,
+  parseTraceCheckpointContextId,
+  shortSha,
+  TRACE_CHECKPOINT_TRAILER,
+} from "./git-checkpoint.js";
 export type {
   LLMRole,
   LLMProvider,
