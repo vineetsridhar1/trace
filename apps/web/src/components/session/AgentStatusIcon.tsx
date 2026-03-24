@@ -1,4 +1,4 @@
-import { Circle, Loader2, XCircle, StopCircle } from "lucide-react";
+import { Circle, Loader2, XCircle, OctagonX } from "lucide-react";
 
 export function AgentStatusIcon({ agentStatus, size, className }: { agentStatus: string; size: number; className?: string }) {
   switch (agentStatus) {
@@ -10,7 +10,7 @@ export function AgentStatusIcon({ agentStatus, size, className }: { agentStatus:
     case "failed":
       return <XCircle size={size} className={className} />;
     case "stopped":
-      return <StopCircle size={size} className={className} />;
+      return <OctagonX size={size} className={className} />;
     default:
       return <Circle size={size} className={`fill-current ${className ?? ""}`} />;
   }
