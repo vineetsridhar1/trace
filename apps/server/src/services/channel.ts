@@ -119,7 +119,16 @@ export class ChannelService {
     await prisma.$transaction(async (tx) => {
       const channel = await tx.channel.findUniqueOrThrow({
         where: { id: channelId },
-        select: { id: true, name: true, type: true, organizationId: true },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          position: true,
+          groupId: true,
+          organizationId: true,
+          repoId: true,
+          repo: { select: { name: true } },
+        },
       });
 
       await tx.orgMember.findUniqueOrThrow({
@@ -148,7 +157,19 @@ export class ChannelService {
         scopeType: "channel",
         scopeId: channelId,
         eventType: "channel_member_added",
-        payload: { userId: actorId, channel: { id: channel.id, name: channel.name, type: channel.type, members: normalizedMembers } },
+        payload: {
+          userId: actorId,
+          channel: {
+            id: channel.id,
+            name: channel.name,
+            type: channel.type,
+            position: channel.position,
+            groupId: channel.groupId,
+            repoId: channel.repoId,
+            ...(channel.repoId && channel.repo ? { repo: { id: channel.repoId, name: channel.repo.name } } : {}),
+            members: normalizedMembers,
+          },
+        },
         actorType,
         actorId,
       }, tx);
@@ -164,7 +185,16 @@ export class ChannelService {
     await prisma.$transaction(async (tx) => {
       const channel = await tx.channel.findUniqueOrThrow({
         where: { id: channelId },
-        select: { id: true, name: true, type: true, organizationId: true },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          position: true,
+          groupId: true,
+          organizationId: true,
+          repoId: true,
+          repo: { select: { name: true } },
+        },
       });
 
       const membership = await tx.channelMember.findUnique({
@@ -187,7 +217,19 @@ export class ChannelService {
         scopeType: "channel",
         scopeId: channelId,
         eventType: "channel_member_removed",
-        payload: { userId: actorId, channel: { id: channel.id, name: channel.name, type: channel.type, members: normalizedMembers } },
+        payload: {
+          userId: actorId,
+          channel: {
+            id: channel.id,
+            name: channel.name,
+            type: channel.type,
+            position: channel.position,
+            groupId: channel.groupId,
+            repoId: channel.repoId,
+            ...(channel.repoId && channel.repo ? { repo: { id: channel.repoId, name: channel.repo.name } } : {}),
+            members: normalizedMembers,
+          },
+        },
         actorType,
         actorId,
       }, tx);

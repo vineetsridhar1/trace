@@ -188,6 +188,12 @@ describe("SessionService", () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup });
 
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
       prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
       prismaMock.session.create.mockResolvedValueOnce(session);
 
@@ -205,6 +211,7 @@ describe("SessionService", () => {
           name: "Implement dashboard filters",
           organizationId: "org-1",
           channelId: "channel-1",
+          repoId: "repo-1",
           connection: expect.any(Object),
         },
         select: expect.any(Object),
@@ -214,6 +221,7 @@ describe("SessionService", () => {
           data: expect.objectContaining({
             sessionGroupId: "group-1",
             channelId: "channel-1",
+            repoId: "repo-1",
           }),
         }),
       );
@@ -227,6 +235,59 @@ describe("SessionService", () => {
         }),
         expect.anything(),
       );
+    });
+
+    it("rejects a repo that conflicts with the channel repo", async () => {
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          channelId: "channel-1",
+          repoId: "repo-2",
+        } as any),
+      ).rejects.toThrow("Coding channel sessions must use the channel's linked repo");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a local runtime that is not linked to the channel repo", async () => {
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        registeredRepoIds: [],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          channelId: "channel-1",
+          runtimeInstanceId: "runtime-1",
+        } as any),
+      ).rejects.toThrow("Selected runtime does not have this repo linked");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
     it("creates a new chat inside an existing group and copies workdir plus links from the source session", async () => {
@@ -252,6 +313,12 @@ describe("SessionService", () => {
           branch: "feature/source",
         }),
       );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
       prismaMock.ticketLink.findMany.mockResolvedValueOnce([{ ticketId: "ticket-1" }]);
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
@@ -303,6 +370,12 @@ describe("SessionService", () => {
           branch: "feature/shared",
         }),
       );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-2",
