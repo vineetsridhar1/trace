@@ -63,7 +63,7 @@ describe("ActionExecutor", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Missing required field: title");
-    expect(services.ticketService.create as any).not.toHaveBeenCalled();
+    expect(services.ticketService.create as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
   it("injects agent context into ticket creation", async () => {

@@ -215,7 +215,10 @@ export function CreateChannelDialog({
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => { setChannelType(opt.value); if (opt.value === "text") setRepoId(undefined); }}
+                        onClick={() => {
+                          setChannelType(opt.value);
+                          if (opt.value === "text") setRepoId(undefined);
+                        }}
                         className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors ${
                           selected
                             ? "border-primary bg-primary/5 text-foreground"

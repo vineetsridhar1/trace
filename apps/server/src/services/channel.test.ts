@@ -73,7 +73,7 @@ describe("ChannelService", () => {
           organizationId: "org-1",
           name: "backend",
           type: "coding",
-        } as any,
+        },
         "user",
         "user-1",
       ),

@@ -332,8 +332,8 @@ export class CloudMachineService {
       const activeSessions = await prisma.session.count({
         where: {
           hosting: "cloud",
-          agentStatus: "active",
-          sessionStatus: { notIn: ["merged"] },
+          agentStatus: { notIn: ["failed", "stopped"] },
+          sessionStatus: { not: "merged" },
           connection: { path: ["cloudMachineId"], equals: machine.id },
         },
       });

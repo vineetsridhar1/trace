@@ -35,6 +35,8 @@ export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
         const agentStatuses = groupSessions.map((session) => session.agentStatus);
         const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
         const prUrl = group.prUrl as string | null | undefined;
+        // Server-derived status is authoritative; client derivation is a fallback
+        // for the brief window before the initial query populates group.status.
         const displaySessionStatus =
           (group.status as string | undefined)
           ?? getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl);

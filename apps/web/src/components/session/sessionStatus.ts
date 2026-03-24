@@ -18,6 +18,8 @@ export const agentStatusLabel: Record<string, string> = {
 
 // ─── Session Status (where the session is in its lifecycle) ───
 
+// Includes "failed" and "stopped" because getDisplaySessionStatus() maps terminal
+// agent states into these display keys for group headers and table row groups.
 export const sessionStatusColor: Record<string, string> = {
   in_progress: "text-blue-400",
   needs_input: "text-amber-400",
