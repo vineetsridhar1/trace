@@ -494,6 +494,41 @@ describe("SessionService", () => {
     });
   });
 
+  describe("complete", () => {
+    it("returns finished sessions to not_started when no follow-up input is needed", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce({
+        organizationId: "org-1",
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+
+      await service.complete("session-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { agentStatus: "done", sessionStatus: "not_started" },
+        select: { organizationId: true, createdById: true, name: true },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_terminated",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            reason: "bridge_complete",
+            agentStatus: "done",
+            sessionStatus: "not_started",
+          }),
+        }),
+      );
+    });
+  });
+
   describe("delete", () => {
     it("removes the session group when the last session is deleted", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());

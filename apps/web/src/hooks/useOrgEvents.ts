@@ -183,7 +183,6 @@ export function useOrgEvents() {
             const existing = useEntityStore.getState().sessionGroups[sessionGroup.id];
             upsert("sessionGroups", sessionGroup.id, {
               ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
-              _sortTimestamp: event.timestamp,
             } as SessionGroupEntity);
           }
         };
