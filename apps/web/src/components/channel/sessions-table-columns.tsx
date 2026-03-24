@@ -1,14 +1,16 @@
-import { Circle, Loader2 } from "lucide-react";
 import type { ColDef, ColumnState, GridApi, ICellRendererParams } from "ag-grid-community";
-import { createTable } from "../ui/table";
-import { statusColor } from "../session/sessionStatus";
-import { timeAgo } from "../../lib/utils";
-import { UserProfileChatCard } from "../shared/UserProfileChatCard";
+import { SessionCompactSummaryCell } from "./SessionCompactSummaryCell";
+import { SessionCreatedByCell } from "./SessionCreatedByCell";
+import { SessionLastActivityCell } from "./SessionLastActivityCell";
+import { SessionNameCell } from "./SessionNameCell";
+import { SessionRepoCell } from "./SessionRepoCell";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { bucketize } from "./sessions-table-types";
-
-type RepoRef = { id: string; name: string };
-type CreatedByRef = { id: string; name: string; avatarUrl?: string | null };
+import {
+  getSessionCreatedBy,
+  getSessionLastActivityAt,
+  getSessionRepo,
+} from "./session-cell-data";
 
 export const SESSION_COLUMN_IDS = {
   compactSummary: "compactSummary",
@@ -18,29 +20,6 @@ export const SESSION_COLUMN_IDS = {
   createdBy: "createdBy",
   lastActivityAt: "lastActivityAt",
 } as const;
-
-function getRepo(data: SessionGroupRow | undefined): RepoRef | null {
-  if (!data) return null;
-  return (
-    (data.repo as RepoRef | null | undefined)
-    ?? (data.latestSession?.repo as RepoRef | null | undefined)
-    ?? null
-  );
-}
-
-function getCreatedBy(data: SessionGroupRow | undefined): CreatedByRef | null {
-  if (!data) return null;
-  return (data.createdBySession?.createdBy as CreatedByRef | undefined) ?? null;
-}
-
-function renderStatusIcon(data: SessionGroupRow, size = 12) {
-  const color = statusColor[data.status ?? "active"];
-  return data.reviewAndActive ? (
-    <Loader2 size={size} className={`shrink-0 animate-spin ${color}`} />
-  ) : (
-    <Circle size={Math.max(size - 4, 7)} className={`shrink-0 fill-current ${color}`} />
-  );
-}
 
 const statusColumn: ColDef<SessionGroupRow> = {
   colId: SESSION_COLUMN_IDS.status,
@@ -56,12 +35,10 @@ const repoColumn: ColDef<SessionGroupRow> = {
   field: "repo" as keyof SessionGroupRow,
   width: 140,
   filter: true,
-  valueGetter: (params) => getRepo(params.data)?.name ?? "",
-  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-    const repo = getRepo(params.data);
-    if (!repo) return null;
-    return <span className="truncate text-xs text-muted-foreground">{repo.name}</span>;
-  },
+  valueGetter: (params) => getSessionRepo(params.data)?.name ?? "",
+  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
+    <SessionRepoCell row={params.data} />
+  ),
 };
 
 const createdByColumn: ColDef<SessionGroupRow> = {
@@ -69,31 +46,10 @@ const createdByColumn: ColDef<SessionGroupRow> = {
   colId: SESSION_COLUMN_IDS.createdBy,
   width: 150,
   filter: true,
-  filterValueGetter: (params) => getCreatedBy(params.data)?.name ?? "",
-  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-    const createdBy = getCreatedBy(params.data);
-    if (!createdBy) return null;
-    return (
-      <UserProfileChatCard
-        userId={createdBy.id}
-        fallbackName={createdBy.name}
-        fallbackAvatarUrl={createdBy.avatarUrl}
-      >
-        <div className="flex h-full cursor-pointer items-center gap-1.5">
-          {createdBy.avatarUrl && (
-            <img
-              src={createdBy.avatarUrl}
-              alt={createdBy.name}
-              className="h-4 w-4 rounded-full"
-            />
-          )}
-          <span className="truncate text-xs text-muted-foreground hover:underline">
-            {createdBy.name}
-          </span>
-        </div>
-      </UserProfileChatCard>
-    );
-  },
+  filterValueGetter: (params) => getSessionCreatedBy(params.data)?.name ?? "",
+  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
+    <SessionCreatedByCell row={params.data} />
+  ),
 };
 
 const lastMessageColumn: ColDef<SessionGroupRow> = {
@@ -101,12 +57,10 @@ const lastMessageColumn: ColDef<SessionGroupRow> = {
   colId: SESSION_COLUMN_IDS.lastActivityAt,
   width: 120,
   filter: true,
-  valueGetter: (params) => params.data?._lastMessageAt ?? params.data?.updatedAt,
-  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-    const lastMessageAt = (params.value as string | undefined) ?? undefined;
-    if (!lastMessageAt) return null;
-    return <span className="text-xs text-muted-foreground">{timeAgo(lastMessageAt)}</span>;
-  },
+  valueGetter: (params) => getSessionLastActivityAt(params.data),
+  cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
+    <SessionLastActivityCell value={(params.value as string | undefined) ?? undefined} />
+  ),
   comparator: (a: string | undefined, b: string | undefined) => bucketize(a) - bucketize(b),
 };
 
@@ -118,32 +72,9 @@ export const sessionColumns: ColDef<SessionGroupRow>[] = [
     flex: 1,
     minWidth: 220,
     hide: true,
-    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const { data } = params;
-      if (!data) return null;
-
-      const repo = getRepo(data);
-      const lastActivityAt = data._lastMessageAt ?? data.updatedAt ?? data.createdAt;
-
-      return (
-        <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">
-          <div className="flex w-full min-w-0 items-center gap-2">
-            {renderStatusIcon(data)}
-            <span className="truncate text-sm font-medium text-foreground">{data.name}</span>
-          </div>
-          <div className="mt-2.5 flex w-full min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
-            {repo && (
-              <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-muted-foreground/90">
-                {repo.name}
-              </span>
-            )}
-            <span className={`${repo ? "" : "ml-auto "}shrink-0 text-right`}>
-              {timeAgo(lastActivityAt)}
-            </span>
-          </div>
-        </div>
-      );
-    },
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
+      <SessionCompactSummaryCell row={params.data} />
+    ),
   },
   {
     colId: SESSION_COLUMN_IDS.name,
@@ -152,16 +83,9 @@ export const sessionColumns: ColDef<SessionGroupRow>[] = [
     flex: 2,
     minWidth: 200,
     filter: true,
-    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const { data } = params;
-      if (!data) return null;
-      return (
-        <div className="flex h-full items-center gap-2">
-          {renderStatusIcon(data)}
-          <span className="truncate text-sm text-foreground">{data.name}</span>
-        </div>
-      );
-    },
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => (
+      <SessionNameCell row={params.data} />
+    ),
   },
   statusColumn,
   repoColumn,
@@ -200,8 +124,3 @@ export function applySessionsColumnMode(api: GridApi<SessionGroupRow>, isCompact
     applyOrder: true,
   });
 }
-
-export const { Table: SessionsGridTable, useTable: useSessionsGridTable } = createTable<SessionGroupRow>({
-  id: "sessions",
-  columns: sessionColumns,
-});
