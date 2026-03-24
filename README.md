@@ -18,6 +18,8 @@ Web / Desktop / Electron  →  GraphQL  →  Service Layer  ←  Agent Runtime
 - **Events are the source of truth.** Mutations produce events; clients subscribe to events for state updates.
 - **Agents are first-class.** No separate "agent mode" — agents use the same service layer as human users, distinguished only by `actor_type`.
 
+> "The best way to predict the future is to build it." — Alan Kay
+
 ## Monorepo Structure
 
 ```
