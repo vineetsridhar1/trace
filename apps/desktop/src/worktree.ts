@@ -18,14 +18,14 @@ async function resolveBaseBranch(
   startBranch: string | undefined,
   defaultBranch: string,
 ): Promise<string> {
-  const branch = startBranch ?? defaultBranch;
+  const candidate = startBranch ?? defaultBranch;
 
   // 1. Remote tracking branch (current behavior, works when pushed)
-  const remote = `origin/${branch}`;
+  const remote = `origin/${candidate}`;
   if (await refExists(repoPath, remote)) return remote;
 
   // 2. Local ref (branch exists locally but was never pushed)
-  if (await refExists(repoPath, branch)) return branch;
+  if (await refExists(repoPath, candidate)) return candidate;
 
   // 3. Safe fallback to repo's main branch on remote
   return `origin/${defaultBranch}`;
