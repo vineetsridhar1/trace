@@ -24,15 +24,17 @@ export function UserBubble({
 
   return (
     <div className="flex justify-end">
-      <div className="user-prompt-bubble max-w-[85%] px-3 py-2">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="text-xs font-semibold text-accent">{displayName}</span>
-          <span className="text-[10px] text-muted-foreground">{formatTime(timestamp)}</span>
+      <div className="flex max-w-[85%] flex-col items-end">
+        <div className="user-prompt-bubble px-3 py-2">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-xs font-semibold text-accent">{displayName}</span>
+            <span className="text-[10px] text-muted-foreground">{formatTime(timestamp)}</span>
+          </div>
+          <div className="text-sm leading-relaxed break-words">
+            <Markdown>{displayText}</Markdown>
+          </div>
         </div>
-        <div className="text-sm leading-relaxed break-words">
-          <Markdown>{displayText}</Markdown>
-        </div>
-        {footer}
+        {footer ? <div className="mt-1.5 w-full">{footer}</div> : null}
       </div>
     </div>
   );

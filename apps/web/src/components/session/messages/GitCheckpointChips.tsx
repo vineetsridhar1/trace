@@ -10,16 +10,18 @@ export function GitCheckpointChips({
   if (checkpoints.length === 0) return null;
 
   return (
-    <div className="mt-2 flex flex-wrap gap-2">
+    <div className="flex flex-col items-end gap-1.5">
       {checkpoints.map((checkpoint) => (
         <div
           key={checkpoint.id}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] text-muted-foreground"
+          className="ml-auto flex w-fit max-w-[10.5rem] items-center gap-1.5 overflow-hidden rounded-md border border-border/45 bg-muted/25 px-2 py-1 text-[10px] text-muted-foreground transition-[max-width,background-color,border-color,color] duration-200 ease-out hover:max-w-full hover:border-border/70 hover:bg-muted/45 hover:text-foreground"
           title={checkpoint.subject}
         >
-          <GitCommitHorizontal size={12} className="shrink-0" />
-          <span className="font-mono text-foreground">{shortSha(checkpoint.commitSha)}</span>
-          <span className="max-w-48 truncate">{checkpoint.subject}</span>
+          <GitCommitHorizontal size={11} className="shrink-0 opacity-70" />
+          <span className="shrink-0 font-mono text-[10px] text-foreground/85">
+            {shortSha(checkpoint.commitSha)}
+          </span>
+          <span className="min-w-0 truncate">{checkpoint.subject}</span>
         </div>
       ))}
     </div>
