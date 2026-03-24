@@ -12,7 +12,7 @@ import type {
 import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel } from "../session/sessionStatus";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { COMPACT_BREAKPOINT, FILTER_STORAGE_KEY_PREFIX, collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
 import {
@@ -97,23 +97,14 @@ export function SessionsTable({ channelId }: { channelId: string }) {
 
   return (
     <div ref={containerRef} className="relative h-full overflow-hidden">
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={isCompact ? "compact" : "table"}
-          className="h-full"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.12 }}
-        >
-          <SessionsGridTable
-            className={isCompact ? "sessions-grid-compact h-full" : "h-full"}
-            agGridOptions={agGridOptions}
-            columnDefs={columnDefs}
-            selectedRowIds={selectedRowIds}
-          />
-        </motion.div>
-      </AnimatePresence>
+      <motion.div className="h-full" layout transition={{ duration: 0.12 }}>
+        <SessionsGridTable
+          className={isCompact ? "sessions-grid-compact h-full" : "h-full"}
+          agGridOptions={agGridOptions}
+          columnDefs={columnDefs}
+          selectedRowIds={selectedRowIds}
+        />
+      </motion.div>
       {deleteTarget && (
         <DeleteSessionGroupDialog
           groupId={deleteTarget.id}
