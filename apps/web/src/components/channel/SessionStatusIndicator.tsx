@@ -1,4 +1,4 @@
-import { agentStatusColor } from "../session/sessionStatus";
+import { sessionStatusColor } from "../session/sessionStatus";
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import type { SessionGroupRow } from "./sessions-table-types";
 
@@ -9,7 +9,7 @@ export function SessionStatusIndicator({
   row: SessionGroupRow;
   size?: number;
 }) {
-  const color = agentStatusColor[row.displayAgentStatus ?? "active"] ?? "text-muted-foreground";
+  const color = sessionStatusColor[row.displaySessionStatus] ?? "text-muted-foreground";
 
   return (
     <AgentStatusIcon

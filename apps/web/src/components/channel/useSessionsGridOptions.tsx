@@ -75,13 +75,9 @@ export function useSessionsGridOptions({
       innerRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
         const status = params.value as string;
         const count = params.node.allChildrenCount ?? 0;
-        const hasActive = params.node.allLeafChildren?.some(
-          (child) => child.data?.displayAgentStatus === "active",
-        );
         return (
           <SessionStatusGroupLabel
             count={count}
-            hasActive={Boolean(hasActive)}
             status={status}
           />
         );

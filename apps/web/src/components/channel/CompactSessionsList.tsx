@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { Circle, Loader2 } from "lucide-react";
+import { Circle } from "lucide-react";
 import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
-import { agentStatusColor, sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
+import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { timeAgo } from "../../lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
@@ -33,15 +33,10 @@ export function CompactSessionsList({
       {grouped.map(([status, items]) => {
         const color = sessionStatusColor[status] ?? "text-muted-foreground";
         const label = sessionStatusLabel[status] ?? status;
-        const hasActive = items.some((item) => item.displayAgentStatus === "active");
         return (
           <div key={status}>
             <div className={`flex items-center gap-2 px-3 py-2 ${color}`}>
-              {hasActive ? (
-                <Loader2 size={10} className="shrink-0 animate-spin" />
-              ) : (
-                <Circle size={6} className="shrink-0 fill-current" />
-              )}
+              <Circle size={6} className="shrink-0 fill-current" />
               <span className="text-xs font-semibold">{label}</span>
               <span className="text-xs text-muted-foreground">
                 {items.length}
@@ -49,7 +44,7 @@ export function CompactSessionsList({
             </div>
             {!collapsedByDefault.has(status) &&
               items.map((row) => {
-                const rowColor = agentStatusColor[row.displayAgentStatus ?? "active"];
+                const rowColor = sessionStatusColor[status] ?? "text-muted-foreground";
                 const isActive = row.id === activeSessionGroupId;
                 return (
                   <button
