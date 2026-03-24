@@ -20,6 +20,8 @@ import type { OpenFileTab } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import { FileExplorer } from "./FileExplorer";
+import { CheckpointOpenContext } from "./CheckpointOpenContext";
+import { CheckpointPanel } from "./CheckpointPanel";
 import { FileOpenContext } from "./FileOpenContext";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
@@ -154,6 +156,8 @@ export function SessionGroupDetailView({
   const [showFiles, setShowFiles] = useState(false);
   const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [showCheckpoints, setShowCheckpoints] = useState(false);
+  const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
@@ -264,6 +268,29 @@ export function SessionGroupDetailView({
     );
   })();
 
+  const groupCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
+    | unknown[]
+    | null
+    | undefined;
+  const checkpointCount = Array.isArray(groupCheckpoints) ? groupCheckpoints.length : 0;
+
+  const handleOpenCheckpointPanel = useCallback(
+    (checkpointId?: string) => {
+      setShowCheckpoints(true);
+      setHighlightCheckpointId(checkpointId ?? null);
+      setActiveFilePath(null);
+      setActiveTerminalId(null);
+    },
+    [setActiveTerminalId],
+  );
+
+  const handleSelectCheckpoints = useCallback(() => {
+    setShowCheckpoints(true);
+    setHighlightCheckpointId(null);
+    setActiveFilePath(null);
+    setActiveTerminalId(null);
+  }, [setActiveTerminalId]);
+
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
       const existing = terminals.filter((terminal) => terminal.sessionId === sessionId);
@@ -358,6 +385,7 @@ export function SessionGroupDetailView({
       if (sessionId) setActiveSessionId(sessionId);
       setActiveTerminalId(terminalId);
       setActiveFilePath(null);
+      setShowCheckpoints(false);
     },
     [setActiveSessionId, setActiveTerminalId],
   );
@@ -371,6 +399,7 @@ export function SessionGroupDetailView({
       });
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
+      setShowCheckpoints(false);
     },
     [setActiveTerminalId],
   );
@@ -379,6 +408,7 @@ export function SessionGroupDetailView({
     (filePath: string) => {
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
+      setShowCheckpoints(false);
     },
     [setActiveTerminalId],
   );
@@ -393,6 +423,7 @@ export function SessionGroupDetailView({
       setActiveSessionId(sessionId);
       setActiveTerminalId(null);
       setActiveFilePath(null);
+      setShowCheckpoints(false);
     },
     [setActiveSessionId, setActiveTerminalId],
   );
@@ -405,6 +436,7 @@ export function SessionGroupDetailView({
   );
 
   return (
+    <CheckpointOpenContext.Provider value={handleOpenCheckpointPanel}>
     <FileOpenContext.Provider value={handleFileClick}>
       <div className="flex h-full flex-col overflow-hidden">
         <GroupHeader
@@ -439,6 +471,9 @@ export function SessionGroupDetailView({
           onOpenTerminal={handleOpenTerminal}
           canNewChat={!!selectedSession}
           canOpenTerminal={terminalAllowed}
+          showCheckpoints={showCheckpoints}
+          onSelectCheckpoints={handleSelectCheckpoints}
+          checkpointCount={checkpointCount}
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -460,6 +495,11 @@ export function SessionGroupDetailView({
               <div className="h-full bg-[#0a0a0a]">
                 <TerminalInstance terminalId={activeTerminal.id} visible />
               </div>
+            ) : showCheckpoints ? (
+              <CheckpointPanel
+                sessionGroupId={sessionGroupId}
+                highlightCheckpointId={highlightCheckpointId}
+              />
             ) : selectedSession ? (
               <SessionDetailView sessionId={selectedSession.id} hideHeader />
             ) : (
@@ -471,5 +511,6 @@ export function SessionGroupDetailView({
         </div>
       </div>
     </FileOpenContext.Provider>
+    </CheckpointOpenContext.Provider>
   );
 }
