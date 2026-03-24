@@ -139,17 +139,16 @@ export async function writeCheckpointContext(
   await fs.promises.writeFile(contextPath, JSON.stringify(context, null, 2), "utf8");
 }
 
-/**
- * Load all queued checkpoint files from the per-file queue directory.
- * Returns entries paired with their file paths so callers can delete
- * individual entries after successful delivery.
- */
-export async function loadQueuedGitHookCheckpoints(): Promise<
-  Array<{ entry: QueuedGitHookCheckpoint; filePath: string }>
-> {
-  const queueDir = getHookQueueDir();
+let legacyMigrationDone = false;
 
-  // Migrate legacy JSONL file if it exists
+/**
+ * Migrate the old single-file JSONL queue to per-file entries.
+ * Runs at most once per process lifetime.
+ */
+async function migrateLegacyQueueOnce(): Promise<void> {
+  if (legacyMigrationDone) return;
+  legacyMigrationDone = true;
+
   const legacyPath = getLegacyHookQueuePath();
   try {
     const legacyContent = await fs.promises.readFile(legacyPath, "utf8");
@@ -171,6 +170,19 @@ export async function loadQueuedGitHookCheckpoints(): Promise<
       console.warn("[hook-runtime] failed to migrate legacy queue:", error);
     }
   }
+}
+
+/**
+ * Load all queued checkpoint files from the per-file queue directory.
+ * Returns entries paired with their file paths so callers can delete
+ * individual entries after successful delivery.
+ */
+export async function loadQueuedGitHookCheckpoints(): Promise<
+  Array<{ entry: QueuedGitHookCheckpoint; filePath: string }>
+> {
+  const queueDir = getHookQueueDir();
+
+  await migrateLegacyQueueOnce();
 
   let files: string[];
   try {
