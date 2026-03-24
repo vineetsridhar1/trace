@@ -43,7 +43,7 @@ export function SidebarPanel({
           className={cn(tabClass, activeTab === "git" ? tabActive : tabInactive)}
         >
           <GitCommitHorizontal size={12} />
-          Git
+          Checkpoints
         </button>
       </div>
 
