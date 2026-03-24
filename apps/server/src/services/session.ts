@@ -1641,10 +1641,6 @@ export class SessionService {
       },
     });
 
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
-      throw new Error("Cannot send follow-up messages to a completed session");
-    }
-
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");
     }
