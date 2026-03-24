@@ -223,14 +223,11 @@ export function GroupTabStrip({
           })}
 
           <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
-                title="New tab (⌘T)"
-              >
-                <Plus size={14} />
-              </button>
+            <DropdownMenuTrigger
+              className="inline-flex shrink-0 items-center justify-center px-2.5 py-2 text-muted-foreground transition-colors hover:text-foreground"
+              title="New tab (⌘T)"
+            >
+              <Plus size={14} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               <DropdownMenuItem
