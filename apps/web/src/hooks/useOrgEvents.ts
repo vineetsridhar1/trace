@@ -62,7 +62,7 @@ function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentS
   // Fallback for older events without agentStatus in payload
   switch (eventType) {
     case "session_started":
-      return "done";
+      return "not_started";
     case "session_resumed":
       return "active";
     case "session_paused":
@@ -82,6 +82,8 @@ function sessionStatusFromEvent(
   if (explicit) return explicit;
 
   switch (eventType) {
+    case "session_started":
+      return "in_progress";
     case "session_resumed":
       return "in_progress";
     case "session_pr_merged":

@@ -27,8 +27,7 @@ export const sessionStatusGroupOrder: Record<string, number> = {
   needs_input: 0,
   in_review: 1,
   in_progress: 2,
-  not_started: 3,
-  failed: 4,
-  stopped: 5,
-  merged: 6,
+  failed: 3,
+  stopped: 4,
+  merged: 5,
 };

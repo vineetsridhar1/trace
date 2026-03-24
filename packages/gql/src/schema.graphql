@@ -2,6 +2,7 @@ scalar DateTime
 scalar JSON
 
 enum AgentStatus {
+  not_started
   active
   done
   failed
@@ -9,7 +10,6 @@ enum AgentStatus {
 }
 
 enum SessionStatus {
-  not_started
   in_progress
   needs_input
   in_review

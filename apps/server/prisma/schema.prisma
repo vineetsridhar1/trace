@@ -19,6 +19,7 @@ enum ChannelType {
 }
 
 enum AgentStatus {
+  not_started
   active
   done
   failed
@@ -26,7 +27,6 @@ enum AgentStatus {
 }
 
 enum SessionStatus {
-  not_started
   in_progress
   needs_input
   in_review
@@ -449,8 +449,8 @@ model SessionGroup {
 model Session {
   id             String       @id @default(uuid())
   name           String
-  agentStatus    AgentStatus   @default(active)
-  sessionStatus  SessionStatus @default(not_started)
+  agentStatus    AgentStatus   @default(not_started)
+  sessionStatus  SessionStatus @default(in_progress)
   tool           CodingTool
   model          String?
   toolChangedAt  DateTime?

@@ -98,8 +98,8 @@ function makeSession(overrides: Record<string, unknown> = {}) {
   return {
     id: "session-1",
     name: "Implement dashboard filters",
-    agentStatus: "active",
-    sessionStatus: "not_started",
+    agentStatus: "not_started",
+    sessionStatus: "in_progress",
     tool: "claude_code",
     model: "claude-sonnet-4-20250514",
     hosting: "cloud",
@@ -162,9 +162,10 @@ describe("SessionService", () => {
     });
 
     it("returns false for active agent with non-merged session status", () => {
-      for (const sessionStatus of ["not_started", "in_progress", "needs_input", "in_review"] as const) {
+      for (const sessionStatus of ["in_progress", "needs_input", "in_review"] as const) {
         expect(isFullyUnloadedSession("active", sessionStatus)).toBe(false);
         expect(isFullyUnloadedSession("done", sessionStatus)).toBe(false);
+        expect(isFullyUnloadedSession("not_started", sessionStatus)).toBe(false);
       }
     });
   });
@@ -233,8 +234,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            agentStatus: "done",
-            sessionStatus: "not_started",
+            agentStatus: "not_started",
+            sessionStatus: "in_progress",
             sessionGroupId: "group-1",
             channelId: "channel-1",
             repoId: "repo-1",
@@ -356,8 +357,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            agentStatus: "done",
-            sessionStatus: "not_started",
+            agentStatus: "not_started",
+            sessionStatus: "in_progress",
             sessionGroupId: "group-1",
             workdir: "/tmp/trace/source",
             repoId: "repo-1",
@@ -414,8 +415,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            agentStatus: "done",
-            sessionStatus: "not_started",
+            agentStatus: "not_started",
+            sessionStatus: "in_progress",
             sessionGroupId: "group-1",
             repoId: "repo-1",
             branch: "feature/shared",
@@ -496,7 +497,7 @@ describe("SessionService", () => {
   });
 
   describe("complete", () => {
-    it("returns finished sessions to not_started when no follow-up input is needed", async () => {
+    it("returns finished sessions to in_progress when no follow-up input is needed", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         agentStatus: "active",
         sessionStatus: "in_progress",
@@ -513,7 +514,7 @@ describe("SessionService", () => {
 
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
-        data: { agentStatus: "done", sessionStatus: "not_started" },
+        data: { agentStatus: "done", sessionStatus: "in_progress" },
         select: { organizationId: true, createdById: true, name: true },
       });
       expect(eventServiceMock.create).toHaveBeenCalledWith(
@@ -523,7 +524,7 @@ describe("SessionService", () => {
             sessionId: "session-1",
             reason: "bridge_complete",
             agentStatus: "done",
-            sessionStatus: "not_started",
+            sessionStatus: "in_progress",
           }),
         }),
       );
@@ -531,15 +532,16 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
-    it("keeps a session not_started until a queued command is actually delivered", async () => {
+    it("keeps a session in_progress while a queued command is waiting for delivery", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,
-        sessionStatus: "not_started",
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
       });
       prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          agentStatus: "done",
-          sessionStatus: "not_started",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
         }),
       );
@@ -553,8 +555,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).toHaveBeenCalledWith({
         where: { id: "session-1" },
         data: {
-          agentStatus: "done",
-          sessionStatus: "not_started",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
           workdir: "/tmp/trace/workspace",
           pendingRun: expect.anything(),
         },
@@ -566,8 +568,8 @@ describe("SessionService", () => {
           payload: expect.objectContaining({
             type: "workspace_ready",
             workdir: "/tmp/trace/workspace",
-            agentStatus: "done",
-            sessionStatus: "not_started",
+            agentStatus: "not_started",
+            sessionStatus: "in_progress",
           }),
         }),
       );
@@ -611,8 +613,8 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-2",
-          agentStatus: "done",
-          sessionStatus: "not_started",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
           hosting: "local",
           sessionGroupId: "group-1",
           connection: {
@@ -647,8 +649,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            agentStatus: "done",
-            sessionStatus: "not_started",
+            agentStatus: "not_started",
+            sessionStatus: "in_progress",
             sessionGroupId: "group-1",
           }),
         }),
@@ -676,8 +678,8 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-3",
-          agentStatus: "done",
-          sessionStatus: "not_started",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
           hosting: "cloud",
           sessionGroupId: "group-1",
         }),
@@ -695,8 +697,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            agentStatus: "done",
-            sessionStatus: "not_started",
+            agentStatus: "not_started",
+            sessionStatus: "in_progress",
             sessionGroupId: "group-1",
           }),
         }),

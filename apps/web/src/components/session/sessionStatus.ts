@@ -19,7 +19,6 @@ export const agentStatusLabel: Record<string, string> = {
 // ─── Session Status (where the session is in its lifecycle) ───
 
 export const sessionStatusColor: Record<string, string> = {
-  not_started: "text-muted-foreground",
   in_progress: "text-blue-400",
   needs_input: "text-amber-400",
   in_review: "text-violet-400",
@@ -29,7 +28,6 @@ export const sessionStatusColor: Record<string, string> = {
 };
 
 export const sessionStatusLabel: Record<string, string> = {
-  not_started: "Not Started",
   in_progress: "In Progress",
   needs_input: "Needs Input",
   in_review: "In Review",
@@ -67,13 +65,11 @@ export function getDisplaySessionStatus(
   if (agentStatus === "stopped") return "stopped";
   if (sessionStatus === "needs_input") return "needs_input";
   if (prUrl) return "in_review";
-  if (sessionStatus === "in_progress") return "in_progress";
-  return "not_started";
+  return "in_progress";
 }
 
 /**
  * Derive the display activity state for dots/icons on a single session.
- * This can include the pseudo-state "not_started" even though it is not stored in agentStatus.
  */
 export function getDisplayAgentStatus(
   agentStatus: string | undefined,
@@ -84,8 +80,8 @@ export function getDisplayAgentStatus(
 
   if (displaySessionStatus === "failed") return "failed";
   if (displaySessionStatus === "stopped") return "stopped";
-  if (displaySessionStatus === "not_started") return "not_started";
-  if (agentStatus === "active" || displaySessionStatus === "in_progress") return "active";
+  if (agentStatus === "not_started") return "not_started";
+  if (agentStatus === "active") return "active";
 
   return agentStatus ?? "done";
 }
@@ -109,7 +105,7 @@ export function getSessionGroupDisplayStatus(
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
-  return "not_started";
+  return "in_progress";
 }
 
 /**
@@ -122,6 +118,7 @@ export function getSessionGroupAgentStatus(
   if (agentStatuses.some((s) => s === "active")) return "active";
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
+  if (agentStatuses.every((s) => s === "not_started")) return "not_started";
   if (agentStatuses.some((s) => s === "done")) return "done";
   return "done";
 }

@@ -52,6 +52,7 @@ export type AgentStatus =
   | 'active'
   | 'done'
   | 'failed'
+  | 'not_started'
   | 'stopped';
 
 export type AgentTrustLevel =
@@ -1114,8 +1115,7 @@ export type SessionStatus =
   | 'in_progress'
   | 'in_review'
   | 'merged'
-  | 'needs_input'
-  | 'not_started';
+  | 'needs_input';
 
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;

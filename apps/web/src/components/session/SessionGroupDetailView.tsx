@@ -226,7 +226,7 @@ export function SessionGroupDetailView({
       groupPrUrl ?? null,
       selectedSession.agentStatus,
     )
-    : "not_started";
+    : "in_progress";
   const selectedAgentStatus = selectedSession
     ? getDisplayAgentStatus(
       selectedSession.agentStatus,
