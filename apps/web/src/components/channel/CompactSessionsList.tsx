@@ -38,9 +38,9 @@ export function CompactSessionsList({
           <div key={status}>
             <div className={`flex items-center gap-2 px-3 py-2 ${color}`}>
               {hasActive ? (
-                <Loader2 size={12} className="shrink-0 animate-spin" />
+                <Loader2 size={10} className="shrink-0 animate-spin" />
               ) : (
-                <Circle size={8} className="shrink-0 fill-current" />
+                <Circle size={6} className="shrink-0 fill-current" />
               )}
               <span className="text-xs font-semibold">{label}</span>
               <span className="text-xs text-muted-foreground">
@@ -63,7 +63,7 @@ export function CompactSessionsList({
                   >
                     <AgentStatusIcon
                       agentStatus={row.displayAgentStatus}
-                      size={10}
+                      size={8}
                       className={`shrink-0 ${rowColor}`}
                     />
                     <span className="min-w-0 flex-1 truncate text-sm text-foreground">

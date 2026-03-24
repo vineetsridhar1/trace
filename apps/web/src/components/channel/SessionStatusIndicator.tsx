@@ -4,7 +4,7 @@ import type { SessionGroupRow } from "./sessions-table-types";
 
 export function SessionStatusIndicator({
   row,
-  size = 12,
+  size = 8,
 }: {
   row: SessionGroupRow;
   size?: number;
