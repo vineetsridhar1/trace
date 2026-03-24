@@ -8,7 +8,7 @@ import {
   TERMINATE_SESSION_MUTATION,
 } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
-import { navigateToSession } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 
 interface PlanResponseBarProps {
@@ -23,6 +23,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
+  const openSessionTab = useUIStore((s) => s.openSessionTab);
 
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
@@ -55,13 +56,14 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
+        openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
         await client.mutation(TERMINATE_SESSION_MUTATION, { id: sessionId }).toPromise();
       }
     } finally {
       setSending(false);
     }
-  }, [sending, sessionGroupId, planContent, tool, model, hosting, channel?.id, repo?.id, branch, sessionId]);
+  }, [sending, sessionGroupId, planContent, tool, model, hosting, channel?.id, repo?.id, branch, sessionId, openSessionTab]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;
