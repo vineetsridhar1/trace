@@ -81,6 +81,14 @@ export type AutonomyMode =
   | 'observe'
   | 'suggest';
 
+export type BranchDiffFile = {
+  __typename?: 'BranchDiffFile';
+  additions: Scalars['Int']['output'];
+  deletions: Scalars['Int']['output'];
+  path: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+};
+
 export type Channel = {
   __typename?: 'Channel';
   groupId?: Maybe<Scalars['ID']['output']>;
@@ -821,6 +829,8 @@ export type Query = {
   repos: Array<Repo>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupBranchDiff: Array<BranchDiffFile>;
+  sessionGroupFileAtRef: Scalars['String']['output'];
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
   sessionGroups: Array<SessionGroup>;
@@ -953,6 +963,18 @@ export type QuerySessionArgs = {
 
 export type QuerySessionGroupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupBranchDiffArgs = {
+  sessionGroupId: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupFileAtRefArgs = {
+  filePath: Scalars['String']['input'];
+  ref: Scalars['String']['input'];
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 
@@ -1399,6 +1421,7 @@ export type ResolversTypes = ResolversObject<{
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
   AutonomyMode: AutonomyMode;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
+  BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
   ChannelMember: ResolverTypeWrapper<ChannelMember>;
@@ -1479,6 +1502,7 @@ export type ResolversParentTypes = ResolversObject<{
   AgentIdentity: AgentIdentity;
   ApiTokenStatus: ApiTokenStatus;
   Boolean: Scalars['Boolean']['output'];
+  BranchDiffFile: BranchDiffFile;
   Channel: Channel;
   ChannelGroup: ChannelGroup;
   ChannelMember: ChannelMember;
@@ -1560,6 +1584,14 @@ export type ApiTokenStatusResolvers<ContextType = Context, ParentType extends Re
   isSet?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   provider?: Resolver<ResolversTypes['ApiTokenProvider'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BranchDiffFileResolvers<ContextType = Context, ParentType extends ResolversParentTypes['BranchDiffFile'] = ResolversParentTypes['BranchDiffFile']> = ResolversObject<{
+  additions?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  deletions?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1829,6 +1861,8 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupArgs, 'id'>>;
+  sessionGroupBranchDiff?: Resolver<Array<ResolversTypes['BranchDiffFile']>, ParentType, ContextType, RequireFields<QuerySessionGroupBranchDiffArgs, 'sessionGroupId'>>;
+  sessionGroupFileAtRef?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QuerySessionGroupFileAtRefArgs, 'filePath' | 'ref' | 'sessionGroupId'>>;
   sessionGroupFileContent?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QuerySessionGroupFileContentArgs, 'filePath' | 'sessionGroupId'>>;
   sessionGroupFiles?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QuerySessionGroupFilesArgs, 'sessionGroupId'>>;
   sessionGroups?: Resolver<Array<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupsArgs, 'channelId'>>;
@@ -1998,6 +2032,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
   AgentIdentity?: AgentIdentityResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
+  BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
   ChannelMember?: ChannelMemberResolvers<ContextType>;

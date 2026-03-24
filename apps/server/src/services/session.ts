@@ -2867,6 +2867,56 @@ export class SessionService {
     );
   }
 
+  /** Compute the branch diff for a session group (changed files vs default branch). */
+  async branchDiff(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+
+    // Look up the repo's default branch
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId },
+      select: { repo: { select: { defaultBranch: true } } },
+    });
+    const baseBranch = group?.repo?.defaultBranch ?? "main";
+
+    return sessionRouter.branchDiff(
+      runtime.runtimeId,
+      runtime.sessionId,
+      baseBranch,
+      runtime.workdirHint,
+    );
+  }
+
+  /** Read a file's content at a specific git ref from a session group's runtime. */
+  async readFileAtRef(
+    sessionGroupId: string,
+    filePath: string,
+    ref: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<string> {
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.fileAtRef(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      ref,
+      runtime.workdirHint,
+    );
+  }
+
   // ─── Helpers ───
 
   /**

@@ -87,6 +87,25 @@ export interface BridgeReadFileCommand {
   workdirHint?: string;
 }
 
+export interface BridgeBranchDiffCommand {
+  type: "branch_diff";
+  requestId: string;
+  sessionId: string;
+  baseBranch: string;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
+}
+
+export interface BridgeFileAtRefCommand {
+  type: "file_at_ref";
+  requestId: string;
+  sessionId: string;
+  filePath: string;
+  ref: string;
+  /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
+  workdirHint?: string;
+}
+
 // --- Terminal commands (Server → Bridge) ---
 
 export interface BridgeTerminalCreateCommand {
@@ -127,6 +146,8 @@ export type BridgeCommand =
   | BridgeListBranchesCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
+  | BridgeBranchDiffCommand
+  | BridgeFileAtRefCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -219,6 +240,27 @@ export interface BridgeFileContentResult {
   error?: string;
 }
 
+export interface BridgeBranchDiffFile {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+}
+
+export interface BridgeBranchDiffResult {
+  type: "branch_diff_result";
+  requestId: string;
+  files: BridgeBranchDiffFile[];
+  error?: string;
+}
+
+export interface BridgeFileAtRefResult {
+  type: "file_at_ref_result";
+  requestId: string;
+  content: string;
+  error?: string;
+}
+
 // --- Terminal messages (Bridge → Server) ---
 
 export interface BridgeTerminalReady {
@@ -258,6 +300,8 @@ export type BridgeMessage =
   | BridgeBranchesResult
   | BridgeFilesResult
   | BridgeFileContentResult
+  | BridgeBranchDiffResult
+  | BridgeFileAtRefResult
   | BridgeTerminalReady
   | BridgeTerminalOutput
   | BridgeTerminalExit
@@ -469,6 +513,109 @@ export function handleReadFile(
       });
     }
   })();
+}
+
+// --- Shared branch diff / file-at-ref handlers ---
+
+/** Callback-based git command runner, injected by bridges. */
+export type GitExecFn = (
+  args: string[],
+  cwd: string,
+) => Promise<string>;
+
+/**
+ * Handle a `branch_diff` bridge command. Runs git diff --numstat and --name-status,
+ * merges results by path.
+ */
+export async function handleBranchDiff(
+  cmd: BridgeBranchDiffCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  gitExec: GitExecFn,
+): Promise<void> {
+  const { requestId, sessionId, baseBranch, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({ type: "branch_diff_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
+    return;
+  }
+
+  try {
+    const [numstatOut, nameStatusOut] = await Promise.all([
+      gitExec(["diff", "--numstat", `${baseBranch}...HEAD`], workdir),
+      gitExec(["diff", "--name-status", `${baseBranch}...HEAD`], workdir),
+    ]);
+
+    // Parse --name-status: "M\tpath" or "R100\told\tnew"
+    const statusMap = new Map<string, string>();
+    for (const line of nameStatusOut.split("\n").filter(Boolean)) {
+      const parts = line.split("\t");
+      const status = parts[0]?.[0] ?? "M"; // First char: A, M, D, R, C
+      const filePath = parts.length >= 3 ? parts[2] : parts[1]; // Renames use 3rd column
+      if (filePath) statusMap.set(filePath, status);
+    }
+
+    // Parse --numstat: "additions\tdeletions\tpath"
+    const files: BridgeBranchDiffFile[] = [];
+    for (const line of numstatOut.split("\n").filter(Boolean)) {
+      const parts = line.split("\t");
+      if (parts.length < 3) continue;
+      const additions = parts[0] === "-" ? 0 : parseInt(parts[0], 10);
+      const deletions = parts[1] === "-" ? 0 : parseInt(parts[1], 10);
+      const filePath = parts.slice(2).join("\t"); // Handle paths with tabs (rare)
+      files.push({
+        path: filePath,
+        status: statusMap.get(filePath) ?? "M",
+        additions: isNaN(additions) ? 0 : additions,
+        deletions: isNaN(deletions) ? 0 : deletions,
+      });
+    }
+
+    send({ type: "branch_diff_result", requestId, files });
+  } catch (err) {
+    send({
+      type: "branch_diff_result",
+      requestId,
+      files: [],
+      error: err instanceof Error ? err.message : "Failed to compute branch diff",
+    });
+  }
+}
+
+/**
+ * Handle a `file_at_ref` bridge command. Runs `git show <ref>:<path>`.
+ * Returns empty content + error for files that don't exist at the ref.
+ */
+export async function handleFileAtRef(
+  cmd: BridgeFileAtRefCommand,
+  sessionWorkdirs: Map<string, string>,
+  send: (msg: BridgeMessage) => void,
+  gitExec: GitExecFn,
+): Promise<void> {
+  const { requestId, sessionId, filePath, ref, workdirHint } = cmd;
+  const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
+  if (!workdir) {
+    send({ type: "file_at_ref_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
+    return;
+  }
+
+  if (hasInvalidRelativePathSegments(filePath)) {
+    send({ type: "file_at_ref_result", requestId, content: "", error: "Path traversal denied" });
+    return;
+  }
+
+  try {
+    const content = await gitExec(["show", `${ref}:${filePath}`], workdir);
+    send({ type: "file_at_ref_result", requestId, content });
+  } catch (err) {
+    // File doesn't exist at this ref (new file) — return empty content with error
+    send({
+      type: "file_at_ref_result",
+      requestId,
+      content: "",
+      error: err instanceof Error ? err.message : "Failed to read file at ref",
+    });
+  }
 }
 
 // --- Bridge client interface ---

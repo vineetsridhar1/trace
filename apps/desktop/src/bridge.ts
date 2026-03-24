@@ -13,7 +13,7 @@ import type {
   GitCheckpointContext,
   GitCheckpointTrigger,
 } from "@trace/shared";
-import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
+import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
@@ -478,6 +478,28 @@ export class BridgeClient implements IBridgeClient {
       }
       case "read_file": {
         handleReadFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
+        break;
+      }
+      case "branch_diff": {
+        const gitExec = (args: string[], cwd: string) =>
+          new Promise<string>((resolve, reject) => {
+            execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+              if (err) reject(err);
+              else resolve(stdout);
+            });
+          });
+        void handleBranchDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), gitExec);
+        break;
+      }
+      case "file_at_ref": {
+        const gitExec = (args: string[], cwd: string) =>
+          new Promise<string>((resolve, reject) => {
+            execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+              if (err) reject(err);
+              else resolve(stdout);
+            });
+          });
+        void handleFileAtRef(cmd, this.sessionWorkdirs, (msg) => this.send(msg), gitExec);
         break;
       }
       case "terminal_create": {
