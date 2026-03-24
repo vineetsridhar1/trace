@@ -23,6 +23,7 @@ import {
 import { timeAgo } from "../../lib/utils";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
+import { AnimatePresence, motion } from "framer-motion";
 
 const COMPACT_BREAKPOINT = 600;
 
@@ -442,12 +443,32 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   );
 
   return (
-    <div ref={containerRef} className="h-full">
-      {isCompact ? (
-        <MobileSessionsList channelId={channelId} rows={filteredGroups} />
-      ) : (
-        <Table className="h-full" agGridOptions={agGridOptions} />
-      )}
+    <div ref={containerRef} className="relative h-full overflow-hidden">
+      <AnimatePresence mode="wait">
+        {isCompact ? (
+          <motion.div
+            key="compact"
+            className="h-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <MobileSessionsList channelId={channelId} rows={filteredGroups} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="table"
+            className="h-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <Table className="h-full" agGridOptions={agGridOptions} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       {deleteTarget && (
         <DeleteSessionGroupDialog
           groupId={deleteTarget.id}
