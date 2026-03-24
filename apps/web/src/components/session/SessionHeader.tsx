@@ -11,16 +11,14 @@ import {
   Minimize2,
   X,
 } from "lucide-react";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
-import { useShallow } from "zustand/react/shallow";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import {
   agentStatusColor,
-  sessionStatusLabel,
+  getDisplayAgentStatus,
   getDisplaySessionStatus,
-  getSessionGroupDisplayStatus,
-  getSessionGroupAgentStatus,
+  sessionStatusLabel,
   isDisconnected,
 } from "./sessionStatus";
 import { AgentStatusIcon } from "./AgentStatusIcon";
@@ -54,23 +52,6 @@ export function SessionHeader({
     | Record<string, unknown>
     | null
     | undefined;
-  const { groupAgentStatuses, groupSessionStatuses } = useEntityStore(
-    useShallow((state) => {
-      if (!sessionGroupId) {
-        return {
-          groupAgentStatuses: agentStatus ? [agentStatus] : [],
-          groupSessionStatuses: sessionStatus ? [sessionStatus] : [],
-        };
-      }
-      const sessions = Object.values(state.sessions).filter(
-        (session) => session.sessionGroupId === sessionGroupId,
-      );
-      return {
-        groupAgentStatuses: sessions.map((session) => session.agentStatus),
-        groupSessionStatuses: sessions.map((session) => session.sessionStatus),
-      };
-    }),
-  );
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
@@ -83,12 +64,8 @@ export function SessionHeader({
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
-  const displaySessionStatus = sessionGroupId
-    ? getSessionGroupDisplayStatus(groupSessionStatuses, groupAgentStatuses, prUrl)
-    : getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
-  const displayAgentStatus = sessionGroupId
-    ? getSessionGroupAgentStatus(groupAgentStatuses)
-    : (agentStatus ?? "done");
+  const displaySessionStatus = getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
+  const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, prUrl);
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 

@@ -6,7 +6,7 @@ import { useEntityStore } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId } from "../../lib/session-group";
-import { agentStatusColor } from "./sessionStatus";
+import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 
 interface SessionHistoryProps {
   sessionId: string;
@@ -79,7 +79,8 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   return (
     <div className="max-h-72 overflow-y-auto py-1">
       {groupSessions.map((entry) => {
-        const color = agentStatusColor[entry.agentStatus ?? "active"] ?? "text-muted-foreground";
+        const displayAgentStatus = getDisplayAgentStatus(entry.agentStatus, entry.sessionStatus);
+        const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
         const channelId = getSessionChannelId(entry);
 
         return (

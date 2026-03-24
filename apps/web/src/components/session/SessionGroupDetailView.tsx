@@ -23,8 +23,8 @@ import { FileExplorer } from "./FileExplorer";
 import { FileOpenContext } from "./FileOpenContext";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
-  getSessionGroupDisplayStatus,
-  getSessionGroupAgentStatus,
+  getDisplayAgentStatus,
+  getDisplaySessionStatus,
   isTerminalStatus,
 } from "./sessionStatus";
 import type { Terminal } from "@trace/gql";
@@ -220,14 +220,20 @@ export function SessionGroupDetailView({
     sessionTabs.find((session) => session.id === activeSessionId) ?? sessionsByRecency[0] ?? null;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
-  const agentStatuses = groupSessions.map((session) => session.agentStatus);
-  const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
-  const selectedSessionStatus = getSessionGroupDisplayStatus(
-    sessionStatuses,
-    agentStatuses,
-    groupPrUrl ?? null,
-  );
-  const selectedAgentStatus = getSessionGroupAgentStatus(agentStatuses);
+  const selectedSessionStatus = selectedSession
+    ? getDisplaySessionStatus(
+      selectedSession.sessionStatus,
+      groupPrUrl ?? null,
+      selectedSession.agentStatus,
+    )
+    : "not_started";
+  const selectedAgentStatus = selectedSession
+    ? getDisplayAgentStatus(
+      selectedSession.agentStatus,
+      selectedSession.sessionStatus,
+      groupPrUrl ?? null,
+    )
+    : "not_started";
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
