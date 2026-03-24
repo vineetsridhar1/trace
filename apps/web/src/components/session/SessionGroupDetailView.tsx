@@ -23,7 +23,6 @@ import { FileExplorer } from "./FileExplorer";
 import { FileOpenContext } from "./FileOpenContext";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
-  getDisplayAgentStatus,
   getDisplaySessionStatus,
   isTerminalStatus,
 } from "./sessionStatus";
@@ -228,13 +227,6 @@ export function SessionGroupDetailView({
       selectedSession.agentStatus,
     )
     : "in_progress";
-  const selectedAgentStatus = selectedSession
-    ? getDisplayAgentStatus(
-      selectedSession.agentStatus,
-      selectedSession.sessionStatus,
-      groupPrUrl ?? null,
-    )
-    : "not_started";
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
@@ -388,7 +380,6 @@ export function SessionGroupDetailView({
       <div className="flex h-full flex-col overflow-hidden">
         <GroupHeader
           groupName={groupName as string | undefined}
-          selectedAgentStatus={selectedAgentStatus}
           selectedSessionStatus={selectedSessionStatus}
           selectedSessionId={selectedSession?.id ?? null}
           groupPrUrl={groupPrUrl}

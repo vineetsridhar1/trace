@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import {
+  Circle,
   Files,
   GitPullRequest,
   History,
@@ -11,8 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { agentStatusColor, sessionStatusLabel } from "./sessionStatus";
-import { AgentStatusIcon } from "./AgentStatusIcon";
+import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 import {
   DropdownMenu,
@@ -23,7 +23,6 @@ import {
 
 interface GroupHeaderProps {
   groupName: string | undefined;
-  selectedAgentStatus: string;
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
@@ -40,7 +39,6 @@ interface GroupHeaderProps {
 
 export function GroupHeader({
   groupName,
-  selectedAgentStatus,
   selectedSessionStatus,
   selectedSessionId,
   groupPrUrl,
@@ -93,8 +91,8 @@ export function GroupHeader({
       </button>
 
       {selectedSessionId && (
-        <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", agentStatusColor[selectedAgentStatus])}>
-          <AgentStatusIcon agentStatus={selectedAgentStatus} size={10} />
+        <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", sessionStatusColor[selectedSessionStatus])}>
+          <Circle size={6} className="fill-current" />
           {label}
         </span>
       )}
