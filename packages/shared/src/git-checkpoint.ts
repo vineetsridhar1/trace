@@ -63,14 +63,64 @@ function inferTrigger(command: string): GitCheckpointTrigger | null {
   return null;
 }
 
-export function extractGitCheckpointTrigger(
+/**
+ * Phase 1: scan an assistant message for Bash/Command tool_use blocks whose
+ * input contains a git commit or push command.  Returns a map of
+ * tool_use_id → { trigger, command } for each match found.
+ *
+ * Call this on every ToolOutput and accumulate the results in a per-session
+ * Map so that phase 2 can match the corresponding tool_result.
+ */
+export function extractGitToolUsePending(
   output: ToolOutput,
-): { trigger: GitCheckpointTrigger; command: string } | null {
+): Map<string, { trigger: GitCheckpointTrigger; command: string }> {
+  const pending = new Map<string, { trigger: GitCheckpointTrigger; command: string }>();
+  if (output.type !== "assistant") return pending;
+
+  for (const block of output.message.content) {
+    if (block.type !== "tool_use") continue;
+    const toolName = block.name.toLowerCase();
+    if (toolName !== "bash" && toolName !== "command") continue;
+    if (!block.id) continue;
+
+    const command =
+      typeof block.input?.command === "string"
+        ? block.input.command.trim()
+        : typeof block.input?.cmd === "string"
+          ? block.input.cmd.trim()
+          : "";
+    if (!command) continue;
+
+    const trigger = inferTrigger(command);
+    if (trigger) pending.set(block.id, { trigger, command });
+  }
+  return pending;
+}
+
+/**
+ * Phase 2: scan an assistant message for tool_result blocks that match a
+ * pending git tool_use_id (Claude Code style, where the command lives in the
+ * tool_use and the result is a plain string).
+ *
+ * Also handles adapters that embed command + exitCode in the tool_result
+ * content object (Codex style) without needing phase-1 state.
+ */
+export function extractGitToolResultTrigger(
+  output: ToolOutput,
+  pendingGitToolUses: Map<string, { trigger: GitCheckpointTrigger; command: string }>,
+): { trigger: GitCheckpointTrigger; command: string; toolUseId: string } | null {
   if (output.type !== "assistant") return null;
 
   for (const block of output.message.content) {
     if (block.type !== "tool_result") continue;
 
+    // Path 1: Claude Code — match via tool_use_id
+    if (block.tool_use_id) {
+      const pending = pendingGitToolUses.get(block.tool_use_id);
+      if (pending) return { ...pending, toolUseId: block.tool_use_id };
+    }
+
+    // Path 2: content-object adapters (Codex etc.) — command + exitCode in content
     const toolName = block.name.toLowerCase();
     if (toolName !== "command" && toolName !== "bash") continue;
 
@@ -90,8 +140,16 @@ export function extractGitCheckpointTrigger(
     if (!command || exitCode !== 0) continue;
 
     const trigger = inferTrigger(command);
-    if (trigger) return { trigger, command };
+    if (trigger) return { trigger, command, toolUseId: "" };
   }
 
   return null;
+}
+
+/** @deprecated Use extractGitToolUsePending + extractGitToolResultTrigger instead */
+export function extractGitCheckpointTrigger(
+  output: ToolOutput,
+): { trigger: GitCheckpointTrigger; command: string } | null {
+  const result = extractGitToolResultTrigger(output, new Map());
+  return result ? { trigger: result.trigger, command: result.command } : null;
 }
