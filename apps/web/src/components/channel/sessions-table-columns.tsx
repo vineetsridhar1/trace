@@ -24,7 +24,7 @@ export const SESSION_COLUMN_IDS = {
 const statusColumn: ColDef<SessionGroupRow> = {
   colId: SESSION_COLUMN_IDS.status,
   headerName: "Status",
-  field: "status",
+  field: "displaySessionStatus",
   rowGroup: true,
   hide: true,
 };

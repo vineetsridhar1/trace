@@ -47,13 +47,15 @@ export type AgentIdentity = {
   name: Scalars['String']['output'];
   organizationId: Scalars['ID']['output'];
   soulFile: Scalars['String']['output'];
-  status: AgentStatus;
+  status: OrgAgentStatus;
   updatedAt: Scalars['DateTime']['output'];
 };
 
 export type AgentStatus =
-  | 'disabled'
-  | 'enabled';
+  | 'active'
+  | 'done'
+  | 'failed'
+  | 'stopped';
 
 export type AgentTrustLevel =
   | 'autonomous'
@@ -721,6 +723,10 @@ export type Notification = {
   type: Scalars['String']['output'];
 };
 
+export type OrgAgentStatus =
+  | 'disabled'
+  | 'enabled';
+
 export type OrgMember = {
   __typename?: 'OrgMember';
   joinedAt: Scalars['DateTime']['output'];
@@ -881,8 +887,8 @@ export type QueryInboxItemsArgs = {
 
 
 export type QueryMySessionsArgs = {
+  agentStatus?: InputMaybe<AgentStatus>;
   organizationId: Scalars['ID']['input'];
-  status?: InputMaybe<SessionStatus>;
 };
 
 
@@ -1018,6 +1024,7 @@ export type ScopeType =
 
 export type Session = {
   __typename?: 'Session';
+  agentStatus: AgentStatus;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1033,7 +1040,7 @@ export type Session = {
   repo?: Maybe<Repo>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupId?: Maybe<Scalars['ID']['output']>;
-  status: SessionStatus;
+  sessionStatus: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
   toolSessionId?: Maybe<Scalars['String']['output']>;
@@ -1067,9 +1074,9 @@ export type SessionEndpoints = {
 };
 
 export type SessionFilters = {
+  agentStatus?: InputMaybe<AgentStatus>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
-  status?: InputMaybe<SessionStatus>;
   tool?: InputMaybe<CodingTool>;
 };
 
@@ -1101,15 +1108,11 @@ export type SessionRuntimeInstance = {
 };
 
 export type SessionStatus =
-  | 'active'
-  | 'completed'
-  | 'creating'
-  | 'failed'
+  | 'in_progress'
+  | 'in_review'
   | 'merged'
   | 'needs_input'
-  | 'paused'
-  | 'pending'
-  | 'unreachable';
+  | 'not_started';
 
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
@@ -1251,7 +1254,7 @@ export type UpdateAgentSettingsInput = {
   dailyLimitCents?: InputMaybe<Scalars['Int']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   soulFile?: InputMaybe<Scalars['String']['input']>;
-  status?: InputMaybe<AgentStatus>;
+  status?: InputMaybe<OrgAgentStatus>;
 };
 
 export type UpdateChannelGroupInput = {
@@ -1400,6 +1403,7 @@ export type ResolversTypes = ResolversObject<{
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
+  OrgAgentStatus: OrgAgentStatus;
   OrgMember: ResolverTypeWrapper<OrgMember>;
   Organization: ResolverTypeWrapper<Organization>;
   Participant: ResolverTypeWrapper<Participant>;
@@ -1517,7 +1521,7 @@ export type AgentIdentityResolvers<ContextType = Context, ParentType extends Res
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   organizationId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   soulFile?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  status?: Resolver<ResolversTypes['AgentStatus'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['OrgAgentStatus'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
@@ -1798,6 +1802,7 @@ export type RepoResolvers<ContextType = Context, ParentType extends ResolversPar
 }>;
 
 export type SessionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Session'] = ResolversParentTypes['Session']> = ResolversObject<{
+  agentStatus?: Resolver<ResolversTypes['AgentStatus'], ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
@@ -1813,7 +1818,7 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType>;
   sessionGroupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
-  status?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;
+  sessionStatus?: Resolver<ResolversTypes['SessionStatus'], ParentType, ContextType>;
   tickets?: Resolver<Array<ResolversTypes['Ticket']>, ParentType, ContextType>;
   tool?: Resolver<ResolversTypes['CodingTool'], ParentType, ContextType>;
   toolSessionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;

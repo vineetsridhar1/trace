@@ -1,5 +1,5 @@
 import type { StartSessionInput, ActorType } from "@trace/gql";
-import type { SessionStatus, EventType as PrismaEventType, CodingTool } from "@prisma/client";
+import type { AgentStatus, SessionStatus, EventType as PrismaEventType, CodingTool } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { getDefaultModel, hasQuestionBlock, hasPlanBlock, isSupportedModel } from "@trace/shared";
@@ -110,7 +110,8 @@ function serializeSession(
   session: {
     id: string;
     name: string;
-    status: SessionStatus;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
     tool: string;
     model: string | null;
     hosting: string;
@@ -131,7 +132,8 @@ function serializeSession(
   return {
     id: session.id,
     name: session.name,
-    status: session.status,
+    agentStatus: session.agentStatus,
+    sessionStatus: session.sessionStatus,
     tool: session.tool,
     model: session.model,
     hosting: session.hosting,
@@ -284,10 +286,10 @@ function validateModelForTool(tool: string, model: string): string {
   return model;
 }
 
-const FULLY_UNLOADED_SESSION_STATUSES: readonly SessionStatus[] = ["failed", "merged"];
+const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
 
-export function isFullyUnloadedSessionStatus(status: SessionStatus): boolean {
-  return FULLY_UNLOADED_SESSION_STATUSES.includes(status);
+export function isFullyUnloadedSession(agentStatus: AgentStatus, sessionStatus: SessionStatus): boolean {
+  return FULLY_UNLOADED_AGENT_STATUSES.includes(agentStatus) || sessionStatus === "merged";
 }
 
 export class SessionService {
@@ -374,14 +376,14 @@ export class SessionService {
   async list(
     organizationId: string,
     filters?: {
-      status?: string | null;
+      agentStatus?: string | null;
       tool?: string | null;
       repoId?: string | null;
       channelId?: string | null;
     },
   ) {
     const where: Record<string, unknown> = { organizationId };
-    if (filters?.status) where.status = filters.status;
+    if (filters?.agentStatus) where.agentStatus = filters.agentStatus;
     if (filters?.tool) where.tool = filters.tool;
     if (filters?.repoId) where.repoId = filters.repoId;
     if (filters?.channelId) where.channelId = filters.channelId;
@@ -396,9 +398,9 @@ export class SessionService {
     return prisma.session.findUnique({ where: { id }, include: SESSION_INCLUDE });
   }
 
-  async listByUser(organizationId: string, userId: string, status?: string | null) {
+  async listByUser(organizationId: string, userId: string, agentStatus?: string | null) {
     const where: Record<string, unknown> = { organizationId, createdById: userId };
-    if (status) where.status = status;
+    if (agentStatus) where.agentStatus = agentStatus;
     return prisma.session.findMany({
       where,
       orderBy: { updatedAt: "desc" },
@@ -546,8 +548,9 @@ export class SessionService {
           }),
         );
 
-    // New sessions can immediately reuse a group's existing workspace/runtime when present.
-    const initialStatus = needsRuntimeProvisioning ? "creating" : "pending";
+    // New sessions start with agentStatus "active" — provisioning or ready to run.
+    const initialAgentStatus: AgentStatus = "active";
+    const initialSessionStatus: SessionStatus = "not_started";
 
     const [session] = await prisma.$transaction(async (tx) => {
       const sessionGroup = existingGroup
@@ -591,7 +594,8 @@ export class SessionService {
       const session = await tx.session.create({
         data: {
           name,
-          status: initialStatus,
+          agentStatus: initialAgentStatus,
+          sessionStatus: initialSessionStatus,
           tool: input.tool,
           model: model ?? undefined,
           hosting,
@@ -683,7 +687,7 @@ export class SessionService {
     });
 
     // If workspace is still being prepared, queue the run for later
-    if (session.status === "creating") {
+    if (session.sessionStatus === "not_started" && !session.workdir) {
       const updated = await prisma.session.update({
         where: { id },
         data: {
@@ -699,7 +703,7 @@ export class SessionService {
     }
 
     // Fully unloaded sessions cannot accept follow-up work.
-    if (isFullyUnloadedSessionStatus(session.status)) {
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
       return session;
     }
 
@@ -772,7 +776,8 @@ export class SessionService {
     const updated = await prisma.session.update({
       where: { id },
       data: {
-        status: "active",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
@@ -794,7 +799,12 @@ export class SessionService {
       scopeType: "session",
       scopeId: id,
       eventType: "session_resumed",
-      payload: { sessionId: id, ...(sessionGroup ? { sessionGroup } : {}) },
+      payload: {
+        sessionId: id,
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
       actorType: "user",
       actorId: session.createdById,
     });
@@ -803,7 +813,7 @@ export class SessionService {
   }
 
   async pause(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.transition(id, "pause", "paused", "session_paused", actorType, actorId);
+    return this.transition(id, "pause", "active", "session_paused", actorType, actorId);
   }
 
   async resume(id: string, actorType: ActorType = "system", actorId: string = "system") {
@@ -811,16 +821,16 @@ export class SessionService {
   }
 
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.terminateWithStatus(id, "completed", "Session stopped", actorType, actorId);
+    return this.terminateWithStatus(id, "stopped", "Session stopped", actorType, actorId);
   }
 
   async dismiss(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.terminateWithStatus(id, "completed", "Session dismissed", actorType, actorId);
+    return this.terminateWithStatus(id, "stopped", "Session dismissed", actorType, actorId);
   }
 
   private async terminateWithStatus(
     id: string,
-    targetStatus: SessionStatus,
+    targetAgentStatus: AgentStatus,
     resolution: string,
     actorType: ActorType,
     actorId: string,
@@ -835,7 +845,7 @@ export class SessionService {
       orgId: session.organizationId,
       resolution,
     });
-    return this.transition(id, "terminate", targetStatus, "session_terminated", actorType, actorId);
+    return this.transition(id, "terminate", targetAgentStatus, "session_terminated", actorType, actorId);
   }
 
   async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
@@ -945,17 +955,17 @@ export class SessionService {
   private async transition(
     id: string,
     command: "pause" | "resume" | "terminate",
-    newStatus: SessionStatus,
+    newAgentStatus: AgentStatus,
     eventType: EventType,
     actorType: ActorType,
     actorId: string,
   ) {
     const current = await prisma.session.findUniqueOrThrow({
       where: { id },
-      select: { hosting: true, organizationId: true, status: true },
+      select: { hosting: true, organizationId: true, agentStatus: true, sessionStatus: true },
     });
 
-    if (isFullyUnloadedSessionStatus(current.status)) {
+    if (isFullyUnloadedSession(current.agentStatus, current.sessionStatus)) {
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
 
@@ -970,7 +980,7 @@ export class SessionService {
 
     const session = await prisma.session.update({
       where: { id },
-      data: { status: newStatus },
+      data: { agentStatus: newAgentStatus },
       include: SESSION_INCLUDE,
     });
 
@@ -979,7 +989,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: id,
       eventType,
-      payload: { sessionId: id, status: newStatus },
+      payload: { sessionId: id, agentStatus: newAgentStatus, sessionStatus: session.sessionStatus },
       actorType,
       actorId,
     });
@@ -1046,7 +1056,7 @@ export class SessionService {
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true, status: true },
+      select: { organizationId: true, agentStatus: true, sessionStatus: true },
     });
     if (!session) return;
 
@@ -1069,18 +1079,18 @@ export class SessionService {
     // Claude Code hangs waiting for stdin when AskUserQuestion/ExitPlanMode fires, so complete()
     // never runs — we detect it here instead.
     const needsInput = hasQuestionBlock(data) || hasPlanBlock(data);
-    if (session.status === "active" && needsInput) {
-      // Use status in the where clause to make this idempotent — if two
+    if (session.agentStatus === "active" && needsInput) {
+      // Use agentStatus in the where clause to make this idempotent — if two
       // recordOutput calls race, only the first one that sees "active" wins.
       const updated = await prisma.session.updateMany({
-        where: { id: sessionId, status: "active" },
-        data: { status: "needs_input" },
+        where: { id: sessionId, agentStatus: "active" },
+        data: { sessionStatus: "needs_input" },
       });
 
       // Only emit the pending event if we won the race — avoids duplicate events
       if (updated.count > 0) {
         // Emit as session_output with a status patch — matches the workspace_ready pattern.
-        // The frontend's sessionPatchFromOutput picks up the status field.
+        // The frontend's sessionPatchFromOutput picks up the sessionStatus field.
         // Questions take precedence — they need immediate user interaction
         const pendingType = hasQuestionBlock(data) ? "question_pending" : "plan_pending";
         await eventService.create({
@@ -1088,7 +1098,7 @@ export class SessionService {
           scopeType: "session",
           scopeId: sessionId,
           eventType: "session_output",
-          payload: { type: pendingType, status: "needs_input" },
+          payload: { type: pendingType, sessionStatus: "needs_input" },
           actorType: "system",
           actorId: "system",
         });
@@ -1185,8 +1195,8 @@ export class SessionService {
 
   async complete(id: string) {
     // Only transition from active — don't overwrite explicit user actions
-    const current = await prisma.session.findUnique({ where: { id }, select: { status: true } });
-    if (!current || current.status !== "active") return;
+    const current = await prisma.session.findUnique({ where: { id }, select: { agentStatus: true, sessionStatus: true } });
+    if (!current || current.agentStatus !== "active") return;
 
     // Find when the current run started (last session_resumed or session_started)
     const lastResume = await prisma.event.findFirst({
@@ -1221,11 +1231,12 @@ export class SessionService {
       return hasQuestionBlock(evt.payload as Record<string, unknown>);
     });
 
-    const newStatus = hasPendingPlan || hasQuestion ? "needs_input" : "completed";
+    const newAgentStatus: AgentStatus = "done";
+    const newSessionStatus: SessionStatus = hasPendingPlan || hasQuestion ? "needs_input" : current.sessionStatus;
 
     const session = await prisma.session.update({
       where: { id },
-      data: { status: newStatus },
+      data: { agentStatus: newAgentStatus, sessionStatus: newSessionStatus },
       select: { organizationId: true, createdById: true, name: true },
     });
 
@@ -1234,13 +1245,13 @@ export class SessionService {
       scopeType: "session",
       scopeId: id,
       eventType: "session_terminated",
-      payload: { sessionId: id, reason: "bridge_complete", status: newStatus },
+      payload: { sessionId: id, reason: "bridge_complete", agentStatus: newAgentStatus, sessionStatus: newSessionStatus },
       actorType: "system",
       actorId: "system",
     });
 
     // Create inbox item when complete() lands in needs_input
-    if (newStatus === "needs_input") {
+    if (newSessionStatus === "needs_input") {
       // Find the event that triggered needs_input to extract question/plan data
       const triggerEvent = recentEvents.find((evt) => {
         const p = evt.payload as Record<string, unknown>;
@@ -1271,7 +1282,8 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
-        status: true,
+        agentStatus: true,
+        sessionStatus: true,
         tool: true,
         model: true,
         toolChangedAt: true,
@@ -1283,8 +1295,8 @@ export class SessionService {
       },
     });
 
-    if (isFullyUnloadedSessionStatus(session.status)) {
-      throw new Error(`Cannot send follow-up messages to a ${session.status} session`);
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+      throw new Error(`Cannot send follow-up messages to a ${session.agentStatus}/${session.sessionStatus} session`);
     }
 
     if (session.worktreeDeleted) {
@@ -1362,7 +1374,8 @@ export class SessionService {
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
-        status: "active",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         connection: this.mergeConnection(session.connection, {
           state: "connected",
           lastSeen: new Date().toISOString(),
@@ -1394,7 +1407,12 @@ export class SessionService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_resumed",
-      payload: { sessionId, ...(sessionGroup ? { sessionGroup } : {}) },
+      payload: {
+        sessionId,
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
       actorType,
       actorId,
     });
@@ -1422,7 +1440,7 @@ export class SessionService {
 
       const updated = await tx.session.update({
         where: { id: sessionId },
-        data: { status: "pending", workdir, ...(branch && { branch }), pendingRun: Prisma.DbNull },
+        data: { agentStatus: "active", sessionStatus: "in_progress", workdir, ...(branch && { branch }), pendingRun: Prisma.DbNull },
         include: SESSION_INCLUDE,
       });
 
@@ -1468,7 +1486,7 @@ export class SessionService {
     const session = await prisma.session.update({
       where: { id: sessionId },
       data: {
-        status: "failed",
+        agentStatus: "failed",
         workdir: null,
         worktreeDeleted: true,
         pendingRun: Prisma.DbNull,
@@ -1504,12 +1522,12 @@ export class SessionService {
   async markConnectionLost(sessionId: string, reason: string, runtimeInstanceId?: string) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true, status: true, connection: true, sessionGroupId: true },
+      select: { organizationId: true, agentStatus: true, sessionStatus: true, connection: true, sessionGroupId: true },
     });
     if (!session) return;
 
     // Fully unloaded sessions are excluded from reconnect/disconnect handling.
-    if (isFullyUnloadedSessionStatus(session.status)) return;
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
 
     const conn = this.parseConnection(session.connection);
     const updated: SessionConnectionData = {
@@ -1539,7 +1557,7 @@ export class SessionService {
         reason,
         runtimeInstanceId,
         connection: connJson(updated),
-        sessionStatus: session.status,
+        agentStatus: session.agentStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
@@ -1603,7 +1621,8 @@ export class SessionService {
 
     const sessions = await prisma.session.findMany({
       where: {
-        status: { notIn: [...FULLY_UNLOADED_SESSION_STATUSES] },
+        agentStatus: { notIn: [...FULLY_UNLOADED_AGENT_STATUSES] },
+        sessionStatus: { not: "merged" },
         connection: { path: ["runtimeInstanceId"], equals: runtimeId },
       },
       select: { id: true, connection: true },
@@ -1643,7 +1662,7 @@ export class SessionService {
       include: SESSION_INCLUDE,
     });
 
-    if (isFullyUnloadedSessionStatus(session.status)) {
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
       return session;
     }
 
@@ -1732,7 +1751,7 @@ export class SessionService {
         });
       }
 
-      // Mark as creating — workspace_ready callback will transition to pending
+      // Mark as active — workspace_ready callback will transition sessionStatus to in_progress
       const restoredConn: SessionConnectionData = {
         ...conn,
         state: "connected",
@@ -1746,7 +1765,7 @@ export class SessionService {
       const updated = await prisma.session.update({
         where: { id: sessionId },
         data: {
-          status: "creating",
+          agentStatus: "active",
           connection: connJson(restoredConn),
         },
         include: SESSION_INCLUDE,
@@ -1788,7 +1807,7 @@ export class SessionService {
     const updated = await prisma.session.update({
       where: { id: sessionId },
       data: {
-        status: "pending",
+        agentStatus: "active",
         connection: connJson(restoredConn),
       },
       include: SESSION_INCLUDE,
@@ -1858,7 +1877,7 @@ export class SessionService {
 
     await prisma.session.update({
       where: { id: sessionId },
-      data: { status: "completed" },
+      data: { agentStatus: "stopped" },
     });
 
     await eventService.create({
@@ -1868,7 +1887,7 @@ export class SessionService {
       eventType: "session_terminated",
       payload: {
         sessionId,
-        status: "completed",
+        agentStatus: "stopped",
       },
       actorType,
       actorId,
@@ -1892,8 +1911,8 @@ export class SessionService {
       where: { entityType: "session", entityId: sessionId },
     });
 
-    if (isFullyUnloadedSessionStatus(session.status)) {
-      throw new Error(`Cannot move a ${session.status} session`);
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+      throw new Error(`Cannot move a ${session.agentStatus} session`);
     }
     const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId);
     if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
@@ -1912,7 +1931,8 @@ export class SessionService {
       const child = await tx.session.create({
         data: {
           name: session.name,
-          status: session.repoId ? "creating" : "pending",
+          agentStatus: "active",
+          sessionStatus: session.sessionStatus,
           tool: session.tool,
           model: session.model ?? undefined,
           hosting: targetRuntime.hostingMode,
@@ -2065,8 +2085,8 @@ export class SessionService {
       where: { entityType: "session", entityId: sessionId },
     });
 
-    if (isFullyUnloadedSessionStatus(session.status)) {
-      throw new Error(`Cannot move a ${session.status} session`);
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+      throw new Error(`Cannot move a ${session.agentStatus} session`);
     }
 
     // Build conversation context from the old session
@@ -2078,7 +2098,8 @@ export class SessionService {
       const child = await tx.session.create({
         data: {
           name: session.name,
-          status: "creating",
+          agentStatus: "active",
+          sessionStatus: session.sessionStatus,
           tool: session.tool,
           model: session.model ?? undefined,
           hosting: "cloud",
@@ -2520,7 +2541,8 @@ export class SessionService {
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
-        status: "active",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         pendingRun: Prisma.DbNull,
         connection: this.mergeConnection(session.connection, {
           state: "connected",
@@ -2560,9 +2582,9 @@ export class SessionService {
   ) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { status: true, connection: true, sessionGroupId: true },
+      select: { agentStatus: true, sessionStatus: true, connection: true, sessionGroupId: true },
     });
-    if (session?.status && isFullyUnloadedSessionStatus(session.status)) return;
+    if (session && isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) return;
     const conn = this.parseConnection(session?.connection);
 
     const updated: SessionConnectionData = {
@@ -2644,7 +2666,8 @@ export class SessionService {
         where: {
           sessionGroupId: session.sessionGroupId,
           id: { not: sessionId },
-          status: { notIn: [...FULLY_UNLOADED_SESSION_STATUSES] },
+          agentStatus: { notIn: [...FULLY_UNLOADED_AGENT_STATUSES] },
+          sessionStatus: { not: "merged" },
         },
       });
 
@@ -2681,6 +2704,12 @@ export class SessionService {
   }) {
     const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
 
+    // Transition all sessions in the group to in_review
+    await prisma.session.updateMany({
+      where: { sessionGroupId, sessionStatus: { notIn: ["merged"] } },
+      data: { sessionStatus: "in_review" },
+    });
+
     const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl,
     });
@@ -2692,7 +2721,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: eventSessionId,
       eventType: "session_pr_opened",
-      payload: { sessionId: eventSessionId, prUrl, sessionGroup },
+      payload: { sessionId: eventSessionId, prUrl, sessionStatus: "in_review", sessionGroup },
       actorType: "system",
       actorId: "github-webhook",
     });
@@ -2747,8 +2776,8 @@ export class SessionService {
 
     // Transition ALL sessions in the group to merged, not just the event session
     const { count } = await prisma.session.updateMany({
-      where: { sessionGroupId, status: { not: "merged" } },
-      data: { status: "merged" },
+      where: { sessionGroupId, sessionStatus: { not: "merged" } },
+      data: { agentStatus: "done", sessionStatus: "merged" },
     });
 
     if (count === 0) return;
@@ -2767,7 +2796,8 @@ export class SessionService {
       payload: {
         sessionId: eventSessionId,
         prUrl,
-        status: "merged",
+        agentStatus: "done",
+        sessionStatus: "merged",
         worktreeDeleted: true,
         ...(sessionGroup ? { sessionGroup } : {}),
       },

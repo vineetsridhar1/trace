@@ -1,5 +1,5 @@
 import type { Context } from "../context.js";
-import type { CodingTool, SessionFilters, SessionStatus, StartSessionInput } from "@trace/gql";
+import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { prisma } from "../lib/db.js";
@@ -14,17 +14,18 @@ export const sessionQueries = {
     return sessionService.getGroup(args.id, requireOrgContext(ctx));
   },
   sessions: (_: unknown, args: { organizationId: string; filters?: SessionFilters }) => {
-    return sessionService.list(args.organizationId, args.filters ?? undefined);
+    const filters = args.filters ? { ...args.filters } : undefined;
+    return sessionService.list(args.organizationId, filters);
   },
   session: (_: unknown, args: { id: string }) => {
     return sessionService.get(args.id);
   },
   mySessions: (
     _: unknown,
-    args: { organizationId: string; status?: SessionStatus },
+    args: { organizationId: string; agentStatus?: AgentStatus },
     ctx: Context,
   ) => {
-    return sessionService.listByUser(args.organizationId, ctx.userId, args.status ?? undefined);
+    return sessionService.listByUser(args.organizationId, ctx.userId, args.agentStatus ?? undefined);
   },
   availableSessionRuntimes: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);

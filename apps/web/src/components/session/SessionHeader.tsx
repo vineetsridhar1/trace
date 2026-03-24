@@ -12,21 +12,37 @@ import {
   Maximize2,
   Minimize2,
   X,
+  XCircle,
+  StopCircle,
 } from "lucide-react";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
 import { useShallow } from "zustand/react/shallow";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import {
-  statusColor,
-  statusLabel,
+  agentStatusColor,
+  sessionStatusColor,
+  sessionStatusLabel,
   isDisconnected,
-  isReviewAndActive,
-  isGroupReviewAndActive,
-  getDisplayStatus,
-  getSessionGroupDisplayStatus,
+  getSessionGroupSessionStatus,
+  getSessionGroupAgentStatus,
 } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
+
+function AgentStatusIcon({ agentStatus, size }: { agentStatus: string; size: number }) {
+  switch (agentStatus) {
+    case "active":
+      return <Loader2 size={size} className="animate-spin" />;
+    case "done":
+      return <Circle size={size - 4} className="fill-current" />;
+    case "failed":
+      return <XCircle size={size} />;
+    case "stopped":
+      return <StopCircle size={size} />;
+    default:
+      return <Circle size={size - 4} className="fill-current" />;
+  }
+}
 
 export function SessionHeader({
   sessionId,
@@ -40,7 +56,8 @@ export function SessionHeader({
   panelMode?: boolean;
 }) {
   const name = useEntityField("sessions", sessionId, "name");
-  const status = useEntityField("sessions", sessionId, "status");
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
@@ -53,15 +70,21 @@ export function SessionHeader({
     | Record<string, unknown>
     | null
     | undefined;
-  const groupStatuses = useEntityStore(
+  const { groupAgentStatuses, groupSessionStatuses } = useEntityStore(
     useShallow((state) => {
       if (!sessionGroupId) {
-        const s = state.sessions[sessionId]?.status;
-        return s ? [s] : [];
+        return {
+          groupAgentStatuses: agentStatus ? [agentStatus] : [],
+          groupSessionStatuses: sessionStatus ? [sessionStatus] : [],
+        };
       }
-      return Object.values(state.sessions)
-        .filter((session) => session.sessionGroupId === sessionGroupId)
-        .map((session) => session.status);
+      const sessions = Object.values(state.sessions).filter(
+        (session) => session.sessionGroupId === sessionGroupId,
+      );
+      return {
+        groupAgentStatuses: sessions.map((session) => session.agentStatus),
+        groupSessionStatuses: sessions.map((session) => session.sessionStatus),
+      };
     }),
   );
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
@@ -76,12 +99,12 @@ export function SessionHeader({
   const runtimeLabel = connection?.runtimeLabel as string | undefined;
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
-  const displayStatus = sessionGroupId
-    ? getSessionGroupDisplayStatus(groupStatuses, prUrl)
-    : getDisplayStatus(status, prUrl);
-  const reviewAndActive = sessionGroupId
-    ? isGroupReviewAndActive(groupStatuses, prUrl)
-    : isReviewAndActive(status, prUrl);
+  const displaySessionStatus = sessionGroupId
+    ? getSessionGroupSessionStatus(groupSessionStatuses)
+    : (sessionStatus ?? "not_started");
+  const displayAgentStatus = sessionGroupId
+    ? getSessionGroupAgentStatus(groupAgentStatuses)
+    : (agentStatus ?? "active");
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
@@ -130,14 +153,10 @@ export function SessionHeader({
         </span>
       ) : (
         <span
-          className={`flex shrink-0 items-center gap-1.5 text-xs ${statusColor[displayStatus]}`}
+          className={`flex shrink-0 items-center gap-1.5 text-xs ${agentStatusColor[displayAgentStatus]}`}
         >
-          {reviewAndActive ? (
-            <Loader2 size={10} className="animate-spin" />
-          ) : (
-            <Circle size={6} className="fill-current" />
-          )}
-          {statusLabel[displayStatus]}
+          <AgentStatusIcon agentStatus={displayAgentStatus} size={10} />
+          {sessionStatusLabel[displaySessionStatus]}
         </span>
       )}
 

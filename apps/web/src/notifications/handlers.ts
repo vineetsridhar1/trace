@@ -1,10 +1,10 @@
 import { toast } from "sonner";
-import type { Event, EventType, ScopeType, SessionStatus } from "@trace/gql";
+import type { Event, EventType, ScopeType, AgentStatus } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import { useEntityStore } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore, navigateToSession } from "../stores/ui";
-import { statusLabel } from "../components/session/sessionStatus";
+import { agentStatusLabel } from "../components/session/sessionStatus";
 import { showNativeNotification } from "./native";
 
 /** Notification handler for a specific event type. */
@@ -64,7 +64,7 @@ function handleSessionStatusChange(event: Event): void {
   if (event.actor.id === currentUserId) return;
 
   const payload = asJsonObject(event.payload);
-  const newStatus = payload?.status as SessionStatus | undefined;
+  const newStatus = (payload?.agentStatus ?? payload?.sessionStatus) as string | undefined;
   if (!newStatus) return;
 
   // Look up the session to check ownership and get the name
@@ -81,7 +81,7 @@ function handleSessionStatusChange(event: Event): void {
   recentToasts.set(event.scopeId, now);
 
   const sessionName = session.name || "Untitled session";
-  const label = statusLabel[newStatus] ?? newStatus;
+  const label = agentStatusLabel[newStatus] ?? newStatus;
   const channelId = (session.channel as { id: string } | null)?.id ?? null;
   const sessionGroupId = session.sessionGroupId as string | undefined;
   const sessionId = event.scopeId;

@@ -6,7 +6,7 @@ import { useEntityStore } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId } from "../../lib/session-group";
-import { getDisplayStatus, statusColor } from "./sessionStatus";
+import { agentStatusColor } from "./sessionStatus";
 
 interface SessionHistoryProps {
   sessionId: string;
@@ -79,7 +79,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   return (
     <div className="max-h-72 overflow-y-auto py-1">
       {groupSessions.map((entry) => {
-        const displayStatus = getDisplayStatus(entry.status, null);
+        const color = agentStatusColor[entry.agentStatus ?? "active"] ?? "text-muted-foreground";
         const channelId = getSessionChannelId(entry);
 
         return (
@@ -97,7 +97,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
             >
               <Circle
                 size={6}
-                className={cn("shrink-0 fill-current", statusColor[displayStatus])}
+                className={cn("shrink-0 fill-current", color)}
               />
               <span
                 className={cn(

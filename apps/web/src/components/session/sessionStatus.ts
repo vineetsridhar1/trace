@@ -1,28 +1,40 @@
-export const statusColor: Record<string, string> = {
-  creating: "text-purple-400",
-  pending: "text-muted-foreground",
+import type { AgentStatus, SessionStatus } from "@trace/gql";
+
+// ─── Agent Status (what the coding agent is doing) ───
+
+export const agentStatusColor: Record<string, string> = {
   active: "text-blue-400",
-  paused: "text-yellow-400",
-  needs_input: "text-amber-400",
-  completed: "text-green-400",
+  done: "text-green-400",
   failed: "text-destructive",
-  unreachable: "text-muted-foreground",
+  stopped: "text-muted-foreground",
+};
+
+export const agentStatusLabel: Record<string, string> = {
+  active: "Active",
+  done: "Done",
+  failed: "Failed",
+  stopped: "Stopped",
+};
+
+// ─── Session Status (where the session is in its lifecycle) ───
+
+export const sessionStatusColor: Record<string, string> = {
+  not_started: "text-muted-foreground",
+  in_progress: "text-blue-400",
+  needs_input: "text-amber-400",
   in_review: "text-violet-400",
   merged: "text-emerald-400",
 };
 
-export const statusLabel: Record<string, string> = {
-  creating: "Preparing...",
-  pending: "Pending",
-  active: "In Progress",
-  paused: "Paused",
+export const sessionStatusLabel: Record<string, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
   needs_input: "Needs Input",
-  completed: "Completed",
-  failed: "Failed",
-  unreachable: "Unreachable",
   in_review: "In Review",
   merged: "Merged",
 };
+
+// ─── Connection ───
 
 export const connectionColor: Record<string, string> = {
   connected: "text-green-400",
@@ -36,52 +48,34 @@ export const connectionLabel: Record<string, string> = {
   disconnected: "Connection Lost",
 };
 
+// ─── Derived helpers ───
+
 /**
- * Derive the display status for a session.
- * "in_review" is not a real DB status — it's derived from having a prUrl.
+ * Derive the display label/color for a session group from its member statuses.
+ * Returns the most urgent session status across all members.
  */
-export function getDisplayStatus(status: string | undefined, prUrl: string | null | undefined): string {
-  if (!status) return "active";
-  // These statuses take priority over the PR-derived "in review" state
-  if (status === "merged" || status === "failed" || status === "needs_input") return status;
-  if (prUrl) return "in_review";
-  return status;
-}
-
-/** Whether the session is "in review" and actively working (show spinner). */
-export function isReviewAndActive(status: string | undefined, prUrl: string | null | undefined): boolean {
-  return !!prUrl && status === "active";
-}
-
-const GROUP_IN_PROGRESS_STATUSES = new Set([
-  "creating",
-  "pending",
-  "active",
-  "paused",
-  "unreachable",
-]);
-
-export function getSessionGroupDisplayStatus(
-  statuses: Array<string | null | undefined>,
-  prUrl: string | null | undefined,
+export function getSessionGroupSessionStatus(
+  sessionStatuses: Array<string | null | undefined>,
 ): string {
-  if (statuses.some((status) => status === "needs_input")) return "needs_input";
-  if (statuses.some((status) => status === "merged")) return "merged";
-  if (prUrl) return "in_review";
-  if (statuses.some((status) => status != null && GROUP_IN_PROGRESS_STATUSES.has(status))) {
-    return "active";
-  }
-  if (statuses.some((status) => status === "completed")) return "completed";
-  if (statuses.some((status) => status === "failed")) return "failed";
-  return "pending";
+  if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
+  if (sessionStatuses.some((s) => s === "merged")) return "merged";
+  if (sessionStatuses.some((s) => s === "in_review")) return "in_review";
+  if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
+  return "not_started";
 }
 
-/** Whether the session group is "in review" but still has active/in-progress sessions. */
-export function isGroupReviewAndActive(
-  statuses: Array<string | null | undefined>,
-  prUrl: string | null | undefined,
-): boolean {
-  return !!prUrl && statuses.some((status) => status != null && GROUP_IN_PROGRESS_STATUSES.has(status));
+/**
+ * Derive the group-level agent status from its member agent statuses.
+ * Returns the most active agent status across all members.
+ */
+export function getSessionGroupAgentStatus(
+  agentStatuses: Array<string | null | undefined>,
+): string {
+  if (agentStatuses.some((s) => s === "active")) return "active";
+  if (agentStatuses.some((s) => s === "done")) return "done";
+  if (agentStatuses.some((s) => s === "failed")) return "failed";
+  if (agentStatuses.some((s) => s === "stopped")) return "stopped";
+  return "active";
 }
 
 /** Check if a session's connection is in a disconnected state */
@@ -91,20 +85,21 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
 }
 
 /** Whether the session has reached a final state and cannot accept further input. */
-export function isTerminalStatus(status: string | undefined): boolean {
-  return status === "failed" || status === "merged";
+export function isTerminalStatus(agentStatus: string | undefined, sessionStatus?: string | undefined): boolean {
+  return agentStatus === "failed" || agentStatus === "stopped" || sessionStatus === "merged";
 }
 
 /** Check if a session can accept new messages (not disconnected and not fully unloaded) */
 export function canSendMessage(
-  status: string | undefined,
+  agentStatus: string | undefined,
+  sessionStatus: string | undefined,
   connection: Record<string, unknown> | null | undefined,
   worktreeDeleted?: boolean,
 ): boolean {
-  if (!status) return false;
-  if (isTerminalStatus(status)) return false;
+  if (!agentStatus) return false;
+  if (isTerminalStatus(agentStatus, sessionStatus)) return false;
   if (worktreeDeleted) return false;
-  if (status === "active") return false; // waiting for response
+  if (agentStatus === "active") return false; // waiting for response
   if (isDisconnected(connection)) return false;
   return true;
 }

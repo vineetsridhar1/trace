@@ -1,15 +1,18 @@
 scalar DateTime
 scalar JSON
 
-enum SessionStatus {
-  creating
-  pending
+enum AgentStatus {
   active
-  paused
-  needs_input
-  completed
+  done
   failed
-  unreachable
+  stopped
+}
+
+enum SessionStatus {
+  not_started
+  in_progress
+  needs_input
+  in_review
   merged
 }
 
@@ -98,7 +101,7 @@ enum AgentTrustLevel {
   blocked
 }
 
-enum AgentStatus {
+enum OrgAgentStatus {
   enabled
   disabled
 }
@@ -255,7 +258,8 @@ type SessionGroup {
 type Session {
   id: ID!
   name: String!
-  status: SessionStatus!
+  agentStatus: AgentStatus!
+  sessionStatus: SessionStatus!
   tool: CodingTool!
   model: String
   hosting: HostingMode!
@@ -375,7 +379,7 @@ type AgentIdentity {
   id: ID!
   organizationId: ID!
   name: String!
-  status: AgentStatus!
+  status: OrgAgentStatus!
   autonomyMode: AutonomyMode!
   soulFile: String!
   costBudget: CostBudget!
@@ -512,7 +516,7 @@ input StartSessionInput {
 }
 
 input SessionFilters {
-  status: SessionStatus
+  agentStatus: AgentStatus
   tool: CodingTool
   repoId: ID
   channelId: ID
@@ -583,7 +587,7 @@ input SetApiTokenInput {
 
 input UpdateAgentSettingsInput {
   name: String
-  status: AgentStatus
+  status: OrgAgentStatus
   autonomyMode: AutonomyMode
   soulFile: String
   dailyLimitCents: Int
@@ -605,7 +609,7 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
-  mySessions(organizationId: ID!, status: SessionStatus): [Session!]!
+  mySessions(organizationId: ID!, agentStatus: AgentStatus): [Session!]!
   tickets(organizationId: ID!, filters: TicketFilters): [Ticket!]!
   ticket(id: ID!): Ticket
   events(

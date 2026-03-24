@@ -10,7 +10,7 @@ import type {
 import { navigateToSessionGroup } from "../../stores/ui";
 import { SessionStatusGroupLabel } from "./SessionStatusGroupLabel";
 import type { SessionGroupRow } from "./sessions-table-types";
-import { collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
+import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
 
 export function useSessionsGridOptions({
   channelId,
@@ -75,12 +75,13 @@ export function useSessionsGridOptions({
       innerRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
         const status = params.value as string;
         const count = params.node.allChildrenCount ?? 0;
-        const hasReviewAndActive = status === "in_review"
-          && params.node.allLeafChildren?.some((child) => child.data?.reviewAndActive);
+        const hasActive = params.node.allLeafChildren?.some(
+          (child) => child.data?.displayAgentStatus === "active",
+        );
         return (
           <SessionStatusGroupLabel
             count={count}
-            hasReviewAndActive={Boolean(hasReviewAndActive)}
+            hasActive={Boolean(hasActive)}
             status={status}
           />
         );
@@ -90,8 +91,8 @@ export function useSessionsGridOptions({
       nodeA: { key?: string | null };
       nodeB: { key?: string | null };
     }) => {
-      const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
-      const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
+      const a = sessionStatusGroupOrder[params.nodeA.key ?? ""] ?? 99;
+      const b = sessionStatusGroupOrder[params.nodeB.key ?? ""] ?? 99;
       return a - b;
     },
   };

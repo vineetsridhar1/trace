@@ -25,7 +25,8 @@ const SESSION_GROUPS_QUERY = gql`
       sessions {
         id
         name
-        status
+        agentStatus
+        sessionStatus
         tool
         model
         hosting

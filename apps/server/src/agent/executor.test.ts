@@ -18,8 +18,8 @@ function createServices(): ServiceContainer {
     } as unknown as ServiceContainer["chatService"],
     sessionService: {
       start: vi.fn().mockResolvedValue({ id: "session-1" }),
-      pause: vi.fn().mockResolvedValue({ id: "session-1", status: "paused" }),
-      resume: vi.fn().mockResolvedValue({ id: "session-1", status: "active" }),
+      pause: vi.fn().mockResolvedValue({ id: "session-1", agentStatus: "active" }),
+      resume: vi.fn().mockResolvedValue({ id: "session-1", agentStatus: "active" }),
     } as unknown as ServiceContainer["sessionService"],
     inboxService: {
       createItem: vi.fn().mockResolvedValue({ id: "inbox-1" }),

@@ -44,13 +44,15 @@ export type AgentIdentity = {
   name: Scalars['String']['output'];
   organizationId: Scalars['ID']['output'];
   soulFile: Scalars['String']['output'];
-  status: AgentStatus;
+  status: OrgAgentStatus;
   updatedAt: Scalars['DateTime']['output'];
 };
 
 export type AgentStatus =
-  | 'disabled'
-  | 'enabled';
+  | 'active'
+  | 'done'
+  | 'failed'
+  | 'stopped';
 
 export type AgentTrustLevel =
   | 'autonomous'
@@ -718,6 +720,10 @@ export type Notification = {
   type: Scalars['String']['output'];
 };
 
+export type OrgAgentStatus =
+  | 'disabled'
+  | 'enabled';
+
 export type OrgMember = {
   __typename?: 'OrgMember';
   joinedAt: Scalars['DateTime']['output'];
@@ -878,8 +884,8 @@ export type QueryInboxItemsArgs = {
 
 
 export type QueryMySessionsArgs = {
+  agentStatus?: InputMaybe<AgentStatus>;
   organizationId: Scalars['ID']['input'];
-  status?: InputMaybe<SessionStatus>;
 };
 
 
@@ -1015,6 +1021,7 @@ export type ScopeType =
 
 export type Session = {
   __typename?: 'Session';
+  agentStatus: AgentStatus;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1030,7 +1037,7 @@ export type Session = {
   repo?: Maybe<Repo>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupId?: Maybe<Scalars['ID']['output']>;
-  status: SessionStatus;
+  sessionStatus: SessionStatus;
   tickets: Array<Ticket>;
   tool: CodingTool;
   toolSessionId?: Maybe<Scalars['String']['output']>;
@@ -1064,9 +1071,9 @@ export type SessionEndpoints = {
 };
 
 export type SessionFilters = {
+  agentStatus?: InputMaybe<AgentStatus>;
   channelId?: InputMaybe<Scalars['ID']['input']>;
   repoId?: InputMaybe<Scalars['ID']['input']>;
-  status?: InputMaybe<SessionStatus>;
   tool?: InputMaybe<CodingTool>;
 };
 
@@ -1098,15 +1105,11 @@ export type SessionRuntimeInstance = {
 };
 
 export type SessionStatus =
-  | 'active'
-  | 'completed'
-  | 'creating'
-  | 'failed'
+  | 'in_progress'
+  | 'in_review'
   | 'merged'
   | 'needs_input'
-  | 'paused'
-  | 'pending'
-  | 'unreachable';
+  | 'not_started';
 
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
@@ -1248,7 +1251,7 @@ export type UpdateAgentSettingsInput = {
   dailyLimitCents?: InputMaybe<Scalars['Int']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   soulFile?: InputMaybe<Scalars['String']['input']>;
-  status?: InputMaybe<AgentStatus>;
+  status?: InputMaybe<OrgAgentStatus>;
 };
 
 export type UpdateChannelGroupInput = {

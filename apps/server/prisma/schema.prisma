@@ -18,15 +18,18 @@ enum ChannelType {
   coding
 }
 
-enum SessionStatus {
-  creating
-  pending
+enum AgentStatus {
   active
-  paused
-  needs_input
-  completed
+  done
   failed
-  unreachable
+  stopped
+}
+
+enum SessionStatus {
+  not_started
+  in_progress
+  needs_input
+  in_review
   merged
 }
 
@@ -110,7 +113,7 @@ enum CloudMachineStatus {
   destroyed
 }
 
-enum AgentStatus {
+enum OrgAgentStatus {
   enabled
   disabled
 }
@@ -224,7 +227,7 @@ model AgentIdentity {
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id])
   name           String       @default("Trace AI")
-  status         AgentStatus  @default(enabled)
+  status         OrgAgentStatus  @default(enabled)
   autonomyMode   AutonomyMode @default(observe)
   soulFile       String       @default("")
   dailyLimitCents Int         @default(1000)
@@ -446,7 +449,8 @@ model SessionGroup {
 model Session {
   id             String       @id @default(uuid())
   name           String
-  status         SessionStatus @default(pending)
+  agentStatus    AgentStatus   @default(active)
+  sessionStatus  SessionStatus @default(not_started)
   tool           CodingTool
   model          String?
   toolChangedAt  DateTime?
