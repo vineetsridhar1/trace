@@ -144,9 +144,9 @@ export const compactSessionColumns: ColDef<SessionGroupRow>[] = [
             {renderStatusIcon(data)}
             <span className="truncate text-sm font-medium text-foreground">{data.name}</span>
           </div>
-          <div className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="mt-2.5 flex min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
             {repo && (
-              <span className="min-w-0 truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/90">
+              <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground/90">
                 {repo.name}
               </span>
             )}

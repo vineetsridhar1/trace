@@ -55,7 +55,6 @@ export const createTable = <T extends { id: string }>({
       rows: T[];
       columns: GridOptions<T>['columnDefs'];
       className?: string;
-      columnDefs?: GridOptions<T>['columnDefs'];
       selectedRowIds?: string[];
       agGridOptions?: GridOptions<T>;
     }>;
