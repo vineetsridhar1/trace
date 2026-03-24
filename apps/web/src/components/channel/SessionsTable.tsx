@@ -26,8 +26,8 @@ import { useSessionGroupRows } from "./useSessionGroupRows";
 export function SessionsTable({ channelId }: { channelId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasMeasuredRef = useRef(false);
+  const hasAnimatedModeRef = useRef(false);
   const [isCompact, setIsCompact] = useState(false);
-  const [displayCompact, setDisplayCompact] = useState(false);
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
   const fadeControls = useAnimationControls();
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -46,7 +46,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       setIsCompact(nextCompact);
       if (!hasMeasuredRef.current) {
         hasMeasuredRef.current = true;
-        setDisplayCompact(nextCompact);
         fadeControls.set({ opacity: 1 });
       }
     };
@@ -62,21 +61,23 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   }, [fadeControls]);
 
   useEffect(() => {
-    if (!hasMeasuredRef.current || displayCompact === isCompact) return;
+    if (!hasMeasuredRef.current) return;
+    if (!hasAnimatedModeRef.current) {
+      hasAnimatedModeRef.current = true;
+      return;
+    }
 
     let cancelled = false;
     void (async () => {
-      await fadeControls.start({ opacity: 0, transition: { duration: 0.08 } });
       if (cancelled) return;
-      setDisplayCompact(isCompact);
       fadeControls.set({ opacity: 0 });
-      await fadeControls.start({ opacity: 1, transition: { duration: 0.08 } });
+      await fadeControls.start({ opacity: 1, transition: { duration: 0.12 } });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [displayCompact, fadeControls, isCompact]);
+  }, [fadeControls, isCompact]);
 
   useEffect(() => {
     useSessionsGridTable.getState().setRows(filteredGroups);
@@ -120,9 +121,9 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     channelId,
     filterStorageKey,
     getContextMenuItems,
-    isCompact: displayCompact,
+    isCompact,
   });
-  const columnDefs = displayCompact ? compactSessionColumns : desktopSessionColumns;
+  const columnDefs = isCompact ? compactSessionColumns : desktopSessionColumns;
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
   return (
@@ -135,7 +136,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         transition={{ duration: 0.12 }}
       >
         <SessionsGridTable
-          className={displayCompact ? "sessions-grid-compact h-full" : "h-full"}
+          className={isCompact ? "sessions-grid-compact h-full" : "h-full"}
           agGridOptions={agGridOptions}
           columnDefs={columnDefs}
           selectedRowIds={selectedRowIds}
