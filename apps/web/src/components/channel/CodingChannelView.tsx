@@ -17,6 +17,7 @@ const SESSION_GROUPS_QUERY = gql`
     sessionGroups(channelId: $channelId) {
       id
       name
+      prUrl
       channel {
         id
       }
