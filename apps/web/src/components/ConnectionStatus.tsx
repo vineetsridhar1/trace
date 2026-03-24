@@ -58,7 +58,7 @@ export function ConnectionStatus() {
         className={`ml-auto flex h-8 items-center rounded-md px-1.5 ${indicatorClass}`}
         aria-label={summaryLabel}
       >
-        <CircleDot className="h-4 w-4" />
+        <CircleDot className="h-3.5 w-3.5" />
       </TooltipTrigger>
       <TooltipContent className="flex min-w-44 flex-col items-start gap-1.5 px-3 py-2">
         <div className="font-medium">{summaryLabel}</div>
