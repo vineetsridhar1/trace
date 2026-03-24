@@ -153,6 +153,30 @@ function createCheckpointContext({
   };
 }
 
+function buildCheckpointContextFromStartMeta({
+  sessionId,
+  sessionGroupId,
+  repoId,
+  startMeta,
+}: {
+  sessionId: string;
+  sessionGroupId?: string | null;
+  repoId?: string | null;
+  startMeta?: Pick<SessionStartMetadata, "checkpointContextId" | "promptEventId"> | null;
+}): GitCheckpointContext | null {
+  if (!sessionGroupId || !repoId || !startMeta?.checkpointContextId) {
+    return null;
+  }
+
+  return createCheckpointContext({
+    checkpointContextId: startMeta.checkpointContextId,
+    promptEventId: startMeta.promptEventId,
+    sessionId,
+    sessionGroupId,
+    repoId,
+  });
+}
+
 const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
@@ -930,6 +954,13 @@ export class SessionService {
       include: SESSION_INCLUDE,
     });
 
+    const startMeta = (
+      (!prompt || !session.toolSessionId)
+      || (session.agentStatus === "not_started" && !session.workdir && !!session.repoId && !!session.sessionGroupId)
+    )
+      ? await getSessionStartMetadata(id)
+      : null;
+
     // If workspace is still being prepared, queue the run for later
     if (session.agentStatus === "not_started" && !session.workdir) {
       const updated = await prisma.session.update({
@@ -939,7 +970,13 @@ export class SessionService {
             type: "run",
             prompt: prompt ?? null,
             interactionMode: interactionMode ?? null,
-          },
+            checkpointContext: buildCheckpointContextFromStartMeta({
+              sessionId: id,
+              sessionGroupId: session.sessionGroupId,
+              repoId: session.repoId,
+              startMeta,
+            }),
+          } as unknown as Prisma.InputJsonValue,
         },
         include: SESSION_INCLUDE,
       });
@@ -957,9 +994,6 @@ export class SessionService {
 
     // If no prompt provided, retrieve the original prompt from the session_started event
     let resolvedPrompt = prompt;
-    const startMeta = !resolvedPrompt || !session.toolSessionId
-      ? await getSessionStartMetadata(id)
-      : null;
     if (!resolvedPrompt) {
       resolvedPrompt = startMeta?.prompt ?? null;
     }
@@ -991,16 +1025,12 @@ export class SessionService {
       resolvedPrompt = appendAutoSave(resolvedPrompt, !!session.repo);
     }
 
-    const checkpointContext =
-      session.repoId && session.sessionGroupId && startMeta?.checkpointContextId
-        ? createCheckpointContext({
-            checkpointContextId: startMeta.checkpointContextId,
-            promptEventId: startMeta.promptEventId,
-            sessionId: id,
-            sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
-          })
-        : null;
+    const checkpointContext = buildCheckpointContextFromStartMeta({
+      sessionId: id,
+      sessionGroupId: session.sessionGroupId,
+      repoId: session.repoId,
+      startMeta,
+    });
 
     const command = {
       type: "run" as const,
@@ -3104,6 +3134,17 @@ export class SessionService {
       prompt = appendAutoSave(prompt, !!session.repoId);
     }
 
+    const fallbackCheckpointContext =
+      pending.type === "run" && !pending.checkpointContext
+        ? buildCheckpointContextFromStartMeta({
+            sessionId,
+            sessionGroupId: session.sessionGroupId,
+            repoId: session.repoId,
+            startMeta: await getSessionStartMetadata(sessionId),
+          })
+        : null;
+    const checkpointContext = pending.checkpointContext ?? fallbackCheckpointContext;
+
     const command = {
       type: pending.type,
       sessionId,
@@ -3113,7 +3154,7 @@ export class SessionService {
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
-      checkpointContext: pending.checkpointContext ?? undefined,
+      checkpointContext: checkpointContext ?? undefined,
     } satisfies {
       type: "run" | "send";
       sessionId: string;

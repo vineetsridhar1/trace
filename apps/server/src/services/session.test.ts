@@ -482,6 +482,12 @@ describe("SessionService", () => {
         }),
       });
       prismaMock.ticketLink.findMany.mockResolvedValueOnce([{ ticketId: "ticket-1" }]);
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
       prismaMock.sessionGroup.create.mockResolvedValueOnce(
         makeSessionGroup({
           id: "group-restored",
@@ -969,6 +975,57 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+  });
+
+  describe("run", () => {
+    it("queues checkpoint context when the initial run waits for workspace preparation", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          workdir: null,
+          toolSessionId: null,
+          repoId: "repo-1",
+          sessionGroupId: "group-1",
+        }),
+      );
+      prismaMock.event.findFirst.mockResolvedValueOnce({
+        id: "event-start-1",
+        payload: { prompt: "Original prompt" },
+        metadata: { checkpointContextId: "ctx-queued-1" },
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          pendingRun: {
+            type: "run",
+            prompt: "Ship it",
+            interactionMode: null,
+          },
+        }),
+      );
+
+      await service.run("session-1", "Ship it");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: {
+          pendingRun: expect.objectContaining({
+            type: "run",
+            prompt: "Ship it",
+            interactionMode: null,
+            checkpointContext: expect.objectContaining({
+              checkpointContextId: "ctx-queued-1",
+              promptEventId: "event-start-1",
+              sessionId: "session-1",
+              sessionGroupId: "group-1",
+              repoId: "repo-1",
+              updatedAt: expect.any(String),
+            }),
+          }),
+        },
+        include: expect.any(Object),
+      });
     });
   });
 
