@@ -7,7 +7,7 @@ import {
   RUN_SESSION_MUTATION,
   TERMINATE_SESSION_MUTATION,
 } from "../../lib/mutations";
-import { useEntityField } from "../../stores/entity";
+import { useEntityField, useEntityStore } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 
@@ -55,6 +55,23 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
+        // Optimistically upsert the new session so tab navigation works
+        // before the session_started event arrives via the subscription.
+        const now = new Date().toISOString();
+        useEntityStore.getState().upsert("sessions", newSessionId, {
+          id: newSessionId,
+          sessionGroupId,
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          tool: tool ?? "claude_code",
+          model: model ?? null,
+          hosting: hosting ?? "cloud",
+          channel: channel ? { id: channel.id } : null,
+          repo: repo ? { id: repo.id } : null,
+          branch: branch ?? null,
+          createdAt: now,
+          updatedAt: now,
+        } as Record<string, unknown>);
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
         openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
