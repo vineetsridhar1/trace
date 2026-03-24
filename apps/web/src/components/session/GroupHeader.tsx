@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect } from "react";
 import {
   Circle,
-  Files,
   GitPullRequest,
+  PanelLeft,
   History,
   Maximize2,
   Minimize2,
@@ -19,10 +19,10 @@ interface GroupHeaderProps {
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
   isFullscreen: boolean;
-  showFiles: boolean;
+  showSidebar: boolean;
   onClose: () => void;
   onToggleFullscreen: () => void;
-  onToggleFiles: () => void;
+  onToggleSidebar: () => void;
 }
 
 export function GroupHeader({
@@ -32,10 +32,10 @@ export function GroupHeader({
   groupPrUrl,
   panelMode,
   isFullscreen,
-  showFiles,
+  showSidebar,
   onClose,
   onToggleFullscreen,
-  onToggleFiles,
+  onToggleSidebar,
 }: GroupHeaderProps) {
   const [showHistory, setShowHistory] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -89,16 +89,16 @@ export function GroupHeader({
       </div>
 
       <button
-        onClick={onToggleFiles}
+        onClick={onToggleSidebar}
         className={cn(
           "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-          showFiles
+          showSidebar
             ? "bg-surface-elevated text-foreground"
             : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
         )}
-        title="Toggle file explorer"
+        title="Toggle sidebar"
       >
-        <Files size={14} />
+        <PanelLeft size={14} />
       </button>
 
       <div className="relative" ref={historyRef}>

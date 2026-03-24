@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Circle, FileCode, GitCommitHorizontal, MessageSquarePlus, Plus, TerminalSquare, X } from "lucide-react";
+import { Circle, FileCode, MessageSquarePlus, Plus, TerminalSquare, X } from "lucide-react";
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
@@ -36,9 +36,6 @@ interface GroupTabStripProps {
   onOpenTerminal: () => void;
   canNewChat: boolean;
   canOpenTerminal: boolean;
-  showCheckpoints: boolean;
-  onSelectCheckpoints: () => void;
-  checkpointCount: number;
 }
 
 const tabBase =
@@ -68,9 +65,6 @@ export function GroupTabStrip({
   onOpenTerminal,
   canNewChat,
   canOpenTerminal,
-  showCheckpoints,
-  onSelectCheckpoints,
-  checkpointCount,
 }: GroupTabStripProps) {
   const sessionById = new Map(groupSessions.map((s) => [s.id, s]));
   const tabRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -82,7 +76,7 @@ export function GroupTabStrip({
   }, []);
 
   // Scroll the active tab into view when selection changes
-  const activeKey = activeFilePath ?? activeTerminalId ?? (showCheckpoints ? "__checkpoints__" : null) ?? selectedSessionId;
+  const activeKey = activeFilePath ?? activeTerminalId ?? selectedSessionId;
   useEffect(() => {
     if (!activeKey) return;
     const el = tabRefs.current.get(activeKey);
@@ -129,7 +123,7 @@ export function GroupTabStrip({
               session.sessionStatus,
             );
             const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
-            const isActive = !activeTerminalId && !activeFilePath && !showCheckpoints && selectedSessionId === session.id;
+            const isActive = !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
             return (
               <div
                 key={session.id}
@@ -227,22 +221,6 @@ export function GroupTabStrip({
               </div>
             );
           })}
-
-          {checkpointCount > 0 && (
-            <button
-              ref={(el) => setTabRef("__checkpoints__", el)}
-              onClick={onSelectCheckpoints}
-              className={cn(tabBase, showCheckpoints ? tabActive : tabInactive)}
-            >
-              <GitCommitHorizontal size={12} className="shrink-0" />
-              <span className="truncate">Git</span>
-              {!showCheckpoints && (
-                <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">
-                  {checkpointCount}
-                </span>
-              )}
-            </button>
-          )}
 
           <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
             <DropdownMenuTrigger asChild>

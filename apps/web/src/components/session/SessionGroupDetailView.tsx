@@ -19,10 +19,10 @@ import { GroupTabStrip } from "./GroupTabStrip";
 import type { OpenFileTab } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
-import { FileExplorer } from "./FileExplorer";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
-import { CheckpointPanel } from "./CheckpointPanel";
 import { FileOpenContext } from "./FileOpenContext";
+import { SidebarPanel } from "./SidebarPanel";
+import type { SidebarTab } from "./SidebarPanel";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
   getDisplaySessionStatus,
@@ -153,10 +153,10 @@ export function SessionGroupDetailView({
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
-  const [showFiles, setShowFiles] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  const [showCheckpoints, setShowCheckpoints] = useState(false);
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
@@ -268,28 +268,14 @@ export function SessionGroupDetailView({
     );
   })();
 
-  const groupCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
-    | unknown[]
-    | null
-    | undefined;
-  const checkpointCount = Array.isArray(groupCheckpoints) ? groupCheckpoints.length : 0;
-
   const handleOpenCheckpointPanel = useCallback(
     (checkpointId?: string) => {
-      setShowCheckpoints(true);
+      setShowSidebar(true);
+      setSidebarTab("git");
       setHighlightCheckpointId(checkpointId ?? null);
-      setActiveFilePath(null);
-      setActiveTerminalId(null);
     },
-    [setActiveTerminalId],
+    [],
   );
-
-  const handleSelectCheckpoints = useCallback(() => {
-    setShowCheckpoints(true);
-    setHighlightCheckpointId(null);
-    setActiveFilePath(null);
-    setActiveTerminalId(null);
-  }, [setActiveTerminalId]);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
@@ -385,7 +371,6 @@ export function SessionGroupDetailView({
       if (sessionId) setActiveSessionId(sessionId);
       setActiveTerminalId(terminalId);
       setActiveFilePath(null);
-      setShowCheckpoints(false);
     },
     [setActiveSessionId, setActiveTerminalId],
   );
@@ -399,7 +384,6 @@ export function SessionGroupDetailView({
       });
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
-      setShowCheckpoints(false);
     },
     [setActiveTerminalId],
   );
@@ -408,7 +392,6 @@ export function SessionGroupDetailView({
     (filePath: string) => {
       setActiveFilePath(filePath);
       setActiveTerminalId(null);
-      setShowCheckpoints(false);
     },
     [setActiveTerminalId],
   );
@@ -423,7 +406,6 @@ export function SessionGroupDetailView({
       setActiveSessionId(sessionId);
       setActiveTerminalId(null);
       setActiveFilePath(null);
-      setShowCheckpoints(false);
     },
     [setActiveSessionId, setActiveTerminalId],
   );
@@ -446,10 +428,10 @@ export function SessionGroupDetailView({
           groupPrUrl={groupPrUrl}
           panelMode={panelMode}
           isFullscreen={isFullscreen}
-          showFiles={showFiles}
+          showSidebar={showSidebar}
           onClose={() => setActiveSessionId(null)}
           onToggleFullscreen={toggleFullscreen}
-          onToggleFiles={() => setShowFiles((v) => !v)}
+          onToggleSidebar={() => setShowSidebar((v) => !v)}
         />
 
         <GroupTabStrip
@@ -471,15 +453,18 @@ export function SessionGroupDetailView({
           onOpenTerminal={handleOpenTerminal}
           canNewChat={!!selectedSession}
           canOpenTerminal={terminalAllowed}
-          showCheckpoints={showCheckpoints}
-          onSelectCheckpoints={handleSelectCheckpoints}
-          checkpointCount={checkpointCount}
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {showFiles && (
+          {showSidebar && (
             <div className="h-full w-[260px] shrink-0 border-r border-[#2d2d2d]">
-              <FileExplorer sessionGroupId={sessionGroupId} onFileClick={handleFileClick} />
+              <SidebarPanel
+                sessionGroupId={sessionGroupId}
+                activeTab={sidebarTab}
+                onTabChange={setSidebarTab}
+                onFileClick={handleFileClick}
+                highlightCheckpointId={highlightCheckpointId}
+              />
             </div>
           )}
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -495,11 +480,6 @@ export function SessionGroupDetailView({
               <div className="h-full bg-[#0a0a0a]">
                 <TerminalInstance terminalId={activeTerminal.id} visible />
               </div>
-            ) : showCheckpoints ? (
-              <CheckpointPanel
-                sessionGroupId={sessionGroupId}
-                highlightCheckpointId={highlightCheckpointId}
-              />
             ) : selectedSession ? (
               <SessionDetailView sessionId={selectedSession.id} hideHeader />
             ) : (
