@@ -272,6 +272,9 @@ type Session {
   sessionStatus: SessionStatus!
   tool: CodingTool!
   model: String
+  estimatedContextTokens: Int!
+  modelContextWindowTokens: Int
+  contextWindowUtilization: Float
   hosting: HostingMode!
   createdBy: User!
   repo: Repo

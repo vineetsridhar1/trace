@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type { AgentStatus, CodingTool, SessionFilters, StartSessionInput } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { getSessionContextMetrics } from "../services/session-token-usage.js";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
@@ -9,6 +10,29 @@ import {
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
+
+const sessionContextMetricsCache = new WeakMap<
+  object,
+  ReturnType<typeof getSessionContextMetrics>
+>();
+
+function loadSessionContextMetrics(session: { id: string; model?: string | null }) {
+  if (typeof session === "object" && session !== null) {
+    const cached = sessionContextMetricsCache.get(session);
+    if (cached) return cached;
+    const next = getSessionContextMetrics({
+      sessionId: session.id,
+      model: session.model,
+    });
+    sessionContextMetricsCache.set(session, next);
+    return next;
+  }
+
+  return getSessionContextMetrics({
+    sessionId: session.id,
+    model: session.model,
+  });
+}
 
 export const sessionQueries = {
   sessionGroups: (_: unknown, args: { channelId: string }, ctx: Context) => {
@@ -190,6 +214,15 @@ export const sessionTypeResolvers = {
     },
   },
   Session: {
+    estimatedContextTokens: async (session: { id: string; model?: string | null }) => {
+      return (await loadSessionContextMetrics(session)).estimatedContextTokens;
+    },
+    modelContextWindowTokens: async (session: { id: string; model?: string | null }) => {
+      return (await loadSessionContextMetrics(session)).modelContextWindowTokens;
+    },
+    contextWindowUtilization: async (session: { id: string; model?: string | null }) => {
+      return (await loadSessionContextMetrics(session)).contextWindowUtilization;
+    },
     tickets: async (session: { id: string }) => {
       const links = await prisma.ticketLink.findMany({
         where: { entityType: "session", entityId: session.id },

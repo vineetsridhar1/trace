@@ -1020,12 +1020,15 @@ export type Session = {
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
+  contextWindowUtilization?: Maybe<Scalars['Float']['output']>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
+  estimatedContextTokens: Scalars['Int']['output'];
   endpoints?: Maybe<SessionEndpoints>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
   model?: Maybe<Scalars['String']['output']>;
+  modelContextWindowTokens?: Maybe<Scalars['Int']['output']>;
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;

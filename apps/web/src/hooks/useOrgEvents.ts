@@ -1,6 +1,11 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
-import { asJsonObject, type JsonObject } from "@trace/shared";
+import {
+  asJsonObject,
+  estimateSessionEventTokens,
+  getModelContextWindowTokens,
+  type JsonObject,
+} from "@trace/shared";
 import { client } from "../lib/urql";
 import { useEntityStore, eventScopeKey } from "../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
@@ -117,6 +122,13 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
   }
   if (payload.type === "question_pending" || payload.type === "plan_pending") {
     return { sessionStatus: "needs_input" as SessionStatus };
+  }
+  if (payload.type === "config_changed") {
+    const model = typeof payload.model === "string" ? payload.model : undefined;
+    return {
+      ...(typeof payload.tool === "string" ? { tool: payload.tool } : {}),
+      ...(model ? { model, modelContextWindowTokens: getModelContextWindowTokens(model) } : {}),
+    } as Partial<SessionEntity>;
   }
   // Connection state events carry a full connection patch
   if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
@@ -336,10 +348,27 @@ export function useOrgEvents() {
           if (session && typeof session.id === "string") {
             upsertSessionGroupFromPayload();
             const existingSession = useEntityStore.getState().sessions[session.id];
-            upsert("sessions", session.id, {
-              ...(existingSession ? { ...existingSession, ...session } : session),
-              _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
-            } as unknown as SessionEntity);
+            const startEstimate = estimateSessionEventTokens(event.eventType, payload);
+            const model =
+              typeof session.model === "string"
+                ? session.model
+                : typeof existingSession?.model === "string"
+                  ? existingSession.model
+                  : null;
+            upsert(
+              "sessions",
+              session.id,
+              {
+                ...(existingSession ? { ...existingSession, ...session } : session),
+                estimatedContextTokens: Math.max(
+                  existingSession?.estimatedContextTokens ?? 0,
+                  startEstimate,
+                ),
+                modelContextWindowTokens:
+                  model != null ? getModelContextWindowTokens(model) : null,
+                _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
+              } as unknown as SessionEntity,
+            );
           }
         }
 
@@ -477,9 +506,17 @@ export function useOrgEvents() {
           payload
         ) {
           const preview = extractMessagePreview(event.eventType, payload);
+          const existingSession = useEntityStore.getState().sessions[event.scopeId];
+          const deltaTokens = estimateSessionEventTokens(event.eventType, payload);
           const updates: Partial<SessionEntity> = {
             updatedAt: event.timestamp,
             _lastMessageAt: event.timestamp,
+            ...(existingSession && deltaTokens > 0
+              ? {
+                  estimatedContextTokens:
+                    (existingSession.estimatedContextTokens ?? 0) + deltaTokens,
+                }
+              : {}),
           };
           if (event.eventType === "message_sent") {
             updates._sortTimestamp = event.timestamp;

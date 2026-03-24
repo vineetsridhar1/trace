@@ -1023,12 +1023,15 @@ export type Session = {
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
+  contextWindowUtilization?: Maybe<Scalars['Float']['output']>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
+  estimatedContextTokens: Scalars['Int']['output'];
   endpoints?: Maybe<SessionEndpoints>;
   hosting: HostingMode;
   id: Scalars['ID']['output'];
   model?: Maybe<Scalars['String']['output']>;
+  modelContextWindowTokens?: Maybe<Scalars['Int']['output']>;
   name: Scalars['String']['output'];
   prUrl?: Maybe<Scalars['String']['output']>;
   projects: Array<Project>;
@@ -1809,12 +1812,15 @@ export type SessionResolvers<ContextType = Context, ParentType extends Resolvers
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;
+  contextWindowUtilization?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  estimatedContextTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   endpoints?: Resolver<Maybe<ResolversTypes['SessionEndpoints']>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes['HostingMode'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   model?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  modelContextWindowTokens?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   projects?: Resolver<Array<ResolversTypes['Project']>, ParentType, ContextType>;
@@ -1982,4 +1988,3 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   TicketLink?: TicketLinkResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
 }>;
-
