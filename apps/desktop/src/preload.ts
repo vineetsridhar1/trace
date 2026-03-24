@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld("trace", {
   getGitInfo: (folderPath: string) => ipcRenderer.invoke("get-git-info", folderPath),
   saveRepoPath: (repoId: string, localPath: string) => ipcRenderer.invoke("save-repo-path", repoId, localPath),
   getRepoPath: (repoId: string) => ipcRenderer.invoke("get-repo-path", repoId),
+  getRepoConfig: (repoId: string) => ipcRenderer.invoke("get-repo-config", repoId),
+  setRepoGitHooksEnabled: (repoId: string, enabled: boolean) =>
+    ipcRenderer.invoke("set-repo-git-hooks-enabled", repoId, enabled),
+  getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),
+  repairRepoGitHooks: (repoId: string) => ipcRenderer.invoke("repair-repo-git-hooks", repoId),
   getBridgeStatus: () => ipcRenderer.invoke("get-bridge-status"),
   onBridgeStatus: (callback: (status: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status);

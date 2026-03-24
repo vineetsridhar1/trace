@@ -4,15 +4,29 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter, GitCheckpointBridgePayload, GitCheckpointTrigger } from "@trace/shared";
+import type {
+  BridgeClient as IBridgeClient,
+  BridgeCommand,
+  BridgeMessage,
+  CodingToolAdapter,
+  GitCheckpointBridgePayload,
+  GitCheckpointContext,
+  GitCheckpointTrigger,
+} from "@trace/shared";
 import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
-import { readConfig, getOrCreateInstanceId } from "./config.js";
+import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
+import {
+  loadQueuedGitHookCheckpoints,
+  replaceQueuedGitHookCheckpoints,
+  writeCheckpointContext,
+} from "./hook-runtime.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
+const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
 const execFileAsync = promisify(execFile);
 
 async function inspectGitCheckpoint(
@@ -37,6 +51,8 @@ export class BridgeClient implements IBridgeClient {
   private reportedToolSessionIds = new Map<string, string>();
   private instanceId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private hookQueueTimer: ReturnType<typeof setInterval> | null = null;
+  private isFlushingHookQueue = false;
   private status: BridgeConnectionStatus = "disconnected";
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
@@ -69,6 +85,8 @@ export class BridgeClient implements IBridgeClient {
       this.setStatus("connected");
       this.sendRuntimeHello();
       this.startHeartbeat();
+      this.startHookQueueDrain();
+      void this.flushQueuedGitHookCheckpoints();
     });
 
     this.ws.on("message", (data) => {
@@ -83,6 +101,7 @@ export class BridgeClient implements IBridgeClient {
     this.ws.on("close", () => {
       console.log("[bridge] disconnected, reconnecting in 3s...");
       this.stopHeartbeat();
+      this.stopHookQueueDrain();
       runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId });
       this.setStatus("disconnected");
       setTimeout(() => this.connect(), 3000);
@@ -102,6 +121,7 @@ export class BridgeClient implements IBridgeClient {
 
   disconnect() {
     this.stopHeartbeat();
+    this.stopHookQueueDrain();
     this.terminalManager.destroyAll();
     for (const adapter of this.adapters.values()) {
       adapter.abort();
@@ -178,11 +198,86 @@ export class BridgeClient implements IBridgeClient {
     }
   }
 
-  private runPrompt({ sessionId, prompt, cwd, tool, model, interactionMode, toolSessionId }: { sessionId: string; prompt: string; cwd?: string; tool?: string; model?: string; interactionMode?: string; toolSessionId?: string }) {
+  private startHookQueueDrain() {
+    this.stopHookQueueDrain();
+    this.hookQueueTimer = setInterval(() => {
+      void this.flushQueuedGitHookCheckpoints();
+    }, HOOK_QUEUE_FLUSH_INTERVAL_MS);
+  }
+
+  private stopHookQueueDrain() {
+    if (this.hookQueueTimer) {
+      clearInterval(this.hookQueueTimer);
+      this.hookQueueTimer = null;
+    }
+  }
+
+  private async flushQueuedGitHookCheckpoints() {
+    if (this.isFlushingHookQueue || this.ws?.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    this.isFlushingHookQueue = true;
+
+    try {
+      const queued = await loadQueuedGitHookCheckpoints();
+      if (queued.length === 0) return;
+
+      let index = 0;
+      for (; index < queued.length; index += 1) {
+        if (this.ws?.readyState !== WebSocket.OPEN) {
+          break;
+        }
+
+        const entry = queued[index];
+        this.send({
+          type: "git_checkpoint",
+          sessionId: entry.sessionId,
+          checkpoint: entry.checkpoint,
+        });
+      }
+
+      await replaceQueuedGitHookCheckpoints(queued.slice(index));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn("[bridge] failed to flush queued git hook checkpoints:", message);
+    } finally {
+      this.isFlushingHookQueue = false;
+    }
+  }
+
+  private async runPrompt({
+    sessionId,
+    prompt,
+    cwd,
+    tool,
+    model,
+    interactionMode,
+    toolSessionId,
+    checkpointContext,
+  }: {
+    sessionId: string;
+    prompt: string;
+    cwd?: string;
+    tool?: string;
+    model?: string;
+    interactionMode?: string;
+    toolSessionId?: string;
+    checkpointContext?: GitCheckpointContext | null;
+  }) {
     if (!cwd) {
       console.warn(`[bridge] No cwd provided for session ${sessionId}, falling back to home directory (${os.homedir()})`);
     }
     const workdir = cwd ?? os.homedir();
+
+    if (checkpointContext && cwd) {
+      try {
+        await writeCheckpointContext(workdir, checkpointContext);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[bridge] failed to write checkpoint context for ${sessionId}:`, message);
+      }
+    }
 
     // If tool changed, abort old adapter and create a fresh one
     const prevTool = this.sessionTools.get(sessionId);
@@ -256,7 +351,7 @@ export class BridgeClient implements IBridgeClient {
   private handleCommand(cmd: BridgeCommand) {
     switch (cmd.type) {
       case "run": {
-        this.runPrompt({
+        void this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt ?? "",
           cwd: cmd.cwd,
@@ -264,11 +359,12 @@ export class BridgeClient implements IBridgeClient {
           model: cmd.model,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
+          checkpointContext: cmd.checkpointContext,
         });
         break;
       }
       case "send": {
-        this.runPrompt({
+        void this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt,
           cwd: cmd.cwd,
@@ -276,14 +372,14 @@ export class BridgeClient implements IBridgeClient {
           model: cmd.model,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
+          checkpointContext: cmd.checkpointContext,
         });
         break;
       }
       case "prepare": {
         const { sessionId, repoId, repoName, defaultBranch, branch, checkpointSha } = cmd;
-
-        const config = readConfig();
-        const repoPath = config.repos[repoId];
+        const repoConfig = getRepoConfig(repoId);
+        const repoPath = repoConfig?.path;
 
         if (!repoPath) {
           this.send({
@@ -301,6 +397,7 @@ export class BridgeClient implements IBridgeClient {
           defaultBranch,
           startBranch: branch,
           checkpointSha,
+          gitHooksEnabled: repoConfig.gitHooksEnabled,
         })
           .then(({ workdir, branch: worktreeBranch }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
@@ -345,8 +442,7 @@ export class BridgeClient implements IBridgeClient {
 
         // Clean up worktree if one exists
         if (cmd.workdir && cmd.repoId) {
-          const config = readConfig();
-          const repoPath = config.repos[cmd.repoId];
+          const repoPath = getRepoConfig(cmd.repoId)?.path;
           if (repoPath) {
             removeWorktree({ repoPath, worktreePath: cmd.workdir }).catch((err: Error) => {
               console.warn(`[bridge] failed to remove worktree ${cmd.workdir}:`, err.message);
@@ -357,8 +453,7 @@ export class BridgeClient implements IBridgeClient {
       }
       case "list_branches": {
         const { requestId, repoId } = cmd;
-        const config = readConfig();
-        const repoPath = config.repos[repoId];
+        const repoPath = getRepoConfig(repoId)?.path;
 
         if (!repoPath) {
           this.send({ type: "branches_result", requestId, branches: [], error: "Repo not linked" });

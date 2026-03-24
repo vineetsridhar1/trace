@@ -3,7 +3,7 @@
  * Defines the wire protocol between bridge clients and the server's /bridge WebSocket.
  */
 
-import type { GitCheckpointBridgePayload } from "./git-checkpoint.js";
+import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
 
 // --- Server → Bridge commands ---
 
@@ -16,6 +16,7 @@ export interface BridgeRunCommand {
   model?: string;
   interactionMode?: string;
   toolSessionId?: string;
+  checkpointContext?: GitCheckpointContext | null;
 }
 
 export interface BridgeSendCommand {
@@ -27,6 +28,7 @@ export interface BridgeSendCommand {
   model?: string;
   interactionMode?: string;
   toolSessionId?: string;
+  checkpointContext?: GitCheckpointContext | null;
 }
 
 export interface BridgePrepareCommand {

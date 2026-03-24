@@ -3,6 +3,7 @@ import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -38,6 +39,7 @@ export async function createWorktree({
   defaultBranch,
   startBranch,
   checkpointSha,
+  gitHooksEnabled,
 }: {
   repoPath: string;
   repoId: string;
@@ -47,6 +49,8 @@ export async function createWorktree({
   startBranch?: string;
   /** Commit SHA to restore from instead of branching from origin/{startBranch|defaultBranch}. */
   checkpointSha?: string;
+  /** When enabled for the linked repo, install or repair Trace-managed hooks. */
+  gitHooksEnabled?: boolean;
 }): Promise<{ workdir: string; branch: string }> {
   const branch = `trace/${sessionId}`;
   const targetPath = path.join(os.homedir(), "trace", "sessions", repoId, sessionId);
@@ -92,6 +96,10 @@ export async function createWorktree({
       ["worktree", "add", "-b", branch, targetPath, baseRef],
       { cwd: repoPath },
     );
+  }
+
+  if (gitHooksEnabled) {
+    await installOrRepairRepoHooks(targetPath);
   }
 
   return { workdir: targetPath, branch };

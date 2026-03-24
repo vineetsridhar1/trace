@@ -3,7 +3,18 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { BridgeClient, type BridgeConnectionStatus } from "./bridge.js";
-import { readConfig, writeConfig } from "./config.js";
+import {
+  getRepoConfig as getStoredRepoConfig,
+  getRepoPath,
+  saveRepoPath,
+  setRepoGitHooksEnabled,
+} from "./config.js";
+import {
+  disableRepoHooks,
+  getRepoHookStatus,
+  installOrRepairRepoHooks,
+} from "./repo-hooks.js";
+import { ensureHookRunnerEntrypoint } from "./hook-runtime.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -92,21 +103,61 @@ ipcMain.handle("get-git-info", async (_event, folderPath: string) => {
 });
 
 ipcMain.handle("save-repo-path", (_event, repoId: string, localPath: string) => {
-  const config = readConfig();
-  config.repos[repoId] = localPath;
-  writeConfig(config);
+  const repoConfig = saveRepoPath(repoId, localPath);
+  if (repoConfig.gitHooksEnabled) {
+    return installOrRepairRepoHooks(localPath).then(() => {
+      bridge.send({ type: "repo_linked", repoId });
+      return repoConfig;
+    });
+  }
   // Notify the server that this bridge now has this repo registered
   bridge.send({ type: "repo_linked", repoId });
+  return repoConfig;
 });
 
 ipcMain.handle("get-repo-path", (_event, repoId: string) => {
-  const config = readConfig();
-  return config.repos[repoId] ?? null;
+  return getRepoPath(repoId);
+});
+
+ipcMain.handle("get-repo-config", (_event, repoId: string) => {
+  return getStoredRepoConfig(repoId);
+});
+
+ipcMain.handle("set-repo-git-hooks-enabled", async (_event, repoId: string, enabled: boolean) => {
+  const repoConfig = setRepoGitHooksEnabled(repoId, enabled);
+  if (!repoConfig) {
+    return { config: null, status: null };
+  }
+
+  const status = enabled
+    ? await installOrRepairRepoHooks(repoConfig.path)
+    : await disableRepoHooks(repoConfig.path);
+
+  return {
+    config: repoConfig,
+    status,
+  };
+});
+
+ipcMain.handle("get-repo-git-hook-status", async (_event, repoId: string) => {
+  const repoConfig = getStoredRepoConfig(repoId);
+  if (!repoConfig) return null;
+  return getRepoHookStatus(repoConfig.path);
+});
+
+ipcMain.handle("repair-repo-git-hooks", async (_event, repoId: string) => {
+  const repoConfig = getStoredRepoConfig(repoId);
+  if (!repoConfig) return null;
+  return installOrRepairRepoHooks(repoConfig.path);
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 
 app.whenReady().then(() => {
+  ensureHookRunnerEntrypoint({
+    electronBinaryPath: process.execPath,
+    runnerScriptPath: path.join(__dirname, "hook-runner.js"),
+  });
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
   });
