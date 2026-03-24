@@ -8,6 +8,10 @@ import { useEntityStore } from "../../stores/entity";
 import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "../../lib/session-group";
+import {
+  RestoreCheckpointDialog,
+  shouldShowRestoreDialog,
+} from "./RestoreCheckpointDialog";
 
 function formatCheckpointTime(committedAt: string): string {
   return new Date(committedAt).toLocaleString([], {
@@ -32,6 +36,7 @@ export function CheckpointPanel({
   );
   const sessions = useEntityStore((s) => s.sessions);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [pendingCheckpoint, setPendingCheckpoint] = useState<GitCheckpoint | null>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
 
   const checkpoints = useMemo(() => {
@@ -91,6 +96,17 @@ export function CheckpointPanel({
       }
     },
     [channelId, groupSessions],
+  );
+
+  const requestRestore = useCallback(
+    (checkpoint: GitCheckpoint) => {
+      if (shouldShowRestoreDialog()) {
+        setPendingCheckpoint(checkpoint);
+      } else {
+        handleRestore(checkpoint);
+      }
+    },
+    [handleRestore],
   );
 
   if (checkpoints.length === 0) {
@@ -160,7 +176,7 @@ export function CheckpointPanel({
             {!isCurrent && (
               <button
                 type="button"
-                onClick={() => handleRestore(checkpoint)}
+                onClick={() => requestRestore(checkpoint)}
                 disabled={restoringId !== null}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-surface-deep hover:text-foreground disabled:opacity-50"
                 title="Restore as new session"
@@ -174,6 +190,17 @@ export function CheckpointPanel({
           </div>
         );
       })}
+
+      <RestoreCheckpointDialog
+        open={pendingCheckpoint !== null}
+        commitSha={pendingCheckpoint ? shortSha(pendingCheckpoint.commitSha) : ""}
+        subject={pendingCheckpoint?.subject ?? ""}
+        onConfirm={() => {
+          if (pendingCheckpoint) handleRestore(pendingCheckpoint);
+          setPendingCheckpoint(null);
+        }}
+        onCancel={() => setPendingCheckpoint(null)}
+      />
     </div>
   );
 }
