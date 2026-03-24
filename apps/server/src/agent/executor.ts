@@ -260,12 +260,6 @@ export class ActionExecutor {
               createdById: actorId,
             });
 
-          case "pause":
-            return svc.pause(args.id as string, actorType, actorId);
-
-          case "resume":
-            return svc.resume(args.id as string, actorType, actorId);
-
           default:
             throw new Error(`Unknown sessionService method: ${method}`);
         }

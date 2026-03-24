@@ -16,6 +16,15 @@ enum SessionStatus {
   merged
 }
 
+enum SessionGroupStatus {
+  in_progress
+  needs_input
+  in_review
+  failed
+  stopped
+  merged
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -243,6 +252,8 @@ type ChannelGroup {
 type SessionGroup {
   id: ID!
   name: String!
+  agentStatus: AgentStatus!
+  status: SessionGroupStatus!
   channel: Channel
   repo: Repo
   branch: String
@@ -657,8 +668,6 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
-  pauseSession(id: ID!): Session!
-  resumeSession(id: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!
   dismissSession(id: ID!): Session!

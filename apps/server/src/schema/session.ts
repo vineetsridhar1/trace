@@ -5,6 +5,11 @@ import { sessionService } from "../services/session.js";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
+import {
+  deriveSessionGroupAgentStatus,
+  deriveSessionGroupStatus,
+  type SessionGroupStatusSource,
+} from "../lib/session-group-status.js";
 
 export const sessionQueries = {
   sessionGroups: (_: unknown, args: { channelId: string }, ctx: Context) => {
@@ -73,12 +78,6 @@ export const sessionMutations = {
       organizationId: orgId,
       createdById: ctx.userId,
     });
-  },
-  pauseSession: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.pause(args.id, ctx.actorType, ctx.userId);
-  },
-  resumeSession: (_: unknown, args: { id: string }, ctx: Context) => {
-    return sessionService.resume(args.id, ctx.actorType, ctx.userId);
   },
   runSession: (
     _: unknown,
@@ -162,6 +161,34 @@ export const sessionMutations = {
 
 export const sessionTypeResolvers = {
   SessionGroup: {
+    agentStatus: async (
+      group: { id: string; sessions?: SessionGroupStatusSource[] },
+    ) => {
+      const sessions = Array.isArray(group.sessions)
+        ? group.sessions
+        : await prisma.session.findMany({
+            where: { sessionGroupId: group.id },
+            select: { agentStatus: true },
+          });
+      return deriveSessionGroupAgentStatus(
+        sessions.map((session) => session.agentStatus),
+      );
+    },
+    status: async (
+      group: {
+        id: string;
+        prUrl?: string | null;
+        sessions?: SessionGroupStatusSource[];
+      },
+    ) => {
+      const sessions = Array.isArray(group.sessions)
+        ? group.sessions
+        : await prisma.session.findMany({
+            where: { sessionGroupId: group.id },
+            select: { agentStatus: true, sessionStatus: true },
+          });
+      return deriveSessionGroupStatus(sessions, group.prUrl ?? null);
+    },
     sessions: async (group: { id: string; sessions?: unknown[] }) => {
       if (Array.isArray(group.sessions)) return group.sessions;
       return prisma.session.findMany({

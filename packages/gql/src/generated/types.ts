@@ -352,13 +352,11 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  pauseSession: Session;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
   renameChat: Chat;
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
-  resumeSession: Session;
   retrySessionConnection: Session;
   runSession: Session;
   sendChannelMessage: Message;
@@ -552,11 +550,6 @@ export type MutationMuteScopeArgs = {
 };
 
 
-export type MutationPauseSessionArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
 export type MutationRegisterRepoWebhookArgs = {
   repoId: Scalars['ID']['input'];
 };
@@ -581,11 +574,6 @@ export type MutationReorderChannelGroupsArgs = {
 
 export type MutationReorderChannelsArgs = {
   input: ReorderChannelsInput;
-};
-
-
-export type MutationResumeSessionArgs = {
-  id: Scalars['ID']['input'];
 };
 
 
@@ -1086,6 +1074,7 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: 'SessionGroup';
+  agentStatus: AgentStatus;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1095,10 +1084,19 @@ export type SessionGroup = {
   prUrl?: Maybe<Scalars['String']['output']>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
+  status: SessionGroupStatus;
   updatedAt: Scalars['DateTime']['output'];
   workdir?: Maybe<Scalars['String']['output']>;
   worktreeDeleted: Scalars['Boolean']['output'];
 };
+
+export type SessionGroupStatus =
+  | 'failed'
+  | 'in_progress'
+  | 'in_review'
+  | 'merged'
+  | 'needs_input'
+  | 'stopped';
 
 export type SessionRuntimeInstance = {
   __typename?: 'SessionRuntimeInstance';

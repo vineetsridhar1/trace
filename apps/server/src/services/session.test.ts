@@ -71,6 +71,8 @@ function makeSessionGroup(overrides: Record<string, unknown> = {}) {
   return {
     id: "group-1",
     name: "Implement dashboard filters",
+    agentStatus: "not_started",
+    status: "in_progress",
     organizationId: "org-1",
     channelId: "channel-1",
     repoId: "repo-1",
@@ -144,6 +146,10 @@ describe("SessionService", () => {
     sessionRouterMock.getRuntime.mockReturnValue(null);
     sessionRouterMock.getDefaultRuntime?.mockReturnValue?.(null);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
+    prismaMock.sessionGroup.findUnique.mockResolvedValue({
+      ...makeSessionGroup(),
+      sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+    });
     prismaMock.channel.findFirst.mockResolvedValue({
       id: "channel-1",
       type: "coding",
@@ -250,7 +256,6 @@ describe("SessionService", () => {
             sessionGroup: expect.objectContaining({ id: "group-1" }),
           }),
         }),
-        expect.anything(),
       );
     });
 

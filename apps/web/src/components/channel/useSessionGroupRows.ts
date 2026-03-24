@@ -35,8 +35,12 @@ export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
         const agentStatuses = groupSessions.map((session) => session.agentStatus);
         const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
         const prUrl = group.prUrl as string | null | undefined;
-        const displaySessionStatus = getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl);
-        const displayAgentStatus = getSessionGroupAgentStatus(agentStatuses);
+        const displaySessionStatus =
+          (group.status as string | undefined)
+          ?? getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl);
+        const displayAgentStatus =
+          (group.agentStatus as string | undefined)
+          ?? getSessionGroupAgentStatus(agentStatuses);
 
         return {
           ...group,

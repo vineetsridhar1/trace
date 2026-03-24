@@ -183,36 +183,6 @@ const actionRegistry: AgentActionRegistration[] = [
     scopes: ["chat", "channel", "ticket", "session"],
   },
   {
-    name: "session.pause",
-    service: "sessionService",
-    method: "pause",
-    description:
-      "Pause a running coding session. Use when a session should be temporarily halted, e.g., waiting for review or blocked on another task.",
-    risk: "medium",
-    suggestable: true,
-    parameters: {
-      fields: {
-        id: { type: "string", description: "The session ID to pause", required: true },
-      },
-    },
-    scopes: ["session"],
-  },
-  {
-    name: "session.resume",
-    service: "sessionService",
-    method: "resume",
-    description:
-      "Resume a paused coding session. Use when the blocking condition has been resolved and the session should continue.",
-    risk: "medium",
-    suggestable: true,
-    parameters: {
-      fields: {
-        id: { type: "string", description: "The session ID to resume", required: true },
-      },
-    },
-    scopes: ["session"],
-  },
-  {
     name: "escalate.toHuman",
     service: "inboxService",
     method: "createItem",

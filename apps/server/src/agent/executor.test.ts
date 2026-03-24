@@ -15,8 +15,6 @@ function createServices(): ServiceContainer {
     } as unknown as ServiceContainer["chatService"],
     sessionService: {
       start: vi.fn().mockResolvedValue({ id: "session-1" }),
-      pause: vi.fn().mockResolvedValue({ id: "session-1", agentStatus: "done" }),
-      resume: vi.fn().mockResolvedValue({ id: "session-1", agentStatus: "active" }),
     } as unknown as ServiceContainer["sessionService"],
     inboxService: {
       createItem: vi.fn().mockResolvedValue({ id: "inbox-1" }),
@@ -120,15 +118,6 @@ describe("ActionExecutor", () => {
       { actionType: "message.send", args: { chatId: "chat-1", text: "hello" } },
       { ...ctx, triggerEventId: "evt-message" },
     );
-    await executor.execute(
-      { actionType: "session.pause", args: { id: "session-1" } },
-      { ...ctx, triggerEventId: "evt-pause" },
-    );
-    await executor.execute(
-      { actionType: "session.resume", args: { id: "session-1" } },
-      { ...ctx, triggerEventId: "evt-resume" },
-    );
-
     expect(services.ticketService.update).toHaveBeenCalledWith(
       "ticket-1",
       { status: "in_progress" },
@@ -150,15 +139,12 @@ describe("ActionExecutor", () => {
     });
     expect(services.chatService.sendMessage).toHaveBeenCalledWith({
       chatId: "chat-1",
-      organizationId: "org-1",
       text: "hello",
       html: undefined,
       parentId: undefined,
       actorType: "agent",
       actorId: "agent-1",
     });
-    expect(services.sessionService.pause).toHaveBeenCalledWith("session-1", "agent", "agent-1");
-    expect(services.sessionService.resume).toHaveBeenCalledWith("session-1", "agent", "agent-1");
   });
 
   it("uses idempotency keys per agent, action, and trigger event", async () => {

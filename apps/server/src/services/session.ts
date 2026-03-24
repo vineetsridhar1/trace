@@ -9,6 +9,12 @@ import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import {
+  deriveSessionGroupAgentStatus,
+  deriveSessionGroupStatus,
+  type SessionGroupStatus as DerivedSessionGroupStatus,
+  type SessionGroupStatusSource,
+} from "../lib/session-group-status.js";
 
 export type StartSessionServiceInput = StartSessionInput & {
   sessionGroupId?: string | null;
@@ -110,6 +116,15 @@ const SESSION_GROUP_INCLUDE = {
   },
 } satisfies Prisma.SessionGroupInclude;
 
+type SessionGroupSummary = Prisma.SessionGroupGetPayload<{
+  select: typeof SESSION_GROUP_SUMMARY_SELECT;
+}>;
+
+type SessionGroupSnapshot = SessionGroupSummary & {
+  agentStatus: AgentStatus;
+  status: DerivedSessionGroupStatus;
+};
+
 const INVALID_FILE_PATH_ERROR = "Invalid file path";
 const LOCAL_FILE_ACCESS_DENIED_ERROR =
   "Access denied: you can only access files on your own local sessions";
@@ -175,6 +190,17 @@ function sortSessionsByRecency<
     if (updatedDiff !== 0) return updatedDiff;
     return b.createdAt.getTime() - a.createdAt.getTime();
   });
+}
+
+function buildSessionGroupSnapshot(
+  group: SessionGroupSummary,
+  sessions: SessionGroupStatusSource[],
+): SessionGroupSnapshot {
+  return {
+    ...group,
+    agentStatus: deriveSessionGroupAgentStatus(sessions.map((session) => session.agentStatus)),
+    status: deriveSessionGroupStatus(sessions, group.prUrl ?? null),
+  };
 }
 
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
@@ -361,7 +387,13 @@ export class SessionService {
     });
 
     return groups
-      .map((group) => ({ ...group, sessions: sortSessionsByRecency(group.sessions) }))
+      .map((group) => {
+        const sessions = sortSessionsByRecency(group.sessions);
+        return {
+          ...buildSessionGroupSnapshot(group, sessions),
+          sessions,
+        };
+      })
       .sort((a, b) => {
         const aLatest = a.sessions[0];
         const bLatest = b.sessions[0];
@@ -378,7 +410,11 @@ export class SessionService {
     });
 
     if (!group) return null;
-    return { ...group, sessions: sortSessionsByRecency(group.sessions) };
+    const sessions = sortSessionsByRecency(group.sessions);
+    return {
+      ...buildSessionGroupSnapshot(group, sessions),
+      sessions,
+    };
   }
 
   async list(
@@ -560,7 +596,7 @@ export class SessionService {
     const initialAgentStatus: AgentStatus = "not_started";
     const initialSessionStatus: SessionStatus = "in_progress";
 
-    const [session] = await prisma.$transaction(async (tx) => {
+    const session = await prisma.$transaction(async (tx) => {
       const sessionGroup = existingGroup
         ? await (async () => {
             const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
@@ -636,25 +672,23 @@ export class SessionService {
         });
       }
 
-      const event = await eventService.create(
-        {
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: session.id,
-          eventType: "session_started",
-          payload: {
-            session: serializeSession(session),
-            sessionGroup,
-            prompt: input.prompt ?? null,
-            sourceSessionId: input.sourceSessionId ?? null,
-          } as Prisma.InputJsonValue,
-          actorType: "user",
-          actorId: input.createdById,
-        },
-        tx,
-      );
+      return session;
+    });
 
-      return [session, event] as const;
+    const sessionGroupSnapshot = await this.loadSessionGroupSnapshot(session.sessionGroupId);
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: session.id,
+      eventType: "session_started",
+      payload: {
+        session: serializeSession(session),
+        ...(sessionGroupSnapshot ? { sessionGroup: sessionGroupSnapshot } : {}),
+        prompt: input.prompt ?? null,
+        sourceSessionId: input.sourceSessionId ?? null,
+      } as Prisma.InputJsonValue,
+      actorType: "user",
+      actorId: input.createdById,
     });
 
     // Reuse the group's runtime binding when a shared workspace already exists.
@@ -987,7 +1021,13 @@ export class SessionService {
   ) {
     const current = await prisma.session.findUniqueOrThrow({
       where: { id },
-      select: { hosting: true, organizationId: true, agentStatus: true, sessionStatus: true },
+      select: {
+        hosting: true,
+        organizationId: true,
+        agentStatus: true,
+        sessionStatus: true,
+        sessionGroupId: true,
+      },
     });
 
     if (isFullyUnloadedSession(current.agentStatus, current.sessionStatus)) {
@@ -1008,6 +1048,7 @@ export class SessionService {
       data: { agentStatus: newAgentStatus },
       include: SESSION_INCLUDE,
     });
+    const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1018,6 +1059,7 @@ export class SessionService {
         sessionId: id,
         agentStatus: newAgentStatus,
         sessionStatus: session.sessionStatus,
+        ...(sessionGroup ? { sessionGroup } : {}),
         ...(payloadExtras ?? {}),
       },
       actorType,
@@ -1086,7 +1128,7 @@ export class SessionService {
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true, agentStatus: true, sessionStatus: true },
+      select: { organizationId: true, agentStatus: true, sessionStatus: true, sessionGroupId: true },
     });
     if (!session) return;
 
@@ -1119,6 +1161,8 @@ export class SessionService {
 
       // Only emit the pending event if we won the race — avoids duplicate events
       if (updated.count > 0) {
+        const sessionGroup = await this.loadSessionGroupSnapshot(session.sessionGroupId);
+
         // Emit as session_output with a status patch — matches the workspace_ready pattern.
         // The frontend's sessionPatchFromOutput picks up the sessionStatus field.
         // Questions take precedence — they need immediate user interaction
@@ -1128,7 +1172,11 @@ export class SessionService {
           scopeType: "session",
           scopeId: sessionId,
           eventType: "session_output",
-          payload: { type: pendingType, sessionStatus: "needs_input" },
+          payload: {
+            type: pendingType,
+            sessionStatus: "needs_input",
+            ...(sessionGroup ? { sessionGroup } : {}),
+          },
           actorType: "system",
           actorId: "system",
         });
@@ -1225,7 +1273,10 @@ export class SessionService {
 
   async complete(id: string) {
     // Only transition from active — don't overwrite explicit user actions
-    const current = await prisma.session.findUnique({ where: { id }, select: { agentStatus: true, sessionStatus: true } });
+    const current = await prisma.session.findUnique({
+      where: { id },
+      select: { agentStatus: true, sessionStatus: true, sessionGroupId: true },
+    });
     if (!current || current.agentStatus !== "active") return;
 
     // Find when the current run started (last session_resumed or session_started)
@@ -1274,13 +1325,20 @@ export class SessionService {
       data: { agentStatus: newAgentStatus, sessionStatus: newSessionStatus },
       select: { organizationId: true, createdById: true, name: true },
     });
+    const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: id,
       eventType: "session_terminated",
-      payload: { sessionId: id, reason: "bridge_complete", agentStatus: newAgentStatus, sessionStatus: newSessionStatus },
+      payload: {
+        sessionId: id,
+        reason: "bridge_complete",
+        agentStatus: newAgentStatus,
+        sessionStatus: newSessionStatus,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
       actorType: "system",
       actorId: "system",
     });
@@ -1945,8 +2003,9 @@ export class SessionService {
     const updated = await prisma.session.update({
       where: { id: sessionId },
       data: { agentStatus: "stopped" },
-      select: { sessionStatus: true },
+      select: { sessionStatus: true, sessionGroupId: true },
     });
+    const sessionGroup = await this.loadSessionGroupSnapshot(updated.sessionGroupId);
 
     await eventService.create({
       organizationId,
@@ -1957,6 +2016,7 @@ export class SessionService {
         sessionId,
         agentStatus: "stopped",
         sessionStatus: updated.sessionStatus,
+        ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType,
       actorId,
@@ -2057,6 +2117,7 @@ export class SessionService {
     sessionRouter.bindSession(childSession.id, runtimeInstanceId);
 
     // Emit session_started for the child
+    const childSessionGroup = await this.loadSessionGroupSnapshot(childSession.sessionGroupId);
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -2064,6 +2125,7 @@ export class SessionService {
       eventType: "session_started",
       payload: {
         session: serializeSession(childSession),
+        ...(childSessionGroup ? { sessionGroup: childSessionGroup } : {}),
         prompt: bootstrapPrompt,
         sourceSessionId: sessionId,
         movedFromSessionId: sessionId,
@@ -2216,6 +2278,7 @@ export class SessionService {
     });
 
     // Emit session_started for the child
+    const childSessionGroup = await this.loadSessionGroupSnapshot(childSession.sessionGroupId);
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -2223,6 +2286,7 @@ export class SessionService {
       eventType: "session_started",
       payload: {
         session: serializeSession(childSession),
+        ...(childSessionGroup ? { sessionGroup: childSessionGroup } : {}),
         prompt: bootstrapPrompt,
         sourceSessionId: sessionId,
         movedFromSessionId: sessionId,
@@ -2490,8 +2554,8 @@ export class SessionService {
 
     const shouldMirrorToSessions = Object.keys(sessionData).length > 0;
 
-    return prisma.$transaction(async (tx) => {
-      const sessionGroup = await tx.sessionGroup.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.sessionGroup.update({
         where: { id: sessionGroupId },
         data: groupData,
         select: SESSION_GROUP_SUMMARY_SELECT,
@@ -2503,9 +2567,32 @@ export class SessionService {
           data: sessionData,
         });
       }
-
-      return sessionGroup;
     });
+
+    return this.loadSessionGroupSnapshot(sessionGroupId);
+  }
+
+  private async loadSessionGroupSnapshot(
+    sessionGroupId: string | null | undefined,
+  ): Promise<SessionGroupSnapshot | null> {
+    if (!sessionGroupId) return null;
+
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: {
+        ...SESSION_GROUP_SUMMARY_SELECT,
+        sessions: {
+          select: {
+            agentStatus: true,
+            sessionStatus: true,
+          },
+        },
+      },
+    });
+
+    if (!group) return null;
+    const { sessions, ...summary } = group;
+    return buildSessionGroupSnapshot(summary, sessions);
   }
 
   private mergeConnection(
@@ -2773,9 +2860,9 @@ export class SessionService {
   }) {
     const { sessionGroupId, eventSessionId, prUrl, organizationId } = params;
 
-    // Transition all sessions in the group to in_review
+    // Transition all non-merged, non-needs-input sessions in the group to in_review.
     await prisma.session.updateMany({
-      where: { sessionGroupId, sessionStatus: { notIn: ["merged"] } },
+      where: { sessionGroupId, sessionStatus: { notIn: ["merged", "needs_input"] } },
       data: { sessionStatus: "in_review" },
     });
 
