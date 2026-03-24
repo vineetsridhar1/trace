@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react";
-import { DiffEditor, loader } from "@monaco-editor/react";
+import { DiffEditor } from "@monaco-editor/react";
 import { gql } from "@urql/core";
 import { Loader2 } from "lucide-react";
 import { client } from "../../lib/urql";
 import { getLanguageFromPath } from "../../lib/monaco-utils";
-
-// Configure Monaco to load workers from CDN
-loader.config({
-  paths: {
-    vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs",
-  },
-});
 
 const SESSION_GROUP_FILE_AT_REF_QUERY = gql`
   query SessionGroupFileAtRef($sessionGroupId: ID!, $filePath: String!, $ref: String!) {

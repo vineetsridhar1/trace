@@ -523,6 +523,11 @@ export type GitExecFn = (
   cwd: string,
 ) => Promise<string>;
 
+/** Reject refs that could be interpreted as git flags or contain dangerous patterns. */
+function hasInvalidGitRef(ref: string): boolean {
+  return !ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f]/.test(ref);
+}
+
 /**
  * Handle a `branch_diff` bridge command. Runs git diff --numstat and --name-status,
  * merges results by path.
@@ -537,6 +542,11 @@ export async function handleBranchDiff(
   const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
   if (!workdir) {
     send({ type: "branch_diff_result", requestId, files: [], error: `No workdir known for session ${sessionId}` });
+    return;
+  }
+
+  if (hasInvalidGitRef(baseBranch)) {
+    send({ type: "branch_diff_result", requestId, files: [], error: "Invalid base branch ref" });
     return;
   }
 
@@ -601,6 +611,11 @@ export async function handleFileAtRef(
 
   if (hasInvalidRelativePathSegments(filePath)) {
     send({ type: "file_at_ref_result", requestId, content: "", error: "Path traversal denied" });
+    return;
+  }
+
+  if (hasInvalidGitRef(ref)) {
+    send({ type: "file_at_ref_result", requestId, content: "", error: "Invalid git ref" });
     return;
   }
 

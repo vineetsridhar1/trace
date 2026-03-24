@@ -1,3 +1,12 @@
+import { loader } from "@monaco-editor/react";
+
+/** Configure Monaco to load workers from CDN. Idempotent — safe to call from multiple modules. */
+loader.config({
+  paths: {
+    vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs",
+  },
+});
+
 /** Map file extensions to Monaco editor language identifiers. */
 export function getLanguageFromPath(filePath: string): string {
   const ext = filePath.split(".").pop()?.toLowerCase();

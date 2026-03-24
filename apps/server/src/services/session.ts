@@ -2873,25 +2873,35 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ) {
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
-      sessionGroupId,
-      organizationId,
-      userId,
-    );
-
-    // Look up the repo's default branch
+    // Single query to get both repo.defaultBranch and group data needed for runtime resolution
     const group = await prisma.sessionGroup.findFirst({
-      where: { id: sessionGroupId },
-      select: { repo: { select: { defaultBranch: true } } },
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, workdir: true, worktreeDeleted: true, repo: { select: { defaultBranch: true } } },
     });
-    const baseBranch = group?.repo?.defaultBranch ?? "main";
+    if (!group) throw new Error("Session group not found");
+    if (group.worktreeDeleted) {
+      throw new Error("Cannot access files: session worktree has been deleted");
+    }
+    const baseBranch = group.repo?.defaultBranch ?? "main";
 
-    return sessionRouter.branchDiff(
-      runtime.runtimeId,
-      runtime.sessionId,
-      baseBranch,
-      runtime.workdirHint,
-    );
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true, workdir: true, hosting: true, createdById: true },
+    });
+    this.assertLocalFileOwnership(sessions, userId);
+
+    for (const session of sessions) {
+      const runtime = sessionRouter.getRuntimeForSession(session.id);
+      if (!runtime) continue;
+      return sessionRouter.branchDiff(
+        runtime.id,
+        session.id,
+        baseBranch,
+        session.workdir ?? group.workdir ?? undefined,
+      );
+    }
+
+    throw new Error("No connected runtime available for this session group");
   }
 
   /** Read a file's content at a specific git ref from a session group's runtime. */
@@ -2902,6 +2912,10 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<string> {
+    // Validate ref to prevent git argument injection
+    if (!ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f]/.test(ref)) {
+      throw new Error("Invalid git ref");
+    }
     const normalizedPath = this.normalizeFilePath(filePath);
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
       sessionGroupId,

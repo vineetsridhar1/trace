@@ -14,6 +14,7 @@ import type {
   GitCheckpointTrigger,
 } from "@trace/shared";
 import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
+import type { GitExecFn } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
@@ -60,6 +61,14 @@ export class BridgeClient implements IBridgeClient {
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
   private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
   private terminalManager: TerminalManager;
+
+  private gitExec: GitExecFn = (args, cwd) =>
+    new Promise((resolve, reject) => {
+      execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
+        if (err) reject(err);
+        else resolve(stdout);
+      });
+    });
 
   constructor(serverUrl: string) {
     this.serverUrl = serverUrl;
@@ -481,25 +490,11 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "branch_diff": {
-        const gitExec = (args: string[], cwd: string) =>
-          new Promise<string>((resolve, reject) => {
-            execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
-              if (err) reject(err);
-              else resolve(stdout);
-            });
-          });
-        void handleBranchDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), gitExec);
+        void handleBranchDiff(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
         break;
       }
       case "file_at_ref": {
-        const gitExec = (args: string[], cwd: string) =>
-          new Promise<string>((resolve, reject) => {
-            execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
-              if (err) reject(err);
-              else resolve(stdout);
-            });
-          });
-        void handleFileAtRef(cmd, this.sessionWorkdirs, (msg) => this.send(msg), gitExec);
+        void handleFileAtRef(cmd, this.sessionWorkdirs, (msg) => this.send(msg), this.gitExec);
         break;
       }
       case "terminal_create": {
