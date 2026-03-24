@@ -13,6 +13,7 @@ export function ChannelWelcome({ channelId }: { channelId: string }) {
       <p className="text-sm text-muted-foreground">
         This is the very beginning of the{" "}
         <span className="font-semibold text-foreground">#{name}</span> channel.
+        Start the conversation!
       </p>
     </div>
   );
