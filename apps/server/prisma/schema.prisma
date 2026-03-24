@@ -333,6 +333,7 @@ model Repo {
   sessions Session[]
   sessionGroups SessionGroup[]
   channels Channel[]
+  gitCheckpoints GitCheckpoint[]
 
   webhookId     String?
   webhookSecret String?
@@ -437,6 +438,7 @@ model SessionGroup {
   worktreeDeleted Boolean     @default(false)
 
   sessions Session[]
+  gitCheckpoints GitCheckpoint[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -573,10 +575,37 @@ model Event {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   timestamp DateTime @default(now())
+  gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])
   @@index([parentId])
+}
+
+model GitCheckpoint {
+  id             String   @id @default(uuid())
+  sessionId      String
+  sessionGroupId String
+  repoId         String
+  promptEventId  String
+  commitSha      String
+  parentShas     String[]
+  treeSha        String
+  subject        String
+  author         String
+  committedAt    DateTime
+  filesChanged   Int
+  createdAt      DateTime @default(now())
+
+  sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repo         Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  promptEvent  Event @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionGroupId, commitSha])
+  @@index([sessionId, committedAt])
+  @@index([sessionGroupId, committedAt])
+  @@index([repoId, committedAt])
+  @@index([promptEventId])
 }
 
 model CloudMachine {

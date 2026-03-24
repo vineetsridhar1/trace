@@ -2,7 +2,15 @@ import type { StartSessionInput, ActorType } from "@trace/gql";
 import type { AgentStatus, SessionStatus, EventType as PrismaEventType, CodingTool } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
-import { getDefaultModel, hasQuestionBlock, hasPlanBlock, isSupportedModel } from "@trace/shared";
+import { randomUUID } from "crypto";
+import {
+  getDefaultModel,
+  hasQuestionBlock,
+  hasPlanBlock,
+  isSupportedModel,
+  type GitCheckpointBridgePayload,
+  type GitCheckpointContext,
+} from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
@@ -20,6 +28,15 @@ export type StartSessionServiceInput = StartSessionInput & {
   sourceSessionId?: string | null;
   organizationId: string;
   createdById: string;
+};
+
+type SessionStartMetadata = {
+  prompt: string | null;
+  promptEventId: string | null;
+  checkpointContextId: string | null;
+  sourceSessionId: string | null;
+  restoreCheckpointId: string | null;
+  restoreCheckpointSha: string | null;
 };
 
 /** Shape of Session.connection JSON stored in the DB */
@@ -41,11 +58,13 @@ type PendingSessionCommand =
       type: "run";
       prompt?: string | null;
       interactionMode?: string | null;
+      checkpointContext?: GitCheckpointContext | null;
     }
   | {
       type: "send";
       prompt: string;
       interactionMode?: string | null;
+      checkpointContext?: GitCheckpointContext | null;
     };
 
 type GroupWorkspaceStatePatch = {
@@ -78,6 +97,84 @@ function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
 /** Cast connection data to Prisma-compatible JSON */
 function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
+}
+
+function shortCommitSha(commitSha: string): string {
+  return commitSha.slice(0, 7);
+}
+
+function parseCheckpointContext(raw: unknown): GitCheckpointContext | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+
+  const context = raw as Record<string, unknown>;
+  if (
+    typeof context.checkpointContextId !== "string"
+    || typeof context.sessionId !== "string"
+    || typeof context.sessionGroupId !== "string"
+    || typeof context.repoId !== "string"
+    || typeof context.updatedAt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    checkpointContextId: context.checkpointContextId,
+    promptEventId:
+      typeof context.promptEventId === "string"
+        ? context.promptEventId
+        : null,
+    sessionId: context.sessionId,
+    sessionGroupId: context.sessionGroupId,
+    repoId: context.repoId,
+    updatedAt: context.updatedAt,
+  };
+}
+
+function createCheckpointContext({
+  checkpointContextId,
+  promptEventId,
+  sessionId,
+  sessionGroupId,
+  repoId,
+}: {
+  checkpointContextId: string;
+  promptEventId?: string | null;
+  sessionId: string;
+  sessionGroupId: string;
+  repoId: string;
+}): GitCheckpointContext {
+  return {
+    checkpointContextId,
+    promptEventId: promptEventId ?? null,
+    sessionId,
+    sessionGroupId,
+    repoId,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function buildCheckpointContextFromStartMeta({
+  sessionId,
+  sessionGroupId,
+  repoId,
+  startMeta,
+}: {
+  sessionId: string;
+  sessionGroupId?: string | null;
+  repoId?: string | null;
+  startMeta?: Pick<SessionStartMetadata, "checkpointContextId" | "promptEventId"> | null;
+}): GitCheckpointContext | null {
+  if (!sessionGroupId || !repoId || !startMeta?.checkpointContextId) {
+    return null;
+  }
+
+  return createCheckpointContext({
+    checkpointContextId: startMeta.checkpointContextId,
+    promptEventId: startMeta.promptEventId,
+    sessionId,
+    sessionGroupId,
+    repoId,
+  });
 }
 
 const SESSION_GROUP_SUMMARY_SELECT = {
@@ -174,6 +271,40 @@ function serializeSession(
     worktreeDeleted: session.worktreeDeleted ?? false,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+  };
+}
+
+function serializeGitCheckpoint(
+  checkpoint: {
+    id: string;
+    sessionId: string;
+    sessionGroupId: string;
+    repoId: string;
+    promptEventId: string;
+    commitSha: string;
+    parentShas: string[];
+    treeSha: string;
+    subject: string;
+    author: string;
+    committedAt: Date;
+    filesChanged: number;
+    createdAt: Date;
+  },
+) {
+  return {
+    id: checkpoint.id,
+    sessionId: checkpoint.sessionId,
+    sessionGroupId: checkpoint.sessionGroupId,
+    repoId: checkpoint.repoId,
+    promptEventId: checkpoint.promptEventId,
+    commitSha: checkpoint.commitSha,
+    parentShas: checkpoint.parentShas,
+    treeSha: checkpoint.treeSha,
+    subject: checkpoint.subject,
+    author: checkpoint.author,
+    committedAt: checkpoint.committedAt.toISOString(),
+    filesChanged: checkpoint.filesChanged,
+    createdAt: checkpoint.createdAt.toISOString(),
   };
 }
 
@@ -280,23 +411,37 @@ function buildMigrationPrompt(context: string | null): string {
   return `${context}\n\nContinue this session on the new runtime.`;
 }
 
-async function getSessionStartMetadata(sessionId: string): Promise<{
-  prompt: string | null;
-  sourceSessionId: string | null;
-}> {
+async function getSessionStartMetadata(sessionId: string): Promise<SessionStartMetadata> {
   const startEvent = await prisma.event.findFirst({
     where: { scopeId: sessionId, scopeType: "session", eventType: "session_started" },
     orderBy: { timestamp: "asc" },
   });
 
   if (!startEvent) {
-    return { prompt: null, sourceSessionId: null };
+    return {
+      prompt: null,
+      promptEventId: null,
+      checkpointContextId: null,
+      sourceSessionId: null,
+      restoreCheckpointId: null,
+      restoreCheckpointSha: null,
+    };
   }
 
   const payload = startEvent.payload as Record<string, unknown>;
+  const metadata = startEvent.metadata as Record<string, unknown> | null;
   return {
     prompt: typeof payload.prompt === "string" ? payload.prompt : null,
+    promptEventId: startEvent.id,
+    checkpointContextId:
+      typeof metadata?.checkpointContextId === "string"
+        ? metadata.checkpointContextId
+        : null,
     sourceSessionId: typeof payload.sourceSessionId === "string" ? payload.sourceSessionId : null,
+    restoreCheckpointId:
+      typeof payload.restoreCheckpointId === "string" ? payload.restoreCheckpointId : null,
+    restoreCheckpointSha:
+      typeof payload.restoreCheckpointSha === "string" ? payload.restoreCheckpointSha : null,
   };
 }
 
@@ -449,17 +594,69 @@ export class SessionService {
     });
   }
 
+  async listGitCheckpointsForSession(sessionId: string) {
+    return prisma.gitCheckpoint.findMany({
+      where: { sessionId },
+      orderBy: [{ committedAt: "asc" }, { createdAt: "asc" }],
+    });
+  }
+
+  async listGitCheckpointsForGroup(sessionGroupId: string) {
+    return prisma.gitCheckpoint.findMany({
+      where: { sessionGroupId },
+      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+    });
+  }
+
   async start(input: StartSessionServiceInput) {
+    if (input.restoreCheckpointId && input.sessionGroupId) {
+      throw new Error("restoreCheckpointId cannot reuse an existing session group");
+    }
+    if (input.restoreCheckpointId && input.sourceSessionId) {
+      throw new Error("restoreCheckpointId cannot be combined with sourceSessionId");
+    }
+
+    const restoreCheckpoint = input.restoreCheckpointId
+      ? await prisma.gitCheckpoint.findUnique({
+          where: { id: input.restoreCheckpointId },
+          select: {
+            id: true,
+            sessionId: true,
+            sessionGroupId: true,
+            repoId: true,
+            commitSha: true,
+            subject: true,
+          },
+        })
+      : null;
+
+    if (input.restoreCheckpointId && !restoreCheckpoint) {
+      throw new Error("Git checkpoint not found");
+    }
+
     const model = input.model
       ? validateModelForTool(input.tool, input.model)
       : getDefaultModel(input.tool);
-    const name = input.prompt
-      ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
-      : `Session ${new Date().toLocaleString()}`;
 
-    const sourceSession = input.sourceSessionId
+    const restoreGroup = restoreCheckpoint
+      ? await prisma.sessionGroup.findFirst({
+          where: {
+            id: restoreCheckpoint.sessionGroupId,
+            organizationId: input.organizationId,
+          },
+          select: SESSION_GROUP_SUMMARY_SELECT,
+        })
+      : null;
+
+    if (restoreCheckpoint && !restoreGroup) {
+      throw new Error("Checkpoint session group not found");
+    }
+
+    const sourceSessionId = input.sourceSessionId ?? restoreCheckpoint?.sessionId ?? null;
+
+    const sourceSession = sourceSessionId
       ? await prisma.session.findUnique({
-          where: { id: input.sourceSessionId },
+          where: { id: sourceSessionId },
           select: {
             id: true,
             organizationId: true,
@@ -485,14 +682,17 @@ export class SessionService {
       throw new Error("Source session does not belong to this organization");
     }
     if (
-      input.sessionGroupId
+      !input.restoreCheckpointId
+      && input.sessionGroupId
       && sourceSession?.sessionGroupId
       && input.sessionGroupId !== sourceSession.sessionGroupId
     ) {
       throw new Error("sourceSessionId must belong to the requested sessionGroupId");
     }
 
-    const existingGroupId = input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null;
+    const existingGroupId = input.restoreCheckpointId
+      ? null
+      : input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null;
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
@@ -505,8 +705,9 @@ export class SessionService {
     }
 
     const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
+    const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
     const resolvedChannelId =
-      input.channelId ?? resolvedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
+      input.channelId ?? seedGroup?.channelId ?? sourceSession?.channelId ?? undefined;
     const resolvedChannel = resolvedChannelId
       ? await prisma.channel.findUnique({
           where: { id: resolvedChannelId },
@@ -527,7 +728,7 @@ export class SessionService {
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
     }
-    if (authoritativeChannelRepoId && resolvedGroup?.repoId && resolvedGroup.repoId !== authoritativeChannelRepoId) {
+    if (authoritativeChannelRepoId && seedGroup?.repoId && seedGroup.repoId !== authoritativeChannelRepoId) {
       throw new Error("Session group repo does not match the channel's linked repo");
     }
     if (authoritativeChannelRepoId && sourceSession?.repoId && sourceSession.repoId !== authoritativeChannelRepoId) {
@@ -537,23 +738,48 @@ export class SessionService {
     const resolvedRepoId =
       authoritativeChannelRepoId
       ?? input.repoId
-      ?? resolvedGroup?.repoId
+      ?? seedGroup?.repoId
       ?? sourceSession?.repoId
+      ?? restoreCheckpoint?.repoId
       ?? undefined;
-    const resolvedBranch = input.branch ?? resolvedGroup?.branch ?? sourceSession?.branch ?? undefined;
-    const sharedWorkdir = resolvedGroup?.workdir ?? null;
-    const sharedConnection = resolvedGroup?.connection ?? null;
+    const resolvedBranch =
+      input.branch ?? seedGroup?.branch ?? sourceSession?.branch ?? undefined;
+    const sharedWorkdir = input.restoreCheckpointId ? null : resolvedGroup?.workdir ?? null;
+    const sharedConnection = input.restoreCheckpointId ? null : resolvedGroup?.connection ?? null;
     const sharedRuntimeInstanceId =
       sharedConnection && typeof sharedConnection === "object" && "runtimeInstanceId" in sharedConnection
         ? (sharedConnection as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null
         : null;
+
+    // For checkpoint restores, inherit the runtime from the source group so the
+    // restored session is prepared on the same machine that owns the repo.
+    const restoreGroupRuntimeInstanceId = (() => {
+      if (!input.restoreCheckpointId || !restoreGroup) return null;
+      const conn = restoreGroup.connection;
+      if (conn && typeof conn === "object" && "runtimeInstanceId" in conn) {
+        return (conn as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null;
+      }
+      return null;
+    })();
     const sourceProjectIds = sourceSession?.projects.map((project) => project.projectId) ?? [];
-    const sourceTicketLinks = input.sourceSessionId
+    const sourceTicketLinks = sourceSessionId
       ? await prisma.ticketLink.findMany({
-          where: { entityType: "session", entityId: input.sourceSessionId },
+          where: { entityType: "session", entityId: sourceSessionId },
           select: { ticketId: true },
         })
       : [];
+
+    if (input.restoreCheckpointId && !resolvedRepoId) {
+      throw new Error("Checkpoint is not associated with a repo");
+    }
+
+    const name = input.prompt
+      ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
+      : restoreCheckpoint
+        ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
+            .trim()
+            .slice(0, MAX_SESSION_NAME_LENGTH)
+        : `Session ${new Date().toLocaleString()}`;
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise use explicit value or default to cloud
     let hosting = input.hosting ?? sourceSession?.hosting ?? "cloud";
@@ -592,6 +818,10 @@ export class SessionService {
     // Sessions stay idle until a command is actually delivered to the coding tool.
     const initialAgentStatus: AgentStatus = "not_started";
     const initialSessionStatus: SessionStatus = "in_progress";
+    const initialCheckpointContextId =
+      resolvedRepoId && input.prompt
+        ? randomUUID()
+        : null;
 
     const session = await prisma.$transaction(async (tx) => {
       const sessionGroup = existingGroup
@@ -684,7 +914,12 @@ export class SessionService {
           sessionGroup: sessionGroupSnapshot,
           prompt: input.prompt ?? null,
           sourceSessionId: input.sourceSessionId ?? null,
+          restoreCheckpointId: restoreCheckpoint?.id ?? null,
+          restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
         } as Prisma.InputJsonValue,
+        metadata: initialCheckpointContextId
+          ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
+          : undefined,
         actorType: "user",
         actorId: input.createdById,
       }, tx);
@@ -692,8 +927,9 @@ export class SessionService {
       return session;
     });
 
-    // Reuse the group's runtime binding when a shared workspace already exists.
-    const runtimeToBind = input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? null;
+    // Reuse the group's runtime binding when a shared workspace already exists,
+    // or inherit from the restore group so the session lands on the same machine.
+    const runtimeToBind = input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? restoreGroupRuntimeInstanceId ?? null;
     if (runtimeToBind) {
       sessionRouter.bindSession(session.id, runtimeToBind);
     }
@@ -713,6 +949,7 @@ export class SessionService {
             }
           : null,
         branch: resolvedBranch ?? undefined,
+        checkpointSha: restoreCheckpoint?.commitSha ?? undefined,
         createdById: input.createdById,
         organizationId: input.organizationId,
         onFailed: (error) => this.workspaceFailed(session.id, error),
@@ -729,6 +966,13 @@ export class SessionService {
       include: SESSION_INCLUDE,
     });
 
+    const startMeta = (
+      (!prompt || !session.toolSessionId)
+      || (session.agentStatus === "not_started" && !session.workdir && !!session.repoId && !!session.sessionGroupId)
+    )
+      ? await getSessionStartMetadata(id)
+      : null;
+
     // If workspace is still being prepared, queue the run for later
     if (session.agentStatus === "not_started" && !session.workdir) {
       const updated = await prisma.session.update({
@@ -738,7 +982,13 @@ export class SessionService {
             type: "run",
             prompt: prompt ?? null,
             interactionMode: interactionMode ?? null,
-          },
+            checkpointContext: buildCheckpointContextFromStartMeta({
+              sessionId: id,
+              sessionGroupId: session.sessionGroupId,
+              repoId: session.repoId,
+              startMeta,
+            }),
+          } as unknown as Prisma.InputJsonValue,
         },
         include: SESSION_INCLUDE,
       });
@@ -756,9 +1006,6 @@ export class SessionService {
 
     // If no prompt provided, retrieve the original prompt from the session_started event
     let resolvedPrompt = prompt;
-    const startMeta = !resolvedPrompt || !session.toolSessionId
-      ? await getSessionStartMetadata(id)
-      : null;
     if (!resolvedPrompt) {
       resolvedPrompt = startMeta?.prompt ?? null;
     }
@@ -790,6 +1037,13 @@ export class SessionService {
       resolvedPrompt = appendAutoSave(resolvedPrompt, !!session.repo);
     }
 
+    const checkpointContext = buildCheckpointContextFromStartMeta({
+      sessionId: id,
+      sessionGroupId: session.sessionGroupId,
+      repoId: session.repoId,
+      startMeta,
+    });
+
     const command = {
       type: "run" as const,
       sessionId: id,
@@ -799,6 +1053,7 @@ export class SessionService {
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
+      checkpointContext,
     };
 
     const deliveryResult = sessionRouter.send(id, command);
@@ -808,6 +1063,7 @@ export class SessionService {
         type: "run",
         prompt: resolvedPrompt ?? null,
         interactionMode: interactionMode ?? null,
+        checkpointContext,
       });
       await this.persistConnectionFailure(id, session.organizationId, deliveryResult, "run");
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
@@ -1379,6 +1635,7 @@ export class SessionService {
         workdir: true,
         toolSessionId: true,
         repoId: true,
+        sessionGroupId: true,
         connection: true,
         worktreeDeleted: true,
       },
@@ -1420,6 +1677,19 @@ export class SessionService {
     // Append auto-save instruction for repo-based sessions
     prompt = appendAutoSave(prompt, !!session.repoId);
 
+    const checkpointContext =
+      session.repoId && session.sessionGroupId
+        ? createCheckpointContext({
+            checkpointContextId: randomUUID(),
+            sessionId,
+            sessionGroupId: session.sessionGroupId,
+            repoId: session.repoId,
+          })
+        : null;
+    const checkpointMetadata = checkpointContext
+      ? ({ checkpointContextId: checkpointContext.checkpointContextId } as Prisma.InputJsonValue)
+      : undefined;
+
     // Attempt delivery before marking active
     const deliveryResult = sessionRouter.send(sessionId, {
       type: "send",
@@ -1430,6 +1700,7 @@ export class SessionService {
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
+      checkpointContext,
     });
 
     if (deliveryResult !== "delivered") {
@@ -1437,6 +1708,7 @@ export class SessionService {
         type: "send",
         prompt,
         interactionMode: interactionMode ?? null,
+        checkpointContext,
       });
       await this.persistConnectionFailure(
         sessionId,
@@ -1451,6 +1723,7 @@ export class SessionService {
         scopeId: sessionId,
         eventType: "message_sent",
         payload: { text, deliveryFailed: true },
+        metadata: checkpointMetadata,
         actorType,
         actorId,
       });
@@ -1512,6 +1785,7 @@ export class SessionService {
       scopeId: sessionId,
       eventType: "message_sent",
       payload: { text },
+      metadata: checkpointMetadata,
       actorType,
       actorId,
     });
@@ -1766,6 +2040,131 @@ export class SessionService {
     });
   }
 
+  async recordGitCheckpoint(sessionId: string, checkpoint: GitCheckpointBridgePayload) {
+    if (Number.isNaN(new Date(checkpoint.committedAt).getTime())) {
+      console.warn(`[checkpoint] invalid committedAt for session ${sessionId}: ${checkpoint.committedAt}`);
+      return;
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        repoId: true,
+      },
+    });
+    if (!session?.sessionGroupId || !session.repoId) return;
+
+    const existing = await prisma.gitCheckpoint.findUnique({
+      where: {
+        sessionGroupId_commitSha: {
+          sessionGroupId: session.sessionGroupId,
+          commitSha: checkpoint.commitSha,
+        },
+      },
+    });
+    const rewrittenCommitSha =
+      typeof checkpoint.rewrittenFromCommitSha === "string"
+        ? checkpoint.rewrittenFromCommitSha.trim()
+        : "";
+    const rewrittenCheckpoint =
+      rewrittenCommitSha && rewrittenCommitSha !== checkpoint.commitSha
+        ? await prisma.gitCheckpoint.findUnique({
+            where: {
+              sessionGroupId_commitSha: {
+                sessionGroupId: session.sessionGroupId,
+                commitSha: rewrittenCommitSha,
+              },
+            },
+          })
+        : null;
+
+    let persisted = existing;
+    let didPersistCheckpoint = false;
+
+    if (!persisted) {
+      const promptEventId = await this.resolvePromptEventIdForCheckpoint(sessionId, checkpoint);
+      if (!promptEventId) return null;
+
+      if (rewrittenCheckpoint) {
+        persisted = await prisma.gitCheckpoint.update({
+          where: { id: rewrittenCheckpoint.id },
+          data: {
+            sessionId,
+            promptEventId,
+            commitSha: checkpoint.commitSha,
+            parentShas: checkpoint.parentShas,
+            treeSha: checkpoint.treeSha,
+            subject: checkpoint.subject,
+            author: checkpoint.author,
+            committedAt: new Date(checkpoint.committedAt),
+            filesChanged: checkpoint.filesChanged,
+          },
+        });
+      } else {
+        persisted = await prisma.gitCheckpoint.create({
+          data: {
+            sessionId,
+            sessionGroupId: session.sessionGroupId,
+            repoId: session.repoId,
+            promptEventId,
+            commitSha: checkpoint.commitSha,
+            parentShas: checkpoint.parentShas,
+            treeSha: checkpoint.treeSha,
+            subject: checkpoint.subject,
+            author: checkpoint.author,
+            committedAt: new Date(checkpoint.committedAt),
+            filesChanged: checkpoint.filesChanged,
+          },
+        });
+      }
+
+      didPersistCheckpoint = true;
+    }
+
+    if (!persisted) return null;
+
+    if (didPersistCheckpoint) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "git_checkpoint",
+          checkpoint: serializeGitCheckpoint(persisted),
+        } as Prisma.InputJsonValue,
+        actorType: "system",
+        actorId: "system",
+      });
+    }
+
+    if (rewrittenCheckpoint && rewrittenCheckpoint.id !== persisted.id) {
+      await prisma.gitCheckpoint.delete({
+        where: { id: rewrittenCheckpoint.id },
+      });
+
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "git_checkpoint_rewrite",
+          replacedCommitSha: rewrittenCheckpoint.commitSha,
+          replacedCheckpointId: rewrittenCheckpoint.id,
+          checkpoint: serializeGitCheckpoint(persisted),
+        } as Prisma.InputJsonValue,
+        actorType: "system",
+        actorId: "system",
+      });
+    }
+
+    return persisted;
+  }
+
   async retryConnection(
     sessionId: string,
     organizationId: string,
@@ -1842,6 +2241,7 @@ export class SessionService {
     sessionRouter.bindSession(sessionId, runtime.id);
 
     if (session.repo) {
+      const startMeta = await getSessionStartMetadata(sessionId);
       // Re-run workspace preparation
       const prepResult = sessionRouter.send(sessionId, {
         type: "prepare",
@@ -1851,6 +2251,7 @@ export class SessionService {
         repoRemoteUrl: session.repo.remoteUrl,
         defaultBranch: session.repo.defaultBranch,
         branch: session.branch ?? undefined,
+        checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
       });
 
       if (prepResult !== "delivered") {
@@ -2520,6 +2921,74 @@ export class SessionService {
     return defaultConnection(raw as Partial<SessionConnectionData>);
   }
 
+  private async resolvePromptEventIdForCheckpoint(
+    sessionId: string,
+    checkpoint: GitCheckpointBridgePayload,
+  ) {
+    if (typeof checkpoint.promptEventId === "string" && checkpoint.promptEventId.trim()) {
+      return checkpoint.promptEventId;
+    }
+
+    if (typeof checkpoint.checkpointContextId === "string" && checkpoint.checkpointContextId.trim()) {
+      const promptEventId = await this.findPromptEventIdForCheckpointContext(
+        sessionId,
+        checkpoint.checkpointContextId,
+      );
+      if (promptEventId) return promptEventId;
+    }
+
+    return this.findPromptEventIdForCheckpoint(sessionId, checkpoint.observedAt);
+  }
+
+  private async findPromptEventIdForCheckpointContext(
+    sessionId: string,
+    checkpointContextId: string,
+  ) {
+    const promptEvent = await prisma.event.findFirst({
+      where: {
+        scopeId: sessionId,
+        scopeType: "session",
+        eventType: { in: ["session_started", "message_sent"] },
+        metadata: { path: ["checkpointContextId"], equals: checkpointContextId },
+      },
+      orderBy: { timestamp: "desc" },
+      select: { id: true },
+    });
+
+    if (!promptEvent) {
+      console.warn(`[checkpoint] no prompt event found for checkpoint context ${checkpointContextId} in session ${sessionId}`);
+      return null;
+    }
+
+    return promptEvent.id;
+  }
+
+  private async findPromptEventIdForCheckpoint(sessionId: string, observedAt: string) {
+    const observedDate = new Date(observedAt);
+    if (Number.isNaN(observedDate.getTime())) {
+      console.warn(`[checkpoint] invalid observedAt for session ${sessionId}: ${observedAt}`);
+      return null;
+    }
+
+    const latestPrompt = await prisma.event.findFirst({
+      where: {
+        scopeId: sessionId,
+        scopeType: "session",
+        eventType: { in: ["session_started", "message_sent"] },
+        timestamp: { lte: observedDate },
+      },
+      orderBy: { timestamp: "desc" },
+      select: { id: true },
+    });
+
+    if (!latestPrompt) {
+      console.warn(`[checkpoint] no prompt event found before ${observedAt} for session ${sessionId}`);
+      return null;
+    }
+
+    return latestPrompt.id;
+  }
+
   private async syncGroupWorkspaceState(
     sessionGroupId: string | null | undefined,
     patch: GroupWorkspaceStatePatch,
@@ -2619,6 +3088,7 @@ export class SessionService {
         prompt: pending.prompt,
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+        checkpointContext: parseCheckpointContext(pending.checkpointContext),
       };
     }
     if (pending.type === "run" || pending.type == null) {
@@ -2627,6 +3097,7 @@ export class SessionService {
         prompt: typeof pending.prompt === "string" ? pending.prompt : null,
         interactionMode:
           typeof pending.interactionMode === "string" ? pending.interactionMode : null,
+        checkpointContext: parseCheckpointContext(pending.checkpointContext),
       };
     }
     return null;
@@ -2675,6 +3146,17 @@ export class SessionService {
       prompt = appendAutoSave(prompt, !!session.repoId);
     }
 
+    const fallbackCheckpointContext =
+      pending.type === "run" && !pending.checkpointContext
+        ? buildCheckpointContextFromStartMeta({
+            sessionId,
+            sessionGroupId: session.sessionGroupId,
+            repoId: session.repoId,
+            startMeta: await getSessionStartMetadata(sessionId),
+          })
+        : null;
+    const checkpointContext = pending.checkpointContext ?? fallbackCheckpointContext;
+
     const command = {
       type: pending.type,
       sessionId,
@@ -2684,6 +3166,7 @@ export class SessionService {
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
+      checkpointContext: checkpointContext ?? undefined,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -2693,6 +3176,7 @@ export class SessionService {
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;
+      checkpointContext?: GitCheckpointContext;
     };
 
     const deliveryResult = sessionRouter.send(sessionId, command);

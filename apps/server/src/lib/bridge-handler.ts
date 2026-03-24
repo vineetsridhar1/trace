@@ -171,6 +171,13 @@ export function handleBridgeConnection(ws: WebSocket) {
             msg.toolSessionId as string,
           );
         });
+      } else if (msg.type === "git_checkpoint" && msg.sessionId && msg.checkpoint) {
+        enqueueEvent(msg.sessionId, async () => {
+          await sessionService.recordGitCheckpoint(
+            msg.sessionId as string,
+            msg.checkpoint,
+          );
+        });
       }
     } catch (err) {
       console.error("[bridge] error handling message:", err);

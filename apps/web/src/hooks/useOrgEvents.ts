@@ -9,7 +9,6 @@ import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
 import type {
   AgentStatus,
-  SessionStatus,
   Event,
   EventType,
   ScopeType,
@@ -18,6 +17,8 @@ import type {
   Chat,
   Repo,
   InboxItem,
+  GitCheckpoint,
+  SessionStatus,
 } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -142,6 +143,55 @@ function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
     payload.type === "plan_pending" ||
     (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type))
   );
+}
+
+function mergeGitCheckpoints(
+  existing: GitCheckpoint[] | null | undefined,
+  incoming: GitCheckpoint | GitCheckpoint[],
+): GitCheckpoint[] {
+  const merged = new Map<string, GitCheckpoint>();
+  for (const checkpoint of existing ?? []) {
+    merged.set(checkpoint.id, checkpoint);
+  }
+
+  const nextItems = Array.isArray(incoming) ? incoming : [incoming];
+  for (const checkpoint of nextItems) {
+    merged.set(checkpoint.id, checkpoint);
+  }
+
+  return [...merged.values()].sort((a, b) => b.committedAt.localeCompare(a.committedAt));
+}
+
+function rewriteGitCheckpoints(
+  existing: GitCheckpoint[] | null | undefined,
+  replacedCommitSha: string,
+  incoming: GitCheckpoint,
+): GitCheckpoint[] {
+  const filtered = (existing ?? []).filter((checkpoint) => checkpoint.commitSha !== replacedCommitSha);
+  return mergeGitCheckpoints(filtered, incoming);
+}
+
+function extractGitCheckpoint(payload: JsonObject): GitCheckpoint | null {
+  if (payload.type !== "git_checkpoint") return null;
+  const checkpoint = asJsonObject(payload.checkpoint);
+  if (!checkpoint || typeof checkpoint.id !== "string") return null;
+  return checkpoint as unknown as GitCheckpoint;
+}
+
+function extractGitCheckpointRewrite(
+  payload: JsonObject,
+): { replacedCommitSha: string; checkpoint: GitCheckpoint } | null {
+  if (payload.type !== "git_checkpoint_rewrite" || typeof payload.replacedCommitSha !== "string") {
+    return null;
+  }
+
+  const checkpoint = asJsonObject(payload.checkpoint);
+  if (!checkpoint || typeof checkpoint.id !== "string") return null;
+
+  return {
+    replacedCommitSha: payload.replacedCommitSha,
+    checkpoint: checkpoint as unknown as GitCheckpoint,
+  };
 }
 
 /** Extract a human-readable preview from a normalized message payload */
@@ -458,6 +508,54 @@ export function useOrgEvents() {
             const activeSessionId = useUIStore.getState().activeSessionId;
             if (activeSessionId === event.scopeId) {
               useUIStore.getState().setActiveSessionId(payload.newSessionId);
+            }
+          }
+
+          const checkpoint = extractGitCheckpoint(payload);
+          if (checkpoint) {
+            const existingSession = useEntityStore.getState().sessions[event.scopeId];
+            if (existingSession) {
+              patch("sessions", event.scopeId, {
+                gitCheckpoints: mergeGitCheckpoints(
+                  existingSession.gitCheckpoints as GitCheckpoint[] | undefined,
+                  checkpoint,
+                ),
+              } as Partial<SessionEntity>);
+            }
+
+            const existingGroup = useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
+            if (existingGroup) {
+              patch("sessionGroups", checkpoint.sessionGroupId, {
+                gitCheckpoints: mergeGitCheckpoints(
+                  existingGroup.gitCheckpoints as GitCheckpoint[] | undefined,
+                  checkpoint,
+                ),
+              } as Partial<SessionGroupEntity>);
+            }
+          }
+
+          const rewrite = extractGitCheckpointRewrite(payload);
+          if (rewrite) {
+            const existingSession = useEntityStore.getState().sessions[event.scopeId];
+            if (existingSession) {
+              patch("sessions", event.scopeId, {
+                gitCheckpoints: rewriteGitCheckpoints(
+                  existingSession.gitCheckpoints as GitCheckpoint[] | undefined,
+                  rewrite.replacedCommitSha,
+                  rewrite.checkpoint,
+                ),
+              } as Partial<SessionEntity>);
+            }
+
+            const existingGroup = useEntityStore.getState().sessionGroups[rewrite.checkpoint.sessionGroupId];
+            if (existingGroup) {
+              patch("sessionGroups", rewrite.checkpoint.sessionGroupId, {
+                gitCheckpoints: rewriteGitCheckpoints(
+                  existingGroup.gitCheckpoints as GitCheckpoint[] | undefined,
+                  rewrite.replacedCommitSha,
+                  rewrite.checkpoint,
+                ),
+              } as Partial<SessionGroupEntity>);
             }
           }
         }

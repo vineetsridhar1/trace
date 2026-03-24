@@ -19,8 +19,10 @@ import { GroupTabStrip } from "./GroupTabStrip";
 import type { OpenFileTab } from "./GroupTabStrip";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
-import { FileExplorer } from "./FileExplorer";
+import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
+import { SidebarPanel } from "./SidebarPanel";
+import type { SidebarTab } from "./SidebarPanel";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
   getDisplaySessionStatus,
@@ -38,6 +40,17 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       prUrl
       workdir
       worktreeDeleted
+      gitCheckpoints {
+        id
+        sessionId
+        promptEventId
+        commitSha
+        subject
+        author
+        committedAt
+        filesChanged
+        createdAt
+      }
       repo {
         id
         name
@@ -140,9 +153,11 @@ export function SessionGroupDetailView({
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const terminals = useSessionGroupTerminals(sessionGroupId);
-  const [showFiles, setShowFiles] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("files");
   const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
@@ -252,6 +267,27 @@ export function SessionGroupDetailView({
       !groupWorktreeDeleted
     );
   })();
+
+  const handleOpenCheckpointPanel = useCallback(
+    (checkpointId?: string) => {
+      setShowSidebar(true);
+      setSidebarTab("git");
+      setHighlightCheckpointId(checkpointId ?? null);
+    },
+    [],
+  );
+
+  const handleSidebarTabChange = useCallback((tab: SidebarTab) => {
+    setSidebarTab(tab);
+    if (tab !== "git") setHighlightCheckpointId(null);
+  }, []);
+
+  const handleToggleSidebar = useCallback(() => {
+    setShowSidebar((prev) => {
+      if (prev) setHighlightCheckpointId(null);
+      return !prev;
+    });
+  }, []);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
@@ -394,6 +430,7 @@ export function SessionGroupDetailView({
   );
 
   return (
+    <CheckpointOpenContext.Provider value={handleOpenCheckpointPanel}>
     <FileOpenContext.Provider value={handleFileClick}>
       <div className="flex h-full flex-col overflow-hidden">
         <GroupHeader
@@ -403,10 +440,10 @@ export function SessionGroupDetailView({
           groupPrUrl={groupPrUrl}
           panelMode={panelMode}
           isFullscreen={isFullscreen}
-          showFiles={showFiles}
+          showSidebar={showSidebar}
           onClose={() => setActiveSessionId(null)}
           onToggleFullscreen={toggleFullscreen}
-          onToggleFiles={() => setShowFiles((v) => !v)}
+          onToggleSidebar={handleToggleSidebar}
         />
 
         <GroupTabStrip
@@ -431,11 +468,6 @@ export function SessionGroupDetailView({
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {showFiles && (
-            <div className="h-full w-[260px] shrink-0 border-r border-[#2d2d2d]">
-              <FileExplorer sessionGroupId={sessionGroupId} onFileClick={handleFileClick} />
-            </div>
-          )}
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
             {activeFilePath ? (
               <div className="h-full">
@@ -457,8 +489,21 @@ export function SessionGroupDetailView({
               </div>
             )}
           </div>
+          {showSidebar && (
+            <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
+              <SidebarPanel
+                sessionGroupId={sessionGroupId}
+                activeSessionId={selectedSession?.id ?? null}
+                activeTab={sidebarTab}
+                onTabChange={handleSidebarTabChange}
+                onFileClick={handleFileClick}
+                highlightCheckpointId={highlightCheckpointId}
+              />
+            </div>
+          )}
         </div>
       </div>
     </FileOpenContext.Provider>
+    </CheckpointOpenContext.Provider>
   );
 }

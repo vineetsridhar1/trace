@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
+import { assertValidCommitSha } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -49,6 +50,7 @@ export async function createWorktree(
   sessionId: string,
   defaultBranch: string,
   branch?: string,
+  checkpointSha?: string,
 ): Promise<{ workdir: string }> {
   const repoPath = `${REPOS_DIR}/${repoId}`;
   const worktreePath = `${WORKSPACES_DIR}/${sessionId}`;
@@ -60,8 +62,20 @@ export async function createWorktree(
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
 
+  if (checkpointSha) assertValidCommitSha(checkpointSha);
+
   const branchName = `trace/${sessionId}`;
-  const baseBranch = `origin/${branch ?? defaultBranch}`;
+  const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;
+
+  // When restoring a checkpoint, verify the SHA is locally reachable; fetch if not
+  if (checkpointSha) {
+    const reachable = await execFileAsync("git", ["cat-file", "-t", checkpointSha], { cwd: repoPath })
+      .then(() => true)
+      .catch(() => false);
+    if (!reachable) {
+      await execFileAsync("git", ["fetch", "--all"], { cwd: repoPath });
+    }
+  }
 
   // Check if the branch already exists
   const branchExists = await execFileAsync(
@@ -72,7 +86,7 @@ export async function createWorktree(
   if (branchExists) {
     await execFileAsync("git", ["worktree", "add", worktreePath, branchName], { cwd: repoPath });
   } else {
-    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseBranch], { cwd: repoPath });
+    await execFileAsync("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], { cwd: repoPath });
   }
 
   return { workdir: worktreePath };

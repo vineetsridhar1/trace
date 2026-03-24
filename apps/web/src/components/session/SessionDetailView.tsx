@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
+import type { GitCheckpoint } from "@trace/gql";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useEntityStore, useEntityField, useScopedEvents, eventScopeKey } from "../../stores/entity";
 import { EventScopeContext } from "./EventScopeContext";
@@ -57,6 +58,17 @@ const SESSION_DETAIL_QUERY = gql`
         prUrl
         workdir
         worktreeDeleted
+        gitCheckpoints {
+          id
+          sessionId
+          promptEventId
+          commitSha
+          subject
+          author
+          committedAt
+          filesChanged
+          createdAt
+        }
         channel {
           id
         }
@@ -75,6 +87,17 @@ const SESSION_DETAIL_QUERY = gql`
         }
         createdAt
         updatedAt
+      }
+      gitCheckpoints {
+        id
+        sessionId
+        promptEventId
+        commitSha
+        subject
+        author
+        committedAt
+        filesChanged
+        createdAt
       }
       channel {
         id
@@ -102,6 +125,9 @@ export function SessionDetailView({
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const createdBy = useEntityField("sessions", sessionId, "createdBy") as { id: string } | undefined;
+  const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
+    | GitCheckpoint[]
+    | undefined;
   const currentUserId = useAuthStore((s) => s.user?.id);
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
@@ -229,6 +255,7 @@ export function SessionDetailView({
             ) : (
               <SessionMessageList
                 nodes={nodes}
+                gitCheckpoints={gitCheckpoints ?? []}
                 hasOlder={hasOlder}
                 loadingOlder={loadingOlder}
                 onLoadOlder={fetchOlderEvents}

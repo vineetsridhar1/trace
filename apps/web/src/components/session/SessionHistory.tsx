@@ -5,7 +5,7 @@ import { START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityStore } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
-import { getSessionChannelId } from "../../lib/session-group";
+import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 
 interface SessionHistoryProps {
@@ -15,10 +15,12 @@ interface SessionHistoryProps {
 export function SessionHistory({ sessionId }: SessionHistoryProps) {
   const sessions = useEntityStore((s) => s.sessions);
   const openSessionTab = useUIStore((s) => s.openSessionTab);
+  const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
 
   const currentSession = sessions[sessionId];
   const sessionGroupId = currentSession?.sessionGroupId as string | undefined;
+  const sessionGroup = sessionGroupId ? sessionGroups[sessionGroupId] : null;
 
   const groupSessions = useMemo(() => {
     if (!sessionGroupId) return [];
@@ -30,6 +32,8 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [sessionGroupId, sessions]);
+
+  const channelId = getSessionGroupChannelId(sessionGroup ?? null, groupSessions);
 
   const handleSeedNewChat = useCallback(
     async (sourceId: string) => {
@@ -54,12 +58,18 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           })
           .toPromise();
 
+        if (result.error) {
+          console.error("[SessionHistory] mutation failed:", result.error);
+          return;
+        }
+
         const newSessionId = result.data?.startSession?.id;
+        const newSessionGroupId = result.data?.startSession?.sessionGroupId ?? sessionGroupId;
         if (newSessionId) {
           openSessionTab(sessionGroupId, newSessionId);
           navigateToSession(
             (source.channel as { id: string } | null | undefined)?.id ?? null,
-            sessionGroupId,
+            newSessionGroupId,
             newSessionId,
           );
         }
@@ -79,11 +89,14 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
   }
 
   return (
-    <div className="max-h-72 overflow-y-auto py-1">
+    <div className="max-h-96 overflow-y-auto py-1">
+      <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Sessions
+      </div>
       {groupSessions.map((entry) => {
         const displayAgentStatus = getDisplayAgentStatus(entry.agentStatus, entry.sessionStatus);
         const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
-        const channelId = getSessionChannelId(entry);
+        const entryChannelId = getSessionChannelId(entry);
 
         return (
           <div

@@ -9,6 +9,10 @@
       "import": "./dist/index.js",
       "require": "./dist/cjs/index.js"
     },
+    "./git-hooks": {
+      "import": "./dist/git-hooks.js",
+      "require": "./dist/cjs/git-hooks.js"
+    },
     "./adapters": {
       "import": "./dist/adapters.js",
       "require": "./dist/cjs/adapters.js"
@@ -16,6 +20,7 @@
   },
   "typesVersions": {
     "*": {
+      "git-hooks": ["dist/git-hooks.d.ts"],
       "adapters": ["dist/adapters.d.ts"]
     }
   },

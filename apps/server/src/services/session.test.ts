@@ -133,6 +133,25 @@ function makeSession(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeGitCheckpoint(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "checkpoint-1",
+    sessionId: "session-1",
+    sessionGroupId: "group-1",
+    repoId: "repo-1",
+    promptEventId: "event-prompt-1",
+    commitSha: "abcdef1234567890",
+    parentShas: ["1234567890abcdef"],
+    treeSha: "feedface12345678",
+    subject: "Add checkpoint support",
+    author: "Test User <test@example.com>",
+    committedAt: new Date("2024-01-02T00:00:00.000Z"),
+    filesChanged: 3,
+    createdAt: new Date("2024-01-02T00:00:01.000Z"),
+    ...overrides,
+  };
+}
+
 describe("SessionService", () => {
   let service: SessionService;
 
@@ -155,6 +174,7 @@ describe("SessionService", () => {
       type: "coding",
       sessionGroups: [],
     });
+    prismaMock.gitCheckpoint.findUnique.mockResolvedValue(null);
   });
 
   describe("isFullyUnloadedSession", () => {
@@ -431,6 +451,351 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("restores a checkpoint into a fresh session group and provisions from the checkpoint sha", async () => {
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(
+        makeGitCheckpoint({
+          sessionId: "source-1",
+          sessionGroupId: "group-source",
+          commitSha: "abcdef1234567890",
+          subject: "Restore me",
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-source",
+          branch: "feature/source",
+        }),
+      );
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "source-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-source",
+        repoId: "repo-1",
+        branch: "feature/source",
+        hosting: "cloud",
+        channelId: "channel-1",
+        projects: [{ projectId: "project-1" }],
+        sessionGroup: makeSessionGroup({
+          id: "group-source",
+          branch: "feature/source",
+        }),
+      });
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([{ ticketId: "ticket-1" }]);
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "group-restored",
+          name: "Restore abcdef1 Restore me",
+          branch: "feature/source",
+        }),
+      );
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-restored",
+          sessionGroupId: "group-restored",
+          branch: "feature/source",
+          sessionGroup: makeSessionGroup({
+            id: "group-restored",
+            name: "Restore abcdef1 Restore me",
+            branch: "feature/source",
+          }),
+        }),
+      );
+
+      const result = await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        hosting: "cloud",
+        restoreCheckpointId: "checkpoint-1",
+      } as any);
+
+      expect(result.id).toBe("session-restored");
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          organizationId: "org-1",
+          repoId: "repo-1",
+          branch: "feature/source",
+        }),
+        select: expect.any(Object),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_started",
+          payload: expect.objectContaining({
+            restoreCheckpointId: "checkpoint-1",
+            restoreCheckpointSha: "abcdef1234567890",
+            sourceSessionId: null,
+          }),
+        }),
+        expect.anything(),
+      );
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-restored",
+          checkpointSha: "abcdef1234567890",
+        }),
+      );
+    });
+  });
+
+  describe("recordGitCheckpoint", () => {
+    it("persists a checkpoint and emits a git_checkpoint session output", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+      });
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
+      prismaMock.event.findFirst
+        .mockResolvedValueOnce({ id: "prompt-1" });
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(makeGitCheckpoint({
+        promptEventId: "prompt-1",
+      }));
+
+      const result = await service.recordGitCheckpoint("session-1", {
+        trigger: "commit",
+        command: "git commit -m 'test'",
+        observedAt: "2024-01-02T00:00:02.000Z",
+        commitSha: "abcdef1234567890",
+        parentShas: ["1234567890abcdef"],
+        treeSha: "feedface12345678",
+        subject: "Add checkpoint support",
+        author: "Test User <test@example.com>",
+        committedAt: "2024-01-02T00:00:00.000Z",
+        filesChanged: 3,
+      });
+
+      expect(result).toEqual(makeGitCheckpoint({ promptEventId: "prompt-1" }));
+      expect(prismaMock.gitCheckpoint.create).toHaveBeenCalledWith({
+        data: {
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          repoId: "repo-1",
+          promptEventId: "prompt-1",
+          commitSha: "abcdef1234567890",
+          parentShas: ["1234567890abcdef"],
+          treeSha: "feedface12345678",
+          subject: "Add checkpoint support",
+          author: "Test User <test@example.com>",
+          committedAt: new Date("2024-01-02T00:00:00.000Z"),
+          filesChanged: 3,
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "git_checkpoint",
+            checkpoint: expect.objectContaining({
+              id: "checkpoint-1",
+              promptEventId: "prompt-1",
+              commitSha: "abcdef1234567890",
+            }),
+          }),
+        }),
+      );
+    });
+
+    it("deduplicates checkpoints by session group and commit sha", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+      });
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(makeGitCheckpoint());
+
+      const result = await service.recordGitCheckpoint("session-1", {
+        trigger: "push",
+        command: "git push origin HEAD",
+        observedAt: "2024-01-02T00:00:02.000Z",
+        commitSha: "abcdef1234567890",
+        parentShas: ["1234567890abcdef"],
+        treeSha: "feedface12345678",
+        subject: "Add checkpoint support",
+        author: "Test User <test@example.com>",
+        committedAt: "2024-01-02T00:00:00.000Z",
+        filesChanged: 3,
+      });
+
+      expect(result).toEqual(makeGitCheckpoint());
+      expect(prismaMock.gitCheckpoint.create).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("prefers explicit checkpoint context ids over observedAt timestamp matching", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+      });
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-explicit" });
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(makeGitCheckpoint({
+        promptEventId: "prompt-explicit",
+      }));
+
+      await service.recordGitCheckpoint("session-1", {
+        trigger: "commit",
+        command: "git post-commit",
+        observedAt: "2024-01-02T00:00:02.000Z",
+        commitSha: "abcdef1234567890",
+        parentShas: ["1234567890abcdef"],
+        treeSha: "feedface12345678",
+        subject: "Add checkpoint support",
+        author: "Test User <test@example.com>",
+        committedAt: "2024-01-02T00:00:00.000Z",
+        filesChanged: 3,
+        source: "git_hook",
+        checkpointContextId: "ctx-1",
+      });
+
+      expect(prismaMock.event.findFirst).toHaveBeenCalledWith({
+        where: {
+          scopeId: "session-1",
+          scopeType: "session",
+          eventType: { in: ["session_started", "message_sent"] },
+          metadata: { path: ["checkpointContextId"], equals: "ctx-1" },
+        },
+        orderBy: { timestamp: "desc" },
+        select: { id: true },
+      });
+      expect(prismaMock.gitCheckpoint.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          promptEventId: "prompt-explicit",
+        }),
+      });
+    });
+
+    it("updates rewritten checkpoints in place when the replacement sha is not stored yet", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+      });
+      prismaMock.gitCheckpoint.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeGitCheckpoint({
+          id: "checkpoint-old",
+          commitSha: "oldsha1234567890",
+          promptEventId: "prompt-old",
+        }));
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-new" });
+      prismaMock.gitCheckpoint.update.mockResolvedValueOnce(makeGitCheckpoint({
+        id: "checkpoint-old",
+        commitSha: "newsha1234567890",
+        promptEventId: "prompt-new",
+      }));
+
+      const result = await service.recordGitCheckpoint("session-1", {
+        trigger: "rewrite",
+        command: "git post-rewrite amend",
+        observedAt: "2024-01-02T00:00:02.000Z",
+        commitSha: "newsha1234567890",
+        parentShas: ["1234567890abcdef"],
+        treeSha: "feedface12345678",
+        subject: "Add checkpoint support",
+        author: "Test User <test@example.com>",
+        committedAt: "2024-01-02T00:00:00.000Z",
+        filesChanged: 3,
+        source: "git_hook",
+        checkpointContextId: "ctx-2",
+        rewrittenFromCommitSha: "oldsha1234567890",
+      });
+
+      expect(result).toEqual(makeGitCheckpoint({
+        id: "checkpoint-old",
+        commitSha: "newsha1234567890",
+        promptEventId: "prompt-new",
+      }));
+      expect(prismaMock.gitCheckpoint.update).toHaveBeenCalledWith({
+        where: { id: "checkpoint-old" },
+        data: expect.objectContaining({
+          promptEventId: "prompt-new",
+          commitSha: "newsha1234567890",
+        }),
+      });
+      expect(prismaMock.gitCheckpoint.delete).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "git_checkpoint",
+            checkpoint: expect.objectContaining({
+              id: "checkpoint-old",
+              commitSha: "newsha1234567890",
+            }),
+          }),
+        }),
+      );
+    });
+
+    it("removes superseded checkpoints when a rewritten sha already exists", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+      });
+      prismaMock.gitCheckpoint.findUnique
+        .mockResolvedValueOnce(makeGitCheckpoint({
+          id: "checkpoint-new",
+          commitSha: "newsha1234567890",
+          promptEventId: "prompt-new",
+        }))
+        .mockResolvedValueOnce(makeGitCheckpoint({
+          id: "checkpoint-old",
+          commitSha: "oldsha1234567890",
+          promptEventId: "prompt-old",
+        }));
+
+      const result = await service.recordGitCheckpoint("session-1", {
+        trigger: "rewrite",
+        command: "git post-rewrite amend",
+        observedAt: "2024-01-02T00:00:02.000Z",
+        commitSha: "newsha1234567890",
+        parentShas: ["1234567890abcdef"],
+        treeSha: "feedface12345678",
+        subject: "Add checkpoint support",
+        author: "Test User <test@example.com>",
+        committedAt: "2024-01-02T00:00:00.000Z",
+        filesChanged: 3,
+        source: "git_hook",
+        rewrittenFromCommitSha: "oldsha1234567890",
+      });
+
+      expect(result).toEqual(makeGitCheckpoint({
+        id: "checkpoint-new",
+        commitSha: "newsha1234567890",
+        promptEventId: "prompt-new",
+      }));
+      expect(prismaMock.gitCheckpoint.delete).toHaveBeenCalledWith({
+        where: { id: "checkpoint-old" },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "git_checkpoint_rewrite",
+            replacedCommitSha: "oldsha1234567890",
+            checkpoint: expect.objectContaining({
+              id: "checkpoint-new",
+              commitSha: "newsha1234567890",
+            }),
+          }),
+        }),
+      );
+    });
   });
 
   describe("file access", () => {
@@ -610,6 +975,57 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+  });
+
+  describe("run", () => {
+    it("queues checkpoint context when the initial run waits for workspace preparation", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          workdir: null,
+          toolSessionId: null,
+          repoId: "repo-1",
+          sessionGroupId: "group-1",
+        }),
+      );
+      prismaMock.event.findFirst.mockResolvedValueOnce({
+        id: "event-start-1",
+        payload: { prompt: "Original prompt" },
+        metadata: { checkpointContextId: "ctx-queued-1" },
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          pendingRun: {
+            type: "run",
+            prompt: "Ship it",
+            interactionMode: null,
+          },
+        }),
+      );
+
+      await service.run("session-1", "Ship it");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: {
+          pendingRun: expect.objectContaining({
+            type: "run",
+            prompt: "Ship it",
+            interactionMode: null,
+            checkpointContext: expect.objectContaining({
+              checkpointContextId: "ctx-queued-1",
+              promptEventId: "event-start-1",
+              sessionId: "session-1",
+              sessionGroupId: "group-1",
+              repoId: "repo-1",
+              updatedAt: expect.any(String),
+            }),
+          }),
+        },
+        include: expect.any(Object),
+      });
     });
   });
 
