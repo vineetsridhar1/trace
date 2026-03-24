@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import {
   Circle,
   GitPullRequest,
-  PanelLeft,
+  PanelRight,
   History,
   Maximize2,
   Minimize2,
@@ -98,7 +98,7 @@ export function GroupHeader({
         )}
         title="Toggle sidebar"
       >
-        <PanelLeft size={14} />
+        <PanelRight size={14} />
       </button>
 
       <div className="relative" ref={historyRef}>

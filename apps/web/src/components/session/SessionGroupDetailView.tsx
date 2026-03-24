@@ -456,17 +456,6 @@ export function SessionGroupDetailView({
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {showSidebar && (
-            <div className="h-full w-[260px] shrink-0 border-r border-[#2d2d2d]">
-              <SidebarPanel
-                sessionGroupId={sessionGroupId}
-                activeTab={sidebarTab}
-                onTabChange={setSidebarTab}
-                onFileClick={handleFileClick}
-                highlightCheckpointId={highlightCheckpointId}
-              />
-            </div>
-          )}
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
             {activeFilePath ? (
               <div className="h-full">
@@ -488,6 +477,17 @@ export function SessionGroupDetailView({
               </div>
             )}
           </div>
+          {showSidebar && (
+            <div className="h-full w-[260px] shrink-0 border-l border-[#2d2d2d]">
+              <SidebarPanel
+                sessionGroupId={sessionGroupId}
+                activeTab={sidebarTab}
+                onTabChange={setSidebarTab}
+                onFileClick={handleFileClick}
+                highlightCheckpointId={highlightCheckpointId}
+              />
+            </div>
+          )}
         </div>
       </div>
     </FileOpenContext.Provider>
