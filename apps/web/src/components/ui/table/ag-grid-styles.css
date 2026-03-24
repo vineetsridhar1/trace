@@ -90,7 +90,18 @@
   padding-inline: 0.75rem;
 }
 
+.sessions-grid-compact .ag-cell-wrapper {
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .sessions-grid-compact .ag-cell-value,
 .sessions-grid-compact .ag-full-width-row .ag-cell-wrapper.ag-row-group {
   width: 100%;
+}
+
+.sessions-grid-compact .ag-cell-value {
+  flex: 1 1 auto;
+  min-width: 0;
 }
