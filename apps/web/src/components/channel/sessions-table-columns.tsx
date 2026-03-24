@@ -1,7 +1,8 @@
 import { Circle, Loader2 } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { createTable } from "../ui/table";
-import { statusColor } from "../session/sessionStatus";
+import { agentStatusColor, sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
+import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { timeAgo } from "../../lib/utils";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import type { SessionGroupRow } from "./sessions-table-types";
@@ -17,14 +18,14 @@ const columns: ColDef<SessionGroupRow>[] = [
     cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
       const { data } = params;
       if (!data) return null;
-      const color = statusColor[data.status ?? "active"];
+      const color = agentStatusColor[data.displayAgentStatus ?? "active"];
       return (
         <div className="flex h-full items-center gap-2">
-          {data.reviewAndActive ? (
-            <Loader2 size={12} className={`shrink-0 animate-spin ${color}`} />
-          ) : (
-            <Circle size={8} className={`shrink-0 fill-current ${color}`} />
-          )}
+          <AgentStatusIcon
+            agentStatus={data.displayAgentStatus}
+            size={data.displayAgentStatus === "done" ? 8 : 12}
+            className={color}
+          />
           <span className="truncate text-sm text-foreground">{data.name}</span>
         </div>
       );
@@ -32,7 +33,7 @@ const columns: ColDef<SessionGroupRow>[] = [
   },
   {
     headerName: "Status",
-    field: "status",
+    field: "displaySessionStatus",
     rowGroup: true,
     hide: true,
   },

@@ -15,10 +15,10 @@ vi.mock("../lib/terminal-relay.js", () => ({
   },
 }));
 
-// Use the real isFullyUnloadedSessionStatus — it's a pure function with no side effects
+// Use the real isFullyUnloadedSession — it's a pure function with no side effects
 vi.mock("./session.js", async () => {
   const actual = await vi.importActual<typeof import("./session.js")>("./session.js");
-  return { isFullyUnloadedSessionStatus: actual.isFullyUnloadedSessionStatus };
+  return { isFullyUnloadedSession: actual.isFullyUnloadedSession };
 });
 
 import { prisma } from "../lib/db.js";
@@ -40,7 +40,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        status: "active",
+        agentStatus: "active", sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -82,7 +82,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        status: "failed",
+        agentStatus: "failed", sessionStatus: "in_progress",
         sessionGroup: { workdir: null, worktreeDeleted: false },
       });
       await expect(
@@ -102,7 +102,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        status: "active",
+        agentStatus: "active", sessionStatus: "in_progress",
         sessionGroup: { workdir: null, worktreeDeleted: true },
       });
 
@@ -123,7 +123,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
-        status: "active",
+        agentStatus: "active", sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -144,7 +144,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
-        status: "active",
+        agentStatus: "active", sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -165,7 +165,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        status: "active",
+        agentStatus: "active", sessionStatus: "in_progress",
         sessionGroup: { workdir: null, worktreeDeleted: false },
       });
 
@@ -192,7 +192,7 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        status: "active",
+        agentStatus: "active", sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 

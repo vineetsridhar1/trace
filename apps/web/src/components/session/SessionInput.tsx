@@ -15,7 +15,8 @@ import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
-  const status = useEntityField("sessions", sessionId, "status") as string | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
   const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as boolean | undefined;
@@ -23,9 +24,9 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const isActive = status === "active";
+  const isActive = agentStatus === "active";
   const disconnected = isDisconnected(connection);
-  const canSend = canSendMessage(status, connection, worktreeDeleted);
+  const canSend = canSendMessage(agentStatus, sessionStatus, connection, worktreeDeleted);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   // Find the timestamp of the last user message for accurate working time
@@ -82,7 +83,9 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     ? "Worktree deleted. This session is read-only."
     : isActive
       ? "Waiting for response..."
-      : (status && disabledPlaceholders[status]) ?? "Send a message...";
+      : (sessionStatus && disabledPlaceholders[sessionStatus])
+      ?? (agentStatus && disabledPlaceholders[agentStatus])
+      ?? "Send a message...";
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">

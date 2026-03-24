@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { statusColor, statusLabel } from "./sessionStatus";
+import { agentStatusColor, sessionStatusLabel } from "./sessionStatus";
 import { SessionHistory } from "./SessionHistory";
 import {
   DropdownMenu,
@@ -24,8 +24,8 @@ import {
 
 interface GroupHeaderProps {
   groupName: string | undefined;
-  selectedStatus: string;
-  reviewAndActive?: boolean;
+  selectedAgentStatus: string;
+  selectedSessionStatus: string;
   selectedSessionId: string | null;
   groupPrUrl: string | null | undefined;
   panelMode?: boolean;
@@ -41,8 +41,8 @@ interface GroupHeaderProps {
 
 export function GroupHeader({
   groupName,
-  selectedStatus,
-  reviewAndActive,
+  selectedAgentStatus,
+  selectedSessionStatus,
   selectedSessionId,
   groupPrUrl,
   panelMode,
@@ -81,7 +81,7 @@ export function GroupHeader({
     };
   }, [showHistory]);
 
-  const label = statusLabel[selectedStatus] ?? selectedStatus;
+  const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2">
@@ -94,8 +94,8 @@ export function GroupHeader({
       </button>
 
       {selectedSessionId && (
-        <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", statusColor[selectedStatus])}>
-          {reviewAndActive ? (
+        <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", agentStatusColor[selectedAgentStatus])}>
+          {selectedAgentStatus === "active" ? (
             <Loader2 size={10} className="animate-spin" />
           ) : (
             <Circle size={6} className="fill-current" />

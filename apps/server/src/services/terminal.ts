@@ -1,6 +1,6 @@
 import { prisma } from "../lib/db.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
-import { isFullyUnloadedSessionStatus } from "./session.js";
+import { isFullyUnloadedSession } from "./session.js";
 
 class TerminalService {
   private assertLocalOwnership(session: { hosting: string | null; createdById: string }, userId: string): void {
@@ -29,7 +29,8 @@ class TerminalService {
         sessionGroupId: true,
         hosting: true,
         createdById: true,
-        status: true,
+        agentStatus: true,
+        sessionStatus: true,
         sessionGroup: {
           select: {
             workdir: true,
@@ -39,8 +40,8 @@ class TerminalService {
       },
     });
     if (!session) throw new Error("Session not found");
-    if (isFullyUnloadedSessionStatus(session.status)) {
-      throw new Error(`Cannot create terminal on a ${session.status} session`);
+    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
+      throw new Error(`Cannot create terminal on a ${session.agentStatus} session`);
     }
     if (session.sessionGroup?.worktreeDeleted) {
       throw new Error("Cannot create terminal: session worktree has been deleted");

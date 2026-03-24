@@ -1,11 +1,11 @@
-import type { AgentStatus, AutonomyMode } from "@prisma/client";
+import type { OrgAgentStatus, AutonomyMode } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
 export interface OrgAgentSettings {
   agentId: string;
   organizationId: string;
   name: string;
-  status: AgentStatus;
+  status: OrgAgentStatus;
   autonomyMode: AutonomyMode;
   soulFile: string;
   costBudget: {
@@ -61,7 +61,7 @@ export class AgentIdentityService {
     organizationId: string,
     updates: {
       name?: string;
-      status?: AgentStatus;
+      status?: OrgAgentStatus;
       autonomyMode?: AutonomyMode;
       soulFile?: string;
       dailyLimitCents?: number;
@@ -79,7 +79,7 @@ export class AgentIdentityService {
     id: string;
     organizationId: string;
     name: string;
-    status: AgentStatus;
+    status: OrgAgentStatus;
     autonomyMode: AutonomyMode;
     soulFile: string;
     dailyLimitCents: number;

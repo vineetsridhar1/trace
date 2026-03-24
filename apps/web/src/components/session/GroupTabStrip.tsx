@@ -3,7 +3,7 @@ import { Circle, FileCode, TerminalSquare, X } from "lucide-react";
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
-import { getDisplayStatus, statusColor } from "./sessionStatus";
+import { agentStatusColor } from "./sessionStatus";
 
 export interface OpenFileTab {
   filePath: string;
@@ -68,7 +68,7 @@ export function GroupTabStrip({
       <div className="native-scrollbar overflow-x-auto">
         <div className="flex min-w-max">
           {sessionTabs.map((session) => {
-            const displayStatus = getDisplayStatus(session.status, null);
+            const color = agentStatusColor[session.agentStatus ?? "active"] ?? "text-muted-foreground";
             const isActive = !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
             return (
               <button
@@ -77,7 +77,7 @@ export function GroupTabStrip({
                 onClick={() => onSelectSession(session.id)}
                 className={cn(tabBase, isActive ? tabActive : tabInactive)}
               >
-                <Circle size={6} className={cn("shrink-0 fill-current", statusColor[displayStatus])} />
+                <Circle size={6} className={cn("shrink-0 fill-current", color)} />
                 <span className="truncate">{session.name}</span>
               </button>
             );

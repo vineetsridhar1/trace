@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { Circle, Loader2 } from "lucide-react";
 import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
-import { statusColor, statusLabel } from "../session/sessionStatus";
+import { agentStatusColor, sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
+import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { timeAgo } from "../../lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
-import { collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
+import { collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
 
 export function CompactSessionsList({
   channelId,
@@ -18,26 +19,25 @@ export function CompactSessionsList({
   const grouped = useMemo(() => {
     const groups: Record<string, SessionGroupRow[]> = {};
     for (const row of rows) {
-      const status = row.status ?? "active";
+      const status = row.displaySessionStatus ?? "in_progress";
       if (!groups[status]) groups[status] = [];
       groups[status].push(row);
     }
     return Object.entries(groups).sort(
-      ([a], [b]) => (statusGroupOrder[a] ?? 99) - (statusGroupOrder[b] ?? 99),
+      ([a], [b]) => (sessionStatusGroupOrder[a] ?? 99) - (sessionStatusGroupOrder[b] ?? 99),
     );
   }, [rows]);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       {grouped.map(([status, items]) => {
-        const color = statusColor[status] ?? "text-muted-foreground";
-        const label = statusLabel[status] ?? status;
-        const hasReviewAndActive =
-          status === "in_review" && items.some((item) => item.reviewAndActive);
+        const color = sessionStatusColor[status] ?? "text-muted-foreground";
+        const label = sessionStatusLabel[status] ?? status;
+        const hasActive = items.some((item) => item.displayAgentStatus === "active");
         return (
           <div key={status}>
             <div className={`flex items-center gap-2 px-3 py-2 ${color}`}>
-              {hasReviewAndActive ? (
+              {hasActive ? (
                 <Loader2 size={12} className="shrink-0 animate-spin" />
               ) : (
                 <Circle size={8} className="shrink-0 fill-current" />
@@ -49,7 +49,7 @@ export function CompactSessionsList({
             </div>
             {!collapsedByDefault.has(status) &&
               items.map((row) => {
-                const rowColor = statusColor[row.status ?? "active"];
+                const rowColor = agentStatusColor[row.displayAgentStatus ?? "active"];
                 const isActive = row.id === activeSessionGroupId;
                 return (
                   <button
@@ -61,17 +61,11 @@ export function CompactSessionsList({
                       navigateToSessionGroup(channelId, row.id, latestSessionId);
                     }}
                   >
-                    {row.reviewAndActive ? (
-                      <Loader2
-                        size={10}
-                        className={`shrink-0 animate-spin ${rowColor}`}
-                      />
-                    ) : (
-                      <Circle
-                        size={7}
-                        className={`shrink-0 fill-current ${rowColor}`}
-                      />
-                    )}
+                    <AgentStatusIcon
+                      agentStatus={row.displayAgentStatus}
+                      size={row.displayAgentStatus === "done" ? 7 : 10}
+                      className={`shrink-0 ${rowColor}`}
+                    />
                     <span className="min-w-0 flex-1 truncate text-sm text-foreground">
                       {row.name}
                     </span>

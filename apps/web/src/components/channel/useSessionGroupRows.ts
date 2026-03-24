@@ -4,7 +4,7 @@ import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   getSessionGroupDisplayStatus,
-  isGroupReviewAndActive,
+  getSessionGroupAgentStatus,
 } from "../session/sessionStatus";
 import type { SessionGroupRow } from "./sessions-table-types";
 
@@ -32,17 +32,18 @@ export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
         const createdBySession = [...groupSessions].sort(
           (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )[0];
-        const sessionStatuses = groupSessions.map((session) => session.status);
+        const agentStatuses = groupSessions.map((session) => session.agentStatus);
+        const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
         const prUrl = group.prUrl as string | null | undefined;
-        const status = getSessionGroupDisplayStatus(sessionStatuses, prUrl);
-        const reviewAndActive = isGroupReviewAndActive(sessionStatuses, prUrl);
+        const displaySessionStatus = getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl);
+        const displayAgentStatus = getSessionGroupAgentStatus(agentStatuses);
 
         return {
           ...group,
           latestSession,
           createdBySession,
-          status,
-          reviewAndActive,
+          displaySessionStatus,
+          displayAgentStatus,
           _sessionCount: groupSessions.length,
           _lastMessageAt:
             latestSession?._lastMessageAt

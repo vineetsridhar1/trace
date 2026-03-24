@@ -23,8 +23,8 @@ import { FileExplorer } from "./FileExplorer";
 import { FileOpenContext } from "./FileOpenContext";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
-  getSessionGroupDisplayStatus,
-  isGroupReviewAndActive,
+  getSessionGroupSessionStatus,
+  getSessionGroupAgentStatus,
   isTerminalStatus,
 } from "./sessionStatus";
 import type { Terminal } from "@trace/gql";
@@ -59,7 +59,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       sessions {
         id
         name
-        status
+        agentStatus
+        sessionStatus
         tool
         model
         hosting
@@ -205,9 +206,10 @@ export function SessionGroupDetailView({
     ?? null;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
-  const sessionStatuses = groupSessions.map((session) => session.status);
-  const selectedStatus = getSessionGroupDisplayStatus(sessionStatuses, groupPrUrl);
-  const reviewAndActive = isGroupReviewAndActive(sessionStatuses, groupPrUrl);
+  const agentStatuses = groupSessions.map((session) => session.agentStatus);
+  const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
+  const selectedSessionStatus = getSessionGroupSessionStatus(sessionStatuses);
+  const selectedAgentStatus = getSessionGroupAgentStatus(agentStatuses);
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
@@ -218,7 +220,7 @@ export function SessionGroupDetailView({
     const isConnected = !groupConnection || groupConnection.state !== "disconnected";
     return (isCloud || isLocalOwner)
       && isConnected
-      && !isTerminalStatus(selectedSession.status)
+      && !isTerminalStatus(selectedSession.agentStatus, selectedSession.sessionStatus)
       && !groupWorktreeDeleted;
   })();
 
@@ -351,8 +353,8 @@ export function SessionGroupDetailView({
       <div className="flex h-full flex-col overflow-hidden">
       <GroupHeader
         groupName={groupName as string | undefined}
-        selectedStatus={selectedStatus}
-        reviewAndActive={reviewAndActive}
+        selectedAgentStatus={selectedAgentStatus}
+        selectedSessionStatus={selectedSessionStatus}
         selectedSessionId={selectedSession?.id ?? null}
         groupPrUrl={groupPrUrl}
         panelMode={panelMode}

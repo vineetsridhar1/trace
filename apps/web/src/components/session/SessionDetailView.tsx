@@ -22,7 +22,8 @@ const SESSION_DETAIL_QUERY = gql`
     session(id: $id) {
       id
       name
-      status
+      agentStatus
+      sessionStatus
       tool
       model
       hosting
@@ -97,7 +98,8 @@ export function SessionDetailView({
     useSessionEvents(sessionId);
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
-  const status = useEntityField("sessions", sessionId, "status") as string | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const createdBy = useEntityField("sessions", sessionId, "createdBy") as { id: string } | undefined;
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -109,7 +111,7 @@ export function SessionDetailView({
   const isCloud = hosting === "cloud";
   const isLocalOwner = hosting === "local" && createdBy?.id === currentUserId;
   const isConnected = !connection || connection.state !== "disconnected";
-  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(status) && !worktreeDeleted;
+  const canAccessTerminal = (isCloud || isLocalOwner) && isConnected && !isTerminalStatus(agentStatus, sessionStatus) && !worktreeDeleted;
 
   // Fetch full session detail — merge to avoid wiping fields set by events
   useEffect(() => {
@@ -145,22 +147,22 @@ export function SessionDetailView({
 
   // Find plan content when server says session needs input
   const activePlan = useMemo(() => {
-    if (status !== "needs_input") return null;
+    if (sessionStatus !== "needs_input") return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
       if (node.kind === "plan-review") return { node, index: i };
     }
     return null;
-  }, [nodes, status]);
+  }, [nodes, sessionStatus]);
 
   const activeQuestion = useMemo(() => {
-    if (status !== "needs_input") return null;
+    if (sessionStatus !== "needs_input") return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
       if (node.kind === "ask-user-question") return { node, index: i };
     }
     return null;
-  }, [nodes, status]);
+  }, [nodes, sessionStatus]);
 
   const [dismissedQuestionId, setDismissedQuestionId] = useState<string | null>(null);
   // Don't show a stale question if a more recent plan exists — the question was already answered
@@ -172,18 +174,18 @@ export function SessionDetailView({
   })();
 
   const latestTodos = useMemo(
-    () => (status && !isTerminalStatus(status) ? extractLatestTodos(eventIds, events) : null),
-    [eventIds, events, status],
+    () => (agentStatus && !isTerminalStatus(agentStatus, sessionStatus) ? extractLatestTodos(eventIds, events) : null),
+    [eventIds, events, agentStatus, sessionStatus],
   );
 
   const [showTerminal, setShowTerminal] = useState(false);
 
   // Auto-close terminal when session enters a terminal state or worktree is deleted
   useEffect(() => {
-    if ((isTerminalStatus(status) || worktreeDeleted) && showTerminal) {
+    if ((isTerminalStatus(agentStatus, sessionStatus) || worktreeDeleted) && showTerminal) {
       setShowTerminal(false);
     }
-  }, [status, worktreeDeleted, showTerminal]);
+  }, [agentStatus, sessionStatus, worktreeDeleted, showTerminal]);
 
   const handleStop = useCallback(async () => {
     await client.mutation(DISMISS_SESSION_MUTATION, { id: sessionId }).toPromise();
@@ -264,7 +266,7 @@ export function SessionDetailView({
           />
         ) : (
           <>
-            {status === "active" && latestTodos && (
+            {agentStatus === "active" && latestTodos && (
               <StickyTodoList todos={latestTodos} />
             )}
             <SessionInput sessionId={sessionId} onStop={handleStop} />

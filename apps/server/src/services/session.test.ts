@@ -60,7 +60,7 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
-import { SessionService, isFullyUnloadedSessionStatus } from "./session.js";
+import { SessionService, isFullyUnloadedSession } from "./session.js";
 
 const prismaMock = prisma as any;
 const eventServiceMock = eventService as any;
@@ -98,7 +98,8 @@ function makeSession(overrides: Record<string, unknown> = {}) {
   return {
     id: "session-1",
     name: "Implement dashboard filters",
-    status: "pending",
+    agentStatus: "active",
+    sessionStatus: "not_started",
     tool: "claude_code",
     model: "claude-sonnet-4-20250514",
     hosting: "cloud",
@@ -149,15 +150,20 @@ describe("SessionService", () => {
     });
   });
 
-  describe("isFullyUnloadedSessionStatus", () => {
-    it("returns true for failed and merged", () => {
-      expect(isFullyUnloadedSessionStatus("failed")).toBe(true);
-      expect(isFullyUnloadedSessionStatus("merged")).toBe(true);
+  describe("isFullyUnloadedSession", () => {
+    it("returns true for failed agent status", () => {
+      expect(isFullyUnloadedSession("failed", "in_progress")).toBe(true);
+      expect(isFullyUnloadedSession("stopped", "in_progress")).toBe(true);
     });
 
-    it("returns false for active, pending, completed, needs_input, creating, paused", () => {
-      for (const status of ["active", "pending", "completed", "needs_input", "creating", "paused"]) {
-        expect(isFullyUnloadedSessionStatus(status as any)).toBe(false);
+    it("returns true for merged session status", () => {
+      expect(isFullyUnloadedSession("done", "merged")).toBe(true);
+    });
+
+    it("returns false for active agent with non-merged session status", () => {
+      for (const sessionStatus of ["not_started", "in_progress", "needs_input", "in_review"] as const) {
+        expect(isFullyUnloadedSession("active", sessionStatus)).toBe(false);
+        expect(isFullyUnloadedSession("done", sessionStatus)).toBe(false);
       }
     });
   });
@@ -517,7 +523,8 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-2",
-          status: "creating",
+          agentStatus: "active",
+          sessionStatus: "not_started",
           hosting: "local",
           sessionGroupId: "group-1",
           connection: {
@@ -579,7 +586,8 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-3",
-          status: "creating",
+          agentStatus: "active",
+          sessionStatus: "not_started",
           hosting: "cloud",
           sessionGroupId: "group-1",
         }),

@@ -2,8 +2,8 @@ import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
 
 export type SessionGroupRow = SessionGroupEntity & {
   id: string;
-  status: string;
-  reviewAndActive?: boolean;
+  displaySessionStatus: string;
+  displayAgentStatus: string;
   latestSession?: SessionEntity;
   createdBySession?: SessionEntity;
   _lastMessageAt?: string;
@@ -21,17 +21,14 @@ export function bucketize(ts: string | undefined): number {
   return Math.floor(t / BUCKET_MS) * BUCKET_MS;
 }
 
-export const collapsedByDefault = new Set(["merged", "failed"]);
+export const collapsedByDefault = new Set(["merged", "failed", "stopped"]);
 
-export const statusGroupOrder: Record<string, number> = {
+export const sessionStatusGroupOrder: Record<string, number> = {
   needs_input: 0,
-  creating: 1,
-  active: 2,
-  completed: 3,
-  paused: 4,
-  pending: 5,
-  in_review: 6,
-  merged: 7,
-  failed: 8,
-  unreachable: 9,
+  in_review: 1,
+  in_progress: 2,
+  not_started: 3,
+  failed: 4,
+  stopped: 5,
+  merged: 6,
 };

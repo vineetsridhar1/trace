@@ -9,11 +9,11 @@ import type {
   MenuItemDef,
 } from "ag-grid-community";
 import { navigateToSessionGroup } from "../../stores/ui";
-import { statusColor, statusLabel } from "../session/sessionStatus";
+import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 import { AnimatePresence, motion } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
-import { COMPACT_BREAKPOINT, FILTER_STORAGE_KEY_PREFIX, collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
+import { COMPACT_BREAKPOINT, FILTER_STORAGE_KEY_PREFIX, collapsedByDefault, sessionStatusGroupOrder } from "./sessions-table-types";
 import { SessionsGridTable, useSessionsGridTable } from "./sessions-table-columns";
 import { useSessionGroupRows } from "./useSessionGroupRows";
 import { CompactSessionsList } from "./CompactSessionsList";
@@ -181,14 +181,15 @@ function useGridOptions({
       suppressCount: true,
       innerRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
         const status = params.value as string;
-        const color = statusColor[status] ?? "text-muted-foreground";
-        const label = statusLabel[status] ?? status;
+        const color = sessionStatusColor[status] ?? "text-muted-foreground";
+        const label = sessionStatusLabel[status] ?? status;
         const count = params.node.allChildrenCount ?? 0;
-        const hasReviewAndActive = status === "in_review"
-          && params.node.allLeafChildren?.some((child) => child.data?.reviewAndActive);
+        const hasActive = params.node.allLeafChildren?.some(
+          (child) => child.data?.displayAgentStatus === "active",
+        );
         return (
           <div className={`flex items-center gap-2 ${color}`}>
-            {hasReviewAndActive ? (
+            {hasActive ? (
               <Loader2 size={12} className="shrink-0 animate-spin" />
             ) : (
               <Circle size={8} className="shrink-0 fill-current" />
@@ -203,8 +204,8 @@ function useGridOptions({
       nodeA: { key?: string | null };
       nodeB: { key?: string | null };
     }) => {
-      const a = statusGroupOrder[params.nodeA.key ?? ""] ?? 99;
-      const b = statusGroupOrder[params.nodeB.key ?? ""] ?? 99;
+      const a = sessionStatusGroupOrder[params.nodeA.key ?? ""] ?? 99;
+      const b = sessionStatusGroupOrder[params.nodeB.key ?? ""] ?? 99;
       return a - b;
     },
   };

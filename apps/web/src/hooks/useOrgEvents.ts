@@ -7,7 +7,7 @@ import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
-import type { Event, EventType, ScopeType, SessionStatus, Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
+import type { AgentStatus, SessionStatus, Event, EventType, ScopeType, Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -38,7 +38,7 @@ const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
   "session_pr_merged",
 ]);
 
-/** PR lifecycle events that only patch prUrl, not status */
+/** PR lifecycle events that patch sessionStatus */
 const SESSION_PR_EVENTS: Set<EventType> = new Set([
   "session_pr_opened",
   "session_pr_closed",
@@ -49,25 +49,35 @@ const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set([
   "message_sent",
 ]);
 
-function statusFromEvent(eventType: EventType, payload: JsonObject): SessionStatus | undefined {
+function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   // Server includes the authoritative status in all session event payloads
-  const explicit = payload.status as SessionStatus | undefined;
+  const explicit = payload.agentStatus as AgentStatus | undefined;
   if (explicit) return explicit;
 
-  // Fallback for older events without status in payload
+  // Fallback for older events without agentStatus in payload
   switch (eventType) {
-    case "session_started": {
-      // Session may start in "creating" status when a repo is selected
-      const session = payload.session as Record<string, unknown> | undefined;
-      const status = session?.status as SessionStatus | undefined;
-      return status ?? "pending";
-    }
+    case "session_started":
+      return "active";
     case "session_resumed":
       return "active";
     case "session_paused":
-      return "paused";
+      return "active";
     case "session_terminated":
-      return payload.reason === "bridge_complete" ? "completed" : "failed";
+      return payload.reason === "bridge_complete" ? "done" : "stopped";
+    default:
+      return undefined;
+  }
+}
+
+function sessionStatusFromEvent(eventType: EventType, payload: JsonObject): SessionStatus | undefined {
+  const explicit = payload.sessionStatus as SessionStatus | undefined;
+  if (explicit) return explicit;
+
+  switch (eventType) {
+    case "session_resumed":
+      return "in_progress";
+    case "session_pr_merged":
+      return "merged";
     default:
       return undefined;
   }
@@ -85,14 +95,14 @@ const CONNECTION_EVENT_TYPES = new Set([
 /** Extract session field updates from session_output subtypes (e.g. workspace_ready, connection events, title) */
 function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | undefined {
   if (payload.type === "workspace_ready" && typeof payload.workdir === "string") {
-    return { status: "pending" as SessionStatus, workdir: payload.workdir };
+    return { agentStatus: "active" as AgentStatus, sessionStatus: "in_progress" as SessionStatus, workdir: payload.workdir };
   }
   // LLM-generated title update
   if (payload.type === "title_generated" && typeof payload.name === "string") {
     return { name: payload.name };
   }
   if (payload.type === "question_pending" || payload.type === "plan_pending") {
-    return { status: "needs_input" as SessionStatus };
+    return { sessionStatus: "needs_input" as SessionStatus };
   }
   // Connection state events carry a full connection patch
   if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {
@@ -341,10 +351,12 @@ export function useOrgEvents() {
         // Route session status events
         if (SESSION_STATUS_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
           upsertSessionGroupFromPayload();
-          const status = statusFromEvent(event.eventType, payload);
-          if (status) {
+          const agentStatus = agentStatusFromEvent(event.eventType, payload);
+          const sessionStatus = sessionStatusFromEvent(event.eventType, payload);
+          if (agentStatus || sessionStatus) {
             const sessionPatch: Record<string, unknown> = {
-              status,
+              ...(agentStatus && { agentStatus }),
+              ...(sessionStatus && { sessionStatus }),
               updatedAt: event.timestamp,
               _sortTimestamp: event.timestamp,
             };
@@ -361,9 +373,10 @@ export function useOrgEvents() {
               if (groupId) {
                 const allSessions = useEntityStore.getState().sessions;
                 for (const [siblingId, sibling] of Object.entries(allSessions)) {
-                  if (siblingId !== event.scopeId && sibling.sessionGroupId === groupId && sibling.status !== "merged") {
+                  if (siblingId !== event.scopeId && sibling.sessionGroupId === groupId && sibling.sessionStatus !== "merged") {
                     patch("sessions", siblingId, {
-                      status: "merged" as SessionStatus,
+                      agentStatus: "done" as AgentStatus,
+                      sessionStatus: "merged" as SessionStatus,
                       worktreeDeleted: true,
                       updatedAt: event.timestamp,
                       _sortTimestamp: event.timestamp,
@@ -375,9 +388,23 @@ export function useOrgEvents() {
           }
         }
 
-        // Route PR lifecycle events — only patch the owning session group
-        if (SESSION_PR_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType)) {
+        // Route PR lifecycle events — patch sessionStatus and the owning session group
+        if (SESSION_PR_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
           upsertSessionGroupFromPayload();
+          const sessionStatus = payload.sessionStatus as SessionStatus | undefined;
+          if (sessionStatus) {
+            // PR opened → patch all sessions in the group to in_review
+            const session = useEntityStore.getState().sessions[event.scopeId];
+            const groupId = session?.sessionGroupId;
+            if (groupId) {
+              const allSessions = useEntityStore.getState().sessions;
+              for (const [siblingId, sibling] of Object.entries(allSessions)) {
+                if (sibling.sessionGroupId === groupId && sibling.sessionStatus !== "merged") {
+                  patch("sessions", siblingId, { sessionStatus });
+                }
+              }
+            }
+          }
         }
 
         // Handle session_output subtypes that update session fields
