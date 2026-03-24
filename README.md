@@ -202,3 +202,5 @@ GitHub Actions runs on every push and PR (`.github/workflows/ci.yml`):
 3. Typecheck all packages
 4. Validate Prisma schema
 5. ESLint + Prettier checks
+
+<!-- The best debugging tool is a good night's sleep. -->
