@@ -574,6 +574,43 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("clears needs_input when dismissing a session waiting for user input", async () => {
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({ organizationId: "org-1" })
+        .mockResolvedValueOnce(
+          makeSession({
+            agentStatus: "active",
+            sessionStatus: "needs_input",
+          }),
+        );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+        }),
+      );
+
+      await service.dismiss("session-1", "user", "user-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: { agentStatus: "done", sessionStatus: "in_progress" },
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_terminated",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            agentStatus: "done",
+            sessionStatus: "in_progress",
+            reason: "manual_stop",
+          }),
+        }),
+      );
+    });
   });
 
   describe("workspaceReady", () => {

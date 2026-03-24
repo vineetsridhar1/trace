@@ -1030,9 +1030,17 @@ export class SessionService {
     // Attempt to notify the runtime; proceed regardless — we always want the session marked as terminated
     await sessionRouter.transitionRuntime(id, current.hosting, command);
 
+    // When terminating, clear needs_input — the session is no longer waiting for user input.
+    const newSessionStatus = current.sessionStatus === "needs_input"
+      ? getIdleSessionStatus(current.sessionStatus)
+      : current.sessionStatus;
+
     const session = await prisma.session.update({
       where: { id },
-      data: { agentStatus: newAgentStatus },
+      data: {
+        agentStatus: newAgentStatus,
+        ...(newSessionStatus !== current.sessionStatus ? { sessionStatus: newSessionStatus } : {}),
+      },
       include: SESSION_INCLUDE,
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
@@ -1045,7 +1053,7 @@ export class SessionService {
       payload: {
         sessionId: id,
         agentStatus: newAgentStatus,
-        sessionStatus: session.sessionStatus,
+        sessionStatus: newSessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
         ...(payloadExtras ?? {}),
       },
@@ -1330,8 +1338,9 @@ export class SessionService {
       actorId: "system",
     });
 
-    // Create inbox item when complete() lands in needs_input
-    if (newSessionStatus === "needs_input") {
+    // Create inbox item when complete() newly transitions to needs_input.
+    // Skip if recordOutput() already set needs_input (and created the inbox item).
+    if (newSessionStatus === "needs_input" && current.sessionStatus !== "needs_input") {
       // Find the event that triggered needs_input to extract question/plan data
       const triggerEvent = recentEvents.find((evt) => {
         const p = evt.payload as Record<string, unknown>;
@@ -1987,9 +1996,20 @@ export class SessionService {
 
     sessionRouter.unbindSession(sessionId);
 
+    const prev = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { sessionStatus: true },
+    });
+    const clearedSessionStatus = prev?.sessionStatus === "needs_input"
+      ? getIdleSessionStatus(prev.sessionStatus)
+      : undefined;
+
     const updated = await prisma.session.update({
       where: { id: sessionId },
-      data: { agentStatus: "stopped" },
+      data: {
+        agentStatus: "stopped",
+        ...(clearedSessionStatus ? { sessionStatus: clearedSessionStatus } : {}),
+      },
       select: { sessionStatus: true, sessionGroupId: true },
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(updated.sessionGroupId);
