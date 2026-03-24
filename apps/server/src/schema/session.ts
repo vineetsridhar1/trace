@@ -95,6 +95,9 @@ export const sessionMutations = {
   deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
   },
+  deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
+  },
   updateSessionConfig: (
     _: unknown,
     args: { sessionId: string; tool?: CodingTool | null; model?: string | null },

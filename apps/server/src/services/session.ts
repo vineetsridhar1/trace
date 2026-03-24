@@ -819,6 +819,37 @@ export class SessionService {
     return session;
   }
 
+  async deleteGroup(groupId: string, organizationId: string, actorType: ActorType = "system", actorId: string = "system") {
+    const group = await prisma.sessionGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw new Error("Session group not found");
+    if (group.organizationId !== organizationId) throw new Error("Session group not found");
+
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId: groupId },
+      select: { id: true },
+    });
+
+    for (const session of sessions) {
+      await this.delete(session.id, actorType, actorId);
+    }
+
+    // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
+    if (sessions.length === 0) {
+      await prisma.sessionGroup.delete({ where: { id: groupId } });
+      await eventService.create({
+        organizationId: group.organizationId,
+        scopeType: "session",
+        scopeId: groupId,
+        eventType: "session_deleted",
+        payload: { deletedSessionGroupId: groupId },
+        actorType,
+        actorId,
+      });
+    }
+
+    return true;
+  }
+
   private async transition(
     id: string,
     command: "pause" | "resume" | "terminate",

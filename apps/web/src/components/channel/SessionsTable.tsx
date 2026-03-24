@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Circle, Loader2 } from "lucide-react";
 import type {
   ColDef,
@@ -22,6 +22,7 @@ import {
 } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
+import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 
 type SessionGroupRow = SessionGroupEntity & {
   id: string;
@@ -31,6 +32,7 @@ type SessionGroupRow = SessionGroupEntity & {
   createdBySession?: SessionEntity;
   _lastMessageAt?: string;
   _sortTimestamp?: string;
+  _sessionCount: number;
 };
 
 const BUCKET_MS = 2 * 60 * 1000;
@@ -163,6 +165,11 @@ const { Table, useTable } = createTable<SessionGroupRow>({
 export function SessionsTable({ channelId }: { channelId: string }) {
   const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const sessions = useEntityStore((s) => s.sessions);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+    sessionCount: number;
+  } | null>(null);
 
   const filteredGroups = useMemo(() => {
     return (Object.values(sessionGroups) as SessionGroupEntity[])
@@ -195,6 +202,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           createdBySession,
           status,
           reviewAndActive,
+          _sessionCount: groupSessions.length,
           _lastMessageAt:
             latestSession?._lastMessageAt
             ?? latestSession?._sortTimestamp
@@ -222,7 +230,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   }, [filteredGroups]);
 
   const getContextMenuItems = useCallback(
-    (params: GetContextMenuItemsParams<SessionGroupRow>): MenuItemDef<SessionGroupRow>[] => {
+    (params: GetContextMenuItemsParams<SessionGroupRow>): (MenuItemDef<SessionGroupRow> | string)[] => {
       if (!params.node?.data) return [];
       const group = params.node.data;
       const sessionId = group.latestSession?.id;
@@ -234,6 +242,18 @@ export function SessionsTable({ channelId }: { channelId: string }) {
               ? `/c/${channelId}/g/${group.id}/s/${sessionId}`
               : `/c/${channelId}/g/${group.id}`;
             navigator.clipboard.writeText(`${window.location.origin}${path}`);
+          },
+        },
+        "separator",
+        {
+          name: "Delete Workspace",
+          cssClasses: ["text-destructive"],
+          action: () => {
+            setDeleteTarget({
+              id: group.id,
+              name: group.name,
+              sessionCount: group._sessionCount,
+            });
           },
         },
       ];
@@ -322,5 +342,20 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     [channelId, filterStorageKey, getContextMenuItems],
   );
 
-  return <Table className="h-full" agGridOptions={agGridOptions} />;
+  return (
+    <>
+      <Table className="h-full" agGridOptions={agGridOptions} />
+      {deleteTarget && (
+        <DeleteSessionGroupDialog
+          groupId={deleteTarget.id}
+          groupName={deleteTarget.name}
+          sessionCount={deleteTarget.sessionCount}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null);
+          }}
+        />
+      )}
+    </>
+  );
 }
