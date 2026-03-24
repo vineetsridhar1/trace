@@ -129,6 +129,10 @@ export function SessionGroupDetailView({
   const activeTerminalId = useUIStore((s) => s.activeTerminalId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
+  const openTabIds = useUIStore((s) => s.openSessionTabsByGroup[sessionGroupId]);
+  const openSessionTab = useUIStore((s) => s.openSessionTab);
+  const closeSessionTab = useUIStore((s) => s.closeSessionTab);
+  const initSessionTabs = useUIStore((s) => s.initSessionTabs);
   const toggleFullscreen = useDetailPanelStore((s) => s.toggleFullscreen);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -159,12 +163,12 @@ export function SessionGroupDetailView({
   }, [groupSessions]);
 
   const sessionTabs = useMemo(() => {
-    return [...groupSessions].sort((a, b) => {
-      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      if (diff !== 0) return diff;
-      return a.id.localeCompare(b.id);
-    });
-  }, [groupSessions]);
+    if (!openTabIds) return [];
+    const sessionMap = new Map(groupSessions.map((s) => [s.id, s]));
+    return openTabIds
+      .map((id) => sessionMap.get(id))
+      .filter((s): s is SessionEntity => s != null);
+  }, [groupSessions, openTabIds]);
 
   // Fetch full group detail and merge into store
   useEffect(() => {
@@ -208,6 +212,12 @@ export function SessionGroupDetailView({
     sessionsByRecency,
     setActiveSessionId,
   ]);
+
+  // Initialize open tabs with the most recent session
+  useEffect(() => {
+    if (sessionsByRecency.length === 0) return;
+    initSessionTabs(sessionGroupId, [sessionsByRecency[0].id]);
+  }, [sessionGroupId, sessionsByRecency, initSessionTabs]);
 
   // Clear terminal selection if the terminal was removed
   useEffect(() => {
@@ -327,9 +337,10 @@ export function SessionGroupDetailView({
 
     const newSessionId = result.data?.startSession?.id;
     if (newSessionId) {
+      openSessionTab(sessionGroupId, newSessionId);
       setActiveSessionId(newSessionId);
     }
-  }, [groupSessions, groupBranch, groupRepo, selectedSession, sessionGroupId, setActiveSessionId]);
+  }, [groupSessions, groupBranch, groupRepo, openSessionTab, selectedSession, sessionGroupId, setActiveSessionId]);
 
   const handleSelectTerminal = useCallback(
     (sessionId: string | null, terminalId: string) => {
@@ -375,6 +386,13 @@ export function SessionGroupDetailView({
     [setActiveSessionId, setActiveTerminalId],
   );
 
+  const handleCloseSession = useCallback(
+    (sessionId: string) => {
+      closeSessionTab(sessionGroupId, sessionId);
+    },
+    [closeSessionTab, sessionGroupId],
+  );
+
   return (
     <FileOpenContext.Provider value={handleFileClick}>
       <div className="flex h-full flex-col overflow-hidden">
@@ -403,6 +421,8 @@ export function SessionGroupDetailView({
           openFiles={openFiles}
           activeFilePath={activeFilePath}
           onSelectSession={handleSelectSession}
+          onCloseSession={handleCloseSession}
+          canCloseSessions={sessionTabs.length > 1}
           onSelectTerminal={handleSelectTerminal}
           onCloseTerminal={handleCloseTerminal}
           onSelectFile={handleSelectFile}

@@ -19,6 +19,8 @@ interface GroupTabStripProps {
   openFiles: OpenFileTab[];
   activeFilePath: string | null;
   onSelectSession: (sessionId: string) => void;
+  onCloseSession?: (sessionId: string) => void;
+  canCloseSessions?: boolean;
   onSelectTerminal: (sessionId: string | null, terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
   onSelectFile: (filePath: string) => void;
@@ -42,6 +44,8 @@ export function GroupTabStrip({
   openFiles,
   activeFilePath,
   onSelectSession,
+  onCloseSession,
+  canCloseSessions,
   onSelectTerminal,
   onCloseTerminal,
   onSelectFile,
@@ -75,15 +79,34 @@ export function GroupTabStrip({
             const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
             const isActive = !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
             return (
-              <button
+              <div
                 key={session.id}
                 ref={(el) => setTabRef(session.id, el)}
-                onClick={() => onSelectSession(session.id)}
-                className={cn(tabBase, isActive ? tabActive : tabInactive)}
+                className={cn(
+                  tabBase,
+                  "max-w-[260px] gap-0 p-0",
+                  isActive ? tabActive : tabInactive,
+                )}
               >
-                <Circle size={6} className={cn("shrink-0 fill-current", color)} />
-                <span className="truncate">{session.name}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectSession(session.id)}
+                  className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                >
+                  <Circle size={6} className={cn("shrink-0 fill-current", color)} />
+                  <span className="truncate">{session.name}</span>
+                </button>
+                {canCloseSessions && onCloseSession && (
+                  <button
+                    type="button"
+                    onClick={() => onCloseSession(session.id)}
+                    className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
+                    title="Close session tab"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
             );
           })}
 
