@@ -14,6 +14,7 @@ import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
 import { useUIStore } from "../../stores/ui";
 import { getSessionChannelId, getSessionGroupChannelId } from "../../lib/session-group";
+import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { GroupHeader } from "./GroupHeader";
 import { GroupTabStrip } from "./GroupTabStrip";
 import type { OpenFileTab } from "./GroupTabStrip";
@@ -373,6 +374,16 @@ export function SessionGroupDetailView({
 
     const newSessionId = result.data?.startSession?.id;
     if (newSessionId) {
+      optimisticallyInsertSession({
+        id: newSessionId,
+        sessionGroupId,
+        tool: selectedSession.tool,
+        model: selectedSession.model,
+        hosting: selectedSession.hosting,
+        channel: resolvedChannelId ? { id: resolvedChannelId } : null,
+        repo: groupRepo ?? (selectedSession.repo as { id: string } | null | undefined),
+        branch: groupBranch ?? selectedSession.branch,
+      });
       openSessionTab(sessionGroupId, newSessionId);
       setActiveSessionId(newSessionId);
     }

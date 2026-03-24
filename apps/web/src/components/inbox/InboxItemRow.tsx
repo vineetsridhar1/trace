@@ -9,8 +9,9 @@ import {
   DISMISS_INBOX_ITEM_MUTATION,
   TERMINATE_SESSION_MUTATION,
 } from "../../lib/mutations";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
+import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
 import type { QuestionData } from "./InboxQuestionBody";
@@ -94,23 +95,15 @@ export function InboxItemRow({ id }: { id: string }) {
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
-        // Optimistically upsert the new session so tab navigation works
-        // before the session_started event arrives via the subscription.
-        const now = new Date().toISOString();
-        useEntityStore.getState().upsert("sessions", newSessionId, {
+        optimisticallyInsertSession({
           id: newSessionId,
           sessionGroupId,
-          agentStatus: "not_started",
-          sessionStatus: "in_progress",
           tool: sessionTool ?? "claude_code",
-          model: null,
           hosting: sessionHosting ?? "cloud",
-          channel: sessionChannel ? { id: sessionChannel.id } : null,
-          repo: sessionRepo ? { id: sessionRepo.id } : null,
-          branch: sessionBranch ?? null,
-          createdAt: now,
-          updatedAt: now,
-        } as Record<string, unknown>);
+          channel: sessionChannel,
+          repo: sessionRepo,
+          branch: sessionBranch,
+        });
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
         openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(sessionChannel?.id ?? null, sessionGroupId, newSessionId);
