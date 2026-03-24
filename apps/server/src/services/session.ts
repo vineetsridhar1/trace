@@ -819,9 +819,10 @@ export class SessionService {
     return session;
   }
 
-  async deleteGroup(groupId: string, actorType: ActorType = "system", actorId: string = "system") {
+  async deleteGroup(groupId: string, organizationId: string, actorType: ActorType = "system", actorId: string = "system") {
     const group = await prisma.sessionGroup.findUnique({ where: { id: groupId } });
     if (!group) throw new Error("Session group not found");
+    if (group.organizationId !== organizationId) throw new Error("Session group not found");
 
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId: groupId },
