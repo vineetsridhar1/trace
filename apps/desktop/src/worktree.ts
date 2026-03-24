@@ -3,6 +3,7 @@ import os from "os";
 import fs from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { assertValidCommitSha } from "@trace/shared";
 import { installOrRepairRepoHooks } from "./repo-hooks.js";
 
 const execFileAsync = promisify(execFile);
@@ -62,6 +63,8 @@ export async function createWorktree({
 
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+
+  if (checkpointSha) assertValidCommitSha(checkpointSha);
 
   // Fetch latest so origin refs are up to date
   if (!checkpointSha) {

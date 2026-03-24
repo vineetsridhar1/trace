@@ -60,6 +60,20 @@ export function shortSha(commitSha: string): string {
   return commitSha.slice(0, 7);
 }
 
+const VALID_SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+/** Validate that a string looks like a hex git SHA. Prevents argument injection. */
+export function isValidCommitSha(sha: string): boolean {
+  return VALID_SHA_RE.test(sha);
+}
+
+/** Throws if the value is not a valid hex commit SHA. */
+export function assertValidCommitSha(sha: string): void {
+  if (!isValidCommitSha(sha)) {
+    throw new Error(`Invalid commit SHA: ${sha.slice(0, 50)}`);
+  }
+}
+
 export interface GitCheckpointBridgePayload {
   trigger: GitCheckpointTrigger;
   command: string;
@@ -141,6 +155,24 @@ export function extractGitToolUsePending(
   return pending;
 }
 
+const GIT_FAILURE_PATTERNS = [
+  /^fatal:/m,
+  /^error:/m,
+  /nothing to commit/i,
+  /no changes added to commit/i,
+  /exit code[:\s]+[1-9]/i,
+  /exited with non-zero/i,
+];
+
+/**
+ * Best-effort heuristic: does the tool_result output look like a failed git command?
+ * Used for Claude Code path where exit codes are not always in the content object.
+ */
+function looksLikeGitFailure(content: string): boolean {
+  if (!content) return false;
+  return GIT_FAILURE_PATTERNS.some((pattern) => pattern.test(content));
+}
+
 /**
  * Phase 2: scan an assistant message for tool_result blocks that match a
  * pending git tool_use_id (Claude Code style, where the command lives in the
@@ -161,7 +193,21 @@ export function extractGitToolResultTrigger(
     // Path 1: Claude Code — match via tool_use_id
     if (block.tool_use_id) {
       const pending = pendingGitToolUses.get(block.tool_use_id);
-      if (pending) return { ...pending, toolUseId: block.tool_use_id };
+      if (pending) {
+        // Skip if the tool_result indicates an error.
+        // Claude Code sets is_error on the block for non-zero exit codes.
+        if (block.is_error === true) continue;
+
+        // Also check for error indicators in the content string.
+        // A failed git commit/push usually prints to stderr which shows up in content.
+        const resultText =
+          typeof block.content === "string"
+            ? block.content
+            : "";
+        if (looksLikeGitFailure(resultText)) continue;
+
+        return { ...pending, toolUseId: block.tool_use_id };
+      }
     }
 
     // Path 2: content-object adapters (Codex etc.) — command + exitCode in content

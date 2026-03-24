@@ -56,6 +56,7 @@ export type {
 } from "./git-checkpoint.js";
 export {
   addTraceCheckpointTrailer,
+  assertValidCommitSha,
   buildGitDiffTreeArgs,
   buildGitShowArgs,
   extractGitCheckpointTrigger,
@@ -63,6 +64,7 @@ export {
   extractGitToolResultTrigger,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
+  isValidCommitSha,
   parseGitShowOutput,
   parseTraceCheckpointContextId,
   shortSha,

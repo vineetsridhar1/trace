@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
+import { assertValidCommitSha } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -60,6 +61,8 @@ export async function createWorktree(
   }
 
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
+
+  if (checkpointSha) assertValidCommitSha(checkpointSha);
 
   const branchName = `trace/${sessionId}`;
   const baseRef = checkpointSha ?? `origin/${branch ?? defaultBranch}`;

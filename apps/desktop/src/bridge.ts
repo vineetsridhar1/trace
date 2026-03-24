@@ -21,7 +21,7 @@ import { runtimeDebug } from "./runtime-debug.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import {
   loadQueuedGitHookCheckpoints,
-  replaceQueuedGitHookCheckpoints,
+  removeQueuedCheckpointFile,
   writeCheckpointContext,
 } from "./hook-runtime.js";
 
@@ -223,21 +223,18 @@ export class BridgeClient implements IBridgeClient {
       const queued = await loadQueuedGitHookCheckpoints();
       if (queued.length === 0) return;
 
-      let index = 0;
-      for (; index < queued.length; index += 1) {
-        if (this.ws?.readyState !== WebSocket.OPEN) {
-          break;
-        }
+      for (const { entry, filePath } of queued) {
+        if (this.ws?.readyState !== WebSocket.OPEN) break;
 
-        const entry = queued[index];
         this.send({
           type: "git_checkpoint",
           sessionId: entry.sessionId,
           checkpoint: entry.checkpoint,
         });
-      }
 
-      await replaceQueuedGitHookCheckpoints(queued.slice(index));
+        // Delete only this file — new entries queued concurrently are untouched
+        await removeQueuedCheckpointFile(filePath);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn("[bridge] failed to flush queued git hook checkpoints:", message);

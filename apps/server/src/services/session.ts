@@ -750,6 +750,17 @@ export class SessionService {
       sharedConnection && typeof sharedConnection === "object" && "runtimeInstanceId" in sharedConnection
         ? (sharedConnection as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null
         : null;
+
+    // For checkpoint restores, inherit the runtime from the source group so the
+    // restored session is prepared on the same machine that owns the repo.
+    const restoreGroupRuntimeInstanceId = (() => {
+      if (!input.restoreCheckpointId || !restoreGroup) return null;
+      const conn = restoreGroup.connection;
+      if (conn && typeof conn === "object" && "runtimeInstanceId" in conn) {
+        return (conn as { runtimeInstanceId?: string | null }).runtimeInstanceId ?? null;
+      }
+      return null;
+    })();
     const sourceProjectIds = sourceSession?.projects.map((project) => project.projectId) ?? [];
     const sourceTicketLinks = sourceSessionId
       ? await prisma.ticketLink.findMany({
@@ -916,8 +927,9 @@ export class SessionService {
       return session;
     });
 
-    // Reuse the group's runtime binding when a shared workspace already exists.
-    const runtimeToBind = input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? null;
+    // Reuse the group's runtime binding when a shared workspace already exists,
+    // or inherit from the restore group so the session lands on the same machine.
+    const runtimeToBind = input.runtimeInstanceId ?? sharedRuntimeInstanceId ?? restoreGroupRuntimeInstanceId ?? null;
     if (runtimeToBind) {
       sessionRouter.bindSession(session.id, runtimeToBind);
     }

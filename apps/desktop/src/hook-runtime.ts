@@ -11,21 +11,13 @@ import {
   parseGitShowOutput,
   parseTraceCheckpointContextId,
 } from "@trace/shared";
-import { resolveGitPath } from "@trace/shared/git-hooks";
+import { resolveGitPath, shellQuote, isNotFoundError } from "@trace/shared/git-hooks";
 
 const execFileAsync = promisify(execFile);
 
 export interface QueuedGitHookCheckpoint {
   sessionId: string;
   checkpoint: GitCheckpointBridgePayload;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 function buildGitCommitMessageArgs(ref: string): string[] {
@@ -78,12 +70,28 @@ export function getTraceHomeDir(): string {
   return path.join(os.homedir(), ".trace");
 }
 
-export function getHookQueuePath(): string {
+export function getHookQueueDir(): string {
+  return path.join(getTraceHomeDir(), "desktop-hooks", "pending-checkpoints");
+}
+
+/** @deprecated kept for migration — remove after one release */
+export function getLegacyHookQueuePath(): string {
   return path.join(getTraceHomeDir(), "desktop-hooks", "pending-checkpoints.jsonl");
 }
 
 export function getHookRunnerWrapperPath(): string {
   return path.join(getTraceHomeDir(), "bin", "trace-hooks");
+}
+
+/**
+ * Resolve the runner script path, handling packaged Electron where
+ * `__dirname` lives inside `app.asar`. Shell scripts cannot exec
+ * into asar archives, so we replace `.asar/` with `.asar.unpacked/`.
+ * The Electron build config must include `hook-runner.js` in
+ * `asarUnpack` for this to work.
+ */
+function resolveRunnerScriptPath(rawPath: string): string {
+  return rawPath.replace(/\.asar([/\\])/, ".asar.unpacked$1");
 }
 
 export function ensureHookRunnerEntrypoint({
@@ -96,11 +104,13 @@ export function ensureHookRunnerEntrypoint({
   const wrapperPath = getHookRunnerWrapperPath();
   fs.mkdirSync(path.dirname(wrapperPath), { recursive: true });
 
+  const resolvedRunnerPath = resolveRunnerScriptPath(runnerScriptPath);
+
   const wrapper = [
     "#!/bin/sh",
     "set -eu",
     "export ELECTRON_RUN_AS_NODE=1",
-    `exec ${shellQuote(electronBinaryPath)} ${shellQuote(runnerScriptPath)} "$@"`,
+    `exec ${shellQuote(electronBinaryPath)} ${shellQuote(resolvedRunnerPath)} "$@"`,
     "",
   ].join("\n");
 
@@ -129,46 +139,87 @@ export async function writeCheckpointContext(
   await fs.promises.writeFile(contextPath, JSON.stringify(context, null, 2), "utf8");
 }
 
-export async function loadQueuedGitHookCheckpoints(): Promise<QueuedGitHookCheckpoint[]> {
+/**
+ * Load all queued checkpoint files from the per-file queue directory.
+ * Returns entries paired with their file paths so callers can delete
+ * individual entries after successful delivery.
+ */
+export async function loadQueuedGitHookCheckpoints(): Promise<
+  Array<{ entry: QueuedGitHookCheckpoint; filePath: string }>
+> {
+  const queueDir = getHookQueueDir();
+
+  // Migrate legacy JSONL file if it exists
+  const legacyPath = getLegacyHookQueuePath();
   try {
-    const raw = await fs.promises.readFile(getHookQueuePath(), "utf8");
-    return raw
+    const legacyContent = await fs.promises.readFile(legacyPath, "utf8");
+    const legacyEntries = legacyContent
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        try {
-          return parseQueuedCheckpoint(JSON.parse(line));
-        } catch {
-          return null;
-        }
+        try { return parseQueuedCheckpoint(JSON.parse(line)); }
+        catch { return null; }
       })
-      .filter((entry): entry is QueuedGitHookCheckpoint => entry != null);
+      .filter((e): e is QueuedGitHookCheckpoint => e != null);
+    for (const entry of legacyEntries) {
+      await queueGitHookCheckpoint(entry);
+    }
+    await fs.promises.rm(legacyPath, { force: true });
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      console.warn("[hook-runtime] failed to migrate legacy queue:", error);
+    }
+  }
+
+  let files: string[];
+  try {
+    files = await fs.promises.readdir(queueDir);
   } catch (error) {
     if (isNotFoundError(error)) return [];
     throw error;
   }
-}
 
-export async function replaceQueuedGitHookCheckpoints(
-  entries: QueuedGitHookCheckpoint[],
-): Promise<void> {
-  const queuePath = getHookQueuePath();
-
-  if (entries.length === 0) {
-    await fs.promises.rm(queuePath, { force: true });
-    return;
+  const results: Array<{ entry: QueuedGitHookCheckpoint; filePath: string }> = [];
+  for (const file of files.sort()) {
+    if (!file.endsWith(".json")) continue;
+    const filePath = path.join(queueDir, file);
+    try {
+      const raw = await fs.promises.readFile(filePath, "utf8");
+      const entry = parseQueuedCheckpoint(JSON.parse(raw));
+      if (entry) results.push({ entry, filePath });
+    } catch {
+      // Corrupt file — remove it
+      await fs.promises.rm(filePath, { force: true }).catch(() => {});
+    }
   }
-
-  await fs.promises.mkdir(path.dirname(queuePath), { recursive: true });
-  const content = entries.map((entry) => JSON.stringify(entry)).join("\n");
-  await fs.promises.writeFile(queuePath, `${content}\n`, "utf8");
+  return results;
 }
 
+/**
+ * Remove a single queued checkpoint file after successful delivery.
+ */
+export async function removeQueuedCheckpointFile(filePath: string): Promise<void> {
+  await fs.promises.rm(filePath, { force: true });
+}
+
+/**
+ * Queue a checkpoint by writing an individual file.
+ * Uses write-to-temp-then-rename for atomicity so concurrent hooks
+ * cannot corrupt each other's writes.
+ */
 export async function queueGitHookCheckpoint(entry: QueuedGitHookCheckpoint): Promise<void> {
-  const queuePath = getHookQueuePath();
-  await fs.promises.mkdir(path.dirname(queuePath), { recursive: true });
-  await fs.promises.appendFile(queuePath, `${JSON.stringify(entry)}\n`, "utf8");
+  const queueDir = getHookQueueDir();
+  await fs.promises.mkdir(queueDir, { recursive: true });
+
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).slice(2, 8);
+  const fileName = `${timestamp}-${random}.json`;
+  const filePath = path.join(queueDir, fileName);
+  const tmpPath = `${filePath}.tmp`;
+
+  await fs.promises.writeFile(tmpPath, JSON.stringify(entry), "utf8");
+  await fs.promises.rename(tmpPath, filePath);
 }
 
 export async function prepareCommitMessageHook(
@@ -239,6 +290,8 @@ export async function postCommitHook(cwd: string): Promise<void> {
   });
 }
 
+const POST_REWRITE_CONCURRENCY = 8;
+
 export async function postRewriteHook(
   cwd: string,
   rewriteType: string,
@@ -255,18 +308,27 @@ export async function postRewriteHook(
     .filter((parts): parts is [string, string] => parts.length >= 2)
     .map(([oldCommitSha, newCommitSha]) => ({ oldCommitSha, newCommitSha }));
 
-  for (const rewrite of rewrites) {
-    const checkpoint = await inspectGitCheckpointForRef(cwd, rewrite.newCommitSha, {
-      trigger: "rewrite",
-      command: `git post-rewrite ${rewriteType}`,
-      hookName: "post-rewrite",
-      rewrittenFromCommitSha: rewrite.oldCommitSha,
-      context,
-    });
+  // Process rewrites in parallel batches to avoid blocking git on large rebases
+  for (let i = 0; i < rewrites.length; i += POST_REWRITE_CONCURRENCY) {
+    const batch = rewrites.slice(i, i + POST_REWRITE_CONCURRENCY);
+    const checkpoints = await Promise.all(
+      batch.map((rewrite) =>
+        inspectGitCheckpointForRef(cwd, rewrite.newCommitSha, {
+          trigger: "rewrite",
+          command: `git post-rewrite ${rewriteType}`,
+          hookName: "post-rewrite",
+          rewrittenFromCommitSha: rewrite.oldCommitSha,
+          context,
+        }),
+      ),
+    );
 
-    await queueGitHookCheckpoint({
-      sessionId: context.sessionId,
-      checkpoint,
-    });
+    // Queue writes are still sequential per batch to avoid FS contention
+    for (const checkpoint of checkpoints) {
+      await queueGitHookCheckpoint({
+        sessionId: context.sessionId,
+        checkpoint,
+      });
+    }
   }
 }

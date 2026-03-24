@@ -21,6 +21,8 @@ export interface ToolResultBlock {
   tool_use_id?: string;
   name: string;
   content?: string | Record<string, unknown>;
+  /** Set by some adapters (e.g. Claude Code) when the tool returned a non-zero exit code. */
+  is_error?: boolean;
 }
 
 export interface QuestionOption {
