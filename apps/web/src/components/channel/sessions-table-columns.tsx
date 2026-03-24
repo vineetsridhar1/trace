@@ -138,12 +138,12 @@ export const compactSessionColumns: ColDef<SessionGroupRow>[] = [
       const lastActivityAt = data._lastMessageAt ?? data.updatedAt ?? data.createdAt;
 
       return (
-        <div className="flex h-full min-w-0 flex-col justify-center py-2">
+        <div className="flex h-full w-full min-w-0 flex-col justify-center py-2">
           <div className="flex min-w-0 items-center gap-2">
             {renderStatusIcon(data)}
             <span className="truncate text-sm font-medium text-foreground">{data.name}</span>
           </div>
-          <div className="mt-2.5 flex min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
+          <div className="mt-2.5 flex w-full min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
             {repo && (
               <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground/90">
                 {repo.name}
