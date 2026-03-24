@@ -77,12 +77,20 @@ export class CloudMachineService {
       // Skip the network round-trip if the machine was touched in the last 30s.
       if (existingMachine.status !== "destroyed") {
         const recentlyUpdated = Date.now() - existingMachine.updatedAt.getTime() < 30_000;
-        const vmState = recentlyUpdated ? null : await this.provider.getVMState(existingMachine.providerMachineId);
+        const vmState = recentlyUpdated
+          ? null
+          : await this.provider.getVMState(existingMachine.providerMachineId);
 
         // If we checked and the VM is gone/terminal — clean up and recreate
         if (vmState && (vmState === "destroyed" || vmState === "failed")) {
-          console.log(`[cloud-machine-service] machine ${existingMachine.id} VM is ${vmState} (DB says ${existingMachine.status}), replacing`);
-          await this.cleanupStaleRecord(existingMachine.id, existingMachine.providerMachineId, existingMachine.bridgeToken);
+          console.log(
+            `[cloud-machine-service] machine ${existingMachine.id} VM is ${vmState} (DB says ${existingMachine.status}), replacing`,
+          );
+          await this.cleanupStaleRecord(
+            existingMachine.id,
+            existingMachine.providerMachineId,
+            existingMachine.bridgeToken,
+          );
           return this.createMachine({ userId, orgId, defaultTool, userTokens });
         }
 
@@ -120,7 +128,11 @@ export class CloudMachineService {
   }
 
   /** Remove a stale CloudMachine record and attempt to clean up the provider VM. */
-  private async cleanupStaleRecord(cloudMachineId: string, providerMachineId: string, bridgeToken: string): Promise<void> {
+  private async cleanupStaleRecord(
+    cloudMachineId: string,
+    providerMachineId: string,
+    bridgeToken: string,
+  ): Promise<void> {
     this.validBridgeTokens.delete(bridgeToken);
     this.cancelIdleTimer(cloudMachineId);
 
@@ -149,7 +161,8 @@ export class CloudMachineService {
     if (userTokens.openai) env.OPENAI_API_KEY = userTokens.openai;
     if (userTokens.github) env.GITHUB_TOKEN = userTokens.github;
     else if (process.env.GITHUB_TOKEN) env.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-    if (userTokens.ssh_key) env.SSH_PRIVATE_KEY = Buffer.from(userTokens.ssh_key).toString("base64");
+    if (userTokens.ssh_key)
+      env.SSH_PRIVATE_KEY = Buffer.from(userTokens.ssh_key).toString("base64");
 
     const { providerMachineId } = await this.provider.createVM({
       cloudMachineId,
@@ -175,22 +188,28 @@ export class CloudMachineService {
     this.validBridgeTokens.add(bridgeToken);
 
     // Track the startup promise so callers can fail fast if the VM dies
-    const startupPromise = this.provider.waitForStarted(providerMachineId).then(async () => {
-      await prisma.cloudMachine.update({
-        where: { id: machine.id },
-        data: { status: "started" },
+    const startupPromise = this.provider
+      .waitForStarted(providerMachineId)
+      .then(async () => {
+        await prisma.cloudMachine.update({
+          where: { id: machine.id },
+          data: { status: "started" },
+        });
+      })
+      .catch(async (err) => {
+        console.error(`[cloud-machine-service] VM ${machine.id} failed to start:`, err);
+        await prisma.cloudMachine
+          .update({
+            where: { id: machine.id },
+            data: { status: "destroyed" },
+          })
+          .catch(() => {});
+        this.validBridgeTokens.delete(bridgeToken);
+        throw err; // Re-throw so awaiters see the failure
+      })
+      .finally(() => {
+        this.startupPromises.delete(cloudMachineId);
       });
-    }).catch(async (err) => {
-      console.error(`[cloud-machine-service] VM ${machine.id} failed to start:`, err);
-      await prisma.cloudMachine.update({
-        where: { id: machine.id },
-        data: { status: "destroyed" },
-      }).catch(() => {});
-      this.validBridgeTokens.delete(bridgeToken);
-      throw err; // Re-throw so awaiters see the failure
-    }).finally(() => {
-      this.startupPromises.delete(cloudMachineId);
-    });
     this.startupPromises.set(cloudMachineId, startupPromise);
 
     return machine;
@@ -216,14 +235,16 @@ export class CloudMachineService {
     const activeSessions = await prisma.session.count({
       where: {
         hosting: "cloud",
-        agentStatus: { in: ["active", "done"] },
+        agentStatus: "active",
         sessionStatus: { notIn: ["merged"] },
         connection: { path: ["cloudMachineId"], equals: cloudMachineId },
       },
     });
 
     if (activeSessions === 0) {
-      console.log(`[cloud-machine-service] machine ${cloudMachineId} has no active sessions, scheduling idle stop in ${IDLE_TIMEOUT_MS / 1000}s`);
+      console.log(
+        `[cloud-machine-service] machine ${cloudMachineId} has no active sessions, scheduling idle stop in ${IDLE_TIMEOUT_MS / 1000}s`,
+      );
       this.scheduleIdleStop(cloudMachineId);
     }
   }
@@ -255,7 +276,10 @@ export class CloudMachineService {
     this.validBridgeTokens.delete(machine.bridgeToken);
 
     await this.provider.destroyVM(machine.providerMachineId).catch((err) => {
-      console.warn(`[cloud-machine-service] failed to destroy VM ${machine.providerMachineId}:`, err);
+      console.warn(
+        `[cloud-machine-service] failed to destroy VM ${machine.providerMachineId}:`,
+        err,
+      );
     });
 
     await prisma.cloudMachine.update({
@@ -308,13 +332,15 @@ export class CloudMachineService {
       const activeSessions = await prisma.session.count({
         where: {
           hosting: "cloud",
-          agentStatus: { in: ["active", "done"] },
+          agentStatus: "active",
           sessionStatus: { notIn: ["merged"] },
           connection: { path: ["cloudMachineId"], equals: machine.id },
         },
       });
       if (activeSessions === 0) {
-        console.log(`[cloud-machine-service] machine ${machine.id} has no active sessions on restore, scheduling idle stop`);
+        console.log(
+          `[cloud-machine-service] machine ${machine.id} has no active sessions on restore, scheduling idle stop`,
+        );
         this.scheduleIdleStop(machine.id);
       }
     }

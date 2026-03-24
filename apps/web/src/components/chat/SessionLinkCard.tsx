@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import {
   agentStatusColor,
+  getDisplaySessionStatus,
   sessionStatusLabel,
 } from "../session/sessionStatus";
 import { SessionPreviewModal } from "./SessionPreviewModal";
@@ -16,10 +17,13 @@ interface SessionLinkCardProps {
 export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: SessionLinkCardProps) {
   const name = useEntityField("sessions", sessionId, "name");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | undefined;
 
   const color = agentStatusColor[agentStatus ?? "active"] ?? "text-muted-foreground";
-  const label = sessionStatusLabel[sessionStatus ?? "not_started"] ?? sessionStatus;
+  const displayStatus = getDisplaySessionStatus(sessionStatus, null, agentStatus);
+  const label = sessionStatusLabel[displayStatus] ?? displayStatus;
 
   if (!name) {
     return (

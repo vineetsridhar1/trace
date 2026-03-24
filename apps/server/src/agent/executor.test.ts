@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServiceContainer } from "./executor.js";
-import {
-  ActionExecutor,
-  InMemoryIdempotencyStore,
-} from "./executor.js";
+import { ActionExecutor, InMemoryIdempotencyStore } from "./executor.js";
 
 function createServices(): ServiceContainer {
   return {
@@ -18,7 +15,7 @@ function createServices(): ServiceContainer {
     } as unknown as ServiceContainer["chatService"],
     sessionService: {
       start: vi.fn().mockResolvedValue({ id: "session-1" }),
-      pause: vi.fn().mockResolvedValue({ id: "session-1", agentStatus: "active" }),
+      pause: vi.fn().mockResolvedValue({ id: "session-1", agentStatus: "done" }),
       resume: vi.fn().mockResolvedValue({ id: "session-1", agentStatus: "active" }),
     } as unknown as ServiceContainer["sessionService"],
     inboxService: {
@@ -52,7 +49,9 @@ describe("ActionExecutor", () => {
   it("rejects unknown actions", async () => {
     const executor = new ActionExecutor(services);
 
-    await expect(executor.execute({ actionType: "unknown.action", args: {} }, ctx)).resolves.toEqual({
+    await expect(
+      executor.execute({ actionType: "unknown.action", args: {} }, ctx),
+    ).resolves.toEqual({
       status: "failed",
       actionType: "unknown.action",
       error: "Unknown action: unknown.action",
@@ -66,7 +65,7 @@ describe("ActionExecutor", () => {
 
     expect(result.status).toBe("failed");
     expect(result.error).toContain("Missing required field: title");
-    expect((services.ticketService.create as any)).not.toHaveBeenCalled();
+    expect(services.ticketService.create as any).not.toHaveBeenCalled();
   });
 
   it("injects agent context into ticket creation", async () => {

@@ -18,9 +18,10 @@ import { useDetailPanelStore } from "../../stores/detail-panel";
 import {
   agentStatusColor,
   sessionStatusLabel,
-  isDisconnected,
-  getSessionGroupSessionStatus,
+  getDisplaySessionStatus,
+  getSessionGroupDisplayStatus,
   getSessionGroupAgentStatus,
+  isDisconnected,
 } from "./sessionStatus";
 import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
@@ -38,7 +39,9 @@ export function SessionHeader({
 }) {
   const name = useEntityField("sessions", sessionId, "name");
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
@@ -81,11 +84,11 @@ export function SessionHeader({
   const isCloud = hosting === "cloud";
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
   const displaySessionStatus = sessionGroupId
-    ? getSessionGroupSessionStatus(groupSessionStatuses)
-    : (sessionStatus ?? "not_started");
+    ? getSessionGroupDisplayStatus(groupSessionStatuses, groupAgentStatuses, prUrl)
+    : getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
   const displayAgentStatus = sessionGroupId
     ? getSessionGroupAgentStatus(groupAgentStatuses)
-    : (agentStatus ?? "active");
+    : (agentStatus ?? "done");
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
