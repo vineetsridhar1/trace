@@ -7,7 +7,18 @@ import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
 import { useUIStore } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
-import type { AgentStatus, SessionStatus, Event, EventType, ScopeType, Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
+import type {
+  AgentStatus,
+  SessionStatus,
+  Event,
+  EventType,
+  ScopeType,
+  Channel,
+  ChannelGroup,
+  Chat,
+  Repo,
+  InboxItem,
+} from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -38,16 +49,10 @@ const SESSION_STATUS_EVENTS: Set<EventType> = new Set([
   "session_pr_merged",
 ]);
 
-/** PR lifecycle events that patch sessionStatus */
-const SESSION_PR_EVENTS: Set<EventType> = new Set([
-  "session_pr_opened",
-  "session_pr_closed",
-]);
+/** PR lifecycle events update the group PR URL; review state is derived from that. */
+const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
-const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set([
-  "session_output",
-  "message_sent",
-]);
+const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
 
 function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentStatus | undefined {
   // Server includes the authoritative status in all session event payloads
@@ -57,11 +62,11 @@ function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentS
   // Fallback for older events without agentStatus in payload
   switch (eventType) {
     case "session_started":
-      return "active";
+      return "done";
     case "session_resumed":
       return "active";
     case "session_paused":
-      return "active";
+      return "done";
     case "session_terminated":
       return payload.reason === "bridge_complete" ? "done" : "stopped";
     default:
@@ -69,7 +74,10 @@ function agentStatusFromEvent(eventType: EventType, payload: JsonObject): AgentS
   }
 }
 
-function sessionStatusFromEvent(eventType: EventType, payload: JsonObject): SessionStatus | undefined {
+function sessionStatusFromEvent(
+  eventType: EventType,
+  payload: JsonObject,
+): SessionStatus | undefined {
   const explicit = payload.sessionStatus as SessionStatus | undefined;
   if (explicit) return explicit;
 
@@ -95,7 +103,11 @@ const CONNECTION_EVENT_TYPES = new Set([
 /** Extract session field updates from session_output subtypes (e.g. workspace_ready, connection events, title) */
 function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | undefined {
   if (payload.type === "workspace_ready" && typeof payload.workdir === "string") {
-    return { agentStatus: "active" as AgentStatus, sessionStatus: "in_progress" as SessionStatus, workdir: payload.workdir };
+    return {
+      ...(payload.agentStatus && { agentStatus: payload.agentStatus as AgentStatus }),
+      ...(payload.sessionStatus && { sessionStatus: payload.sessionStatus as SessionStatus }),
+      workdir: payload.workdir,
+    };
   }
   // LLM-generated title update
   if (payload.type === "title_generated" && typeof payload.name === "string") {
@@ -115,10 +127,12 @@ function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEntity> | u
 }
 
 function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
-  return payload.type === "workspace_ready"
-    || payload.type === "question_pending"
-    || payload.type === "plan_pending"
-    || (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type));
+  return (
+    payload.type === "workspace_ready" ||
+    payload.type === "question_pending" ||
+    payload.type === "plan_pending" ||
+    (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type))
+  );
 }
 
 /** Extract a human-readable preview from a normalized message payload */
@@ -164,18 +178,13 @@ export function useOrgEvents() {
         const upsertSessionGroupFromPayload = () => {
           const sessionFromPayload = asJsonObject(payload?.session);
           const sessionGroup =
-            asJsonObject(payload?.sessionGroup)
-            ?? asJsonObject(sessionFromPayload?.sessionGroup);
+            asJsonObject(payload?.sessionGroup) ?? asJsonObject(sessionFromPayload?.sessionGroup);
           if (sessionGroup && typeof sessionGroup.id === "string") {
             const existing = useEntityStore.getState().sessionGroups[sessionGroup.id];
-            upsert(
-              "sessionGroups",
-              sessionGroup.id,
-              {
-                ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
-                _sortTimestamp: event.timestamp,
-              } as SessionGroupEntity,
-            );
+            upsert("sessionGroups", sessionGroup.id, {
+              ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
+              _sortTimestamp: event.timestamp,
+            } as SessionGroupEntity);
           }
         };
 
@@ -187,7 +196,11 @@ export function useOrgEvents() {
           const repo = asJsonObject(payload.repo);
           if (repo && typeof repo.id === "string") {
             const existing = useEntityStore.getState().repos[repo.id];
-            upsert("repos", repo.id, (existing ? { ...existing, ...repo } : repo) as unknown as Repo);
+            upsert(
+              "repos",
+              repo.id,
+              (existing ? { ...existing, ...repo } : repo) as unknown as Repo,
+            );
           }
         }
 
@@ -203,7 +216,10 @@ export function useOrgEvents() {
             patch("chats", event.scopeId, { name: payload.name } as Partial<Chat>);
           }
         }
-        if ((event.eventType === "chat_member_added" || event.eventType === "chat_member_removed") && payload) {
+        if (
+          (event.eventType === "chat_member_added" || event.eventType === "chat_member_removed") &&
+          payload
+        ) {
           if (event.scopeType === "chat") {
             const members = payload.members;
             if (Array.isArray(members)) {
@@ -238,12 +254,21 @@ export function useOrgEvents() {
         }
 
         // Channel membership events
-        if ((event.eventType === "channel_member_added" || event.eventType === "channel_member_removed") && payload) {
+        if (
+          (event.eventType === "channel_member_added" ||
+            event.eventType === "channel_member_removed") &&
+          payload
+        ) {
           const userId = payload.userId as string | undefined;
           const currentUserId = useAuthStore.getState().user?.id;
           const channel = asJsonObject(payload.channel);
 
-          if (event.eventType === "channel_member_added" && userId === currentUserId && channel && typeof channel.id === "string") {
+          if (
+            event.eventType === "channel_member_added" &&
+            userId === currentUserId &&
+            channel &&
+            typeof channel.id === "string"
+          ) {
             // Current user joined — add channel to store
             upsert("channels", channel.id, channel as unknown as Channel);
           } else if (event.eventType === "channel_member_removed" && userId === currentUserId) {
@@ -302,28 +327,25 @@ export function useOrgEvents() {
           if (session && typeof session.id === "string") {
             upsertSessionGroupFromPayload();
             const existingSession = useEntityStore.getState().sessions[session.id];
-            upsert(
-              "sessions",
-              session.id,
-              {
-                ...(existingSession ? { ...existingSession, ...session } : session),
-                _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
-              } as unknown as SessionEntity,
-            );
+            upsert("sessions", session.id, {
+              ...(existingSession ? { ...existingSession, ...session } : session),
+              _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
+            } as unknown as SessionEntity);
           }
         }
 
         // Session deleted — remove from store and navigate away if active
-        if (event.eventType === "session_deleted" && event.scopeType === ("session" satisfies ScopeType)) {
+        if (
+          event.eventType === "session_deleted" &&
+          event.scopeType === ("session" satisfies ScopeType)
+        ) {
           const deletedId = event.scopeId;
           const deletedSessionGroupId =
             payload && typeof payload.deletedSessionGroupId === "string"
               ? payload.deletedSessionGroupId
               : null;
           const sessionGroupId =
-            payload && typeof payload.sessionGroupId === "string"
-              ? payload.sessionGroupId
-              : null;
+            payload && typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
           remove("sessions", deletedId);
           if (deletedSessionGroupId) {
             remove("sessionGroups", deletedSessionGroupId);
@@ -349,7 +371,11 @@ export function useOrgEvents() {
         }
 
         // Route session status events
-        if (SESSION_STATUS_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
+        if (
+          SESSION_STATUS_EVENTS.has(event.eventType) &&
+          event.scopeType === ("session" satisfies ScopeType) &&
+          payload
+        ) {
           upsertSessionGroupFromPayload();
           const agentStatus = agentStatusFromEvent(event.eventType, payload);
           const sessionStatus = sessionStatusFromEvent(event.eventType, payload);
@@ -373,7 +399,11 @@ export function useOrgEvents() {
               if (groupId) {
                 const allSessions = useEntityStore.getState().sessions;
                 for (const [siblingId, sibling] of Object.entries(allSessions)) {
-                  if (siblingId !== event.scopeId && sibling.sessionGroupId === groupId && sibling.sessionStatus !== "merged") {
+                  if (
+                    siblingId !== event.scopeId &&
+                    sibling.sessionGroupId === groupId &&
+                    sibling.sessionStatus !== "merged"
+                  ) {
                     patch("sessions", siblingId, {
                       agentStatus: "done" as AgentStatus,
                       sessionStatus: "merged" as SessionStatus,
@@ -388,34 +418,30 @@ export function useOrgEvents() {
           }
         }
 
-        // Route PR lifecycle events — patch sessionStatus and the owning session group
-        if (SESSION_PR_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
+        // Route PR lifecycle events — review state is derived from sessionGroup.prUrl
+        if (
+          SESSION_PR_EVENTS.has(event.eventType) &&
+          event.scopeType === ("session" satisfies ScopeType) &&
+          payload
+        ) {
           upsertSessionGroupFromPayload();
-          const sessionStatus = payload.sessionStatus as SessionStatus | undefined;
-          if (sessionStatus) {
-            // PR opened → patch all sessions in the group to in_review
-            const session = useEntityStore.getState().sessions[event.scopeId];
-            const groupId = session?.sessionGroupId;
-            if (groupId) {
-              const allSessions = useEntityStore.getState().sessions;
-              for (const [siblingId, sibling] of Object.entries(allSessions)) {
-                if (sibling.sessionGroupId === groupId && sibling.sessionStatus !== "merged") {
-                  patch("sessions", siblingId, { sessionStatus });
-                }
-              }
-            }
-          }
         }
 
         // Handle session_output subtypes that update session fields
-        if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType) && payload) {
+        if (
+          event.eventType === "session_output" &&
+          event.scopeType === ("session" satisfies ScopeType) &&
+          payload
+        ) {
           upsertSessionGroupFromPayload();
           const sessionPatch = sessionPatchFromOutput(payload);
           if (sessionPatch) {
             patch("sessions", event.scopeId, {
               ...sessionPatch,
               updatedAt: event.timestamp,
-              ...(shouldBumpSortTimestampForOutput(payload) ? { _sortTimestamp: event.timestamp } : {}),
+              ...(shouldBumpSortTimestampForOutput(payload)
+                ? { _sortTimestamp: event.timestamp }
+                : {}),
             });
           }
 
@@ -428,14 +454,24 @@ export function useOrgEvents() {
         }
 
         // Chat activity — update sort timestamp when a new message arrives in a chat
-        if (event.eventType === "message_sent" && event.scopeType === ("chat" satisfies ScopeType)) {
+        if (
+          event.eventType === "message_sent" &&
+          event.scopeType === ("chat" satisfies ScopeType)
+        ) {
           patch("chats", event.scopeId, { updatedAt: event.timestamp } as Partial<Chat>);
         }
 
         // Route session activity events — update timestamp, and preview if it's a real message
-        if (SESSION_ACTIVITY_EVENTS.has(event.eventType) && event.scopeType === ("session" satisfies ScopeType) && payload) {
+        if (
+          SESSION_ACTIVITY_EVENTS.has(event.eventType) &&
+          event.scopeType === ("session" satisfies ScopeType) &&
+          payload
+        ) {
           const preview = extractMessagePreview(event.eventType, payload);
-          const updates: Partial<SessionEntity> = { updatedAt: event.timestamp, _lastMessageAt: event.timestamp };
+          const updates: Partial<SessionEntity> = {
+            updatedAt: event.timestamp,
+            _lastMessageAt: event.timestamp,
+          };
           if (event.eventType === "message_sent") {
             updates._sortTimestamp = event.timestamp;
           }

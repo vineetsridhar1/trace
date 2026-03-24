@@ -16,11 +16,12 @@ ALTER TABLE "Session" ADD COLUMN "sessionStatus" "SessionStatus" NOT NULL DEFAUL
 
 -- Step 6: Backfill agentStatus from old status column
 UPDATE "Session" SET "agentStatus" = CASE
+  WHEN "status"::"text" = 'active' THEN 'active'::"AgentStatus"
   WHEN "status"::"text" = 'completed' THEN 'done'::"AgentStatus"
   WHEN "status"::"text" = 'failed' THEN 'failed'::"AgentStatus"
-  WHEN "status"::"text" IN ('creating', 'pending', 'active', 'paused', 'unreachable', 'needs_input') THEN 'active'::"AgentStatus"
+  WHEN "status"::"text" IN ('creating', 'pending', 'paused', 'unreachable', 'needs_input') THEN 'done'::"AgentStatus"
   WHEN "status"::"text" = 'merged' THEN 'done'::"AgentStatus"
-  ELSE 'active'::"AgentStatus"
+  ELSE 'done'::"AgentStatus"
 END;
 
 -- Step 7: Backfill sessionStatus from old status + prUrl
@@ -28,7 +29,8 @@ UPDATE "Session" SET "sessionStatus" = CASE
   WHEN "status"::"text" = 'merged' THEN 'merged'::"SessionStatus"
   WHEN "status"::"text" = 'needs_input' THEN 'needs_input'::"SessionStatus"
   WHEN "prUrl" IS NOT NULL THEN 'in_review'::"SessionStatus"
-  WHEN "status"::"text" IN ('active', 'paused', 'creating', 'pending', 'unreachable', 'completed') THEN 'in_progress'::"SessionStatus"
+  WHEN "status"::"text" IN ('active', 'paused', 'unreachable', 'completed') THEN 'in_progress'::"SessionStatus"
+  WHEN "status"::"text" IN ('creating', 'pending') THEN 'not_started'::"SessionStatus"
   ELSE 'not_started'::"SessionStatus"
 END;
 

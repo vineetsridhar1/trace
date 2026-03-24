@@ -21,6 +21,8 @@ export const sessionStatusColor: Record<string, string> = {
   in_progress: "text-blue-400",
   needs_input: "text-amber-400",
   in_review: "text-violet-400",
+  failed: "text-destructive",
+  stopped: "text-muted-foreground",
   merged: "text-emerald-400",
 };
 
@@ -29,6 +31,8 @@ export const sessionStatusLabel: Record<string, string> = {
   in_progress: "In Progress",
   needs_input: "Needs Input",
   in_review: "In Review",
+  failed: "Failed",
+  stopped: "Stopped",
   merged: "Merged",
 };
 
@@ -49,15 +53,40 @@ export const connectionLabel: Record<string, string> = {
 // ─── Derived helpers ───
 
 /**
- * Derive the display label/color for a session group from its member statuses.
- * Returns the most urgent session status across all members.
+ * Derive the display lifecycle label for a single session.
  */
-export function getSessionGroupSessionStatus(
+export function getDisplaySessionStatus(
+  sessionStatus: string | undefined,
+  prUrl: string | null | undefined,
+  agentStatus?: string | undefined,
+): string {
+  if (sessionStatus === "merged") return "merged";
+  if (agentStatus === "failed") return "failed";
+  if (agentStatus === "stopped") return "stopped";
+  if (sessionStatus === "needs_input") return "needs_input";
+  if (prUrl) return "in_review";
+  if (sessionStatus === "in_progress") return "in_progress";
+  return "not_started";
+}
+
+/**
+ * Derive the display label/color for a session group from its member statuses.
+ */
+export function getSessionGroupDisplayStatus(
   sessionStatuses: Array<string | null | undefined>,
+  agentStatuses: Array<string | null | undefined>,
+  prUrl: string | null | undefined,
 ): string {
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
-  if (sessionStatuses.some((s) => s === "in_review")) return "in_review";
-  if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
+  if (prUrl) return "in_review";
+  if (
+    agentStatuses.some((s) => s === "active") ||
+    sessionStatuses.some((s) => s === "in_progress")
+  ) {
+    return "in_progress";
+  }
+  if (agentStatuses.some((s) => s === "failed")) return "failed";
+  if (agentStatuses.some((s) => s === "stopped")) return "stopped";
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
   return "not_started";
 }
@@ -73,7 +102,7 @@ export function getSessionGroupAgentStatus(
   if (agentStatuses.some((s) => s === "done")) return "done";
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
-  return "active";
+  return "done";
 }
 
 /** Check if a session's connection is in a disconnected state */
@@ -83,7 +112,10 @@ export function isDisconnected(connection: Record<string, unknown> | null | unde
 }
 
 /** Whether the session has reached a final state and cannot accept further input. */
-export function isTerminalStatus(agentStatus: string | undefined, sessionStatus?: string | undefined): boolean {
+export function isTerminalStatus(
+  agentStatus: string | undefined,
+  sessionStatus?: string | undefined,
+): boolean {
   return agentStatus === "failed" || agentStatus === "stopped" || sessionStatus === "merged";
 }
 

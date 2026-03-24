@@ -162,11 +162,17 @@ export function SessionMessage({
         const error = str(payload?.error);
         return <SystemBadge text={error || "Workspace preparation failed"} />;
       }
-      if (payload?.status === "completed") {
-        return <SystemBadge text="Session completed" />;
+      if (payload?.sessionStatus === "merged") {
+        return <SystemBadge text="Session merged" />;
       }
-      if (payload?.status === "failed") {
+      if (payload?.agentStatus === "failed") {
         return <SystemBadge text="Session failed" />;
+      }
+      if (payload?.agentStatus === "stopped") {
+        return <SystemBadge text="Session stopped" />;
+      }
+      if (payload?.agentStatus === "done") {
+        return <SystemBadge text="Session completed" />;
       }
       return <SystemBadge text="Session terminated" />;
     }

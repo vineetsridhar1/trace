@@ -3,11 +3,7 @@ import { Send, Square } from "lucide-react";
 import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
 import { client } from "../../lib/urql";
 import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
-import {
-  type InteractionMode,
-  MODE_CYCLE,
-  wrapPrompt,
-} from "./interactionModes";
+import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage } from "./sessionStatus";
@@ -16,10 +12,17 @@ import { getModelLabel } from "./modelOptions";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as string | undefined;
+  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
+    | string
+    | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
-  const connection = useEntityField("sessions", sessionId, "connection") as Record<string, unknown> | null | undefined;
-  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as boolean | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const worktreeDeleted = useEntityField("sessions", sessionId, "worktreeDeleted") as
+    | boolean
+    | undefined;
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<InteractionMode>("code");
@@ -59,11 +62,13 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     setMessage("");
     try {
       const wrappedText = wrapPrompt(mode, text);
-      await client.mutation(SEND_SESSION_MESSAGE_MUTATION, {
-        sessionId,
-        text: wrappedText,
-        interactionMode: mode === "code" ? undefined : mode,
-      }).toPromise();
+      await client
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: wrappedText,
+          interactionMode: mode === "code" ? undefined : mode,
+        })
+        .toPromise();
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -78,14 +83,15 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const disabledPlaceholders: Record<string, string> = {
     merged: "Session merged. Follow-up messages are disabled.",
     failed: "Session failed. Follow-up messages are disabled.",
+    stopped: "Session stopped. Follow-up messages are disabled.",
   };
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
     : isActive
       ? "Waiting for response..."
-      : (sessionStatus && disabledPlaceholders[sessionStatus])
-      ?? (agentStatus && disabledPlaceholders[agentStatus])
-      ?? "Send a message...";
+      : ((sessionStatus && disabledPlaceholders[sessionStatus]) ??
+        (agentStatus && disabledPlaceholders[agentStatus]) ??
+        "Send a message...");
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
