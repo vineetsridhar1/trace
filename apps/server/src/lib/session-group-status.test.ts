@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  deriveSessionGroupAgentStatus,
-  deriveSessionGroupStatus,
-} from "./session-group-status.js";
+import { deriveSessionGroupStatus } from "./session-group-status.js";
 
 describe("deriveSessionGroupStatus", () => {
   it("prioritizes needs_input over review and in_progress", () => {
@@ -37,16 +34,5 @@ describe("deriveSessionGroupStatus", () => {
         null,
       ),
     ).toBe("in_progress");
-  });
-});
-
-describe("deriveSessionGroupAgentStatus", () => {
-  it("returns not_started only when every session is not_started", () => {
-    expect(
-      deriveSessionGroupAgentStatus(["not_started", "not_started"]),
-    ).toBe("not_started");
-    expect(
-      deriveSessionGroupAgentStatus(["not_started", "done"]),
-    ).toBe("done");
   });
 });

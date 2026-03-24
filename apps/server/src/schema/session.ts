@@ -6,7 +6,6 @@ import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import {
-  deriveSessionGroupAgentStatus,
   deriveSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
@@ -161,19 +160,6 @@ export const sessionMutations = {
 
 export const sessionTypeResolvers = {
   SessionGroup: {
-    agentStatus: async (
-      group: { id: string; sessions?: SessionGroupStatusSource[] },
-    ) => {
-      const sessions = Array.isArray(group.sessions)
-        ? group.sessions
-        : await prisma.session.findMany({
-            where: { sessionGroupId: group.id },
-            select: { agentStatus: true },
-          });
-      return deriveSessionGroupAgentStatus(
-        sessions.map((session) => session.agentStatus),
-      );
-    },
     status: async (
       group: {
         id: string;

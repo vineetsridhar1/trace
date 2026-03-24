@@ -252,7 +252,6 @@ type ChannelGroup {
 type SessionGroup {
   id: ID!
   name: String!
-  agentStatus: AgentStatus!
   status: SessionGroupStatus!
   channel: Channel
   repo: Repo

@@ -17,7 +17,6 @@ const SESSION_GROUPS_QUERY = gql`
     sessionGroups(channelId: $channelId) {
       id
       name
-      agentStatus
       status
       prUrl
       channel {

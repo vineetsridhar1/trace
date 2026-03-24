@@ -34,16 +34,3 @@ export function deriveSessionGroupStatus(
   if (sessions.some((session) => session?.sessionStatus === "merged")) return "merged";
   return "in_progress";
 }
-
-export function deriveSessionGroupAgentStatus(
-  agentStatuses: Array<AgentStatus | null | undefined>,
-): AgentStatus {
-  if (agentStatuses.some((status) => status === "active")) return "active";
-  if (agentStatuses.some((status) => status === "failed")) return "failed";
-  if (agentStatuses.some((status) => status === "stopped")) return "stopped";
-  if (agentStatuses.length > 0 && agentStatuses.every((status) => status === "not_started")) {
-    return "not_started";
-  }
-  if (agentStatuses.some((status) => status === "done")) return "done";
-  return "done";
-}

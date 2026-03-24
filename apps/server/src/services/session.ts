@@ -10,7 +10,6 @@ import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import {
-  deriveSessionGroupAgentStatus,
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
   type SessionGroupStatusSource,
@@ -121,7 +120,6 @@ type SessionGroupSummary = Prisma.SessionGroupGetPayload<{
 }>;
 
 type SessionGroupSnapshot = SessionGroupSummary & {
-  agentStatus: AgentStatus;
   status: DerivedSessionGroupStatus;
 };
 
@@ -198,7 +196,6 @@ function buildSessionGroupSnapshot(
 ): SessionGroupSnapshot {
   return {
     ...group,
-    agentStatus: deriveSessionGroupAgentStatus(sessions.map((session) => session.agentStatus)),
     status: deriveSessionGroupStatus(sessions, group.prUrl ?? null),
   };
 }

@@ -1077,7 +1077,6 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: 'SessionGroup';
-  agentStatus: AgentStatus;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -1852,7 +1851,6 @@ export type SessionEndpointsResolvers<ContextType = Context, ParentType extends 
 }>;
 
 export type SessionGroupResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionGroup'] = ResolversParentTypes['SessionGroup']> = ResolversObject<{
-  agentStatus?: Resolver<ResolversTypes['AgentStatus'], ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;

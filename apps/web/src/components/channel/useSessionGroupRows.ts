@@ -38,9 +38,7 @@ export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
         const displaySessionStatus =
           (group.status as string | undefined)
           ?? getSessionGroupDisplayStatus(sessionStatuses, agentStatuses, prUrl);
-        const displayAgentStatus =
-          (group.agentStatus as string | undefined)
-          ?? getSessionGroupAgentStatus(agentStatuses);
+        const displayAgentStatus = getSessionGroupAgentStatus(agentStatuses);
 
         return {
           ...group,

@@ -1074,7 +1074,6 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: 'SessionGroup';
-  agentStatus: AgentStatus;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
