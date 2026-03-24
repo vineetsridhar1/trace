@@ -3,7 +3,7 @@ import { Circle, FileCode, TerminalSquare, X } from "lucide-react";
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
-import { agentStatusColor } from "./sessionStatus";
+import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 
 export interface OpenFileTab {
   filePath: string;
@@ -68,7 +68,11 @@ export function GroupTabStrip({
       <div className="native-scrollbar overflow-x-auto">
         <div className="flex min-w-max">
           {sessionTabs.map((session) => {
-            const color = agentStatusColor[session.agentStatus ?? "active"] ?? "text-muted-foreground";
+            const displayAgentStatus = getDisplayAgentStatus(
+              session.agentStatus,
+              session.sessionStatus,
+            );
+            const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
             const isActive = !activeTerminalId && !activeFilePath && selectedSessionId === session.id;
             return (
               <button

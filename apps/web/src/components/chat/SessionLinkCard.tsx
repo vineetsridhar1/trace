@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import {
   agentStatusColor,
+  getDisplayAgentStatus,
   getDisplaySessionStatus,
   sessionStatusLabel,
 } from "../session/sessionStatus";
@@ -21,8 +22,9 @@ export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: Sessio
     | string
     | undefined;
 
-  const color = agentStatusColor[agentStatus ?? "active"] ?? "text-muted-foreground";
   const displayStatus = getDisplaySessionStatus(sessionStatus, null, agentStatus);
+  const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus);
+  const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
   const label = sessionStatusLabel[displayStatus] ?? displayStatus;
 
   if (!name) {

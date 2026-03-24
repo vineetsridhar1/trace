@@ -232,6 +232,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            agentStatus: "active",
+            sessionStatus: "not_started",
             sessionGroupId: "group-1",
             channelId: "channel-1",
             repoId: "repo-1",
@@ -336,6 +338,7 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-2",
+          agentStatus: "done",
           workdir: "/tmp/trace/source",
           branch: "feature/source",
         }),
@@ -352,6 +355,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            agentStatus: "done",
+            sessionStatus: "not_started",
             sessionGroupId: "group-1",
             workdir: "/tmp/trace/source",
             repoId: "repo-1",
@@ -392,6 +397,7 @@ describe("SessionService", () => {
       prismaMock.session.create.mockResolvedValueOnce(
         makeSession({
           id: "session-2",
+          agentStatus: "done",
           workdir: "/tmp/trace/shared",
           branch: "feature/shared",
         }),
@@ -407,6 +413,8 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            agentStatus: "done",
+            sessionStatus: "not_started",
             sessionGroupId: "group-1",
             repoId: "repo-1",
             branch: "feature/shared",

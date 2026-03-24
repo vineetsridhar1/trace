@@ -548,8 +548,8 @@ export class SessionService {
           }),
         );
 
-    // New sessions start with agentStatus "active" — provisioning or ready to run.
-    const initialAgentStatus: AgentStatus = "active";
+    // New sessions stay idle unless a runtime/workspace still needs provisioning.
+    const initialAgentStatus: AgentStatus = needsRuntimeProvisioning ? "active" : "done";
     const initialSessionStatus: SessionStatus = "not_started";
 
     const [session] = await prisma.$transaction(async (tx) => {

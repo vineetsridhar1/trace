@@ -4,6 +4,7 @@ export const agentStatusColor: Record<string, string> = {
   active: "text-blue-400",
   done: "text-green-400",
   failed: "text-destructive",
+  not_started: "text-muted-foreground",
   stopped: "text-muted-foreground",
 };
 
@@ -11,6 +12,7 @@ export const agentStatusLabel: Record<string, string> = {
   active: "Active",
   done: "Done",
   failed: "Failed",
+  not_started: "Not Started",
   stopped: "Stopped",
 };
 
@@ -67,6 +69,25 @@ export function getDisplaySessionStatus(
   if (prUrl) return "in_review";
   if (sessionStatus === "in_progress") return "in_progress";
   return "not_started";
+}
+
+/**
+ * Derive the display activity state for dots/icons on a single session.
+ * This can include the pseudo-state "not_started" even though it is not stored in agentStatus.
+ */
+export function getDisplayAgentStatus(
+  agentStatus: string | undefined,
+  sessionStatus?: string | undefined,
+  prUrl?: string | null | undefined,
+): string {
+  const displaySessionStatus = getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
+
+  if (displaySessionStatus === "failed") return "failed";
+  if (displaySessionStatus === "stopped") return "stopped";
+  if (displaySessionStatus === "not_started") return "not_started";
+  if (agentStatus === "active" || displaySessionStatus === "in_progress") return "active";
+
+  return agentStatus ?? "done";
 }
 
 /**
