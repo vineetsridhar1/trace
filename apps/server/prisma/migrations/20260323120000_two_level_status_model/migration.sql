@@ -38,6 +38,4 @@ ALTER TABLE "Session" DROP COLUMN "status";
 -- Step 9: Drop the old enum
 DROP TYPE "SessionStatus_old";
 
--- Step 10: Remove defaults (Prisma will handle defaults in the schema)
-ALTER TABLE "Session" ALTER COLUMN "agentStatus" DROP DEFAULT;
-ALTER TABLE "Session" ALTER COLUMN "sessionStatus" DROP DEFAULT;
+-- Note: DB defaults are kept — Prisma @default relies on them for omitted fields.

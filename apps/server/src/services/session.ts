@@ -1509,6 +1509,8 @@ export class SessionService {
         sessionId,
         reason: "workspace_failed",
         error,
+        agentStatus: session.agentStatus,
+        sessionStatus: session.sessionStatus,
         worktreeDeleted: true,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -1568,7 +1570,7 @@ export class SessionService {
   async markConnectionRestored(sessionId: string, runtimeInstanceId: string) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { organizationId: true, connection: true, sessionGroupId: true },
+      select: { organizationId: true, agentStatus: true, sessionStatus: true, connection: true, sessionGroupId: true },
     });
     if (!session) return;
 
@@ -1875,9 +1877,10 @@ export class SessionService {
 
     sessionRouter.unbindSession(sessionId);
 
-    await prisma.session.update({
+    const updated = await prisma.session.update({
       where: { id: sessionId },
       data: { agentStatus: "stopped" },
+      select: { sessionStatus: true },
     });
 
     await eventService.create({
@@ -1888,6 +1891,7 @@ export class SessionService {
       payload: {
         sessionId,
         agentStatus: "stopped",
+        sessionStatus: updated.sessionStatus,
       },
       actorType,
       actorId,

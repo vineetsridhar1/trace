@@ -1,10 +1,8 @@
 import { useRef, useState, useEffect } from "react";
 import {
-  Circle,
   Files,
   GitPullRequest,
   History,
-  Loader2,
   Maximize2,
   MessageSquarePlus,
   Minimize2,
@@ -14,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { agentStatusColor, sessionStatusLabel } from "./sessionStatus";
+import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
 import {
   DropdownMenu,
@@ -95,11 +94,7 @@ export function GroupHeader({
 
       {selectedSessionId && (
         <span className={cn("flex shrink-0 items-center gap-1.5 text-xs", agentStatusColor[selectedAgentStatus])}>
-          {selectedAgentStatus === "active" ? (
-            <Loader2 size={10} className="animate-spin" />
-          ) : (
-            <Circle size={6} className="fill-current" />
-          )}
+          <AgentStatusIcon agentStatus={selectedAgentStatus} size={10} />
           {label}
         </span>
       )}
