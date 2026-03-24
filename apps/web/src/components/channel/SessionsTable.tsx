@@ -24,6 +24,7 @@ import {
 import { useSessionGroupRows } from "./useSessionGroupRows";
 
 export function SessionsTable({ channelId }: { channelId: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const gridApiRef = useRef<GridApi<SessionGroupRow> | null>(null);
   const hasMeasuredRef = useRef(false);
   const hasAnimatedModeRef = useRef(false);
@@ -39,20 +40,26 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const filteredGroups = useSessionGroupRows(channelId);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const el = containerRef.current;
+    if (!el) return;
 
-    const media = window.matchMedia(`(max-width: ${COMPACT_BREAKPOINT - 1}px)`);
-    const updateCompact = () => {
-      setIsCompact(media.matches);
+    const updateCompact = (width: number) => {
+      setIsCompact(width < COMPACT_BREAKPOINT);
       if (!hasMeasuredRef.current) {
         hasMeasuredRef.current = true;
         fadeControls.set({ opacity: 1 });
       }
     };
 
-    media.addEventListener("change", updateCompact);
-    updateCompact();
-    return () => media.removeEventListener("change", updateCompact);
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        updateCompact(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(el);
+    updateCompact(el.getBoundingClientRect().width);
+    return () => observer.disconnect();
   }, [fadeControls]);
 
   useEffect(() => {
@@ -137,7 +144,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
   return (
-    <div className="relative h-full overflow-hidden">
+    <div ref={containerRef} className="relative h-full overflow-hidden">
       <motion.div
         className="h-full"
         layout
