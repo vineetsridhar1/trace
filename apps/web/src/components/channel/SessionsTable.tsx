@@ -12,7 +12,7 @@ import type {
 import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel } from "../session/sessionStatus";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
-import { motion } from "framer-motion";
+import { motion, useAnimationControls } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { COMPACT_BREAKPOINT, FILTER_STORAGE_KEY_PREFIX, collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
 import {
@@ -25,8 +25,11 @@ import { useSessionGroupRows } from "./useSessionGroupRows";
 
 export function SessionsTable({ channelId }: { channelId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const hasMeasuredRef = useRef(false);
   const [isCompact, setIsCompact] = useState(false);
+  const [displayCompact, setDisplayCompact] = useState(false);
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
+  const fadeControls = useAnimationControls();
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
@@ -38,15 +41,42 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+
+    const applyCompact = (nextCompact: boolean) => {
+      setIsCompact(nextCompact);
+      if (!hasMeasuredRef.current) {
+        hasMeasuredRef.current = true;
+        setDisplayCompact(nextCompact);
+        fadeControls.set({ opacity: 1 });
+      }
+    };
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setIsCompact(entry.contentRect.width < COMPACT_BREAKPOINT);
+        applyCompact(entry.contentRect.width < COMPACT_BREAKPOINT);
       }
     });
     observer.observe(el);
-    setIsCompact(el.getBoundingClientRect().width < COMPACT_BREAKPOINT);
+    applyCompact(el.getBoundingClientRect().width < COMPACT_BREAKPOINT);
     return () => observer.disconnect();
-  }, []);
+  }, [fadeControls]);
+
+  useEffect(() => {
+    if (!hasMeasuredRef.current || displayCompact === isCompact) return;
+
+    let cancelled = false;
+    void (async () => {
+      await fadeControls.start({ opacity: 0, transition: { duration: 0.08 } });
+      if (cancelled) return;
+      setDisplayCompact(isCompact);
+      fadeControls.set({ opacity: 0 });
+      await fadeControls.start({ opacity: 1, transition: { duration: 0.08 } });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayCompact, fadeControls, isCompact]);
 
   useEffect(() => {
     useSessionsGridTable.getState().setRows(filteredGroups);
@@ -90,16 +120,22 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     channelId,
     filterStorageKey,
     getContextMenuItems,
-    isCompact,
+    isCompact: displayCompact,
   });
-  const columnDefs = isCompact ? compactSessionColumns : desktopSessionColumns;
+  const columnDefs = displayCompact ? compactSessionColumns : desktopSessionColumns;
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
   return (
     <div ref={containerRef} className="relative h-full overflow-hidden">
-      <motion.div className="h-full" layout transition={{ duration: 0.12 }}>
+      <motion.div
+        className="h-full"
+        layout
+        initial={{ opacity: 1 }}
+        animate={fadeControls}
+        transition={{ duration: 0.12 }}
+      >
         <SessionsGridTable
-          className={isCompact ? "sessions-grid-compact h-full" : "h-full"}
+          className={displayCompact ? "sessions-grid-compact h-full" : "h-full"}
           agGridOptions={agGridOptions}
           columnDefs={columnDefs}
           selectedRowIds={selectedRowIds}
