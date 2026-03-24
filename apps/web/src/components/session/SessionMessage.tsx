@@ -162,6 +162,9 @@ export function SessionMessage({
         const error = str(payload?.error);
         return <SystemBadge text={error || "Workspace preparation failed"} />;
       }
+      if (payload?.reason === "manual_stop") {
+        return <SystemBadge text="Session stopped" />;
+      }
       if (payload?.sessionStatus === "merged") {
         return <SystemBadge text="Session merged" />;
       }

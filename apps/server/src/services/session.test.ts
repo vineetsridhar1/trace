@@ -531,6 +531,45 @@ describe("SessionService", () => {
     });
   });
 
+  describe("dismiss", () => {
+    it("stops the current run without making the session terminal", async () => {
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({ organizationId: "org-1" })
+        .mockResolvedValueOnce(
+          makeSession({
+            agentStatus: "done",
+            sessionStatus: "in_progress",
+          }),
+        );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+        }),
+      );
+
+      await service.dismiss("session-1", "user", "user-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: { agentStatus: "done" },
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_terminated",
+          payload: expect.objectContaining({
+            sessionId: "session-1",
+            agentStatus: "done",
+            sessionStatus: "in_progress",
+            reason: "manual_stop",
+          }),
+        }),
+      );
+    });
+  });
+
   describe("workspaceReady", () => {
     it("keeps a session in_progress while a queued command is waiting for delivery", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({

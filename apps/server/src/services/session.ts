@@ -833,7 +833,14 @@ export class SessionService {
   }
 
   async dismiss(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.terminateWithStatus(id, "stopped", "Session dismissed", actorType, actorId);
+    return this.terminateWithStatus(
+      id,
+      "done",
+      "Session stopped",
+      actorType,
+      actorId,
+      { reason: "manual_stop" },
+    );
   }
 
   private async terminateWithStatus(
@@ -842,6 +849,7 @@ export class SessionService {
     resolution: string,
     actorType: ActorType,
     actorId: string,
+    payloadExtras?: Record<string, unknown>,
   ) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id },
@@ -853,7 +861,15 @@ export class SessionService {
       orgId: session.organizationId,
       resolution,
     });
-    return this.transition(id, "terminate", targetAgentStatus, "session_terminated", actorType, actorId);
+    return this.transition(
+      id,
+      "terminate",
+      targetAgentStatus,
+      "session_terminated",
+      actorType,
+      actorId,
+      payloadExtras,
+    );
   }
 
   async delete(id: string, actorType: ActorType = "system", actorId: string = "system") {
@@ -967,6 +983,7 @@ export class SessionService {
     eventType: EventType,
     actorType: ActorType,
     actorId: string,
+    payloadExtras?: Record<string, unknown>,
   ) {
     const current = await prisma.session.findUniqueOrThrow({
       where: { id },
@@ -997,7 +1014,12 @@ export class SessionService {
       scopeType: "session",
       scopeId: id,
       eventType,
-      payload: { sessionId: id, agentStatus: newAgentStatus, sessionStatus: session.sessionStatus },
+      payload: {
+        sessionId: id,
+        agentStatus: newAgentStatus,
+        sessionStatus: session.sessionStatus,
+        ...(payloadExtras ?? {}),
+      },
       actorType,
       actorId,
     });
