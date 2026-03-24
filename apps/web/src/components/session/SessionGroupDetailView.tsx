@@ -24,6 +24,7 @@ import { FileOpenContext } from "./FileOpenContext";
 import { MonacoFileViewer } from "./MonacoFileViewer";
 import {
   getSessionGroupDisplayStatus,
+  isGroupReviewAndActive,
   isTerminalStatus,
 } from "./sessionStatus";
 import type { Terminal } from "@trace/gql";
@@ -204,10 +205,9 @@ export function SessionGroupDetailView({
     ?? null;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
-  const selectedStatus = getSessionGroupDisplayStatus(
-    groupSessions.map((session) => session.status),
-    groupPrUrl,
-  );
+  const sessionStatuses = groupSessions.map((session) => session.status);
+  const selectedStatus = getSessionGroupDisplayStatus(sessionStatuses, groupPrUrl);
+  const reviewAndActive = isGroupReviewAndActive(sessionStatuses, groupPrUrl);
 
   const terminalAllowed = (() => {
     if (!selectedSession) return false;
@@ -352,6 +352,7 @@ export function SessionGroupDetailView({
       <GroupHeader
         groupName={groupName as string | undefined}
         selectedStatus={selectedStatus}
+        reviewAndActive={reviewAndActive}
         selectedSessionId={selectedSession?.id ?? null}
         groupPrUrl={groupPrUrl}
         panelMode={panelMode}
