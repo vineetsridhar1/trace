@@ -3,7 +3,7 @@ import { Circle, Plus } from "lucide-react";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "../../lib/mutations";
 import { useEntityStore } from "../../stores/entity";
-import { navigateToSession } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId } from "../../lib/session-group";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
@@ -14,6 +14,7 @@ interface SessionHistoryProps {
 
 export function SessionHistory({ sessionId }: SessionHistoryProps) {
   const sessions = useEntityStore((s) => s.sessions);
+  const openSessionTab = useUIStore((s) => s.openSessionTab);
   const [creatingFromId, setCreatingFromId] = useState<string | null>(null);
 
   const currentSession = sessions[sessionId];
@@ -55,6 +56,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
 
         const newSessionId = result.data?.startSession?.id;
         if (newSessionId) {
+          openSessionTab(sessionGroupId, newSessionId);
           navigateToSession(
             (source.channel as { id: string } | null | undefined)?.id ?? null,
             sessionGroupId,
@@ -65,7 +67,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
         setCreatingFromId(null);
       }
     },
-    [sessionGroupId, sessions],
+    [openSessionTab, sessionGroupId, sessions],
   );
 
   if (!sessionGroupId || groupSessions.length === 0) {
@@ -93,7 +95,10 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           >
             <button
               type="button"
-              onClick={() => navigateToSession(channelId, sessionGroupId, entry.id)}
+              onClick={() => {
+                openSessionTab(sessionGroupId, entry.id);
+                navigateToSession(channelId, sessionGroupId, entry.id);
+              }}
               className="flex min-w-0 flex-1 items-center gap-2 text-left"
             >
               <Circle

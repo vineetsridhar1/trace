@@ -22,6 +22,10 @@ interface UIState {
   refreshTick: number;
   triggerRefresh: () => void;
   lastSelectedSessionIdsByGroup: Record<string, string>;
+  openSessionTabsByGroup: Record<string, string[]>;
+  openSessionTab: (groupId: string, sessionId: string) => void;
+  closeSessionTab: (groupId: string, sessionId: string) => void;
+  initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   restoreLastVisited: (tab: "dm" | "main") => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
@@ -135,8 +139,62 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeThreadId: null,
   refreshTick: 0,
   lastSelectedSessionIdsByGroup: {},
+  openSessionTabsByGroup: {},
   unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
+
+  openSessionTab: (groupId, sessionId) => {
+    set((s) => {
+      const existing = s.openSessionTabsByGroup[groupId] ?? [];
+      if (existing.includes(sessionId)) return s;
+      return {
+        openSessionTabsByGroup: {
+          ...s.openSessionTabsByGroup,
+          [groupId]: [...existing, sessionId],
+        },
+      };
+    });
+  },
+
+  closeSessionTab: (groupId, sessionId) => {
+    const state = get();
+    const existing = state.openSessionTabsByGroup[groupId] ?? [];
+    if (existing.length <= 1) return;
+    const idx = existing.indexOf(sessionId);
+    if (idx === -1) return;
+    const next = existing.filter((id) => id !== sessionId);
+    const updates: Partial<UIState> = {
+      openSessionTabsByGroup: {
+        ...state.openSessionTabsByGroup,
+        [groupId]: next,
+      },
+    };
+    if (state.activeSessionId === sessionId) {
+      const adjacentIdx = Math.min(idx, next.length - 1);
+      const adjacentId = next[adjacentIdx];
+      updates.activeSessionId = adjacentId;
+      updates.lastSelectedSessionIdsByGroup = {
+        ...state.lastSelectedSessionIdsByGroup,
+        [groupId]: adjacentId,
+      };
+      const channelId = resolveChannelIdForSessionGroup(groupId, state.activeChannelId);
+      persistActiveSessionNav(groupId, adjacentId);
+      pushNav(channelId, groupId, adjacentId);
+    }
+    set(updates);
+  },
+
+  initSessionTabs: (groupId, sessionIds) => {
+    set((s) => {
+      if (s.openSessionTabsByGroup[groupId]) return s;
+      return {
+        openSessionTabsByGroup: {
+          ...s.openSessionTabsByGroup,
+          [groupId]: sessionIds,
+        },
+      };
+    });
+  },
 
   setActivePage: (page) => {
     set({ activePage: page });
