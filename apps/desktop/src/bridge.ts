@@ -5,7 +5,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import type { BridgeClient as IBridgeClient, BridgeCommand, BridgeMessage, CodingToolAdapter, GitCheckpointBridgePayload, GitCheckpointTrigger } from "@trace/shared";
-import { extractGitCheckpointTrigger, parseBranchOutput, handleListFiles, handleReadFile, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
+import { extractGitToolUsePending, extractGitToolResultTrigger, parseBranchOutput, handleListFiles, handleReadFile, GIT_SHOW_ARGS, GIT_DIFF_TREE_ARGS, parseGitShowOutput } from "@trace/shared";
 import { ClaudeCodeAdapter, CodexAdapter } from "@trace/shared/adapters";
 import { readConfig, getOrCreateInstanceId } from "./config.js";
 import { createWorktree, removeWorktree } from "./worktree.js";
@@ -41,6 +41,8 @@ export class BridgeClient implements IBridgeClient {
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
+  /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
+  private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
   private terminalManager: TerminalManager;
 
   constructor(serverUrl: string) {
@@ -208,8 +210,20 @@ export class BridgeClient implements IBridgeClient {
       onOutput: (output) => {
         if (this.adapters.get(sessionId) !== activeAdapter) return;
         this.send({ type: "session_output", sessionId, data: output });
-        const gitTrigger = extractGitCheckpointTrigger(output);
+
+        // Phase 1: collect tool_use blocks whose command is a git commit/push
+        const newPending = extractGitToolUsePending(output);
+        if (newPending.size > 0) {
+          const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
+          for (const [id, val] of newPending) sessionPending.set(id, val);
+          this.pendingGitToolUses.set(sessionId, sessionPending);
+        }
+
+        // Phase 2: fire checkpoint when the matching tool_result arrives
+        const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
+        const gitTrigger = extractGitToolResultTrigger(output, sessionPending);
         if (gitTrigger) {
+          if (gitTrigger.toolUseId) sessionPending.delete(gitTrigger.toolUseId);
           inspectGitCheckpoint(workdir, gitTrigger.trigger, gitTrigger.command)
             .then((checkpoint) => {
               if (this.adapters.get(sessionId) !== activeAdapter) return;
@@ -326,6 +340,7 @@ export class BridgeClient implements IBridgeClient {
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
+        this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
         // Clean up worktree if one exists
