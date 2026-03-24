@@ -56,6 +56,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
 
         const newSessionId = result.data?.startSession?.id;
         if (newSessionId) {
+          openSessionTab(sessionGroupId, newSessionId);
           navigateToSession(
             (source.channel as { id: string } | null | undefined)?.id ?? null,
             sessionGroupId,
@@ -66,7 +67,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
         setCreatingFromId(null);
       }
     },
-    [sessionGroupId, sessions],
+    [openSessionTab, sessionGroupId, sessions],
   );
 
   if (!sessionGroupId || groupSessions.length === 0) {

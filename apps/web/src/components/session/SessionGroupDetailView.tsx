@@ -227,7 +227,7 @@ export function SessionGroupDetailView({
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
   const selectedSession =
-    sessionTabs.find((session) => session.id === activeSessionId) ?? sessionsByRecency[0] ?? null;
+    sessionTabs.find((session) => session.id === activeSessionId) ?? sessionTabs[0] ?? null;
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
   const selectedSessionStatus = selectedSession
