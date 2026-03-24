@@ -1,5 +1,5 @@
 import { Circle, Loader2 } from "lucide-react";
-import type { ColDef, ColumnState, ICellRendererParams } from "ag-grid-community";
+import type { ColDef, ColumnState, GridApi, ICellRendererParams } from "ag-grid-community";
 import { createTable } from "../ui/table";
 import { statusColor } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
@@ -189,6 +189,16 @@ export function getSessionsColumnState(isCompact: boolean): ColumnState[] {
     { colId: SESSION_COLUMN_IDS.createdBy, hide: false },
     { colId: SESSION_COLUMN_IDS.lastActivityAt, hide: false },
   ];
+}
+
+// Keep one stable AG Grid column set and switch visibility explicitly. Swapping
+// column definitions caused AG Grid to retain the compact visibility state when
+// returning to desktop mode.
+export function applySessionsColumnMode(api: GridApi<SessionGroupRow>, isCompact: boolean) {
+  api.applyColumnState({
+    state: getSessionsColumnState(isCompact),
+    applyOrder: true,
+  });
 }
 
 export const { Table: SessionsGridTable, useTable: useSessionsGridTable } = createTable<SessionGroupRow>({

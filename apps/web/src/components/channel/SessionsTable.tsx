@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Circle, Loader2 } from "lucide-react";
 import type {
   DefaultMenuItem,
@@ -17,7 +17,7 @@ import { motion, useAnimationControls } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { COMPACT_BREAKPOINT, FILTER_STORAGE_KEY_PREFIX, collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
 import {
-  getSessionsColumnState,
+  applySessionsColumnMode,
   SessionsGridTable,
   useSessionsGridTable,
 } from "./sessions-table-columns";
@@ -26,11 +26,8 @@ import { useSessionGroupRows } from "./useSessionGroupRows";
 export function SessionsTable({ channelId }: { channelId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridApiRef = useRef<GridApi<SessionGroupRow> | null>(null);
-  const hasMeasuredRef = useRef(false);
-  const hasAnimatedModeRef = useRef(false);
-  const [isCompact, setIsCompact] = useState(false);
+  const { fadeControls, isCompact } = useCompactTableMode(containerRef);
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
-  const fadeControls = useAnimationControls();
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
@@ -40,59 +37,18 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   const filteredGroups = useSessionGroupRows(channelId);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const updateCompact = (width: number) => {
-      setIsCompact(width < COMPACT_BREAKPOINT);
-      if (!hasMeasuredRef.current) {
-        hasMeasuredRef.current = true;
-        fadeControls.set({ opacity: 1 });
-      }
-    };
-
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        updateCompact(entry.contentRect.width);
-      }
-    });
-
-    observer.observe(el);
-    updateCompact(el.getBoundingClientRect().width);
-    return () => observer.disconnect();
-  }, [fadeControls]);
-
-  useEffect(() => {
-    if (!hasMeasuredRef.current) return;
-    if (!hasAnimatedModeRef.current) {
-      hasAnimatedModeRef.current = true;
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      if (cancelled) return;
-      fadeControls.set({ opacity: 0 });
-      await fadeControls.start({ opacity: 1, transition: { duration: 0.12 } });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fadeControls, isCompact]);
-
-  useEffect(() => {
     useSessionsGridTable.getState().setRows(filteredGroups);
   }, [filteredGroups]);
+
+  const applyColumnMode = useCallback((api: GridApi<SessionGroupRow>) => {
+    applySessionsColumnMode(api, isCompact);
+  }, [isCompact]);
 
   useEffect(() => {
     const api = gridApiRef.current;
     if (!api) return;
-    api.applyColumnState({
-      state: getSessionsColumnState(isCompact),
-      applyOrder: true,
-    });
-  }, [isCompact]);
+    applyColumnMode(api);
+  }, [applyColumnMode]);
 
   const getContextMenuItems = useCallback(
     (params: GetContextMenuItemsParams<SessionGroupRow>): (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[] => {
@@ -135,10 +91,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     isCompact,
     onGridReady: (event) => {
       gridApiRef.current = event.api;
-      event.api.applyColumnState({
-        state: getSessionsColumnState(isCompact),
-        applyOrder: true,
-      });
+      applyColumnMode(event.api);
     },
   });
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
@@ -171,6 +124,57 @@ export function SessionsTable({ channelId }: { channelId: string }) {
       )}
     </div>
   );
+}
+
+function useCompactTableMode(containerRef: RefObject<HTMLDivElement | null>) {
+  const hasMeasuredRef = useRef(false);
+  const hasAnimatedModeRef = useRef(false);
+  const [isCompact, setIsCompact] = useState(false);
+  const fadeControls = useAnimationControls();
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const updateCompact = (width: number) => {
+      setIsCompact(width < COMPACT_BREAKPOINT);
+      if (!hasMeasuredRef.current) {
+        hasMeasuredRef.current = true;
+        fadeControls.set({ opacity: 1 });
+      }
+    };
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        updateCompact(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(el);
+    updateCompact(el.getBoundingClientRect().width);
+    return () => observer.disconnect();
+  }, [containerRef, fadeControls]);
+
+  useEffect(() => {
+    if (!hasMeasuredRef.current) return;
+    if (!hasAnimatedModeRef.current) {
+      hasAnimatedModeRef.current = true;
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      if (cancelled) return;
+      fadeControls.set({ opacity: 0 });
+      await fadeControls.start({ opacity: 1, transition: { duration: 0.12 } });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fadeControls, isCompact]);
+
+  return { fadeControls, isCompact };
 }
 
 function useGridOptions({
