@@ -1,5 +1,3 @@
-import type { AgentStatus, SessionStatus } from "@trace/gql";
-
 // ─── Agent Status (what the coding agent is doing) ───
 
 export const agentStatusColor: Record<string, string> = {
@@ -58,9 +56,9 @@ export function getSessionGroupSessionStatus(
   sessionStatuses: Array<string | null | undefined>,
 ): string {
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
-  if (sessionStatuses.some((s) => s === "merged")) return "merged";
   if (sessionStatuses.some((s) => s === "in_review")) return "in_review";
   if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
+  if (sessionStatuses.some((s) => s === "merged")) return "merged";
   return "not_started";
 }
 

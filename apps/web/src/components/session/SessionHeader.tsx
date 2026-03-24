@@ -2,8 +2,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
   History,
-  Circle,
-  Loader2,
   WifiOff,
   Monitor,
   Cloud,
@@ -12,8 +10,6 @@ import {
   Maximize2,
   Minimize2,
   X,
-  XCircle,
-  StopCircle,
 } from "lucide-react";
 import { useEntityField, useEntityStore } from "../../stores/entity";
 import { useUIStore } from "../../stores/ui";
@@ -21,28 +17,13 @@ import { useShallow } from "zustand/react/shallow";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import {
   agentStatusColor,
-  sessionStatusColor,
   sessionStatusLabel,
   isDisconnected,
   getSessionGroupSessionStatus,
   getSessionGroupAgentStatus,
 } from "./sessionStatus";
+import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
-
-function AgentStatusIcon({ agentStatus, size }: { agentStatus: string; size: number }) {
-  switch (agentStatus) {
-    case "active":
-      return <Loader2 size={size} className="animate-spin" />;
-    case "done":
-      return <Circle size={size - 4} className="fill-current" />;
-    case "failed":
-      return <XCircle size={size} />;
-    case "stopped":
-      return <StopCircle size={size} />;
-    default:
-      return <Circle size={size - 4} className="fill-current" />;
-  }
-}
 
 export function SessionHeader({
   sessionId,
