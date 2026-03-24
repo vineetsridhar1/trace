@@ -44,7 +44,7 @@ export function CompactSessionsList({
             </div>
             {!collapsedByDefault.has(status) &&
               items.map((row) => {
-                const rowColor = sessionStatusColor[status];
+                const rowColor = sessionStatusColor[status] ?? "text-muted-foreground";
                 const isActive = row.id === activeSessionGroupId;
                 return (
                   <button
