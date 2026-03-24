@@ -12,7 +12,7 @@ import type {
 import { createTable } from "../ui/table";
 import { useEntityStore } from "../../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
-import { navigateToSessionGroup } from "../../stores/ui";
+import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { getSessionGroupChannelId } from "../../lib/session-group";
 import {
   getSessionGroupDisplayStatus,
@@ -172,7 +172,8 @@ function MobileSessionsList({
   channelId: string;
   rows: SessionGroupRow[];
 }) {
-  // Group rows by status
+  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
+
   const grouped = useMemo(() => {
     const groups: Record<string, SessionGroupRow[]> = {};
     for (const row of rows) {
@@ -208,11 +209,12 @@ function MobileSessionsList({
             {!collapsedByDefault.has(status) &&
               items.map((row) => {
                 const rowColor = statusColor[row.status ?? "active"];
+                const isActive = row.id === activeSessionGroupId;
                 return (
                   <button
                     key={row.id}
                     type="button"
-                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 active:bg-muted"
+                    className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 active:bg-muted ${isActive ? "bg-muted" : ""}`}
                     onClick={() => {
                       const latestSessionId = row.latestSession?.id ?? null;
                       navigateToSessionGroup(channelId, row.id, latestSessionId);
@@ -452,7 +454,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.1 }}
           >
             <MobileSessionsList channelId={channelId} rows={filteredGroups} />
           </motion.div>
@@ -463,7 +465,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.1 }}
           >
             <Table className="h-full" agGridOptions={agGridOptions} />
           </motion.div>
