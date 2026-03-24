@@ -14,7 +14,7 @@ import {
   type InteractionMode,
   MODE_CONFIG,
 } from "./interactionModes";
-import { getModelsForTool, getDefaultModel } from "./modelOptions";
+import { getModelsForTool, getDefaultModel, getModelContextWindowTokens } from "./modelOptions";
 import { cn } from "../../lib/utils";
 
 const UPDATE_SESSION_CONFIG_MUTATION = gql`
@@ -50,13 +50,20 @@ export function SessionInputOptions({
   const handleToolChange = useCallback(async (newTool: string | null) => {
     if (!newTool) return;
     const newDefault = getDefaultModel(newTool);
-    useEntityStore.getState().patch("sessions", sessionId, { tool: newTool as CodingTool, model: newDefault ?? null });
+    useEntityStore.getState().patch("sessions", sessionId, {
+      tool: newTool as CodingTool,
+      model: newDefault ?? null,
+      modelContextWindowTokens: newDefault ? getModelContextWindowTokens(newDefault) : null,
+    });
     await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, tool: newTool, model: newDefault }).toPromise();
   }, [sessionId]);
 
   const handleModelChange = useCallback(async (newModel: string | null) => {
     if (!newModel) return;
-    useEntityStore.getState().patch("sessions", sessionId, { model: newModel });
+    useEntityStore.getState().patch("sessions", sessionId, {
+      model: newModel,
+      modelContextWindowTokens: getModelContextWindowTokens(newModel),
+    });
     await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel }).toPromise();
   }, [sessionId]);
 

@@ -24,6 +24,12 @@ import {
 import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
 
+function formatTokenCount(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}k`;
+  return `${value}`;
+}
+
 export function SessionHeader({
   sessionId,
   onToggleTerminal,
@@ -41,6 +47,16 @@ export function SessionHeader({
     | string
     | undefined;
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const estimatedContextTokens = useEntityField(
+    "sessions",
+    sessionId,
+    "estimatedContextTokens",
+  ) as number | undefined;
+  const modelContextWindowTokens = useEntityField(
+    "sessions",
+    sessionId,
+    "modelContextWindowTokens",
+  ) as number | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -66,6 +82,18 @@ export function SessionHeader({
   const runtimeDisplayLabel = isCloud ? "Cloud" : (runtimeLabel ?? null);
   const displaySessionStatus = getDisplaySessionStatus(sessionStatus, prUrl, agentStatus);
   const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, prUrl);
+  const contextUtilization =
+    typeof estimatedContextTokens === "number"
+    && typeof modelContextWindowTokens === "number"
+    && modelContextWindowTokens > 0
+      ? estimatedContextTokens / modelContextWindowTokens
+      : null;
+  const contextBadgeClass =
+    contextUtilization != null && contextUtilization >= 0.9
+      ? "bg-destructive/10 text-destructive"
+      : contextUtilization != null && contextUtilization >= 0.75
+        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        : "bg-surface-elevated text-muted-foreground";
 
   const closeHistory = useCallback(() => setShowHistory(false), []);
 
@@ -129,6 +157,17 @@ export function SessionHeader({
         <span className="flex shrink-0 items-center gap-1 rounded-md bg-surface-elevated px-2 py-1 text-xs text-muted-foreground">
           {isCloud ? <Cloud size={12} /> : <Monitor size={12} />}
           {runtimeDisplayLabel}
+        </span>
+      )}
+
+      {typeof estimatedContextTokens === "number" && (
+        <span
+          className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs ${contextBadgeClass}`}
+          title="Estimated session context size versus the selected model's context window."
+        >
+          {modelContextWindowTokens
+            ? `${formatTokenCount(estimatedContextTokens)} / ${formatTokenCount(modelContextWindowTokens)} ctx`
+            : `${formatTokenCount(estimatedContextTokens)} ctx`}
         </span>
       )}
 

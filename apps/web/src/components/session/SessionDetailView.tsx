@@ -26,6 +26,9 @@ const SESSION_DETAIL_QUERY = gql`
       sessionStatus
       tool
       model
+      estimatedContextTokens
+      modelContextWindowTokens
+      contextWindowUtilization
       hosting
       repo {
         id
