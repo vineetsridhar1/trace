@@ -70,3 +70,27 @@
   overscroll-behavior: contain;
   touch-action: pan-y;
 }
+
+.sessions-grid-compact.ag-theme-quartz {
+  --ag-font-size: 0.8125rem;
+  --ag-grid-size: 5px;
+}
+
+.sessions-grid-compact .ag-header {
+  border-bottom: 1px solid var(--th-edge);
+}
+
+.sessions-grid-compact .ag-header-cell {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sessions-grid-compact .ag-cell {
+  padding-inline: 0.75rem;
+}
+
+.sessions-grid-compact .ag-cell-value,
+.sessions-grid-compact .ag-full-width-row .ag-cell-wrapper.ag-row-group {
+  width: 100%;
+}

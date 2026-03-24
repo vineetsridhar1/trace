@@ -32,17 +32,21 @@ export const createTable = <T extends { id: string }>({
   const TableComponent = ({
     agGridOptions = {},
     className,
+    columnDefs,
     selectedRowIds,
   }: {
     agGridOptions?: GridOptions<T>;
     className?: string;
+    columnDefs?: GridOptions<T>['columnDefs'];
     selectedRowIds?: string[];
   }) => {
     const rows = useTable(state => state.rows);
-    const columns = useTable(state => state.columns);
+    const storedColumns = useTable(state => state.columns);
     const loading = useTable(state => state.loading);
 
     if (loading) return null;
+
+    const resolvedColumns = columnDefs ?? storedColumns;
 
     // Assert the lazy component to the concrete T — safe because AgGridTableGrid
     // is generic and we control all call sites through createTable<T>.
@@ -51,6 +55,7 @@ export const createTable = <T extends { id: string }>({
       rows: T[];
       columns: GridOptions<T>['columnDefs'];
       className?: string;
+      columnDefs?: GridOptions<T>['columnDefs'];
       selectedRowIds?: string[];
       agGridOptions?: GridOptions<T>;
     }>;
@@ -60,7 +65,7 @@ export const createTable = <T extends { id: string }>({
         <Grid
           id={id}
           rows={rows}
-          columns={columns}
+          columns={resolvedColumns}
           className={className}
           selectedRowIds={selectedRowIds}
           agGridOptions={agGridOptions}

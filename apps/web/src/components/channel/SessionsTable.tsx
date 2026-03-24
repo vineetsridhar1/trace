@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Circle, Loader2 } from "lucide-react";
 import type {
+  DefaultMenuItem,
   FilterChangedEvent,
   GetContextMenuItemsParams,
   GridReadyEvent,
@@ -8,19 +9,24 @@ import type {
   IsGroupOpenByDefaultParams,
   MenuItemDef,
 } from "ag-grid-community";
-import { navigateToSessionGroup } from "../../stores/ui";
+import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { statusColor, statusLabel } from "../session/sessionStatus";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 import { AnimatePresence, motion } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { COMPACT_BREAKPOINT, FILTER_STORAGE_KEY_PREFIX, collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
-import { SessionsGridTable, useSessionsGridTable } from "./sessions-table-columns";
+import {
+  compactSessionColumns,
+  desktopSessionColumns,
+  SessionsGridTable,
+  useSessionsGridTable,
+} from "./sessions-table-columns";
 import { useSessionGroupRows } from "./useSessionGroupRows";
-import { CompactSessionsList } from "./CompactSessionsList";
 
 export function SessionsTable({ channelId }: { channelId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isCompact, setIsCompact] = useState(false);
+  const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
@@ -47,7 +53,7 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   }, [filteredGroups]);
 
   const getContextMenuItems = useCallback(
-    (params: GetContextMenuItemsParams<SessionGroupRow>): (MenuItemDef<SessionGroupRow> | string)[] => {
+    (params: GetContextMenuItemsParams<SessionGroupRow>): (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[] => {
       if (!params.node?.data) return [];
       const group = params.node.data;
       const sessionId = group.latestSession?.id;
@@ -80,34 +86,33 @@ export function SessionsTable({ channelId }: { channelId: string }) {
 
   const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}`;
 
-  const agGridOptions = useGridOptions({ channelId, filterStorageKey, getContextMenuItems });
+  const agGridOptions = useGridOptions({
+    channelId,
+    filterStorageKey,
+    getContextMenuItems,
+    isCompact,
+  });
+  const columnDefs = isCompact ? compactSessionColumns : desktopSessionColumns;
+  const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
   return (
     <div ref={containerRef} className="relative h-full overflow-hidden">
-      <AnimatePresence mode="wait">
-        {isCompact ? (
-          <motion.div
-            key="compact"
-            className="h-full"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.1 }}
-          >
-            <CompactSessionsList channelId={channelId} rows={filteredGroups} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="table"
-            className="h-full"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.1 }}
-          >
-            <SessionsGridTable className="h-full" agGridOptions={agGridOptions} />
-          </motion.div>
-        )}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={isCompact ? "compact" : "table"}
+          className="h-full"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.12 }}
+        >
+          <SessionsGridTable
+            className={isCompact ? "sessions-grid-compact h-full" : "h-full"}
+            agGridOptions={agGridOptions}
+            columnDefs={columnDefs}
+            selectedRowIds={selectedRowIds}
+          />
+        </motion.div>
       </AnimatePresence>
       {deleteTarget && (
         <DeleteSessionGroupDialog
@@ -128,10 +133,12 @@ function useGridOptions({
   channelId,
   filterStorageKey,
   getContextMenuItems,
+  isCompact,
 }: {
   channelId: string;
   filterStorageKey: string;
-  getContextMenuItems: (params: GetContextMenuItemsParams<SessionGroupRow>) => (MenuItemDef<SessionGroupRow> | string)[];
+  getContextMenuItems: (params: GetContextMenuItemsParams<SessionGroupRow>) => (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[];
+  isCompact: boolean;
 }) {
   return {
     onRowClicked: (event: {
@@ -165,12 +172,12 @@ function useGridOptions({
         localStorage.setItem(filterStorageKey, JSON.stringify(model));
       }
     },
-    rowHeight: 40,
-    headerHeight: 32,
+    rowHeight: isCompact ? 68 : 40,
+    headerHeight: isCompact ? 36 : 32,
     suppressCellFocus: true,
     getContextMenuItems,
     getRowHeight: (params: { node: { group?: boolean } }) => {
-      if (params.node.group) return 40;
+      if (params.node.group) return isCompact ? 36 : 40;
       return undefined;
     },
     groupDisplayType: "groupRows" as const,
