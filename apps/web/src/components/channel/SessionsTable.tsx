@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Loader2 } from "lucide-react";
 import type {
   ColDef,
@@ -23,7 +23,8 @@ import {
 import { timeAgo } from "../../lib/utils";
 import { UserProfileChatCard } from "../shared/UserProfileChatCard";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
-import { useIsMobile } from "../../hooks/use-mobile";
+
+const COMPACT_BREAKPOINT = 600;
 
 type SessionGroupRow = SessionGroupEntity & {
   id: string;
@@ -246,7 +247,8 @@ function MobileSessionsList({
 }
 
 export function SessionsTable({ channelId }: { channelId: string }) {
-  const isMobile = useIsMobile();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isCompact, setIsCompact] = useState(false);
   const sessionGroups = useEntityStore((s) => s.sessionGroups);
   const sessions = useEntityStore((s) => s.sessions);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -254,6 +256,19 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     name: string;
     sessionCount: number;
   } | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setIsCompact(entry.contentRect.width < COMPACT_BREAKPOINT);
+      }
+    });
+    observer.observe(el);
+    setIsCompact(el.getBoundingClientRect().width < COMPACT_BREAKPOINT);
+    return () => observer.disconnect();
+  }, []);
 
   const filteredGroups = useMemo(() => {
     return (Object.values(sessionGroups) as SessionGroupEntity[])
@@ -427,8 +442,8 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   );
 
   return (
-    <>
-      {isMobile ? (
+    <div ref={containerRef} className="h-full">
+      {isCompact ? (
         <MobileSessionsList channelId={channelId} rows={filteredGroups} />
       ) : (
         <Table className="h-full" agGridOptions={agGridOptions} />
@@ -444,6 +459,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           }}
         />
       )}
-    </>
+    </div>
   );
 }
