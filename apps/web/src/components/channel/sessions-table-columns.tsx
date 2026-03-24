@@ -135,7 +135,6 @@ export const compactSessionColumns: ColDef<SessionGroupRow>[] = [
       if (!data) return null;
 
       const repo = getRepo(data);
-      const createdBy = getCreatedBy(data);
       const lastActivityAt = data._lastMessageAt ?? data.updatedAt ?? data.createdAt;
 
       return (
@@ -148,11 +147,6 @@ export const compactSessionColumns: ColDef<SessionGroupRow>[] = [
             {repo && (
               <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground/90">
                 {repo.name}
-              </span>
-            )}
-            {createdBy && (
-              <span className="min-w-0 truncate">
-                {createdBy.name}
               </span>
             )}
             <span className="ml-auto shrink-0">{timeAgo(lastActivityAt)}</span>
