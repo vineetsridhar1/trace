@@ -1,5 +1,5 @@
 import { Circle, Loader2 } from "lucide-react";
-import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import type { ColDef, ColumnState, ICellRendererParams } from "ag-grid-community";
 import { createTable } from "../ui/table";
 import { statusColor } from "../session/sessionStatus";
 import { timeAgo } from "../../lib/utils";
@@ -9,6 +9,15 @@ import { bucketize } from "./sessions-table-types";
 
 type RepoRef = { id: string; name: string };
 type CreatedByRef = { id: string; name: string; avatarUrl?: string | null };
+
+export const SESSION_COLUMN_IDS = {
+  compactSummary: "compactSummary",
+  name: "name",
+  status: "status",
+  repo: "repo",
+  createdBy: "createdBy",
+  lastActivityAt: "lastActivityAt",
+} as const;
 
 function getRepo(data: SessionGroupRow | undefined): RepoRef | null {
   if (!data) return null;
@@ -34,6 +43,7 @@ function renderStatusIcon(data: SessionGroupRow, size = 12) {
 }
 
 const statusColumn: ColDef<SessionGroupRow> = {
+  colId: SESSION_COLUMN_IDS.status,
   headerName: "Status",
   field: "status",
   rowGroup: true,
@@ -41,6 +51,7 @@ const statusColumn: ColDef<SessionGroupRow> = {
 };
 
 const repoColumn: ColDef<SessionGroupRow> = {
+  colId: SESSION_COLUMN_IDS.repo,
   headerName: "Repo",
   field: "repo" as keyof SessionGroupRow,
   width: 140,
@@ -55,7 +66,7 @@ const repoColumn: ColDef<SessionGroupRow> = {
 
 const createdByColumn: ColDef<SessionGroupRow> = {
   headerName: "Created by",
-  colId: "createdBy",
+  colId: SESSION_COLUMN_IDS.createdBy,
   width: 150,
   filter: true,
   filterValueGetter: (params) => getCreatedBy(params.data)?.name ?? "",
@@ -87,7 +98,7 @@ const createdByColumn: ColDef<SessionGroupRow> = {
 
 const lastMessageColumn: ColDef<SessionGroupRow> = {
   headerName: "Last message",
-  colId: "lastActivityAt",
+  colId: SESSION_COLUMN_IDS.lastActivityAt,
   width: 120,
   filter: true,
   valueGetter: (params) => params.data?._lastMessageAt ?? params.data?.updatedAt,
@@ -99,37 +110,14 @@ const lastMessageColumn: ColDef<SessionGroupRow> = {
   comparator: (a: string | undefined, b: string | undefined) => bucketize(a) - bucketize(b),
 };
 
-export const desktopSessionColumns: ColDef<SessionGroupRow>[] = [
+export const sessionColumns: ColDef<SessionGroupRow>[] = [
   {
-    headerName: "Name",
-    field: "name",
-    flex: 2,
-    minWidth: 200,
-    filter: true,
-    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
-      const { data } = params;
-      if (!data) return null;
-      return (
-        <div className="flex h-full items-center gap-2">
-          {renderStatusIcon(data)}
-          <span className="truncate text-sm text-foreground">{data.name}</span>
-        </div>
-      );
-    },
-  },
-  statusColumn,
-  repoColumn,
-  createdByColumn,
-  lastMessageColumn,
-];
-
-export const compactSessionColumns: ColDef<SessionGroupRow>[] = [
-  {
+    colId: SESSION_COLUMN_IDS.compactSummary,
     headerName: "Workspace",
     field: "name",
     flex: 1,
     minWidth: 220,
-    filter: true,
+    hide: true,
     cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
       const { data } = params;
       if (!data) return null;
@@ -157,13 +145,53 @@ export const compactSessionColumns: ColDef<SessionGroupRow>[] = [
       );
     },
   },
+  {
+    colId: SESSION_COLUMN_IDS.name,
+    headerName: "Name",
+    field: "name",
+    flex: 2,
+    minWidth: 200,
+    filter: true,
+    cellRenderer: (params: ICellRendererParams<SessionGroupRow>) => {
+      const { data } = params;
+      if (!data) return null;
+      return (
+        <div className="flex h-full items-center gap-2">
+          {renderStatusIcon(data)}
+          <span className="truncate text-sm text-foreground">{data.name}</span>
+        </div>
+      );
+    },
+  },
   statusColumn,
-  { ...repoColumn, hide: true },
-  { ...createdByColumn, hide: true },
-  { ...lastMessageColumn, hide: true },
+  repoColumn,
+  createdByColumn,
+  lastMessageColumn,
 ];
+
+export function getSessionsColumnState(isCompact: boolean): ColumnState[] {
+  if (isCompact) {
+    return [
+      { colId: SESSION_COLUMN_IDS.compactSummary, hide: false },
+      { colId: SESSION_COLUMN_IDS.name, hide: true },
+      { colId: SESSION_COLUMN_IDS.status, hide: true },
+      { colId: SESSION_COLUMN_IDS.repo, hide: true },
+      { colId: SESSION_COLUMN_IDS.createdBy, hide: true },
+      { colId: SESSION_COLUMN_IDS.lastActivityAt, hide: true },
+    ];
+  }
+
+  return [
+    { colId: SESSION_COLUMN_IDS.compactSummary, hide: true },
+    { colId: SESSION_COLUMN_IDS.name, hide: false },
+    { colId: SESSION_COLUMN_IDS.status, hide: true },
+    { colId: SESSION_COLUMN_IDS.repo, hide: false },
+    { colId: SESSION_COLUMN_IDS.createdBy, hide: false },
+    { colId: SESSION_COLUMN_IDS.lastActivityAt, hide: false },
+  ];
+}
 
 export const { Table: SessionsGridTable, useTable: useSessionsGridTable } = createTable<SessionGroupRow>({
   id: "sessions",
-  columns: desktopSessionColumns,
+  columns: sessionColumns,
 });

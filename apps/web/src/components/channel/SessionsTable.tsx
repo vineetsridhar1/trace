@@ -4,6 +4,7 @@ import type {
   DefaultMenuItem,
   FilterChangedEvent,
   GetContextMenuItemsParams,
+  GridApi,
   GridReadyEvent,
   ICellRendererParams,
   IsGroupOpenByDefaultParams,
@@ -16,14 +17,14 @@ import { motion, useAnimationControls } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
 import { COMPACT_BREAKPOINT, FILTER_STORAGE_KEY_PREFIX, collapsedByDefault, statusGroupOrder } from "./sessions-table-types";
 import {
-  compactSessionColumns,
-  desktopSessionColumns,
+  getSessionsColumnState,
   SessionsGridTable,
   useSessionsGridTable,
 } from "./sessions-table-columns";
 import { useSessionGroupRows } from "./useSessionGroupRows";
 
 export function SessionsTable({ channelId }: { channelId: string }) {
+  const gridApiRef = useRef<GridApi<SessionGroupRow> | null>(null);
   const hasMeasuredRef = useRef(false);
   const hasAnimatedModeRef = useRef(false);
   const [isCompact, setIsCompact] = useState(false);
@@ -77,6 +78,15 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     useSessionsGridTable.getState().setRows(filteredGroups);
   }, [filteredGroups]);
 
+  useEffect(() => {
+    const api = gridApiRef.current;
+    if (!api) return;
+    api.applyColumnState({
+      state: getSessionsColumnState(isCompact),
+      applyOrder: true,
+    });
+  }, [isCompact]);
+
   const getContextMenuItems = useCallback(
     (params: GetContextMenuItemsParams<SessionGroupRow>): (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[] => {
       if (!params.node?.data) return [];
@@ -116,8 +126,14 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     filterStorageKey,
     getContextMenuItems,
     isCompact,
+    onGridReady: (event) => {
+      gridApiRef.current = event.api;
+      event.api.applyColumnState({
+        state: getSessionsColumnState(isCompact),
+        applyOrder: true,
+      });
+    },
   });
-  const columnDefs = isCompact ? compactSessionColumns : desktopSessionColumns;
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
   return (
@@ -132,7 +148,6 @@ export function SessionsTable({ channelId }: { channelId: string }) {
         <SessionsGridTable
           className={isCompact ? "sessions-grid-compact h-full" : "h-full"}
           agGridOptions={agGridOptions}
-          columnDefs={columnDefs}
           selectedRowIds={selectedRowIds}
         />
       </motion.div>
@@ -156,11 +171,13 @@ function useGridOptions({
   filterStorageKey,
   getContextMenuItems,
   isCompact,
+  onGridReady,
 }: {
   channelId: string;
   filterStorageKey: string;
   getContextMenuItems: (params: GetContextMenuItemsParams<SessionGroupRow>) => (DefaultMenuItem | MenuItemDef<SessionGroupRow>)[];
   isCompact: boolean;
+  onGridReady?: (event: GridReadyEvent<SessionGroupRow>) => void;
 }) {
   return {
     onRowClicked: (event: {
@@ -185,6 +202,7 @@ function useGridOptions({
       } catch {
         // ignore corrupt data
       }
+      onGridReady?.(event);
     },
     onFilterChanged: (event: FilterChangedEvent<SessionGroupRow>) => {
       const model = event.api.getFilterModel();
