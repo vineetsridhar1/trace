@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { GitCheckpoint } from "@trace/gql";
 import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
@@ -49,14 +50,16 @@ export function CheckpointPanel({
   }, [gitCheckpoints]);
 
   // Build a minimal map of session id → name for display only
-  const sessionNameById = useEntityStore((s) => {
-    const names: Record<string, string> = {};
-    for (const cp of checkpoints) {
-      const session = s.sessions[cp.sessionId];
-      if (session) names[cp.sessionId] = session.name;
-    }
-    return names;
-  });
+  const sessionNameById = useEntityStore(
+    useShallow((s) => {
+      const names: Record<string, string> = {};
+      for (const cp of checkpoints) {
+        const session = s.sessions[cp.sessionId];
+        if (session) names[cp.sessionId] = session.name;
+      }
+      return names;
+    }),
+  );
 
   const groupSessions = useMemo(
     () =>
