@@ -40,7 +40,8 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        agentStatus: "active", sessionStatus: "in_progress",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -82,7 +83,8 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        agentStatus: "failed", sessionStatus: "in_progress",
+        agentStatus: "failed",
+        sessionStatus: "in_progress",
         sessionGroup: { workdir: null, worktreeDeleted: false },
       });
       await expect(
@@ -102,7 +104,8 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        agentStatus: "active", sessionStatus: "in_progress",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         sessionGroup: { workdir: null, worktreeDeleted: true },
       });
 
@@ -123,7 +126,8 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
-        agentStatus: "active", sessionStatus: "in_progress",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -144,7 +148,8 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "local",
         createdById: "user-1",
-        agentStatus: "active", sessionStatus: "in_progress",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 
@@ -165,7 +170,8 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        agentStatus: "active", sessionStatus: "in_progress",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         sessionGroup: { workdir: null, worktreeDeleted: false },
       });
 
@@ -192,7 +198,8 @@ describe("TerminalService", () => {
         sessionGroupId: "group-1",
         hosting: "cloud",
         createdById: "user-1",
-        agentStatus: "active", sessionStatus: "in_progress",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
         sessionGroup: { workdir: "/workspace", worktreeDeleted: false },
       });
 

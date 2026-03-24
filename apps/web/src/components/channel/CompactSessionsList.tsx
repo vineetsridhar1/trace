@@ -63,7 +63,7 @@ export function CompactSessionsList({
                   >
                     <AgentStatusIcon
                       agentStatus={row.displayAgentStatus}
-                      size={row.displayAgentStatus === "done" ? 7 : 10}
+                      size={10}
                       className={`shrink-0 ${rowColor}`}
                     />
                     <span className="min-w-0 flex-1 truncate text-sm text-foreground">

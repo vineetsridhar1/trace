@@ -256,6 +256,7 @@ describe("SessionService", () => {
             sessionGroup: expect.objectContaining({ id: "group-1" }),
           }),
         }),
+        expect.anything(),
       );
     });
 

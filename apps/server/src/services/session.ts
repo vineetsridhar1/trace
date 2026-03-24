@@ -669,23 +669,27 @@ export class SessionService {
         });
       }
 
-      return session;
-    });
+      const sessionGroupSnapshot = buildSessionGroupSnapshot(
+        sessionGroup,
+        [{ agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus }],
+      );
 
-    const sessionGroupSnapshot = await this.loadSessionGroupSnapshot(session.sessionGroupId);
-    await eventService.create({
-      organizationId: input.organizationId,
-      scopeType: "session",
-      scopeId: session.id,
-      eventType: "session_started",
-      payload: {
-        session: serializeSession(session),
-        ...(sessionGroupSnapshot ? { sessionGroup: sessionGroupSnapshot } : {}),
-        prompt: input.prompt ?? null,
-        sourceSessionId: input.sourceSessionId ?? null,
-      } as Prisma.InputJsonValue,
-      actorType: "user",
-      actorId: input.createdById,
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: session.id,
+        eventType: "session_started",
+        payload: {
+          session: serializeSession(session),
+          sessionGroup: sessionGroupSnapshot,
+          prompt: input.prompt ?? null,
+          sourceSessionId: input.sourceSessionId ?? null,
+        } as Prisma.InputJsonValue,
+        actorType: "user",
+        actorId: input.createdById,
+      }, tx);
+
+      return session;
     });
 
     // Reuse the group's runtime binding when a shared workspace already exists.
@@ -851,14 +855,6 @@ export class SessionService {
     return updated;
   }
 
-  async pause(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.transition(id, "pause", "active", "session_paused", actorType, actorId);
-  }
-
-  async resume(id: string, actorType: ActorType = "system", actorId: string = "system") {
-    return this.transition(id, "resume", "active", "session_resumed", actorType, actorId);
-  }
-
   async terminate(id: string, actorType: ActorType = "system", actorId: string = "system") {
     return this.terminateWithStatus(id, "stopped", "Session stopped", actorType, actorId);
   }
@@ -1009,7 +1005,7 @@ export class SessionService {
 
   private async transition(
     id: string,
-    command: "pause" | "resume" | "terminate",
+    command: "terminate",
     newAgentStatus: AgentStatus,
     eventType: EventType,
     actorType: ActorType,
@@ -1031,14 +1027,8 @@ export class SessionService {
       return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
 
-    const deliveryResult = await sessionRouter.transitionRuntime(id, current.hosting, command);
-
-    // For terminate, proceed regardless — we want the session marked as terminated
-    // For pause/resume, only proceed if delivered or if terminating
-    if (command !== "terminate" && deliveryResult !== "delivered") {
-      await this.persistConnectionFailure(id, current.organizationId, deliveryResult, command);
-      return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
-    }
+    // Attempt to notify the runtime; proceed regardless — we always want the session marked as terminated
+    await sessionRouter.transitionRuntime(id, current.hosting, command);
 
     const session = await prisma.session.update({
       where: { id },
@@ -1386,7 +1376,7 @@ export class SessionService {
     });
 
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
-      throw new Error(`Cannot send follow-up messages to a ${session.agentStatus}/${session.sessionStatus} session`);
+      throw new Error("Cannot send follow-up messages to a completed session");
     }
 
     if (session.worktreeDeleted) {

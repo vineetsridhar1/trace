@@ -6,12 +6,12 @@ export function AgentStatusIcon({ agentStatus, size, className }: { agentStatus:
       return <Loader2 size={size} className={`animate-spin ${className ?? ""}`} />;
     case "done":
     case "not_started":
-      return <Circle size={Math.max(size - 4, 4)} className={`fill-current ${className ?? ""}`} />;
+      return <Circle size={size} className={`fill-current ${className ?? ""}`} />;
     case "failed":
       return <XCircle size={size} className={className} />;
     case "stopped":
       return <StopCircle size={size} className={className} />;
     default:
-      return <Circle size={Math.max(size - 4, 4)} className={`fill-current ${className ?? ""}`} />;
+      return <Circle size={size} className={`fill-current ${className ?? ""}`} />;
   }
 }
