@@ -25,10 +25,7 @@ export const agentIdentityMutations = {
     },
     ctx: Context,
   ) => {
-    const membership = await orgMemberService.assertMembership(ctx.userId, args.organizationId);
-    if (membership.role !== "admin") {
-      throw new Error("Only admins can update agent settings");
-    }
+    await orgMemberService.assertMembership(ctx.userId, args.organizationId);
 
     return agentIdentityService.update(args.organizationId, {
       ...(args.input.name != null && { name: args.input.name }),
