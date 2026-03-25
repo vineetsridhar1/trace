@@ -1,5 +1,5 @@
 import type { Context } from "../context.js";
-import type { CreateChannelInput } from "@trace/gql";
+import type { CreateChannelInput, UpdateChannelInput } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { channelService } from "../services/channel.js";
 import { assertChannelAccess } from "../services/access.js";
@@ -49,6 +49,10 @@ export const channelMutations = {
       throw new Error("Not authorized for this organization");
     }
     return channelService.create(args.input, ctx.actorType, ctx.userId);
+  },
+  updateChannel: async (_: unknown, args: { id: string; input: UpdateChannelInput }, ctx: Context) => {
+    await assertChannelAccess(args.id, ctx.userId);
+    return channelService.update(args.id, args.input, ctx.actorType, ctx.userId);
   },
   joinChannel: (_: unknown, args: { channelId: string }, ctx: Context) => {
     return channelService.join(args.channelId, ctx.actorType, ctx.userId);

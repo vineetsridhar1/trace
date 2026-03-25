@@ -418,6 +418,7 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
+  updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
@@ -729,6 +730,12 @@ export type MutationUnsubscribeArgs = {
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateChannelArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateChannelInput;
 };
 
 
@@ -1336,6 +1343,11 @@ export type UpdateChannelGroupInput = {
   position?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type UpdateChannelInput = {
+  baseBranch?: InputMaybe<Scalars['String']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+};
+
 export type UpdateRepoInput = {
   defaultBranch?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
@@ -1513,6 +1525,7 @@ export type ResolversTypes = ResolversObject<{
   TicketStatus: TicketStatus;
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
+  UpdateChannelInput: UpdateChannelInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: ResolverTypeWrapper<User>;
@@ -1578,6 +1591,7 @@ export type ResolversParentTypes = ResolversObject<{
   TicketLink: TicketLink;
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
+  UpdateChannelInput: UpdateChannelInput;
   UpdateRepoInput: UpdateRepoInput;
   UpdateTicketInput: UpdateTicketInput;
   User: User;
@@ -1802,6 +1816,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unregisterRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUnregisterRepoWebhookArgs, 'repoId'>>;
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
+  updateChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationUpdateChannelArgs, 'id' | 'input'>>;
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;
   updateOrgMemberRole?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationUpdateOrgMemberRoleArgs, 'organizationId' | 'role' | 'userId'>>;
   updateRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUpdateRepoArgs, 'id' | 'input'>>;
