@@ -18,6 +18,9 @@ Wire AI Conversation actions into the Trace event stream. Every mutation that ch
   - branch summary and context-health updates
   - fork provenance / other conversation metadata added after foundation
 - Add these event types to the existing event type enum/registry
+- Refactor `AiConversationService` mutating methods to accept `actorType: ActorType` and `actorId: string` parameters, consistent with `ChannelService` and other existing services. Currently `createConversation` embeds `createdById` in the input object and `updateTitle` takes `requestingUserId` — these need to be normalized to the standard `(input, actorType, actorId)` signature before events can be emitted.
+- Add org membership verification to `getConversations` — it currently trusts the caller-provided `organizationId` without checking membership.
+- Fix `getConversation` to avoid leaking existence of private conversations — use `findFirst` with access-control filters instead of `findUniqueOrThrow` followed by an authorization check.
 - Update `AiConversationService` methods to emit events after successful mutations:
   - `createConversation` → emit `ai_conversation.created` + `branch.created` (for root branch)
   - `updateTitle` → emit `ai_conversation.title_updated`

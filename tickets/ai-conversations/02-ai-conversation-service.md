@@ -37,13 +37,13 @@ Create the service layer for managing AI conversations and branches. This servic
 
 ## Completion requirements
 
-- [ ] `AiConversationService` exists at `apps/server/src/services/aiConversation.ts`
-- [ ] `createConversation` creates both the conversation and root branch atomically
-- [ ] `getConversations` correctly filters by visibility and ownership
-- [ ] `getConversation` enforces access control (private conversations only visible to creator)
-- [ ] `getBranch` returns turns in correct order
-- [ ] `getBranchDepth` correctly computes depth by walking the parent chain
-- [ ] Service is registered and accessible from resolvers and agent runtime
+- [x] `AiConversationService` exists at `apps/server/src/services/aiConversation.ts`
+- [x] `createConversation` creates both the conversation and root branch atomically
+- [~] `getConversations` correctly filters by visibility and ownership — filters work but missing org membership verification for the requesting user (tracked for fix in ticket 05)
+- [~] `getConversation` enforces access control — checks visibility but leaks existence of private conversations via different error messages (tracked for fix in ticket 05)
+- [x] `getBranch` returns turns in correct order
+- [x] `getBranchDepth` correctly computes depth by walking the parent chain
+- [x] Service is registered and accessible from resolvers and agent runtime
 
 ## How to test
 
