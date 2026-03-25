@@ -32,30 +32,7 @@ import { refreshSummary } from "./summary-worker.js";
 import { executionLoggingService } from "../services/execution-logging.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { processedEventService } from "../services/processed-event.js";
-
-// ---------------------------------------------------------------------------
-// Cost estimation (same model-aware lookup as summary-worker)
-// ---------------------------------------------------------------------------
-
-const MODEL_COST_MAP: Record<string, { input: number; output: number }> = {
-  "claude-haiku": { input: 0.00000025, output: 0.00000125 },
-  "claude-sonnet": { input: 0.000003, output: 0.000015 },
-  "claude-opus": { input: 0.000015, output: 0.000075 },
-};
-
-const DEFAULT_COST = { input: 0.00000025, output: 0.00000125 };
-
-function estimateCostCents(
-  model: string,
-  inputTokens: number,
-  outputTokens: number,
-): number {
-  const match = Object.entries(MODEL_COST_MAP).find(([prefix]) =>
-    model.startsWith(prefix),
-  );
-  const rates = match ? match[1] : DEFAULT_COST;
-  return (inputTokens * rates.input + outputTokens * rates.output) * 100;
-}
+import { estimateCostCents } from "./cost-utils.js";
 
 // ---------------------------------------------------------------------------
 // Constants
