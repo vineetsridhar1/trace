@@ -27,9 +27,6 @@ interface UIState {
   closeSessionTab: (groupId: string, sessionId: string) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   restoreLastVisited: (tab: "dm" | "main") => void;
-  /** When set, the detail panel shows a new-session draft instead of an existing session */
-  pendingNewSession: boolean;
-  setPendingNewSession: (v: boolean) => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -153,12 +150,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTerminalId: null,
   activeThreadId: null,
   refreshTick: 0,
-  pendingNewSession: false,
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
   unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
-  setPendingNewSession: (v) => set({ pendingNewSession: v }),
 
   openSessionTab: (groupId, sessionId) => {
     set((s) => {
@@ -316,7 +311,6 @@ export const useUIStore = create<UIState>((set, get) => ({
       activeSessionGroupId: groupId,
       activeSessionId: nextSessionId,
       activeTerminalId: null,
-      pendingNewSession: false,
       lastSelectedSessionIdsByGroup:
         nextSessionId
           ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }

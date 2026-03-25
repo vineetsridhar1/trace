@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
 import { useDetailPanelStore } from "./stores/detail-panel";
+import { usePreferencesStore } from "./stores/preferences";
+import { useEntityStore } from "./stores/entity";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
@@ -10,7 +12,6 @@ import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
-import { NewSessionView } from "./components/session/NewSessionView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -22,6 +23,12 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
 import { cn } from "./lib/utils";
+import { client } from "./lib/urql";
+import { START_SESSION_MUTATION, AVAILABLE_RUNTIMES_QUERY } from "./lib/mutations";
+import { optimisticallyInsertSession } from "./lib/optimistic-session";
+import { getDefaultModel } from "./components/session/modelOptions";
+import { CLOUD_RUNTIME_ID } from "./components/session/RuntimeSelector";
+import type { SessionRuntimeInstance } from "@trace/gql";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -52,6 +59,38 @@ export function App() {
   );
 }
 
+/**
+ * Resolve the best runtime for a new session based on user preference.
+ * Prefers a connected local bridge when defaultHosting is "bridge",
+ * falls back to cloud if none available.
+ */
+async function resolveDefaultRuntime(tool: string, channelRepoId: string | undefined): Promise<{
+  runtimeInstanceId: string | undefined;
+  hosting: "cloud" | "local";
+}> {
+  const pref = usePreferencesStore.getState().defaultHosting;
+  if (pref === "cloud") {
+    return { runtimeInstanceId: undefined, hosting: "cloud" };
+  }
+
+  // Prefer bridge: fetch available runtimes and pick the first connected local one
+  try {
+    const result = await client.query(AVAILABLE_RUNTIMES_QUERY, { tool }).toPromise();
+    const runtimes = (result.data?.availableRuntimes ?? []) as SessionRuntimeInstance[];
+    const connected = runtimes.filter((r) => r.connected && r.hostingMode === "local");
+    // If channel has a repo, filter to runtimes that have it linked
+    const eligible = channelRepoId
+      ? connected.filter((r) => r.registeredRepoIds.includes(channelRepoId))
+      : connected;
+    if (eligible.length > 0) {
+      return { runtimeInstanceId: eligible[0].id, hosting: "local" };
+    }
+  } catch {
+    // Fall through to cloud
+  }
+  return { runtimeInstanceId: undefined, hosting: "cloud" };
+}
+
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
   useHistorySync();
@@ -59,34 +98,74 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const activePage = useUIStore((s) => s.activePage);
   const activeChatId = useUIStore((s) => s.activeChatId);
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
-  const pendingNewSession = useUIStore((s) => s.pendingNewSession);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
-  const setPendingNewSession = useUIStore((s) => s.setPendingNewSession);
+  const setActiveSessionGroupId = useUIStore((s) => s.setActiveSessionGroupId);
+  const openSessionTab = useUIStore((s) => s.openSessionTab);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const isMobile = useIsMobile();
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Cmd+N / Ctrl+N: open new session draft in the active channel
+  // Cmd+N / Ctrl+N: create a new session with smart defaults
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "n") {
         e.preventDefault();
         const channelId = useUIStore.getState().activeChannelId;
         if (!channelId) return;
-        // Close any open session group and open the draft panel
-        useUIStore.getState().setActiveSessionGroupId(null);
-        useUIStore.getState().setPendingNewSession(true);
+
+        const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
+        const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
+
+        // Resolve channel repo
+        const channel = useEntityStore.getState().channels[channelId];
+        const channelRepoId =
+          channel && typeof channel === "object" && "repo" in channel && channel.repo &&
+          typeof channel.repo === "object" && "id" in (channel.repo as Record<string, unknown>)
+            ? (channel.repo as { id: string }).id
+            : undefined;
+
+        // Pick the best runtime based on user preference, then create session
+        resolveDefaultRuntime(prefTool, channelRepoId).then(({ runtimeInstanceId, hosting }) => {
+          const isCloud = !runtimeInstanceId || hosting === "cloud";
+          return client
+            .mutation(START_SESSION_MUTATION, {
+              input: {
+                tool: prefTool,
+                model: prefModel ?? undefined,
+                hosting: isCloud ? "cloud" : undefined,
+                runtimeInstanceId: isCloud ? undefined : runtimeInstanceId,
+                channelId,
+                repoId: channelRepoId ?? undefined,
+              },
+            })
+            .toPromise()
+            .then((result) => {
+              const session = result.data?.startSession;
+              if (!session?.id) return;
+              const sessionGroupId = session.sessionGroupId;
+              if (sessionGroupId) {
+                optimisticallyInsertSession({
+                  id: session.id,
+                  sessionGroupId,
+                  tool: prefTool,
+                  model: prefModel,
+                  hosting,
+                  channel: { id: channelId },
+                  repo: channelRepoId ? { id: channelRepoId } : null,
+                });
+                openSessionTab(sessionGroupId, session.id);
+                setActiveSessionGroupId(sessionGroupId, session.id);
+              }
+            });
+        });
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [openSessionTab, setActiveSessionGroupId]);
 
-  const closePanel = useCallback(() => {
-    setActiveSessionId(null);
-    setPendingNewSession(false);
-  }, [setActiveSessionId, setPendingNewSession]);
+  const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
 
   const [displayedSessionGroupId, setDisplayedSessionGroupId] = useState<string | null>(activeSessionGroupId);
   useEffect(() => {
@@ -95,7 +174,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
     }
   }, [activeSessionGroupId]);
 
-  const hasSession = !!activeSessionGroupId || pendingNewSession;
+  const hasSession = !!activeSessionGroupId;
   const isMainContentCollapsed = hasSession && isFullscreen && !isMobile;
 
   return (
@@ -158,13 +237,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               isOpen={hasSession}
               onClose={closePanel}
               containerRef={containerRef}
-              onClosed={() => { setDisplayedSessionGroupId(null); setPendingNewSession(false); }}
+              onClosed={() => setDisplayedSessionGroupId(null)}
             >
-              {pendingNewSession && activeChannelId ? (
-                <NewSessionView channelId={activeChannelId} />
-              ) : displayedSessionGroupId ? (
+              {displayedSessionGroupId && (
                 <SessionGroupDetailView sessionGroupId={displayedSessionGroupId} panelMode />
-              ) : null}
+              )}
             </DetailPanel>
           </div>
         </SidebarProvider>
