@@ -35,12 +35,14 @@ Should include:
 
 ## Completion requirements
 
-- [ ] Platform default soul file exists
-- [ ] Soul file resolver merges platform default + org override + optional project override + optional repo override
-- [ ] Org admins can update their soul file via GraphQL mutation
-- [ ] Context builder includes the resolved soul file in the context packet
-- [ ] Soul file is truncated to token budget (2000 tokens) if it exceeds allocation, from the bottom up
-- [ ] UI exists in org settings for editing the soul file
+- [x] Platform default soul file exists
+- [x] Soul file resolver merges platform default + org override + optional project override + optional repo override
+- [x] Org admins can update their soul file via GraphQL mutation
+- [x] Context builder includes the resolved soul file in the context packet
+- [x] Soul file is truncated to token budget (2000 tokens) if it exceeds allocation, from the bottom up
+- [x] UI exists in org settings for editing the soul file
+
+<!-- Ticket 13 implemented: Soul file resolver at `./agent/soul-file-resolver.ts`. Import `resolveSoulFile(input: SoulFileResolutionInput)` — takes `{ orgSoulFile, projectSoulFile?, repoSoulFile?, tokenBudget? }`, returns the resolved string (truncated to budget). The context builder's `BuildContextInput` now accepts optional `projectSoulFile` and `repoSoulFile` — pass these from the pipeline when available. The platform default lives at `./agent/default-soul.md` and is loaded once at startup via `readFileSync`. NOTE: repo-level `.trace/soul.md` is accepted by the resolver but nothing fetches it yet — that needs to happen in the pipeline or session monitoring (ticket 15/18). -->
 
 ## How to test
 

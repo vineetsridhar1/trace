@@ -28,6 +28,7 @@ Wire everything together. The individual components exist (router, aggregator, c
 ## Dependencies
 
 - All previous tickets (04-14)
+  <!-- Ticket 13 created: The context builder's `BuildContextInput` now accepts optional `projectSoulFile` and `repoSoulFile` fields. When wiring the pipeline, if the batch scope involves a session with a linked repo, fetch the repo-level `.trace/soul.md` (if available) and pass it as `repoSoulFile`. Similarly, if the scope belongs to a project, check for a project-level soul file. For v1, it's fine to just pass `undefined` for both — the resolver falls back to org-level or platform default automatically. The resolver handles truncation to the 2000-token budget internally. -->
   <!-- Ticket 08 created: Three services to wire in the pipeline:
     1. `executionLoggingService.write(input)` — call after each planner run to record the full decision chain. `WriteExecutionLogInput` takes: organizationId, triggerEventId, batchSize, agentId, modelTier, model, promoted, promotionReason, inputTokens, outputTokens, estimatedCostCents, contextTokenAllocation, disposition, confidence, plannedActions, policyDecision, finalActions, status, inboxItemId, latencyMs. Import types `ModelTier`, `ExecutionDisposition`, `ExecutionStatus` from `@prisma/client`.
     2. `costTrackingService.recordCost({ organizationId, modelTier, costCents, isSummary? })` — call after each planner call and each summary generation to update daily cost aggregation.

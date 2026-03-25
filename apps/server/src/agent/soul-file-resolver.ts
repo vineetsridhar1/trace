@@ -18,56 +18,40 @@
  * Ticket: #13
  */
 
-import { readFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+import { estimateTokens } from "./context-builder.js";
 
 // ---------------------------------------------------------------------------
-// Platform default (loaded once at startup)
+// Platform default (inlined to avoid build-time asset resolution issues)
 // ---------------------------------------------------------------------------
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_SOUL_FILE_PATH = resolve(__dirname, "default-soul.md");
+const DEFAULT_SOUL_FILE = `# Trace AI Agent
 
-let cachedDefault: string | null = null;
+You are an ambient AI assistant embedded in Trace, a collaborative project management platform. You observe events across channels, tickets, sessions, and chats, and decide when to help.
 
-function getDefaultSoulFile(): string {
-  if (cachedDefault !== null) return cachedDefault;
-  let content: string;
-  try {
-    content = readFileSync(DEFAULT_SOUL_FILE_PATH, "utf-8");
-  } catch {
-    // Fallback if file is missing (shouldn't happen in production)
-    content =
-      "You are an ambient AI assistant. Default to no action. Prefer suggesting over acting. Be concise.";
-  }
-  cachedDefault = content;
-  return content;
-}
+## Behavioral Defaults
 
-/** Visible for testing — reset the cached default. */
-export function resetDefaultSoulFileCache(): void {
-  cachedDefault = null;
-}
+- **Default to no action.** Most events do not require your involvement. When uncertain, do nothing.
+- **Prefer suggesting over acting.** Unless the situation is clearly low-risk and high-confidence, suggest rather than execute.
+- **Be concise.** Keep any user-facing messages to 1–2 sentences. Avoid filler, hedging, or preamble.
+- **Respect the autonomy mode.** In observe mode, only update summaries. In suggest mode, propose but never execute. In act mode, execute only when confidence is high and risk is low.
 
-// ---------------------------------------------------------------------------
-// Token estimation (mirrors context-builder's logic)
-// ---------------------------------------------------------------------------
+## Privacy Rules
 
-function estimateTokens(text: string): number {
-  if (!text) return 0;
-  const wordCount = text.split(/\s+/).filter(Boolean).length;
-  return Math.ceil(wordCount * 1.3);
-}
+- **Never share private DM content** in channels, tickets, or other public scopes.
+- **Never reference information from one private chat** in a different scope unless the user explicitly shared it there.
+- **Treat chat membership as a privacy boundary.** If you observed something in a members-only context, keep it there.
+
+## Priorities
+
+1. Help the team stay aligned — surface blockers, contradictions, and stale work.
+2. Reduce toil — automate repetitive bookkeeping (status updates, linking, labeling).
+3. Stay out of the way — unhelpful suggestions are worse than silence.
+`;
 
 // ---------------------------------------------------------------------------
 // Truncation — bottom-up (preserves identity at top, trims rules at bottom)
 // ---------------------------------------------------------------------------
 
-/**
- * Truncate text to fit within a token budget. Keeps the beginning of the text
- * (identity, preamble) and trims from the bottom.
- */
 function truncateToTokenBudget(text: string, budget: number): string {
   if (estimateTokens(text) <= budget) return text;
 
@@ -102,7 +86,6 @@ export interface SoulFileResolutionInput {
 export function resolveSoulFile(input: SoulFileResolutionInput): string {
   const budget = input.tokenBudget ?? 2000;
 
-  // Pick the most specific non-empty source
   let resolved: string;
 
   if (input.repoSoulFile?.trim()) {
@@ -112,17 +95,8 @@ export function resolveSoulFile(input: SoulFileResolutionInput): string {
   } else if (input.orgSoulFile?.trim()) {
     resolved = input.orgSoulFile;
   } else {
-    resolved = getDefaultSoulFile();
+    resolved = DEFAULT_SOUL_FILE;
   }
 
-  // Truncate to budget (bottom-up — identity preserved, rules trimmed)
   return truncateToTokenBudget(resolved, budget);
-}
-
-/**
- * Get the platform default soul file content.
- * Useful for displaying in the UI as a reference.
- */
-export function getDefaultSoulFileContent(): string {
-  return getDefaultSoulFile();
 }
