@@ -351,6 +351,12 @@ function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
+function buildBaseBranchInstruction(baseBranch: string): string {
+  return `\n\n<system-instruction>
+This session is working off the base branch "${baseBranch}". All work should be branched from this base branch, and when merging, merge into "${baseBranch}" (not main/master). When pushing, ensure your branch is based on origin/${baseBranch}.
+</system-instruction>`;
+}
+
 /** Regex to extract <session-title>…</session-title> from assistant output. */
 const TITLE_TAG_RE = /<session-title>([\s\S]*?)<\/session-title>/;
 
@@ -715,7 +721,7 @@ export class SessionService {
     const resolvedChannel = resolvedChannelId
       ? await prisma.channel.findUnique({
           where: { id: resolvedChannelId },
-          select: { id: true, organizationId: true, type: true, repoId: true },
+          select: { id: true, organizationId: true, type: true, repoId: true, baseBranch: true },
         })
       : null;
 
@@ -747,7 +753,7 @@ export class SessionService {
       ?? restoreCheckpoint?.repoId
       ?? undefined;
     const resolvedBranch =
-      input.branch ?? seedGroup?.branch ?? sourceSession?.branch ?? undefined;
+      input.branch ?? seedGroup?.branch ?? sourceSession?.branch ?? resolvedChannel?.baseBranch ?? undefined;
     const sharedWorkdir = input.restoreCheckpointId ? null : resolvedGroup?.workdir ?? null;
     const sharedConnection = input.restoreCheckpointId ? null : resolvedGroup?.connection ?? null;
     const sharedRuntimeInstanceId =
@@ -1039,6 +1045,12 @@ export class SessionService {
     // Append auto-save instruction for repo-based sessions
     if (resolvedPrompt) {
       resolvedPrompt = appendAutoSave(resolvedPrompt, !!session.repo);
+    }
+
+    // Append base branch instruction when the channel specifies one
+    const channelBaseBranch = session.channel?.baseBranch ?? session.sessionGroup?.channel?.baseBranch ?? null;
+    if (isFirstRun && resolvedPrompt && channelBaseBranch) {
+      resolvedPrompt = resolvedPrompt + buildBaseBranchInstruction(channelBaseBranch);
     }
 
     const checkpointContext = buildCheckpointContextFromStartMeta({
