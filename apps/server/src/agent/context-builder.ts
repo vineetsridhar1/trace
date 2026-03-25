@@ -192,9 +192,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
         id: p.project.id,
         name: p.project.name,
       })),
-      channel: ticket.channel
-        ? { id: ticket.channel.id, name: ticket.channel.name }
-        : null,
+      channel: ticket.channel ? { id: ticket.channel.id, name: ticket.channel.name } : null,
     };
   },
 
@@ -217,9 +215,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       repo: session.repo
         ? { id: session.repo.id, name: session.repo.name, remoteUrl: session.repo.remoteUrl }
         : null,
-      channel: session.channel
-        ? { id: session.channel.id, name: session.channel.name }
-        : null,
+      channel: session.channel ? { id: session.channel.id, name: session.channel.name } : null,
       projects: session.projects.map((p: { project: { id: string; name: string } }) => ({
         id: p.project.id,
         name: p.project.name,
@@ -438,7 +434,10 @@ async function fetchLinkedEntity(
         const s = await prisma.session.findUnique({
           where: { id: entityId },
           select: {
-            id: true, name: true, agentStatus: true, sessionStatus: true,
+            id: true,
+            name: true,
+            agentStatus: true,
+            sessionStatus: true,
             tool: true,
           },
         });
@@ -465,7 +464,11 @@ async function fetchLinkedEntity(
         const t = await prisma.ticket.findUnique({
           where: { id: entityId },
           select: {
-            id: true, title: true, status: true, priority: true, labels: true,
+            id: true,
+            title: true,
+            status: true,
+            priority: true,
+            labels: true,
           },
         });
         if (!t) return null;
@@ -510,7 +513,7 @@ function truncateEntities(entities: ContextEntity[], budget: number): ContextEnt
 
 async function fetchRecentEvents(input: {
   organizationId: string;
-  scopeType: string;
+  scopeType: PrismaScopeType;
   scopeId: string;
   excludeIds: Set<string>;
   limit: number;
@@ -518,7 +521,7 @@ async function fetchRecentEvents(input: {
   const events = await prisma.event.findMany({
     where: {
       organizationId: input.organizationId,
-      scopeType: input.scopeType as PrismaScopeType,
+      scopeType: input.scopeType,
       scopeId: input.scopeId,
     },
     orderBy: { timestamp: "desc" },
@@ -568,11 +571,7 @@ async function fetchSummaries(input: {
   let used = 0;
 
   // Scope entity summary first (highest priority)
-  const scopeSummary = await refreshIfStale(
-    input.organizationId,
-    input.scopeType,
-    input.scopeId,
-  );
+  const scopeSummary = await refreshIfStale(input.organizationId, input.scopeType, input.scopeId);
 
   if (scopeSummary) {
     const tokens = estimateTokens(scopeSummary.content);
@@ -718,7 +717,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   const { organizationId, scopeKey, events } = batch;
 
   // Parse scope type and ID from scope key
-  const scopeType = scopeKey.split(":")[0];
+  const scopeType = scopeKey.split(":")[0] as PrismaScopeType;
   const scopeId = parseScopeId(scopeKey);
 
   // Trigger event = most recent in batch
@@ -869,4 +868,3 @@ function truncateEventsToFit(events: AgentEvent[], budget: number): AgentEvent[]
 
   return result;
 }
-

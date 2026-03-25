@@ -479,14 +479,18 @@ export class SessionService {
   }
 
   private normalizeFilePath(filePath: string): string {
-    if (!filePath || filePath.startsWith("/") || filePath.includes("\\")) {
+    if (!filePath) {
       throw new Error(INVALID_FILE_PATH_ERROR);
     }
-    const parts = filePath.split("/");
-    if (parts.some((part) => part.length === 0 || part === "." || part === "..")) {
-      throw new Error(INVALID_FILE_PATH_ERROR);
+    // Allow absolute paths through — the bridge validates they're inside the workdir.
+    // Just block path traversal segments for relative paths.
+    if (!filePath.startsWith("/")) {
+      const parts = filePath.split("/");
+      if (parts.some((part) => part.length === 0 || part === "." || part === "..")) {
+        throw new Error(INVALID_FILE_PATH_ERROR);
+      }
     }
-    return parts.join("/");
+    return filePath;
   }
 
   private async resolveAccessibleSessionGroupRuntime(
@@ -2841,18 +2845,27 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<string> {
-    const normalizedPath = this.normalizeFilePath(filePath);
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
       sessionGroupId,
       organizationId,
       userId,
     );
+    const normalizedPath = this.normalizeFilePath(filePath);
+    // For absolute paths, derive the relative form for the allowlist check.
+    // The bridge will resolve the actual path and verify it's inside the workdir.
+    let relativePath = normalizedPath;
+    if (normalizedPath.startsWith("/") && runtime.workdirHint) {
+      const prefix = runtime.workdirHint.replace(/\/$/, "") + "/";
+      if (normalizedPath.startsWith(prefix)) {
+        relativePath = normalizedPath.slice(prefix.length);
+      }
+    }
     const allowedFiles = await sessionRouter.listFiles(
       runtime.runtimeId,
       runtime.sessionId,
       runtime.workdirHint,
     );
-    if (!allowedFiles.includes(normalizedPath)) {
+    if (!allowedFiles.includes(relativePath)) {
       throw new Error(INVALID_FILE_PATH_ERROR);
     }
     return sessionRouter.readFile(
@@ -2912,12 +2925,12 @@ export class SessionService {
     if (!ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f]/.test(ref)) {
       throw new Error("Invalid git ref");
     }
-    const normalizedPath = this.normalizeFilePath(filePath);
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
       sessionGroupId,
       organizationId,
       userId,
     );
+    const normalizedPath = this.normalizeFilePath(filePath);
     return sessionRouter.fileAtRef(
       runtime.runtimeId,
       runtime.sessionId,

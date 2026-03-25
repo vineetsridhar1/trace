@@ -25,7 +25,7 @@ export function UserBubble({
   return (
     <div className="flex justify-end">
       <div className="flex max-w-[85%] flex-col items-end">
-        <div className="user-prompt-bubble px-3 py-2">
+        <div className="user-prompt-bubble px-3 py-2 w-full">
           <div className="mb-1 flex items-center gap-2">
             <span className="text-xs font-semibold text-accent">{displayName}</span>
             <span className="text-[10px] text-muted-foreground">{formatTime(timestamp)}</span>

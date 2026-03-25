@@ -18,10 +18,9 @@ function ExternalLink(props: ComponentPropsWithoutRef<"a">) {
   return <a {...props} target="_blank" rel="noopener noreferrer" />;
 }
 
-/** Normalize a file path for the file viewer (strip leading slash, collapse ./ prefix). */
+/** Normalize a file path for the file viewer (collapse ./ prefix). */
 function normalizeFilePath(href: string): string {
   let p = href;
-  if (p.startsWith("/")) p = p.slice(1);
   if (p.startsWith("./")) p = p.slice(2);
   return p;
 }

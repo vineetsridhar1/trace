@@ -452,12 +452,9 @@ export function handleReadFile(
     send({ type: "file_content_result", requestId, content: "", error: `No workdir known for session ${sessionId}` });
     return;
   }
-  // Defense-in-depth: reject absolute paths and suspicious relative paths at the bridge level too.
-  if (hasInvalidRelativePathSegments(relativePath)) {
-    send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
-    return;
-  }
   const normalizedWorkdir = deps.path.resolve(workdir);
+  // Accept absolute paths (e.g. from Codex) — resolve handles both absolute and relative.
+  // The isPathInsideRoot check below ensures the resolved path stays within the workdir.
   const fullPath = deps.path.resolve(normalizedWorkdir, relativePath);
   if (!isPathInsideRoot(normalizedWorkdir, fullPath, deps.path)) {
     send({ type: "file_content_result", requestId, content: "", error: "Path traversal denied" });
