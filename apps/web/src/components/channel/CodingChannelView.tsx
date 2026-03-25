@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from "react";
-import { Code } from "lucide-react";
+import { Code, GitBranch } from "lucide-react";
 import { gql } from "@urql/core";
 import type { SessionGroup } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
@@ -67,6 +67,7 @@ const SESSION_GROUPS_QUERY = gql`
 
 export function CodingChannelView({ channelId }: { channelId: string }) {
   const channelName = useEntityField("channels", channelId, "name");
+  const baseBranch = useEntityField("channels", channelId, "baseBranch") as string | null | undefined;
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [loading, setLoading] = useState(true);
   const refreshTick = useUIStore((s) => s.refreshTick);
@@ -106,6 +107,12 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
         <h2 className="text-sm font-semibold text-foreground">
           {channelName ?? "Channel"}
         </h2>
+        {baseBranch && (
+          <span className="flex items-center gap-1 rounded-md bg-surface-elevated px-1.5 py-0.5 text-xs text-muted-foreground">
+            <GitBranch size={12} />
+            {baseBranch}
+          </span>
+        )}
         <ConnectionStatus />
         <StartSessionDialog channelId={channelId} />
       </div>
