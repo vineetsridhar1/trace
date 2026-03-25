@@ -77,7 +77,7 @@ describe("router", () => {
     expect(result).toEqual({
       decision: "direct",
       reason: "direct:message_sent",
-      maxTier: undefined,
+      maxTier: 3,
     });
   });
 
@@ -152,5 +152,99 @@ describe("router", () => {
     cleanupRateLimits();
 
     expect(routeEvent(event({ scopeId: "chat-clean" }), settings).decision).toBe("aggregate");
+  });
+
+  // ---- Tier 3 promotion rules ----
+
+  it("promotes ticket_assigned to Tier 3 when assigned to agent", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_assigned",
+        payload: { assigneeId: "agent-1" },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("direct");
+    expect(result.maxTier).toBe(3);
+  });
+
+  it("promotes urgent ticket_created to Tier 3", () => {
+    seedChatMemberships("org-1", ["chat-1"]);
+
+    const result = routeEvent(
+      event({
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_created",
+        payload: { priority: "urgent" },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.maxTier).toBe(3);
+  });
+
+  it("promotes high priority ticket_updated to Tier 3", () => {
+    seedChatMemberships("org-1", ["chat-1"]);
+
+    const result = routeEvent(
+      event({
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_updated",
+        payload: { priority: "high" },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.maxTier).toBe(3);
+  });
+
+  it("promotes @mention of agent to Tier 3", () => {
+    seedChatMemberships("org-1", ["chat-1"]);
+
+    const result = routeEvent(
+      event({ payload: { mentions: [{ userId: "agent-1" }] } }),
+      settings,
+    );
+
+    expect(result.decision).toBe("direct");
+    expect(result.maxTier).toBe(3);
+  });
+
+  it("suppresses Tier 3 promotion when budget is below 50%", () => {
+    seedChatMemberships("org-1", ["chat-1"]);
+    setCostTracker({ getRemainingBudgetFraction: () => 0.3 });
+
+    const result = routeEvent(
+      event({ payload: { mentions: [{ userId: "agent-1" }] } }),
+      settings,
+    );
+
+    // Budget suppression: even though event qualifies for Tier 3, maxTier stays at 2
+    expect(result.decision).toBe("direct");
+    expect(result.maxTier).toBe(2);
+  });
+
+  it("does not promote normal priority tickets to Tier 3", () => {
+    seedChatMemberships("org-1", ["chat-1"]);
+
+    const result = routeEvent(
+      event({
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_created",
+        payload: { priority: "medium" },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.maxTier).toBeUndefined();
   });
 });

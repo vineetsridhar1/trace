@@ -51,10 +51,11 @@ export interface PlannerResult {
 }
 
 // ---------------------------------------------------------------------------
-// Default model — Sonnet-class for Tier 2
+// Model configuration per tier
 // ---------------------------------------------------------------------------
 
 const DEFAULT_TIER2_MODEL = "claude-sonnet-4-20250514";
+export const DEFAULT_TIER3_MODEL = "claude-opus-4-20250514";
 
 // ---------------------------------------------------------------------------
 // LLM adapter (lazy singleton, same pattern as summary-generator)

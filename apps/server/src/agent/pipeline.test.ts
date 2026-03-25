@@ -11,10 +11,25 @@ import type { PolicyResult } from "./policy-engine.js";
 
 vi.mock("./context-builder.js", () => ({
   buildContext: vi.fn(),
+  TIER3_TOKEN_BUDGET: {
+    total: 100_000,
+    sections: {
+      triggerEvent: 3_000,
+      actionSchema: 5_000,
+      soulFile: 3_000,
+      scopeEntity: 6_000,
+      eventBatch: 18_000,
+      relevantEntities: 22_000,
+      summaries: 18_000,
+      recentEvents: 14_000,
+      actors: 3_000,
+    },
+  },
 }));
 
 vi.mock("./planner.js", () => ({
   runPlanner: vi.fn(),
+  DEFAULT_TIER3_MODEL: "claude-opus-4-20250514",
 }));
 
 vi.mock("./policy-engine.js", () => ({
@@ -34,7 +49,15 @@ vi.mock("../services/execution-logging.js", () => ({
 }));
 
 vi.mock("../services/cost-tracking.js", () => ({
-  costTrackingService: { recordCost: vi.fn().mockResolvedValue({}) },
+  costTrackingService: {
+    recordCost: vi.fn().mockResolvedValue({}),
+    checkBudget: vi.fn().mockResolvedValue({
+      dailyLimitCents: 1000,
+      spentCents: 100,
+      remainingCents: 900,
+      remainingPercent: 90,
+    }),
+  },
 }));
 
 vi.mock("../services/processed-event.js", () => ({
@@ -67,6 +90,7 @@ const mockCreateSuggestions = vi.mocked(createSuggestions);
 const mockRefreshSummary = vi.mocked(refreshSummary);
 const mockLogWrite = vi.mocked(executionLoggingService.write);
 const mockRecordCost = vi.mocked(costTrackingService.recordCost);
+const mockCheckBudget = vi.mocked(costTrackingService.checkBudget);
 const mockIsProcessed = vi.mocked(processedEventService.isProcessed);
 const mockMarkProcessed = vi.mocked(processedEventService.markProcessed);
 
@@ -193,20 +217,117 @@ describe("runPipeline", () => {
     expect(logInput.status).toBe("dropped");
   });
 
-  it("handles escalate disposition — logs as blocked", async () => {
+  it("handles escalate disposition with promotion — re-runs with Tier 3", async () => {
     const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    const plannerResult = makePlannerResult("escalate");
-    plannerResult.output.promotionReason = "complex multi-step task";
-    mockRunPlanner.mockResolvedValue(plannerResult);
+    const tier3Packet = makePacket({ tokenBudget: { total: 100000, used: 8000, sections: { trigger: 300 } } });
+    mockBuildContext
+      .mockResolvedValueOnce(packet) // Tier 2 context
+      .mockResolvedValueOnce(tier3Packet); // Tier 3 context (rebuilt)
+
+    // Tier 2 planner returns escalate with promotionReason
+    const tier2Result = makePlannerResult("escalate");
+    tier2Result.output.promotionReason = "complex multi-step task";
+
+    // Tier 3 planner returns act
+    const tier3Result = makePlannerResult("act", { model: "claude-opus-4-20250514" });
+
+    mockRunPlanner
+      .mockResolvedValueOnce(tier2Result)
+      .mockResolvedValueOnce(tier3Result);
+
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "high confidence",
+        },
+      ],
+      plannerOutput: tier3Result.output,
+    } as PolicyResult);
 
     await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
 
-    expect(mockEvaluatePolicy).not.toHaveBeenCalled();
+    // Planner called twice: once for Tier 2, once for Tier 3
+    expect(mockRunPlanner).toHaveBeenCalledTimes(2);
+    // Second call should use Tier 3 model
+    expect(mockRunPlanner.mock.calls[1][1]).toEqual({ model: "claude-opus-4-20250514" });
+    // Context rebuilt for Tier 3
+    expect(mockBuildContext).toHaveBeenCalledTimes(2);
+    // Execution log records promotion
     expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].disposition).toBe("escalate");
+    expect(mockLogWrite.mock.calls[0][0].modelTier).toBe("tier3");
+    expect(mockLogWrite.mock.calls[0][0].promoted).toBe(true);
+    expect(mockLogWrite.mock.calls[0][0].promotionReason).toBe("complex multi-step task");
+    // Cost recorded for both tiers
+    expect(mockRecordCost).toHaveBeenCalledTimes(2);
+    expect(mockRecordCost.mock.calls[0][0].modelTier).toBe("tier2");
+    expect(mockRecordCost.mock.calls[1][0].modelTier).toBe("tier3");
+  });
+
+  it("suppresses Tier 3 promotion when budget is below 50%", async () => {
+    const packet = makePacket();
+    mockBuildContext.mockResolvedValue(packet);
+
+    // Tier 2 planner returns escalate
+    const tier2Result = makePlannerResult("escalate");
+    tier2Result.output.promotionReason = "complex multi-step task";
+    mockRunPlanner.mockResolvedValue(tier2Result);
+
+    // Budget is tight — should suppress Tier 3
+    mockCheckBudget.mockResolvedValue({
+      dailyLimitCents: 1000,
+      spentCents: 600,
+      remainingCents: 400,
+      remainingPercent: 40,
+    });
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    // Only one planner call (Tier 2 only, no promotion)
+    expect(mockRunPlanner).toHaveBeenCalledOnce();
+    expect(mockLogWrite).toHaveBeenCalledOnce();
     expect(mockLogWrite.mock.calls[0][0].status).toBe("blocked");
-    expect(mockMarkProcessed).toHaveBeenCalledOnce();
+    expect(mockLogWrite.mock.calls[0][0].modelTier).toBe("tier2");
+  });
+
+  it("runs Tier 3 directly when batch.maxTier is 3 (rule-based promotion)", async () => {
+    const packet = makePacket({ tokenBudget: { total: 100000, used: 8000, sections: { trigger: 300 } } });
+    mockBuildContext.mockResolvedValue(packet);
+    const tier3Result = makePlannerResult("act", { model: "claude-opus-4-20250514" });
+    mockRunPlanner.mockResolvedValue(tier3Result);
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "high confidence",
+        },
+      ],
+      plannerOutput: tier3Result.output,
+    } as PolicyResult);
+
+    // batch.maxTier = 3 → skip Tier 2, run Tier 3 directly
+    await runPipeline({
+      batch: makeBatch({ maxTier: 3 }),
+      agentSettings,
+      executor: mockExecutor,
+    });
+
+    // Only one planner call with Tier 3 model
+    expect(mockRunPlanner).toHaveBeenCalledOnce();
+    expect(mockRunPlanner.mock.calls[0][1]).toEqual({ model: "claude-opus-4-20250514" });
+    // Context built with Tier 3 token budget
+    expect(mockBuildContext.mock.calls[0][0]).toHaveProperty("tokenBudget");
+    // Execution log records rule-based promotion
+    expect(mockLogWrite).toHaveBeenCalledOnce();
+    expect(mockLogWrite.mock.calls[0][0].modelTier).toBe("tier3");
+    expect(mockLogWrite.mock.calls[0][0].promoted).toBe(true);
+    expect(mockLogWrite.mock.calls[0][0].promotionReason).toBe("rule_based:router");
+    // Cost recorded as tier3
+    expect(mockRecordCost).toHaveBeenCalledWith(
+      expect.objectContaining({ modelTier: "tier3" }),
+    );
   });
 
   it("handles summarize disposition — triggers summary refresh", async () => {

@@ -7,12 +7,17 @@
  * - ignore: log and return
  * - suggest/act: policy engine → executor or suggestion creator
  * - summarize: trigger summary refresh for the scope
- * - escalate: log and skip (Tier 3 promotion is ticket #16)
+ * - escalate: promote to Tier 3 (re-run with Opus-class model)
+ *
+ * Tier 3 promotion:
+ * - Rule-based: router annotates maxTier=3 → skip Tier 2, run Tier 3 directly
+ * - Model-requested: Tier 2 returns promotionReason → discard, re-run with Tier 3
+ * - Budget-suppressed: if org budget is 10-50%, downgrade Tier 3 to Tier 2
  *
  * Every planner run is recorded via executionLoggingService and cost tracked
  * via costTrackingService.
  *
- * Ticket: #15
+ * Ticket: #15, #16
  * Dependencies: #04-14
  */
 
@@ -20,7 +25,9 @@ import type { ExecutionDisposition, ExecutionStatus } from "@prisma/client";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentContextPacket } from "./context-builder.js";
+import { TIER3_TOKEN_BUDGET } from "./context-builder.js";
 import type { PlannerResult } from "./planner.js";
+import { DEFAULT_TIER3_MODEL } from "./planner.js";
 import type { PolicyDecision, PolicyActionResult } from "./policy-engine.js";
 import type { ExecutionResult } from "./executor.js";
 import { buildContext } from "./context-builder.js";
@@ -102,15 +109,26 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     return;
   }
 
-  // ── 1. Build context ──
+  // ── Determine tier — rule-based Tier 3 promotion ──
+  const isRuleBasedTier3 = batch.maxTier === 3;
+  let currentTier: "tier2" | "tier3" = isRuleBasedTier3 ? "tier3" : "tier2";
+  let promoted = false;
+  let promotionReason: string | undefined;
+
+  // ── 1. Build context (Tier 3 gets a larger token budget) ──
   let packet: AgentContextPacket;
   try {
-    packet = await buildContext({ batch, agentSettings });
+    packet = await buildContext({
+      batch,
+      agentSettings,
+      tokenBudget: currentTier === "tier3" ? TIER3_TOKEN_BUDGET : undefined,
+    });
     log("context built", {
       scopeKey: packet.scopeKey,
       triggerEventType: packet.triggerEvent.eventType,
       relevantEntities: packet.relevantEntities.length,
       tokensUsed: packet.tokenBudget.used,
+      tier: currentTier,
     });
   } catch (err) {
     logError("context builder failed", err);
@@ -118,12 +136,95 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   }
 
   // ── 2. Run planner ──
+  const tier3Model = process.env.AGENT_TIER3_MODEL ?? DEFAULT_TIER3_MODEL;
   let plannerResult: PlannerResult;
   try {
-    plannerResult = await runPlanner(packet);
+    plannerResult = await runPlanner(
+      packet,
+      currentTier === "tier3" ? { model: tier3Model } : undefined,
+    );
   } catch (err) {
     logError("planner failed unexpectedly", err);
     return;
+  }
+
+  // ── 2a. Model-requested promotion — Tier 2 escalate → re-run with Tier 3 ──
+  if (
+    currentTier === "tier2" &&
+    plannerResult.output.disposition === "escalate" &&
+    plannerResult.output.promotionReason
+  ) {
+    // Record the Tier 2 cost before re-running
+    const tier2CostCents = estimateCostCents(
+      plannerResult.model,
+      plannerResult.usage.inputTokens,
+      plannerResult.usage.outputTokens,
+    );
+    try {
+      await costTrackingService.recordCost({
+        organizationId: packet.organizationId,
+        modelTier: "tier2",
+        costCents: tier2CostCents,
+      });
+    } catch (err) {
+      logError("tier2 cost tracking failed (non-fatal)", err);
+    }
+
+    // Check budget before promoting — suppress Tier 3 if budget is tight
+    let budgetAllowsTier3 = true;
+    try {
+      const budgetStatus = await costTrackingService.checkBudget(packet.organizationId);
+      if (budgetStatus.remainingPercent < 50) {
+        budgetAllowsTier3 = false;
+        log("Tier 3 promotion suppressed — budget below 50%", {
+          scopeKey: packet.scopeKey,
+          remainingPercent: budgetStatus.remainingPercent,
+        });
+      }
+    } catch (err) {
+      logError("budget check failed, suppressing Tier 3 (non-fatal)", err);
+      budgetAllowsTier3 = false;
+    }
+
+    if (budgetAllowsTier3) {
+      promoted = true;
+      promotionReason = plannerResult.output.promotionReason;
+      currentTier = "tier3";
+
+      log("promoting to Tier 3", {
+        scopeKey: packet.scopeKey,
+        promotionReason,
+      });
+
+      // Rebuild context with larger Tier 3 token budget
+      try {
+        packet = await buildContext({
+          batch,
+          agentSettings,
+          tokenBudget: TIER3_TOKEN_BUDGET,
+        });
+      } catch (err) {
+        logError("Tier 3 context rebuild failed", err);
+        return;
+      }
+
+      // Re-run planner with Tier 3 model (discard Tier 2 output entirely)
+      try {
+        plannerResult = await runPlanner(packet, { model: tier3Model });
+      } catch (err) {
+        logError("Tier 3 planner failed unexpectedly", err);
+        return;
+      }
+    } else {
+      // Budget suppressed — fall through with the Tier 2 escalate result
+      // which will be handled as a blocked escalation below
+    }
+  }
+
+  // For rule-based Tier 3, mark as promoted
+  if (isRuleBasedTier3) {
+    promoted = true;
+    promotionReason = "rule_based:router";
   }
 
   const { output: plannerOutput } = plannerResult;
@@ -139,6 +240,8 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     confidence: plannerOutput.confidence,
     actionCount: plannerOutput.proposedActions.length,
     model: plannerResult.model,
+    tier: currentTier,
+    promoted,
     latencyMs: plannerResult.latencyMs,
     costCents: Math.round(costCents * 1000) / 1000,
   });
@@ -147,7 +250,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   try {
     await costTrackingService.recordCost({
       organizationId: packet.organizationId,
-      modelTier: "tier2",
+      modelTier: currentTier,
       costCents,
     });
   } catch (err) {
@@ -179,16 +282,24 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       status: "dropped",
       policyDecision: {},
       finalActions: [],
+      modelTier: currentTier,
+      promoted,
+      promotionReason,
     });
     await markProcessed(packet);
     return;
   }
 
-  // Escalate: log for Tier 3 promotion (ticket #16 will handle re-running with Opus)
+  // Escalate: either Tier 3 already ran and still escalated, or promotion was suppressed
   if (plannerOutput.disposition === "escalate") {
-    log("escalation requested (Tier 3 not yet implemented)", {
+    const escalationReason = currentTier === "tier3"
+      ? "tier3_escalation_unresolvable"
+      : "tier3_promotion_suppressed_by_budget";
+    log("escalation unresolved", {
       scopeKey: packet.scopeKey,
+      reason: escalationReason,
       promotionReason: plannerOutput.promotionReason,
+      tier: currentTier,
     });
     await writeExecutionLog({
       packet,
@@ -198,8 +309,11 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       batch,
       disposition: executionDisposition,
       status: "blocked",
-      policyDecision: { reason: "escalation_pending_tier3" },
+      policyDecision: { reason: escalationReason },
       finalActions: [],
+      promoted,
+      promotionReason,
+      modelTier: currentTier,
     });
     await markProcessed(packet);
     return;
@@ -231,6 +345,9 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       status: "succeeded",
       policyDecision: {},
       finalActions: [],
+      modelTier: currentTier,
+      promoted,
+      promotionReason,
     });
     await markProcessed(packet);
     return;
@@ -256,6 +373,9 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       status: "failed",
       policyDecision: { error: err instanceof Error ? err.message : String(err) },
       finalActions: [],
+      modelTier: currentTier,
+      promoted,
+      promotionReason,
     });
     await markProcessed(packet);
     return;
@@ -390,6 +510,9 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     ),
     finalActions,
     inboxItemId,
+    modelTier: currentTier,
+    promoted,
+    promotionReason,
   });
 
   // ── 11. Mark trigger event as processed ──
@@ -418,12 +541,19 @@ interface WriteLogInput {
   policyDecision: Record<string, unknown>;
   finalActions: Record<string, unknown>[];
   inboxItemId?: string;
+  /** Override model tier (defaults to "tier2" for backward compat). */
+  modelTier?: "tier2" | "tier3";
+  /** Whether the call was promoted from Tier 2 to Tier 3. */
+  promoted?: boolean;
+  /** Why the call was promoted. */
+  promotionReason?: string;
 }
 
 async function writeExecutionLog(input: WriteLogInput): Promise<void> {
   const {
     packet, plannerResult, costCents, agentSettings, batch,
     disposition, status, policyDecision, finalActions, inboxItemId,
+    modelTier = "tier2", promoted: wasPromoted = false, promotionReason: promoReason,
   } = input;
   try {
     await executionLoggingService.write({
@@ -431,9 +561,10 @@ async function writeExecutionLog(input: WriteLogInput): Promise<void> {
       triggerEventId: packet.triggerEvent.id,
       batchSize: batch.events.length,
       agentId: agentSettings.agentId,
-      modelTier: "tier2",
+      modelTier,
       model: plannerResult.model,
-      promoted: false,
+      promoted: wasPromoted,
+      promotionReason: promoReason,
       inputTokens: plannerResult.usage.inputTokens,
       outputTokens: plannerResult.usage.outputTokens,
       estimatedCostCents: costCents,

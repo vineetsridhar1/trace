@@ -65,6 +65,44 @@ const DIRECT_RULES: Record<string, (event: AgentEvent, agentId: string) => boole
   },
 };
 
+// ---------------------------------------------------------------------------
+// Tier 3 promotion rules — events that warrant the premium (Opus-class) model.
+// When matched, maxTier is set to 3 so the pipeline skips Tier 2 entirely.
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine whether an event should be promoted to Tier 3.
+ * Returns true if the event matches a Tier 3 trigger condition.
+ */
+function shouldPromoteToTier3(event: AgentEvent, agentId: string): boolean {
+  // 1. Ticket assigned directly to the agent → Tier 3
+  if (event.eventType === "ticket_assigned") {
+    const assigneeId = event.payload.assigneeId;
+    if (typeof assigneeId === "string" && assigneeId === agentId) return true;
+  }
+
+  // 2. Ticket with priority "urgent" or "high" (created or updated)
+  if (event.eventType === "ticket_created" || event.eventType === "ticket_updated") {
+    const priority = event.payload.priority;
+    if (priority === "urgent" || priority === "high") return true;
+  }
+
+  // 3. Explicit @mention of the agent in a message (complex question indicator)
+  if (event.eventType === "message_sent") {
+    const mentions = event.payload.mentions;
+    if (
+      Array.isArray(mentions) &&
+      mentions.some(
+        (m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Events that should be aggregated (batched before planner).
  * Simple set — if the event type is here and not direct, it's aggregated.
@@ -281,7 +319,13 @@ export function routeEvent(
     return { decision: "drop", reason: "rate_limited" };
   }
 
-  const maxTier = getMaxTier(budgetFraction);
+  const budgetMaxTier = getMaxTier(budgetFraction);
+
+  // Determine Tier 3 promotion — overrides budget-based maxTier only upward
+  const tier3Promoted = shouldPromoteToTier3(event, agentId);
+  const maxTier = tier3Promoted
+    ? (budgetMaxTier === 2 ? 2 : 3) // respect budget suppression
+    : budgetMaxTier;
 
   // 7. Direct routing — check if this event should bypass aggregation
   const directRule = DIRECT_RULES[event.eventType];

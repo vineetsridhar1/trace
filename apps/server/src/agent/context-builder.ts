@@ -117,8 +117,24 @@ function estimateObjectTokens(obj: unknown): number {
  * Per-section token allocations. These define the maximum tokens each section
  * can consume. Sections are filled greedily by priority order.
  */
-const DEFAULT_TOKEN_BUDGET = {
-  total: 60_000, // ~30% of 200K context window
+export interface TokenBudgetConfig {
+  total: number;
+  sections: {
+    triggerEvent: number;
+    actionSchema: number;
+    soulFile: number;
+    scopeEntity: number;
+    eventBatch: number;
+    relevantEntities: number;
+    summaries: number;
+    recentEvents: number;
+    actors: number;
+  };
+}
+
+/** Tier 2 token budget — ~30% of 200K context window */
+export const TIER2_TOKEN_BUDGET: TokenBudgetConfig = {
+  total: 60_000,
   sections: {
     triggerEvent: 2_000,
     actionSchema: 4_000,
@@ -131,6 +147,24 @@ const DEFAULT_TOKEN_BUDGET = {
     actors: 2_000,
   },
 };
+
+/** Tier 3 token budget — larger budget for premium model (Opus-class) */
+export const TIER3_TOKEN_BUDGET: TokenBudgetConfig = {
+  total: 100_000,
+  sections: {
+    triggerEvent: 3_000,
+    actionSchema: 5_000,
+    soulFile: 3_000,
+    scopeEntity: 6_000,
+    eventBatch: 18_000,
+    relevantEntities: 22_000,
+    summaries: 18_000,
+    recentEvents: 14_000,
+    actors: 3_000,
+  },
+};
+
+const DEFAULT_TOKEN_BUDGET = TIER2_TOKEN_BUDGET;
 
 // ---------------------------------------------------------------------------
 // Scope entity fetching — strategy per scope type
@@ -698,6 +732,8 @@ export interface BuildContextInput {
   projectSoulFile?: string;
   /** Optional repo-level soul file (from .trace/soul.md). */
   repoSoulFile?: string;
+  /** Optional token budget override (e.g. TIER3_TOKEN_BUDGET for premium model). */
+  tokenBudget?: TokenBudgetConfig;
 }
 
 /**
@@ -723,7 +759,9 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   // Trigger event = most recent in batch
   const triggerEvent = events[events.length - 1];
 
-  const budget = { ...DEFAULT_TOKEN_BUDGET };
+  const budget = input.tokenBudget
+    ? { total: input.tokenBudget.total, sections: { ...input.tokenBudget.sections } }
+    : { total: DEFAULT_TOKEN_BUDGET.total, sections: { ...DEFAULT_TOKEN_BUDGET.sections } };
   const sectionTokens: Record<string, number> = {};
   let totalUsed = 0;
 
