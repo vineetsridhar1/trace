@@ -9,6 +9,7 @@
  */
 
 import { prisma } from "../lib/db.js";
+import { ScopeType as PrismaScopeType } from "@prisma/client";
 import { summaryService } from "../services/summary.js";
 import { refreshIfStale } from "./summary-worker.js";
 import { ticketService } from "../services/ticket.js";
@@ -230,7 +231,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       where: { id: scopeId },
       include: {
         projects: { include: { project: { select: { id: true, name: true } } } },
-        repos: { include: { repo: { select: { id: true, name: true } } } },
+        repo: { select: { id: true, name: true } },
       },
     });
     if (!channel) return null;
@@ -242,10 +243,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
         id: p.project.id,
         name: p.project.name,
       })),
-      repos: channel.repos.map((r: { repo: { id: string; name: string } }) => ({
-        id: r.repo.id,
-        name: r.repo.name,
-      })),
+      repo: channel.repo ? { id: channel.repo.id, name: channel.repo.name } : null,
     };
   },
 };
@@ -519,7 +517,7 @@ async function fetchRecentEvents(input: {
   const events = await prisma.event.findMany({
     where: {
       organizationId: input.organizationId,
-      scopeType: input.scopeType,
+      scopeType: input.scopeType as PrismaScopeType,
       scopeId: input.scopeId,
     },
     orderBy: { timestamp: "desc" },
