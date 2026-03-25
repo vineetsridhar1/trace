@@ -46,6 +46,7 @@ Prevent the agent from suggesting the same thing twice. If users discuss the sam
 
 - 14 (Suggestion Delivery)
 - 12 (Policy Engine)
+  <!-- Ticket 12 created: Dismissal tracking is currently in-memory in `./agent/policy-engine.js` via `recordDismissal()` and an internal `Map<string, DismissalRecord>`. This works for single-worker but needs migration to Redis for multi-worker deployment. Replace the in-memory `dismissals` Map with Redis SET/GET on key `suppress:{orgId}:{scopeType}:{scopeId}:{actionType}` with TTL 24h. The `recordDismissal({ organizationId, scopeType, scopeId, actionType })` export is the write path — call it from the suggestion dismiss handler. The `isDismissalCooldownActive()` internal function is the read path — refactor it to check Redis instead. Similarly, suggestion rate limiting is in-memory (`suggestionRates` Map) — consider migrating to Redis INCR with TTL for multi-worker consistency. -->
 
 ## Completion requirements
 
