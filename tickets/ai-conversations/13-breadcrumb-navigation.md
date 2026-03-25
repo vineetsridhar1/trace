@@ -6,7 +6,7 @@ Add a breadcrumb trail at the top of the conversation view showing the current b
 
 ## What needs to happen
 
-- Create `apps/web/src/components/ai-conversations/BranchBreadcrumb.tsx`:
+- Create `BranchBreadcrumb.tsx` under `apps/web/src/features/ai-conversations/components/`:
   - Renders the ancestor chain for the current branch as a horizontal breadcrumb
   - Each crumb shows the branch label (or auto-label from first turn)
   - Separator between crumbs: `→` or `›` or `/`

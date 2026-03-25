@@ -15,10 +15,10 @@ Create the service layer for managing AI conversations and branches. This servic
 - Implement `getConversation(id)`:
   - Returns conversation with branches and turn counts
   - Validates the requesting user has access (private = creator only, org = any org member)
-- Implement `getConversations({ organizationId, userId, visibility? })`:
+- Implement `getConversations({ organizationId, userId, visibility?, limit? })`:
   - Returns conversations the user can see: their own private ones + org-visible ones
   - Sorted by `updatedAt` descending
-  - Support pagination (cursor-based)
+  - Allow a bounded `limit` for list hydration if needed, but v1 does not require a GraphQL connection shape
 - Implement `updateTitle(conversationId, title)`:
   - Updates the conversation title
   - Validates the requesting user is the creator

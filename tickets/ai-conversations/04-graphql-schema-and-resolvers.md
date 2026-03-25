@@ -70,11 +70,17 @@ Add the GraphQL types, queries, mutations, and subscriptions for AI Conversation
 - Add subscription:
   ```graphql
   branchTurns(branchId: ID!): Turn!
+  conversationEvents(conversationId: ID!): Event!
   ```
-- Create resolver files at `apps/server/src/resolvers/`:
-  - `aiConversation.ts` — query and mutation resolvers
+- Create the GraphQL module under `apps/server/src/schema/` following the existing server pattern:
+  - `aiConversation.ts` — query, mutation, and subscription resolvers
   - Each resolver calls the corresponding service method
   - Resolvers parse input, call service, format output — nothing else
+- Register the module in `apps/server/src/schema/resolvers.ts`
+- Keep later GraphQL additions for this feature in the same module family:
+  - Branching tickets extend the schema with `forkBranch`
+  - Conversation configuration tickets extend `AiConversation` with `modelId`, `systemPrompt`, `agentObservability`, and fork provenance
+  - Context-management tickets extend the schema with summary and context-health fields
 - Run `pnpm gql:codegen` to regenerate types
 - Wire resolvers into the Apollo Server configuration
 
@@ -92,6 +98,7 @@ Add the GraphQL types, queries, mutations, and subscriptions for AI Conversation
 - [ ] `sendTurn` mutation works end-to-end (creates user turn, calls LLM, returns assistant turn)
 - [ ] `aiConversations` query returns conversations with correct access control
 - [ ] `branchTurns` subscription emits new turns as they are created
+- [ ] `conversationEvents` subscription emits conversation/branch metadata changes for the active viewport
 - [ ] No business logic in resolvers — all logic lives in the service layer
 
 ## How to test
@@ -102,3 +109,4 @@ Add the GraphQL types, queries, mutations, and subscriptions for AI Conversation
 4. Run `sendTurn` mutation with the root branch ID — verify user and assistant turns are returned
 5. Run `aiConversations` query — verify the created conversation appears
 6. Subscribe to `branchTurns` and send a turn — verify the subscription emits the new turn
+7. Subscribe to `conversationEvents`, update the title — verify the event arrives without polling

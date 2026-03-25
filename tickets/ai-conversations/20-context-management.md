@@ -21,6 +21,10 @@ Implement the context management system to handle long conversations and deep br
 - Update `buildContext` to use summaries:
   - If a branch has a summary, prepend it as a system message instead of the raw turns
   - Apply token budget allocation across ancestor levels
+- Extend the GraphQL + store surface so summaries are first-class in the UI:
+  - Expose summary metadata and context-health metrics in conversation/branch queries
+  - Emit a branch summary event (for example `branch.summary_updated`) when a summary is created or refreshed
+  - Update the AI Conversations event processor and `useBranchTimeline()` selector so summary nodes render through the same virtualized timeline as turns
 
 ### Token Budget Allocation
 - Implement the budget system from the PRD:
@@ -54,9 +58,13 @@ Implement the context management system to handle long conversations and deep br
 ## Dependencies
 
 - 03 (Turn Service & LLM Integration)
-  <!-- Ticket 03 creates: sendTurn, LLM adapter integration for generating responses -->
+  <!-- Ticket 03 creates: LLM adapter integration, which summarization reuses for summary generation -->
+- 06 (Zustand Store & Entity Integration)
+  <!-- Ticket 06 creates: the branch timeline selector, store pipeline, and viewport subscriptions that summary nodes plug into -->
+- 08 (Conversation View & Turn Rendering)
+  <!-- Ticket 08 creates: the conversation header and virtualized timeline that will host summary nodes and context health -->
 - 10 (Branch Forking Service & Context Assembly)
-  <!-- Ticket 10 creates: buildContext recursive algorithm, ancestor chain walking -->
+  <!-- Ticket 10 creates: buildContext recursive algorithm and ancestor chain walking -->
 
 ## Completion requirements
 
@@ -67,6 +75,7 @@ Implement the context management system to handle long conversations and deep br
 - [ ] Context health indicator shows current usage in the conversation header
 - [ ] Auto-summarization triggers at ~70% capacity
 - [ ] Summarized sections appear as collapsible nodes in the turn list
+- [ ] Summary metadata and context-health values are exposed through the GraphQL/store/event pipeline for multi-client consistency
 - [ ] `summarizeBranch` mutation creates a summary turn in the parent branch
 - [ ] Raw turns are never deleted — only excluded from live context assembly
 - [ ] Context is never silently dropped — all compression is visible in the UI

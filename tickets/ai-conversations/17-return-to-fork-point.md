@@ -12,11 +12,11 @@ Add a "Return to fork point" button that appears when viewing any non-root branc
   - Position: in the header/toolbar area, near the breadcrumb
   - Icon: `ArrowLeft` or `CornerUpLeft` from Lucide
 - On click:
-  - Switch `activeBranchId` to the parent branch
+  - Switch `activeBranchId` to the parent branch via the AI Conversations Zustand UI slice
   - Scroll the turn list to the fork turn (the turn this branch was created from)
   - Briefly highlight the fork turn (pulse animation or background flash) so the user can see exactly where they branched
 - Add scroll-to-turn functionality to `TurnList.tsx`:
-  - Accept an optional `scrollToTurnId` prop
+  - Read an optional `scrollToTurnId` from the shared AI Conversations UI store
   - When set, scroll the virtualized list to that turn after rendering
   - Clear the scroll target after scrolling
 - Handle edge case: if the fork turn is in the middle of a long conversation, the scroll should position the fork turn near the top of the viewport (not at the bottom)
@@ -24,6 +24,8 @@ Add a "Return to fork point" button that appears when viewing any non-root branc
 
 ## Dependencies
 
+- 11 (Branch Forking UI)
+  <!-- Ticket 11 creates: branch switching, inherited-context view state, and non-root branch navigation -->
 - 13 (Breadcrumb Navigation)
   <!-- Ticket 13 creates: BranchBreadcrumb, ancestor chain display, branch switching from breadcrumb -->
 

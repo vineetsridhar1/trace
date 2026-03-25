@@ -29,6 +29,7 @@ Build the conversation creation flow and per-conversation model selection. Users
   - Use the conversation's `modelId` when calling the LLM (falling back to org default)
   - Include the system prompt in the LLM call if set
 - Add `updateAiConversation` mutation for updating model and system prompt
+- Emit a conversation field-change event when `modelId` or `systemPrompt` changes and extend the AI Conversations store handler so open clients update in real time
 
 ## Dependencies
 
@@ -44,6 +45,7 @@ Build the conversation creation flow and per-conversation model selection. Users
 - [ ] System prompt field exists and is editable via a settings panel
 - [ ] System prompt is included in LLM calls when set
 - [ ] Default model falls back to org configuration when not set
+- [ ] Model/system prompt updates propagate through the event/store pipeline rather than relying on a local mutation result
 - [ ] Prisma migration runs cleanly for new fields
 
 ## How to test

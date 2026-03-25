@@ -31,6 +31,7 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
     - Title derived from the conversation topic
     - Description with relevant context from the conversation
     - Link back to the conversation/branch
+    - Durable provenance so the created ticket can navigate back to the originating conversation/branch
   - This reuses the existing suggestion delivery system from ai-agent ticket 14
 - In `SUGGEST` mode: creates a suggestion InboxItem
 - In `PARTICIPATE` mode: posts a turn with an inline "Create ticket" action
@@ -39,10 +40,11 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
 - Register a new agent action: `ai_conversation.link_entity`
 - The agent monitors conversation content for references to existing tickets or sessions
 - When a match is found: "This sounds related to TRACE-142 — want to link it?"
-- If accepted, creates a link between the conversation and the ticket/session
+- If accepted, creates a durable link between the conversation and the ticket/session through the service layer
 - Add `linkedEntities` field to `AiConversation` (or use a join table):
   - `entityType` (Ticket, Session, etc.)
   - `entityId`
+  - Expose the relation in GraphQL and update the AI Conversations store/event pipeline so linked-entity chips update without a manual refetch
 
 ### Suggested Branches
 - Register a new agent action: `branch.suggest`
@@ -67,6 +69,7 @@ Implement the ambient agent's AI-powered features for conversations: auto-titlin
 - [ ] Branch label suggestions appear when a new branch gets its first turn
 - [ ] Ticket creation suggestions surface for actionable content
 - [ ] Cross-entity linking detects references to existing tickets/sessions
+- [ ] Accepted ticket/link actions persist durable provenance / linked-entity data and update the conversation UI
 - [ ] Suggested branches appear in `PARTICIPATE` mode with one-tap creation
 - [ ] All features respect the observability level (`OFF` = nothing, `SUGGEST` = suggestions only, `PARTICIPATE` = direct actions)
 - [ ] All actions are registered in the action registry

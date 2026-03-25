@@ -11,7 +11,7 @@ Add visual indicators directly on turns that have branches forking from them. Wh
   - Position: right side of the turn, or below the turn content
   - Style: subtle, muted color — should not compete with the turn content
   - Badge shows the count (e.g., "2" if two branches fork from this turn)
-- Create `apps/web/src/components/ai-conversations/BranchPopover.tsx`:
+- Create `BranchPopover.tsx` under `apps/web/src/features/ai-conversations/components/`:
   - Triggered by clicking the branch indicator badge
   - Lists all child branches forking from this turn
   - Each item shows:
@@ -31,6 +31,8 @@ Add visual indicators directly on turns that have branches forking from them. Wh
   <!-- Ticket 11 creates: fork button on turns, branch switching, activeBranchId management -->
 - 12 (Branch Tree Panel)
   <!-- Ticket 12 creates: BranchTreeNode component, branch navigation pattern -->
+- 14 (Branch Labels)
+  <!-- Ticket 14 creates: branch labels / auto-labels used by the indicator popover -->
 
 ## Completion requirements
 

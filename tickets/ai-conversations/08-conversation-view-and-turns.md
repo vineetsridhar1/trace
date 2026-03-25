@@ -2,20 +2,21 @@
 
 ## Summary
 
-Build the main conversation view — the screen where users see turns and interact with the AI. This is a single-branch view for now (no tree panel, no branching UI — those come in Phase B). The view shows the turn list for the root branch, an input box at the bottom, and renders markdown content. This is the "Claude.ai within Trace" baseline.
+Build the main conversation view — the screen where users see turns and interact with the AI. This is the single-branch baseline for now (no tree panel yet), but the view should already follow the architecture needed for later branching: derived timeline rendering, scoped subscriptions, and shared branch state in Zustand.
 
 ## What needs to happen
 
-- Create `apps/web/src/components/ai-conversations/ConversationView.tsx`:
-  - Top-level component for the `/conversations/:id` route
-  - Fetches conversation data and root branch turns on mount
-  - Subscribes to `branchTurns` for real-time updates
-  - Manages current branch ID in state (defaults to root branch; branching changes this in ticket 11)
-- Create `apps/web/src/components/ai-conversations/TurnList.tsx`:
-  - Virtualized list of turns for the current branch
+- Create the conversation view components under `apps/web/src/features/ai-conversations/components/`:
+  - Keep the container/presentational split from `plan.md`
+  - Top-level route container for `/conversations/:id`
+  - Hydrates conversation data and the root branch timeline on mount
+  - Uses `useConversationEventsSubscription()` and `useBranchTurnsSubscription()` for active-viewport updates
+  - Reads/writes the active branch through the AI Conversations Zustand UI slice (seeded from the root branch for now)
+- Create `TurnList.tsx` in the same feature folder:
+  - Virtualized list of timeline items for the current branch
   - Auto-scrolls to bottom on new turns (with a "scroll to bottom" button if user has scrolled up)
   - Accepts `branchId` as prop
-- Create `apps/web/src/components/ai-conversations/TurnItem.tsx`:
+- Create `TurnItem.tsx` in the same feature folder:
   - Renders a single turn
   - Takes `turnId` as prop, uses `useTurnField` selectors
   - User turns: right-aligned or left-aligned with user avatar/name
@@ -23,13 +24,14 @@ Build the main conversation view — the screen where users see turns and intera
   - Content rendered as markdown (use existing markdown renderer or add `react-markdown`)
   - Show timestamp on hover
   - Subtle entrance animation (framer-motion fade-in)
-- Create `apps/web/src/components/ai-conversations/TurnInput.tsx`:
+- Create `TurnInput.tsx` in the same feature folder:
   - Text input at bottom of the conversation
   - Multi-line with auto-resize (textarea, not single-line input)
   - Submit on Enter (Shift+Enter for newline)
   - Calls `useSendTurn()` mutation on submit
   - Shows loading state while waiting for AI response
   - Disabled while AI is responding
+- Build the list/rendering boundary so later tickets can insert inherited-turn sections and summary nodes without rewriting the list component
 - Handle the streaming/loading UX:
   - While the AI is generating, show a typing indicator or streaming text
   - The assistant turn appears incrementally if streaming is supported, or all at once with a loading state
@@ -53,7 +55,7 @@ Build the main conversation view — the screen where users see turns and intera
 - [ ] AI response appears when ready (streaming or full)
 - [ ] Loading/typing indicator shows while AI is generating
 - [ ] Empty conversation shows a helpful prompt and auto-focuses input
-- [ ] Real-time subscription updates the turn list when new turns arrive
+- [ ] Scoped subscription updates the turn list when new turns arrive
 
 ## How to test
 

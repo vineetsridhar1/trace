@@ -2,18 +2,24 @@
 
 ## Summary
 
-Add frontend state management for AI Conversations, Branches, and Turns using the existing Zustand entity store pattern. Following Trace conventions: urql is transport only, all state lives in Zustand, components use `useEntityField` selectors for fine-grained re-renders. Events from the org-wide subscription drive all state updates — mutation results are never used to update the store.
+Add frontend state management for AI Conversations, Branches, Turns, and shared conversation UI state using the existing Zustand architecture from `plan.md`. urql is transport only, queries hydrate Zustand, scoped subscriptions feed the same event processor, and shared UI state lives in Zustand rather than component-local state.
 
 ## What needs to happen
 
+- Create the feature folder under `apps/web/src/features/ai-conversations/` and keep hooks/components/utils/store co-located there
 - Register `AiConversation`, `Branch`, and `Turn` as entity types in the Zustand entity store
 - Add entity upsert handlers for each event type:
   - `ai_conversation.created` → upsert `AiConversation` entity
   - `ai_conversation.title_updated` → update title field on existing entity
   - `ai_conversation.visibility_changed` → update visibility field
-  - `branch.created` → upsert `Branch` entity, update parent conversation's branch list
+  - `branch.created` → upsert `Branch` entity, update the parent conversation's branch list, the parent branch's `childBranches`, and the fork turn's branch-count metadata
   - `branch.labeled` → update label field on existing branch
-  - `turn.created` → upsert `Turn` entity, update parent branch's turn count
+  - `turn.created` → upsert `Turn` entity, append to the branch's ordered turn IDs, update the branch's turn count, and update conversation activity metadata
+- Structure the event processor so later tickets can add field-change handlers for `modelId`, `systemPrompt`, `agentObservability`, summary metadata, and other conversation fields without bypassing the same store pipeline
+- Add a small AI Conversations UI slice in Zustand for shared state:
+  - active branch ID per conversation
+  - pending scroll target turn ID
+  - branch switcher open/closed state
 - Add typed selectors:
   - `useAiConversation(id)` — returns conversation entity
   - `useAiConversationField(id, field)` — fine-grained field selector
@@ -21,12 +27,16 @@ Add frontend state management for AI Conversations, Branches, and Turns using th
   - `useBranch(id)` — returns branch entity
   - `useBranchField(id, field)` — fine-grained field selector
   - `useBranchTurns(branchId)` — returns ordered turn IDs for a branch
+  - `useBranchTimeline(branchId)` — returns the derived render timeline for the active branch (inherited turns, local turns, separators, and later summary nodes)
   - `useTurn(id)` — returns turn entity
   - `useTurnField(id, field)` — fine-grained field selector
 - Add urql query hooks (transport only — results go into Zustand):
   - `useAiConversationsQuery()` — fetches conversation list, upserts into store
   - `useAiConversationQuery(id)` — fetches single conversation with branches
-  - `useBranchTurnsQuery(branchId)` — fetches turns for a branch
+  - `useBranchTimelineQuery(branchId)` — hydrates the active branch plus any ancestor turns / summary metadata needed to render inherited context
+- Add scoped subscription hooks for the active viewport:
+  - `useConversationEventsSubscription(conversationId)` — conversation metadata, branch changes, labels, visibility, etc.
+  - `useBranchTurnsSubscription(branchId)` — new turns for the active branch
 - Add urql mutation hooks:
   - `useCreateAiConversation()` — fire-and-forget, event stream handles store update
   - `useSendTurn()` — fire-and-forget with optimistic update for the user turn
@@ -44,8 +54,9 @@ Add frontend state management for AI Conversations, Branches, and Turns using th
 
 - [ ] `AiConversation`, `Branch`, and `Turn` are registered as entity types in the Zustand store
 - [ ] All event types correctly upsert/update entities in the store
+- [ ] Shared AI Conversation UI state lives in Zustand rather than being threaded through component-local state
 - [ ] `useEntityField`-style selectors exist for all three entity types
-- [ ] Query hooks fetch data and upsert into Zustand (urql cache is not used for state)
+- [ ] Query hooks hydrate Zustand and the scoped subscription hooks keep the active viewport live
 - [ ] Mutation hooks are fire-and-forget — store updates come from the event stream
 - [ ] Optimistic update for `sendTurn` works: user turn appears immediately, reconciles on event
 - [ ] No `useState` for shared state — everything goes through Zustand
@@ -57,4 +68,5 @@ Add frontend state management for AI Conversations, Branches, and Turns using th
 2. Create a conversation via mutation — verify the entity appears in the store via the event stream (not the mutation result)
 3. Send a turn — verify the user turn appears immediately (optimistic), then the assistant turn appears when the event arrives
 4. Update a title — verify the store updates via the event, not the mutation response
-5. Open React DevTools, verify no unnecessary re-renders on unrelated field changes
+5. Switch between two branches — verify the active branch and scroll target move through the Zustand UI slice
+6. Open React DevTools, verify no unnecessary re-renders on unrelated field changes

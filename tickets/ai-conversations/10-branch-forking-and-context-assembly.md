@@ -17,6 +17,9 @@ Implement the core branching logic: creating a new branch from any turn and asse
   - Increment the source turn's `branchCount` (or compute it dynamically from `forkedBranches.length`)
   - Emit `branch.created` event
   - Return the new branch
+- Extend the GraphQL schema/resolvers with the mutation the UI will call:
+  - `forkBranch(turnId: ID!, label: String): Branch!`
+  - Resolver stays thin and delegates to the service method above
 - Implement `buildContext(branchId)` — the recursive context assembly algorithm:
   ```typescript
   function buildContext(branch: Branch, upToTurn?: Turn): Turn[] {
@@ -42,8 +45,12 @@ Implement the core branching logic: creating a new branch from any turn and asse
 
 ## Dependencies
 
-- 06 (Zustand Store & Entity Integration)
-  <!-- Ticket 06 creates: Zustand store for branches/turns, entity selectors, event handlers -->
+- 03 (Turn Service & LLM Integration)
+  <!-- Ticket 03 creates: sendTurn, getTurns, and the LLM call path that buildContext extends -->
+- 04 (GraphQL Schema & Resolvers)
+  <!-- Ticket 04 creates: the conversation GraphQL module that this ticket extends with forkBranch -->
+- 05 (Event Stream Integration)
+  <!-- Ticket 05 creates: branch.created event registration and scoped conversation subscriptions -->
 
 ## Completion requirements
 
@@ -54,6 +61,7 @@ Implement the core branching logic: creating a new branch from any turn and asse
 - [ ] `sendTurn` in a forked branch passes the full inherited context to the LLM
 - [ ] `getBranchAncestors` returns the correct ordered ancestor list
 - [ ] `branch.created` event is emitted with correct payload
+- [ ] `forkBranch` GraphQL mutation exists and is wired end-to-end
 - [ ] Forking does not duplicate any turns (zero-copy)
 
 ## How to test

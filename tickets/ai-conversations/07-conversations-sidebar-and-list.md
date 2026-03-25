@@ -9,7 +9,8 @@ Add AI Conversations as a top-level navigation item in the Trace sidebar and bui
 - Add an "AI Conversations" entry to the main sidebar navigation (alongside Channels, Sessions, Tickets)
   - Use an appropriate icon (e.g., `MessageSquare` or `BrainCircuit` from Lucide)
   - Show an unread/activity indicator if there are conversations with new activity (stretch — can be deferred)
-- Create `apps/web/src/components/ai-conversations/ConversationList.tsx`:
+- Create the list components under `apps/web/src/features/ai-conversations/components/`:
+  - Keep the container/presentational split from `plan.md` (`ConversationListContainer.tsx` / `ConversationList.tsx`, etc.)
   - Fetch conversations using `useAiConversationsQuery()` from ticket 06
   - Group conversations into sections: **Recents** (last 7 days), **Mine** (private), **Shared** (org-visible)
   - Each list item shows:
@@ -21,7 +22,7 @@ Add AI Conversations as a top-level navigation item in the Trace sidebar and bui
   - Text search filters by conversation title
   - Filter by: All / Private / Shared
   - Filter by project (if conversations are linked to projects — stretch)
-- Create `apps/web/src/components/ai-conversations/ConversationListItem.tsx`:
+- Create `ConversationListItem` components in the same feature folder:
   - Takes conversation ID as prop, uses `useAiConversationField` selectors
   - Click navigates to the conversation view
 - Add route for the conversations list at `/conversations` (or whatever the routing pattern is)

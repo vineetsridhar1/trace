@@ -17,6 +17,7 @@ Wire AI Conversations into the ambient agent's event stream with opt-in observab
     - Emit `ai_conversation.agent_observability_changed` event
   - GraphQL: `updateAgentObservability(conversationId: ID!, level: AgentObservability!): AiConversation!`
 - Add the `AgentObservability` enum to GraphQL schema
+- Extend the AI Conversations store/event processor so `agentObservability` changes update any open headers and settings panels in real time
 - Wire conversation events into the agent's event router:
   - The event router (from ai-agent ticket 04) should receive conversation events
   - The router checks the conversation's `agentObservability` level:
@@ -34,6 +35,8 @@ Wire AI Conversations into the ambient agent's event stream with opt-in observab
 
 - 05 (Event Stream Integration)
   <!-- Ticket 05 creates: Event types and emission for all conversation mutations, org-wide event stream -->
+- 06 (Zustand Store & Entity Integration)
+  <!-- Ticket 06 creates: the store/event pipeline that must also handle agent observability changes -->
 
 ## Completion requirements
 
@@ -45,6 +48,7 @@ Wire AI Conversations into the ambient agent's event stream with opt-in observab
 - [ ] `PARTICIPATE` conversations allow the agent to post turns
 - [ ] Settings UI shows the three levels with descriptions
 - [ ] Current observability level is indicated in the conversation header
+- [ ] Observability changes propagate through the same event/store pipeline used by the rest of the feature
 
 ## How to test
 

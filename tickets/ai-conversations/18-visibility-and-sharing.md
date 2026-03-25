@@ -35,8 +35,12 @@ Implement the visibility model for AI Conversations. Conversations are private b
 
 ## Dependencies
 
+- 07 (Conversations Sidebar & List)
+  <!-- Ticket 07 creates: the list UI that needs shared/private visibility treatment -->
 - 08 (Conversation View & Turn Rendering)
   <!-- Ticket 08 creates: ConversationView, TurnList, TurnInput — the conversation UI -->
+- 11 (Branch Forking UI)
+  <!-- Ticket 11 creates: fork affordances that must switch to read-only / fork-to-my-conversations for shared views -->
 
 ## Completion requirements
 

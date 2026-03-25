@@ -18,9 +18,9 @@ Add the fork button to turns and the flow for creating a new branch from the UI.
   - Focus the input box
   - Show a subtle animation indicating the branch was created (e.g., a brief flash or slide transition)
 - Update `ConversationView.tsx` to support branch switching:
-  - Track `activeBranchId` in state (or URL params)
-  - When `activeBranchId` changes, fetch/display turns for the new branch
-  - Update the `branchTurns` subscription to the new branch
+  - Track `activeBranchId` in the AI Conversations Zustand UI slice and sync it with the route when branch URLs are present
+  - When `activeBranchId` changes, hydrate/display the branch timeline for the new branch
+  - Update the active conversation/branch scoped subscriptions to the new branch
 - When viewing a forked branch:
   - Show the inherited turns from ancestor branches (read-only, slightly dimmed) above the branch's own turns
   - A visual separator between inherited and branch-specific turns ("Branch started here")
@@ -40,7 +40,7 @@ Add the fork button to turns and the flow for creating a new branch from the UI.
 - [ ] New branch view shows inherited turns (dimmed) above the branch separator
 - [ ] Input is focused and ready for the user's first turn in the new branch
 - [ ] Sending a turn in the new branch works with full inherited context
-- [ ] `activeBranchId` correctly tracks and switches branches
+- [ ] `activeBranchId` is shared through the feature's Zustand UI slice and correctly switches branches
 - [ ] Subscription updates when switching branches
 
 ## How to test

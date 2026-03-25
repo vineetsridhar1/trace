@@ -6,7 +6,7 @@ Build a keyboard-driven branch switcher overlay, activated by Cmd+B (or Ctrl+B o
 
 ## What needs to happen
 
-- Create `apps/web/src/components/ai-conversations/BranchSwitcher.tsx`:
+- Create `BranchSwitcher.tsx` under `apps/web/src/features/ai-conversations/components/`:
   - Modal/overlay triggered by Cmd+B (global keyboard shortcut within conversation view)
   - Search input at top, auto-focused on open
   - List of all branches in the conversation below the search

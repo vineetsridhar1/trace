@@ -6,12 +6,12 @@ Build the collapsible tree panel on the left side of the conversation view that 
 
 ## What needs to happen
 
-- Create `apps/web/src/components/ai-conversations/BranchTreePanel.tsx`:
+- Create the tree-panel components under `apps/web/src/features/ai-conversations/components/`:
   - Collapsible left panel (default open on desktop, hidden on mobile)
   - Shows the branch tree as a nested list/tree structure
   - Toggle button to collapse/expand the panel
   - Panel width: ~240px, resizable (stretch)
-- Create `apps/web/src/components/ai-conversations/BranchTreeNode.tsx`:
+- Create `BranchTreeNode.tsx` in the same feature folder:
   - Takes `branchId` as prop
   - Displays:
     - Branch label, or first ~30 chars of the branch's first turn, or "New branch" if empty
