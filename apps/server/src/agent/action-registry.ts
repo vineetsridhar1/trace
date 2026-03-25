@@ -251,12 +251,20 @@ export function findAction(name: string): AgentActionRegistration | undefined {
   return actionRegistry.find((a) => a.name === name);
 }
 
-/** Validate that action parameters contain all required fields. */
+/** Validate that action parameters contain all required fields and no unknown fields. */
 export function validateActionParams(
   action: AgentActionRegistration,
   params: Record<string, unknown>,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
+  const knownFields = new Set(Object.keys(action.parameters.fields));
+
+  // Reject unknown fields to prevent prompt injection / unexpected data
+  for (const key of Object.keys(params)) {
+    if (!knownFields.has(key)) {
+      errors.push(`Unknown field: ${key}`);
+    }
+  }
 
   for (const [fieldName, field] of Object.entries(action.parameters.fields)) {
     if (field.required && (params[fieldName] === undefined || params[fieldName] === null)) {
@@ -266,8 +274,17 @@ export function validateActionParams(
     const value = params[fieldName];
     if (value === undefined || value === null) continue;
 
-    if (field.type === "array" && !Array.isArray(value)) {
-      errors.push(`Field ${fieldName} must be an array`);
+    if (field.type === "array") {
+      if (!Array.isArray(value)) {
+        errors.push(`Field ${fieldName} must be an array`);
+      } else if (field.items?.type === "string") {
+        for (let i = 0; i < value.length; i++) {
+          if (typeof value[i] !== "string") {
+            errors.push(`Field ${fieldName}[${i}] must be a string`);
+            break;
+          }
+        }
+      }
     } else if (field.type === "string" && typeof value !== "string") {
       errors.push(`Field ${fieldName} must be a string`);
     } else if (field.type === "number" && typeof value !== "number") {

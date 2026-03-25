@@ -96,6 +96,20 @@ export class InMemoryIdempotencyStore implements IdempotencyStore {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Simple string hash for idempotency key differentiation (not cryptographic). */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash + char) | 0;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+// ---------------------------------------------------------------------------
 // Executor
 // ---------------------------------------------------------------------------
 
@@ -138,7 +152,10 @@ export class ActionExecutor {
     }
 
     // ---- Idempotency check ----
-    const idempotencyKey = `agent:${ctx.agentId}:${actionType}:${ctx.triggerEventId}`;
+    // Include a hash of the args so that two different actions of the same type
+    // on the same trigger event are not incorrectly deduplicated.
+    const argsHash = simpleHash(JSON.stringify(args));
+    const idempotencyKey = `agent:${ctx.agentId}:${actionType}:${ctx.triggerEventId}:${argsHash}`;
     if (await this.idempotency.has(idempotencyKey)) {
       return {
         status: "success",
@@ -270,12 +287,10 @@ export class ActionExecutor {
         const svc = this.services.inboxService;
         switch (method) {
           case "createItem":
-            // agent_escalation is not in the InboxItemType enum yet (added in ticket #14).
-            // Cast is intentional — this code path won't be hit until ticket #14's migration runs.
             return svc.createItem({
               orgId,
               userId: args.userId as string,
-              itemType: "agent_escalation" as unknown as Parameters<typeof svc.createItem>[0]["itemType"],
+              itemType: "agent_escalation" as Parameters<typeof svc.createItem>[0]["itemType"],
               title: args.title as string,
               summary: args.summary as string | undefined,
               sourceType: args.sourceType as string,
