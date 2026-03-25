@@ -144,7 +144,6 @@ export function isTerminalStatus(
 /** Check if a session can accept new messages (not disconnected and not fully unloaded) */
 export function canSendMessage(
   agentStatus: string | undefined,
-  sessionStatus: string | undefined,
   connection: Record<string, unknown> | null | undefined,
   worktreeDeleted?: boolean,
 ): boolean {
