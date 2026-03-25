@@ -200,7 +200,8 @@ export class EventAggregator {
   }
 
   /**
-   * Stop the aggregator. Flushes all open windows and clears timers.
+   * Stop the aggregator. Emits all open windows as batches (so no data is lost),
+   * then removes them from Redis.
    */
   async stop(): Promise<void> {
     if (this.checkInterval) {
@@ -214,12 +215,20 @@ export class EventAggregator {
     }
     this.timers.clear();
 
-    // Flush remaining windows (persist to Redis so they survive restart)
-    for (const window of this.windows.values()) {
-      await persistWindow(window);
+    // Emit all open windows before shutting down so events aren't lost
+    const windowCount = this.windows.size;
+    for (const [windowKey, window] of this.windows) {
+      try {
+        this.emitBatch(window, "silence");
+        await removePersistedWindow(window.scopeKey, window.organizationId);
+      } catch (err) {
+        // If emit fails, persist to Redis as a fallback
+        logError(`failed to emit window ${windowKey} on shutdown, persisting instead`, err);
+        await persistWindow(window).catch(() => {});
+      }
     }
 
-    log(`stopped — ${this.windows.size} window(s) persisted to Redis`);
+    log(`stopped — emitted ${windowCount} remaining window(s)`);
     this.windows.clear();
   }
 

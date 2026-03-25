@@ -15,9 +15,66 @@ import {
   updateChatMembership,
   seedChatMemberships,
   cleanupRateLimits,
+  setCostTracker,
   type AgentEvent,
+  type CostTracker,
 } from "./agent/router.js";
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
+import { costTrackingService } from "./services/cost-tracking.js";
+
+// ---------------------------------------------------------------------------
+// Cached cost tracker — bridges async CostTrackingService to sync router interface
+// ---------------------------------------------------------------------------
+
+const COST_CACHE_TTL_MS = 30_000; // refresh budget every 30s
+
+/**
+ * Polls the CostTrackingService periodically and serves the router synchronously.
+ * Converts remainingPercent (0-100) to a fraction (0.0-1.0) as the router expects.
+ */
+class CachedCostTracker implements CostTracker {
+  private cache = new Map<string, { fraction: number; fetchedAt: number }>();
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Start periodic refresh for all active orgs. */
+  start(getActiveOrgs: () => Iterable<string>): void {
+    this.refreshTimer = setInterval(() => {
+      this.refreshAll(getActiveOrgs()).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[cost-tracker] refresh failed:", message);
+      });
+    }, COST_CACHE_TTL_MS);
+  }
+
+  stop(): void {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  getRemainingBudgetFraction(organizationId: string): number {
+    const entry = this.cache.get(organizationId);
+    if (!entry) return 1.0; // assume full budget until first refresh
+    return entry.fraction;
+  }
+
+  async refreshAll(orgIds: Iterable<string>): Promise<void> {
+    for (const orgId of orgIds) {
+      try {
+        const status = await costTrackingService.checkBudget(orgId);
+        this.cache.set(orgId, {
+          fraction: status.remainingPercent / 100, // convert 0-100 → 0.0-1.0
+          fetchedAt: Date.now(),
+        });
+      } catch {
+        // Keep stale value on error
+      }
+    }
+  }
+}
+
+const cachedCostTracker = new CachedCostTracker();
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -330,8 +387,8 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       if (result.decision !== "drop") {
         await aggregator.ingest(event, result);
       }
-    } catch {
-      log("event consumed (unparseable)", { orgId, streamId: entry.id });
+    } catch (err) {
+      logError(`unparseable event (orgId=${orgId}, streamId=${entry.id})`, err);
     }
   }
 }
@@ -410,8 +467,9 @@ async function shutdown(signal: string): Promise<void> {
   log(`received ${signal}, shutting down gracefully...`);
 
   stopTimers();
+  cachedCostTracker.stop();
 
-  // Stop aggregator — persists open windows to Redis
+  // Stop aggregator — emits all open windows so no events are lost
   try {
     await aggregator.stop();
     log("aggregator stopped");
@@ -419,9 +477,12 @@ async function shutdown(signal: string): Promise<void> {
     logError("error stopping aggregator", err);
   }
 
-  // Give the consume loop time to exit its current XREADGROUP block
-  // (it will exit on next iteration since shuttingDown is true)
-  await sleep(500);
+  // Give the consume loop time to exit its current XREADGROUP block.
+  // BLOCK_MS is 5s, so we wait up to 6s for it to finish.
+  const drainDeadline = Date.now() + BLOCK_MS + 1_000;
+  while (Date.now() < drainDeadline) {
+    await sleep(200);
+  }
 
   try {
     await disconnectRedis();
@@ -468,6 +529,12 @@ async function main(): Promise<void> {
 
   // Seed chat membership gate from database
   await seedChatMembershipGate();
+
+  // Wire up cost tracker so the router enforces budget degradation
+  setCostTracker(cachedCostTracker);
+  await cachedCostTracker.refreshAll(activeOrgs);
+  cachedCostTracker.start(() => activeOrgs);
+  log("cost tracker initialized");
 
   // Start polling for new orgs
   startOrgPolling();
