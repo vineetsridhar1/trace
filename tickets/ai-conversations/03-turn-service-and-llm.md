@@ -30,7 +30,7 @@ Build the service for sending turns and getting AI responses. When a user sends 
 ## Dependencies
 
 - 02 (AI Conversation Service)
-  <!-- Ticket 02 creates: AiConversationService with createConversation, getConversation, getAiBranch -->
+  <!-- Ticket 02 creates: AiConversationService with createConversation, getConversation, getBranch, getBranches, getBranchDepth, updateTitle. Mutating methods follow the standard (input, actorType, actorId) signature. -->
 
 ## Completion requirements
 
