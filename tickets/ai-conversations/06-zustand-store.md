@@ -7,14 +7,14 @@ Add frontend state management for AI Conversations, Branches, Turns, and shared 
 ## What needs to happen
 
 - Create the feature folder under `apps/web/src/features/ai-conversations/` and keep hooks/components/utils/store co-located there
-- Register `AiConversation`, `Branch`, and `Turn` as entity types in the Zustand entity store
+- Register `AiConversation`, `AiBranch`, and `AiTurn` as entity types in the Zustand entity store
 - Add entity upsert handlers for each event type:
   - `ai_conversation.created` → upsert `AiConversation` entity
   - `ai_conversation.title_updated` → update title field on existing entity
   - `ai_conversation.visibility_changed` → update visibility field
-  - `branch.created` → upsert `Branch` entity, update the parent conversation's branch list, the parent branch's `childBranches`, and the fork turn's branch-count metadata
+  - `branch.created` → upsert `AiBranch` entity, update the parent conversation's branch list, the parent branch's `childBranches`, and the fork turn's branch-count metadata
   - `branch.labeled` → update label field on existing branch
-  - `turn.created` → upsert `Turn` entity, append to the branch's ordered turn IDs, update the branch's turn count, and update conversation activity metadata
+  - `turn.created` → upsert `AiTurn` entity, append to the branch's ordered turn IDs, update the branch's turn count, and update conversation activity metadata
 - Structure the event processor so later tickets can add field-change handlers for `modelId`, `systemPrompt`, `agentObservability`, summary metadata, and other conversation fields without bypassing the same store pipeline
 - Add a small AI Conversations UI slice in Zustand for shared state:
   - active branch ID per conversation
@@ -52,7 +52,7 @@ Add frontend state management for AI Conversations, Branches, Turns, and shared 
 
 ## Completion requirements
 
-- [ ] `AiConversation`, `Branch`, and `Turn` are registered as entity types in the Zustand store
+- [ ] `AiConversation`, `AiBranch`, and `AiTurn` are registered as entity types in the Zustand store
 - [ ] All event types correctly upsert/update entities in the store
 - [ ] Shared AI Conversation UI state lives in Zustand rather than being threaded through component-local state
 - [ ] `useEntityField`-style selectors exist for all three entity types

@@ -9,7 +9,7 @@ Create the service layer for managing AI conversations and branches. This servic
 - Create `apps/server/src/services/aiConversation.ts` with an `AiConversationService` class
 - Implement `createConversation({ organizationId, createdById, title?, visibility? })`:
   - Creates the `AiConversation` record
-  - Creates the root `Branch` (parentBranchId = null, forkTurnId = null)
+  - Creates the root `AiBranch` (parentBranchId = null, forkTurnId = null)
   - Updates `AiConversation.rootBranchId` to point to the root branch
   - Returns the full conversation with root branch
 - Implement `getConversation(id)`:
@@ -33,7 +33,7 @@ Create the service layer for managing AI conversations and branches. This servic
 ## Dependencies
 
 - 01 (Database Schema)
-  <!-- Ticket 01 creates: AiConversation, Branch, Turn Prisma models with all relations -->
+  <!-- Ticket 01 creates: AiConversation, AiBranch, AiTurn Prisma models with all relations -->
 
 ## Completion requirements
 
