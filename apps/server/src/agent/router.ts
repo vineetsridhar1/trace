@@ -156,13 +156,35 @@ const chatMemberships = new Map<string, Map<string, ChatType>>();
  * Update chat membership based on membership events.
  * Called by the agent worker for every event before routing.
  *
- * Extracts chat type from the event payload when available (chat_member_added
- * events include a `members` array — DMs always have exactly 2 members and
- * the chat_created event includes `chat.type`). Falls back to "group" if
- * the type cannot be determined.
+ * Handles three event types:
+ * - `chat_created`: The initial members are embedded in the payload. If the
+ *   agent is one of them, register the chat (this is how DM creation works —
+ *   ChatService.create() emits chat_created but not individual chat_member_added).
+ * - `chat_member_added`: A member was added after creation.
+ * - `chat_member_removed`: A member left or was removed.
+ *
+ * Falls back to "group" if the chat type cannot be determined.
  */
 export function updateChatMembership(event: AgentEvent, agentId: string): void {
-  if (event.eventType === "chat_member_added") {
+  if (event.eventType === "chat_created") {
+    // chat_created includes all initial members in payload.chat.members
+    const chat = event.payload.chat as Record<string, unknown> | undefined;
+    if (!chat) return;
+    const members = chat.members as Array<{ user?: { id?: string } }> | undefined;
+    if (!Array.isArray(members)) return;
+    const isAgentMember = members.some(
+      (m) => m?.user?.id === agentId,
+    );
+    if (isAgentMember) {
+      let chats = chatMemberships.get(event.organizationId);
+      if (!chats) {
+        chats = new Map();
+        chatMemberships.set(event.organizationId, chats);
+      }
+      const chatType = (chat.type === "dm" ? "dm" : "group") as ChatType;
+      chats.set(event.scopeId, chatType);
+    }
+  } else if (event.eventType === "chat_member_added") {
     const userId = event.payload.userId as string | undefined;
     if (userId === agentId) {
       let chats = chatMemberships.get(event.organizationId);
@@ -350,7 +372,11 @@ export function routeEvent(
   // 5. Chat membership gate — drop chat-scoped events if agent not a member
   if (event.scopeType === "chat") {
     // Always process membership events (they update the gate itself)
-    if (event.eventType !== "chat_member_added" && event.eventType !== "chat_member_removed") {
+    const isMembershipEvent =
+      event.eventType === "chat_member_added" ||
+      event.eventType === "chat_member_removed" ||
+      event.eventType === "chat_created";
+    if (!isMembershipEvent) {
       if (!isAgentChatMember(event.organizationId, event.scopeId)) {
         return { decision: "drop", reason: "not_chat_member" };
       }
