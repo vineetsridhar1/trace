@@ -159,6 +159,16 @@ enum SummaryType {
   milestone
 }
 
+enum AiConversationVisibility {
+  PRIVATE
+  ORG
+}
+
+enum TurnRole {
+  USER
+  ASSISTANT
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -220,6 +230,7 @@ model Organization {
   processedEvents  ProcessedAgentEvent[]
   costTrackers     AgentCostTracker[]
   entitySummaries  EntitySummary[]
+  aiConversations  AiConversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -350,6 +361,8 @@ model User {
   participants         Participant[]
   apiTokens         ApiToken[]
   cloudMachines     CloudMachine[]
+  aiConversations   AiConversation[] @relation("AiConversationCreator")
+  branches          Branch[]         @relation("BranchCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -744,4 +757,62 @@ model Participant {
 
   @@id([userId, scopeType, scopeId])
   @@index([scopeType, scopeId])
+}
+
+model AiConversation {
+  id             String                   @id @default(uuid())
+  organizationId String
+  organization   Organization             @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User                     @relation("AiConversationCreator", fields: [createdById], references: [id])
+  title          String?
+  visibility     AiConversationVisibility @default(PRIVATE)
+  rootBranchId   String?
+
+  branches Branch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, createdById])
+  @@index([organizationId, updatedAt])
+}
+
+model Branch {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parentBranchId String?
+  parentBranch   Branch?        @relation("BranchTree", fields: [parentBranchId], references: [id])
+  childBranches  Branch[]       @relation("BranchTree")
+  forkTurnId     String?
+  forkTurn       Turn?          @relation("ForkTurn", fields: [forkTurnId], references: [id])
+  label          String?
+  createdById    String
+  createdBy      User           @relation("BranchCreator", fields: [createdById], references: [id])
+
+  turns Turn[]
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([parentBranchId])
+}
+
+model Turn {
+  id           String   @id @default(uuid())
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  role         TurnRole
+  content      String
+  parentTurnId String?  @unique
+  parentTurn   Turn?    @relation("TurnChain", fields: [parentTurnId], references: [id])
+  childTurn    Turn?    @relation("TurnChain")
+
+  forkedBranches Branch[] @relation("ForkTurn")
+
+  createdAt DateTime @default(now())
+
+  @@index([branchId, createdAt])
+  @@index([parentTurnId])
 }
