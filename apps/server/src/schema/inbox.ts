@@ -48,9 +48,10 @@ export const inboxMutations = {
         : storedArgs;
 
       const action: PlannedAction = { actionType, args: finalArgs };
+      // Use the accepting user's ID — they're the one approving this action
       const agentCtx: AgentContext = {
         organizationId: orgId,
-        agentId: (payload.agentId as string) ?? "system",
+        agentId: ctx.userId,
         triggerEventId: `accept:${item.id}`,
       };
 
