@@ -22,6 +22,7 @@ import {
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
 import { startSummaryWorker, stopSummaryWorker, trackEventForSummary } from "./agent/summary-worker.js";
+import { buildContext } from "./agent/context-builder.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -106,8 +107,7 @@ const aggregator = new EventAggregator(handleBatch);
 
 /**
  * Handle a closed aggregation window.
- * Future tickets will send this to the context builder (#10) and planner (#11).
- * For now, log the batch.
+ * Builds a context packet (#10) for the planner (#11).
  */
 function handleBatch(batch: AggregatedBatch): void {
   log("batch ready", {
@@ -118,6 +118,34 @@ function handleBatch(batch: AggregatedBatch): void {
     durationMs: batch.closedAt - batch.openedAt,
     ...(batch.maxTier !== undefined ? { maxTier: batch.maxTier } : {}),
   });
+
+  // Build context packet asynchronously — don't block the aggregator
+  const agentSettings = agentContexts.get(batch.organizationId);
+  if (!agentSettings) {
+    log("skipping batch — no agent settings", { orgId: batch.organizationId });
+    return;
+  }
+
+  buildContext({ batch, agentSettings })
+    .then((packet) => {
+      log("context packet built", {
+        scopeKey: packet.scopeKey,
+        orgId: packet.organizationId,
+        scopeType: packet.scopeType,
+        triggerEventType: packet.triggerEvent.eventType,
+        relevantEntities: packet.relevantEntities.length,
+        summaries: packet.summaries.length,
+        actors: packet.actors.length,
+        actions: packet.permissions.actions.length,
+        tokensUsed: packet.tokenBudget.used,
+        tokensTotal: packet.tokenBudget.total,
+      });
+
+      // Future: pass packet to planner (ticket #11)
+    })
+    .catch((err) => {
+      logError("context builder failed", err);
+    });
 }
 
 // ---------------------------------------------------------------------------
