@@ -126,12 +126,19 @@ enum InboxItemType {
   question
   agent_escalation
   agent_suggestion
+  ticket_suggestion
+  link_suggestion
+  session_suggestion
+  field_change_suggestion
+  comment_suggestion
+  message_suggestion
 }
 
 enum InboxItemStatus {
   active
   resolved
   dismissed
+  expired
 }
 
 enum ApiTokenProvider {
@@ -723,6 +730,8 @@ type Mutation {
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
+  acceptAgentSuggestion(inboxItemId: ID!, edits: JSON): InboxItem!
+  dismissAgentSuggestion(inboxItemId: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!

@@ -84,12 +84,19 @@ enum InboxItemType {
   question
   agent_escalation
   agent_suggestion
+  ticket_suggestion
+  link_suggestion
+  session_suggestion
+  field_change_suggestion
+  comment_suggestion
+  message_suggestion
 }
 
 enum InboxItemStatus {
   active
   resolved
   dismissed
+  expired
 }
 
 enum ApiTokenProvider {

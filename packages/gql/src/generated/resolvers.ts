@@ -320,11 +320,20 @@ export type InboxItem = {
 export type InboxItemStatus =
   | 'active'
   | 'dismissed'
+  | 'expired'
   | 'resolved';
 
 export type InboxItemType =
+  | 'agent_escalation'
+  | 'agent_suggestion'
+  | 'comment_suggestion'
+  | 'field_change_suggestion'
+  | 'link_suggestion'
+  | 'message_suggestion'
   | 'plan'
-  | 'question';
+  | 'question'
+  | 'session_suggestion'
+  | 'ticket_suggestion';
 
 export type Message = {
   __typename?: 'Message';
@@ -353,6 +362,7 @@ export type MoveChannelInput = {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
   assignTicket: Ticket;
@@ -371,6 +381,7 @@ export type Mutation = {
   deleteSession: Session;
   deleteSessionGroup: Scalars['Boolean']['output'];
   destroyTerminal: Scalars['Boolean']['output'];
+  dismissAgentSuggestion: InboxItem;
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChannelMessage: Message;
@@ -410,6 +421,12 @@ export type Mutation = {
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
+};
+
+
+export type MutationAcceptAgentSuggestionArgs = {
+  edits?: InputMaybe<Scalars['JSON']['input']>;
+  inboxItemId: Scalars['ID']['input'];
 };
 
 
@@ -506,6 +523,11 @@ export type MutationDeleteSessionGroupArgs = {
 
 export type MutationDestroyTerminalArgs = {
   terminalId: Scalars['ID']['input'];
+};
+
+
+export type MutationDismissAgentSuggestionArgs = {
+  inboxItemId: Scalars['ID']['input'];
 };
 
 
@@ -1723,6 +1745,7 @@ export type MessageResolvers<ContextType = Context, ParentType extends Resolvers
 }>;
 
 export type MutationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
+  acceptAgentSuggestion?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationAcceptAgentSuggestionArgs, 'inboxItemId'>>;
   addChatMember?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationAddChatMemberArgs, 'input'>>;
   addOrgMember?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationAddOrgMemberArgs, 'organizationId' | 'userId'>>;
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
@@ -1741,6 +1764,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   deleteSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDeleteSessionArgs, 'id'>>;
   deleteSessionGroup?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSessionGroupArgs, 'id'>>;
   destroyTerminal?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDestroyTerminalArgs, 'terminalId'>>;
+  dismissAgentSuggestion?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissAgentSuggestionArgs, 'inboxItemId'>>;
   dismissInboxItem?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationDismissInboxItemArgs, 'id'>>;
   dismissSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationDismissSessionArgs, 'id'>>;
   editChannelMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationEditChannelMessageArgs, 'html' | 'messageId'>>;

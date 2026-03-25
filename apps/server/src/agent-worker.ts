@@ -23,6 +23,15 @@ import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
 import { startSummaryWorker, stopSummaryWorker, trackEventForSummary } from "./agent/summary-worker.js";
 import { buildContext } from "./agent/context-builder.js";
+import { runPlanner } from "./agent/planner.js";
+import { evaluatePolicy, type PolicyDecision } from "./agent/policy-engine.js";
+import { ActionExecutor } from "./agent/executor.js";
+import { createSuggestions } from "./agent/suggestion.js";
+import { ticketService } from "./services/ticket.js";
+import { chatService } from "./services/chat.js";
+import { sessionService } from "./services/session.js";
+import { inboxService } from "./services/inbox.js";
+import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -106,8 +115,18 @@ let shuttingDown = false;
 const aggregator = new EventAggregator(handleBatch);
 
 /**
+ * Shared executor instance — reused across batch handlers.
+ */
+const executor = new ActionExecutor({
+  ticketService,
+  chatService,
+  sessionService,
+  inboxService,
+});
+
+/**
  * Handle a closed aggregation window.
- * Builds a context packet (#10) for the planner (#11).
+ * Full pipeline: context → planner → policy engine → execute / suggest.
  */
 function handleBatch(batch: AggregatedBatch): void {
   log("batch ready", {
@@ -127,7 +146,7 @@ function handleBatch(batch: AggregatedBatch): void {
   }
 
   buildContext({ batch, agentSettings })
-    .then((packet) => {
+    .then(async (packet) => {
       log("context packet built", {
         scopeKey: packet.scopeKey,
         orgId: packet.organizationId,
@@ -141,10 +160,84 @@ function handleBatch(batch: AggregatedBatch): void {
         tokensTotal: packet.tokenBudget.total,
       });
 
-      // Future: pass packet to planner (ticket #11)
+      // ── Planner (ticket #11) ──
+      const plannerResult = await runPlanner(packet);
+      const { output: plannerOutput } = plannerResult;
+
+      log("planner decided", {
+        scopeKey: packet.scopeKey,
+        disposition: plannerOutput.disposition,
+        confidence: plannerOutput.confidence,
+        actionCount: plannerOutput.proposedActions.length,
+        model: plannerResult.model,
+        latencyMs: plannerResult.latencyMs,
+      });
+
+      // If the planner says ignore, we're done
+      if (plannerOutput.disposition === "ignore") return;
+
+      // ── Policy engine (ticket #12) ──
+      const policyResult = await evaluatePolicy({
+        plannerOutput,
+        context: packet,
+      });
+
+      // Group actions by decision
+      const byDecision = new Map<PolicyDecision, typeof policyResult.actions>();
+      for (const actionResult of policyResult.actions) {
+        const existing = byDecision.get(actionResult.decision) ?? [];
+        existing.push(actionResult);
+        byDecision.set(actionResult.decision, existing);
+      }
+
+      log("policy evaluated", {
+        scopeKey: packet.scopeKey,
+        execute: byDecision.get("execute")?.length ?? 0,
+        suggest: byDecision.get("suggest")?.length ?? 0,
+        drop: byDecision.get("drop")?.length ?? 0,
+      });
+
+      // ── Execute actions ──
+      const executes = byDecision.get("execute") ?? [];
+      for (const actionResult of executes) {
+        const result = await executor.execute(actionResult.action, {
+          organizationId: packet.organizationId,
+          agentId: agentSettings.agentId,
+          triggerEventId: packet.triggerEvent.id,
+        });
+        log("action executed", {
+          scopeKey: packet.scopeKey,
+          actionType: result.actionType,
+          status: result.status,
+          ...(result.error ? { error: result.error } : {}),
+        });
+      }
+
+      // ── Create suggestions (ticket #14) ──
+      const suggests = byDecision.get("suggest") ?? [];
+      if (suggests.length > 0) {
+        // Determine the best recipient — use the trigger event's actor if they're a user
+        const triggerActorType = packet.triggerEvent.actorType;
+        const triggerActorId = packet.triggerEvent.actorId;
+        const userId = triggerActorType === "user" ? triggerActorId : agentSettings.agentId;
+
+        const items = await createSuggestions({
+          suggestions: suggests,
+          plannerOutput,
+          context: packet,
+          agentId: agentSettings.agentId,
+          userId,
+        });
+
+        log("suggestions created", {
+          scopeKey: packet.scopeKey,
+          count: items.length,
+          types: items.map((i) => i.itemType),
+        });
+      }
     })
     .catch((err) => {
-      logError("context builder failed", err);
+      logError("agent pipeline failed", err);
     });
 }
 
@@ -501,6 +594,7 @@ async function shutdown(signal: string): Promise<void> {
   stopTimers();
   cachedCostTracker.stop();
   stopSummaryWorker();
+  stopSuggestionExpiryWorker();
 
   // Stop aggregator — emits all open windows so no events are lost
   try {
@@ -582,6 +676,10 @@ async function main(): Promise<void> {
   // Start the background summary refresh worker
   startSummaryWorker(() => activeOrgs);
   log("summary worker started");
+
+  // Start the suggestion expiry worker
+  startSuggestionExpiryWorker();
+  log("suggestion expiry worker started");
 
   // Enter the main consume loop (blocks until shutdown)
   await consumeLoop();

@@ -2,6 +2,11 @@ import type { Context } from "../context.js";
 import type { InboxItemStatus } from "@prisma/client";
 import { inboxService } from "../services/inbox.js";
 import { requireOrgContext } from "../lib/require-org.js";
+import { ActionExecutor, type PlannedAction, type AgentContext } from "../agent/executor.js";
+import { ticketService } from "../services/ticket.js";
+import { chatService } from "../services/chat.js";
+import { sessionService } from "../services/session.js";
+import { recordDismissal } from "../agent/policy-engine.js";
 
 export const inboxQueries = {
   inboxItems: (_: unknown, args: { organizationId: string; status?: InboxItemStatus }, ctx: Context) => {
@@ -12,5 +17,72 @@ export const inboxQueries = {
 export const inboxMutations = {
   dismissInboxItem: (_: unknown, args: { id: string }, ctx: Context) => {
     return inboxService.dismiss(args.id, ctx.userId, requireOrgContext(ctx));
+  },
+
+  acceptAgentSuggestion: async (
+    _: unknown,
+    args: { inboxItemId: string; edits?: Record<string, unknown> | null },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+
+    // 1. Accept the suggestion (marks as resolved)
+    const item = await inboxService.acceptSuggestion(
+      args.inboxItemId,
+      ctx.userId,
+      orgId,
+      args.edits ?? undefined,
+    );
+
+    // 2. Extract the stored action from the payload and execute it
+    const payload = (item.payload ?? {}) as Record<string, unknown>;
+    const actionType = payload.actionType as string | undefined;
+    const rawArgs = (args.edits
+      ? { ...(payload.args as Record<string, unknown>), ...args.edits }
+      : payload.args) as Record<string, unknown> | undefined;
+
+    if (actionType && rawArgs) {
+      const action: PlannedAction = { actionType, args: rawArgs };
+      const agentCtx: AgentContext = {
+        organizationId: orgId,
+        agentId: (payload.agentId as string) ?? "system",
+        triggerEventId: (payload.triggerEventId as string) ?? item.sourceId,
+      };
+
+      const executor = new ActionExecutor({
+        ticketService,
+        chatService,
+        sessionService,
+        inboxService,
+      });
+
+      await executor.execute(action, agentCtx);
+    }
+
+    return item;
+  },
+
+  dismissAgentSuggestion: async (
+    _: unknown,
+    args: { inboxItemId: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    const item = await inboxService.dismissSuggestion(args.inboxItemId, ctx.userId, orgId);
+
+    // Record dismissal for the policy engine's 24h cooldown
+    const payload = (item.payload ?? {}) as Record<string, unknown>;
+    const actionType = payload.actionType as string | undefined;
+    if (actionType) {
+      // Determine scope from the source — for now use system scope as fallback
+      recordDismissal({
+        organizationId: orgId,
+        scopeType: "system",
+        scopeId: orgId,
+        actionType,
+      });
+    }
+
+    return item;
   },
 };
