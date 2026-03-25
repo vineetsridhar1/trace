@@ -44,6 +44,7 @@ Create a lightweight `ScopeAdapter` interface that encapsulates scope-specific b
 - `buildScopeKey(event)` — construct the aggregation key
 
 Implement adapters for `chat`, `ticket`, `session`, and `channel`. The context builder and policy engine use these adapters instead of hardcoded switches.
+<!-- Ticket 17 created: The chat scope adapter must handle DM vs group chat distinction. Use `ChatType` from `router.ts` and `AgentContextPacket.isDm`. Chat adapter's `getDefaultAutonomyMode()` should return `observe` for DMs and `suggest` for group chats. Chat adapter's `getRateLimit()` should return 0 for DMs (no unsolicited suggestions) and 1 for group chats. Privacy: the chat adapter should indicate DMs have restricted context sharing (no auto-summaries, no linked entity exposure). -->
 
 ## Dependencies
 

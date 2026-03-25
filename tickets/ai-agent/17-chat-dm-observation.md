@@ -41,14 +41,14 @@ Make the agent fully functional in DMs and group chats. The router and aggregato
 
 ## Completion requirements
 
-- [ ] DM messages to the agent produce a direct reply (not a suggestion)
-- [ ] DMs bypass aggregation
-- [ ] Group chat messages are aggregated and produce suggestions via InboxItem
-- [ ] Group chat rate limiting is enforced (1/hour)
-- [ ] @mentions in group chats bypass aggregation
-- [ ] Chat membership set is initialized on startup and updated in real-time
-- [ ] Removing the agent from a chat immediately stops observation
-- [ ] DM content never appears in context for other scopes
+- [x] DM messages to the agent produce a direct reply (not a suggestion) — `router.ts:376-382` routes DMs direct; `planner.ts:232-238` instructs act+message.send; `policy-engine.ts:84` blocks unsolicited suggestions
+- [x] DMs bypass aggregation — `router.ts:376-382` returns `direct` for DM `message_sent`
+- [x] Group chat messages are aggregated and produce suggestions via InboxItem — unchanged; falls through to `AGGREGATE_EVENT_TYPES` at `router.ts:391`
+- [x] Group chat rate limiting is enforced (1/hour) — `policy-engine.ts:76` (`chat: 1`), wired via `isDm` flag
+- [x] @mentions in group chats bypass aggregation — `router.ts:59-65` DIRECT_RULES for mentions
+- [x] Chat membership set is initialized on startup and updated in real-time — `agent-worker.ts:250-277` seeds with types; `router.ts:164-186` updates on events
+- [x] Removing the agent from a chat immediately stops observation — `agent-worker.ts:401-416` closes windows; `router.ts:177-185` removes membership
+- [x] DM content never appears in context for other scopes — `context-builder.ts:495-497` filters DM linked entities; `context-builder.ts:822-831` skips DM auto-summaries
 
 ## How to test
 

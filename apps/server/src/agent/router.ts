@@ -187,19 +187,16 @@ export function updateChatMembership(event: AgentEvent, agentId: string): void {
 
 /**
  * Try to infer chat type from a chat_member_added event's payload.
- * The chat_created event includes `chat.type`; membership events include a
- * `members` array (DMs always have exactly 2 members).
+ * The chat_created event includes `chat.type` directly. For other membership
+ * events where the type can't be determined, returns null and the caller
+ * falls back to "group" (the safer default — group behavior is more
+ * conservative than DM behavior).
  */
 function inferChatTypeFromPayload(event: AgentEvent): ChatType | null {
   // chat_created payload includes chat.type directly
   const chat = event.payload.chat as Record<string, unknown> | undefined;
   if (chat && typeof chat.type === "string") {
     return chat.type === "dm" ? "dm" : "group";
-  }
-  // Membership events include members array — DMs have exactly 2 members
-  const members = event.payload.members as unknown[] | undefined;
-  if (Array.isArray(members) && members.length === 2) {
-    return "dm";
   }
   return null;
 }
