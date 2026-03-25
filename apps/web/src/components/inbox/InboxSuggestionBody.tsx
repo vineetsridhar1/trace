@@ -1,18 +1,9 @@
 import { useState } from "react";
-import {
-  Check,
-  X,
-  ChevronDown,
-  ChevronUp,
-  Ticket,
-  Link2,
-  Play,
-  MessageSquare,
-  Hash,
-  Clock,
-} from "lucide-react";
+import { Check, X, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { useEntityField } from "../../stores/entity";
+import { ScopeRef } from "./ScopeRef";
+import { SuggestionExpandedDetails } from "./SuggestionExpandedDetails";
+import { ACTION_META, FALLBACK_META, PRIORITY_STYLES, timeUntil } from "./suggestion-meta";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,220 +24,6 @@ interface InboxSuggestionBodyProps {
   sending: boolean;
   onAccept: (edits?: Record<string, unknown>) => void;
   onDismiss: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// Action metadata
-// ---------------------------------------------------------------------------
-
-interface ActionMeta {
-  verb: string;
-  icon: typeof Ticket;
-  titleFn: (args: Record<string, unknown>) => string;
-  editableFields: string[];
-  fieldLabels: Record<string, string>;
-}
-
-const ACTION_META: Record<string, ActionMeta> = {
-  "ticket.create": {
-    verb: "Create",
-    icon: Ticket,
-    titleFn: (args) => `Create ticket: ${(args.title as string) || "Untitled"}`,
-    editableFields: ["title", "description", "priority"],
-    fieldLabels: { title: "Title", description: "Description", priority: "Priority" },
-  },
-  "ticket.update": {
-    verb: "Update",
-    icon: Ticket,
-    titleFn: (args) => `Update ticket${args.title ? `: ${args.title}` : ""}`,
-    editableFields: ["title", "description", "status", "priority"],
-    fieldLabels: { title: "Title", description: "Description", status: "Status", priority: "Priority" },
-  },
-  "ticket.addComment": {
-    verb: "Comment",
-    icon: MessageSquare,
-    titleFn: () => "Add comment to ticket",
-    editableFields: ["text"],
-    fieldLabels: { text: "Comment" },
-  },
-  "link.create": {
-    verb: "Link",
-    icon: Link2,
-    titleFn: () => "Link related entities",
-    editableFields: [],
-    fieldLabels: {},
-  },
-  "session.start": {
-    verb: "Start session",
-    icon: Play,
-    titleFn: (args) => {
-      const prompt = args.prompt as string | undefined;
-      return prompt ? `Start session: ${prompt.slice(0, 60)}${prompt.length > 60 ? "…" : ""}` : "Start coding session";
-    },
-    editableFields: ["prompt"],
-    fieldLabels: { prompt: "Task" },
-  },
-  "message.send": {
-    verb: "Send",
-    icon: MessageSquare,
-    titleFn: () => "Send message",
-    editableFields: ["text"],
-    fieldLabels: { text: "Message" },
-  },
-};
-
-const FALLBACK_META: ActionMeta = {
-  verb: "Accept",
-  icon: Ticket,
-  titleFn: (args) => `Agent suggestion${args.title ? `: ${args.title}` : ""}`,
-  editableFields: [],
-  fieldLabels: {},
-};
-
-const PRIORITY_STYLES: Record<string, string> = {
-  urgent: "bg-red-500/15 text-red-400",
-  high: "bg-orange-500/15 text-orange-400",
-  medium: "bg-amber-500/15 text-amber-400",
-  low: "bg-emerald-500/15 text-emerald-400",
-};
-
-// ---------------------------------------------------------------------------
-// Scope reference
-// ---------------------------------------------------------------------------
-
-function ScopeRef({ scopeType, scopeId }: { scopeType: string; scopeId: string }) {
-  const entityType = scopeType === "channel" ? "channels" as const
-    : scopeType === "chat" ? "chats" as const
-    : scopeType === "ticket" ? "tickets" as const
-    : scopeType === "session" ? "sessions" as const
-    : null;
-
-  const name = useEntityField(entityType ?? "channels", entityType ? scopeId : "", "name") as string | undefined;
-  const title = useEntityField(entityType ?? "tickets", entityType ? scopeId : "", "title") as string | undefined;
-
-  const display = name ?? title ?? scopeId.slice(0, 8);
-  const icon = scopeType === "channel" ? <Hash size={11} className="text-muted-foreground" /> : null;
-
-  return (
-    <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
-      {icon}
-      <span>{display}</span>
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Time helpers
-// ---------------------------------------------------------------------------
-
-function timeUntil(dateStr: string): { text: string; urgent: boolean } {
-  const ms = new Date(dateStr).getTime() - Date.now();
-  if (ms <= 0) return { text: "expired", urgent: true };
-  const hours = Math.floor(ms / (1000 * 60 * 60));
-  if (hours < 1) return { text: "< 1h", urgent: true };
-  if (hours < 6) return { text: `${hours}h`, urgent: true };
-  if (hours < 24) return { text: `${hours}h`, urgent: false };
-  const days = Math.floor(hours / 24);
-  return { text: `${days}d`, urgent: false };
-}
-
-// ---------------------------------------------------------------------------
-// Expanded details for editing
-// ---------------------------------------------------------------------------
-
-function ExpandedDetails({
-  args,
-  meta,
-  editedArgs,
-  onEdit,
-}: {
-  args: Record<string, unknown>;
-  meta: ActionMeta;
-  editedArgs: Record<string, string>;
-  onEdit: (field: string, value: string) => void;
-}) {
-  return (
-    <div className="space-y-2.5 border-t border-border/50 pt-2.5">
-      {meta.editableFields.map((field) => {
-        const value = editedArgs[field] ?? ((args[field] as string) ?? "");
-        const label = meta.fieldLabels[field] ?? field;
-        const isLong = field === "description" || field === "prompt" || field === "text";
-
-        if (field === "priority") {
-          return (
-            <div key={field}>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
-              <div className="flex gap-1">
-                {["low", "medium", "high", "urgent"].map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onEdit("priority", p); }}
-                    className={cn(
-                      "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
-                      (editedArgs.priority ?? args.priority) === p
-                        ? PRIORITY_STYLES[p]
-                        : "bg-surface-elevated text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        if (field === "status") {
-          return (
-            <div key={field}>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
-              <div className="flex flex-wrap gap-1">
-                {["backlog", "todo", "in_progress", "in_review", "done"].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onEdit("status", s); }}
-                    className={cn(
-                      "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
-                      (editedArgs.status ?? args.status) === s
-                        ? "bg-accent/15 text-accent"
-                        : "bg-surface-elevated text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {s.replace("_", " ")}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        return (
-          <div key={field}>
-            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
-            {isLong ? (
-              <textarea
-                value={value}
-                onChange={(e) => onEdit(field, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                rows={2}
-                className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-            ) : (
-              <input
-                type="text"
-                value={value}
-                onChange={(e) => onEdit(field, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -330,7 +107,6 @@ export function InboxSuggestionBody({
               {expiry.text}
             </span>
           )}
-          {/* Inline preview of key fields */}
           {actionType === "ticket.create" && args.priority && (
             <span className={cn(
               "rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize",
@@ -344,7 +120,7 @@ export function InboxSuggestionBody({
         {/* ── Expanded details ── */}
         {expanded && meta.editableFields.length > 0 && (
           <div className="mt-2.5 pl-8">
-            <ExpandedDetails
+            <SuggestionExpandedDetails
               args={args}
               meta={meta}
               editedArgs={editedArgs}
@@ -355,7 +131,6 @@ export function InboxSuggestionBody({
 
         {/* ── Row 4: Actions ── */}
         <div className="mt-3 flex items-center gap-1.5 pl-8">
-          {/* Primary: quick action */}
           <button
             type="button"
             disabled={sending}
@@ -369,7 +144,6 @@ export function InboxSuggestionBody({
             {meta.verb}
           </button>
 
-          {/* Secondary: expand/collapse for editing */}
           {meta.editableFields.length > 0 && (
             <button
               type="button"
@@ -388,7 +162,6 @@ export function InboxSuggestionBody({
             </button>
           )}
 
-          {/* Dismiss */}
           <button
             type="button"
             disabled={sending}

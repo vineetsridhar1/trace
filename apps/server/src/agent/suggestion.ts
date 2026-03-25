@@ -37,7 +37,7 @@ function mapActionToItemType(actionType: string): InboxItemType {
 // Expiry defaults (milliseconds)
 // ---------------------------------------------------------------------------
 
-const EXPIRY_DEFAULTS_MS: Record<InboxItemType, number> = {
+const EXPIRY_DEFAULTS_MS: Partial<Record<InboxItemType, number>> = {
   ticket_suggestion: 72 * 60 * 60 * 1000,       // 72h
   field_change_suggestion: 72 * 60 * 60 * 1000,  // 72h
   comment_suggestion: 48 * 60 * 60 * 1000,       // 48h
@@ -45,14 +45,12 @@ const EXPIRY_DEFAULTS_MS: Record<InboxItemType, number> = {
   session_suggestion: 24 * 60 * 60 * 1000,       // 24h
   message_suggestion: 24 * 60 * 60 * 1000,       // 24h
   agent_suggestion: 48 * 60 * 60 * 1000,         // 48h
-  // Non-suggestion types (won't be used but satisfies the record type)
-  plan: 0,
-  question: 0,
-  agent_escalation: 0,
 };
 
+const DEFAULT_EXPIRY_MS = 48 * 60 * 60 * 1000; // 48h
+
 function getExpiryTimestamp(itemType: InboxItemType): string {
-  const ms = EXPIRY_DEFAULTS_MS[itemType] || 48 * 60 * 60 * 1000;
+  const ms = EXPIRY_DEFAULTS_MS[itemType] ?? DEFAULT_EXPIRY_MS;
   return new Date(Date.now() + ms).toISOString();
 }
 

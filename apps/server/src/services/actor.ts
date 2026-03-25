@@ -1,6 +1,5 @@
 import type DataLoader from "dataloader";
 import { prisma } from "../lib/db.js";
-import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 export type ActorSummary = {
   type: string;
