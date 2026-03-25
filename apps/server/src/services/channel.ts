@@ -1,4 +1,4 @@
-import type { CreateChannelInput, ActorType } from "@trace/gql";
+import type { CreateChannelInput, UpdateChannelInput, ActorType } from "@trace/gql";
 import { Prisma, type Prisma as PrismaTypes } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
@@ -111,6 +111,49 @@ export class ChannelService {
       }, tx);
 
       return [channel, event] as const;
+    });
+
+    return channel;
+  }
+
+  async update(channelId: string, input: UpdateChannelInput, actorType: ActorType, actorId: string) {
+    const channel = await prisma.$transaction(async (tx) => {
+      const existing = await tx.channel.findUniqueOrThrow({
+        where: { id: channelId },
+        select: { organizationId: true },
+      });
+
+      await tx.orgMember.findUniqueOrThrow({
+        where: { userId_organizationId: { userId: actorId, organizationId: existing.organizationId } },
+      });
+
+      const data: Record<string, unknown> = {};
+      if (input.name !== undefined && input.name !== null) data.name = input.name;
+      if (input.baseBranch !== undefined) data.baseBranch = input.baseBranch || null;
+
+      if (Object.keys(data).length === 0) {
+        return tx.channel.findUniqueOrThrow({ where: { id: channelId } });
+      }
+
+      const updated = await tx.channel.update({ where: { id: channelId }, data });
+
+      await eventService.create({
+        organizationId: existing.organizationId,
+        scopeType: "system",
+        scopeId: existing.organizationId,
+        eventType: "channel_updated",
+        payload: {
+          channel: {
+            id: updated.id, name: updated.name, type: updated.type,
+            position: updated.position, groupId: updated.groupId,
+            repoId: updated.repoId, baseBranch: updated.baseBranch,
+          },
+        },
+        actorType,
+        actorId,
+      }, tx);
+
+      return updated;
     });
 
     return channel;

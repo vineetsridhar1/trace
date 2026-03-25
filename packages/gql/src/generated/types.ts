@@ -415,6 +415,7 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
+  updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
@@ -726,6 +727,12 @@ export type MutationUnsubscribeArgs = {
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateChannelArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateChannelInput;
 };
 
 
@@ -1331,6 +1338,11 @@ export type UpdateChannelGroupInput = {
   isCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   position?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type UpdateChannelInput = {
+  baseBranch?: InputMaybe<Scalars['String']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRepoInput = {

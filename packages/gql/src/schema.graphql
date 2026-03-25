@@ -522,6 +522,11 @@ input CreateChannelInput {
   position: Int
 }
 
+input UpdateChannelInput {
+  name: String
+  baseBranch: String
+}
+
 input CreateChannelGroupInput {
   organizationId: ID!
   name: String!
@@ -700,6 +705,7 @@ type Terminal {
 
 type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
+  updateChannel(id: ID!, input: UpdateChannelInput!): Channel!
   joinChannel(channelId: ID!): Channel!
   leaveChannel(channelId: ID!): Channel!
   createChannelGroup(input: CreateChannelGroupInput!): ChannelGroup!
