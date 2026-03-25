@@ -34,13 +34,13 @@ Build the service for sending turns and getting AI responses. When a user sends 
 
 ## Completion requirements
 
-- [ ] `sendTurn` creates a user turn, calls the LLM, and creates an assistant turn
-- [ ] Turns are linked via `parentTurnId` forming a correct chain
-- [ ] LLM receives the full conversation history as context
-- [ ] LLM adapter is called with the correct model and message format
-- [ ] Failed LLM calls do not leave orphaned user turns without responses (either rollback or mark as error)
-- [ ] `getTurns` returns turns in correct chronological order
-- [ ] Conversation `updatedAt` is updated on each new turn
+- [x] `sendTurn` creates a user turn, calls the LLM, and creates an assistant turn
+- [x] Turns are linked via `parentTurnId` forming a correct chain
+- [x] LLM receives the full conversation history as context
+- [x] LLM adapter is called with the correct model and message format
+- [x] Failed LLM calls do not leave orphaned user turns without responses (either rollback or mark as error)
+- [x] `getTurns` returns turns in correct chronological order
+- [x] Conversation `updatedAt` is updated on each new turn
 
 ## How to test
 
