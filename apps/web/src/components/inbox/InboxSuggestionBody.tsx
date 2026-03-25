@@ -2,12 +2,13 @@ import { useState } from "react";
 import {
   Check,
   X,
-  Pencil,
+  ChevronDown,
+  ChevronUp,
   Ticket,
   Link2,
   Play,
   MessageSquare,
-  AlertTriangle,
+  Hash,
   Clock,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
@@ -38,49 +39,100 @@ interface InboxSuggestionBodyProps {
 // Action metadata
 // ---------------------------------------------------------------------------
 
-const ACTION_META: Record<string, { label: string; icon: typeof Ticket; verb: string }> = {
-  "ticket.create": { label: "Create ticket", icon: Ticket, verb: "Create" },
-  "ticket.update": { label: "Update ticket", icon: Ticket, verb: "Update" },
-  "ticket.addComment": { label: "Add comment", icon: MessageSquare, verb: "Comment" },
-  "link.create": { label: "Link entities", icon: Link2, verb: "Link" },
-  "session.start": { label: "Start session", icon: Play, verb: "Start" },
-  "message.send": { label: "Send message", icon: MessageSquare, verb: "Send" },
+interface ActionMeta {
+  verb: string;
+  icon: typeof Ticket;
+  titleFn: (args: Record<string, unknown>) => string;
+  editableFields: string[];
+  fieldLabels: Record<string, string>;
+}
+
+const ACTION_META: Record<string, ActionMeta> = {
+  "ticket.create": {
+    verb: "Create",
+    icon: Ticket,
+    titleFn: (args) => `Create ticket: ${(args.title as string) || "Untitled"}`,
+    editableFields: ["title", "description", "priority"],
+    fieldLabels: { title: "Title", description: "Description", priority: "Priority" },
+  },
+  "ticket.update": {
+    verb: "Update",
+    icon: Ticket,
+    titleFn: (args) => `Update ticket${args.title ? `: ${args.title}` : ""}`,
+    editableFields: ["title", "description", "status", "priority"],
+    fieldLabels: { title: "Title", description: "Description", status: "Status", priority: "Priority" },
+  },
+  "ticket.addComment": {
+    verb: "Comment",
+    icon: MessageSquare,
+    titleFn: () => "Add comment to ticket",
+    editableFields: ["text"],
+    fieldLabels: { text: "Comment" },
+  },
+  "link.create": {
+    verb: "Link",
+    icon: Link2,
+    titleFn: () => "Link related entities",
+    editableFields: [],
+    fieldLabels: {},
+  },
+  "session.start": {
+    verb: "Start session",
+    icon: Play,
+    titleFn: (args) => {
+      const prompt = args.prompt as string | undefined;
+      return prompt ? `Start session: ${prompt.slice(0, 60)}${prompt.length > 60 ? "…" : ""}` : "Start coding session";
+    },
+    editableFields: ["prompt"],
+    fieldLabels: { prompt: "Task" },
+  },
+  "message.send": {
+    verb: "Send",
+    icon: MessageSquare,
+    titleFn: () => "Send message",
+    editableFields: ["text"],
+    fieldLabels: { text: "Message" },
+  },
 };
 
-const EDITABLE_FIELDS: Record<string, string[]> = {
-  "ticket.create": ["title", "description", "priority"],
-  "ticket.update": ["title", "description", "status", "priority"],
-  "ticket.addComment": ["text"],
-  "message.send": ["text"],
-  "session.start": ["prompt"],
+const FALLBACK_META: ActionMeta = {
+  verb: "Accept",
+  icon: Ticket,
+  titleFn: (args) => `Agent suggestion${args.title ? `: ${args.title}` : ""}`,
+  editableFields: [],
+  fieldLabels: {},
 };
 
-const PRIORITY_COLORS: Record<string, string> = {
-  urgent: "bg-red-500/15 text-red-400 border-red-500/30",
-  high: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-  medium: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  low: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  backlog: "bg-zinc-500/15 text-zinc-400",
-  todo: "bg-blue-500/15 text-blue-400",
-  in_progress: "bg-amber-500/15 text-amber-400",
-  in_review: "bg-purple-500/15 text-purple-400",
-  done: "bg-emerald-500/15 text-emerald-400",
-  cancelled: "bg-red-500/15 text-red-400",
+const PRIORITY_STYLES: Record<string, string> = {
+  urgent: "bg-red-500/15 text-red-400",
+  high: "bg-orange-500/15 text-orange-400",
+  medium: "bg-amber-500/15 text-amber-400",
+  low: "bg-emerald-500/15 text-emerald-400",
 };
 
 // ---------------------------------------------------------------------------
-// Entity name resolver
+// Scope reference
 // ---------------------------------------------------------------------------
 
-function EntityName({ type, id }: { type: "channels" | "sessions" | "tickets"; id: string }) {
-  const name = useEntityField(type, id, "name") as string | undefined;
-  const title = useEntityField(type, id, "title") as string | undefined;
-  const display = name ?? title;
-  if (!display) return <span className="font-mono text-muted-foreground">{id.slice(0, 8)}…</span>;
-  return <span className="font-medium text-foreground">{display}</span>;
+function ScopeRef({ scopeType, scopeId }: { scopeType: string; scopeId: string }) {
+  const entityType = scopeType === "channel" ? "channels" as const
+    : scopeType === "chat" ? "chats" as const
+    : scopeType === "ticket" ? "tickets" as const
+    : scopeType === "session" ? "sessions" as const
+    : null;
+
+  const name = useEntityField(entityType ?? "channels", entityType ? scopeId : "", "name") as string | undefined;
+  const title = useEntityField(entityType ?? "tickets", entityType ? scopeId : "", "title") as string | undefined;
+
+  const display = name ?? title ?? scopeId.slice(0, 8);
+  const icon = scopeType === "channel" ? <Hash size={11} className="text-muted-foreground" /> : null;
+
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+      {icon}
+      <span>{display}</span>
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -99,194 +151,100 @@ function timeUntil(dateStr: string): { text: string; urgent: boolean } {
 }
 
 // ---------------------------------------------------------------------------
-// Action-specific detail renderers
+// Expanded details for editing
 // ---------------------------------------------------------------------------
 
-function TicketCreateDetails({
+function ExpandedDetails({
   args,
-  editing,
+  meta,
   editedArgs,
   onEdit,
 }: {
   args: Record<string, unknown>;
-  editing: boolean;
+  meta: ActionMeta;
   editedArgs: Record<string, string>;
   onEdit: (field: string, value: string) => void;
 }) {
-  const title = editedArgs.title ?? (args.title as string) ?? "";
-  const description = editedArgs.description ?? (args.description as string) ?? "";
-  const priority = (args.priority as string) ?? "medium";
-  const labels = (args.labels as string[]) ?? [];
-  const channelId = args.channelId as string | undefined;
-
   return (
-    <div className="space-y-2">
-      {/* Title */}
-      {editing ? (
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => onEdit("title", e.target.value)}
-          onClick={(e) => e.stopPropagation()}
-          className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-          placeholder="Ticket title"
-        />
-      ) : (
-        <p className="text-sm font-medium text-foreground">{title}</p>
-      )}
+    <div className="space-y-2.5 border-t border-border/50 pt-2.5">
+      {meta.editableFields.map((field) => {
+        const value = editedArgs[field] ?? ((args[field] as string) ?? "");
+        const label = meta.fieldLabels[field] ?? field;
+        const isLong = field === "description" || field === "prompt" || field === "text";
 
-      {/* Description */}
-      {(description || editing) && (
-        editing ? (
-          <textarea
-            value={description}
-            onChange={(e) => onEdit("description", e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            rows={2}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-            placeholder="Description"
-          />
-        ) : (
-          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
-        )
-      )}
+        if (field === "priority") {
+          return (
+            <div key={field}>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+              <div className="flex gap-1">
+                {["low", "medium", "high", "urgent"].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onEdit("priority", p); }}
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
+                      (editedArgs.priority ?? args.priority) === p
+                        ? PRIORITY_STYLES[p]
+                        : "bg-surface-elevated text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
 
-      {/* Metadata row */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {/* Priority badge */}
-        <span className={cn(
-          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize",
-          PRIORITY_COLORS[priority] ?? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
-        )}>
-          {priority}
-        </span>
+        if (field === "status") {
+          return (
+            <div key={field}>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+              <div className="flex flex-wrap gap-1">
+                {["backlog", "todo", "in_progress", "in_review", "done"].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onEdit("status", s); }}
+                    className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors",
+                      (editedArgs.status ?? args.status) === s
+                        ? "bg-accent/15 text-accent"
+                        : "bg-surface-elevated text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {s.replace("_", " ")}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
 
-        {/* Labels */}
-        {labels.map((label) => (
-          <span
-            key={label}
-            className="inline-flex rounded-full bg-surface-elevated px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-          >
-            {label}
-          </span>
-        ))}
-
-        {/* Channel */}
-        {channelId && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            in <EntityName type="channels" id={channelId} />
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function TicketUpdateDetails({ args }: { args: Record<string, unknown> }) {
-  const ticketId = args.id as string | undefined;
-  const status = args.status as string | undefined;
-  const priority = args.priority as string | undefined;
-  const title = args.title as string | undefined;
-
-  return (
-    <div className="space-y-1.5">
-      {ticketId && (
-        <p className="text-xs text-muted-foreground">
-          Ticket: <EntityName type="tickets" id={ticketId} />
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {title && <span className="text-xs text-foreground">{title}</span>}
-        {status && (
-          <span className={cn(
-            "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-            STATUS_COLORS[status] ?? "bg-zinc-500/15 text-zinc-400",
-          )}>
-            {status.replace("_", " ")}
-          </span>
-        )}
-        {priority && (
-          <span className={cn(
-            "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize",
-            PRIORITY_COLORS[priority] ?? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
-          )}>
-            {priority}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CommentDetails({ args }: { args: Record<string, unknown> }) {
-  const ticketId = args.ticketId as string | undefined;
-  const text = args.text as string | undefined;
-
-  return (
-    <div className="space-y-1.5">
-      {ticketId && (
-        <p className="text-[11px] text-muted-foreground">
-          on <EntityName type="tickets" id={ticketId} />
-        </p>
-      )}
-      {text && (
-        <div className="rounded-md border-l-2 border-accent/40 bg-surface-elevated/50 px-3 py-1.5">
-          <p className="text-xs leading-relaxed text-foreground">{text}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SessionStartDetails({ args }: { args: Record<string, unknown> }) {
-  const prompt = args.prompt as string | undefined;
-  const channelId = args.channelId as string | undefined;
-
-  return (
-    <div className="space-y-1.5">
-      {channelId && (
-        <p className="text-[11px] text-muted-foreground">
-          in <EntityName type="channels" id={channelId} />
-        </p>
-      )}
-      {prompt && (
-        <div className="rounded-md border-l-2 border-accent/40 bg-surface-elevated/50 px-3 py-1.5">
-          <p className="text-xs leading-relaxed text-foreground">{prompt}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MessageDetails({ args }: { args: Record<string, unknown> }) {
-  const text = args.text as string | undefined;
-  return text ? (
-    <div className="rounded-md border-l-2 border-accent/40 bg-surface-elevated/50 px-3 py-1.5">
-      <p className="text-xs leading-relaxed text-foreground">{text}</p>
-    </div>
-  ) : null;
-}
-
-function GenericDetails({ args }: { args: Record<string, unknown> }) {
-  // Filter out internal IDs, show only human-readable fields
-  const HIDDEN_KEYS = new Set(["channelId", "projectId", "chatId", "repoId", "ticketId", "id", "entityId", "entityType", "sessionGroupId", "sourceSessionId"]);
-
-  const entries = Object.entries(args).filter(
-    ([key, value]) => !HIDDEN_KEYS.has(key) && value !== undefined && value !== null && value !== "",
-  );
-
-  if (entries.length === 0) return null;
-
-  return (
-    <div className="space-y-1">
-      {entries.map(([key, value]) => (
-        <div key={key} className="flex items-baseline gap-2 text-xs">
-          <span className="shrink-0 capitalize text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}</span>
-          <span className="text-foreground">
-            {typeof value === "string" ? value : Array.isArray(value) ? value.join(", ") : String(value)}
-          </span>
-        </div>
-      ))}
+        return (
+          <div key={field}>
+            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+            {isLong ? (
+              <textarea
+                value={value}
+                onChange={(e) => onEdit(field, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                rows={2}
+                className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            ) : (
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => onEdit(field, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -301,20 +259,21 @@ export function InboxSuggestionBody({
   onAccept,
   onDismiss,
 }: InboxSuggestionBodyProps) {
-  const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [editedArgs, setEditedArgs] = useState<Record<string, string>>({});
 
   const actionType = payload.actionType ?? "unknown";
-  const meta = ACTION_META[actionType] ?? { label: actionType, icon: AlertTriangle, verb: "Run" };
+  const meta = ACTION_META[actionType] ?? FALLBACK_META;
   const Icon = meta.icon;
   const args = payload.args ?? {};
-  const editableFields = EDITABLE_FIELDS[actionType] ?? [];
   const confidence = payload.confidence;
   const expiresAt = payload.expiresAt;
   const expiry = expiresAt ? timeUntil(expiresAt) : null;
 
+  const actionTitle = meta.titleFn(args);
+
   const handleAccept = () => {
-    if (editing && Object.keys(editedArgs).length > 0) {
+    if (expanded && Object.keys(editedArgs).length > 0) {
       onAccept(editedArgs);
     } else {
       onAccept();
@@ -325,111 +284,124 @@ export function InboxSuggestionBody({
     setEditedArgs((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Render action-specific details
-  const renderDetails = () => {
-    switch (actionType) {
-      case "ticket.create":
-        return <TicketCreateDetails args={args} editing={editing} editedArgs={editedArgs} onEdit={handleEditField} />;
-      case "ticket.update":
-        return <TicketUpdateDetails args={args} />;
-      case "ticket.addComment":
-        return <CommentDetails args={args} />;
-      case "session.start":
-        return <SessionStartDetails args={args} />;
-      case "message.send":
-        return <MessageDetails args={args} />;
-      default:
-        return <GenericDetails args={args} />;
-    }
-  };
-
   return (
     <div className="px-4 pb-3">
-      {/* Card */}
-      <div className="accent-dashed-container mb-2.5 px-3.5 py-3">
-        {/* Header row: action type + metadata */}
-        <div className="mb-2 flex items-center gap-2">
-          <Icon size={14} className="shrink-0 text-accent" />
-          <span className="text-xs font-semibold text-accent">{meta.label}</span>
-          <div className="ml-auto flex items-center gap-2">
-            {confidence !== undefined && (
-              <span className={cn(
-                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                confidence >= 0.8
-                  ? "bg-emerald-500/15 text-emerald-400"
-                  : confidence >= 0.5
-                    ? "bg-amber-500/15 text-amber-400"
-                    : "bg-zinc-500/15 text-zinc-400",
-              )}>
-                {Math.round(confidence * 100)}%
-              </span>
-            )}
-            {expiry && (
-              <span className={cn(
-                "flex items-center gap-0.5 text-[10px]",
-                expiry.urgent ? "text-amber-400" : "text-muted-foreground",
-              )}>
-                <Clock size={10} />
-                {expiry.text}
-              </span>
-            )}
+      <div className="rounded-lg border border-border bg-surface-deep px-3.5 py-3">
+        {/* ── Row 1: Title ── */}
+        <div className="flex items-start gap-2.5">
+          <div className="mt-0.5 rounded-md bg-accent/10 p-1">
+            <Icon size={14} className="text-accent" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">{actionTitle}</p>
           </div>
         </div>
 
-        {/* Rationale */}
+        {/* ── Row 2: Justification ── */}
         {payload.rationaleSummary && (
-          <p className="mb-2.5 text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-1.5 pl-8 text-xs leading-relaxed text-muted-foreground">
             {payload.rationaleSummary}
           </p>
         )}
 
-        {/* Action-specific details */}
-        {renderDetails()}
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          disabled={sending}
-          onClick={(e) => { e.stopPropagation(); handleAccept(); }}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90",
-            sending && "opacity-50",
+        {/* ── Row 3: Metadata (scope, confidence, expiry) ── */}
+        <div className="mt-2 flex items-center gap-2.5 pl-8">
+          {payload.scopeType && payload.scopeId && (
+            <ScopeRef scopeType={payload.scopeType} scopeId={payload.scopeId} />
           )}
-        >
-          <Check size={12} />
-          {meta.verb}
-        </button>
-        {editableFields.length > 0 && (
+          {confidence !== undefined && (
+            <span className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+              confidence >= 0.8
+                ? "bg-emerald-500/10 text-emerald-400"
+                : confidence >= 0.5
+                  ? "bg-amber-500/10 text-amber-400"
+                  : "bg-zinc-500/10 text-zinc-400",
+            )}>
+              {Math.round(confidence * 100)}% confident
+            </span>
+          )}
+          {expiry && (
+            <span className={cn(
+              "flex items-center gap-0.5 text-[10px]",
+              expiry.urgent ? "text-amber-400" : "text-muted-foreground/60",
+            )}>
+              <Clock size={10} />
+              {expiry.text}
+            </span>
+          )}
+          {/* Inline preview of key fields */}
+          {actionType === "ticket.create" && args.priority && (
+            <span className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize",
+              PRIORITY_STYLES[args.priority as string] ?? "bg-zinc-500/10 text-zinc-400",
+            )}>
+              {args.priority as string}
+            </span>
+          )}
+        </div>
+
+        {/* ── Expanded details ── */}
+        {expanded && meta.editableFields.length > 0 && (
+          <div className="mt-2.5 pl-8">
+            <ExpandedDetails
+              args={args}
+              meta={meta}
+              editedArgs={editedArgs}
+              onEdit={handleEditField}
+            />
+          </div>
+        )}
+
+        {/* ── Row 4: Actions ── */}
+        <div className="mt-3 flex items-center gap-1.5 pl-8">
+          {/* Primary: quick action */}
           <button
             type="button"
             disabled={sending}
-            onClick={(e) => { e.stopPropagation(); setEditing(!editing); }}
+            onClick={(e) => { e.stopPropagation(); handleAccept(); }}
             className={cn(
-              "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-colors",
-              editing
-                ? "border-accent/50 bg-accent/10 text-accent"
-                : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+              "flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/90",
               sending && "opacity-50",
             )}
           >
-            <Pencil size={12} />
-            {editing ? "Editing" : "Edit first"}
+            <Check size={12} />
+            {meta.verb}
           </button>
-        )}
-        <button
-          type="button"
-          disabled={sending}
-          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
-          className={cn(
-            "flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-red-400",
-            sending && "opacity-50",
+
+          {/* Secondary: expand/collapse for editing */}
+          {meta.editableFields.length > 0 && (
+            <button
+              type="button"
+              disabled={sending}
+              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+              className={cn(
+                "flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                expanded
+                  ? "border-accent/40 text-accent"
+                  : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+                sending && "opacity-50",
+              )}
+            >
+              {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {expanded ? "Less" : "Edit"}
+            </button>
           )}
-        >
-          <X size={12} />
-          Dismiss
-        </button>
+
+          {/* Dismiss */}
+          <button
+            type="button"
+            disabled={sending}
+            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            className={cn(
+              "ml-auto flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/60 transition-colors hover:text-red-400",
+              sending && "opacity-50",
+            )}
+          >
+            <X size={12} />
+            Dismiss
+          </button>
+        </div>
       </div>
     </div>
   );
