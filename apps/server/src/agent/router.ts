@@ -50,15 +50,18 @@ export interface CostTracker {
  * Map of eventType -> predicate on the event. If predicate returns true, route direct.
  */
 const DIRECT_RULES: Record<string, (event: AgentEvent, agentId: string) => boolean> = {
-  ticket_assigned: (event, agentId) =>
-    (event.payload.assigneeId as string) === agentId,
-  session_terminated: (event) =>
-    (event.payload.needsInput as boolean) === true,
-  session_paused: (event) =>
-    (event.payload.needsInput as boolean) === true,
+  ticket_assigned: (event, agentId) => {
+    const assigneeId = event.payload.assigneeId;
+    return typeof assigneeId === "string" && assigneeId === agentId;
+  },
+  session_terminated: (event) => event.payload.needsInput === true,
+  session_paused: (event) => event.payload.needsInput === true,
   message_sent: (event, agentId) => {
-    const mentions = event.payload.mentions as Array<{ userId: string }> | undefined;
-    return mentions !== undefined && mentions.some((m) => m.userId === agentId);
+    const mentions = event.payload.mentions;
+    return (
+      Array.isArray(mentions) &&
+      mentions.some((m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId)
+    );
   },
 };
 
@@ -195,9 +198,13 @@ export function cleanupRateLimits(): void {
 // Cost budget degradation
 // ---------------------------------------------------------------------------
 
-/** Default cost tracker — no budget tracking yet (ticket #08 will replace) */
+/**
+ * Default cost tracker — returns full budget. The agent worker should replace
+ * this with a CachedCostTracker that polls CostTrackingService periodically
+ * (e.g., every 30s) and converts remainingPercent (0-100) to a fraction (0.0-1.0).
+ */
 const defaultCostTracker: CostTracker = {
-  getRemainingBudgetFraction: () => 1.0, // assume full budget until implemented
+  getRemainingBudgetFraction: () => 1.0,
 };
 
 let activeCostTracker: CostTracker = defaultCostTracker;

@@ -1,5 +1,4 @@
 import type { Context } from "../context.js";
-import { prisma } from "../lib/db.js";
 import { agentIdentityService } from "../services/agent-identity.js";
 import { orgMemberService } from "../services/org-member.js";
 import type { AgentIdentity as PrismaAgentIdentity } from "@prisma/client";
@@ -7,9 +6,7 @@ import type { AgentIdentity as PrismaAgentIdentity } from "@prisma/client";
 export const agentIdentityQueries = {
   agentIdentity: async (_: unknown, args: { organizationId: string }, ctx: Context) => {
     await orgMemberService.assertMembership(ctx.userId, args.organizationId);
-    return prisma.agentIdentity.findUnique({
-      where: { organizationId: args.organizationId },
-    });
+    return agentIdentityService.get(args.organizationId);
   },
 };
 
@@ -33,15 +30,12 @@ export const agentIdentityMutations = {
       throw new Error("Only admins can update agent settings");
     }
 
-    return prisma.agentIdentity.update({
-      where: { organizationId: args.organizationId },
-      data: {
-        ...(args.input.name != null && { name: args.input.name }),
-        ...(args.input.status != null && { status: args.input.status }),
-        ...(args.input.autonomyMode != null && { autonomyMode: args.input.autonomyMode }),
-        ...(args.input.soulFile != null && { soulFile: args.input.soulFile }),
-        ...(args.input.dailyLimitCents != null && { dailyLimitCents: args.input.dailyLimitCents }),
-      },
+    return agentIdentityService.update(args.organizationId, {
+      ...(args.input.name != null && { name: args.input.name }),
+      ...(args.input.status != null && { status: args.input.status }),
+      ...(args.input.autonomyMode != null && { autonomyMode: args.input.autonomyMode }),
+      ...(args.input.soulFile != null && { soulFile: args.input.soulFile }),
+      ...(args.input.dailyLimitCents != null && { dailyLimitCents: args.input.dailyLimitCents }),
     });
   },
 };

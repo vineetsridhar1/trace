@@ -124,6 +124,8 @@ enum AutonomyMode {
 enum InboxItemType {
   plan
   question
+  agent_escalation
+  agent_suggestion
 }
 
 enum InboxItemStatus {
