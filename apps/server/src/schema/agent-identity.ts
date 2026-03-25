@@ -1,7 +1,7 @@
 import type { Context } from "../context.js";
 import { agentIdentityService } from "../services/agent-identity.js";
 import { orgMemberService } from "../services/org-member.js";
-import type { AgentIdentity as PrismaAgentIdentity } from "@prisma/client";
+import type { OrgAgentSettings } from "../services/agent-identity.js";
 
 export const agentIdentityQueries = {
   agentIdentity: async (_: unknown, args: { organizationId: string }, ctx: Context) => {
@@ -17,8 +17,8 @@ export const agentIdentityMutations = {
       organizationId: string;
       input: {
         name?: string;
-        status?: PrismaAgentIdentity["status"];
-        autonomyMode?: PrismaAgentIdentity["autonomyMode"];
+        status?: string;
+        autonomyMode?: string;
         soulFile?: string;
         dailyLimitCents?: number;
       };
@@ -42,8 +42,7 @@ export const agentIdentityMutations = {
 
 export const agentIdentityTypeResolvers = {
   AgentIdentity: {
-    costBudget: (parent: PrismaAgentIdentity) => ({
-      dailyLimitCents: parent.dailyLimitCents,
-    }),
+    id: (parent: OrgAgentSettings) => parent.agentId,
+    costBudget: (parent: OrgAgentSettings) => parent.costBudget,
   },
 };
