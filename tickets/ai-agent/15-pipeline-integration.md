@@ -38,13 +38,22 @@ Wire everything together. The individual components exist (router, aggregator, c
 
 ## Completion requirements
 
-- [ ] Pipeline module exists and chains all components
-- [ ] Agent worker runs the full pipeline for every event batch
-- [ ] Each stage's output feeds into the next stage
-- [ ] Execution logs capture the full decision chain
-- [ ] Cost tracking is updated after each planner call
-- [ ] Errors in any stage are caught, logged, and don't crash the worker
-- [ ] The pipeline processes events from all scope types that the router forwards
+- [~] Pipeline module exists and chains all components — pipeline is wired inline in `agent-worker.ts` `handleBatch()` (ticket #14 PR). Consider extracting to a dedicated `pipeline.ts` module for testability, but the wiring is functional.
+- [x] Agent worker runs the full pipeline for every event batch — `handleBatch()` now calls `buildContext → runPlanner → evaluatePolicy → executor/createSuggestions`
+- [x] Each stage's output feeds into the next stage — planner output feeds policy engine, policy decisions route to executor or suggestion creator
+- [ ] Execution logs capture the full decision chain — `executionLoggingService.write()` is NOT yet called. This is the main remaining work.
+- [ ] Cost tracking is updated after each planner call — `costTrackingService.recordCost()` is NOT yet called after planner runs. Remaining work.
+- [x] Errors in any stage are caught, logged, and don't crash the worker — `.catch()` wraps the entire pipeline
+- [x] The pipeline processes events from all scope types that the router forwards
+
+<!-- Updated after ticket #14: The core pipeline wiring (context → planner → policy → execute/suggest) was implemented directly in `handleBatch()` in `agent-worker.ts` as part of ticket #14's suggestion delivery work. Remaining scope for this ticket:
+  1. Wire `executionLoggingService.write()` to record full decision chains after each planner run
+  2. Wire `costTrackingService.recordCost()` after each planner call
+  3. Wire `processedEventService.markProcessed()` / `isProcessed()` for event dedup
+  4. Optionally extract pipeline logic from `handleBatch()` into a dedicated `pipeline.ts` module
+  5. Handle `disposition === "escalate"` → Tier 3 promotion (ticket #16)
+  6. Handle `disposition === "summarize"` → summary service routing
+-->
 
 ## How to test
 

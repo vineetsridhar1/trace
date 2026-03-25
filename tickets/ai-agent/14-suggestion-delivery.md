@@ -63,12 +63,24 @@ When the policy engine routes a decision to `suggest`, the agent creates an Inbo
 
 ## Completion requirements
 
-- [ ] New InboxItemType values exist via migration
-- [ ] Suggestions are created as InboxItems with the full action payload
-- [ ] `acceptAgentSuggestion` mutation exists and executes the stored action
-- [ ] User edits before accepting are applied to the action args
-- [ ] Suggestion expiry background job exists and resolves expired items
-- [ ] Suggestion outcomes (accepted/dismissed/expired) are recorded in the execution log
+- [x] New InboxItemType values exist via migration
+- [x] Suggestions are created as InboxItems with the full action payload
+- [x] `acceptAgentSuggestion` mutation exists and executes the stored action
+- [x] User edits before accepting are applied to the action args
+- [x] Suggestion expiry background job exists and resolves expired items
+- [~] Suggestion outcomes (accepted/dismissed/expired) are recorded in the execution log — outcomes are recorded as events (`inbox_item_resolved` with resolution field), but not yet in the `AgentExecutionLog` table (deferred to ticket #15 pipeline integration)
+
+<!-- Ticket 14 implemented:
+  - `apps/server/src/agent/suggestion.ts` — `createSuggestion()` and `createSuggestions()`. Maps action names to InboxItemType via `ACTION_TO_ITEM_TYPE`. Payload shape: `SuggestionPayload { actionType, args, confidence, triggerEventId, agentId, rationaleSummary, expiresAt }`. Expiry defaults: ticket 72h, link/comment 48h, session/message 24h.
+  - `apps/server/src/agent/suggestion-expiry.ts` — `startSuggestionExpiryWorker()` / `stopSuggestionExpiryWorker()`. Runs every 60s via setInterval.
+  - `apps/server/src/services/inbox.ts` — added `acceptSuggestion()`, `dismissSuggestion()`, `expireSuggestions()`.
+  - `apps/server/src/schema/inbox.ts` — `acceptAgentSuggestion` and `dismissAgentSuggestion` resolvers. Accept extracts PlannedAction from payload, merges user edits, and calls `executor.execute()`. Dismiss calls `recordDismissal()` for policy cooldown.
+  - GraphQL: `acceptAgentSuggestion(inboxItemId: ID!, edits: JSON): InboxItem!` and `dismissAgentSuggestion(inboxItemId: ID!): InboxItem!`
+  - Prisma enum: added `ticket_suggestion`, `link_suggestion`, `session_suggestion`, `field_change_suggestion`, `comment_suggestion`, `message_suggestion` to InboxItemType; added `expired` to InboxItemStatus.
+  - Frontend: `InboxSuggestionBody.tsx` with accept/edit/dismiss flow, wired into `InboxItemRow.tsx`.
+  - NOTE: Suggestion payload should include `scopeType` and `scopeId` for accurate dismissal cooldown (currently uses system scope as fallback).
+  - NOTE: The accept resolver creates a new ActionExecutor per call — should use a shared singleton for idempotency.
+-->
 
 ## How to test
 
