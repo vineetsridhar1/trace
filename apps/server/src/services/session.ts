@@ -2867,6 +2867,70 @@ export class SessionService {
     );
   }
 
+  /** Compute the branch diff for a session group (changed files vs default branch). */
+  async branchDiff(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    // Single query to get both repo.defaultBranch and group data needed for runtime resolution
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, workdir: true, worktreeDeleted: true, repo: { select: { defaultBranch: true } } },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.worktreeDeleted) {
+      throw new Error("Cannot access files: session worktree has been deleted");
+    }
+    const baseBranch = group.repo?.defaultBranch ?? "main";
+
+    const sessions = await prisma.session.findMany({
+      where: { sessionGroupId, organizationId },
+      select: { id: true, workdir: true, hosting: true, createdById: true },
+    });
+    this.assertLocalFileOwnership(sessions, userId);
+
+    for (const session of sessions) {
+      const runtime = sessionRouter.getRuntimeForSession(session.id);
+      if (!runtime) continue;
+      return sessionRouter.branchDiff(
+        runtime.id,
+        session.id,
+        baseBranch,
+        session.workdir ?? group.workdir ?? undefined,
+      );
+    }
+
+    throw new Error("No connected runtime available for this session group");
+  }
+
+  /** Read a file's content at a specific git ref from a session group's runtime. */
+  async readFileAtRef(
+    sessionGroupId: string,
+    filePath: string,
+    ref: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<string> {
+    // Validate ref to prevent git argument injection
+    if (!ref || ref.startsWith("-") || ref.includes("..") || /[\x00-\x1f\x7f]/.test(ref)) {
+      throw new Error("Invalid git ref");
+    }
+    const normalizedPath = this.normalizeFilePath(filePath);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    return sessionRouter.fileAtRef(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      ref,
+      runtime.workdirHint,
+    );
+  }
+
   // ─── Helpers ───
 
   /**

@@ -78,6 +78,14 @@ export type AutonomyMode =
   | 'observe'
   | 'suggest';
 
+export type BranchDiffFile = {
+  __typename?: 'BranchDiffFile';
+  additions: Scalars['Int']['output'];
+  deletions: Scalars['Int']['output'];
+  path: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+};
+
 export type Channel = {
   __typename?: 'Channel';
   groupId?: Maybe<Scalars['ID']['output']>;
@@ -818,6 +826,8 @@ export type Query = {
   repos: Array<Repo>;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
+  sessionGroupBranchDiff: Array<BranchDiffFile>;
+  sessionGroupFileAtRef: Scalars['String']['output'];
   sessionGroupFileContent: Scalars['String']['output'];
   sessionGroupFiles: Array<Scalars['String']['output']>;
   sessionGroups: Array<SessionGroup>;
@@ -950,6 +960,18 @@ export type QuerySessionArgs = {
 
 export type QuerySessionGroupArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupBranchDiffArgs = {
+  sessionGroupId: Scalars['ID']['input'];
+};
+
+
+export type QuerySessionGroupFileAtRefArgs = {
+  filePath: Scalars['String']['input'];
+  ref: Scalars['String']['input'];
+  sessionGroupId: Scalars['ID']['input'];
 };
 
 

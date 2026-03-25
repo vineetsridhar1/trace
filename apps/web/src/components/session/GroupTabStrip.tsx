@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Circle, FileCode, MessageSquarePlus, Plus, TerminalSquare, X } from "lucide-react";
+import { Circle, FileCode, GitCompareArrows, MessageSquarePlus, Plus, TerminalSquare, X } from "lucide-react";
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
@@ -15,6 +15,8 @@ import {
 export interface OpenFileTab {
   filePath: string;
   fileName: string;
+  isDiff?: boolean;
+  diffStatus?: string;
 }
 
 interface GroupTabStripProps {
@@ -207,7 +209,11 @@ export function GroupTabStrip({
                   onClick={() => onSelectFile(file.filePath)}
                   className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
                 >
-                  <FileCode size={12} className="shrink-0" />
+                  {file.isDiff ? (
+                    <GitCompareArrows size={12} className="shrink-0" />
+                  ) : (
+                    <FileCode size={12} className="shrink-0" />
+                  )}
                   <span className="truncate">{file.fileName}</span>
                 </button>
                 <button

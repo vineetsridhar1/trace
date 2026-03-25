@@ -67,6 +67,22 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.readFile(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
+  sessionGroupBranchDiff: (
+    _: unknown,
+    args: { sessionGroupId: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.branchDiff(args.sessionGroupId, orgId, ctx.userId);
+  },
+  sessionGroupFileAtRef: (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string; ref: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.readFileAtRef(args.sessionGroupId, args.filePath, args.ref, orgId, ctx.userId);
+  },
 };
 
 export const sessionMutations = {

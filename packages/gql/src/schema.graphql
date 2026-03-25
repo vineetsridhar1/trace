@@ -485,6 +485,13 @@ type SessionRuntimeInstance {
   registeredRepoIds: [ID!]!
 }
 
+type BranchDiffFile {
+  path: String!
+  status: String!
+  additions: Int!
+  deletions: Int!
+}
+
 type Notification {
   id: ID!
   type: String!
@@ -658,6 +665,8 @@ type Query {
   repoBranches(repoId: ID!, runtimeInstanceId: ID): [String!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
+  sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
+  sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   inboxItems(organizationId: ID!, status: InboxItemStatus): [InboxItem!]!
   chats: [Chat!]!
   chat(id: ID!): Chat

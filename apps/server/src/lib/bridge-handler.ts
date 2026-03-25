@@ -135,6 +135,25 @@ export function handleBridgeConnection(ws: WebSocket) {
         return;
       }
 
+      if (msg.type === "branch_diff_result" && typeof msg.requestId === "string") {
+        const files = Array.isArray(msg.files) ? (msg.files as Array<{ path: string; status: string; additions: number; deletions: number }>) : [];
+        sessionRouter.resolveBranchDiffRequest(
+          msg.requestId,
+          files,
+          typeof msg.error === "string" ? msg.error : undefined,
+        );
+        return;
+      }
+
+      if (msg.type === "file_at_ref_result" && typeof msg.requestId === "string") {
+        sessionRouter.resolveFileAtRefRequest(
+          msg.requestId,
+          typeof msg.content === "string" ? msg.content : "",
+          typeof msg.error === "string" ? msg.error : undefined,
+        );
+        return;
+      }
+
       // Terminal messages — relay directly to frontend, no event store
       if (msg.type === "terminal_ready" || msg.type === "terminal_output" ||
           msg.type === "terminal_exit" || msg.type === "terminal_error") {

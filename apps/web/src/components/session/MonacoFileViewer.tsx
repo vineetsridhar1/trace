@@ -1,73 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import Editor, { loader } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
 import { gql } from "@urql/core";
 import { Loader2, RefreshCw } from "lucide-react";
 import { client } from "../../lib/urql";
-
-// Configure Monaco to load workers from CDN
-loader.config({
-  paths: {
-    vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs",
-  },
-});
+import { getLanguageFromPath } from "../../lib/monaco-utils";
 
 const SESSION_GROUP_FILE_CONTENT_QUERY = gql`
   query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {
     sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)
   }
 `;
-
-function getLanguageFromPath(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase();
-  const map: Record<string, string> = {
-    ts: "typescript",
-    tsx: "typescript",
-    js: "javascript",
-    jsx: "javascript",
-    json: "json",
-    jsonc: "json",
-    md: "markdown",
-    mdx: "markdown",
-    html: "html",
-    htm: "html",
-    css: "css",
-    scss: "scss",
-    less: "less",
-    py: "python",
-    rb: "ruby",
-    go: "go",
-    rs: "rust",
-    java: "java",
-    c: "c",
-    cpp: "cpp",
-    h: "c",
-    hpp: "cpp",
-    cs: "csharp",
-    swift: "swift",
-    kt: "kotlin",
-    yaml: "yaml",
-    yml: "yaml",
-    toml: "ini",
-    xml: "xml",
-    svg: "xml",
-    sql: "sql",
-    sh: "shell",
-    bash: "shell",
-    zsh: "shell",
-    dockerfile: "dockerfile",
-    graphql: "graphql",
-    gql: "graphql",
-    prisma: "graphql",
-    vue: "html",
-    svelte: "html",
-    env: "ini",
-    ini: "ini",
-    conf: "ini",
-    txt: "plaintext",
-    lock: "json",
-  };
-  return map[ext ?? ""] ?? "plaintext";
-}
 
 export function MonacoFileViewer({
   sessionGroupId,

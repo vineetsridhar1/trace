@@ -1,9 +1,10 @@
-import { Files, GitCommitHorizontal } from "lucide-react";
+import { Files, GitCommitHorizontal, GitCompareArrows } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { FileExplorer } from "./FileExplorer";
 import { CheckpointPanel } from "./CheckpointPanel";
+import { BranchChangesPanel } from "./BranchChangesPanel";
 
-export type SidebarTab = "files" | "git";
+export type SidebarTab = "files" | "git" | "changes";
 
 interface SidebarPanelProps {
   sessionGroupId: string;
@@ -11,6 +12,7 @@ interface SidebarPanelProps {
   activeTab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
   onFileClick: (filePath: string) => void;
+  onDiffFileClick?: (filePath: string, status: string) => void;
   highlightCheckpointId?: string | null;
 }
 
@@ -26,6 +28,7 @@ export function SidebarPanel({
   activeTab,
   onTabChange,
   onFileClick,
+  onDiffFileClick,
   highlightCheckpointId,
 }: SidebarPanelProps) {
   return (
@@ -47,6 +50,14 @@ export function SidebarPanel({
           <GitCommitHorizontal size={12} />
           Checkpoints
         </button>
+        <button
+          type="button"
+          onClick={() => onTabChange("changes")}
+          className={cn(tabClass, activeTab === "changes" ? tabActive : tabInactive)}
+        >
+          <GitCompareArrows size={12} />
+          Changes
+        </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -54,6 +65,11 @@ export function SidebarPanel({
           <FileExplorer
             sessionGroupId={sessionGroupId}
             onFileClick={onFileClick}
+          />
+        ) : activeTab === "changes" ? (
+          <BranchChangesPanel
+            sessionGroupId={sessionGroupId}
+            onFileClick={onDiffFileClick ?? (() => {})}
           />
         ) : (
           <CheckpointPanel
