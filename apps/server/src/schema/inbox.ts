@@ -56,10 +56,15 @@ export const inboxMutations = {
       const agentCtx: AgentContext = {
         organizationId: orgId,
         agentId: (payload.agentId as string) ?? "system",
-        triggerEventId: (payload.triggerEventId as string) ?? item.sourceId,
+        // Use the inbox item ID as trigger to avoid idempotency collision
+        // with the original pipeline execution that created this suggestion
+        triggerEventId: `accept:${item.id}`,
       };
 
-      await executor.execute(action, agentCtx);
+      const result = await executor.execute(action, agentCtx);
+      if (result.status === "failed") {
+        throw new Error(`Failed to execute suggestion: ${result.error}`);
+      }
     }
 
     return item;
