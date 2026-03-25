@@ -34,20 +34,15 @@ export const inboxMutations = {
   ) => {
     const orgId = requireOrgContext(ctx);
 
-    // 1. Accept the suggestion (marks as resolved — does NOT merge edits into payload)
-    const item = await inboxService.acceptSuggestion(
-      args.inboxItemId,
-      ctx.userId,
-      orgId,
-    );
+    // 1. Load the suggestion (verify ownership + active status) without resolving yet
+    const item = await inboxService.getActiveSuggestion(args.inboxItemId, ctx.userId, orgId);
 
-    // 2. Extract the stored action from the payload and execute it
+    // 2. Extract the stored action and execute it BEFORE marking as resolved
     const payload = (item.payload ?? {}) as Record<string, unknown>;
     const actionType = payload.actionType as string | undefined;
     const storedArgs = payload.args as Record<string, unknown> | undefined;
 
     if (actionType && storedArgs) {
-      // Merge user edits into the action args (single merge point)
       const finalArgs = args.edits
         ? { ...storedArgs, ...args.edits }
         : storedArgs;
@@ -56,8 +51,6 @@ export const inboxMutations = {
       const agentCtx: AgentContext = {
         organizationId: orgId,
         agentId: (payload.agentId as string) ?? "system",
-        // Use the inbox item ID as trigger to avoid idempotency collision
-        // with the original pipeline execution that created this suggestion
         triggerEventId: `accept:${item.id}`,
       };
 
@@ -67,7 +60,8 @@ export const inboxMutations = {
       }
     }
 
-    return item;
+    // 3. Only mark as resolved after successful execution
+    return inboxService.acceptSuggestion(args.inboxItemId, ctx.userId, orgId);
   },
 
   dismissAgentSuggestion: async (

@@ -135,9 +135,19 @@ export class InboxService {
   }
 
   /**
+   * Load an active suggestion and verify ownership. Does NOT modify it.
+   * Use this to read the payload before deciding to execute.
+   */
+  async getActiveSuggestion(id: string, actorId: string, organizationId: string) {
+    return prisma.inboxItem.findFirstOrThrow({
+      where: { id, userId: actorId, organizationId, status: "active" },
+    });
+  }
+
+  /**
    * Accept an agent suggestion. Marks it as resolved with resolution "accepted".
    * Returns the updated inbox item with original payload intact.
-   * The caller (resolver) is responsible for extracting the action, merging edits, and executing.
+   * Call this AFTER the action has been successfully executed.
    */
   async acceptSuggestion(id: string, actorId: string, organizationId: string) {
     const item = await prisma.inboxItem.findFirstOrThrow({

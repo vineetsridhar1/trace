@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { MessageCircleQuestion, Map, Check, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -185,12 +186,17 @@ export function InboxItemRow({ id }: { id: string }) {
       if (sending) return;
       setSending(true);
       try {
-        await client
+        const result = await client
           .mutation(ACCEPT_AGENT_SUGGESTION_MUTATION, {
             inboxItemId: id,
             edits: edits ?? null,
           })
           .toPromise();
+        if (result.error) {
+          toast.error(`Failed to accept: ${result.error.message}`);
+        } else {
+          toast.success("Suggestion accepted");
+        }
       } finally {
         setSending(false);
       }
@@ -202,9 +208,12 @@ export function InboxItemRow({ id }: { id: string }) {
     if (sending) return;
     setSending(true);
     try {
-      await client
+      const result = await client
         .mutation(DISMISS_AGENT_SUGGESTION_MUTATION, { inboxItemId: id })
         .toPromise();
+      if (result.error) {
+        toast.error(`Failed to dismiss: ${result.error.message}`);
+      }
     } finally {
       setSending(false);
     }
