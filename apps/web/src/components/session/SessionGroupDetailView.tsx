@@ -25,6 +25,7 @@ import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
 import { MonacoFileViewer } from "./MonacoFileViewer";
+import { MonacoDiffViewer } from "./MonacoDiffViewer";
 import {
   getDisplaySessionStatus,
   isTerminalStatus,
@@ -55,6 +56,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       repo {
         id
         name
+        defaultBranch
       }
       connection {
         state
@@ -118,7 +120,7 @@ export function SessionGroupDetailView({
 }) {
   const groupName = useEntityField("sessionGroups", sessionGroupId, "name");
   const groupRepo = useEntityField("sessionGroups", sessionGroupId, "repo") as
-    | { id: string; name: string }
+    | { id: string; name: string; defaultBranch?: string }
     | null
     | undefined;
   const groupBranch = useEntityField("sessionGroups", sessionGroupId, "branch") as
@@ -411,6 +413,20 @@ export function SessionGroupDetailView({
     [setActiveTerminalId],
   );
 
+  const handleDiffFileClick = useCallback(
+    (filePath: string, status: string) => {
+      const diffKey = `diff:${filePath}`;
+      setOpenFiles((prev) => {
+        if (prev.some((f) => f.filePath === diffKey)) return prev;
+        const fileName = filePath.split("/").pop() ?? filePath;
+        return [...prev, { filePath: diffKey, fileName, isDiff: true, diffStatus: status }];
+      });
+      setActiveFilePath(diffKey);
+      setActiveTerminalId(null);
+    },
+    [setActiveTerminalId],
+  );
+
   const handleSelectFile = useCallback(
     (filePath: string) => {
       setActiveFilePath(filePath);
@@ -480,7 +496,17 @@ export function SessionGroupDetailView({
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            {activeFilePath ? (
+            {activeFilePath?.startsWith("diff:") ? (
+              <div className="h-full">
+                <MonacoDiffViewer
+                  key={activeFilePath}
+                  sessionGroupId={sessionGroupId}
+                  filePath={activeFilePath.slice(5)}
+                  status={openFiles.find((f) => f.filePath === activeFilePath)?.diffStatus ?? "M"}
+                  defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                />
+              </div>
+            ) : activeFilePath ? (
               <div className="h-full">
                 <MonacoFileViewer
                   key={activeFilePath}
@@ -508,6 +534,7 @@ export function SessionGroupDetailView({
                 activeTab={sidebarTab}
                 onTabChange={handleSidebarTabChange}
                 onFileClick={handleFileClick}
+                onDiffFileClick={handleDiffFileClick}
                 highlightCheckpointId={highlightCheckpointId}
               />
             </div>

@@ -43,12 +43,18 @@ export type {
   BridgeReadFileCommand,
   BridgeFilesResult,
   BridgeFileContentResult,
+  BridgeBranchDiffCommand,
+  BridgeFileAtRefCommand,
+  BridgeBranchDiffResult,
+  BridgeBranchDiffFile,
+  BridgeFileAtRefResult,
   BridgeTerminalCreateCommand,
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
 } from "./bridge.js";
-export { parseBranchOutput, walkDir, handleListFiles, handleReadFile } from "./bridge.js";
+export { parseBranchOutput, walkDir, handleListFiles, handleReadFile, handleBranchDiff, handleFileAtRef } from "./bridge.js";
+export type { GitExecFn } from "./bridge.js";
 export type {
   GitCheckpointBridgePayload,
   GitCheckpointContext,

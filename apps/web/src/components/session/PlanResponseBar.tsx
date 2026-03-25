@@ -24,7 +24,6 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
-
   const openSessionTab = useUIStore((s) => s.openSessionTab);
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;

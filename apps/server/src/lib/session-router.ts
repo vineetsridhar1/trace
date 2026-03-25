@@ -2,7 +2,7 @@ import type WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { CloudMachineService } from "./cloud-machine-service.js";
-import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand } from "@trace/shared";
+import type { BridgeTerminalCreateCommand, BridgeTerminalInputCommand, BridgeTerminalResizeCommand, BridgeTerminalDestroyCommand, BridgeListFilesCommand, BridgeReadFileCommand, BridgeBranchDiffCommand, BridgeFileAtRefCommand, BridgeBranchDiffFile } from "@trace/shared";
 import { prisma } from "./db.js";
 import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -18,6 +18,8 @@ export type SessionCommand =
   | BaseSessionCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
+  | BridgeBranchDiffCommand
+  | BridgeFileAtRefCommand
   | BridgeTerminalCreateCommand
   | BridgeTerminalInputCommand
   | BridgeTerminalResizeCommand
@@ -244,6 +246,10 @@ export class SessionRouter {
   private pendingFileRequests = new Map<string, { resolve: (files: string[]) => void; reject: (err: Error) => void }>();
   /** Pending file content requests: requestId → resolve/reject */
   private pendingFileContentRequests = new Map<string, { resolve: (content: string) => void; reject: (err: Error) => void }>();
+  /** Pending branch diff requests: requestId → resolve/reject */
+  private pendingBranchDiffRequests = new Map<string, { resolve: (files: BridgeBranchDiffFile[]) => void; reject: (err: Error) => void }>();
+  /** Pending file-at-ref requests: requestId → resolve/reject */
+  private pendingFileAtRefRequests = new Map<string, { resolve: (content: string) => void; reject: (err: Error) => void }>();
 
   /** Cloud adapter instance, initialized once CloudMachineService is available */
   private cloudAdapter: SessionAdapter | null = null;
@@ -660,6 +666,76 @@ export class SessionRouter {
     const pending = this.pendingFileContentRequests.get(requestId);
     if (!pending) return;
     this.pendingFileContentRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(content);
+    }
+  }
+
+  /**
+   * Ask a runtime to compute the branch diff (changed files vs base branch).
+   */
+  branchDiff(runtimeId: string, sessionId: string, baseBranch: string, workdirHint?: string, timeoutMs = 30_000): Promise<BridgeBranchDiffFile[]> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, { type: "branch_diff", requestId, sessionId, baseBranch, workdirHint });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<BridgeBranchDiffFile[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingBranchDiffRequests.delete(requestId);
+        reject(new Error("Branch diff request timed out"));
+      }, timeoutMs);
+
+      this.pendingBranchDiffRequests.set(requestId, {
+        resolve: (files) => { clearTimeout(timer); resolve(files); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+    });
+  }
+
+  /** Resolve a pending branch diff request (called from bridge handler). */
+  resolveBranchDiffRequest(requestId: string, files: BridgeBranchDiffFile[], error?: string): void {
+    const pending = this.pendingBranchDiffRequests.get(requestId);
+    if (!pending) return;
+    this.pendingBranchDiffRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(files);
+    }
+  }
+
+  /**
+   * Ask a runtime to read a file's content at a specific git ref.
+   */
+  fileAtRef(runtimeId: string, sessionId: string, filePath: string, ref: string, workdirHint?: string, timeoutMs = 15_000): Promise<string> {
+    const requestId = randomUUID();
+    const result = this.sendToRuntime(runtimeId, { type: "file_at_ref", requestId, sessionId, filePath, ref, workdirHint });
+    if (result !== "delivered") {
+      return Promise.reject(new Error(`Runtime not available: ${result}`));
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFileAtRefRequests.delete(requestId);
+        reject(new Error("File at ref request timed out"));
+      }, timeoutMs);
+
+      this.pendingFileAtRefRequests.set(requestId, {
+        resolve: (content) => { clearTimeout(timer); resolve(content); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+    });
+  }
+
+  /** Resolve a pending file-at-ref request (called from bridge handler). */
+  resolveFileAtRefRequest(requestId: string, content: string, error?: string): void {
+    const pending = this.pendingFileAtRefRequests.get(requestId);
+    if (!pending) return;
+    this.pendingFileAtRefRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
     } else {
