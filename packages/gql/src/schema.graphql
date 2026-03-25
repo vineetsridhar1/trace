@@ -239,6 +239,7 @@ type Channel {
   type: ChannelType!
   position: Int!
   groupId: ID
+  baseBranch: String
   repo: Repo
   members: [ChannelMember!]!
   projects: [Project!]!
@@ -515,6 +516,7 @@ input CreateChannelInput {
   name: String!
   type: ChannelType
   repoId: ID
+  baseBranch: String
   projectIds: [ID!]
   groupId: ID
   position: Int

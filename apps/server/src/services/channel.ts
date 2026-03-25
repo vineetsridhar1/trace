@@ -83,6 +83,7 @@ export class ChannelService {
           organizationId: input.organizationId,
           groupId: input.groupId ?? null,
           repoId: input.repoId ?? null,
+          baseBranch: input.baseBranch ?? null,
           ...(input.projectIds?.length && {
             projects: { create: input.projectIds.map((projectId) => ({ projectId })) },
           }),
@@ -100,7 +101,7 @@ export class ChannelService {
         payload: {
           channel: {
             id: channel.id, name: channel.name, type: channel.type, position: channel.position,
-            groupId: channel.groupId, repoId: channel.repoId,
+            groupId: channel.groupId, repoId: channel.repoId, baseBranch: channel.baseBranch,
             ...(channel.repoId && repoName ? { repo: { id: channel.repoId, name: repoName } } : {}),
             members: normalizedMembers,
           },
@@ -127,6 +128,7 @@ export class ChannelService {
           groupId: true,
           organizationId: true,
           repoId: true,
+          baseBranch: true,
           repo: { select: { name: true } },
         },
       });
@@ -166,6 +168,7 @@ export class ChannelService {
             position: channel.position,
             groupId: channel.groupId,
             repoId: channel.repoId,
+            baseBranch: channel.baseBranch,
             ...(channel.repoId && channel.repo ? { repo: { id: channel.repoId, name: channel.repo.name } } : {}),
             members: normalizedMembers,
           },
@@ -193,6 +196,7 @@ export class ChannelService {
           groupId: true,
           organizationId: true,
           repoId: true,
+          baseBranch: true,
           repo: { select: { name: true } },
         },
       });
@@ -226,6 +230,7 @@ export class ChannelService {
             position: channel.position,
             groupId: channel.groupId,
             repoId: channel.repoId,
+            baseBranch: channel.baseBranch,
             ...(channel.repoId && channel.repo ? { repo: { id: channel.repoId, name: channel.repo.name } } : {}),
             members: normalizedMembers,
           },

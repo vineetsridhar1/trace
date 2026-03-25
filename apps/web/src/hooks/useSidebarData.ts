@@ -15,6 +15,7 @@ const CHANNELS_QUERY = gql`
       type
       position
       groupId
+      baseBranch
       repo { id name }
     }
   }
