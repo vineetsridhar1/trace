@@ -42,12 +42,12 @@ The agent needs compressed history to reason about long-lived entities. Entity s
 
 ## Completion requirements
 
-- [ ] `EntitySummary` table exists with migration
-- [ ] Summary service with `getLatest`, `upsert`, and `isFresh` methods
-- [ ] Summary generation function that calls an LLM and produces structured summaries
-- [ ] Background worker refreshes stale summaries
-- [ ] Summaries are scoped by org (no cross-org data)
-- [ ] Entity type is generic — adding "channel" summaries later requires no schema changes
+- [x] `EntitySummary` table exists with migration
+- [x] Summary service with `getLatest`, `upsert`, and `isFresh` methods
+- [x] Summary generation function that calls an LLM and produces structured summaries
+- [x] Background worker refreshes stale summaries
+- [x] Summaries are scoped by org (no cross-org data)
+- [x] Entity type is generic — adding "channel" summaries later requires no schema changes
 
 ## How to test
 
