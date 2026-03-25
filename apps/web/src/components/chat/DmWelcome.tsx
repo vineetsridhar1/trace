@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { useEntityField } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 
@@ -16,24 +17,25 @@ export function DmWelcome({ chatId }: { chatId: string }) {
   const { name, avatarUrl } = other.user;
 
   return (
-    <div className="px-5 pb-4 pt-8">
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={name}
-          className="h-20 w-20 rounded-xl"
-        />
-      ) : (
-        <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-muted text-2xl font-bold text-muted-foreground">
-          {name[0]?.toUpperCase()}
-        </div>
-      )}
-      <h3 className="mt-3 text-xl font-bold text-foreground">{name}</h3>
+    <div className="px-5 pb-6 pt-10">
+      <div className="mb-4 flex items-end gap-4">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={name} className="h-24 w-24 rounded-2xl ring-2 ring-border" />
+        ) : (
+          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-muted text-3xl font-bold text-muted-foreground ring-2 ring-border">
+            {name[0]?.toUpperCase()}
+          </div>
+        )}
+      </div>
+      <h3 className="text-2xl font-bold text-foreground">{name}</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        This conversation is just between{" "}
-        <span className="rounded bg-blue-500/20 px-1 py-0.5 text-blue-400">@{name}</span>
-        {" "}and you.
+        This is the beginning of your direct message history with{" "}
+        <span className="font-semibold text-foreground">@{name}</span>.
       </p>
+      <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Lock size={11} />
+        <span>Messages are only visible to you and {name}.</span>
+      </div>
     </div>
   );
 }
