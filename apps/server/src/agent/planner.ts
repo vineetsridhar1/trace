@@ -218,10 +218,34 @@ function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
 function buildContextSection(ctx: AgentContextPacket): string {
   const parts: string[] = [];
 
-  // Scope info
-  parts.push(
-    `<scope>\nType: ${ctx.scopeType}\nID: ${ctx.scopeId}\nOrganization: ${ctx.organizationId}\nAutonomy mode: ${ctx.permissions.autonomyMode}\n</scope>`,
-  );
+  // Scope info — include chat type (DM vs group) when applicable
+  const scopeLines = [
+    `Type: ${ctx.scopeType}`,
+    `ID: ${ctx.scopeId}`,
+    `Organization: ${ctx.organizationId}`,
+    `Autonomy mode: ${ctx.permissions.autonomyMode}`,
+  ];
+
+  // Add chat-specific context hints
+  if (ctx.scopeType === "chat" && ctx.scopeEntity) {
+    const chatType = ctx.scopeEntity.data.type as string | undefined;
+    if (chatType === "dm") {
+      scopeLines.push("Chat type: dm (direct message — 1:1 conversation with the user)");
+      scopeLines.push(
+        "DM behavior: This is a direct conversation with you. The user expects a response. " +
+        "Use 'act' disposition with a message.send action to reply directly. " +
+        "Do NOT use 'suggest' — reply in the DM."
+      );
+    } else if (chatType === "group") {
+      scopeLines.push("Chat type: group (multi-member chat)");
+      scopeLines.push(
+        "Group chat behavior: Be more reserved. Only suggest actions when genuinely helpful. " +
+        "@mentions directed at you should be treated as direct requests."
+      );
+    }
+  }
+
+  parts.push(`<scope>\n${scopeLines.join("\n")}\n</scope>`);
 
   // Trigger event
   parts.push(

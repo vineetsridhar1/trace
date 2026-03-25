@@ -354,11 +354,13 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   }
 
   // ── 6. Policy engine (for suggest/act dispositions) ──
+  //    The context packet carries isDm from the context builder.
   let policyActions: PolicyActionResult[];
   try {
     const policyResult = await evaluatePolicy({
       plannerOutput,
       context: packet,
+      isDm: packet.isDm,
     });
     policyActions = policyResult.actions;
   } catch (err) {

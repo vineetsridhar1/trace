@@ -412,6 +412,34 @@ export class EventAggregator {
     this.batchHandler(batch);
   }
 
+  /**
+   * Close all open windows whose scope key starts with the given prefix.
+   * Used when the agent is removed from a scope (e.g. removed from a chat) —
+   * all pending windows for that scope should be discarded immediately.
+   */
+  async closeWindowsForScope(orgId: string, scopePrefix: string): Promise<number> {
+    const toClose: string[] = [];
+    for (const [windowKey, window] of this.windows) {
+      if (window.organizationId === orgId && window.scopeKey.startsWith(scopePrefix)) {
+        toClose.push(windowKey);
+      }
+    }
+    for (const key of toClose) {
+      const window = this.windows.get(key);
+      if (window) {
+        this.windows.delete(key);
+        const timer = this.timers.get(key);
+        if (timer) {
+          clearTimeout(timer);
+          this.timers.delete(key);
+        }
+        await removePersistedWindow(window.scopeKey, window.organizationId);
+        log("window closed (scope removed)", { scopeKey: window.scopeKey, orgId });
+      }
+    }
+    return toClose.length;
+  }
+
   /** Number of currently open windows (for testing/observability) */
   get openWindowCount(): number {
     return this.windows.size;
