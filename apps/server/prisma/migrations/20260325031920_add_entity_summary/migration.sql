@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "EntitySummary_organizationId_entityType_entityId_summaryType_ke" RENAME TO "EntitySummary_organizationId_entityType_entityId_summaryTyp_key";

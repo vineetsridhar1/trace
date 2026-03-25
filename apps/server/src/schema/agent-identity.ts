@@ -6,7 +6,7 @@ import type { AgentIdentity as PrismaAgentIdentity } from "@prisma/client";
 export const agentIdentityQueries = {
   agentIdentity: async (_: unknown, args: { organizationId: string }, ctx: Context) => {
     await orgMemberService.assertMembership(ctx.userId, args.organizationId);
-    return agentIdentityService.get(args.organizationId);
+    return agentIdentityService.getOrCreate(args.organizationId);
   },
 };
 
