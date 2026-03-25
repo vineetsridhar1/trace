@@ -1,5 +1,6 @@
 import type { OrgAgentStatus, AutonomyMode } from "@prisma/client";
 import { prisma } from "../lib/db.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 export interface OrgAgentSettings {
   agentId: string;
@@ -85,7 +86,7 @@ export class AgentIdentityService {
     dailyLimitCents: number;
   }): OrgAgentSettings {
     return {
-      agentId: identity.id,
+      agentId: TRACE_AI_USER_ID,
       organizationId: identity.organizationId,
       name: identity.name,
       status: identity.status,

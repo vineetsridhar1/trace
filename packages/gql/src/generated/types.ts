@@ -317,11 +317,20 @@ export type InboxItem = {
 export type InboxItemStatus =
   | 'active'
   | 'dismissed'
+  | 'expired'
   | 'resolved';
 
 export type InboxItemType =
+  | 'agent_escalation'
+  | 'agent_suggestion'
+  | 'comment_suggestion'
+  | 'field_change_suggestion'
+  | 'link_suggestion'
+  | 'message_suggestion'
   | 'plan'
-  | 'question';
+  | 'question'
+  | 'session_suggestion'
+  | 'ticket_suggestion';
 
 export type Message = {
   __typename?: 'Message';
@@ -350,6 +359,7 @@ export type MoveChannelInput = {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
   assignTicket: Ticket;
@@ -368,6 +378,7 @@ export type Mutation = {
   deleteSession: Session;
   deleteSessionGroup: Scalars['Boolean']['output'];
   destroyTerminal: Scalars['Boolean']['output'];
+  dismissAgentSuggestion: InboxItem;
   dismissInboxItem: InboxItem;
   dismissSession: Session;
   editChannelMessage: Message;
@@ -407,6 +418,12 @@ export type Mutation = {
   updateRepo: Repo;
   updateSessionConfig: Session;
   updateTicket: Ticket;
+};
+
+
+export type MutationAcceptAgentSuggestionArgs = {
+  edits?: InputMaybe<Scalars['JSON']['input']>;
+  inboxItemId: Scalars['ID']['input'];
 };
 
 
@@ -503,6 +520,11 @@ export type MutationDeleteSessionGroupArgs = {
 
 export type MutationDestroyTerminalArgs = {
   terminalId: Scalars['ID']['input'];
+};
+
+
+export type MutationDismissAgentSuggestionArgs = {
+  inboxItemId: Scalars['ID']['input'];
 };
 
 

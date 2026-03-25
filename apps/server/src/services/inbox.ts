@@ -133,6 +133,140 @@ export class InboxService {
       },
     });
   }
+
+  /**
+   * Load an active suggestion and verify ownership. Does NOT modify it.
+   * Use this to read the payload before deciding to execute.
+   */
+  async getActiveSuggestion(id: string, actorId: string, organizationId: string) {
+    return prisma.inboxItem.findFirstOrThrow({
+      where: { id, userId: actorId, organizationId, status: "active" },
+    });
+  }
+
+  /**
+   * Accept an agent suggestion. Marks it as resolved with resolution "accepted".
+   * Returns the updated inbox item with original payload intact.
+   * Call this AFTER the action has been successfully executed.
+   */
+  async acceptSuggestion(id: string, actorId: string, organizationId: string) {
+    const item = await prisma.inboxItem.findFirstOrThrow({
+      where: { id, userId: actorId, organizationId, status: "active" },
+    });
+
+    const existingPayload = (item.payload ?? {}) as Record<string, unknown>;
+    const updatedPayload = { ...existingPayload, resolution: "accepted" };
+
+    const updated = await prisma.inboxItem.update({
+      where: { id },
+      data: {
+        status: "resolved",
+        resolvedAt: new Date(),
+        payload: updatedPayload as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await eventService.create({
+      organizationId: updated.organizationId,
+      scopeType: "system",
+      scopeId: updated.organizationId,
+      eventType: "inbox_item_resolved",
+      payload: { inboxItem: updated, resolution: "accepted" } as unknown as Prisma.InputJsonValue,
+      actorType: "user",
+      actorId,
+    });
+
+    return updated;
+  }
+
+  /**
+   * Dismiss an agent suggestion and record the action type for dismissal cooldown.
+   */
+  async dismissSuggestion(id: string, actorId: string, organizationId: string) {
+    const item = await prisma.inboxItem.findFirstOrThrow({
+      where: { id, userId: actorId, organizationId, status: "active" },
+    });
+
+    const existingPayload = (item.payload ?? {}) as Record<string, unknown>;
+    const newPayload = { ...existingPayload, resolution: "dismissed" };
+
+    const updated = await prisma.inboxItem.update({
+      where: { id },
+      data: {
+        status: "dismissed",
+        resolvedAt: new Date(),
+        payload: newPayload as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await eventService.create({
+      organizationId: updated.organizationId,
+      scopeType: "system",
+      scopeId: updated.organizationId,
+      eventType: "inbox_item_resolved",
+      payload: { inboxItem: updated, resolution: "dismissed" } as unknown as Prisma.InputJsonValue,
+      actorType: "user",
+      actorId,
+    });
+
+    return updated;
+  }
+
+  /**
+   * Expire suggestions past their expiresAt timestamp.
+   * Called by a periodic background job.
+   */
+  async expireSuggestions() {
+    const now = new Date();
+    // Find active suggestion items where the payload contains an expiresAt in the past
+    const items = await prisma.inboxItem.findMany({
+      where: {
+        status: "active",
+        itemType: {
+          in: [
+            "ticket_suggestion",
+            "link_suggestion",
+            "session_suggestion",
+            "field_change_suggestion",
+            "comment_suggestion",
+            "message_suggestion",
+            "agent_suggestion",
+          ],
+        },
+      },
+    });
+
+    const expired = [];
+    for (const item of items) {
+      const payload = (item.payload ?? {}) as Record<string, unknown>;
+      const expiresAt = payload.expiresAt as string | undefined;
+      if (!expiresAt || new Date(expiresAt) > now) continue;
+
+      const updatedPayload = { ...payload, resolution: "expired" };
+      const updated = await prisma.inboxItem.update({
+        where: { id: item.id },
+        data: {
+          status: "expired",
+          resolvedAt: now,
+          payload: updatedPayload as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      await eventService.create({
+        organizationId: updated.organizationId,
+        scopeType: "system",
+        scopeId: updated.organizationId,
+        eventType: "inbox_item_resolved",
+        payload: { inboxItem: updated, resolution: "expired" } as unknown as Prisma.InputJsonValue,
+        actorType: "system",
+        actorId: "system",
+      });
+
+      expired.push(updated);
+    }
+
+    return expired;
+  }
 }
 
 export const inboxService = new InboxService();

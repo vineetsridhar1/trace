@@ -290,9 +290,10 @@ export class ActionExecutor {
             return svc.createItem({
               orgId,
               userId: args.userId as string,
-              itemType: "agent_escalation" as Parameters<typeof svc.createItem>[0]["itemType"],
+              itemType: (args.itemType as Parameters<typeof svc.createItem>[0]["itemType"]) ?? "agent_escalation",
               title: args.title as string,
               summary: args.summary as string | undefined,
+              payload: args.payload as Parameters<typeof svc.createItem>[0]["payload"],
               sourceType: args.sourceType as string,
               sourceId: args.sourceId as string,
             });

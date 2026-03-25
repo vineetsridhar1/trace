@@ -29,11 +29,17 @@ export async function resolveActor(
     actor.name = user?.name ?? null;
     actor.avatarUrl = user?.avatarUrl ?? null;
   } else if (ref.actorType === "agent") {
-    const agentIdentity = await prisma.agentIdentity.findUnique({
+    // The agent's actorId is the AI User ID — look it up from User table
+    const user = await prisma.user.findUnique({
       where: { id: ref.actorId },
-      select: { name: true },
+      select: { name: true, avatarUrl: true },
     });
-    actor.name = agentIdentity?.name ?? "Trace AI";
+    if (user) {
+      actor.name = user.name;
+      actor.avatarUrl = user.avatarUrl;
+    } else {
+      actor.name = "Trace AI";
+    }
   }
   return actor;
 }
@@ -45,43 +51,30 @@ export async function resolveActors(
   const userIds = [...new Set(refs.filter((ref) => ref.actorType === "user").map((ref) => ref.actorId))];
   const agentIds = [...new Set(refs.filter((ref) => ref.actorType === "agent").map((ref) => ref.actorId))];
 
-  const users = userIds.length
+  // Agents are now User rows — fetch all user + agent IDs together
+  const allUserIds = [...new Set([...userIds, ...agentIds])];
+
+  const users = allUserIds.length
     ? await prisma.user.findMany({
-        where: { id: { in: userIds } },
+        where: { id: { in: allUserIds } },
         select: { id: true, name: true, avatarUrl: true },
       })
     : [];
 
-  const agents = agentIds.length
-    ? await prisma.agentIdentity.findMany({
-        where: { id: { in: agentIds } },
-        select: { id: true, name: true },
-      })
-    : [];
-
   const userMap = new Map(users.map((user) => [user.id, user]));
-  const agentMap = new Map(agents.map((agent) => [agent.id, agent]));
   const actorMap = new Map<string, ActorSummary>();
 
   for (const ref of refs) {
     const key = `${ref.actorType}:${ref.actorId}`;
     if (actorMap.has(key)) continue;
 
-    if (ref.actorType === "user") {
+    if (ref.actorType === "user" || ref.actorType === "agent") {
       const user = userMap.get(ref.actorId);
       actorMap.set(key, {
         type: ref.actorType,
         id: ref.actorId,
-        name: user?.name ?? null,
+        name: user?.name ?? (ref.actorType === "agent" ? "Trace AI" : null),
         avatarUrl: user?.avatarUrl ?? null,
-      });
-    } else if (ref.actorType === "agent") {
-      const agent = agentMap.get(ref.actorId);
-      actorMap.set(key, {
-        type: ref.actorType,
-        id: ref.actorId,
-        name: agent?.name ?? "Trace AI",
-        avatarUrl: null,
       });
     } else {
       actorMap.set(key, {
