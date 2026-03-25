@@ -8,7 +8,7 @@ Implement the core branching logic: creating a new branch from any turn and asse
 
 - Add `forkBranch({ turnId, label?, userId })` to `AiConversationService`:
   - Validate the turn exists and the user has access to the conversation
-  - Create a new `Branch` with:
+  - Create a new `AiBranch` with:
     - `conversationId` = the turn's conversation ID
     - `parentBranchId` = the turn's branch ID
     - `forkTurnId` = the specified turn ID
@@ -22,7 +22,7 @@ Implement the core branching logic: creating a new branch from any turn and asse
   - Resolver stays thin and delegates to the service method above
 - Implement `buildContext(branchId)` — the recursive context assembly algorithm:
   ```typescript
-  function buildContext(branch: Branch, upToTurn?: Turn): Turn[] {
+  function buildContext(branch: AiBranch, upToTurn?: AiTurn): AiTurn[] {
     const turns = getTurnsInBranch(branch, upToTurn);
     if (branch.parentBranchId === null) {
       return turns; // root branch — no ancestors
