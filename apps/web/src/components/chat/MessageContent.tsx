@@ -93,8 +93,11 @@ function linkifySessionUrls(html: string): string {
 }
 
 export function MessageContent({ html }: { html: string }) {
-  // Strip trailing empty paragraphs Quill always appends
-  const stripped = html.replace(/(<p>\s*<br\s*\/?>\s*<\/p>\s*)+$/i, "");
+  // Strip empty paragraphs Quill appends and trailing <br> inside paragraphs
+  const stripped = html
+    .replace(/^(\s*<p>\s*<br\s*\/?>\s*<\/p>)+/i, "")
+    .replace(/(<p>\s*<br\s*\/?>\s*<\/p>\s*)+$/i, "")
+    .replace(/<br\s*\/?>\s*(<\/p>)/gi, "$1");
   const linked = linkifySessionUrls(stripped);
   const clean = DOMPurify.sanitize(linked);
   return (

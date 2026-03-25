@@ -1,3 +1,4 @@
+import type { OrgAgentStatus, AutonomyMode } from "@prisma/client";
 import type { Context } from "../context.js";
 import { agentIdentityService } from "../services/agent-identity.js";
 import { orgMemberService } from "../services/org-member.js";
@@ -29,8 +30,8 @@ export const agentIdentityMutations = {
 
     return agentIdentityService.update(args.organizationId, {
       ...(args.input.name != null && { name: args.input.name }),
-      ...(args.input.status != null && { status: args.input.status }),
-      ...(args.input.autonomyMode != null && { autonomyMode: args.input.autonomyMode }),
+      ...(args.input.status != null && { status: args.input.status as OrgAgentStatus }),
+      ...(args.input.autonomyMode != null && { autonomyMode: args.input.autonomyMode as AutonomyMode }),
       ...(args.input.soulFile != null && { soulFile: args.input.soulFile }),
       ...(args.input.dailyLimitCents != null && { dailyLimitCents: args.input.dailyLimitCents }),
     });

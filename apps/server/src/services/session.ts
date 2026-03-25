@@ -2891,7 +2891,7 @@ export class SessionService {
     if (group.worktreeDeleted) {
       throw new Error("Cannot access files: session worktree has been deleted");
     }
-    const baseBranch = group.repo?.defaultBranch ?? "main";
+    const baseBranch = "origin/" + (group.repo?.defaultBranch ?? "main");
 
     const sessions = await prisma.session.findMany({
       where: { sessionGroupId, organizationId },
