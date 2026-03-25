@@ -16,7 +16,7 @@
  * Dependencies: #04-14
  */
 
-import type { ExecutionDisposition, ExecutionStatus, ModelTier } from "@prisma/client";
+import type { ExecutionDisposition, ExecutionStatus } from "@prisma/client";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentContextPacket } from "./context-builder.js";
@@ -38,6 +38,7 @@ import { estimateCostCents } from "./cost-utils.js";
 // Constants
 // ---------------------------------------------------------------------------
 
+// Shared across all worker instances — dedup is per-event, not per-worker process.
 const CONSUMER_NAME = "agent-pipeline";
 
 // ---------------------------------------------------------------------------
@@ -146,7 +147,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   try {
     await costTrackingService.recordCost({
       organizationId: packet.organizationId,
-      modelTier: "tier2" as ModelTier,
+      modelTier: "tier2",
       costCents,
     });
   } catch (err) {
@@ -420,14 +421,17 @@ interface WriteLogInput {
 }
 
 async function writeExecutionLog(input: WriteLogInput): Promise<void> {
-  const { packet, plannerResult, costCents, agentSettings, batch, disposition, status, policyDecision, finalActions, inboxItemId } = input;
+  const {
+    packet, plannerResult, costCents, agentSettings, batch,
+    disposition, status, policyDecision, finalActions, inboxItemId,
+  } = input;
   try {
     await executionLoggingService.write({
       organizationId: packet.organizationId,
       triggerEventId: packet.triggerEvent.id,
       batchSize: batch.events.length,
       agentId: agentSettings.agentId,
-      modelTier: "tier2" as ModelTier,
+      modelTier: "tier2",
       model: plannerResult.model,
       promoted: false,
       inputTokens: plannerResult.usage.inputTokens,
