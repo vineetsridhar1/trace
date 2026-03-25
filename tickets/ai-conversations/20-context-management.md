@@ -7,7 +7,7 @@ Implement the context management system to handle long conversations and deep br
 ## What needs to happen
 
 ### Rolling Summaries
-- Add a `BranchSummary` model to Prisma (or a `summary` field on `Branch`):
+- Add a `BranchSummary` model to Prisma (or a `summary` field on `AiBranch`):
   - `branchId` — the branch being summarized
   - `content` — the summary text
   - `summarizedTurnCount` — how many turns were summarized
