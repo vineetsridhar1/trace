@@ -1,4 +1,5 @@
 import type { AiConversationVisibility, Prisma } from "@prisma/client";
+import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 
 export class AiConversationService {
@@ -6,43 +7,39 @@ export class AiConversationService {
    * Creates a conversation and its root branch atomically.
    * Returns the conversation with the root branch included.
    */
-  async createConversation({
-    organizationId,
-    createdById,
-    title,
-    visibility,
-  }: {
-    organizationId: string;
-    createdById: string;
-    title?: string;
-    visibility?: AiConversationVisibility;
-  }) {
+  async createConversation(
+    input: {
+      organizationId: string;
+      title?: string;
+      visibility?: AiConversationVisibility;
+    },
+    actorType: ActorType,
+    actorId: string,
+  ) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Verify user belongs to org
       await tx.orgMember.findUniqueOrThrow({
         where: {
           userId_organizationId: {
-            userId: createdById,
-            organizationId,
+            userId: actorId,
+            organizationId: input.organizationId,
           },
         },
       });
 
       const conversation = await tx.aiConversation.create({
         data: {
-          organizationId,
-          createdById,
-          title: title ?? null,
-          visibility: visibility ?? "PRIVATE",
+          organizationId: input.organizationId,
+          createdById: actorId,
+          title: input.title ?? null,
+          visibility: input.visibility ?? "PRIVATE",
         },
       });
 
       const rootBranch = await tx.aiBranch.create({
         data: {
           conversationId: conversation.id,
-          createdById,
-          parentBranchId: null,
-          forkTurnId: null,
+          createdById: actorId,
           label: "main",
         },
       });
@@ -60,10 +57,17 @@ export class AiConversationService {
   /**
    * Returns a single conversation with branches and turn counts.
    * Enforces access control: private conversations are only visible to the creator.
+   * Returns a uniform "not found" error to avoid leaking existence of private conversations.
    */
   async getConversation(id: string, requestingUserId: string) {
-    const conversation = await prisma.aiConversation.findUniqueOrThrow({
-      where: { id },
+    const conversation = await prisma.aiConversation.findFirst({
+      where: {
+        id,
+        OR: [
+          { createdById: requestingUserId },
+          { visibility: "ORG" },
+        ],
+      },
       include: {
         branches: {
           include: {
@@ -73,11 +77,8 @@ export class AiConversationService {
       },
     });
 
-    if (
-      conversation.visibility === "PRIVATE" &&
-      conversation.createdById !== requestingUserId
-    ) {
-      throw new Error("Not authorized to view this conversation");
+    if (!conversation) {
+      throw new Error("Conversation not found");
     }
 
     // For ORG visibility, verify user is in the same org
@@ -111,14 +112,35 @@ export class AiConversationService {
     visibility?: AiConversationVisibility;
     limit?: number;
   }) {
-    // User can see: own conversations + ORG-visible ones in the same org
+    // Verify user belongs to org
+    await prisma.orgMember.findUniqueOrThrow({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId,
+        },
+      },
+    });
+
+    // Build visibility filter: own conversations + ORG-visible ones
+    const accessFilter: Prisma.AiConversationWhereInput[] = [
+      { createdById: userId },
+      { visibility: "ORG" },
+    ];
+
+    // If caller requests a specific visibility, narrow the OR accordingly
     const where: Prisma.AiConversationWhereInput = {
       organizationId,
-      OR: [
-        { createdById: userId },
-        { visibility: "ORG" },
-      ],
-      ...(visibility ? { visibility } : {}),
+      ...(visibility
+        ? {
+            OR: accessFilter.filter((f) => {
+              // PRIVATE filter: only show own
+              if (visibility === "PRIVATE") return "createdById" in f;
+              // ORG filter: show own ORG + others' ORG
+              return true;
+            }),
+          }
+        : { OR: accessFilter }),
     };
 
     return prisma.aiConversation.findMany({
@@ -139,21 +161,21 @@ export class AiConversationService {
    * Updates the conversation title. Only the creator can update.
    */
   async updateTitle(
-    conversationId: string,
-    title: string,
-    requestingUserId: string,
+    input: { conversationId: string; title: string },
+    actorType: ActorType,
+    actorId: string,
   ) {
     const conversation = await prisma.aiConversation.findUniqueOrThrow({
-      where: { id: conversationId },
+      where: { id: input.conversationId },
     });
 
-    if (conversation.createdById !== requestingUserId) {
+    if (conversation.createdById !== actorId) {
       throw new Error("Only the conversation creator can update the title");
     }
 
     return prisma.aiConversation.update({
-      where: { id: conversationId },
-      data: { title },
+      where: { id: input.conversationId },
+      data: { title: input.title },
     });
   }
 
