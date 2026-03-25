@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import createScrollSnap from "scroll-snap/dist/scroll-snap.esm.js";
 import { clamp } from "../lib/utils";
 import { getTabFromProgress, getTabIndex, type SidebarTab } from "../components/sidebar/sidebarTabs";
-
-const SNAP_DURATION_MS = 50;
-const SNAP_TIMEOUT_MS = 80; // minimum the library allows is 50ms
-
-function easeInOut(t: number) {
-  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-}
 
 export function useSidebarTabScroll({
   currentTab,
@@ -23,6 +15,7 @@ export function useSidebarTabScroll({
   const progressRef = useRef(getTabIndex(currentTab));
   const [tabProgress, setTabProgressState] = useState(getTabIndex(currentTab));
   const hasInitRef = useRef(false);
+  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const setProgress = useCallback((p: number) => {
     const clamped = clamp(p, 0, 1);
@@ -31,7 +24,7 @@ export function useSidebarTabScroll({
     onProgressChange?.(clamped);
   }, [onProgressChange]);
 
-  // Called by the library after each snap animation completes
+  // Commit the snapped position after scrolling settles
   const commitPosition = useCallback(() => {
     const tab = getTabFromProgress(progressRef.current);
     onTabCommit?.(tab);
@@ -43,27 +36,16 @@ export function useSidebarTabScroll({
     const viewport = viewportRef.current;
     if (!viewport) return;
     setProgress(viewport.scrollLeft / Math.max(viewport.clientWidth, 1));
-  }, [setProgress]);
 
-  // Bind scroll-snap to the viewport
+    // Debounce commit — fires after scroll settles (native snap end)
+    clearTimeout(scrollEndTimerRef.current);
+    scrollEndTimerRef.current = setTimeout(commitPosition, 150);
+  }, [setProgress, commitPosition]);
+
+  // Cleanup timer on unmount
   useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const { unbind } = createScrollSnap(
-      viewport,
-      {
-        snapDestinationX: "100%",
-        duration: SNAP_DURATION_MS,
-        timeout: SNAP_TIMEOUT_MS,
-        snapStop: true,
-        easing: easeInOut,
-      },
-      commitPosition,
-    );
-
-    return () => unbind();
-  }, [commitPosition]);
+    return () => clearTimeout(scrollEndTimerRef.current);
+  }, []);
 
   // Instant jump — used for init, resize, and external tab changes
   const jumpToTab = useCallback((tab: SidebarTab) => {
@@ -74,7 +56,6 @@ export function useSidebarTabScroll({
   }, [setProgress]);
 
   // Animated switch — used when user clicks the tab switcher.
-  // scrollTo smooth lets the library detect scroll-end and run its snap animation.
   const selectTab = useCallback((tab: SidebarTab) => {
     const viewport = viewportRef.current;
     if (!viewport) return;

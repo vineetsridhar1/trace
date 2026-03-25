@@ -38,7 +38,7 @@ export function SidebarChannelsPane({
   const [createForGroupId, setCreateForGroupId] = useState<string | null>(null);
 
   return (
-    <section className="flex h-full min-w-full max-w-full shrink-0 flex-col overflow-hidden">
+    <section className="flex h-full min-w-full max-w-full shrink-0 snap-start flex-col overflow-hidden">
       <div className="mt-2 h-[49px] shrink-0 border-b border-border/70">
         <OrgSwitcher large />
       </div>
