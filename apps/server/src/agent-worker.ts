@@ -22,11 +22,8 @@ import {
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
 import { startSummaryWorker, stopSummaryWorker, trackEventForSummary } from "./agent/summary-worker.js";
-import { buildContext } from "./agent/context-builder.js";
-import { runPlanner } from "./agent/planner.js";
-import { evaluatePolicy, type PolicyDecision } from "./agent/policy-engine.js";
 import { ActionExecutor } from "./agent/executor.js";
-import { createSuggestions } from "./agent/suggestion.js";
+import { runPipeline } from "./agent/pipeline.js";
 import { ticketService } from "./services/ticket.js";
 import { chatService } from "./services/chat.js";
 import { sessionService } from "./services/session.js";
@@ -126,7 +123,8 @@ const executor = new ActionExecutor({
 
 /**
  * Handle a closed aggregation window.
- * Full pipeline: context → planner → policy engine → execute / suggest.
+ * Delegates to the pipeline module which chains:
+ * context → planner → policy engine → execute/suggest → logging.
  */
 function handleBatch(batch: AggregatedBatch): void {
   log("batch ready", {
@@ -138,107 +136,16 @@ function handleBatch(batch: AggregatedBatch): void {
     ...(batch.maxTier !== undefined ? { maxTier: batch.maxTier } : {}),
   });
 
-  // Build context packet asynchronously — don't block the aggregator
   const agentSettings = agentContexts.get(batch.organizationId);
   if (!agentSettings) {
     log("skipping batch — no agent settings", { orgId: batch.organizationId });
     return;
   }
 
-  buildContext({ batch, agentSettings })
-    .then(async (packet) => {
-      log("context packet built", {
-        scopeKey: packet.scopeKey,
-        orgId: packet.organizationId,
-        scopeType: packet.scopeType,
-        triggerEventType: packet.triggerEvent.eventType,
-        relevantEntities: packet.relevantEntities.length,
-        summaries: packet.summaries.length,
-        actors: packet.actors.length,
-        actions: packet.permissions.actions.length,
-        tokensUsed: packet.tokenBudget.used,
-        tokensTotal: packet.tokenBudget.total,
-      });
-
-      // ── Planner (ticket #11) ──
-      const plannerResult = await runPlanner(packet);
-      const { output: plannerOutput } = plannerResult;
-
-      log("planner decided", {
-        scopeKey: packet.scopeKey,
-        disposition: plannerOutput.disposition,
-        confidence: plannerOutput.confidence,
-        actionCount: plannerOutput.proposedActions.length,
-        model: plannerResult.model,
-        latencyMs: plannerResult.latencyMs,
-      });
-
-      // If the planner says ignore, we're done
-      if (plannerOutput.disposition === "ignore") return;
-
-      // ── Policy engine (ticket #12) ──
-      const policyResult = await evaluatePolicy({
-        plannerOutput,
-        context: packet,
-      });
-
-      // Group actions by decision
-      const byDecision = new Map<PolicyDecision, typeof policyResult.actions>();
-      for (const actionResult of policyResult.actions) {
-        const existing = byDecision.get(actionResult.decision) ?? [];
-        existing.push(actionResult);
-        byDecision.set(actionResult.decision, existing);
-      }
-
-      log("policy evaluated", {
-        scopeKey: packet.scopeKey,
-        execute: byDecision.get("execute")?.length ?? 0,
-        suggest: byDecision.get("suggest")?.length ?? 0,
-        drop: byDecision.get("drop")?.length ?? 0,
-      });
-
-      // ── Execute actions ──
-      const executes = byDecision.get("execute") ?? [];
-      for (const actionResult of executes) {
-        const result = await executor.execute(actionResult.action, {
-          organizationId: packet.organizationId,
-          agentId: agentSettings.agentId,
-          triggerEventId: packet.triggerEvent.id,
-        });
-        log("action executed", {
-          scopeKey: packet.scopeKey,
-          actionType: result.actionType,
-          status: result.status,
-          ...(result.error ? { error: result.error } : {}),
-        });
-      }
-
-      // ── Create suggestions (ticket #14) ──
-      const suggests = byDecision.get("suggest") ?? [];
-      if (suggests.length > 0) {
-        // Determine the best recipient — use the trigger event's actor if they're a user
-        const triggerActorType = packet.triggerEvent.actorType;
-        const triggerActorId = packet.triggerEvent.actorId;
-        const userId = triggerActorType === "user" ? triggerActorId : agentSettings.agentId;
-
-        const items = await createSuggestions({
-          suggestions: suggests,
-          plannerOutput,
-          context: packet,
-          agentId: agentSettings.agentId,
-          userId,
-        });
-
-        log("suggestions created", {
-          scopeKey: packet.scopeKey,
-          count: items.length,
-          types: items.map((i) => i.itemType),
-        });
-      }
-    })
-    .catch((err) => {
-      logError("agent pipeline failed", err);
-    });
+  // Run the full pipeline asynchronously — don't block the aggregator
+  runPipeline({ batch, agentSettings, executor }).catch((err) => {
+    logError("agent pipeline failed", err);
+  });
 }
 
 // ---------------------------------------------------------------------------
