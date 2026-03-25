@@ -23,6 +23,7 @@ import {
 } from "../ui/select";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { BranchCombobox } from "../channel/BranchCombobox";
 
 const CREATE_CHANNEL_MUTATION = gql`
   mutation CreateChannel($input: CreateChannelInput!) {
@@ -68,6 +69,7 @@ export function CreateChannelDialog({
   const [name, setName] = useState("");
   const [channelType, setChannelType] = useState<ChannelType>("coding");
   const [repoId, setRepoId] = useState<string | undefined>(undefined);
+  const [baseBranch, setBaseBranch] = useState("");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const repoIds = useEntityIds("repos");
@@ -84,6 +86,7 @@ export function CreateChannelDialog({
       setName("");
       setChannelType("coding");
       setRepoId(undefined);
+      setBaseBranch("");
     }
   }, [open, defaultGroupId]);
 
@@ -100,6 +103,7 @@ export function CreateChannelDialog({
             name: name.trim(),
             type: channelType,
             repoId,
+            baseBranch: baseBranch || undefined,
             groupId: defaultGroupId ?? null,
           },
         })
@@ -110,6 +114,7 @@ export function CreateChannelDialog({
         setName("");
         setChannelType("coding");
         setRepoId(undefined);
+        setBaseBranch("");
         setOpen(false);
         useUIStore.getState().setActiveChannelId(newChannelId);
       }
@@ -217,7 +222,10 @@ export function CreateChannelDialog({
                         type="button"
                         onClick={() => {
                           setChannelType(opt.value);
-                          if (opt.value === "text") setRepoId(undefined);
+                          if (opt.value === "text") {
+                            setRepoId(undefined);
+                            setBaseBranch("");
+                          }
                         }}
                         className={`flex flex-col items-center gap-1 rounded-lg border p-3 text-sm transition-colors ${
                           selected
@@ -239,7 +247,10 @@ export function CreateChannelDialog({
                   {repoIds.length > 0 ? (
                     <Select
                       value={repoId ?? ""}
-                      onValueChange={(v) => setRepoId(v || undefined)}
+                      onValueChange={(v) => {
+                        setRepoId(v || undefined);
+                        setBaseBranch("");
+                      }}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select a repo..." />
@@ -255,6 +266,19 @@ export function CreateChannelDialog({
                       Link a repository to your organization first.
                     </p>
                   )}
+                </div>
+              )}
+              {channelType === "coding" && repoId && (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">Base branch</label>
+                  <BranchCombobox
+                    repoId={repoId}
+                    value={baseBranch}
+                    onChange={setBaseBranch}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Sessions in this channel will merge into this branch.
+                  </p>
                 </div>
               )}
             </div>

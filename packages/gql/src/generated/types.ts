@@ -88,6 +88,7 @@ export type BranchDiffFile = {
 
 export type Channel = {
   __typename?: 'Channel';
+  baseBranch?: Maybe<Scalars['String']['output']>;
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   members: Array<ChannelMember>;
@@ -170,6 +171,7 @@ export type CreateChannelGroupInput = {
 };
 
 export type CreateChannelInput = {
+  baseBranch?: InputMaybe<Scalars['String']['input']>;
   groupId?: InputMaybe<Scalars['ID']['input']>;
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];

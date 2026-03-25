@@ -422,6 +422,7 @@ model Channel {
   group          ChannelGroup? @relation(fields: [groupId], references: [id])
   repoId         String?
   repo           Repo?         @relation(fields: [repoId], references: [id])
+  baseBranch     String?
 
   projects ChannelProject[]
   sessionGroups SessionGroup[]
