@@ -20,6 +20,7 @@ import {
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentEvent } from "./router.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
+import { resolveSoulFile } from "./soul-file-resolver.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -696,6 +697,10 @@ async function resolveActors(events: AgentEvent[]): Promise<ContextActor[]> {
 export interface BuildContextInput {
   batch: AggregatedBatch;
   agentSettings: OrgAgentSettings;
+  /** Optional project-level soul file override. */
+  projectSoulFile?: string;
+  /** Optional repo-level soul file (from .trace/soul.md). */
+  repoSoulFile?: string;
 }
 
 /**
@@ -739,12 +744,13 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   const actions = getActionsByScope(scopeTypeForActions);
   recordSection("actionSchema", estimateObjectTokens(actions));
 
-  // --- 3. Soul file (truncate to budget from the end if too long) ---
-  let soulFile = agentSettings.soulFile ?? "";
-  const soulTokens = estimateTokens(soulFile);
-  if (soulTokens > budget.sections.soulFile) {
-    soulFile = truncateTextToTokenBudget(soulFile, budget.sections.soulFile);
-  }
+  // --- 3. Soul file (resolved from platform default → org → project → repo) ---
+  const soulFile = resolveSoulFile({
+    orgSoulFile: agentSettings.soulFile ?? "",
+    projectSoulFile: input.projectSoulFile,
+    repoSoulFile: input.repoSoulFile,
+    tokenBudget: budget.sections.soulFile,
+  });
   recordSection("soulFile", estimateTokens(soulFile));
 
   // --- 4. Scope entity ---
@@ -847,15 +853,6 @@ function toScopeType(scopeType: string): ScopeType {
     return scopeType as ScopeType;
   }
   return "system"; // fallback for unknown scope types
-}
-
-/** Truncate text to fit within a token budget, keeping the beginning (identity/preamble). */
-function truncateTextToTokenBudget(text: string, budget: number): string {
-  const words = text.split(/\s+/);
-  // Target word count from budget: budget / 1.3
-  const targetWords = Math.floor(budget / 1.3);
-  if (words.length <= targetWords) return text;
-  return words.slice(0, targetWords).join(" ");
 }
 
 /** Truncate events list (from oldest) to fit within a token budget. */
