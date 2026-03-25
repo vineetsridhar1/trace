@@ -60,12 +60,24 @@ export function AgentSettingsSection() {
   const [status, setStatus] = useState("enabled");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchIdentity = useCallback(async () => {
-    if (!activeOrgId) return;
+    if (!activeOrgId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
     const result = await client
       .query(AGENT_IDENTITY_QUERY, { organizationId: activeOrgId })
       .toPromise();
+    if (result.error) {
+      setError(result.error.message);
+      setLoading(false);
+      return;
+    }
     const data = result.data?.agentIdentity as AgentIdentityData | undefined;
     if (data) {
       setIdentity(data);
@@ -74,6 +86,7 @@ export function AgentSettingsSection() {
       setStatus(data.status);
       setDirty(false);
     }
+    setLoading(false);
   }, [activeOrgId]);
 
   useEffect(() => {
@@ -113,8 +126,6 @@ export function AgentSettingsSection() {
     setDirty(true);
   }
 
-  if (!identity) return null;
-
   return (
     <section className="mx-auto max-w-2xl mt-8">
       <div className="mb-4">
@@ -127,7 +138,25 @@ export function AgentSettingsSection() {
         </p>
       </div>
 
-      <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
+      {loading && (
+        <div className="rounded-lg border border-border bg-surface-deep p-8 text-center">
+          <p className="text-sm text-muted-foreground">Loading agent settings...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+          <p className="text-sm text-destructive">Failed to load agent settings: {error}</p>
+        </div>
+      )}
+
+      {!loading && !error && !identity && (
+        <div className="rounded-lg border border-border bg-surface-deep p-8 text-center">
+          <p className="text-sm text-muted-foreground">Agent settings unavailable.</p>
+        </div>
+      )}
+
+      {identity && <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="agent-status">Status</Label>
@@ -178,7 +207,7 @@ export function AgentSettingsSection() {
             {saving ? "Saving..." : "Save changes"}
           </Button>
         </div>
-      </div>
+      </div>}
     </section>
   );
 }
