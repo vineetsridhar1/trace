@@ -59,6 +59,7 @@ When the policy engine routes a decision to `suggest`, the agent creates an Inbo
   <!-- Ticket 07 created: `ActionExecutor` class in `./agent/executor.js`. Constructor takes `ServiceContainer` (ticketService, chatService, sessionService, inboxService, summaryService?). Call `executor.execute(action, ctx)` where `action: PlannedAction { actionType: string, args: Record<string, unknown> }` and `ctx: AgentContext { organizationId, agentId, triggerEventId }`. Returns `ExecutionResult { status: "success" | "failed", actionType, result?, error? }`. The accept mutation should construct a PlannedAction from the stored InboxItem payload and an AgentContext from the org's agent identity + the original triggerEventId. -->
 - 08 (Execution Logging — records suggestion outcomes)
 - 12 (Policy Engine — triggers suggestion creation)
+  <!-- Ticket 12 created: Import `evaluatePolicy`, `PolicyResult`, `PolicyActionResult`, `PolicyDecision`, `PolicyEngineInput` from `./agent/policy-engine.js`. Call `evaluatePolicy({ plannerOutput, context, isDm? })` — returns `PolicyResult` with `.actions` (array of `PolicyActionResult { action: ProposedAction, decision: "execute" | "suggest" | "drop", reason: string }`) and `.plannerOutput` (pass-through). For each action where `decision === "suggest"`, create an InboxItem. The `reason` string is loggable (e.g. "confidence_0.8_gte_suggest_0.5"). Also import `recordDismissal({ organizationId, scopeType, scopeId, actionType })` — call when a user dismisses a suggestion to activate the 24-hour cooldown. -->
 
 ## Completion requirements
 

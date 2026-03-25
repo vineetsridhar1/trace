@@ -47,13 +47,13 @@ Use configurable thresholds based on risk × autonomy mode:
 
 ## Completion requirements
 
-- [ ] Policy engine module exists and routes decisions correctly
-- [ ] Confidence × risk × autonomy matrix is implemented
-- [ ] Hard rules (observe mode, unknown actions, blocked actions) are enforced
-- [ ] Per-scope rate limiting is implemented
-- [ ] Dismissal cooldown suppression is implemented
-- [ ] Cost budget enforcement is integrated
-- [ ] Policy decisions are structured and loggable
+- [x] Policy engine module exists and routes decisions correctly
+- [x] Confidence × risk × autonomy matrix is implemented
+- [x] Hard rules (observe mode, unknown actions, blocked actions) are enforced
+- [x] Per-scope rate limiting is implemented
+- [x] Dismissal cooldown suppression is implemented
+- [x] Cost budget enforcement is integrated
+- [x] Policy decisions are structured and loggable
 
 ## How to test
 
