@@ -16,6 +16,7 @@ import {
   generateSummary,
   type SummaryEvent,
 } from "./summary-generator.js";
+import { estimateCostCents } from "./cost-utils.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -29,31 +30,6 @@ const EVENTS_PER_SUMMARY = 100; // max events to feed into one summary call
 
 /** Redis key tracking per-scope event counts since last summary. */
 const SCOPE_EVENT_COUNT_PREFIX = "agent:summary:events:";
-
-// ---------------------------------------------------------------------------
-// Cost estimation per model
-// ---------------------------------------------------------------------------
-
-/** Cost per token in dollars, keyed by model name prefix. */
-const MODEL_COST_MAP: Record<string, { input: number; output: number }> = {
-  "claude-haiku": { input: 0.00000025, output: 0.00000125 },
-  "claude-sonnet": { input: 0.000003, output: 0.000015 },
-  "claude-opus": { input: 0.000015, output: 0.000075 },
-};
-
-const DEFAULT_COST = { input: 0.00000025, output: 0.00000125 }; // Haiku fallback
-
-function estimateCostCents(
-  model: string,
-  inputTokens: number,
-  outputTokens: number,
-): number {
-  const match = Object.entries(MODEL_COST_MAP).find(([prefix]) =>
-    model.startsWith(prefix),
-  );
-  const rates = match ? match[1] : DEFAULT_COST;
-  return (inputTokens * rates.input + outputTokens * rates.output) * 100;
-}
 
 // ---------------------------------------------------------------------------
 // Event count tracking (called from the main event consumption loop)

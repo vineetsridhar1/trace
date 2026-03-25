@@ -17,7 +17,7 @@ export function SidebarDirectMessagesPane({
 }: SidebarDirectMessagesPaneProps) {
 
   return (
-    <section className="flex h-full min-w-full max-w-full shrink-0 flex-col overflow-hidden">
+    <section className="flex h-full min-w-full max-w-full shrink-0 snap-start snap-always flex-col overflow-hidden">
       <div className="mt-2 flex h-[49px] shrink-0 items-center justify-between border-b border-border/70 px-3">
         <p className="truncate text-sm font-semibold text-sidebar-foreground">Direct Messages</p>
         <CreateChatDialog />

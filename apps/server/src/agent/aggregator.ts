@@ -40,17 +40,38 @@ export type BatchHandler = (batch: AggregatedBatch) => void;
 // Configuration
 // ---------------------------------------------------------------------------
 
-/** Default silence timeout per scope type (ms). Configurable per scope. */
+/**
+ * Silence timeout per scope type (ms) — how long to wait after the last event
+ * before closing the window and sending the batch to the pipeline.
+ *
+ * Conversations (chat, channel) use shorter windows so suggestions feel timely.
+ * Ticket and session scopes are less latency-sensitive.
+ */
 const DEFAULT_SILENCE_TIMEOUTS: Record<string, number> = {
-  chat: 30_000,
+  chat: 10_000,
+  channel: 15_000,
   ticket: 30_000,
   session: 30_000,
-  channel: 60_000, // channels may want longer windows
 };
 
-const DEFAULT_SILENCE_TIMEOUT_MS = 30_000;
+const DEFAULT_SILENCE_TIMEOUT_MS = 15_000;
 const MAX_EVENTS_PER_WINDOW = 25;
-const MAX_WALL_CLOCK_MS = 5 * 60 * 1_000; // 5 minutes
+
+/**
+ * Max wall clock per scope type (ms) — hard cap on how long a window stays open,
+ * even if events keep arriving within the silence timeout.
+ *
+ * Conversations cap at 60s so the agent responds within a minute during active
+ * discussions. Tickets and sessions are more tolerant of longer batching.
+ */
+const MAX_WALL_CLOCK_TIMEOUTS: Record<string, number> = {
+  chat: 60_000,
+  channel: 60_000,
+  ticket: 5 * 60 * 1_000,
+  session: 5 * 60 * 1_000,
+};
+
+const DEFAULT_MAX_WALL_CLOCK_MS = 2 * 60 * 1_000; // 2 minutes
 const REDIS_KEY_PREFIX = "agent:aggregator:window:";
 const TIMER_CHECK_INTERVAL_MS = 1_000; // check timers every second
 
@@ -89,6 +110,10 @@ function getSilenceTimeout(scopeType: string): number {
   return DEFAULT_SILENCE_TIMEOUTS[scopeType] ?? DEFAULT_SILENCE_TIMEOUT_MS;
 }
 
+function getMaxWallClock(scopeType: string): number {
+  return MAX_WALL_CLOCK_TIMEOUTS[scopeType] ?? DEFAULT_MAX_WALL_CLOCK_MS;
+}
+
 // ---------------------------------------------------------------------------
 // Redis persistence helpers
 // ---------------------------------------------------------------------------
@@ -108,7 +133,8 @@ async function persistWindow(window: AggregationWindow): Promise<void> {
     lastEventAt: window.lastEventAt,
   });
   // Expire after max wall clock + generous buffer so orphaned keys are cleaned up
-  const ttlSeconds = Math.ceil((MAX_WALL_CLOCK_MS + 60_000) / 1_000);
+  const scopeType = window.scopeKey.split(":")[0];
+  const ttlSeconds = Math.ceil((getMaxWallClock(scopeType) + 60_000) / 1_000);
   await redis.set(key, data, "EX", ttlSeconds);
 }
 
@@ -174,8 +200,8 @@ export class EventAggregator {
       const windowKey = this.windowKey(window.scopeKey, window.organizationId);
 
       // Check if window should have already expired
-      const wallClockElapsed = now - window.openedAt >= MAX_WALL_CLOCK_MS;
       const scopeType = window.scopeKey.split(":")[0];
+      const wallClockElapsed = now - window.openedAt >= getMaxWallClock(scopeType);
       const silenceElapsed = now - window.lastEventAt >= getSilenceTimeout(scopeType);
 
       if (wallClockElapsed) {
@@ -330,7 +356,8 @@ export class EventAggregator {
     // Collect expired keys first to avoid mutating the map during iteration
     const expired: string[] = [];
     for (const [windowKey, window] of this.windows) {
-      if (now - window.openedAt >= MAX_WALL_CLOCK_MS) {
+      const scopeType = window.scopeKey.split(":")[0];
+      if (now - window.openedAt >= getMaxWallClock(scopeType)) {
         expired.push(windowKey);
       }
     }
