@@ -86,7 +86,7 @@ const actionRegistry: AgentActionRegistration[] = [
         status: {
           type: "string",
           description: "New status",
-          enum: ["open", "in_progress", "in_review", "closed"],
+          enum: ["backlog", "todo", "in_progress", "in_review", "done", "cancelled"],
         },
         priority: {
           type: "string",
@@ -174,7 +174,7 @@ const actionRegistry: AgentActionRegistration[] = [
         tool: {
           type: "string",
           description: "Coding tool to use",
-          enum: ["claude_code", "cursor"],
+          enum: ["claude_code", "codex", "custom"],
         },
         sessionGroupId: { type: "string", description: "Existing session group to add the session to" },
         sourceSessionId: { type: "string", description: "Session to copy context/workdir from when starting the new session" },
