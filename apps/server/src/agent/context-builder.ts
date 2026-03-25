@@ -130,19 +130,6 @@ const DEFAULT_TOKEN_BUDGET = {
   },
 };
 
-/** Priority order for filling sections — highest priority first. */
-const FILL_PRIORITY: (keyof typeof DEFAULT_TOKEN_BUDGET.sections)[] = [
-  "triggerEvent",
-  "actionSchema",
-  "soulFile",
-  "scopeEntity",
-  "eventBatch",
-  "relevantEntities",
-  "summaries",
-  "recentEvents",
-  "actors",
-];
-
 // ---------------------------------------------------------------------------
 // Scope entity fetching — strategy per scope type
 // ---------------------------------------------------------------------------
@@ -532,7 +519,7 @@ async function fetchRecentEvents(input: {
   const events = await prisma.event.findMany({
     where: {
       organizationId: input.organizationId,
-      scopeType: input.scopeType as never,
+      scopeType: input.scopeType,
       scopeId: input.scopeId,
     },
     orderBy: { timestamp: "desc" },
@@ -738,11 +725,10 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   const sectionTokens: Record<string, number> = {};
   let totalUsed = 0;
 
-  // Track used tokens per section helper
+  // Track actual tokens per section
   function recordSection(name: string, tokens: number): void {
-    const capped = Math.min(tokens, budget.sections[name as keyof typeof budget.sections] ?? tokens);
-    sectionTokens[name] = capped;
-    totalUsed += capped;
+    sectionTokens[name] = tokens;
+    totalUsed += tokens;
   }
 
   // --- 1. Trigger event ---
@@ -753,8 +739,12 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   const actions = getActionsByScope(scopeTypeForActions);
   recordSection("actionSchema", estimateObjectTokens(actions));
 
-  // --- 3. Soul file ---
-  const soulFile = agentSettings.soulFile ?? "";
+  // --- 3. Soul file (truncate to budget from the end if too long) ---
+  let soulFile = agentSettings.soulFile ?? "";
+  const soulTokens = estimateTokens(soulFile);
+  if (soulTokens > budget.sections.soulFile) {
+    soulFile = truncateTextToTokenBudget(soulFile, budget.sections.soulFile);
+  }
   recordSection("soulFile", estimateTokens(soulFile));
 
   // --- 4. Scope entity ---
@@ -859,6 +849,15 @@ function toScopeType(scopeType: string): ScopeType {
   return "system"; // fallback for unknown scope types
 }
 
+/** Truncate text to fit within a token budget, keeping the beginning (identity/preamble). */
+function truncateTextToTokenBudget(text: string, budget: number): string {
+  const words = text.split(/\s+/);
+  // Target word count from budget: budget / 1.3
+  const targetWords = Math.floor(budget / 1.3);
+  if (words.length <= targetWords) return text;
+  return words.slice(0, targetWords).join(" ");
+}
+
 /** Truncate events list (from oldest) to fit within a token budget. */
 function truncateEventsToFit(events: AgentEvent[], budget: number): AgentEvent[] {
   // Keep most recent events (they're more relevant to the planner)
@@ -876,15 +875,3 @@ function truncateEventsToFit(events: AgentEvent[], budget: number): AgentEvent[]
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Logging
-// ---------------------------------------------------------------------------
-
-function log(msg: string, data?: Record<string, unknown>): void {
-  const prefix = "[context-builder]";
-  if (data) {
-    console.log(prefix, msg, JSON.stringify(data));
-  } else {
-    console.log(prefix, msg);
-  }
-}

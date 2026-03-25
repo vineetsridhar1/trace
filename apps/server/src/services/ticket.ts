@@ -242,6 +242,7 @@ export class TicketService {
 
     return ticket;
   }
+
   /**
    * Search tickets by relevance to a query string.
    * Uses ILIKE against title and description to find potentially related tickets.
