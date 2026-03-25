@@ -147,6 +147,11 @@ enum ExecutionStatus {
   failed
 }
 
+enum SummaryType {
+  rolling
+  milestone
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -207,6 +212,7 @@ model Organization {
   executionLogs    AgentExecutionLog[]
   processedEvents  ProcessedAgentEvent[]
   costTrackers     AgentCostTracker[]
+  entitySummaries  EntitySummary[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -298,6 +304,26 @@ model AgentCostTracker {
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, date])
+}
+
+model EntitySummary {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  entityType     String       // channel, chat, ticket, session, project, repo
+  entityId       String
+  summaryType    SummaryType  @default(rolling)
+  content        String       @default("")
+  structuredData Json         @default("{}")
+  startEventId   String?
+  endEventId     String?
+  eventCount     Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, entityType, entityId, summaryType])
+  @@index([organizationId, entityType, entityId])
 }
 
 model User {

@@ -21,6 +21,7 @@ import {
 } from "./agent/router.js";
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
+import { startSummaryWorker, stopSummaryWorker, trackEventForSummary } from "./agent/summary-worker.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -369,6 +370,9 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       // Update chat membership gate before routing
       updateChatMembership(event, agentContext.agentId);
 
+      // Track event count for summary freshness (non-blocking)
+      trackEventForSummary(orgId, event.scopeType, event.scopeId).catch(() => {});
+
       // Route the event
       const result = routeEvent(event, agentContext);
 
@@ -468,6 +472,7 @@ async function shutdown(signal: string): Promise<void> {
 
   stopTimers();
   cachedCostTracker.stop();
+  stopSummaryWorker();
 
   // Stop aggregator — emits all open windows so no events are lost
   try {
@@ -545,6 +550,10 @@ async function main(): Promise<void> {
   // Start the event aggregator (recovers persisted windows from Redis)
   await aggregator.start();
   log("aggregator started");
+
+  // Start the background summary refresh worker
+  startSummaryWorker(() => activeOrgs);
+  log("summary worker started");
 
   // Enter the main consume loop (blocks until shutdown)
   await consumeLoop();
