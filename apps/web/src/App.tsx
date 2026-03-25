@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "./stores/auth";
 import { useUIStore } from "./stores/ui";
 import { useDetailPanelStore } from "./stores/detail-panel";
+import { usePreferencesStore } from "./stores/preferences";
+import { useEntityStore } from "./stores/entity";
 import { AppSidebar } from "./components/AppSidebar";
 import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
@@ -21,6 +23,10 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
 import { cn } from "./lib/utils";
+import { client } from "./lib/urql";
+import { START_SESSION_MUTATION } from "./lib/mutations";
+import { optimisticallyInsertSession } from "./lib/optimistic-session";
+import { getDefaultModel } from "./components/session/modelOptions";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -59,10 +65,66 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const activeChatId = useUIStore((s) => s.activeChatId);
   const activeSessionGroupId = useUIStore((s) => s.activeSessionGroupId);
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
+  const setActiveSessionGroupId = useUIStore((s) => s.setActiveSessionGroupId);
+  const openSessionTab = useUIStore((s) => s.openSessionTab);
   const isFullscreen = useDetailPanelStore((s) => s.isFullscreen);
   const isMobile = useIsMobile();
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Cmd+N / Ctrl+N: create a new session in the active channel
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        const channelId = useUIStore.getState().activeChannelId;
+        if (!channelId) return;
+
+        const prefTool = usePreferencesStore.getState().defaultTool ?? "claude_code";
+        const prefModel = usePreferencesStore.getState().defaultModel ?? getDefaultModel(prefTool);
+
+        // Resolve channel repo
+        const channel = useEntityStore.getState().channels[channelId];
+        const channelRepoId =
+          channel && typeof channel === "object" && "repo" in channel && channel.repo &&
+          typeof channel.repo === "object" && "id" in (channel.repo as Record<string, unknown>)
+            ? (channel.repo as { id: string }).id
+            : undefined;
+
+        client
+          .mutation(START_SESSION_MUTATION, {
+            input: {
+              tool: prefTool,
+              model: prefModel ?? undefined,
+              hosting: "cloud",
+              channelId,
+              repoId: channelRepoId ?? undefined,
+            },
+          })
+          .toPromise()
+          .then((result) => {
+            const session = result.data?.startSession;
+            if (!session?.id) return;
+            const sessionGroupId = session.sessionGroupId;
+            if (sessionGroupId) {
+              optimisticallyInsertSession({
+                id: session.id,
+                sessionGroupId,
+                tool: prefTool,
+                model: prefModel,
+                hosting: "cloud",
+                channel: { id: channelId },
+                repo: channelRepoId ? { id: channelRepoId } : null,
+              });
+              openSessionTab(sessionGroupId, session.id);
+              setActiveSessionGroupId(sessionGroupId, session.id);
+            }
+          });
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [openSessionTab, setActiveSessionGroupId, setActiveSessionId]);
 
   const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
 

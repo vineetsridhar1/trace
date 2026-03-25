@@ -16,7 +16,6 @@ import { START_SESSION_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutation
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "../session/interactionModes";
 import { getDefaultModel } from "../session/modelOptions";
 import { CLOUD_RUNTIME_ID } from "../session/RuntimeSelector";
-import type { RuntimeInfo } from "../session/RuntimeSelector";
 import { usePreferencesStore } from "../../stores/preferences";
 import { useEntityField } from "../../stores/entity";
 import { SessionFormFields } from "./SessionFormFields";
@@ -33,9 +32,6 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const [tool, setTool] = useState<string>(initialTool);
   const [model, setModel] = useState<string | undefined>(initialModel);
   const [runtimeInstanceId, setRuntimeInstanceId] = useState<string | undefined>(undefined);
-  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfo | null>(null);
-  const [repoId, setRepoId] = useState<string | undefined>(undefined);
-  const [branch, setBranch] = useState("");
   const [mode, setMode] = useState<InteractionMode>("code");
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
@@ -55,11 +51,8 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
     setModel(getDefaultModel(v));
   }, []);
 
-  const handleRuntimeChange = useCallback((id: string | undefined, info: RuntimeInfo | null) => {
+  const handleRuntimeChange = useCallback((id: string | undefined, _info: unknown) => {
     setRuntimeInstanceId(id);
-    setRuntimeInfo(info);
-    setRepoId(undefined);
-    setBranch("");
   }, []);
 
   const handleOpenChange = (next: boolean) => {
@@ -70,10 +63,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
       const resetTool = prefTool ?? "claude_code";
       setTool(resetTool);
       setModel(prefModel ?? getDefaultModel(resetTool));
-      setRepoId(undefined);
-      setBranch("");
       setRuntimeInstanceId(undefined);
-      setRuntimeInfo(null);
     }
   };
 
@@ -93,8 +83,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             hosting: isCloud ? "cloud" : undefined,
             runtimeInstanceId: isCloud ? undefined : (runtimeInstanceId ?? undefined),
             channelId,
-            repoId: channelRepoId ?? repoId ?? undefined,
-            branch: branch.trim() || undefined,
+            repoId: channelRepoId ?? undefined,
             prompt: prompt.trim(),
           },
         })
@@ -109,7 +98,6 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
         }).toPromise();
         setPrompt("");
         setMode("code");
-        setBranch("");
         setOpen(false);
       }
     } finally {
@@ -135,17 +123,12 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
               tool={tool}
               model={model}
               runtimeInstanceId={runtimeInstanceId}
-              runtimeInfo={runtimeInfo}
-              repoId={repoId}
-              branch={branch}
               mode={mode}
               dialogOpen={open}
               channelRepoId={channelRepoId}
               onToolChange={handleToolChange}
               onModelChange={setModel}
               onRuntimeChange={handleRuntimeChange}
-              onRepoChange={setRepoId}
-              onBranchChange={setBranch}
               onModeChange={cycleMode}
             />
             <div>

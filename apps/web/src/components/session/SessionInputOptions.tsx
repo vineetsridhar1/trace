@@ -1,8 +1,14 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { gql } from "@urql/core";
-import type { CodingTool } from "@trace/gql";
+import { Cloud, Monitor } from "lucide-react";
+import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
+import {
+  AVAILABLE_RUNTIMES_QUERY,
+  MOVE_SESSION_TO_RUNTIME_MUTATION,
+  MOVE_SESSION_TO_CLOUD_MUTATION,
+} from "../../lib/mutations";
 import {
   Select,
   SelectContent,
@@ -15,6 +21,7 @@ import {
   MODE_CONFIG,
 } from "./interactionModes";
 import { getModelsForTool, getDefaultModel } from "./modelOptions";
+import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
 import { cn } from "../../lib/utils";
 
 const UPDATE_SESSION_CONFIG_MUTATION = gql`
@@ -42,10 +49,36 @@ export function SessionInputOptions({
 }: SessionInputOptionsProps) {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
 
   const currentTool = tool ?? "claude_code";
   const modelOptions = getModelsForTool(currentTool);
   const currentModel = model ?? getDefaultModel(currentTool);
+  const isNotStarted = agentStatus === "not_started";
+
+  // Runtime state for not_started sessions
+  const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
+  const currentRuntimeId =
+    connection && typeof connection === "object" && "runtimeInstanceId" in connection
+      ? (connection.runtimeInstanceId as string | null)
+      : null;
+  const currentRuntimeValue = hosting === "cloud" ? CLOUD_RUNTIME_ID : (currentRuntimeId ?? CLOUD_RUNTIME_ID);
+
+  useEffect(() => {
+    if (!isNotStarted) return;
+    client
+      .query(AVAILABLE_RUNTIMES_QUERY, { tool: currentTool })
+      .toPromise()
+      .then((result) => {
+        const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
+        if (data) setRuntimes(data);
+      });
+  }, [isNotStarted, currentTool]);
 
   const handleToolChange = useCallback(async (newTool: string | null) => {
     if (!newTool) return;
@@ -59,6 +92,20 @@ export function SessionInputOptions({
     useEntityStore.getState().patch("sessions", sessionId, { model: newModel });
     await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel }).toPromise();
   }, [sessionId]);
+
+  const handleRuntimeChange = useCallback(async (value: string) => {
+    if (value === CLOUD_RUNTIME_ID) {
+      useEntityStore.getState().patch("sessions", sessionId, { hosting: "cloud" });
+      await client.mutation(MOVE_SESSION_TO_CLOUD_MUTATION, { sessionId }).toPromise();
+    } else {
+      const rt = runtimes.find((r) => r.id === value);
+      useEntityStore.getState().patch("sessions", sessionId, {
+        hosting: rt?.hostingMode ?? "local",
+        connection: { ...(connection as Record<string, unknown> ?? {}), runtimeInstanceId: value, runtimeLabel: rt?.label },
+      });
+      await client.mutation(MOVE_SESSION_TO_RUNTIME_MUTATION, { sessionId, runtimeInstanceId: value }).toPromise();
+    }
+  }, [sessionId, runtimes, connection]);
 
   const modeConfig = MODE_CONFIG[mode];
   const ModeIcon = modeConfig.icon;
@@ -83,6 +130,31 @@ export function SessionInputOptions({
             {modelOptions.map((m) => (
               <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      )}
+      {isNotStarted && (
+        <Select value={currentRuntimeValue} onValueChange={handleRuntimeChange}>
+          <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
+            <SelectValue>
+              {currentRuntimeValue === CLOUD_RUNTIME_ID ? (
+                <span className="flex items-center gap-1"><Cloud size={12} /> Cloud</span>
+              ) : (
+                <span className="flex items-center gap-1"><Monitor size={12} /> {runtimes.find((r) => r.id === currentRuntimeId)?.label ?? "Local"}</span>
+              )}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={CLOUD_RUNTIME_ID}>
+              <span className="flex items-center gap-1.5"><Cloud size={12} /> Cloud</span>
+            </SelectItem>
+            {runtimes
+              .filter((r) => r.hostingMode === "local" && r.connected)
+              .map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  <span className="flex items-center gap-1.5"><Monitor size={12} /> {r.label}</span>
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       )}

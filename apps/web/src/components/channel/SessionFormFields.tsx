@@ -2,8 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { RuntimeSelector } from "../session/RuntimeSelector";
 import type { RuntimeInfo } from "../session/RuntimeSelector";
 import { type InteractionMode, MODE_CONFIG } from "../session/interactionModes";
-import { getModelsForTool, getDefaultModel, getModelLabel } from "../session/modelOptions";
-import { RepoSection } from "./RepoSection";
+import { getModelsForTool, getModelLabel } from "../session/modelOptions";
 import { cn } from "../../lib/utils";
 
 /** Must stay in sync with SelectItem labels below */
@@ -16,23 +15,18 @@ interface SessionFormFieldsProps {
   tool: string;
   model: string | undefined;
   runtimeInstanceId: string | undefined;
-  runtimeInfo: RuntimeInfo | null;
-  repoId: string | undefined;
-  branch: string;
   mode: InteractionMode;
   dialogOpen: boolean;
   channelRepoId?: string;
   onToolChange: (tool: string) => void;
   onModelChange: (model: string) => void;
   onRuntimeChange: (id: string | undefined, info: RuntimeInfo | null) => void;
-  onRepoChange: (repoId: string | undefined) => void;
-  onBranchChange: (branch: string) => void;
   onModeChange: () => void;
 }
 
 export function SessionFormFields({
-  tool, model, runtimeInstanceId, runtimeInfo, repoId, branch, mode, dialogOpen, channelRepoId,
-  onToolChange, onModelChange, onRuntimeChange, onRepoChange, onBranchChange,
+  tool, model, runtimeInstanceId, mode, dialogOpen, channelRepoId,
+  onToolChange, onModelChange, onRuntimeChange,
   onModeChange,
 }: SessionFormFieldsProps) {
   const modelOptions = getModelsForTool(tool);
@@ -68,15 +62,6 @@ export function SessionFormFields({
         <label className="mb-1.5 block text-sm text-muted-foreground">Runtime</label>
         <RuntimeSelector tool={tool} open={dialogOpen} value={runtimeInstanceId} onChange={onRuntimeChange} channelRepoId={channelRepoId} />
       </div>
-      <RepoSection
-        repoId={channelRepoId ?? repoId}
-        branch={branch}
-        runtimeInfo={runtimeInfo}
-        runtimeInstanceId={runtimeInstanceId}
-        lockedRepoId={channelRepoId}
-        onRepoChange={onRepoChange}
-        onBranchChange={onBranchChange}
-      />
       <div>
         <label className="mb-1.5 block text-sm text-muted-foreground">Mode</label>
         <button
