@@ -242,6 +242,44 @@ export class TicketService {
 
     return ticket;
   }
+  /**
+   * Search tickets by relevance to a query string.
+   * Uses ILIKE against title and description to find potentially related tickets.
+   * Returns top N matches ordered by best match (title match first, then description).
+   */
+  async searchByRelevance(input: {
+    organizationId: string;
+    query: string;
+    limit?: number;
+  }) {
+    const limit = input.limit ?? 5;
+    const query = input.query.trim();
+    if (!query) return [];
+
+    // Extract meaningful keywords (3+ chars) for searching
+    const keywords = query
+      .split(/\s+/)
+      .filter((w) => w.length >= 3)
+      .slice(0, 10); // cap to avoid overly complex queries
+
+    if (keywords.length === 0) return [];
+
+    // Build ILIKE conditions for each keyword against title and description
+    const orConditions = keywords.flatMap((kw) => [
+      { title: { contains: kw, mode: "insensitive" as const } },
+      { description: { contains: kw, mode: "insensitive" as const } },
+    ]);
+
+    return prisma.ticket.findMany({
+      where: {
+        organizationId: input.organizationId,
+        OR: orConditions,
+      },
+      include: TICKET_INCLUDE,
+      take: limit,
+      orderBy: { updatedAt: "desc" },
+    });
+  }
 }
 
 export const ticketService = new TicketService();

@@ -1,0 +1,890 @@
+/**
+ * Context Builder — converts an aggregated event batch into a compact, relevant
+ * context packet for the planner.
+ *
+ * The planner is only as good as what this module feeds it. This is a retrieval
+ * step, not a data dump — we search for relevant entities rather than loading everything.
+ *
+ * Ticket: #10
+ */
+
+import { prisma } from "../lib/db.js";
+import { summaryService } from "../services/summary.js";
+import { refreshIfStale } from "./summary-worker.js";
+import { ticketService } from "../services/ticket.js";
+import {
+  getActionsByScope,
+  type AgentActionRegistration,
+  type ScopeType,
+} from "./action-registry.js";
+import type { AggregatedBatch } from "./aggregator.js";
+import type { AgentEvent } from "./router.js";
+import type { OrgAgentSettings } from "../services/agent-identity.js";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Compact representation of an entity included in the context packet. */
+export interface ContextEntity {
+  type: string;
+  id: string;
+  data: Record<string, unknown>;
+  hop: number; // 0 = scope entity, 1 = directly linked, 2 = linked-to-linked
+}
+
+/** Freshness metadata for a summary included in the packet. */
+export interface ContextSummary {
+  entityType: string;
+  entityId: string;
+  content: string;
+  structuredData: Record<string, unknown>;
+  fresh: boolean;
+  eventCount: number;
+}
+
+/** Actor information resolved from user IDs in the batch. */
+export interface ContextActor {
+  id: string;
+  name: string;
+  role: string;
+  type: string; // "user" | "agent"
+}
+
+/** The structured context packet passed to the planner. */
+export interface AgentContextPacket {
+  organizationId: string;
+  scopeKey: string;
+  scopeType: string;
+  scopeId: string;
+
+  /** The most recent event in the batch — the primary trigger. */
+  triggerEvent: AgentEvent;
+
+  /** All events in the aggregation window. */
+  eventBatch: AgentEvent[];
+
+  /** Org-level agent personality / instructions. */
+  soulFile: string;
+
+  /** The entity where the event happened (chat, ticket, session). */
+  scopeEntity: ContextEntity | null;
+
+  /** Entities found via targeted search and link traversal. */
+  relevantEntities: ContextEntity[];
+
+  /** Additional recent events in the same scope beyond the batch. */
+  recentEvents: AgentEvent[];
+
+  /** Rolling summaries for the scope and relevant entities. */
+  summaries: ContextSummary[];
+
+  /** Actors involved in the batch events. */
+  actors: ContextActor[];
+
+  /** Org autonomy mode and available actions filtered by scope. */
+  permissions: {
+    autonomyMode: string;
+    actions: AgentActionRegistration[];
+  };
+
+  /** Token budget accounting — how many estimated tokens each section uses. */
+  tokenBudget: {
+    total: number;
+    used: number;
+    sections: Record<string, number>;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Token budget configuration
+// ---------------------------------------------------------------------------
+
+/** Simple token estimation: words × 1.3 */
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  return Math.ceil(wordCount * 1.3);
+}
+
+function estimateObjectTokens(obj: unknown): number {
+  return estimateTokens(JSON.stringify(obj));
+}
+
+/**
+ * Per-section token allocations. These define the maximum tokens each section
+ * can consume. Sections are filled greedily by priority order.
+ */
+const DEFAULT_TOKEN_BUDGET = {
+  total: 60_000, // ~30% of 200K context window
+  sections: {
+    triggerEvent: 2_000,
+    actionSchema: 4_000,
+    soulFile: 2_000,
+    scopeEntity: 4_000,
+    eventBatch: 10_000,
+    relevantEntities: 12_000,
+    summaries: 10_000,
+    recentEvents: 8_000,
+    actors: 2_000,
+  },
+};
+
+/** Priority order for filling sections — highest priority first. */
+const FILL_PRIORITY: (keyof typeof DEFAULT_TOKEN_BUDGET.sections)[] = [
+  "triggerEvent",
+  "actionSchema",
+  "soulFile",
+  "scopeEntity",
+  "eventBatch",
+  "relevantEntities",
+  "summaries",
+  "recentEvents",
+  "actors",
+];
+
+// ---------------------------------------------------------------------------
+// Scope entity fetching — strategy per scope type
+// ---------------------------------------------------------------------------
+
+type ScopeEntityFetcher = (
+  organizationId: string,
+  scopeId: string,
+) => Promise<Record<string, unknown> | null>;
+
+const scopeFetchers: Record<string, ScopeEntityFetcher> = {
+  async chat(organizationId, scopeId) {
+    const chat = await prisma.chat.findUnique({
+      where: { id: scopeId },
+      include: {
+        members: { include: { user: { select: { id: true, name: true } } } },
+      },
+    });
+    if (!chat) return null;
+    return {
+      id: chat.id,
+      type: chat.type,
+      name: chat.name,
+      memberCount: chat.members.length,
+      members: chat.members.map((m: { user: { id: string; name: string | null } }) => ({
+        id: m.user.id,
+        name: m.user.name,
+      })),
+    };
+  },
+
+  async ticket(organizationId, scopeId) {
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: scopeId },
+      include: {
+        assignees: { include: { user: { select: { id: true, name: true } } } },
+        links: true,
+        projects: { include: { project: { select: { id: true, name: true } } } },
+        channel: { select: { id: true, name: true } },
+      },
+    });
+    if (!ticket) return null;
+    return {
+      id: ticket.id,
+      title: ticket.title,
+      description: ticket.description,
+      status: ticket.status,
+      priority: ticket.priority,
+      labels: ticket.labels,
+      assignees: ticket.assignees.map((a: { user: { id: string; name: string | null } }) => ({
+        id: a.user.id,
+        name: a.user.name,
+      })),
+      links: ticket.links.map((l: { entityType: string; entityId: string }) => ({
+        entityType: l.entityType,
+        entityId: l.entityId,
+      })),
+      projects: ticket.projects.map((p: { project: { id: string; name: string } }) => ({
+        id: p.project.id,
+        name: p.project.name,
+      })),
+      channel: ticket.channel
+        ? { id: ticket.channel.id, name: ticket.channel.name }
+        : null,
+    };
+  },
+
+  async session(organizationId, scopeId) {
+    const session = await prisma.session.findUnique({
+      where: { id: scopeId },
+      include: {
+        repo: { select: { id: true, name: true, remoteUrl: true } },
+        channel: { select: { id: true, name: true } },
+        projects: { include: { project: { select: { id: true, name: true } } } },
+      },
+    });
+    if (!session) return null;
+    return {
+      id: session.id,
+      name: session.name,
+      agentStatus: session.agentStatus,
+      sessionStatus: session.sessionStatus,
+      tool: session.tool,
+      repo: session.repo
+        ? { id: session.repo.id, name: session.repo.name, remoteUrl: session.repo.remoteUrl }
+        : null,
+      channel: session.channel
+        ? { id: session.channel.id, name: session.channel.name }
+        : null,
+      projects: session.projects.map((p: { project: { id: string; name: string } }) => ({
+        id: p.project.id,
+        name: p.project.name,
+      })),
+    };
+  },
+
+  async channel(organizationId, scopeId) {
+    const channel = await prisma.channel.findUnique({
+      where: { id: scopeId },
+      include: {
+        projects: { include: { project: { select: { id: true, name: true } } } },
+        repos: { include: { repo: { select: { id: true, name: true } } } },
+      },
+    });
+    if (!channel) return null;
+    return {
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+      projects: channel.projects.map((p: { project: { id: string; name: string } }) => ({
+        id: p.project.id,
+        name: p.project.name,
+      })),
+      repos: channel.repos.map((r: { repo: { id: string; name: string } }) => ({
+        id: r.repo.id,
+        name: r.repo.name,
+      })),
+    };
+  },
+};
+
+async function fetchScopeEntity(
+  scopeType: string,
+  organizationId: string,
+  scopeId: string,
+): Promise<ContextEntity | null> {
+  const fetcher = scopeFetchers[scopeType];
+  if (!fetcher) {
+    // Generic fallback — no specific fetcher for this scope type
+    return null;
+  }
+
+  const data = await fetcher(organizationId, scopeId);
+  if (!data) return null;
+
+  return { type: scopeType, id: scopeId, data, hop: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Relevant entity search
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract search text from a batch of events. Concatenates message text,
+ * ticket titles, and other textual payload fields.
+ */
+function extractSearchText(events: AgentEvent[]): string {
+  const parts: string[] = [];
+
+  for (const event of events) {
+    const p = event.payload;
+    if (typeof p.text === "string") parts.push(p.text);
+    if (typeof p.title === "string") parts.push(p.title);
+    if (typeof p.description === "string") parts.push(p.description);
+    if (typeof p.html === "string") {
+      // Strip HTML tags for search
+      parts.push(p.html.replace(/<[^>]+>/g, " "));
+    }
+  }
+
+  return parts.join(" ").slice(0, 1000); // cap length for query sanity
+}
+
+/**
+ * Find relevant entities via bounded graph traversal.
+ *
+ * Hop 0: scope entity (already fetched separately)
+ * Hop 1: directly linked entities (60% of linked-entity budget)
+ * Hop 2: entities linked to Hop 1 entities (40% of linked-entity budget)
+ */
+async function findRelevantEntities(input: {
+  organizationId: string;
+  scopeType: string;
+  scopeId: string;
+  scopeEntity: ContextEntity | null;
+  events: AgentEvent[];
+  tokenBudget: number;
+}): Promise<ContextEntity[]> {
+  const entities: ContextEntity[] = [];
+  const seen = new Set<string>(); // "type:id" dedup
+  seen.add(`${input.scopeType}:${input.scopeId}`); // don't re-include scope
+
+  // --- Ticket search by relevance ---
+  const searchText = extractSearchText(input.events);
+  if (searchText.trim()) {
+    try {
+      const relatedTickets = await ticketService.searchByRelevance({
+        organizationId: input.organizationId,
+        query: searchText,
+        limit: 5,
+      });
+
+      for (const ticket of relatedTickets) {
+        const key = `ticket:${ticket.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        entities.push({
+          type: "ticket",
+          id: ticket.id,
+          data: {
+            id: ticket.id,
+            title: ticket.title,
+            description: ticket.description?.slice(0, 500),
+            status: ticket.status,
+            priority: ticket.priority,
+            labels: ticket.labels,
+          },
+          hop: 1,
+        });
+      }
+    } catch {
+      // Search failure is non-fatal — proceed without ticket matches
+    }
+  }
+
+  // --- Follow links from scope entity (Hop 1) ---
+  const links = (input.scopeEntity?.data.links ?? []) as Array<{
+    entityType: string;
+    entityId: string;
+  }>;
+
+  for (const link of links) {
+    const key = `${link.entityType}:${link.entityId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const linked = await fetchLinkedEntity(link.entityType, link.entityId);
+    if (linked) {
+      entities.push({ ...linked, hop: 1 });
+    }
+  }
+
+  // --- Follow links from Hop 1 ticket entities (Hop 2) ---
+  // Only follow links from Hop 1 tickets that have links themselves
+  const hop1Tickets = entities.filter((e) => e.type === "ticket" && e.hop === 1);
+
+  for (const ticketEntity of hop1Tickets) {
+    const ticketLinks = await prisma.ticketLink.findMany({
+      where: { ticketId: ticketEntity.id },
+    });
+
+    for (const link of ticketLinks) {
+      const key = `${link.entityType}:${link.entityId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const linked = await fetchLinkedEntity(link.entityType, link.entityId);
+      if (linked) {
+        entities.push({ ...linked, hop: 2 });
+      }
+
+      // Cap Hop 2 entities
+      if (entities.filter((e) => e.hop === 2).length >= 3) break;
+    }
+  }
+
+  // --- Project/repo context (Hop 1 if scope belongs to a project) ---
+  const scopeProjects = (input.scopeEntity?.data.projects ?? []) as Array<{
+    id: string;
+    name: string;
+  }>;
+
+  for (const proj of scopeProjects) {
+    const key = `project:${proj.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    entities.push({
+      type: "project",
+      id: proj.id,
+      data: { id: proj.id, name: proj.name },
+      hop: 1,
+    });
+  }
+
+  // Repo context for sessions
+  const scopeRepo = input.scopeEntity?.data.repo as
+    | { id: string; name: string; remoteUrl: string }
+    | null
+    | undefined;
+
+  if (scopeRepo) {
+    const key = `repo:${scopeRepo.id}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      entities.push({
+        type: "repo",
+        id: scopeRepo.id,
+        data: scopeRepo,
+        hop: 1,
+      });
+    }
+  }
+
+  // --- Truncate by token budget ---
+  return truncateEntities(entities, input.tokenBudget);
+}
+
+/** Fetch a linked entity in a compact form. */
+async function fetchLinkedEntity(
+  entityType: string,
+  entityId: string,
+): Promise<Omit<ContextEntity, "hop"> | null> {
+  try {
+    switch (entityType) {
+      case "session": {
+        const s = await prisma.session.findUnique({
+          where: { id: entityId },
+          select: {
+            id: true, name: true, agentStatus: true, sessionStatus: true,
+            tool: true,
+          },
+        });
+        if (!s) return null;
+        return { type: "session", id: s.id, data: s as unknown as Record<string, unknown> };
+      }
+      case "channel": {
+        const c = await prisma.channel.findUnique({
+          where: { id: entityId },
+          select: { id: true, name: true, type: true },
+        });
+        if (!c) return null;
+        return { type: "channel", id: c.id, data: c as unknown as Record<string, unknown> };
+      }
+      case "chat": {
+        const ch = await prisma.chat.findUnique({
+          where: { id: entityId },
+          select: { id: true, name: true, type: true },
+        });
+        if (!ch) return null;
+        return { type: "chat", id: ch.id, data: ch as unknown as Record<string, unknown> };
+      }
+      case "ticket": {
+        const t = await prisma.ticket.findUnique({
+          where: { id: entityId },
+          select: {
+            id: true, title: true, status: true, priority: true, labels: true,
+          },
+        });
+        if (!t) return null;
+        return { type: "ticket", id: t.id, data: t as unknown as Record<string, unknown> };
+      }
+      case "project": {
+        const p = await prisma.project.findUnique({
+          where: { id: entityId },
+          select: { id: true, name: true },
+        });
+        if (!p) return null;
+        return { type: "project", id: p.id, data: p as unknown as Record<string, unknown> };
+      }
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Truncate entities list to fit within a token budget, removing least relevant first. */
+function truncateEntities(entities: ContextEntity[], budget: number): ContextEntity[] {
+  // Sort by hop (lower = more relevant), then by order added
+  const sorted = [...entities].sort((a, b) => a.hop - b.hop);
+  const result: ContextEntity[] = [];
+  let used = 0;
+
+  for (const entity of sorted) {
+    const tokens = estimateObjectTokens(entity.data);
+    if (used + tokens > budget) continue;
+    used += tokens;
+    result.push(entity);
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Recent events beyond the batch
+// ---------------------------------------------------------------------------
+
+async function fetchRecentEvents(input: {
+  organizationId: string;
+  scopeType: string;
+  scopeId: string;
+  excludeIds: Set<string>;
+  limit: number;
+}): Promise<AgentEvent[]> {
+  const events = await prisma.event.findMany({
+    where: {
+      organizationId: input.organizationId,
+      scopeType: input.scopeType as never,
+      scopeId: input.scopeId,
+    },
+    orderBy: { timestamp: "desc" },
+    take: input.limit + input.excludeIds.size, // fetch extra to account for exclusions
+  });
+
+  interface DbEvent {
+    id: string;
+    organizationId: string;
+    scopeType: string;
+    scopeId: string;
+    eventType: string;
+    actorType: string;
+    actorId: string;
+    payload: unknown;
+    timestamp: Date;
+  }
+
+  return (events as DbEvent[])
+    .filter((e) => !input.excludeIds.has(e.id))
+    .slice(0, input.limit)
+    .map((e) => ({
+      id: e.id,
+      organizationId: e.organizationId,
+      scopeType: e.scopeType,
+      scopeId: e.scopeId,
+      eventType: e.eventType,
+      actorType: e.actorType,
+      actorId: e.actorId,
+      payload: e.payload as Record<string, unknown>,
+      timestamp: e.timestamp.toISOString(),
+    }));
+}
+
+// ---------------------------------------------------------------------------
+// Summary fetching
+// ---------------------------------------------------------------------------
+
+async function fetchSummaries(input: {
+  organizationId: string;
+  scopeType: string;
+  scopeId: string;
+  relevantEntities: ContextEntity[];
+  tokenBudget: number;
+}): Promise<ContextSummary[]> {
+  const summaries: ContextSummary[] = [];
+  let used = 0;
+
+  // Scope entity summary first (highest priority)
+  const scopeSummary = await refreshIfStale(
+    input.organizationId,
+    input.scopeType,
+    input.scopeId,
+  );
+
+  if (scopeSummary) {
+    const tokens = estimateTokens(scopeSummary.content);
+    if (used + tokens <= input.tokenBudget) {
+      used += tokens;
+
+      // Check freshness for metadata
+      const eventCount = await summaryService.countEventsSince({
+        organizationId: input.organizationId,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+        afterEventId: scopeSummary.endEventId ?? undefined,
+      });
+      const totalCount = scopeSummary.eventCount + eventCount;
+      const { fresh } = summaryService.isFresh(scopeSummary, totalCount);
+
+      summaries.push({
+        entityType: input.scopeType,
+        entityId: input.scopeId,
+        content: scopeSummary.content,
+        structuredData: scopeSummary.structuredData as Record<string, unknown>,
+        fresh,
+        eventCount: scopeSummary.eventCount,
+      });
+    }
+  }
+
+  // Summaries for relevant entities (sorted by hop — closer entities first)
+  const sortedEntities = [...input.relevantEntities].sort((a, b) => a.hop - b.hop);
+
+  for (const entity of sortedEntities) {
+    if (used >= input.tokenBudget) break;
+
+    try {
+      const summary = await summaryService.getLatest({
+        organizationId: input.organizationId,
+        entityType: entity.type,
+        entityId: entity.id,
+      });
+
+      if (summary) {
+        const tokens = estimateTokens(summary.content);
+        if (used + tokens > input.tokenBudget) continue;
+        used += tokens;
+
+        const eventCount = await summaryService.countEventsSince({
+          organizationId: input.organizationId,
+          scopeType: entity.type,
+          scopeId: entity.id,
+          afterEventId: summary.endEventId ?? undefined,
+        });
+        const totalCount = summary.eventCount + eventCount;
+        const { fresh } = summaryService.isFresh(summary, totalCount);
+
+        summaries.push({
+          entityType: entity.type,
+          entityId: entity.id,
+          content: summary.content,
+          structuredData: summary.structuredData as Record<string, unknown>,
+          fresh,
+          eventCount: summary.eventCount,
+        });
+      }
+    } catch {
+      // Non-fatal — skip this summary
+    }
+  }
+
+  return summaries;
+}
+
+// ---------------------------------------------------------------------------
+// Actor resolution
+// ---------------------------------------------------------------------------
+
+async function resolveActors(events: AgentEvent[]): Promise<ContextActor[]> {
+  const actorIds = new Set<string>();
+  for (const event of events) {
+    if (event.actorId) actorIds.add(event.actorId);
+  }
+
+  if (actorIds.size === 0) return [];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...actorIds] } },
+    select: { id: true, name: true },
+  });
+
+  const typedUsers = users as Array<{ id: string; name: string | null }>;
+  const userMap = new Map(typedUsers.map((u) => [u.id, u]));
+  const actors: ContextActor[] = [];
+
+  for (const id of actorIds) {
+    const user = userMap.get(id);
+    if (user) {
+      actors.push({
+        id: user.id,
+        name: user.name ?? "Unknown",
+        role: "member",
+        type: "user",
+      });
+    } else {
+      // Could be an agent actor
+      actors.push({
+        id,
+        name: "Agent",
+        role: "agent",
+        type: "agent",
+      });
+    }
+  }
+
+  return actors;
+}
+
+// ---------------------------------------------------------------------------
+// Main context builder
+// ---------------------------------------------------------------------------
+
+export interface BuildContextInput {
+  batch: AggregatedBatch;
+  agentSettings: OrgAgentSettings;
+}
+
+/**
+ * Build a structured context packet from an aggregated event batch.
+ *
+ * This is the main entry point. The context builder:
+ * 1. Identifies the trigger event
+ * 2. Fetches the scope entity
+ * 3. Searches for relevant entities via bounded graph traversal
+ * 4. Fetches summaries with freshness checks
+ * 5. Resolves actor information
+ * 6. Filters actions by scope
+ * 7. Respects token budget throughout
+ */
+export async function buildContext(input: BuildContextInput): Promise<AgentContextPacket> {
+  const { batch, agentSettings } = input;
+  const { organizationId, scopeKey, events } = batch;
+
+  // Parse scope type and ID from scope key
+  const scopeType = scopeKey.split(":")[0];
+  const scopeId = parseScopeId(scopeKey);
+
+  // Trigger event = most recent in batch
+  const triggerEvent = events[events.length - 1];
+
+  const budget = { ...DEFAULT_TOKEN_BUDGET };
+  const sectionTokens: Record<string, number> = {};
+  let totalUsed = 0;
+
+  // Track used tokens per section helper
+  function recordSection(name: string, tokens: number): void {
+    const capped = Math.min(tokens, budget.sections[name as keyof typeof budget.sections] ?? tokens);
+    sectionTokens[name] = capped;
+    totalUsed += capped;
+  }
+
+  // --- 1. Trigger event ---
+  recordSection("triggerEvent", estimateObjectTokens(triggerEvent));
+
+  // --- 2. Action schema (high priority — planner needs to know what it can do) ---
+  const scopeTypeForActions = toScopeType(scopeType);
+  const actions = getActionsByScope(scopeTypeForActions);
+  recordSection("actionSchema", estimateObjectTokens(actions));
+
+  // --- 3. Soul file ---
+  const soulFile = agentSettings.soulFile ?? "";
+  recordSection("soulFile", estimateTokens(soulFile));
+
+  // --- 4. Scope entity ---
+  const scopeEntity = await fetchScopeEntity(scopeType, organizationId, scopeId);
+  if (scopeEntity) {
+    recordSection("scopeEntity", estimateObjectTokens(scopeEntity.data));
+  }
+
+  // --- 5. Event batch ---
+  let eventBatch = events;
+  const batchTokens = estimateObjectTokens(events);
+  const batchBudget = budget.sections.eventBatch;
+  if (batchTokens > batchBudget) {
+    // Truncate from oldest events
+    eventBatch = truncateEventsToFit(events, batchBudget);
+  }
+  recordSection("eventBatch", estimateObjectTokens(eventBatch));
+
+  // --- 6. Relevant entities via search and link traversal ---
+  const relevantEntities = await findRelevantEntities({
+    organizationId,
+    scopeType,
+    scopeId,
+    scopeEntity,
+    events,
+    tokenBudget: budget.sections.relevantEntities,
+  });
+  recordSection("relevantEntities", estimateObjectTokens(relevantEntities));
+
+  // --- 7. Summaries ---
+  const summaries = await fetchSummaries({
+    organizationId,
+    scopeType,
+    scopeId,
+    relevantEntities,
+    tokenBudget: budget.sections.summaries,
+  });
+  recordSection("summaries", estimateObjectTokens(summaries));
+
+  // --- 8. Recent events beyond the batch ---
+  const batchIds = new Set(events.map((e) => e.id));
+  const recentEvents = await fetchRecentEvents({
+    organizationId,
+    scopeType,
+    scopeId,
+    excludeIds: batchIds,
+    limit: 20,
+  });
+  // Truncate to fit budget
+  const recentTruncated = truncateEventsToFit(recentEvents, budget.sections.recentEvents);
+  recordSection("recentEvents", estimateObjectTokens(recentTruncated));
+
+  // --- 9. Actors ---
+  const actors = await resolveActors([...events, ...recentTruncated]);
+  recordSection("actors", estimateObjectTokens(actors));
+
+  return {
+    organizationId,
+    scopeKey,
+    scopeType,
+    scopeId,
+    triggerEvent,
+    eventBatch,
+    soulFile,
+    scopeEntity,
+    relevantEntities,
+    recentEvents: recentTruncated,
+    summaries,
+    actors,
+    permissions: {
+      autonomyMode: agentSettings.autonomyMode,
+      actions,
+    },
+    tokenBudget: {
+      total: budget.total,
+      used: totalUsed,
+      sections: sectionTokens,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse the entity ID from a scope key.
+ * Handles formats like "chat:abc123", "chat:abc123:thread:msg456", "ticket:abc123".
+ */
+function parseScopeId(scopeKey: string): string {
+  const parts = scopeKey.split(":");
+  // For "chat:id:thread:parentId", the scope ID is the chat ID
+  return parts[1] ?? parts[0];
+}
+
+/** Map raw scope type strings to the typed ScopeType union. */
+function toScopeType(scopeType: string): ScopeType {
+  const valid: ScopeType[] = ["chat", "channel", "ticket", "session", "project", "system"];
+  if (valid.includes(scopeType as ScopeType)) {
+    return scopeType as ScopeType;
+  }
+  return "system"; // fallback for unknown scope types
+}
+
+/** Truncate events list (from oldest) to fit within a token budget. */
+function truncateEventsToFit(events: AgentEvent[], budget: number): AgentEvent[] {
+  // Keep most recent events (they're more relevant to the planner)
+  const result: AgentEvent[] = [];
+  let used = 0;
+
+  // Iterate from newest to oldest
+  for (let i = events.length - 1; i >= 0; i--) {
+    const tokens = estimateObjectTokens(events[i]);
+    if (used + tokens > budget) break;
+    used += tokens;
+    result.unshift(events[i]);
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Logging
+// ---------------------------------------------------------------------------
+
+function log(msg: string, data?: Record<string, unknown>): void {
+  const prefix = "[context-builder]";
+  if (data) {
+    console.log(prefix, msg, JSON.stringify(data));
+  } else {
+    console.log(prefix, msg);
+  }
+}
