@@ -36,6 +36,8 @@ Make the agent fully functional in DMs and group chats. The router and aggregato
 ## Dependencies
 
 - 15 (Pipeline Integration — the pipeline must be working end-to-end)
+- 16 (Tier 3 Planner & Promotion)
+  <!-- Ticket 16 created: The router now promotes @mentions of the agent to Tier 3 (`router.ts:90-101`). This means every DM message to the agent triggers Tier 3 (Opus-class model) since DMs are essentially @mentions. For simple DM queries ("what's the status of TK-142?"), this is wasteful. Consider: (1) suppress Tier 3 for DM-scoped @mentions by adding `event.scopeType !== "chat"` to the message_sent Tier 3 rule, or (2) let DMs default to Tier 2 and only promote when the Tier 2 planner requests escalation via `promotionReason`. Option 2 is recommended — it lets the model decide whether it needs Opus. -->
 
 ## Completion requirements
 
