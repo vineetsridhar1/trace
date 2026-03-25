@@ -31,6 +31,31 @@ const EVENTS_PER_SUMMARY = 100; // max events to feed into one summary call
 const SCOPE_EVENT_COUNT_PREFIX = "agent:summary:events:";
 
 // ---------------------------------------------------------------------------
+// Cost estimation per model
+// ---------------------------------------------------------------------------
+
+/** Cost per token in dollars, keyed by model name prefix. */
+const MODEL_COST_MAP: Record<string, { input: number; output: number }> = {
+  "claude-haiku": { input: 0.00000025, output: 0.00000125 },
+  "claude-sonnet": { input: 0.000003, output: 0.000015 },
+  "claude-opus": { input: 0.000015, output: 0.000075 },
+};
+
+const DEFAULT_COST = { input: 0.00000025, output: 0.00000125 }; // Haiku fallback
+
+function estimateCostCents(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const match = Object.entries(MODEL_COST_MAP).find(([prefix]) =>
+    model.startsWith(prefix),
+  );
+  const rates = match ? match[1] : DEFAULT_COST;
+  return (inputTokens * rates.input + outputTokens * rates.output) * 100;
+}
+
+// ---------------------------------------------------------------------------
 // Event count tracking (called from the main event consumption loop)
 // ---------------------------------------------------------------------------
 
@@ -53,35 +78,29 @@ export async function trackEventForSummary(
 }
 
 /**
- * Get the accumulated event count for a scope since last summary reset.
+ * Atomically read and reset the event counter for a scope.
+ * Uses GETDEL to avoid race conditions where events arrive between GET and DEL.
+ * Returns the count that was cleared.
  */
-async function getScopeEventCount(
+async function getAndResetScopeEventCount(
   organizationId: string,
   scopeType: string,
   scopeId: string,
 ): Promise<number> {
   const key = `${SCOPE_EVENT_COUNT_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
   try {
-    const val = await redis.get(key);
+    // GETDEL atomically returns and deletes — no events lost between read and reset
+    const val = await redis.getdel(key);
     return val ? parseInt(val, 10) : 0;
   } catch {
-    return 0;
-  }
-}
-
-/**
- * Reset the event counter for a scope after a summary is generated.
- */
-async function resetScopeEventCount(
-  organizationId: string,
-  scopeType: string,
-  scopeId: string,
-): Promise<void> {
-  const key = `${SCOPE_EVENT_COUNT_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
-  try {
-    await redis.del(key);
-  } catch {
-    // Non-critical
+    // Fallback: try non-atomic delete if GETDEL unsupported
+    try {
+      const val = await redis.get(key);
+      await redis.del(key);
+      return val ? parseInt(val, 10) : 0;
+    } catch {
+      return 0;
+    }
   }
 }
 
@@ -89,10 +108,14 @@ async function resetScopeEventCount(
 // Core refresh logic
 // ---------------------------------------------------------------------------
 
+/** Summary model — read from env or default to Haiku. */
+const SUMMARY_MODEL = process.env.AGENT_SUMMARY_MODEL ?? "claude-haiku-4-5-20251001";
+
 /**
  * Refresh one entity's rolling summary.
+ * Exported so the context builder (ticket #10) can trigger synchronous refresh.
  */
-async function refreshSummary(
+export async function refreshSummary(
   organizationId: string,
   entityType: string,
   entityId: string,
@@ -114,8 +137,8 @@ async function refreshSummary(
   });
 
   if (events.length === 0) {
-    // Reset the counter — no actual new events (counter may be stale)
-    await resetScopeEventCount(organizationId, entityType, entityId);
+    // No actual new events — reset the counter (may be stale) and skip
+    await getAndResetScopeEventCount(organizationId, entityType, entityId);
     return null;
   }
 
@@ -155,12 +178,15 @@ async function refreshSummary(
     eventCount: totalEventCount,
   });
 
-  // Reset the Redis counter
-  await resetScopeEventCount(organizationId, entityType, entityId);
+  // Atomically reset the Redis counter (events arriving during generation are preserved)
+  await getAndResetScopeEventCount(organizationId, entityType, entityId);
 
-  // Estimate cost (Haiku-class pricing: ~$0.25/M input, ~$1.25/M output)
-  const costCents =
-    (result.inputTokens * 0.000025 + result.outputTokens * 0.000125) * 100;
+  // Estimate cost using model-aware lookup
+  const costCents = estimateCostCents(
+    SUMMARY_MODEL,
+    result.inputTokens,
+    result.outputTokens,
+  );
 
   // Record cost
   await costTrackingService.recordCost({
@@ -171,6 +197,41 @@ async function refreshSummary(
   });
 
   return { costCents };
+}
+
+/**
+ * Refresh a summary only if it's stale. Convenience wrapper for the context builder.
+ * Returns the current summary (refreshed if needed).
+ */
+export async function refreshIfStale(
+  organizationId: string,
+  entityType: string,
+  entityId: string,
+): Promise<EntitySummary | null> {
+  const existing = await summaryService.getLatest({
+    organizationId,
+    entityType,
+    entityId,
+  });
+
+  // Count events since last summary
+  const currentCount = await summaryService.countEventsSince({
+    organizationId,
+    scopeType: entityType,
+    scopeId: entityId,
+    afterEventId: existing?.endEventId ?? undefined,
+  });
+
+  const totalCount = (existing?.eventCount ?? 0) + currentCount;
+  const { fresh } = summaryService.isFresh(existing, totalCount);
+
+  if (!fresh) {
+    await refreshSummary(organizationId, entityType, entityId);
+    // Re-fetch the updated summary
+    return summaryService.getLatest({ organizationId, entityType, entityId });
+  }
+
+  return existing;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +297,7 @@ async function findStaleByEventCount(
 
 /**
  * Find summaries that are stale by time (haven't been updated in 30+ min).
+ * Only returns summaries that actually have new events to process.
  */
 async function findStaleByTime(): Promise<StaleScopeCandidate[]> {
   const staleSummaries = await summaryService.findStale({
@@ -243,12 +305,27 @@ async function findStaleByTime(): Promise<StaleScopeCandidate[]> {
     limit: BATCH_LIMIT,
   });
 
-  return staleSummaries.map((s: EntitySummary) => ({
-    organizationId: s.organizationId,
-    entityType: s.entityType,
-    entityId: s.entityId,
-    reason: "time_elapsed" as const,
-  }));
+  // Filter out summaries that have no new events (avoid wasted LLM calls)
+  const candidates: StaleScopeCandidate[] = [];
+  for (const s of staleSummaries) {
+    const newEventCount = await summaryService.countEventsSince({
+      organizationId: s.organizationId,
+      scopeType: s.entityType,
+      scopeId: s.entityId,
+      afterEventId: s.endEventId ?? undefined,
+    });
+
+    if (newEventCount > 0) {
+      candidates.push({
+        organizationId: s.organizationId,
+        entityType: s.entityType,
+        entityId: s.entityId,
+        reason: "time_elapsed",
+      });
+    }
+  }
+
+  return candidates;
 }
 
 // ---------------------------------------------------------------------------

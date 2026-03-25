@@ -127,15 +127,13 @@ export class SummaryService {
   }
 
   /**
-   * Find all summaries that need refreshing across all orgs.
-   * Returns entities that have accumulated enough new events or time since last update.
+   * Find all summaries that are stale by time across all orgs.
+   * Event-count staleness is tracked via Redis counters in the summary worker.
    */
   async findStale(input: {
-    eventThreshold?: number;
     minutesThreshold?: number;
     limit?: number;
   }) {
-    const threshold = input.eventThreshold ?? STALE_EVENT_THRESHOLD;
     const minutesThreshold = input.minutesThreshold ?? STALE_MINUTES_THRESHOLD;
     const limit = input.limit ?? 50;
     const cutoff = new Date(Date.now() - minutesThreshold * 60_000);
