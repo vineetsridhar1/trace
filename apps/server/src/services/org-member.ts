@@ -1,6 +1,7 @@
 import type { UserRole } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 
 export class OrgMemberService {
   async addMember({
@@ -62,6 +63,10 @@ export class OrgMemberService {
     actorType: "user" | "agent" | "system";
     actorId: string;
   }) {
+    if (userId === TRACE_AI_USER_ID) {
+      throw new Error("The AI agent cannot be removed from an organization");
+    }
+
     await prisma.orgMember.delete({
       where: { userId_organizationId: { userId, organizationId } },
     });

@@ -25,7 +25,7 @@ export class TicketService {
           priority: input.priority ?? "medium",
           labels: input.labels ?? [],
           organizationId: input.organizationId,
-          createdById: input.actorType === "user" ? input.actorId : undefined,
+          createdById: input.actorId,
           channelId: input.channelId ?? undefined,
           ...(input.projectId && {
             projects: { create: { projectId: input.projectId } },

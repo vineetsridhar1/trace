@@ -537,8 +537,8 @@ model Ticket {
   labels         String[]     @default([])
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
-  createdById    String?
-  createdBy      User?        @relation("TicketCreator", fields: [createdById], references: [id])
+  createdById    String
+  createdBy      User         @relation("TicketCreator", fields: [createdById], references: [id])
   originEventId  String?
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
