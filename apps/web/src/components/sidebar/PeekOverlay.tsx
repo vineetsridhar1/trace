@@ -81,7 +81,7 @@ export function PeekOverlay({
           <div className="flex flex-1 flex-col overflow-hidden rounded-xl">
             <div
               ref={viewportRef}
-              className="no-scrollbar flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain"
+              className="no-scrollbar flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
               onScroll={handleScroll}
             >
               <SidebarDirectMessagesPane

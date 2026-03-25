@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import createScrollSnap from "scroll-snap/dist/scroll-snap.esm.js";
 import { clamp } from "../lib/utils";
 import { getTabFromProgress, getTabIndex, type SidebarTab } from "../components/sidebar/sidebarTabs";
 
-const SNAP_DURATION_MS = 50;
-const SNAP_TIMEOUT_MS = 80; // minimum the library allows is 50ms
-
-function easeInOut(t: number) {
-  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-}
+/**
+ * Scroll-end detection timeout for browsers that don't support the `scrollend`
+ * event. After this many ms of no `scroll` events, we treat scrolling as done.
+ */
+const SCROLL_END_TIMEOUT_MS = 150;
 
 export function useSidebarTabScroll({
   currentTab,
@@ -23,6 +21,7 @@ export function useSidebarTabScroll({
   const progressRef = useRef(getTabIndex(currentTab));
   const [tabProgress, setTabProgressState] = useState(getTabIndex(currentTab));
   const hasInitRef = useRef(false);
+  const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const setProgress = useCallback((p: number) => {
     const clamped = clamp(p, 0, 1);
@@ -31,7 +30,7 @@ export function useSidebarTabScroll({
     onProgressChange?.(clamped);
   }, [onProgressChange]);
 
-  // Called by the library after each snap animation completes
+  // Called when scrolling settles — commit to nearest tab
   const commitPosition = useCallback(() => {
     const tab = getTabFromProgress(progressRef.current);
     onTabCommit?.(tab);
@@ -43,26 +42,24 @@ export function useSidebarTabScroll({
     const viewport = viewportRef.current;
     if (!viewport) return;
     setProgress(viewport.scrollLeft / Math.max(viewport.clientWidth, 1));
-  }, [setProgress]);
 
-  // Bind scroll-snap to the viewport
+    // Fallback scroll-end detection via timeout (for Safari < 18 etc.)
+    clearTimeout(scrollEndTimerRef.current);
+    scrollEndTimerRef.current = setTimeout(commitPosition, SCROLL_END_TIMEOUT_MS);
+  }, [setProgress, commitPosition]);
+
+  // Use native scrollend event where supported (fires reliably after CSS snap settles)
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    const { unbind } = createScrollSnap(
-      viewport,
-      {
-        snapDestinationX: "100%",
-        duration: SNAP_DURATION_MS,
-        timeout: SNAP_TIMEOUT_MS,
-        snapStop: true,
-        easing: easeInOut,
-      },
-      commitPosition,
-    );
+    const onScrollEnd = () => {
+      clearTimeout(scrollEndTimerRef.current);
+      commitPosition();
+    };
 
-    return () => unbind();
+    viewport.addEventListener("scrollend", onScrollEnd);
+    return () => viewport.removeEventListener("scrollend", onScrollEnd);
   }, [commitPosition]);
 
   // Instant jump — used for init, resize, and external tab changes
@@ -73,8 +70,7 @@ export function useSidebarTabScroll({
     setProgress(getTabIndex(tab));
   }, [setProgress]);
 
-  // Animated switch — used when user clicks the tab switcher.
-  // scrollTo smooth lets the library detect scroll-end and run its snap animation.
+  // Animated switch — used when user clicks the tab switcher
   const selectTab = useCallback((tab: SidebarTab) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -97,6 +93,11 @@ export function useSidebarTabScroll({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [currentTab, jumpToTab]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => clearTimeout(scrollEndTimerRef.current);
+  }, []);
 
   return { handleScroll, jumpToTab, selectTab, tabProgress, viewportRef };
 }
