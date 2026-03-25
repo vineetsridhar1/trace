@@ -70,6 +70,8 @@ type Documents = {
     "\n  mutation DeleteSessionGroup($id: ID!) {\n    deleteSessionGroup(id: $id)\n  }\n": typeof types.DeleteSessionGroupDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": typeof types.AvailableSessionRuntimesDocument,
     "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": typeof types.DismissInboxItemDocument,
+    "\n  mutation AcceptAgentSuggestion($inboxItemId: ID!, $edits: JSON) {\n    acceptAgentSuggestion(inboxItemId: $inboxItemId, edits: $edits) {\n      id\n      status\n      resolvedAt\n    }\n  }\n": typeof types.AcceptAgentSuggestionDocument,
+    "\n  mutation DismissAgentSuggestion($inboxItemId: ID!) {\n    dismissAgentSuggestion(inboxItemId: $inboxItemId) {\n      id\n      status\n      resolvedAt\n    }\n  }\n": typeof types.DismissAgentSuggestionDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": typeof types.AvailableRuntimesDocument,
     "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateRepoDocument,
     "\n  mutation RegisterRepoWebhook($repoId: ID!) {\n    registerRepoWebhook(repoId: $repoId) {\n      id\n    }\n  }\n": typeof types.RegisterRepoWebhookDocument,
@@ -141,6 +143,8 @@ const documents: Documents = {
     "\n  mutation DeleteSessionGroup($id: ID!) {\n    deleteSessionGroup(id: $id)\n  }\n": types.DeleteSessionGroupDocument,
     "\n  query AvailableSessionRuntimes($sessionId: ID!) {\n    availableSessionRuntimes(sessionId: $sessionId) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": types.AvailableSessionRuntimesDocument,
     "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n": types.DismissInboxItemDocument,
+    "\n  mutation AcceptAgentSuggestion($inboxItemId: ID!, $edits: JSON) {\n    acceptAgentSuggestion(inboxItemId: $inboxItemId, edits: $edits) {\n      id\n      status\n      resolvedAt\n    }\n  }\n": types.AcceptAgentSuggestionDocument,
+    "\n  mutation DismissAgentSuggestion($inboxItemId: ID!) {\n    dismissAgentSuggestion(inboxItemId: $inboxItemId) {\n      id\n      status\n      resolvedAt\n    }\n  }\n": types.DismissAgentSuggestionDocument,
     "\n  query AvailableRuntimes($tool: CodingTool!) {\n    availableRuntimes(tool: $tool) {\n      id\n      label\n      hostingMode\n      supportedTools\n      connected\n      sessionCount\n      registeredRepoIds\n    }\n  }\n": types.AvailableRuntimesDocument,
     "\n  mutation UpdateRepo($id: ID!, $input: UpdateRepoInput!) {\n    updateRepo(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateRepoDocument,
     "\n  mutation RegisterRepoWebhook($repoId: ID!) {\n    registerRepoWebhook(repoId: $repoId) {\n      id\n    }\n  }\n": types.RegisterRepoWebhookDocument,
@@ -394,6 +398,14 @@ export function graphql(source: "\n  query AvailableSessionRuntimes($sessionId: 
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n"): (typeof documents)["\n  mutation DismissInboxItem($id: ID!) {\n    dismissInboxItem(id: $id) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation AcceptAgentSuggestion($inboxItemId: ID!, $edits: JSON) {\n    acceptAgentSuggestion(inboxItemId: $inboxItemId, edits: $edits) {\n      id\n      status\n      resolvedAt\n    }\n  }\n"): (typeof documents)["\n  mutation AcceptAgentSuggestion($inboxItemId: ID!, $edits: JSON) {\n    acceptAgentSuggestion(inboxItemId: $inboxItemId, edits: $edits) {\n      id\n      status\n      resolvedAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DismissAgentSuggestion($inboxItemId: ID!) {\n    dismissAgentSuggestion(inboxItemId: $inboxItemId) {\n      id\n      status\n      resolvedAt\n    }\n  }\n"): (typeof documents)["\n  mutation DismissAgentSuggestion($inboxItemId: ID!) {\n    dismissAgentSuggestion(inboxItemId: $inboxItemId) {\n      id\n      status\n      resolvedAt\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
