@@ -13,6 +13,7 @@ import { CreateRepoDialog } from "./CreateRepoDialog";
 import { ApiTokensSection } from "./ApiTokensSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
 import { NotificationsSection } from "./NotificationsSection";
+import { AgentSettingsSection } from "./AgentSettingsSection";
 
 const REPOS_QUERY = gql`
   query SettingsRepos($organizationId: ID!) {
@@ -92,6 +93,8 @@ export function SettingsPage() {
             </div>
           )}
         </section>
+
+        <AgentSettingsSection />
 
         <SessionDefaultsSection />
 
