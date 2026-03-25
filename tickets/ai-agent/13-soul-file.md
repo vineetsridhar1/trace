@@ -31,6 +31,7 @@ Should include:
 
 - 03 (Agent Identity — org agent settings)
 - 10 (Context Builder — consumes the soul file)
+  <!-- Ticket 10 created: The context builder currently reads `agentSettings.soulFile` directly and includes it in the packet as `packet.soulFile` (a plain string). The soul file gets a 2000-token budget allocation in `DEFAULT_TOKEN_BUDGET.sections.soulFile`. To add the resolver: either modify `buildContext()` in `./agent/context-builder.js` to call the resolver instead of reading `agentSettings.soulFile` directly, or resolve the soul file before calling `buildContext()` and pass it through `agentSettings.soulFile`. The context builder currently does NOT truncate the soul file to its budget — it records the token estimate but includes the full string. The resolver should handle truncation. -->
 
 ## Completion requirements
 

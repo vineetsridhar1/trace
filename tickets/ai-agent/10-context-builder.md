@@ -56,14 +56,14 @@ The packet should include:
 
 ## Completion requirements
 
-- [ ] Context builder module exists and produces structured context packets
-- [ ] Token budget management is implemented with priority-based filling
-- [ ] Relevant entities are found via search, not bulk loading
-- [ ] Ticket search by relevance is implemented
-- [ ] Summaries are included with freshness status
-- [ ] Actor information is resolved from user IDs
-- [ ] The packet includes the available action list filtered by scope
-- [ ] Adding a new scope type is a localized change
+- [x] Context builder module exists and produces structured context packets
+- [x] Token budget management is implemented with priority-based filling
+- [x] Relevant entities are found via search, not bulk loading
+- [x] Ticket search by relevance is implemented
+- [x] Summaries are included with freshness status
+- [x] Actor information is resolved from user IDs
+- [x] The packet includes the available action list filtered by scope
+- [x] Adding a new scope type is a localized change
 
 ## How to test
 
