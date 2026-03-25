@@ -19,7 +19,6 @@ import type { LLMAdapter, LLMAssistantContentBlock, LLMToolDefinition } from "@t
 import { createLLMAdapter } from "../lib/llm/index.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import type { AgentActionRegistration } from "./action-registry.js";
-import { findAction } from "./action-registry.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -338,14 +337,10 @@ function parsePlannerOutput(
     const a = action as Record<string, unknown>;
     const actionType = typeof a.actionType === "string" ? a.actionType : "";
 
-    // Reject unknown action names
-    if (!actionNames.has(actionType) && actionType !== "no_op") {
+    // Reject unknown action names — must be in the scope-filtered set
+    if (!actionNames.has(actionType)) {
       continue;
     }
-
-    // Validate the action exists in the registry
-    const registeredAction = findAction(actionType);
-    if (!registeredAction && actionType !== "no_op") continue;
 
     proposedActions.push({
       actionType,

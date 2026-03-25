@@ -2,8 +2,6 @@ import { describe, expect, it, beforeEach } from "vitest";
 import {
   runPlanner,
   setAdapterForTest,
-  type PlannerOutput,
-  type PlannerResult,
 } from "./planner.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import type {

@@ -43,13 +43,13 @@ The planner is where the LLM decides what to do. It receives a context packet an
 
 ## Completion requirements
 
-- [ ] Planner module exists and calls an LLM with a structured prompt
-- [ ] Output is parsed into a typed `PlannerOutput` structure
-- [ ] Invalid LLM outputs (wrong action names, malformed JSON) are handled gracefully — default to `ignore`
-- [ ] Token usage and latency are tracked and returned alongside the decision
-- [ ] The system prompt includes the action schema, soul file, and full context
-- [ ] `no_op`/`ignore` is the default behavior for ambiguous situations
-- [ ] The prompt is constructed so adding new action types or scope types doesn't require prompt rewrites
+- [x] Planner module exists and calls an LLM with a structured prompt
+- [x] Output is parsed into a typed `PlannerOutput` structure
+- [x] Invalid LLM outputs (wrong action names, malformed JSON) are handled gracefully — default to `ignore`
+- [x] Token usage and latency are tracked and returned alongside the decision
+- [x] The system prompt includes the action schema, soul file, and full context
+- [x] `no_op`/`ignore` is the default behavior for ambiguous situations
+- [x] The prompt is constructed so adding new action types or scope types doesn't require prompt rewrites
 
 ## How to test
 

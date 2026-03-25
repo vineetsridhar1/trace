@@ -23,6 +23,7 @@ Add the premium model tier for high-stakes decisions. Tier 3 uses an Opus-class 
 ## Dependencies
 
 - 11 (Tier 2 Planner)
+  <!-- Ticket 11 created: `runPlanner(ctx, options?)` in `./agent/planner.js` already supports model override via `options.model`. For Tier 3, call `runPlanner(ctx, { model: TIER3_MODEL })` with the Opus-class model. The planner returns `PlannerResult` with `.output.promotionReason` when Tier 2 requests escalation. Note: the ticket spec mentioned `OrgAgentSettings.modelTier` but this field doesn't exist — model selection should be handled at the pipeline level (this ticket) by passing the model via `options.model`. Consider adding a `modelTier` or `tier3Model` field to `OrgAgentSettings` (ticket 03) if per-org model selection is needed. -->
 - 15 (Pipeline Integration)
 
 ## Completion requirements
