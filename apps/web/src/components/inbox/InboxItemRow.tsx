@@ -10,7 +10,8 @@ import {
   TERMINATE_SESSION_MUTATION,
 } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
-import { navigateToSession } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
+import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
 import type { QuestionData } from "./InboxQuestionBody";
@@ -56,6 +57,7 @@ export function InboxItemRow({ id }: { id: string }) {
     | null
     | undefined;
 
+  const openSessionTab = useUIStore((s) => s.openSessionTab);
   const [sending, setSending] = useState(false);
 
   const isQuestion = itemType === "question";
@@ -93,7 +95,17 @@ export function InboxItemRow({ id }: { id: string }) {
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
+        optimisticallyInsertSession({
+          id: newSessionId,
+          sessionGroupId,
+          tool: sessionTool ?? "claude_code",
+          hosting: sessionHosting ?? "cloud",
+          channel: sessionChannel,
+          repo: sessionRepo,
+          branch: sessionBranch,
+        });
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
+        openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(sessionChannel?.id ?? null, sessionGroupId, newSessionId);
         await client.mutation(TERMINATE_SESSION_MUTATION, { id: sourceId }).toPromise();
       }
@@ -110,6 +122,7 @@ export function InboxItemRow({ id }: { id: string }) {
     sessionRepo?.id,
     sessionBranch,
     sessionGroupId,
+    openSessionTab,
   ]);
 
   const handleApproveKeepContext = useCallback(async () => {

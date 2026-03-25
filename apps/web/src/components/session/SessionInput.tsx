@@ -12,9 +12,6 @@ import { getModelLabel } from "./modelOptions";
 
 export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop: () => void }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
-  const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
-    | string
-    | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | Record<string, unknown>
@@ -29,7 +26,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isActive = agentStatus === "active";
   const disconnected = isDisconnected(connection);
-  const canSend = canSendMessage(agentStatus, sessionStatus, connection, worktreeDeleted);
+  const canSend = canSendMessage(agentStatus, connection, worktreeDeleted);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   // Find the timestamp of the last user message for accurate working time
@@ -80,18 +77,11 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
 
-  const disabledPlaceholders: Record<string, string> = {
-    merged: "Session merged. Follow-up messages are disabled.",
-    failed: "Session failed. Follow-up messages are disabled.",
-    stopped: "Session stopped. Follow-up messages are disabled.",
-  };
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
     : isActive
       ? "Waiting for response..."
-      : ((sessionStatus && disabledPlaceholders[sessionStatus]) ??
-        (agentStatus && disabledPlaceholders[agentStatus]) ??
-        "Send a message...");
+      : "Send a message...";
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">

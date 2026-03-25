@@ -9,6 +9,7 @@ import {
 } from "../../lib/mutations";
 import { useEntityField } from "../../stores/entity";
 import { navigateToSession, useUIStore } from "../../stores/ui";
+import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { cn } from "../../lib/utils";
 
 interface PlanResponseBarProps {
@@ -24,7 +25,6 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
   const openSessionTab = useUIStore((s) => s.openSessionTab);
-
   const channel = useEntityField("sessions", sessionId, "channel") as { id: string } | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as string | undefined;
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
@@ -48,6 +48,7 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
             repoId: repo?.id,
             branch,
             sessionGroupId,
+            sourceSessionId: sessionId,
             prompt,
           },
         })
@@ -55,6 +56,16 @@ export function PlanResponseBar({ sessionId, planContent, onDismiss }: PlanRespo
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {
+        optimisticallyInsertSession({
+          id: newSessionId,
+          sessionGroupId,
+          tool: tool ?? "claude_code",
+          model,
+          hosting: hosting ?? "cloud",
+          channel,
+          repo,
+          branch,
+        });
         await client.mutation(RUN_SESSION_MUTATION, { id: newSessionId, prompt }).toPromise();
         openSessionTab(sessionGroupId, newSessionId);
         navigateToSession(channel?.id ?? null, sessionGroupId, newSessionId);
