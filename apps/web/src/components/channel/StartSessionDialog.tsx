@@ -43,6 +43,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
   const channelRepoId = channelRepoRaw && typeof channelRepoRaw === "object" && "id" in channelRepoRaw
     ? (channelRepoRaw as { id: string }).id
     : undefined;
+  const channelBaseBranch = useEntityField("channels", channelId, "baseBranch") as string | null | undefined;
   const isMobile = useIsMobile();
 
   const cycleMode = useCallback(() => {
@@ -63,7 +64,9 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    if (!next) {
+    if (next) {
+      setBranch(channelBaseBranch ?? "");
+    } else {
       const resetTool = prefTool ?? "claude_code";
       setTool(resetTool);
       setModel(prefModel ?? getDefaultModel(resetTool));
