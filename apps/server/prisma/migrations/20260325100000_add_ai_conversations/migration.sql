@@ -19,7 +19,7 @@ CREATE TABLE "AiConversation" (
 );
 
 -- CreateTable
-CREATE TABLE "Branch" (
+CREATE TABLE "AiBranch" (
     "id" TEXT NOT NULL,
     "conversationId" TEXT NOT NULL,
     "parentBranchId" TEXT,
@@ -28,11 +28,11 @@ CREATE TABLE "Branch" (
     "createdById" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "Branch_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "AiBranch_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Turn" (
+CREATE TABLE "AiTurn" (
     "id" TEXT NOT NULL,
     "branchId" TEXT NOT NULL,
     "role" "TurnRole" NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE "Turn" (
     "parentTurnId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "Turn_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "AiTurn_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -50,19 +50,19 @@ CREATE INDEX "AiConversation_organizationId_createdById_idx" ON "AiConversation"
 CREATE INDEX "AiConversation_organizationId_updatedAt_idx" ON "AiConversation"("organizationId", "updatedAt");
 
 -- CreateIndex
-CREATE INDEX "Branch_conversationId_idx" ON "Branch"("conversationId");
+CREATE INDEX "AiBranch_conversationId_idx" ON "AiBranch"("conversationId");
 
 -- CreateIndex
-CREATE INDEX "Branch_parentBranchId_idx" ON "Branch"("parentBranchId");
+CREATE INDEX "AiBranch_parentBranchId_idx" ON "AiBranch"("parentBranchId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Turn_parentTurnId_key" ON "Turn"("parentTurnId");
+CREATE UNIQUE INDEX "AiTurn_parentTurnId_key" ON "AiTurn"("parentTurnId");
 
 -- CreateIndex
-CREATE INDEX "Turn_branchId_createdAt_idx" ON "Turn"("branchId", "createdAt");
+CREATE INDEX "AiTurn_branchId_createdAt_idx" ON "AiTurn"("branchId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Turn_parentTurnId_idx" ON "Turn"("parentTurnId");
+CREATE INDEX "AiTurn_parentTurnId_idx" ON "AiTurn"("parentTurnId");
 
 -- AddForeignKey
 ALTER TABLE "AiConversation" ADD CONSTRAINT "AiConversation_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -71,19 +71,19 @@ ALTER TABLE "AiConversation" ADD CONSTRAINT "AiConversation_organizationId_fkey"
 ALTER TABLE "AiConversation" ADD CONSTRAINT "AiConversation_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Branch" ADD CONSTRAINT "Branch_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "AiConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AiBranch" ADD CONSTRAINT "AiBranch_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "AiConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Branch" ADD CONSTRAINT "Branch_parentBranchId_fkey" FOREIGN KEY ("parentBranchId") REFERENCES "Branch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "AiBranch" ADD CONSTRAINT "AiBranch_parentBranchId_fkey" FOREIGN KEY ("parentBranchId") REFERENCES "AiBranch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Branch" ADD CONSTRAINT "Branch_forkTurnId_fkey" FOREIGN KEY ("forkTurnId") REFERENCES "Turn"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "AiBranch" ADD CONSTRAINT "AiBranch_forkTurnId_fkey" FOREIGN KEY ("forkTurnId") REFERENCES "AiTurn"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Branch" ADD CONSTRAINT "Branch_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "AiBranch" ADD CONSTRAINT "AiBranch_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Turn" ADD CONSTRAINT "Turn_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AiTurn" ADD CONSTRAINT "AiTurn_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "AiBranch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Turn" ADD CONSTRAINT "Turn_parentTurnId_fkey" FOREIGN KEY ("parentTurnId") REFERENCES "Turn"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "AiTurn" ADD CONSTRAINT "AiTurn_parentTurnId_fkey" FOREIGN KEY ("parentTurnId") REFERENCES "AiTurn"("id") ON DELETE SET NULL ON UPDATE CASCADE;

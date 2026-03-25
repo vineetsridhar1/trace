@@ -362,7 +362,7 @@ model User {
   apiTokens         ApiToken[]
   cloudMachines     CloudMachine[]
   aiConversations   AiConversation[] @relation("AiConversationCreator")
-  branches          Branch[]         @relation("BranchCreator")
+  aiBranches        AiBranch[]       @relation("AiBranchCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -769,7 +769,7 @@ model AiConversation {
   visibility     AiConversationVisibility @default(PRIVATE)
   rootBranchId   String?
 
-  branches Branch[]
+  branches AiBranch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -778,20 +778,20 @@ model AiConversation {
   @@index([organizationId, updatedAt])
 }
 
-model Branch {
+model AiBranch {
   id             String         @id @default(uuid())
   conversationId String
   conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   parentBranchId String?
-  parentBranch   Branch?        @relation("BranchTree", fields: [parentBranchId], references: [id])
-  childBranches  Branch[]       @relation("BranchTree")
+  parentBranch   AiBranch?      @relation("AiBranchTree", fields: [parentBranchId], references: [id])
+  childBranches  AiBranch[]     @relation("AiBranchTree")
   forkTurnId     String?
-  forkTurn       Turn?          @relation("ForkTurn", fields: [forkTurnId], references: [id])
+  forkTurn       AiTurn?        @relation("ForkTurn", fields: [forkTurnId], references: [id])
   label          String?
   createdById    String
-  createdBy      User           @relation("BranchCreator", fields: [createdById], references: [id])
+  createdBy      User           @relation("AiBranchCreator", fields: [createdById], references: [id])
 
-  turns Turn[]
+  turns AiTurn[]
 
   createdAt DateTime @default(now())
 
@@ -799,17 +799,17 @@ model Branch {
   @@index([parentBranchId])
 }
 
-model Turn {
+model AiTurn {
   id           String   @id @default(uuid())
   branchId     String
-  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch       AiBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
   role         TurnRole
   content      String
-  parentTurnId String?  @unique
-  parentTurn   Turn?    @relation("TurnChain", fields: [parentTurnId], references: [id])
-  childTurn    Turn?    @relation("TurnChain")
+  parentTurnId String?    @unique
+  parentTurn   AiTurn?    @relation("AiTurnChain", fields: [parentTurnId], references: [id])
+  childTurn    AiTurn?    @relation("AiTurnChain")
 
-  forkedBranches Branch[] @relation("ForkTurn")
+  forkedBranches AiBranch[] @relation("ForkTurn")
 
   createdAt DateTime @default(now())
 
