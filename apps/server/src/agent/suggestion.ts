@@ -68,6 +68,9 @@ export interface SuggestionPayload {
   agentId: string;
   rationaleSummary: string;
   expiresAt: string;
+  /** Scope where the suggestion originated — used for dismissal cooldown. */
+  scopeType: string;
+  scopeId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +109,8 @@ export async function createSuggestion(input: CreateSuggestionInput) {
     agentId,
     rationaleSummary: plannerOutput.rationaleSummary,
     expiresAt,
+    scopeType: context.scopeType,
+    scopeId: context.scopeId,
   };
 
   return inboxService.createItem({

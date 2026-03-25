@@ -136,20 +136,16 @@ export class InboxService {
 
   /**
    * Accept an agent suggestion. Marks it as resolved with resolution "accepted".
-   * Returns the updated inbox item. The caller is responsible for executing the action.
+   * Returns the updated inbox item with original payload intact.
+   * The caller (resolver) is responsible for extracting the action, merging edits, and executing.
    */
-  async acceptSuggestion(id: string, actorId: string, organizationId: string, edits?: Record<string, unknown>) {
+  async acceptSuggestion(id: string, actorId: string, organizationId: string) {
     const item = await prisma.inboxItem.findFirstOrThrow({
       where: { id, userId: actorId, organizationId, status: "active" },
     });
 
     const existingPayload = (item.payload ?? {}) as Record<string, unknown>;
-
-    // If the user provided edits, merge them into the action args
-    const updatedPayload: Record<string, unknown> = { ...existingPayload, resolution: "accepted" };
-    if (edits && existingPayload.args) {
-      updatedPayload.args = { ...(existingPayload.args as Record<string, unknown>), ...edits };
-    }
+    const updatedPayload = { ...existingPayload, resolution: "accepted" };
 
     const updated = await prisma.inboxItem.update({
       where: { id },

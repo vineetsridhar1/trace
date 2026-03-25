@@ -8,6 +8,14 @@ import { chatService } from "../services/chat.js";
 import { sessionService } from "../services/session.js";
 import { recordDismissal } from "../agent/policy-engine.js";
 
+/** Shared executor — reused across resolver calls to preserve idempotency state. */
+const executor = new ActionExecutor({
+  ticketService,
+  chatService,
+  sessionService,
+  inboxService,
+});
+
 export const inboxQueries = {
   inboxItems: (_: unknown, args: { organizationId: string; status?: InboxItemStatus }, ctx: Context) => {
     return inboxService.listForUser(args.organizationId, ctx.userId, args.status ?? undefined);
@@ -26,35 +34,30 @@ export const inboxMutations = {
   ) => {
     const orgId = requireOrgContext(ctx);
 
-    // 1. Accept the suggestion (marks as resolved)
+    // 1. Accept the suggestion (marks as resolved — does NOT merge edits into payload)
     const item = await inboxService.acceptSuggestion(
       args.inboxItemId,
       ctx.userId,
       orgId,
-      args.edits ?? undefined,
     );
 
     // 2. Extract the stored action from the payload and execute it
     const payload = (item.payload ?? {}) as Record<string, unknown>;
     const actionType = payload.actionType as string | undefined;
-    const rawArgs = (args.edits
-      ? { ...(payload.args as Record<string, unknown>), ...args.edits }
-      : payload.args) as Record<string, unknown> | undefined;
+    const storedArgs = payload.args as Record<string, unknown> | undefined;
 
-    if (actionType && rawArgs) {
-      const action: PlannedAction = { actionType, args: rawArgs };
+    if (actionType && storedArgs) {
+      // Merge user edits into the action args (single merge point)
+      const finalArgs = args.edits
+        ? { ...storedArgs, ...args.edits }
+        : storedArgs;
+
+      const action: PlannedAction = { actionType, args: finalArgs };
       const agentCtx: AgentContext = {
         organizationId: orgId,
         agentId: (payload.agentId as string) ?? "system",
         triggerEventId: (payload.triggerEventId as string) ?? item.sourceId,
       };
-
-      const executor = new ActionExecutor({
-        ticketService,
-        chatService,
-        sessionService,
-        inboxService,
-      });
 
       await executor.execute(action, agentCtx);
     }
@@ -74,11 +77,12 @@ export const inboxMutations = {
     const payload = (item.payload ?? {}) as Record<string, unknown>;
     const actionType = payload.actionType as string | undefined;
     if (actionType) {
-      // Determine scope from the source — for now use system scope as fallback
+      const scopeType = (payload.scopeType as string) ?? "system";
+      const scopeId = (payload.scopeId as string) ?? orgId;
       recordDismissal({
         organizationId: orgId,
-        scopeType: "system",
-        scopeId: orgId,
+        scopeType,
+        scopeId,
         actionType,
       });
     }
