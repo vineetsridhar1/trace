@@ -25,8 +25,10 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
   const [mode, setMode] = useState<InteractionMode>("code");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isActive = agentStatus === "active";
+  const isNotStarted = agentStatus === "not_started";
   const disconnected = isDisconnected(connection);
-  const canSend = canSendMessage(agentStatus, connection, worktreeDeleted);
+  // not_started sessions can always send — the user picks runtime before first message
+  const canSend = isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted);
   const displayModel = model ? getModelLabel(model) : "Claude Code";
 
   // Find the timestamp of the last user message for accurate working time
@@ -83,12 +85,11 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     }
   }, [sessionId, message, sending, mode, canSend, agentStatus]);
 
-  // Show recovery panel instead of input when disconnected
-  if (disconnected) {
+  // Show recovery panel when disconnected — but not for not_started sessions
+  // where the user still needs to pick a runtime and type their first message
+  if (disconnected && !isNotStarted) {
     return <SessionRecoveryPanel sessionId={sessionId} connection={connection} />;
   }
-
-  const isNotStarted = agentStatus === "not_started";
   const placeholder = worktreeDeleted
     ? "Worktree deleted. This session is read-only."
     : isActive
