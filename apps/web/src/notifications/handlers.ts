@@ -111,7 +111,9 @@ function handleInboxItemCreated(event: Event): void {
   // Only notify for items assigned to the current user
   if (item.userId !== currentUserId) return;
 
-  const itemType = item.itemType === "question" ? "Question" : "Plan";
+  const rawType = item.itemType as string;
+  const isSuggestion = rawType?.endsWith("_suggestion");
+  const itemType = rawType === "question" ? "Question" : isSuggestion ? "Suggestion" : "Plan";
   const title = (item.title as string) || "New item";
 
   notify(`${itemType}: ${title}`, {
