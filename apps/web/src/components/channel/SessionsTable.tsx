@@ -1,16 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   DefaultMenuItem,
   GetContextMenuItemsParams,
   GridApi,
   MenuItemDef,
 } from "ag-grid-community";
-import { Circle, Loader2 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 import { motion } from "framer-motion";
 import type { SessionGroupRow } from "./sessions-table-types";
-import { FILTER_STORAGE_KEY_PREFIX } from "./sessions-table-types";
+import { FILTER_STORAGE_KEY_PREFIX, MERGED_PLACEHOLDER_ID } from "./sessions-table-types";
 import { applySessionsColumnMode } from "./sessions-table-columns";
 import { SessionsGridTable } from "./SessionsGridTable";
 import { useCompactTableMode } from "./useCompactTableMode";
@@ -41,9 +40,30 @@ export function SessionsTable({
 
   const filteredGroups = useSessionGroupRows(channelId);
 
+  // If merged data hasn't been loaded yet, inject a hidden placeholder row so
+  // the ag-grid "Merged" group header is always visible and expandable.
+  const hasMergedRows = useMemo(
+    () => filteredGroups.some((r) => r.displaySessionStatus === "merged"),
+    [filteredGroups],
+  );
+
+  const rowsWithPlaceholder = useMemo(() => {
+    if (mergedLoaded || hasMergedRows) return filteredGroups;
+    return [
+      ...filteredGroups,
+      {
+        id: MERGED_PLACEHOLDER_ID,
+        name: loadingMerged ? "Loading…" : "Expand to load merged workspaces",
+        displaySessionStatus: "merged",
+        displayAgentStatus: "idle",
+        _sessionCount: 0,
+      } as SessionGroupRow,
+    ];
+  }, [filteredGroups, mergedLoaded, hasMergedRows, loadingMerged]);
+
   useEffect(() => {
-    useSessionsGridTable.getState().setRows(filteredGroups);
-  }, [filteredGroups]);
+    useSessionsGridTable.getState().setRows(rowsWithPlaceholder);
+  }, [rowsWithPlaceholder]);
 
   const applyColumnMode = useCallback((api: GridApi<SessionGroupRow>) => {
     applySessionsColumnMode(api, isCompact);
@@ -89,24 +109,26 @@ export function SessionsTable({
 
   const filterStorageKey = `${FILTER_STORAGE_KEY_PREFIX}${channelId}`;
 
+  const handleLoadMerged = useCallback(async () => {
+    if (!onLoadMerged || mergedLoaded || loadingMerged) return;
+    setLoadingMerged(true);
+    await onLoadMerged();
+    setLoadingMerged(false);
+  }, [onLoadMerged, mergedLoaded, loadingMerged]);
+
   const agGridOptions = useSessionsGridOptions({
     channelId,
     filterStorageKey,
     getContextMenuItems,
     isCompact,
+    onLoadMerged: handleLoadMerged,
+    mergedLoaded: mergedLoaded ?? false,
     onGridReady: (event) => {
       gridApiRef.current = event.api;
       applyColumnMode(event.api);
     },
   });
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
-
-  const handleLoadMerged = useCallback(async () => {
-    if (!onLoadMerged || mergedLoaded) return;
-    setLoadingMerged(true);
-    await onLoadMerged();
-    setLoadingMerged(false);
-  }, [onLoadMerged, mergedLoaded]);
 
   return (
     <div ref={containerRef} className="relative flex h-full flex-col overflow-hidden">
@@ -123,21 +145,6 @@ export function SessionsTable({
           selectedRowIds={selectedRowIds}
         />
       </motion.div>
-      {!mergedLoaded && onLoadMerged && (
-        <button
-          type="button"
-          onClick={handleLoadMerged}
-          disabled={loadingMerged}
-          className="flex shrink-0 items-center gap-2 border-t border-border px-4 py-2 text-sm text-emerald-400 hover:bg-surface-elevated disabled:opacity-50"
-        >
-          {loadingMerged ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <Circle size={6} className="shrink-0 fill-current" />
-          )}
-          <span className="font-semibold">Show Merged Workspaces</span>
-        </button>
-      )}
       {deleteTarget && (
         <DeleteSessionGroupDialog
           groupId={deleteTarget.id}
