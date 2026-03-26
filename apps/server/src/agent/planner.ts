@@ -37,6 +37,8 @@ export interface ProposedAction {
   args: Record<string, unknown>;
 }
 
+export type PromotionTarget = "sonnet" | "opus";
+
 export interface PlannerOutput {
   disposition: PlannerDisposition;
   confidence: number;
@@ -44,6 +46,8 @@ export interface PlannerOutput {
   proposedActions: ProposedAction[];
   userVisibleMessage?: string;
   promotionReason?: string;
+  /** Which model to escalate to. Only used when disposition is "escalate". Defaults to "sonnet". */
+  promotionTarget?: PromotionTarget;
   /** When true, the planner has nothing more to do. Pipeline respects this as a stop hint. */
   done?: boolean;
 }
@@ -63,7 +67,10 @@ export interface PlannerResult {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_TIER2_MODEL = "claude-haiku-4-5-20251001";
-export const DEFAULT_TIER3_MODEL = "claude-opus-4-20250514";
+export const DEFAULT_SONNET_MODEL = "claude-sonnet-4-20250514";
+export const DEFAULT_OPUS_MODEL = "claude-opus-4-20250514";
+/** @deprecated Use DEFAULT_OPUS_MODEL — kept for backward compat */
+export const DEFAULT_TIER3_MODEL = DEFAULT_OPUS_MODEL;
 
 // ---------------------------------------------------------------------------
 // LLM adapter (lazy singleton, same pattern as summary-generator)
@@ -148,8 +155,17 @@ const PLANNER_TOOL: LLMToolDefinition = {
       promotionReason: {
         type: "string",
         description:
-          "If disposition is 'escalate', explain why Tier 3 is needed. " +
+          "If disposition is 'escalate', explain why a more capable model is needed. " +
           "Omit for other dispositions.",
+      },
+      promotionTarget: {
+        type: "string",
+        enum: ["sonnet", "opus"],
+        description:
+          "Which model to escalate to when disposition is 'escalate'. " +
+          "'sonnet' for moderate complexity (multi-step reasoning, nuanced responses). " +
+          "'opus' for high complexity (deep analysis, complex planning, ambiguous situations). " +
+          "Defaults to 'sonnet' if omitted.",
       },
       done: {
         type: "boolean",
@@ -198,7 +214,7 @@ CRITICAL RULES:
 5. For "act" disposition, confidence must be >= 0.8 and the action must be low-risk.
 6. For "suggest" disposition, confidence should be >= 0.5.
 7. Below 0.5 confidence, always choose "ignore".
-8. Use "escalate" sparingly — only when a complex situation genuinely needs deeper analysis (Tier 3).
+8. Use "escalate" sparingly — only when the task exceeds your capabilities. Set promotionTarget to "sonnet" for moderate complexity or "opus" for very high complexity. Default is "sonnet".
 9. Use "summarize" when events are informational and a rolling summary update would be useful, but no user-facing action is needed.
 10. Check relevant entities carefully — do NOT suggest creating a ticket if one already exists for the same issue.
 11. Check recent events — do NOT suggest actions that have already been taken.
@@ -433,6 +449,10 @@ function parsePlannerOutput(
 
   if (typeof raw.promotionReason === "string" && raw.promotionReason) {
     output.promotionReason = raw.promotionReason;
+  }
+
+  if (raw.promotionTarget === "sonnet" || raw.promotionTarget === "opus") {
+    output.promotionTarget = raw.promotionTarget;
   }
 
   if (typeof raw.done === "boolean") {

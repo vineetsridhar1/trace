@@ -28,7 +28,13 @@ import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import { TIER3_TOKEN_BUDGET } from "./context-builder.js";
 import type { PlannerOutput, PlannerTurnResult } from "./planner.js";
-import { DEFAULT_TIER3_MODEL, buildSystemPrompt, runPlannerTurn } from "./planner.js";
+import {
+  DEFAULT_TIER3_MODEL,
+  DEFAULT_SONNET_MODEL,
+  DEFAULT_OPUS_MODEL,
+  buildSystemPrompt,
+  runPlannerTurn,
+} from "./planner.js";
 import type { PolicyDecision, PolicyActionResult } from "./policy-engine.js";
 import type { ExecutionResult } from "./executor.js";
 import { buildContext } from "./context-builder.js";
@@ -165,7 +171,8 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   }
 
   // ── Build system prompt (once) ──
-  const tier3Model = process.env.AGENT_TIER3_MODEL ?? DEFAULT_TIER3_MODEL;
+  const sonnetModel = process.env.AGENT_SONNET_MODEL ?? DEFAULT_SONNET_MODEL;
+  const opusModel = process.env.AGENT_TIER3_MODEL ?? DEFAULT_OPUS_MODEL;
   const systemPrompt = buildSystemPrompt(packet);
   const messageHistory: LLMMessage[] = [];
   const turnResults: TurnResult[] = [];
@@ -174,6 +181,8 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
   let totalOutputTokens = 0;
   let lastModel = "";
   let anyMessageSendExecuted = false;
+  /** Model override when promoted — null means use default Tier 2 */
+  let promotedModel: string | null = isRuleBasedTier3 ? opusModel : null;
 
   // ── Multi-turn loop ──
   for (let turn = 1; turn <= MAX_ITERATIONS; turn++) {
@@ -198,7 +207,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
         systemPrompt,
         messageHistory,
         packet.permissions.actions,
-        currentTier === "tier3" ? { model: tier3Model } : undefined,
+        promotedModel ? { model: promotedModel } : undefined,
       );
     } catch (err) {
       logError(`planner failed on turn ${turn}`, err);
@@ -252,40 +261,56 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
         logError("tier2 cost tracking failed (non-fatal)", err);
       }
 
-      let budgetAllowsTier3 = true;
-      try {
-        const budgetStatus = await costTrackingService.checkBudget(packet.organizationId);
-        if (budgetStatus.remainingPercent < 50) {
-          budgetAllowsTier3 = false;
-          log("Tier 3 promotion suppressed — budget below 50%", {
-            scopeKey: packet.scopeKey,
-            remainingPercent: budgetStatus.remainingPercent,
-          });
+      // Resolve target model from planner's choice (default to sonnet)
+      const target = plannerOutput.promotionTarget ?? "sonnet";
+      const targetModel = target === "opus" ? opusModel : sonnetModel;
+      const isOpusPromotion = target === "opus";
+
+      let budgetAllowsPromotion = true;
+      if (isOpusPromotion) {
+        // Only budget-gate Opus promotions — Sonnet is cheap enough
+        try {
+          const budgetStatus = await costTrackingService.checkBudget(packet.organizationId);
+          if (budgetStatus.remainingPercent < 50) {
+            budgetAllowsPromotion = false;
+            log("Opus promotion suppressed — budget below 50%", {
+              scopeKey: packet.scopeKey,
+              remainingPercent: budgetStatus.remainingPercent,
+            });
+          }
+        } catch (err) {
+          logError("budget check failed, suppressing promotion (non-fatal)", err);
+          budgetAllowsPromotion = false;
         }
-      } catch (err) {
-        logError("budget check failed, suppressing Tier 3 (non-fatal)", err);
-        budgetAllowsTier3 = false;
       }
 
-      if (budgetAllowsTier3) {
+      if (budgetAllowsPromotion) {
         promoted = true;
         promotionReason = plannerOutput.promotionReason;
-        currentTier = "tier3";
-        log("promoting to Tier 3", { scopeKey: packet.scopeKey, promotionReason });
+        promotedModel = targetModel;
+        currentTier = isOpusPromotion ? "tier3" : "tier2";
+        log("promoting", {
+          scopeKey: packet.scopeKey,
+          target,
+          model: targetModel,
+          promotionReason,
+        });
 
-        // Rebuild context with larger budget
-        try {
-          packet = await buildContext({
-            batch,
-            agentSettings,
-            tokenBudget: TIER3_TOKEN_BUDGET,
-          });
-        } catch (err) {
-          logError("Tier 3 context rebuild failed", err);
-          break;
+        // Only rebuild context with larger budget for Opus
+        if (isOpusPromotion) {
+          try {
+            packet = await buildContext({
+              batch,
+              agentSettings,
+              tokenBudget: TIER3_TOKEN_BUDGET,
+            });
+          } catch (err) {
+            logError("Opus context rebuild failed", err);
+            break;
+          }
         }
 
-        // Reset message history for fresh Tier 3 start
+        // Reset message history for fresh promoted start
         messageHistory.length = 0;
         messageHistory.push({
           role: "user",
@@ -294,7 +319,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
             `Call the planner_decision tool with your response. ` +
             `You have up to ${MAX_ITERATIONS} turns. This is turn 1 of ${MAX_ITERATIONS}.`,
         });
-        continue; // Re-run turn 1 with Tier 3
+        continue; // Re-run turn 1 with promoted model
       }
       // Budget suppressed — fall through with escalation
     }
@@ -704,7 +729,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     },
     usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
     latencyMs: turnResults.reduce((sum, t) => sum + t.latencyMs, 0),
-    model: lastModel || (currentTier === "tier3" ? tier3Model : "unknown"),
+    model: lastModel || (promotedModel ?? "unknown"),
   };
 
   await writeExecutionLog({
