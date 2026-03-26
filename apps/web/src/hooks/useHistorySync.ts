@@ -15,6 +15,9 @@ function parseNavFromPath(path: string): {
   if (path.startsWith("/inbox")) {
     return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "inbox" };
   }
+  if (path.startsWith("/tickets")) {
+    return { channelId: null, sessionGroupId: null, sessionId: null, chatId: null, page: "tickets" };
+  }
 
   const chatMatch = path.match(/^\/dm\/([^/]+)/);
   if (chatMatch) {
@@ -93,19 +96,19 @@ export function useHistorySync() {
       window.location.pathname,
     );
     const initialChat =
-      (page === "settings" || page === "inbox" || channelId)
+      (page === "settings" || page === "inbox" || page === "tickets" || channelId)
         ? null
         : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      (page === "settings" || page === "inbox" || initialChat)
+      (page === "settings" || page === "inbox" || page === "tickets" || initialChat)
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
     const initialSessionGroupId =
-      (page === "settings" || page === "inbox" || initialChat)
+      (page === "settings" || page === "inbox" || page === "tickets" || initialChat)
         ? null
         : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
     const initialSessionId =
-      (page === "settings" || page === "inbox" || initialChat)
+      (page === "settings" || page === "inbox" || page === "tickets" || initialChat)
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 
@@ -114,6 +117,8 @@ export function useHistorySync() {
       path = "/settings";
     } else if (page === "inbox") {
       path = "/inbox";
+    } else if (page === "tickets") {
+      path = "/tickets";
     } else if (initialChat) {
       path = `/dm/${initialChat}`;
     } else if (initialChannel && initialSessionGroupId && initialSessionId) {

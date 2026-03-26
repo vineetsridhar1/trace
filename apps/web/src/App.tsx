@@ -7,6 +7,7 @@ import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
+import { TicketsView } from "./components/tickets/TicketsView";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "./components/ui/sidebar";
@@ -106,6 +107,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <SettingsPage />
                 ) : activePage === "inbox" ? (
                   <InboxView />
+                ) : activePage === "tickets" ? (
+                  <TicketsView />
                 ) : activeChatId ? (
                   <ChatView chatId={activeChatId} />
                 ) : activeChannelId ? (
