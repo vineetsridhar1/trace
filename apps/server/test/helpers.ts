@@ -136,7 +136,10 @@ export function createPrismaMock() {
     },
     project: {
       create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
     },
     session: {
       create: vi.fn(),
@@ -167,6 +170,7 @@ export function createPrismaMock() {
     },
     sessionProject: {
       create: vi.fn(),
+      findMany: vi.fn(),
       deleteMany: vi.fn(),
     },
     channel: {
@@ -195,9 +199,11 @@ export function createPrismaMock() {
     },
     channelProject: {
       create: vi.fn(),
+      findMany: vi.fn(),
     },
     ticketProject: {
       create: vi.fn(),
+      findMany: vi.fn(),
     },
     agentExecutionLog: {
       create: vi.fn(),

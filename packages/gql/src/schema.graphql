@@ -228,6 +228,7 @@ type Project {
   id: ID!
   name: String!
   repo: Repo
+  aiMode: AutonomyMode
   channels: [Channel!]!
   sessions: [Session!]!
   tickets: [Ticket!]!
@@ -241,6 +242,7 @@ type Channel {
   groupId: ID
   baseBranch: String
   repo: Repo
+  aiMode: AutonomyMode
   members: [ChannelMember!]!
   projects: [Project!]!
   messages(after: DateTime, limit: Int): [Event!]!
@@ -334,6 +336,7 @@ type Ticket {
   labels: [String!]!
   origin: Event
   channel: Channel
+  aiMode: AutonomyMode
   projects: [Project!]!
   sessions: [Session!]!
   links: [TicketLink!]!
@@ -396,6 +399,7 @@ type Chat {
   id: ID!
   type: ChatType!
   name: String
+  aiMode: AutonomyMode
   members: [ChatMember!]!
   messages(after: DateTime, before: DateTime, limit: Int): [Message!]!
   createdBy: User!
@@ -694,6 +698,7 @@ type Query {
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
   agentIdentity(organizationId: ID!): AgentIdentity
+  resolvedAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!): AutonomyMode!
 }
 
 type Terminal {
@@ -760,6 +765,7 @@ type Mutation {
   unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
   muteScope(scopeType: String!, scopeId: ID!): Participant!
   unmuteScope(scopeType: String!, scopeId: ID!): Participant!
+  updateScopeAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!, aiMode: AutonomyMode): Boolean!
   updateAgentSettings(organizationId: ID!, input: UpdateAgentSettingsInput!): AgentIdentity!
   addOrgMember(organizationId: ID!, userId: ID!, role: UserRole): OrgMember!
   removeOrgMember(organizationId: ID!, userId: ID!): Boolean!

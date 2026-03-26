@@ -386,6 +386,7 @@ model Project {
   organization   Organization @relation(fields: [organizationId], references: [id])
   repoId         String?
   repo           Repo?        @relation(fields: [repoId], references: [id])
+  aiMode         AutonomyMode?
 
   channels       ChannelProject[]
   sessions       SessionProject[]
@@ -423,6 +424,7 @@ model Channel {
   repoId         String?
   repo           Repo?         @relation(fields: [repoId], references: [id])
   baseBranch     String?
+  aiMode         AutonomyMode?
 
   projects ChannelProject[]
   sessionGroups SessionGroup[]
@@ -543,6 +545,7 @@ model Ticket {
   originEventId  String?
   channelId      String?
   channel        Channel?     @relation(fields: [channelId], references: [id])
+  aiMode         AutonomyMode?
 
   projects  TicketProject[]
   assignees TicketAssignee[]
@@ -691,6 +694,7 @@ model Chat {
   dmKey          String?      @unique
   createdById    String
   createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
+  aiMode         AutonomyMode?
 
   members ChatMember[]
   messages Message[]

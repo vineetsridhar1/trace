@@ -22,6 +22,7 @@ import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentEvent } from "./router.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import { resolveSoulFile } from "./soul-file-resolver.js";
+import { resolveAutonomyMode } from "../services/scope-autonomy.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -890,11 +891,20 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   });
   recordSection("relevantEntities", estimateObjectTokens(relevantEntities));
 
+  // --- 6b. Resolve effective autonomy mode (ticket #20) ---
+  const isDmScope = scopeType === "chat" && scopeEntity?.data.type === "dm";
+  const effectiveAutonomyMode = await resolveAutonomyMode({
+    scopeType,
+    scopeId,
+    organizationId,
+    isDm: isDmScope,
+    orgDefault: agentSettings.autonomyMode,
+  });
+
   // --- 7. Summaries ---
   //    Privacy guard (ticket #17): DM summaries are never generated automatically.
   //    They are only produced on explicit user request. Group chat summaries are
   //    generated automatically but scoped — they never leak into unrelated contexts.
-  const isDmScope = scopeType === "chat" && scopeEntity?.data.type === "dm";
   const summaries = isDmScope
     ? [] // skip auto-summaries for DMs
     : await fetchSummaries({
@@ -939,7 +949,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     summaries,
     actors,
     permissions: {
-      autonomyMode: agentSettings.autonomyMode,
+      autonomyMode: effectiveAutonomyMode,
       actions,
     },
     tokenBudget: {

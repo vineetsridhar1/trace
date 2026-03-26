@@ -88,6 +88,7 @@ export type BranchDiffFile = {
 
 export type Channel = {
   __typename?: 'Channel';
+  aiMode?: Maybe<AutonomyMode>;
   baseBranch?: Maybe<Scalars['String']['output']>;
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
@@ -127,6 +128,7 @@ export type ChannelType =
 
 export type Chat = {
   __typename?: 'Chat';
+  aiMode?: Maybe<AutonomyMode>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
@@ -419,6 +421,7 @@ export type Mutation = {
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
+  updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
   updateTicket: Ticket;
 };
@@ -755,6 +758,14 @@ export type MutationUpdateRepoArgs = {
 };
 
 
+export type MutationUpdateScopeAiModeArgs = {
+  aiMode?: InputMaybe<AutonomyMode>;
+  organizationId: Scalars['ID']['input'];
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
+};
+
+
 export type MutationUpdateSessionConfigArgs = {
   model?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
@@ -823,6 +834,7 @@ export type Priority =
 
 export type Project = {
   __typename?: 'Project';
+  aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -855,6 +867,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
+  resolvedAiMode: AutonomyMode;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -981,6 +994,13 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryResolvedAiModeArgs = {
+  organizationId: Scalars['ID']['input'];
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
 };
 
 
@@ -1287,6 +1307,7 @@ export type ThreadSummary = {
 
 export type Ticket = {
   __typename?: 'Ticket';
+  aiMode?: Maybe<AutonomyMode>;
   assignees: Array<User>;
   channel?: Maybe<Channel>;
   createdAt: Scalars['DateTime']['output'];
