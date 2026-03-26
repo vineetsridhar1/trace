@@ -73,15 +73,6 @@ export type AiConversation = {
   visibility: AiConversationVisibility;
 };
 
-/** Deprecated: Use Event type via conversationEvents subscription instead. */
-export type AiConversationEvent = {
-  __typename?: 'AiConversationEvent';
-  conversationId: Scalars['ID']['output'];
-  payload: Scalars['JSON']['output'];
-  timestamp: Scalars['DateTime']['output'];
-  type: Scalars['String']['output'];
-};
-
 export type AiConversationVisibility =
   | 'ORG'
   | 'PRIVATE';

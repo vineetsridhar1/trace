@@ -1,4 +1,4 @@
-import type { AiTurn, Prisma } from "@prisma/client";
+import type { AiBranch, AiConversation, AiTurn, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import type {
   LLMAssistantContentBlock,
@@ -9,6 +9,7 @@ import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { eventService } from "./event.js";
+import { aiConversationService } from "./aiConversation.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -28,31 +29,8 @@ export class AiTurnService {
   ): Promise<{ userTurn: AiTurn; assistantTurn: AiTurn }> {
     const model = input.model ?? DEFAULT_MODEL;
 
-    // Load the branch and verify access to the conversation
-    const branch = await prisma.aiBranch.findUniqueOrThrow({
-      where: { id: input.branchId },
-      include: {
-        conversation: true,
-      },
-    });
-
-    // Verify user belongs to org
-    await prisma.orgMember.findUniqueOrThrow({
-      where: {
-        userId_organizationId: {
-          userId: actorId,
-          organizationId: branch.conversation.organizationId,
-        },
-      },
-    });
-
-    // Verify access: private conversations only accessible to creator
-    if (
-      branch.conversation.visibility === "PRIVATE" &&
-      branch.conversation.createdById !== actorId
-    ) {
-      throw new Error("Conversation not found");
-    }
+    // Verify access via the shared access control method
+    const branch = await aiConversationService.assertBranchAccess(input.branchId, actorId);
 
     // Get the last turn in the branch to set parentTurnId
     const lastTurn = await prisma.aiTurn.findFirst({
@@ -125,36 +103,12 @@ export class AiTurnService {
       },
     );
 
-    // Emit turn.created events via the event service (persisted + org-wide + conversation-scoped)
-    const emitTurnEvent = (turn: AiTurn) =>
-      eventService.create({
-        organizationId: branch.conversation.organizationId,
-        scopeType: "ai_conversation",
-        scopeId: branch.conversationId,
-        eventType: "ai_turn_created",
-        payload: {
-          turnId: turn.id,
-          branchId: input.branchId,
-          conversationId: branch.conversationId,
-          role: turn.role,
-          content: turn.content,
-          parentTurnId: turn.parentTurnId,
-          createdAt: turn.createdAt.toISOString(),
-        },
-        actorType,
-        actorId,
-      });
+    // Emit events and publish to subscriptions after both turns succeed
+    await this.emitTurnCreated(userTurn, branch, actorType, actorId);
+    await this.emitTurnCreated(assistantTurn, branch, actorType, actorId);
 
-    await emitTurnEvent(userTurn);
-    await emitTurnEvent(assistantTurn);
-
-    // Also publish Turn objects to the branch-scoped subscription for real-time UI
-    pubsub.publish(topics.branchTurns(input.branchId), {
-      branchTurns: userTurn,
-    });
-    pubsub.publish(topics.branchTurns(input.branchId), {
-      branchTurns: assistantTurn,
-    });
+    pubsub.publish(topics.branchTurns(input.branchId), { branchTurns: userTurn });
+    pubsub.publish(topics.branchTurns(input.branchId), { branchTurns: assistantTurn });
 
     return { userTurn, assistantTurn };
   }
@@ -178,27 +132,8 @@ export class AiTurnService {
   > {
     const model = input.model ?? DEFAULT_MODEL;
 
-    // Load the branch and verify access
-    const branch = await prisma.aiBranch.findUniqueOrThrow({
-      where: { id: input.branchId },
-      include: { conversation: true },
-    });
-
-    await prisma.orgMember.findUniqueOrThrow({
-      where: {
-        userId_organizationId: {
-          userId: actorId,
-          organizationId: branch.conversation.organizationId,
-        },
-      },
-    });
-
-    if (
-      branch.conversation.visibility === "PRIVATE" &&
-      branch.conversation.createdById !== actorId
-    ) {
-      throw new Error("Conversation not found");
-    }
+    // Verify access via the shared access control method
+    const branch = await aiConversationService.assertBranchAccess(input.branchId, actorId);
 
     const lastTurn = await prisma.aiTurn.findFirst({
       where: { branchId: input.branchId },
@@ -214,30 +149,10 @@ export class AiTurnService {
       },
     });
 
-    // Emit turn.created event for user turn
-    await eventService.create({
-      organizationId: branch.conversation.organizationId,
-      scopeType: "ai_conversation",
-      scopeId: branch.conversationId,
-      eventType: "ai_turn_created",
-      payload: {
-        turnId: userTurn.id,
-        branchId: input.branchId,
-        conversationId: branch.conversationId,
-        role: userTurn.role,
-        content: userTurn.content,
-        parentTurnId: userTurn.parentTurnId,
-        createdAt: userTurn.createdAt.toISOString(),
-      },
-      actorType,
-      actorId,
-    });
-
-    // Publish Turn to branch-scoped subscription
-    pubsub.publish(topics.branchTurns(input.branchId), {
-      branchTurns: userTurn,
-    });
-
+    // Yield the user turn immediately so the UI can show it,
+    // but defer event emission until after the LLM succeeds
+    // to avoid orphan events if the stream fails and the turn is deleted.
+    pubsub.publish(topics.branchTurns(input.branchId), { branchTurns: userTurn });
     yield { type: "user_turn_created" as const, turn: userTurn };
 
     // Assemble context
@@ -294,29 +209,11 @@ export class AiTurnService {
       },
     );
 
-    // Emit turn.created event for assistant turn
-    await eventService.create({
-      organizationId: branch.conversation.organizationId,
-      scopeType: "ai_conversation",
-      scopeId: branch.conversationId,
-      eventType: "ai_turn_created",
-      payload: {
-        turnId: assistantTurn.id,
-        branchId: input.branchId,
-        conversationId: branch.conversationId,
-        role: assistantTurn.role,
-        content: assistantTurn.content,
-        parentTurnId: assistantTurn.parentTurnId,
-        createdAt: assistantTurn.createdAt.toISOString(),
-      },
-      actorType,
-      actorId,
-    });
+    // Emit events for both turns now that the full exchange succeeded
+    await this.emitTurnCreated(userTurn, branch, actorType, actorId);
+    await this.emitTurnCreated(assistantTurn, branch, actorType, actorId);
 
-    // Publish Turn to branch-scoped subscription
-    pubsub.publish(topics.branchTurns(input.branchId), {
-      branchTurns: assistantTurn,
-    });
+    pubsub.publish(topics.branchTurns(input.branchId), { branchTurns: assistantTurn });
 
     return assistantTurn;
   }
@@ -338,6 +235,35 @@ export class AiTurnService {
     return prisma.aiTurn.findUniqueOrThrow({
       where: { id: turnId },
       include: { branch: true },
+    });
+  }
+
+  /**
+   * Emits an ai_turn_created event via the event service.
+   * Persists the event to the DB and broadcasts to org-wide + conversation-scoped streams.
+   */
+  private emitTurnCreated(
+    turn: AiTurn,
+    branch: AiBranch & { conversation: AiConversation },
+    actorType: ActorType,
+    actorId: string,
+  ) {
+    return eventService.create({
+      organizationId: branch.conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: branch.conversationId,
+      eventType: "ai_turn_created",
+      payload: {
+        turnId: turn.id,
+        branchId: branch.id,
+        conversationId: branch.conversationId,
+        role: turn.role,
+        content: turn.content,
+        parentTurnId: turn.parentTurnId,
+        createdAt: turn.createdAt.toISOString(),
+      },
+      actorType,
+      actorId,
     });
   }
 

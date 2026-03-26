@@ -80,12 +80,19 @@ export async function assertChannelAccess(channelId: string, userId: string) {
 export async function isAiConversationAccessible(conversationId: string, userId: string): Promise<boolean> {
   const conversation = await prisma.aiConversation.findUnique({
     where: { id: conversationId },
-    select: { visibility: true, createdById: true },
+    select: { visibility: true, createdById: true, organizationId: true },
   });
 
   if (!conversation) return false;
   if (conversation.createdById === userId) return true;
-  if (conversation.visibility === "ORG") return true;
+  if (conversation.visibility === "ORG") {
+    // Verify user is in the same org before granting access
+    const member = await prisma.orgMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId: conversation.organizationId } },
+      select: { userId: true },
+    });
+    return member !== null;
+  }
   return false;
 }
 

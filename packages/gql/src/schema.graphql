@@ -564,14 +564,6 @@ type Turn {
   createdAt: DateTime!
 }
 
-"""Deprecated: Use Event type via conversationEvents subscription instead."""
-type AiConversationEvent {
-  conversationId: ID!
-  type: String!
-  payload: JSON!
-  timestamp: DateTime!
-}
-
 # --- Inputs ---
 
 input CreateChannelInput {
