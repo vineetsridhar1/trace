@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { gql } from "@urql/core";
+import { Cloud, Monitor } from "lucide-react";
 import type { CodingTool } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
 import { client } from "../../lib/urql";
@@ -42,10 +43,20 @@ export function SessionInputOptions({
 }: SessionInputOptionsProps) {
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const connection = useEntityField("sessions", sessionId, "connection") as
+    | Record<string, unknown>
+    | null
+    | undefined;
 
   const currentTool = tool ?? "claude_code";
   const modelOptions = getModelsForTool(currentTool);
   const currentModel = model ?? getDefaultModel(currentTool);
+
+  const runtimeLabel = connection && typeof connection === "object" && "runtimeLabel" in connection
+    ? (connection.runtimeLabel as string)
+    : null;
+  const isCloud = hosting === "cloud";
 
   const handleToolChange = useCallback(async (newTool: string | null) => {
     if (!newTool) return;
@@ -86,6 +97,13 @@ export function SessionInputOptions({
           </SelectContent>
         </Select>
       )}
+      <span className="flex items-center gap-1 px-2 text-[11px] text-muted-foreground">
+        {isCloud ? (
+          <><Cloud size={12} className="shrink-0 text-blue-400" /> Cloud</>
+        ) : (
+          <><Monitor size={12} className="shrink-0 text-green-400" /> {runtimeLabel ?? "Local"}</>
+        )}
+      </span>
       <button
         type="button"
         onClick={() => onModeChange(mode)}
