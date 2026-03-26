@@ -42,12 +42,24 @@ Autonomy modes should be configurable at multiple levels: org, project, channel 
 
 ## Completion requirements
 
-- [ ] `aiMode` field exists on Chat, Ticket, Project, and Channel models
-- [ ] Resolution function correctly applies the override hierarchy
-- [ ] DMs default to `observe`, group chats default to `suggest` when no explicit override
+- [x] `aiMode` field exists on Chat, Ticket, Project, and Channel models
+- [x] Resolution function correctly applies the override hierarchy
+- [x] DMs default to `observe`, group chats default to `suggest` when no explicit override
 - [ ] UI allows setting per-scope AI mode
-- [ ] Policy engine uses resolved mode
-- [ ] Null values correctly fall through to parent/org default
+- [x] Policy engine uses resolved mode
+- [x] Null values correctly fall through to parent/org default
+
+<!-- Implementation notes (PR: per-scope autonomy settings):
+- `aiMode: AutonomyMode?` added to Chat, Ticket, Project, Channel in Prisma schema
+- `resolveAutonomyMode()` in `services/scope-autonomy.ts` walks: scope → project (most restrictive) → chat-type default → org default
+- `updateScopeAiMode()` in same file handles setting/clearing overrides
+- GraphQL: `resolvedAiMode` query returns effective mode, `updateScopeAiMode` mutation sets/clears
+- Context builder calls `resolveAutonomyMode()` before building permissions
+- 12 unit tests cover all resolution scenarios
+- UI work is deferred — backend is fully wired but no frontend toggle yet
+- Note: mutation does not yet emit events (no `scope_ai_mode_changed` event type exists)
+- Note: authorization is org membership only — admin/owner check not yet enforced
+-->
 
 ## How to test
 
