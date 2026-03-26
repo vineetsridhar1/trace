@@ -43,9 +43,12 @@ export function useOrgMembers(): OrgMember[] {
       .then((result) => {
         if (requestId !== requestIdRef.current) return;
 
-        const users = result.data?.organization?.members as User[] | undefined;
-        if (!users) return;
+        const rawMembers = result.data?.organization?.members as
+          | Array<{ user: User; role: string; joinedAt: string }>
+          | undefined;
+        if (!rawMembers) return;
 
+        const users = rawMembers.map((m) => m.user);
         useEntityStore.getState().upsertMany("users", users);
 
         const scopedMembers = users.map((user) => ({
