@@ -13,14 +13,23 @@
 import type { AutonomyMode } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
+/** Scope types that support aiMode overrides or participate in resolution. */
+export type AutonomyScopeType = "chat" | "ticket" | "channel" | "session" | "project";
+
 export interface ResolveAutonomyInput {
-  scopeType: string;
+  scopeType: AutonomyScopeType;
   scopeId: string;
   organizationId: string;
   /** Whether this scope is a DM chat. Used for chat-type defaults. */
   isDm?: boolean;
   /** Org-level default autonomy mode from AgentIdentity. */
   orgDefault: AutonomyMode;
+  /**
+   * Pre-fetched scope-level aiMode override. When provided, skips the DB
+   * lookup for the scope entity's aiMode. Use `undefined` to force a fresh
+   * lookup, or `null` to indicate "already checked, no override set".
+   */
+  prefetchedAiMode?: AutonomyMode | null;
 }
 
 /**
@@ -29,10 +38,12 @@ export interface ResolveAutonomyInput {
  * chat-type defaults and then the org default.
  */
 export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<AutonomyMode> {
-  const { scopeType, scopeId, organizationId, isDm, orgDefault } = input;
+  const { scopeType, scopeId, organizationId, isDm, orgDefault, prefetchedAiMode } = input;
 
   // 1. Scope-level override
-  const scopeOverride = await getScopeAiMode(scopeType, scopeId);
+  const scopeOverride = prefetchedAiMode !== undefined
+    ? prefetchedAiMode
+    : await getScopeAiMode(scopeType, scopeId);
   if (scopeOverride) return scopeOverride;
 
   // 2. Project-level override (if scope belongs to a project)
@@ -52,7 +63,7 @@ export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<
  * Read the aiMode directly set on a scope entity.
  * Returns null if the scope type doesn't support aiMode or if it's not set.
  */
-async function getScopeAiMode(scopeType: string, scopeId: string): Promise<AutonomyMode | null> {
+async function getScopeAiMode(scopeType: AutonomyScopeType, scopeId: string): Promise<AutonomyMode | null> {
   switch (scopeType) {
     case "chat": {
       const chat = await prisma.chat.findUnique({
@@ -86,7 +97,7 @@ async function getScopeAiMode(scopeType: string, scopeId: string): Promise<Auton
  * (lowest autonomy) mode if multiple projects have overrides.
  */
 async function getProjectOverride(
-  scopeType: string,
+  scopeType: AutonomyScopeType,
   scopeId: string,
   organizationId: string,
 ): Promise<AutonomyMode | null> {
@@ -151,12 +162,15 @@ async function getProjectOverride(
   return mostRestrictive;
 }
 
+/** Scope types that support direct aiMode writes. */
+export type WritableAiModeScopeType = "chat" | "ticket" | "channel" | "project";
+
 /**
  * Update the aiMode on a scope entity. Pass null to clear the override
  * (inherit from parent/org default).
  */
 export async function updateScopeAiMode(input: {
-  scopeType: string;
+  scopeType: WritableAiModeScopeType;
   scopeId: string;
   aiMode: AutonomyMode | null;
 }): Promise<void> {
@@ -176,6 +190,6 @@ export async function updateScopeAiMode(input: {
       await prisma.project.update({ where: { id: scopeId }, data: { aiMode } });
       break;
     default:
-      throw new Error(`Cannot set aiMode on scope type: ${scopeType}`);
+      throw new Error(`Cannot set aiMode on scope type: ${scopeType as string}`);
   }
 }
