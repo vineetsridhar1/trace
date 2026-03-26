@@ -52,8 +52,11 @@ const MAX_ITERATIONS = 10;
 // Logging helpers
 // ---------------------------------------------------------------------------
 
+let pipelineStartTime = 0;
+
 function log(msg: string, data?: Record<string, unknown>): void {
-  const prefix = "[agent-pipeline]";
+  const elapsed = pipelineStartTime ? `+${Date.now() - pipelineStartTime}ms` : "0ms";
+  const prefix = `[agent-pipeline] [${elapsed}]`;
   if (data) {
     console.log(prefix, msg, JSON.stringify(data));
   } else {
@@ -62,8 +65,9 @@ function log(msg: string, data?: Record<string, unknown>): void {
 }
 
 function logError(msg: string, err: unknown): void {
+  const elapsed = pipelineStartTime ? `+${Date.now() - pipelineStartTime}ms` : "0ms";
   const message = err instanceof Error ? err.message : String(err);
-  console.error(`[agent-pipeline] ${msg}:`, message);
+  console.error(`[agent-pipeline] [${elapsed}] ${msg}:`, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +111,7 @@ interface TurnResult {
 export async function runPipeline(input: PipelineInput): Promise<void> {
   const { batch, agentSettings, executor } = input;
   const startTime = Date.now();
+  pipelineStartTime = startTime;
 
   // ── Event dedup — skip events already processed ──
   const triggerEvent = batch.events[batch.events.length - 1];
