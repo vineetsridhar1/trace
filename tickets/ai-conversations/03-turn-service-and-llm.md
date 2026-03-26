@@ -34,13 +34,19 @@ Build the service for sending turns and getting AI responses. When a user sends 
 
 ## Completion requirements
 
-- [ ] `sendTurn` creates a user turn, calls the LLM, and creates an assistant turn
-- [ ] Turns are linked via `parentTurnId` forming a correct chain
-- [ ] LLM receives the full conversation history as context
-- [ ] LLM adapter is called with the correct model and message format
-- [ ] Failed LLM calls do not leave orphaned user turns without responses (either rollback or mark as error)
-- [ ] `getTurns` returns turns in correct chronological order
-- [ ] Conversation `updatedAt` is updated on each new turn
+- [x] `sendTurn` creates a user turn, calls the LLM, and creates an assistant turn
+- [x] Turns are linked via `parentTurnId` forming a correct chain
+- [x] LLM receives the full conversation history as context
+- [x] LLM adapter is called with the correct model and message format
+- [x] Failed LLM calls do not leave orphaned user turns without responses (either rollback or mark as error)
+- [x] `getTurns` returns turns in correct chronological order
+- [x] Conversation `updatedAt` is updated on each new turn
+
+## Known issues to address
+
+- **Concurrent sendTurn race condition**: The "find last turn" + "create user turn" sequence is non-atomic. Two concurrent sends to the same branch can read the same `lastTurn`, violating the `parentTurnId` unique constraint. Fix: wrap in a serializable transaction or catch unique-constraint errors and retry.
+- **Duplicated access control**: The org membership + visibility check in `AiTurnService.sendTurn` duplicates `AiConversationService.getConversation`. Refactor to delegate access verification to the conversation service.
+- **streamTurn orphan UX**: Deleting the user turn after a partial stream failure removes a turn the user already saw. Consider keeping the user turn and marking the error inline instead.
 
 ## How to test
 

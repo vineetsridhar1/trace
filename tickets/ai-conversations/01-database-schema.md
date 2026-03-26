@@ -45,13 +45,13 @@ None — this is the foundation for AI Conversations.
 
 ## Completion requirements
 
-- [ ] `AiConversation`, `AiBranch`, and `AiTurn` models exist in `schema.prisma`
-- [ ] `AiConversationVisibility` and `TurnRole` enums exist
-- [ ] Self-relations work for `AiBranch.parentBranch` → `AiBranch.childBranches` and `AiTurn.parentTurn` → `AiTurn.childTurn`
-- [ ] `AiTurn.forkedBranches` relation returns all branches that fork from that turn
-- [ ] Migration runs successfully against a clean database
-- [ ] Prisma client generates without errors
-- [ ] Existing models and migrations are unaffected
+- [x] `AiConversation`, `AiBranch`, and `AiTurn` models exist in `schema.prisma`
+- [x] `AiConversationVisibility` and `TurnRole` enums exist
+- [x] Self-relations work for `AiBranch.parentBranch` → `AiBranch.childBranches` and `AiTurn.parentTurn` → `AiTurn.childTurn`
+- [x] `AiTurn.forkedBranches` relation returns all branches that fork from that turn
+- [x] Migration runs successfully against a clean database
+- [x] Prisma client generates without errors
+- [x] Existing models and migrations are unaffected
 
 ## How to test
 

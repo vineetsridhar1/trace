@@ -87,7 +87,7 @@ Add the GraphQL types, queries, mutations, and subscriptions for AI Conversation
 ## Dependencies
 
 - 03 (Turn Service & LLM Integration)
-  <!-- Ticket 03 creates: sendTurn, getTurns, getTurn service methods + LLM integration -->
+  <!-- Ticket 03 creates: AiTurnService (separate from AiConversationService) with sendTurn({ branchId, content, model? }, actorType, actorId) returning { userTurn, assistantTurn }, streamTurn (AsyncGenerator yielding LLMStreamEvent), getTurns(branchId), getTurn(turnId). Default model is claude-sonnet-4-6. The GraphQL sendTurn mutation returns a single Turn! so the resolver should return the assistant turn (or adjust the schema to return both). -->
 
 ## Completion requirements
 

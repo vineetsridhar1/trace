@@ -18,10 +18,10 @@ Wire AI Conversation actions into the Trace event stream. Every mutation that ch
   - branch summary and context-health updates
   - fork provenance / other conversation metadata added after foundation
 - Add these event types to the existing event type enum/registry
-- Update `AiConversationService` methods to emit events after successful mutations:
-  - `createConversation` → emit `ai_conversation.created` + `branch.created` (for root branch)
-  - `updateTitle` → emit `ai_conversation.title_updated`
-  - `sendTurn` → emit `turn.created` for both user and assistant turns
+- Update service methods to emit events after successful mutations:
+  - `AiConversationService.createConversation` → emit `ai_conversation.created` + `branch.created` (for root branch)
+  - `AiConversationService.updateTitle` → emit `ai_conversation.title_updated`
+  - `AiTurnService.sendTurn` → emit `turn.created` for both user and assistant turns (note: turn logic is in a separate `AiTurnService`, not `AiConversationService`)
 - Events must include `organizationId` and `actorId` for the org-wide event stream
 - Events must include enough data in the payload for the frontend to upsert entities and relationship metadata without refetching:
   - `updatedAt` / last-activity timestamps
