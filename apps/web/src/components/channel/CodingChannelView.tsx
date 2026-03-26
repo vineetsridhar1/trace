@@ -13,8 +13,8 @@ import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
 
 const SESSION_GROUPS_QUERY = gql`
-  query SessionGroups($channelId: ID!) {
-    sessionGroups(channelId: $channelId) {
+  query SessionGroups($channelId: ID!, $excludeStatuses: [SessionGroupStatus!]) {
+    sessionGroups(channelId: $channelId, excludeStatuses: $excludeStatuses) {
       id
       name
       status
@@ -70,32 +70,46 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
   const baseBranch = useEntityField("channels", channelId, "baseBranch") as string | null | undefined;
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [loading, setLoading] = useState(true);
+  const [mergedLoaded, setMergedLoaded] = useState(false);
   const refreshTick = useUIStore((s) => s.refreshTick);
 
+  const upsertSessionGroups = useCallback((groups: Array<SessionGroup & { id: string }>) => {
+    const flattenedSessions = groups.flatMap((group) => group.sessions ?? []);
+    upsertMany(
+      "sessionGroups",
+      groups.map((group) => ({
+        ...group,
+        _sortTimestamp:
+          group.sessions?.[0]?.updatedAt
+          ?? group.updatedAt,
+      })) as Array<SessionGroupEntity & { id: string }>,
+    );
+    upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);
+  }, [upsertMany]);
+
   const fetchSessionGroups = useCallback(async () => {
-    const result = await client.query(SESSION_GROUPS_QUERY, { channelId }).toPromise();
+    const result = await client.query(SESSION_GROUPS_QUERY, { channelId, excludeStatuses: ["merged"] }).toPromise();
 
     if (result.data?.sessionGroups) {
-      const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
-      const flattenedSessions = groups.flatMap((group) => group.sessions ?? []);
-
-      upsertMany(
-        "sessionGroups",
-        groups.map((group) => ({
-          ...group,
-          _sortTimestamp:
-            group.sessions?.[0]?.updatedAt
-            ?? group.updatedAt,
-        })) as Array<SessionGroupEntity & { id: string }>,
-      );
-      upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);
+      upsertSessionGroups(result.data.sessionGroups as Array<SessionGroup & { id: string }>);
     }
 
     setLoading(false);
-  }, [channelId, upsertMany]);
+  }, [channelId, upsertSessionGroups]);
+
+  const fetchMergedGroups = useCallback(async () => {
+    if (mergedLoaded) return;
+    const result = await client.query(SESSION_GROUPS_QUERY, { channelId }).toPromise();
+
+    if (result.data?.sessionGroups) {
+      upsertSessionGroups(result.data.sessionGroups as Array<SessionGroup & { id: string }>);
+    }
+    setMergedLoaded(true);
+  }, [channelId, mergedLoaded, upsertSessionGroups]);
 
   useEffect(() => {
     setLoading(true);
+    setMergedLoaded(false);
     fetchSessionGroups();
   }, [fetchSessionGroups, refreshTick]);
 
@@ -129,7 +143,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
             ))}
           </div>
         ) : (
-          <SessionsTable channelId={channelId} />
+          <SessionsTable channelId={channelId} onLoadMerged={fetchMergedGroups} mergedLoaded={mergedLoaded} />
         )}
       </div>
     </div>

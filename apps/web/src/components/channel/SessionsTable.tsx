@@ -5,6 +5,7 @@ import type {
   GridApi,
   MenuItemDef,
 } from "ag-grid-community";
+import { Circle, Loader2 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
 import { motion } from "framer-motion";
@@ -17,7 +18,15 @@ import { useSessionsGridOptions } from "./useSessionsGridOptions";
 import { useSessionGroupRows } from "./useSessionGroupRows";
 import { useSessionsGridTable } from "./useSessionsGridTable";
 
-export function SessionsTable({ channelId }: { channelId: string }) {
+export function SessionsTable({
+  channelId,
+  onLoadMerged,
+  mergedLoaded,
+}: {
+  channelId: string;
+  onLoadMerged?: () => Promise<void>;
+  mergedLoaded?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridApiRef = useRef<GridApi<SessionGroupRow> | null>(null);
   const { fadeControls, isCompact } = useCompactTableMode(containerRef);
@@ -27,6 +36,8 @@ export function SessionsTable({ channelId }: { channelId: string }) {
     name: string;
     sessionCount: number;
   } | null>(null);
+
+  const [loadingMerged, setLoadingMerged] = useState(false);
 
   const filteredGroups = useSessionGroupRows(channelId);
 
@@ -90,10 +101,17 @@ export function SessionsTable({ channelId }: { channelId: string }) {
   });
   const selectedRowIds = activeSessionGroupId ? [activeSessionGroupId] : undefined;
 
+  const handleLoadMerged = useCallback(async () => {
+    if (!onLoadMerged || mergedLoaded) return;
+    setLoadingMerged(true);
+    await onLoadMerged();
+    setLoadingMerged(false);
+  }, [onLoadMerged, mergedLoaded]);
+
   return (
-    <div ref={containerRef} className="relative h-full overflow-hidden">
+    <div ref={containerRef} className="relative flex h-full flex-col overflow-hidden">
       <motion.div
-        className="h-full"
+        className="min-h-0 flex-1"
         layout
         initial={{ opacity: 1 }}
         animate={fadeControls}
@@ -105,6 +123,21 @@ export function SessionsTable({ channelId }: { channelId: string }) {
           selectedRowIds={selectedRowIds}
         />
       </motion.div>
+      {!mergedLoaded && onLoadMerged && (
+        <button
+          type="button"
+          onClick={handleLoadMerged}
+          disabled={loadingMerged}
+          className="flex shrink-0 items-center gap-2 border-t border-border px-4 py-2 text-sm text-emerald-400 hover:bg-surface-elevated disabled:opacity-50"
+        >
+          {loadingMerged ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Circle size={6} className="shrink-0 fill-current" />
+          )}
+          <span className="font-semibold">Show Merged Workspaces</span>
+        </button>
+      )}
       {deleteTarget && (
         <DeleteSessionGroupDialog
           groupId={deleteTarget.id}

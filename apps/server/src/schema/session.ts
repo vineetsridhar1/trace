@@ -11,8 +11,8 @@ import {
 } from "../lib/session-group-status.js";
 
 export const sessionQueries = {
-  sessionGroups: (_: unknown, args: { channelId: string }, ctx: Context) => {
-    return sessionService.listGroups(args.channelId, requireOrgContext(ctx));
+  sessionGroups: (_: unknown, args: { channelId: string; excludeStatuses?: string[] }, ctx: Context) => {
+    return sessionService.listGroups(args.channelId, requireOrgContext(ctx), { excludeStatuses: args.excludeStatuses });
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx));
