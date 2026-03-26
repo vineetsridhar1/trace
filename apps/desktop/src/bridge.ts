@@ -53,6 +53,7 @@ export class BridgeClient implements IBridgeClient {
   private instanceId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private hookQueueTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private isFlushingHookQueue = false;
   private status: BridgeConnectionStatus = "disconnected";
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
@@ -84,6 +85,7 @@ export class BridgeClient implements IBridgeClient {
   }
 
   connect() {
+    this.cancelPendingReconnect();
     this.setStatus("connecting");
     runtimeDebug("desktop bridge connecting", { serverUrl: this.serverUrl, instanceId: this.instanceId });
     this.ws = new WebSocket(`${this.serverUrl}/bridge`);
@@ -113,7 +115,7 @@ export class BridgeClient implements IBridgeClient {
       this.stopHookQueueDrain();
       runtimeDebug("desktop bridge websocket closed", { instanceId: this.instanceId });
       this.setStatus("disconnected");
-      setTimeout(() => this.connect(), 3000);
+      this.scheduleReconnect(3000);
     });
 
     this.ws.on("error", (err) => {
@@ -129,6 +131,7 @@ export class BridgeClient implements IBridgeClient {
   }
 
   disconnect() {
+    this.cancelPendingReconnect();
     this.stopHeartbeat();
     this.stopHookQueueDrain();
     this.terminalManager.destroyAll();
@@ -139,6 +142,38 @@ export class BridgeClient implements IBridgeClient {
     this.ws?.close();
     this.ws = null;
     this.setStatus("disconnected");
+  }
+
+  /**
+   * Force an immediate reconnect — used after system wake to avoid waiting
+   * for the stale WebSocket to time out on its own.
+   */
+  forceReconnect() {
+    console.log("[bridge] force reconnecting...");
+    runtimeDebug("desktop bridge force reconnect", { instanceId: this.instanceId });
+    this.cancelPendingReconnect();
+    this.stopHeartbeat();
+    this.stopHookQueueDrain();
+    // Tear down the old socket without triggering the close handler's reconnect
+    if (this.ws) {
+      this.ws.removeAllListeners();
+      this.ws.close();
+      this.ws = null;
+    }
+    this.setStatus("disconnected");
+    this.connect();
+  }
+
+  private cancelPendingReconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private scheduleReconnect(delayMs: number) {
+    this.cancelPendingReconnect();
+    this.reconnectTimer = setTimeout(() => this.connect(), delayMs);
   }
 
   getStatus(): BridgeConnectionStatus {

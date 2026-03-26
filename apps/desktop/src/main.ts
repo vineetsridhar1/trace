@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell } from "electron";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -163,6 +163,13 @@ app.whenReady().then(() => {
   });
   bridge.connect();
   createWindow();
+
+  // After sleep/wake the WebSocket is often dead but no close event fires.
+  // Force an immediate reconnect so the user doesn't have to restart the app.
+  powerMonitor.on("resume", () => {
+    console.log("[main] system resumed from sleep, forcing bridge reconnect");
+    bridge.forceReconnect();
+  });
 });
 
 app.on("window-all-closed", () => {
