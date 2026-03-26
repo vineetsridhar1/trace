@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "../../lib/utils";
 import { useSidebarData } from "../../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
 import { useUIStore } from "../../stores/ui";
@@ -30,7 +31,7 @@ export function PeekOverlay({
   const activeChatId = useUIStore((s) => s.activeChatId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
 
-  const { handleScroll, jumpToTab, selectTab, tabProgress, viewportRef } = useSidebarTabScroll({
+  const { handleScroll, isIOSSafari, jumpToTab, selectTab, tabProgress, viewportRef } = useSidebarTabScroll({
     currentTab,
     onProgressChange: onTabProgressChange,
     onTabCommit,
@@ -81,7 +82,10 @@ export function PeekOverlay({
           <div className="flex flex-1 flex-col overflow-hidden rounded-xl">
             <div
               ref={viewportRef}
-              className="no-scrollbar flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
+              className={cn(
+                "no-scrollbar flex min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain",
+                isIOSSafari && "snap-x snap-mandatory",
+              )}
               onScroll={handleScroll}
             >
               <SidebarDirectMessagesPane
