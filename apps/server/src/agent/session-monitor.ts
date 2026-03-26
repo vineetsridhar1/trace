@@ -1,106 +1,20 @@
 /**
- * Session Monitor — provides session-specific helpers for the agent pipeline.
+ * Session Monitor — event classification and info extraction helpers for
+ * session-scoped pipeline processing.
  *
  * The ambient AI observes coding session lifecycle events and provides useful
  * oversight: summarize progress to linked tickets, detect blocked/failed
  * sessions, and notify relevant people.
  *
- * This module does NOT run the pipeline — it provides enrichment functions
- * that the pipeline calls when processing session-scoped events.
+ * Note: Linked ticket fetching is handled by the context builder's session
+ * scope fetcher (context-builder.ts). This module provides pure classification
+ * and extraction functions that don't query the database.
  *
  * Ticket: #18
  * Dependencies: #09 (Entity Summaries), #15 (Pipeline Integration)
  */
 
-import { prisma } from "../lib/db.js";
 import type { AgentEvent } from "./router.js";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface LinkedTicketInfo {
-  id: string;
-  title: string;
-  status: string;
-  priority: string | null;
-  assignees: Array<{ id: string; name: string | null }>;
-}
-
-export interface SessionMonitorContext {
-  sessionId: string;
-  sessionName: string | null;
-  linkedTickets: LinkedTicketInfo[];
-  /** All unique assignee user IDs across all linked tickets. */
-  assigneeIds: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Session context helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Build session monitoring context from a session-scoped event.
- * Fetches linked tickets and their assignees for notification targeting.
- */
-export async function buildSessionMonitorContext(
-  sessionId: string,
-): Promise<SessionMonitorContext | null> {
-  const [session, ticketLinks] = await Promise.all([
-    prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { id: true, name: true },
-    }),
-    prisma.ticketLink.findMany({
-      where: { entityType: "session", entityId: sessionId },
-      include: {
-        ticket: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            priority: true,
-            assignees: { include: { user: { select: { id: true, name: true } } } },
-          },
-        },
-      },
-    }),
-  ]);
-
-  if (!session) return null;
-
-  const linkedTickets: LinkedTicketInfo[] = ticketLinks.map(
-    (l: {
-      ticket: {
-        id: string;
-        title: string;
-        status: string;
-        priority: string | null;
-        assignees: Array<{ user: { id: string; name: string | null } }>;
-      };
-    }) => ({
-      id: l.ticket.id,
-      title: l.ticket.title,
-      status: l.ticket.status,
-      priority: l.ticket.priority,
-      assignees: l.ticket.assignees.map((a) => ({ id: a.user.id, name: a.user.name })),
-    }),
-  );
-
-  const assigneeIdSet = new Set<string>();
-  for (const ticket of linkedTickets) {
-    for (const assignee of ticket.assignees) {
-      assigneeIdSet.add(assignee.id);
-    }
-  }
-
-  return {
-    sessionId: session.id,
-    sessionName: session.name,
-    linkedTickets,
-    assigneeIds: [...assigneeIdSet],
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Event classification helpers

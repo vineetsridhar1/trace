@@ -1,12 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("../lib/db.js", () => ({
-  prisma: {
-    session: { findUnique: vi.fn().mockResolvedValue(null) },
-    ticketLink: { findMany: vi.fn().mockResolvedValue([]) },
-  },
-}));
-
+import { describe, expect, it } from "vitest";
 import {
   isBlockedSessionEvent,
   isSessionCompletionEvent,
