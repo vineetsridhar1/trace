@@ -85,6 +85,7 @@ export function StartSessionDialog({ channelId }: { channelId: string }) {
             channelId,
             repoId: channelRepoId ?? undefined,
             prompt: prompt.trim(),
+            interactionMode: mode === "code" ? undefined : mode,
           },
         })
         .toPromise();

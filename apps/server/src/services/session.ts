@@ -836,6 +836,11 @@ export class SessionService {
       runtimeLabel = runtime.label;
     }
 
+    // Ask-mode sessions skip worktree creation (read-only against repo root).
+    // Checkpoint restores always need a worktree to reset to a specific SHA.
+    const readOnlyWorkspace =
+      input.interactionMode === "ask" && !input.restoreCheckpointId;
+
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
     const initialConnection = sharedConnection
@@ -905,6 +910,7 @@ export class SessionService {
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
           worktreeDeleted: sessionGroup.worktreeDeleted,
+          readOnlyWorkspace,
           ...(projectIds.length > 0 && {
             projects: {
               create: projectIds.map((projectId) => ({ projectId })),
@@ -981,6 +987,7 @@ export class SessionService {
         checkpointSha: restoreCheckpoint?.commitSha ?? undefined,
         createdById: input.createdById,
         organizationId: input.organizationId,
+        readOnly: readOnlyWorkspace,
         onFailed: (error) => this.workspaceFailed(session.id, error),
         onWorkspaceReady: (workdir) => this.workspaceReady(session.id, workdir),
       });
@@ -1004,6 +1011,38 @@ export class SessionService {
         !!session.sessionGroupId)
         ? await getSessionStartMetadata(id)
         : null;
+
+    // If session has a read-only workspace and the mode switched away from ask,
+    // upgrade to a full worktree before running
+    if (session.readOnlyWorkspace && interactionMode !== "ask" && session.repo) {
+      const updated = await prisma.session.update({
+        where: { id },
+        data: {
+          pendingRun: {
+            type: "run",
+            prompt: prompt ?? null,
+            interactionMode: interactionMode ?? null,
+            checkpointContext: buildCheckpointContextFromStartMeta({
+              sessionId: id,
+              sessionGroupId: session.sessionGroupId,
+              repoId: session.repoId,
+              startMeta,
+            }),
+          } as unknown as Prisma.InputJsonValue,
+        },
+        include: SESSION_INCLUDE,
+      });
+      sessionRouter.send(id, {
+        type: "upgrade_workspace",
+        sessionId: id,
+        repoId: session.repo.id,
+        repoName: session.repo.name,
+        repoRemoteUrl: session.repo.remoteUrl,
+        defaultBranch: session.repo.defaultBranch,
+        branch: session.branch ?? undefined,
+      });
+      return updated;
+    }
 
     // If workspace is still being prepared, queue the run for later
     if (session.agentStatus === "not_started" && !session.workdir) {
@@ -1740,11 +1779,45 @@ export class SessionService {
         sessionGroupId: true,
         connection: true,
         worktreeDeleted: true,
+        readOnlyWorkspace: true,
+        repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
+        branch: true,
       },
     });
 
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");
+    }
+
+    // If session has a read-only workspace and user switched away from ask mode,
+    // trigger a workspace upgrade to create a real worktree
+    if (session.readOnlyWorkspace && interactionMode !== "ask" && session.repo) {
+      await this.storePendingCommand(sessionId, {
+        type: "send",
+        prompt: text,
+        interactionMode: interactionMode ?? null,
+        checkpointContext: null,
+      });
+      sessionRouter.send(sessionId, {
+        type: "upgrade_workspace",
+        sessionId,
+        repoId: session.repo.id,
+        repoName: session.repo.name,
+        repoRemoteUrl: session.repo.remoteUrl,
+        defaultBranch: session.repo.defaultBranch,
+        branch: session.branch ?? undefined,
+      });
+      // Record the message event so it appears in the UI
+      const event = await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "message_sent",
+        payload: { text },
+        actorType,
+        actorId,
+      });
+      return event;
     }
 
     // If the tool was recently switched and no user message has been sent since,
@@ -1907,6 +1980,7 @@ export class SessionService {
           workdir,
           ...(branch && { branch }),
           pendingRun: Prisma.DbNull,
+          readOnlyWorkspace: false,
         },
         include: SESSION_INCLUDE,
       });

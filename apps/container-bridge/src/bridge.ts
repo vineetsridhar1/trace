@@ -42,6 +42,8 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
+  /** Sessions running in read-only mode (no worktree, using bare repo path) */
+  private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
   private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
   private terminalManager: TerminalManager;
@@ -232,9 +234,43 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare": {
-        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha } = cmd;
+        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha, readOnly } = cmd;
 
-        // Ensure repo is cloned, then create worktree for this session
+        (async () => {
+          try {
+            await ensureRepo(repoId, repoRemoteUrl);
+
+            if (readOnly) {
+              // Read-only mode: skip worktree, use the bare repo path directly
+              const workdir = getRepoPath(repoId) ?? `/repos/${repoId}`;
+              this.sessionWorkdirs.set(sessionId, workdir);
+              this.readOnlySessions.add(sessionId);
+              this.send({ type: "register_session", sessionId });
+              this.send({ type: "workspace_ready", sessionId, workdir });
+            } else {
+              const { workdir } = await createWorktree(
+                repoId,
+                sessionId,
+                defaultBranch,
+                branch,
+                checkpointSha,
+              );
+              this.sessionWorkdirs.set(sessionId, workdir);
+              this.send({ type: "register_session", sessionId });
+              this.send({ type: "workspace_ready", sessionId, workdir });
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[container-bridge] workspace failed for ${sessionId}:`, message);
+            this.send({ type: "workspace_failed", sessionId, error: message });
+          }
+        })();
+        break;
+      }
+
+      case "upgrade_workspace": {
+        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
+
         (async () => {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
@@ -243,15 +279,13 @@ export class ContainerBridge implements IBridgeClient {
               sessionId,
               defaultBranch,
               branch,
-              checkpointSha,
             );
             this.sessionWorkdirs.set(sessionId, workdir);
-            // Register this session with the server
-            this.send({ type: "register_session", sessionId });
+            this.readOnlySessions.delete(sessionId);
             this.send({ type: "workspace_ready", sessionId, workdir });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            console.error(`[container-bridge] workspace failed for ${sessionId}:`, message);
+            console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);
             this.send({ type: "workspace_failed", sessionId, error: message });
           }
         })();
@@ -283,12 +317,14 @@ export class ContainerBridge implements IBridgeClient {
         }
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
+        const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
+        this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
-        // Clean up worktree for this session only — keep the machine and bare repo
-        if (cmd.workdir && cmd.repoId) {
+        // Clean up worktree for this session only — skip for read-only sessions (no worktree to remove)
+        if (cmd.workdir && cmd.repoId && !wasReadOnly) {
           removeWorktree(cmd.repoId, cmd.workdir).catch((err: Error) => {
             console.warn(`[container-bridge] failed to remove worktree ${cmd.workdir}:`, err.message);
           });

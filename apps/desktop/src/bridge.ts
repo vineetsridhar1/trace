@@ -59,6 +59,8 @@ export class BridgeClient implements IBridgeClient {
   private statusListeners = new Set<(status: BridgeConnectionStatus) => void>();
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
+  /** Sessions running in read-only mode (no worktree, using user's repo checkout) */
+  private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
   private pendingGitToolUses = new Map<string, Map<string, { trigger: import("@trace/shared").GitCheckpointTrigger; command: string }>>();
   private terminalManager: TerminalManager;
@@ -418,7 +420,47 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "prepare": {
-        const { sessionId, repoId, repoName, defaultBranch, branch, checkpointSha } = cmd;
+        const { sessionId, repoId, repoName, defaultBranch, branch, checkpointSha, readOnly } = cmd;
+        const repoConfig = getRepoConfig(repoId);
+        const repoPath = repoConfig?.path;
+
+        if (!repoPath) {
+          this.send({
+            type: "workspace_failed",
+            sessionId,
+            error: `No local path configured for repo "${repoName}" (${repoId}). Configure it in Settings.`,
+          });
+          break;
+        }
+
+        if (readOnly) {
+          // Read-only mode: skip worktree, use the user's actual repo checkout
+          this.sessionWorkdirs.set(sessionId, repoPath);
+          this.readOnlySessions.add(sessionId);
+          this.send({ type: "workspace_ready", sessionId, workdir: repoPath });
+          break;
+        }
+
+        createWorktree({
+          repoPath,
+          repoId,
+          sessionId,
+          defaultBranch,
+          startBranch: branch,
+          checkpointSha,
+          gitHooksEnabled: repoConfig.gitHooksEnabled,
+        })
+          .then(({ workdir, branch: worktreeBranch }) => {
+            this.sessionWorkdirs.set(sessionId, workdir);
+            this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId, error: err.message });
+          });
+        break;
+      }
+      case "upgrade_workspace": {
+        const { sessionId, repoId, repoName, defaultBranch, branch } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -437,11 +479,11 @@ export class BridgeClient implements IBridgeClient {
           sessionId,
           defaultBranch,
           startBranch: branch,
-          checkpointSha,
           gitHooksEnabled: repoConfig.gitHooksEnabled,
         })
           .then(({ workdir, branch: worktreeBranch }) => {
             this.sessionWorkdirs.set(sessionId, workdir);
+            this.readOnlySessions.delete(sessionId);
             this.send({ type: "workspace_ready", sessionId, workdir, branch: worktreeBranch });
           })
           .catch((err: Error) => {
@@ -477,12 +519,14 @@ export class BridgeClient implements IBridgeClient {
         }
         this.sessionTools.delete(cmd.sessionId);
         this.reportedToolSessionIds.delete(cmd.sessionId);
+        const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
+        this.readOnlySessions.delete(cmd.sessionId);
         this.sessionWorkdirs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
-        // Clean up worktree if one exists
-        if (cmd.workdir && cmd.repoId) {
+        // Clean up worktree if one exists — skip for read-only sessions (no worktree to remove)
+        if (cmd.workdir && cmd.repoId && !wasReadOnly) {
           const repoPath = getRepoConfig(cmd.repoId)?.path;
           if (repoPath) {
             removeWorktree({ repoPath, worktreePath: cmd.workdir }).catch((err: Error) => {

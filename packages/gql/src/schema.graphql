@@ -731,6 +731,7 @@ input StartSessionInput {
   restoreCheckpointId: ID
   projectId: ID
   prompt: String
+  interactionMode: String
 }
 
 input SessionFilters {
