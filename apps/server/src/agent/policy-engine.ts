@@ -73,7 +73,7 @@ function getThresholds(risk: RiskLevel, mode: AutonomyMode): Thresholds {
 /** Default max suggestions per scope type per hour. */
 const SUGGESTION_RATE_LIMITS: Record<string, number> = {
   channel: 2,
-  chat: 1,    // group chats
+  chat: 10,   // group chats (raised for dev testing)
   ticket: 2,
   session: 2,
   project: 2,
