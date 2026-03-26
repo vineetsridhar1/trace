@@ -1012,36 +1012,22 @@ export class SessionService {
         ? await getSessionStartMetadata(id)
         : null;
 
-    // If session has a read-only workspace and the mode switched away from ask,
+    // If session has a read-only workspace and the mode explicitly switched away from ask,
     // upgrade to a full worktree before running
-    if (session.readOnlyWorkspace && interactionMode !== "ask" && session.repo) {
-      const updated = await prisma.session.update({
-        where: { id },
-        data: {
-          pendingRun: {
-            type: "run",
-            prompt: prompt ?? null,
-            interactionMode: interactionMode ?? null,
-            checkpointContext: buildCheckpointContextFromStartMeta({
-              sessionId: id,
-              sessionGroupId: session.sessionGroupId,
-              repoId: session.repoId,
-              startMeta,
-            }),
-          } as unknown as Prisma.InputJsonValue,
-        },
-        include: SESSION_INCLUDE,
-      });
-      sessionRouter.send(id, {
-        type: "upgrade_workspace",
-        sessionId: id,
-        repoId: session.repo.id,
-        repoName: session.repo.name,
-        repoRemoteUrl: session.repo.remoteUrl,
-        defaultBranch: session.repo.defaultBranch,
-        branch: session.branch ?? undefined,
-      });
-      return updated;
+    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+      const pendingCommand: PendingSessionCommand = {
+        type: "run",
+        prompt: prompt ?? null,
+        interactionMode: interactionMode ?? null,
+        checkpointContext: buildCheckpointContextFromStartMeta({
+          sessionId: id,
+          sessionGroupId: session.sessionGroupId,
+          repoId: session.repoId,
+          startMeta,
+        }),
+      };
+      await this.triggerWorkspaceUpgrade(id, session, pendingCommand);
+      return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
     }
 
     // If workspace is still being prepared, queue the run for later
@@ -1405,7 +1391,7 @@ export class SessionService {
   ) {
     const prev = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true },
+      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true, readOnlyWorkspace: true },
     });
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
@@ -1470,6 +1456,7 @@ export class SessionService {
           branch: sessionForRepo.branch ?? undefined,
           createdById: actorId,
           organizationId,
+          readOnly: prev.readOnlyWorkspace,
           onFailed: (error) => this.workspaceFailed(sessionId, error),
           onWorkspaceReady: (workdir) => this.workspaceReady(sessionId, workdir),
         });
@@ -1789,24 +1776,16 @@ export class SessionService {
       throw new Error("Cannot send messages: session worktree has been deleted");
     }
 
-    // If session has a read-only workspace and user switched away from ask mode,
+    // If session has a read-only workspace and user explicitly switched away from ask mode,
     // trigger a workspace upgrade to create a real worktree
-    if (session.readOnlyWorkspace && interactionMode !== "ask" && session.repo) {
-      await this.storePendingCommand(sessionId, {
+    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+      const pendingCommand: PendingSessionCommand = {
         type: "send",
         prompt: text,
         interactionMode: interactionMode ?? null,
         checkpointContext: null,
-      });
-      sessionRouter.send(sessionId, {
-        type: "upgrade_workspace",
-        sessionId,
-        repoId: session.repo.id,
-        repoName: session.repo.name,
-        repoRemoteUrl: session.repo.remoteUrl,
-        defaultBranch: session.repo.defaultBranch,
-        branch: session.branch ?? undefined,
-      });
+      };
+      await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand);
       // Record the message event so it appears in the UI
       const event = await eventService.create({
         organizationId: session.organizationId,
@@ -3363,6 +3342,40 @@ export class SessionService {
       };
     }
     return null;
+  }
+
+  /**
+   * Store a pending command and send upgrade_workspace to the bridge.
+   * If delivery fails, persists the connection failure so the user sees the error.
+   */
+  private async triggerWorkspaceUpgrade(
+    sessionId: string,
+    session: { organizationId: string; repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null; branch: string | null },
+    pendingCommand: PendingSessionCommand,
+  ) {
+    await this.storePendingCommand(sessionId, pendingCommand);
+
+    const repo = session.repo;
+    if (!repo) return;
+
+    const deliveryResult = sessionRouter.send(sessionId, {
+      type: "upgrade_workspace",
+      sessionId,
+      repoId: repo.id,
+      repoName: repo.name,
+      repoRemoteUrl: repo.remoteUrl,
+      defaultBranch: repo.defaultBranch,
+      branch: session.branch ?? undefined,
+    });
+
+    if (deliveryResult !== "delivered") {
+      await this.persistConnectionFailure(
+        sessionId,
+        session.organizationId,
+        deliveryResult,
+        "upgrade_workspace",
+      );
+    }
   }
 
   private async storePendingCommand(sessionId: string, pending: PendingSessionCommand) {

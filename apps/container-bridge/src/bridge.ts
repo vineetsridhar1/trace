@@ -242,7 +242,8 @@ export class ContainerBridge implements IBridgeClient {
 
             if (readOnly) {
               // Read-only mode: skip worktree, use the bare repo path directly
-              const workdir = getRepoPath(repoId) ?? `/repos/${repoId}`;
+              const workdir = getRepoPath(repoId);
+              if (!workdir) throw new Error(`Repo path not found after ensureRepo for ${repoId}`);
               this.sessionWorkdirs.set(sessionId, workdir);
               this.readOnlySessions.add(sessionId);
               this.send({ type: "register_session", sessionId });
