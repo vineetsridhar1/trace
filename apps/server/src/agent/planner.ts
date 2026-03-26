@@ -15,7 +15,13 @@
  * Dependencies: #06 (Action Registry), #10 (Context Builder)
  */
 
-import type { LLMAdapter, LLMAssistantContentBlock, LLMToolDefinition } from "@trace/shared";
+import type {
+  LLMAdapter,
+  LLMAssistantContentBlock,
+  LLMMessage,
+  LLMResponse,
+  LLMToolDefinition,
+} from "@trace/shared";
 import { createLLMAdapter } from "../lib/llm/index.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import type { AgentActionRegistration } from "./action-registry.js";
@@ -38,6 +44,8 @@ export interface PlannerOutput {
   proposedActions: ProposedAction[];
   userVisibleMessage?: string;
   promotionReason?: string;
+  /** When true, the planner has nothing more to do. Pipeline respects this as a stop hint. */
+  done?: boolean;
 }
 
 export interface PlannerResult {
@@ -143,6 +151,12 @@ const PLANNER_TOOL: LLMToolDefinition = {
           "If disposition is 'escalate', explain why Tier 3 is needed. " +
           "Omit for other dispositions.",
       },
+      done: {
+        type: "boolean",
+        description:
+          "Set to true when you have completed all useful actions and have nothing more to do. " +
+          "Defaults to false if omitted. The pipeline will stop the loop when this is true.",
+      },
     },
     additionalProperties: false,
   },
@@ -152,7 +166,7 @@ const PLANNER_TOOL: LLMToolDefinition = {
 // System prompt construction
 // ---------------------------------------------------------------------------
 
-function buildSystemPrompt(ctx: AgentContextPacket): string {
+export function buildSystemPrompt(ctx: AgentContextPacket): string {
   const parts: string[] = [];
 
   // 1. System preamble
@@ -189,7 +203,15 @@ CRITICAL RULES:
 10. Check relevant entities carefully — do NOT suggest creating a ticket if one already exists for the same issue.
 11. Check recent events — do NOT suggest actions that have already been taken.
 
-You MUST call the planner_decision tool exactly once with your decision.`;
+MULTI-TURN LOOP:
+- You operate in a loop of up to 10 turns. Each turn, you propose actions, they are executed, and you see the results.
+- You may send multiple messages, create tickets, and perform other actions across turns.
+- After each turn, you'll receive a tool_result showing what was executed, suggested, or dropped, plus the current turn count.
+- Set done=true when you have nothing more to do. The pipeline enforces a hard cap of 10 turns regardless.
+- You do NOT need to do everything in one turn. Propose one or a few actions per turn, observe the results, and decide what's next.
+- If your first action is to reply to a message, you can then follow up with additional actions in subsequent turns.
+
+You MUST call the planner_decision tool exactly once per turn with your decision.`;
 
 function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
   const entries = actions.map((a) => {
@@ -413,6 +435,10 @@ function parsePlannerOutput(
     output.promotionReason = raw.promotionReason;
   }
 
+  if (typeof raw.done === "boolean") {
+    output.done = raw.done;
+  }
+
   return output;
 }
 
@@ -504,4 +530,65 @@ export async function runPlanner(
       model,
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-turn planner entry point
+// ---------------------------------------------------------------------------
+
+export interface PlannerTurnResult {
+  output: PlannerOutput;
+  /** Raw LLM response — pipeline uses content blocks to build message history */
+  response: LLMResponse;
+  latencyMs: number;
+}
+
+/**
+ * Run a single planner turn with a full message history.
+ *
+ * Unlike `runPlanner`, this does not build the system prompt or construct the
+ * initial user message — the pipeline manages those. This is a thin wrapper
+ * around the LLM adapter that parses the tool_use output.
+ */
+export async function runPlannerTurn(
+  systemPrompt: string,
+  messages: LLMMessage[],
+  availableActions: AgentActionRegistration[],
+  options?: PlannerOptions,
+): Promise<PlannerTurnResult> {
+  const model = options?.model ?? process.env.AGENT_PLANNER_MODEL ?? DEFAULT_TIER2_MODEL;
+  const adapter = options?.adapter ?? getAdapter();
+  const startTime = Date.now();
+
+  const response = await adapter.complete({
+    model,
+    system: systemPrompt,
+    messages,
+    tools: [PLANNER_TOOL],
+    maxTokens: 1024,
+    temperature: 0,
+  });
+
+  const latencyMs = Date.now() - startTime;
+
+  const toolUseBlock = response.content.find(
+    (b: LLMAssistantContentBlock) => b.type === "tool_use" && b.name === "planner_decision",
+  );
+
+  if (!toolUseBlock || toolUseBlock.type !== "tool_use") {
+    return {
+      output: {
+        ...IGNORE_OUTPUT,
+        rationaleSummary: "LLM did not produce a tool_use response — defaulted to ignore.",
+        done: true,
+      },
+      response,
+      latencyMs,
+    };
+  }
+
+  const rawInput = toolUseBlock.input as Record<string, unknown>;
+  const output = parsePlannerOutput(rawInput, availableActions);
+
+  return { output, response, latencyMs };
 }
