@@ -5,7 +5,7 @@ import { client } from "../lib/urql";
 import { useEntityStore, eventScopeKey } from "../stores/entity";
 import type { SessionEntity, SessionGroupEntity } from "../stores/entity";
 import { useAuthStore } from "../stores/auth";
-import { useUIStore } from "../stores/ui";
+import { useUIStore, navigateToSession } from "../stores/ui";
 import { notifyForEvent } from "../notifications/handlers";
 import type {
   AgentStatus,
@@ -390,6 +390,23 @@ export function useOrgEvents() {
               ...(existingSession ? { ...existingSession, ...session } : session),
               _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
             } as unknown as SessionEntity);
+
+            // Auto-navigate to continuation sessions: if the new session was created
+            // from the currently active session, open its tab and navigate to it.
+            const sourceSessionId = payload.sourceSessionId;
+            const ui = useUIStore.getState();
+            if (
+              typeof sourceSessionId === "string" &&
+              sourceSessionId === ui.activeSessionId
+            ) {
+              const sessionGroupId = session.sessionGroupId as string | undefined;
+              const channel = asJsonObject(session.channel);
+              const channelId = typeof channel?.id === "string" ? channel.id : null;
+              if (sessionGroupId) {
+                ui.openSessionTab(sessionGroupId, session.id);
+                navigateToSession(channelId, sessionGroupId, session.id);
+              }
+            }
           }
         }
 
