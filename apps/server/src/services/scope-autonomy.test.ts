@@ -84,7 +84,7 @@ describe("resolveAutonomyMode", () => {
     expect(result).toBe("observe");
   });
 
-  it("DMs default to observe when no explicit override", async () => {
+  it("DMs default to suggest when no explicit override", async () => {
     prismaMock.chat.findUnique.mockResolvedValueOnce({ aiMode: null });
 
     const result = await resolveAutonomyMode({
@@ -95,7 +95,7 @@ describe("resolveAutonomyMode", () => {
       orgDefault: "act",
     });
 
-    expect(result).toBe("observe");
+    expect(result).toBe("suggest");
   });
 
   it("group chats default to suggest when no explicit override", async () => {
@@ -137,8 +137,8 @@ describe("resolveAutonomyMode", () => {
       orgDefault: "act",
     });
 
-    // DM defaults to observe, not org default
-    expect(result).toBe("observe");
+    // DM defaults to suggest
+    expect(result).toBe("suggest");
   });
 
   it("scope override wins over project override", async () => {

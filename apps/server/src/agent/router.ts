@@ -380,7 +380,12 @@ export function routeEvent(
     }
   }
 
-  // 6. Rate limiting per scope
+  // 6. Session-scoped messages — already handled by the session's own AI
+  if (event.scopeType === "session" && event.eventType === "message_sent") {
+    return { decision: "drop", reason: "session_message_handled_by_session_ai" };
+  }
+
+  // 7. Rate limiting per scope
   if (isRateLimited(event)) {
     return { decision: "drop", reason: "rate_limited" };
   }

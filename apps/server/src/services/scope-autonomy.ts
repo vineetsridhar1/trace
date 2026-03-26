@@ -4,7 +4,7 @@
  *
  *   1. Scope-level override (chat/ticket/channel aiMode if set)
  *   2. Project-level override (if scope belongs to a project with aiMode set)
- *   3. Chat-type defaults (DMs → observe, group chats → suggest)
+ *   3. Chat-type defaults (DMs and group chats → suggest)
  *   4. Org-level default (AgentIdentity.autonomyMode)
  *
  * Ticket: #20
@@ -51,9 +51,9 @@ export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<
   const projectOverride = await getProjectOverride(scopeType, scopeId, organizationId);
   if (projectOverride) return projectOverride;
 
-  // 3. Chat-type defaults: DMs → observe, group chats → suggest
+  // 3. Chat-type defaults: DMs and group chats → suggest
   if (scopeType === "chat") {
-    return isDm ? "observe" : "suggest";
+    return "suggest";
   }
 
   // 4. Org-level default
