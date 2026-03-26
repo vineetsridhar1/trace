@@ -87,24 +87,8 @@ function shouldPromoteToTier3(event: AgentEvent, agentId: string): boolean {
     if (priority === "urgent" || priority === "high") return true;
   }
 
-  // 3. Explicit @mention of the agent in a non-DM message (complex question indicator).
-  //    DM messages are excluded — they default to Tier 2 and only promote via
-  //    model-requested escalation (promotionReason). This avoids wasting Opus-class
-  //    tokens on simple DM queries like "what's the status of TK-142?".
-  if (event.eventType === "message_sent" && event.scopeType === "chat") {
-    const chatType = getAgentChatType(event.organizationId, event.scopeId);
-    if (chatType !== "dm") {
-      const mentions = event.payload.mentions;
-      if (
-        Array.isArray(mentions) &&
-        mentions.some(
-          (m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
-        )
-      ) {
-        return true;
-      }
-    }
-  }
+  // 3. @mentions no longer auto-promote to Tier 3. The planner (Haiku by default)
+  //    can escalate via promotionReason if the question is complex enough for Opus.
 
   return false;
 }
