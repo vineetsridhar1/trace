@@ -297,11 +297,14 @@ class TerminalRelay {
     if (!ids) return;
     for (const terminalId of ids) {
       const entry = this.terminals.get(terminalId);
-      if (entry?.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
+      if (!entry) continue;
+      // Kill the terminal process on the bridge
+      sessionRouter.send(entry.sessionId, { type: "terminal_destroy", terminalId });
+      if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
       this.cancelOrphanCleanup(terminalId);
-      if (entry?.sessionGroupId) {
+      if (entry.sessionGroupId) {
         const groupIds = this.sessionGroupTerminals.get(entry.sessionGroupId);
         if (groupIds) {
           groupIds.delete(terminalId);
@@ -319,7 +322,9 @@ class TerminalRelay {
     for (const terminalId of ids) {
       const entry = this.terminals.get(terminalId);
       if (!entry) continue;
-      if (entry?.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
+      // Kill the terminal process on the bridge
+      sessionRouter.send(entry.sessionId, { type: "terminal_destroy", terminalId });
+      if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
         entry.frontendWs.send(JSON.stringify({ type: "exit", exitCode: -1 }));
       }
       this.cancelOrphanCleanup(terminalId);
