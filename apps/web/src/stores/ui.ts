@@ -191,7 +191,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
       const channelId = resolveChannelIdForSessionGroup(groupId, state.activeChannelId);
       persistActiveSessionNav(groupId, adjacentId);
-      pushNav(channelId, groupId, adjacentId);
+      replaceNav(channelId, groupId, adjacentId);
     }
     set(updates);
   },

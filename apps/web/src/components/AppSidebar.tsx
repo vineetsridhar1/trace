@@ -16,7 +16,7 @@ export function AppSidebar() {
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const activeChatId = useUIStore((s) => s.activeChatId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
-  const { state, isMobile, setOpen, setOpenMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const sidebarData = useSidebarData();
 
   const restoreLastVisited = useUIStore((s) => s.restoreLastVisited);
@@ -24,10 +24,8 @@ export function AppSidebar() {
   const closeSidebar = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
-    } else {
-      setOpen(false);
     }
-  }, [isMobile, setOpen, setOpenMobile]);
+  }, [isMobile, setOpenMobile]);
 
   const handleChannelClick = useCallback((id: string) => {
     setActiveChannelId(id);
