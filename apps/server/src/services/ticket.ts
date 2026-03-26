@@ -1,6 +1,7 @@
 import type { CreateTicketInput, UpdateTicketInput, ActorType, EntityType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { embeddingService } from "./embedding.js";
 
 export type CreateTicketServiceInput = CreateTicketInput & {
   actorType: ActorType;
@@ -56,6 +57,9 @@ export class TicketService {
       return [ticket, event] as const;
     });
 
+    // Fire-and-forget: generate embedding for the new ticket
+    this.embedTicket(ticket).catch(() => {});
+
     return ticket;
   }
 
@@ -90,6 +94,11 @@ export class TicketService {
       actorType,
       actorId,
     });
+
+    // Fire-and-forget: update embedding if title or description changed
+    if (input.title !== undefined || input.description !== undefined) {
+      this.embedTicket(ticket).catch(() => {});
+    }
 
     return ticket;
   }
@@ -279,6 +288,69 @@ export class TicketService {
       include: TICKET_INCLUDE,
       take: limit,
       orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  /**
+   * Search tickets by semantic similarity using vector embeddings.
+   * Falls back to keyword search if the embedding service is unavailable.
+   */
+  async searchBySemantic(input: {
+    organizationId: string;
+    query: string;
+    limit?: number;
+    threshold?: number;
+  }) {
+    const limit = input.limit ?? 5;
+
+    if (!embeddingService.isAvailable()) {
+      return this.searchByRelevance({
+        organizationId: input.organizationId,
+        query: input.query,
+        limit,
+      });
+    }
+
+    const similar = await embeddingService.findSimilar({
+      organizationId: input.organizationId,
+      text: input.query,
+      entityTypes: ["ticket"],
+      limit,
+      threshold: input.threshold,
+    });
+
+    if (similar.length === 0) {
+      return this.searchByRelevance({
+        organizationId: input.organizationId,
+        query: input.query,
+        limit,
+      });
+    }
+
+    const ticketIds = similar.map((s) => s.entityId);
+    const tickets = await prisma.ticket.findMany({
+      where: { id: { in: ticketIds } },
+      include: TICKET_INCLUDE,
+    });
+
+    // Preserve similarity ordering
+    const ticketMap = new Map(tickets.map((t) => [t.id, t]));
+    return ticketIds.map((id) => ticketMap.get(id)).filter(Boolean);
+  }
+
+  /** Generate embedding text for a ticket and upsert it. */
+  private async embedTicket(ticket: { id: string; organizationId: string; title: string; description: string; labels: string[] }) {
+    const text = [
+      ticket.title,
+      ticket.description,
+      ...ticket.labels,
+    ].filter(Boolean).join(" ");
+
+    await embeddingService.upsert({
+      organizationId: ticket.organizationId,
+      entityType: "ticket",
+      entityId: ticket.id,
+      text,
     });
   }
 }

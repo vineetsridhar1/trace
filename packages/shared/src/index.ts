@@ -105,6 +105,8 @@ export type {
   LLMStreamEvent,
   LLMRequestOptions,
   LLMAdapter,
+  EmbedRequest,
+  EmbedResponse,
 } from "./adapters/llm.js";
 export type { ModelOption } from "./models.js";
 export { getModelsForTool, getDefaultModel, getModelLabel, isSupportedModel } from "./models.js";

@@ -13,6 +13,7 @@ import { ScopeType as PrismaScopeType } from "@prisma/client";
 import { summaryService } from "../services/summary.js";
 import { refreshIfStale } from "./summary-worker.js";
 import { ticketService } from "../services/ticket.js";
+import { embeddingService } from "../services/embedding.js";
 import {
   getActionsByScope,
   type AgentActionRegistration,
@@ -396,9 +397,36 @@ async function findRelevantEntities(input: {
   const seen = new Set<string>(); // "type:id" dedup
   seen.add(`${input.scopeType}:${input.scopeId}`); // don't re-include scope
 
-  // --- Ticket search by relevance ---
+  // --- Semantic + keyword search for relevant entities ---
   const searchText = extractSearchText(input.events);
   if (searchText.trim()) {
+    // Try semantic search first (cross-entity), fall back to keyword search
+    try {
+      if (embeddingService.isAvailable()) {
+        const semanticResults = await embeddingService.findSimilar({
+          organizationId: input.organizationId,
+          text: searchText,
+          entityTypes: ["ticket", "session", "channel"],
+          limit: 8,
+          excludeIds: [input.scopeId],
+        });
+
+        for (const result of semanticResults) {
+          const key = `${result.entityType}:${result.entityId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          const linked = await fetchLinkedEntity(result.entityType, result.entityId);
+          if (linked) {
+            entities.push({ ...linked, hop: 1 });
+          }
+        }
+      }
+    } catch {
+      // Semantic search failure is non-fatal
+    }
+
+    // Keyword fallback for tickets (complements semantic results)
     try {
       const relatedTickets = await ticketService.searchByRelevance({
         organizationId: input.organizationId,

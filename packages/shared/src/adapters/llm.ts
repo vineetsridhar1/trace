@@ -133,10 +133,24 @@ export interface LLMRequestOptions {
   stopSequences?: string[];
 }
 
+// ── Embedding types ──
+
+export interface EmbedRequest {
+  model: string;
+  texts: string[];
+}
+
+export interface EmbedResponse {
+  embeddings: number[][];
+  model: string;
+  usage: { totalTokens: number };
+}
+
 // ── Adapter interface ──
 
 export interface LLMAdapter {
   readonly provider: LLMProvider;
   complete(options: LLMRequestOptions): Promise<LLMResponse>;
   stream(options: LLMRequestOptions): AsyncIterable<LLMStreamEvent>;
+  embed?(input: EmbedRequest): Promise<EmbedResponse>;
 }

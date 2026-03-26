@@ -17,6 +17,7 @@ import { sessionRouter, type DeliveryResult } from "../lib/session-router.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { embeddingService } from "./embedding.js";
 import {
   deriveSessionGroupStatus,
   type SessionGroupStatus as DerivedSessionGroupStatus,
@@ -962,6 +963,14 @@ export class SessionService {
     if (runtimeToBind) {
       sessionRouter.bindSession(session.id, runtimeToBind);
     }
+
+    // Fire-and-forget: generate embedding for the new session
+    embeddingService.upsert({
+      organizationId: session.organizationId,
+      entityType: "session",
+      entityId: session.id,
+      text: session.name,
+    }).catch(() => {});
 
     if (needsRuntimeProvisioning) {
       sessionRouter.createRuntime({

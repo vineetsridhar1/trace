@@ -19,6 +19,7 @@ import type { PolicyActionResult } from "./policy-engine.js";
 import type { PlannerOutput } from "./planner.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import { inboxService } from "../services/inbox.js";
+import { embeddingService } from "../services/embedding.js";
 import { mapActionToItemType } from "./action-types.js";
 
 export { mapActionToItemType } from "./action-types.js";
@@ -224,10 +225,31 @@ async function checkDuplicate(input: {
   });
 
   for (const item of existing) {
-    const similarity = titleSimilarity(
-      input.title,
-      getDedupComparisonTitle(item),
-    );
+    const comparisonTitle = getDedupComparisonTitle(item);
+
+    // Try embedding similarity first for higher accuracy
+    if (embeddingService.isAvailable()) {
+      try {
+        const embeddingSimilarity = await embeddingService.computeSimilarity(
+          input.title,
+          comparisonTitle,
+        );
+        if (embeddingSimilarity !== null && embeddingSimilarity >= DEDUP_SIMILARITY_THRESHOLD) {
+          return {
+            isDuplicate: true,
+            existingId: item.id,
+            existingTitle: item.title,
+            similarity: embeddingSimilarity,
+          };
+        }
+        if (embeddingSimilarity !== null) continue; // embedding available, skip Levenshtein
+      } catch {
+        // Fall through to Levenshtein
+      }
+    }
+
+    // Fallback: Levenshtein distance
+    const similarity = titleSimilarity(input.title, comparisonTitle);
     if (similarity >= DEDUP_SIMILARITY_THRESHOLD) {
       return {
         isDuplicate: true,

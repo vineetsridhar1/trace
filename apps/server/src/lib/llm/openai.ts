@@ -12,6 +12,8 @@ import type {
   LLMToolDefinition,
   LLMToolUseContent,
   LLMUserMessage,
+  EmbedRequest,
+  EmbedResponse,
 } from "@trace/shared";
 
 type ChatMessage = OpenAI.ChatCompletionMessageParam;
@@ -254,6 +256,18 @@ export class OpenAIAdapter implements LLMAdapter {
     const response = await this.client.chat.completions.create(buildOpenAIBaseRequest(options));
 
     return fromOpenAIResponse(response);
+  }
+
+  async embed(input: EmbedRequest): Promise<EmbedResponse> {
+    const response = await this.client.embeddings.create({
+      model: input.model,
+      input: input.texts,
+    });
+    return {
+      embeddings: response.data.map((d) => d.embedding),
+      model: response.model,
+      usage: { totalTokens: response.usage.total_tokens },
+    };
   }
 
   async *stream(options: LLMRequestOptions): AsyncIterable<LLMStreamEvent> {

@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 enum UserRole {
@@ -220,6 +222,7 @@ model Organization {
   processedEvents  ProcessedAgentEvent[]
   costTrackers     AgentCostTracker[]
   entitySummaries  EntitySummary[]
+  embeddings       Embedding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -749,4 +752,21 @@ model Participant {
 
   @@id([userId, scopeType, scopeId])
   @@index([scopeType, scopeId])
+}
+
+model Embedding {
+  id             String   @id @default(uuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  content        String
+  vector         Unsupported("vector(1536)")
+  model          String   @default("text-embedding-3-small")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([entityType, entityId])
+  @@index([organizationId, entityType])
 }
