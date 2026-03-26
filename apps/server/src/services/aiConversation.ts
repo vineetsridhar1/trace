@@ -1,6 +1,7 @@
 import type { AiConversationVisibility, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
+import { pubsub, topics } from "../lib/pubsub.js";
 
 export class AiConversationService {
   /**
@@ -52,6 +53,67 @@ export class AiConversationService {
 
       return updated;
     });
+  }
+
+  /**
+   * Verifies the user has access to the conversation that owns this branch.
+   * Returns the branch with its conversation for downstream use.
+   */
+  async assertBranchAccess(branchId: string, userId: string) {
+    const branch = await prisma.aiBranch.findUniqueOrThrow({
+      where: { id: branchId },
+      include: { conversation: true },
+    });
+
+    if (
+      branch.conversation.visibility === "PRIVATE" &&
+      branch.conversation.createdById !== userId
+    ) {
+      throw new Error("Conversation not found");
+    }
+
+    // For ORG visibility, verify user is in the same org
+    if (branch.conversation.createdById !== userId) {
+      await prisma.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId,
+            organizationId: branch.conversation.organizationId,
+          },
+        },
+      });
+    }
+
+    return branch;
+  }
+
+  /**
+   * Verifies the user has access to a conversation.
+   */
+  async assertConversationAccess(conversationId: string, userId: string) {
+    const conversation = await prisma.aiConversation.findUniqueOrThrow({
+      where: { id: conversationId },
+    });
+
+    if (
+      conversation.visibility === "PRIVATE" &&
+      conversation.createdById !== userId
+    ) {
+      throw new Error("Conversation not found");
+    }
+
+    if (conversation.createdById !== userId) {
+      await prisma.orgMember.findUniqueOrThrow({
+        where: {
+          userId_organizationId: {
+            userId,
+            organizationId: conversation.organizationId,
+          },
+        },
+      });
+    }
+
+    return conversation;
   }
 
   /**
@@ -173,16 +235,30 @@ export class AiConversationService {
       throw new Error("Only the conversation creator can update the title");
     }
 
-    return prisma.aiConversation.update({
+    const updated = await prisma.aiConversation.update({
       where: { id: input.conversationId },
       data: { title: input.title },
     });
+
+    pubsub.publish(topics.conversationEvents(input.conversationId), {
+      conversationEvents: {
+        conversationId: input.conversationId,
+        type: "title_updated",
+        payload: { title: input.title },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    return updated;
   }
 
   /**
    * Returns a branch with its turns ordered by creation time.
+   * Enforces access control through the parent conversation.
    */
-  async getBranch(branchId: string) {
+  async getBranch(branchId: string, requestingUserId: string) {
+    await this.assertBranchAccess(branchId, requestingUserId);
+
     return prisma.aiBranch.findUniqueOrThrow({
       where: { id: branchId },
       include: {
