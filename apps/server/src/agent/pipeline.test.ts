@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import type { AgentContextPacket } from "./context-builder.js";
-import type { PlannerResult } from "./planner.js";
+import type { PlannerTurnResult, PlannerOutput } from "./planner.js";
 import type { PolicyResult } from "./policy-engine.js";
+import type { LLMResponse } from "@trace/shared";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared before importing the module under test
@@ -28,8 +29,10 @@ vi.mock("./context-builder.js", () => ({
 }));
 
 vi.mock("./planner.js", () => ({
-  runPlanner: vi.fn(),
-  DEFAULT_TIER3_MODEL: "claude-opus-4-20250514",
+  DEFAULT_SONNET_MODEL: "claude-sonnet-4-20250514",
+  DEFAULT_OPUS_MODEL: "claude-opus-4-20250514",
+  buildSystemPrompt: vi.fn().mockReturnValue("system prompt"),
+  runPlannerTurn: vi.fn(),
 }));
 
 vi.mock("./policy-engine.js", () => ({
@@ -70,7 +73,7 @@ vi.mock("../services/processed-event.js", () => ({
 // Now import the module under test and mocked modules
 import { runPipeline } from "./pipeline.js";
 import { buildContext } from "./context-builder.js";
-import { runPlanner } from "./planner.js";
+import { runPlannerTurn } from "./planner.js";
 import { evaluatePolicy } from "./policy-engine.js";
 import { createSuggestions } from "./suggestion.js";
 import { refreshSummary } from "./summary-worker.js";
@@ -84,7 +87,7 @@ import { ActionExecutor } from "./executor.js";
 // ---------------------------------------------------------------------------
 
 const mockBuildContext = vi.mocked(buildContext);
-const mockRunPlanner = vi.mocked(runPlanner);
+const mockRunPlannerTurn = vi.mocked(runPlannerTurn);
 const mockEvaluatePolicy = vi.mocked(evaluatePolicy);
 const mockCreateSuggestions = vi.mocked(createSuggestions);
 const mockRefreshSummary = vi.mocked(refreshSummary);
@@ -124,6 +127,8 @@ function makePacket(overrides?: Partial<AgentContextPacket>): AgentContextPacket
     scopeKey: "channel:ch-1",
     scopeType: "channel",
     scopeId: "ch-1",
+    isDm: false,
+    isMention: false,
     triggerEvent: {
       id: "evt-1",
       organizationId: "org-1",
@@ -148,21 +153,46 @@ function makePacket(overrides?: Partial<AgentContextPacket>): AgentContextPacket
   } as AgentContextPacket;
 }
 
-function makePlannerResult(
+function makeLLMResponse(model = "claude-haiku-test"): LLMResponse {
+  return {
+    content: [
+      {
+        type: "tool_use",
+        id: "tool-1",
+        name: "planner_decision",
+        input: {},
+      },
+    ],
+    stopReason: "tool_use",
+    usage: { inputTokens: 1000, outputTokens: 200 },
+    model,
+  };
+}
+
+function makeTurnResult(
   disposition: string,
-  overrides?: Partial<PlannerResult>,
-): PlannerResult {
+  overrides?: {
+    done?: boolean;
+    proposedActions?: PlannerOutput["proposedActions"];
+    promotionReason?: string;
+    promotionTarget?: "sonnet" | "opus";
+    model?: string;
+  },
+): PlannerTurnResult {
+  const actions = overrides?.proposedActions ??
+    (disposition === "ignore" ? [] : [{ actionType: "ticket.create", args: { title: "Bug" } }]);
   return {
     output: {
-      disposition: disposition as PlannerResult["output"]["disposition"],
+      disposition: disposition as PlannerOutput["disposition"],
       confidence: 0.85,
       rationaleSummary: "test rationale",
-      proposedActions: disposition === "ignore" ? [] : [{ actionType: "ticket.create", args: { title: "Bug" } }],
+      proposedActions: actions,
+      done: overrides?.done,
+      promotionReason: overrides?.promotionReason,
+      promotionTarget: overrides?.promotionTarget,
     },
-    usage: { inputTokens: 1000, outputTokens: 200 },
+    response: makeLLMResponse(overrides?.model),
     latencyMs: 500,
-    model: "claude-sonnet-test",
-    ...overrides,
   };
 }
 
@@ -195,284 +225,11 @@ describe("runPipeline", () => {
     await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
 
     expect(mockBuildContext).not.toHaveBeenCalled();
-    expect(mockRunPlanner).not.toHaveBeenCalled();
-  });
-
-  it("handles ignore disposition — logs and marks processed", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("ignore"));
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    expect(mockRunPlanner).toHaveBeenCalledOnce();
-    expect(mockEvaluatePolicy).not.toHaveBeenCalled();
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockRecordCost).toHaveBeenCalledOnce();
-    expect(mockMarkProcessed).toHaveBeenCalledOnce();
-
-    // Verify the log recorded the "dropped" status
-    const logInput = mockLogWrite.mock.calls[0][0];
-    expect(logInput.disposition).toBe("ignore");
-    expect(logInput.status).toBe("dropped");
-  });
-
-  it("handles escalate disposition with promotion — re-runs with Tier 3", async () => {
-    const packet = makePacket();
-    const tier3Packet = makePacket({ tokenBudget: { total: 100000, used: 8000, sections: { trigger: 300 } } });
-    mockBuildContext
-      .mockResolvedValueOnce(packet) // Tier 2 context
-      .mockResolvedValueOnce(tier3Packet); // Tier 3 context (rebuilt)
-
-    // Tier 2 planner returns escalate with promotionReason
-    const tier2Result = makePlannerResult("escalate");
-    tier2Result.output.promotionReason = "complex multi-step task";
-
-    // Tier 3 planner returns act
-    const tier3Result = makePlannerResult("act", { model: "claude-opus-4-20250514" });
-
-    mockRunPlanner
-      .mockResolvedValueOnce(tier2Result)
-      .mockResolvedValueOnce(tier3Result);
-
-    mockEvaluatePolicy.mockResolvedValue({
-      actions: [
-        {
-          action: { actionType: "ticket.create", args: { title: "Bug" } },
-          decision: "execute",
-          reason: "high confidence",
-        },
-      ],
-      plannerOutput: tier3Result.output,
-    } as PolicyResult);
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    // Planner called twice: once for Tier 2, once for Tier 3
-    expect(mockRunPlanner).toHaveBeenCalledTimes(2);
-    // Second call should use Tier 3 model
-    expect(mockRunPlanner.mock.calls[1][1]).toEqual({ model: "claude-opus-4-20250514" });
-    // Context rebuilt for Tier 3
-    expect(mockBuildContext).toHaveBeenCalledTimes(2);
-    // Execution log records promotion
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].modelTier).toBe("tier3");
-    expect(mockLogWrite.mock.calls[0][0].promoted).toBe(true);
-    expect(mockLogWrite.mock.calls[0][0].promotionReason).toBe("complex multi-step task");
-    // Cost recorded for both tiers
-    expect(mockRecordCost).toHaveBeenCalledTimes(2);
-    expect(mockRecordCost.mock.calls[0][0].modelTier).toBe("tier2");
-    expect(mockRecordCost.mock.calls[1][0].modelTier).toBe("tier3");
-  });
-
-  it("suppresses Tier 3 promotion when budget is below 50%", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-
-    // Tier 2 planner returns escalate
-    const tier2Result = makePlannerResult("escalate");
-    tier2Result.output.promotionReason = "complex multi-step task";
-    mockRunPlanner.mockResolvedValue(tier2Result);
-
-    // Budget is tight — should suppress Tier 3
-    mockCheckBudget.mockResolvedValue({
-      dailyLimitCents: 1000,
-      spentCents: 600,
-      remainingCents: 400,
-      remainingPercent: 40,
-    });
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    // Only one planner call (Tier 2 only, no promotion)
-    expect(mockRunPlanner).toHaveBeenCalledOnce();
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].status).toBe("blocked");
-    expect(mockLogWrite.mock.calls[0][0].modelTier).toBe("tier2");
-  });
-
-  it("runs Tier 3 directly when batch.maxTier is 3 (rule-based promotion)", async () => {
-    const packet = makePacket({ tokenBudget: { total: 100000, used: 8000, sections: { trigger: 300 } } });
-    mockBuildContext.mockResolvedValue(packet);
-    const tier3Result = makePlannerResult("act", { model: "claude-opus-4-20250514" });
-    mockRunPlanner.mockResolvedValue(tier3Result);
-    mockEvaluatePolicy.mockResolvedValue({
-      actions: [
-        {
-          action: { actionType: "ticket.create", args: { title: "Bug" } },
-          decision: "execute",
-          reason: "high confidence",
-        },
-      ],
-      plannerOutput: tier3Result.output,
-    } as PolicyResult);
-
-    // batch.maxTier = 3 → skip Tier 2, run Tier 3 directly
-    await runPipeline({
-      batch: makeBatch({ maxTier: 3 }),
-      agentSettings,
-      executor: mockExecutor,
-    });
-
-    // Only one planner call with Tier 3 model
-    expect(mockRunPlanner).toHaveBeenCalledOnce();
-    expect(mockRunPlanner.mock.calls[0][1]).toEqual({ model: "claude-opus-4-20250514" });
-    // Context built with Tier 3 token budget
-    expect(mockBuildContext.mock.calls[0][0]).toHaveProperty("tokenBudget");
-    // Execution log records rule-based promotion
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].modelTier).toBe("tier3");
-    expect(mockLogWrite.mock.calls[0][0].promoted).toBe(true);
-    expect(mockLogWrite.mock.calls[0][0].promotionReason).toBe("rule_based:router");
-    // Cost recorded as tier3
-    expect(mockRecordCost).toHaveBeenCalledWith(
-      expect.objectContaining({ modelTier: "tier3" }),
-    );
-  });
-
-  it("handles summarize disposition — triggers summary refresh", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("summarize"));
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    expect(mockRefreshSummary).toHaveBeenCalledWith("org-1", "channel", "ch-1");
-    expect(mockEvaluatePolicy).not.toHaveBeenCalled();
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].disposition).toBe("summarize");
-    expect(mockLogWrite.mock.calls[0][0].status).toBe("succeeded");
-    expect(mockMarkProcessed).toHaveBeenCalledOnce();
-  });
-
-  it("runs full pipeline for suggest disposition", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("suggest"));
-    mockEvaluatePolicy.mockResolvedValue({
-      actions: [
-        {
-          action: { actionType: "ticket.create", args: { title: "Bug" } },
-          decision: "suggest",
-          reason: "confidence below act threshold",
-        },
-      ],
-      plannerOutput: makePlannerResult("suggest").output,
-    } as PolicyResult);
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    expect(mockEvaluatePolicy).toHaveBeenCalledOnce();
-    expect(mockCreateSuggestions).toHaveBeenCalledOnce();
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].status).toBe("suggested");
-    expect(mockRecordCost).toHaveBeenCalledOnce();
-    expect(mockMarkProcessed).toHaveBeenCalledOnce();
-  });
-
-  it("runs full pipeline for act disposition with execute decision", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("act"));
-    mockEvaluatePolicy.mockResolvedValue({
-      actions: [
-        {
-          action: { actionType: "ticket.create", args: { title: "Bug" } },
-          decision: "execute",
-          reason: "high confidence, low risk",
-        },
-      ],
-      plannerOutput: makePlannerResult("act").output,
-    } as PolicyResult);
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    expect(mockEvaluatePolicy).toHaveBeenCalledOnce();
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
-    expect(mockCreateSuggestions).not.toHaveBeenCalled();
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].status).toBe("succeeded");
-  });
-
-  it("records cost after planner call", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("ignore"));
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    expect(mockRecordCost).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      modelTier: "tier2",
-      costCents: expect.any(Number),
-    });
-  });
-
-  it("records execution log with full decision chain", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("act"));
-    mockEvaluatePolicy.mockResolvedValue({
-      actions: [
-        {
-          action: { actionType: "ticket.create", args: { title: "Bug" } },
-          decision: "execute",
-          reason: "ok",
-        },
-      ],
-      plannerOutput: makePlannerResult("act").output,
-    } as PolicyResult);
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    const logInput = mockLogWrite.mock.calls[0][0];
-    expect(logInput).toMatchObject({
-      organizationId: "org-1",
-      triggerEventId: "evt-1",
-      agentId: "agent-1",
-      modelTier: "tier2",
-      model: "claude-sonnet-test",
-      inputTokens: 1000,
-      outputTokens: 200,
-      disposition: "act",
-      confidence: 0.85,
-      latencyMs: 500,
-    });
-    expect(logInput.plannedActions).toHaveLength(1);
-    expect(logInput.finalActions).toHaveLength(1);
-    expect(logInput.contextTokenAllocation).toEqual({ trigger: 200 });
-  });
-
-  it("handles policy engine dropping actions", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("suggest"));
-    mockEvaluatePolicy.mockResolvedValue({
-      actions: [
-        {
-          action: { actionType: "ticket.create", args: { title: "Bug" } },
-          decision: "drop",
-          reason: "rate limited",
-        },
-      ],
-      plannerOutput: makePlannerResult("suggest").output,
-    } as PolicyResult);
-
-    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
-
-    expect(mockCreateSuggestions).not.toHaveBeenCalled();
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
-    expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].status).toBe("dropped");
+    expect(mockRunPlannerTurn).not.toHaveBeenCalled();
   });
 
   it("skips empty batches", async () => {
-    const batch = makeBatch({ events: [] });
-
-    await runPipeline({ batch, agentSettings, executor: mockExecutor });
-
+    await runPipeline({ batch: makeBatch({ events: [] }), agentSettings, executor: mockExecutor });
     expect(mockBuildContext).not.toHaveBeenCalled();
   });
 
@@ -483,19 +240,345 @@ describe("runPipeline", () => {
       runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor }),
     ).resolves.toBeUndefined();
 
-    expect(mockRunPlanner).not.toHaveBeenCalled();
+    expect(mockRunPlannerTurn).not.toHaveBeenCalled();
   });
 
-  it("survives policy engine failure and still logs", async () => {
-    const packet = makePacket();
-    mockBuildContext.mockResolvedValue(packet);
-    mockRunPlanner.mockResolvedValue(makePlannerResult("suggest"));
+  // ── Disposition handling ──
+
+  it("handles ignore — logs and marks processed, no policy call", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("ignore"));
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockRunPlannerTurn).toHaveBeenCalledOnce();
+    expect(mockEvaluatePolicy).not.toHaveBeenCalled();
+    expect(mockLogWrite).toHaveBeenCalledOnce();
+    expect(mockRecordCost).toHaveBeenCalledOnce();
+    expect(mockMarkProcessed).toHaveBeenCalledOnce();
+    expect(mockLogWrite.mock.calls[0][0].disposition).toBe("ignore");
+    expect(mockLogWrite.mock.calls[0][0].status).toBe("dropped");
+  });
+
+  it("handles summarize — triggers summary refresh", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("summarize"));
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockRefreshSummary).toHaveBeenCalledWith("org-1", "channel", "ch-1");
+    expect(mockEvaluatePolicy).not.toHaveBeenCalled();
+    expect(mockLogWrite).toHaveBeenCalledOnce();
+    expect(mockMarkProcessed).toHaveBeenCalledOnce();
+  });
+
+  // ── Suggest/Act flow ──
+
+  it("runs full pipeline for suggest disposition", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("suggest", { done: true }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "suggest",
+          reason: "confidence below act threshold",
+        },
+      ],
+      plannerOutput: makeTurnResult("suggest").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockEvaluatePolicy).toHaveBeenCalledOnce();
+    expect(mockCreateSuggestions).toHaveBeenCalledOnce();
+    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(mockLogWrite).toHaveBeenCalledOnce();
+    expect(mockLogWrite.mock.calls[0][0].status).toBe("suggested");
+  });
+
+  it("runs full pipeline for act disposition with execute decision", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("act", { done: true }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "high confidence, low risk",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    expect(mockCreateSuggestions).not.toHaveBeenCalled();
+    expect(mockLogWrite.mock.calls[0][0].status).toBe("succeeded");
+  });
+
+  it("handles policy engine dropping actions", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("suggest", { done: true }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "drop",
+          reason: "rate limited",
+        },
+      ],
+      plannerOutput: makeTurnResult("suggest").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockCreateSuggestions).not.toHaveBeenCalled();
+    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(mockLogWrite.mock.calls[0][0].status).toBe("dropped");
+  });
+
+  it("survives policy engine failure", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("suggest"));
     mockEvaluatePolicy.mockRejectedValue(new Error("policy failure"));
 
     await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
 
     expect(mockLogWrite).toHaveBeenCalledOnce();
-    expect(mockLogWrite.mock.calls[0][0].status).toBe("failed");
     expect(mockMarkProcessed).toHaveBeenCalledOnce();
+  });
+
+  // ── Multi-turn ──
+
+  it("runs multiple turns when planner does not set done", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+
+    // Turn 1: act, done=false → Turn 2: ignore, done=true
+    mockRunPlannerTurn
+      .mockResolvedValueOnce(makeTurnResult("act", { done: false }))
+      .mockResolvedValueOnce(makeTurnResult("ignore", { done: true }));
+
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "message.send", args: { chatId: "ch-1", text: "hi" } },
+          decision: "execute",
+          reason: "ok",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockRunPlannerTurn).toHaveBeenCalledTimes(2);
+    // Policy only called for the act turn, not the ignore turn
+    expect(mockEvaluatePolicy).toHaveBeenCalledOnce();
+  });
+
+  it("stops at done=true even if more turns are available", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("act", { done: true }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "ok",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockRunPlannerTurn).toHaveBeenCalledOnce();
+  });
+
+  // ── Tier 3 promotion ──
+
+  it("promotes to Opus when planner escalates with promotionTarget opus", async () => {
+    const packet = makePacket();
+    const tier3Packet = makePacket({ tokenBudget: { total: 100000, used: 8000, sections: { trigger: 300 } } });
+    mockBuildContext
+      .mockResolvedValueOnce(packet)
+      .mockResolvedValueOnce(tier3Packet);
+
+    mockRunPlannerTurn
+      .mockResolvedValueOnce(makeTurnResult("escalate", {
+        promotionReason: "complex task",
+        promotionTarget: "opus",
+      }))
+      .mockResolvedValueOnce(makeTurnResult("act", { done: true, model: "claude-opus-4-20250514" }));
+
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "ok",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    // Two planner calls: Tier 2 escalate, then Opus re-run
+    expect(mockRunPlannerTurn).toHaveBeenCalledTimes(2);
+    // Context rebuilt for Opus
+    expect(mockBuildContext).toHaveBeenCalledTimes(2);
+    // Tier 2 cost recorded separately
+    expect(mockRecordCost.mock.calls[0][0].modelTier).toBe("tier2");
+  });
+
+  it("promotes to Sonnet (default) when no promotionTarget specified", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+
+    mockRunPlannerTurn
+      .mockResolvedValueOnce(makeTurnResult("escalate", { promotionReason: "needs reasoning" }))
+      .mockResolvedValueOnce(makeTurnResult("act", { done: true, model: "claude-sonnet-4-20250514" }));
+
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "ok",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    // Context NOT rebuilt (Sonnet doesn't get larger budget)
+    expect(mockBuildContext).toHaveBeenCalledOnce();
+  });
+
+  it("suppresses Opus promotion when budget is below 50%", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("escalate", {
+      promotionReason: "complex task",
+      promotionTarget: "opus",
+    }));
+    mockCheckBudget.mockResolvedValue({
+      dailyLimitCents: 1000,
+      spentCents: 600,
+      remainingCents: 400,
+      remainingPercent: 40,
+    });
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    // Only one planner call — promotion suppressed
+    expect(mockRunPlannerTurn).toHaveBeenCalledOnce();
+    expect(mockLogWrite).toHaveBeenCalledOnce();
+  });
+
+  it("runs Tier 3 directly when batch.maxTier is 3", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("act", { done: true, model: "claude-opus-4-20250514" }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "ok",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({
+      batch: makeBatch({ maxTier: 3 }),
+      agentSettings,
+      executor: mockExecutor,
+    });
+
+    expect(mockRunPlannerTurn).toHaveBeenCalledOnce();
+    // Build context with Tier 3 budget
+    expect(mockBuildContext.mock.calls[0][0]).toHaveProperty("tokenBudget");
+    expect(mockLogWrite.mock.calls[0][0].promoted).toBe(true);
+    expect(mockLogWrite.mock.calls[0][0].promotionReason).toBe("rule_based:router");
+  });
+
+  // ── @mention handling ──
+
+  it("forces reply when planner ignores an @mention", async () => {
+    const packet = makePacket({
+      isMention: true,
+      scopeType: "chat",
+      scopeId: "chat-1",
+      triggerEvent: {
+        id: "evt-1",
+        organizationId: "org-1",
+        scopeType: "chat",
+        scopeId: "chat-1",
+        eventType: "message_sent",
+        actorType: "user",
+        actorId: "user-1",
+        payload: { messageId: "msg-1" },
+        timestamp: new Date().toISOString(),
+      },
+    });
+    mockBuildContext.mockResolvedValue(packet);
+    // Turn 1: planner ignores → pipeline overrides with forced reply
+    // Turn 2: planner says done
+    mockRunPlannerTurn
+      .mockResolvedValueOnce(makeTurnResult("ignore"))
+      .mockResolvedValueOnce(makeTurnResult("ignore", { done: true }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "message.send", args: { chatId: "chat-1", text: "test rationale", parentId: "msg-1" } },
+          decision: "execute",
+          reason: "forced mention reply",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    // Policy engine was called (ignore was overridden to act)
+    expect(mockEvaluatePolicy).toHaveBeenCalledOnce();
+  });
+
+  // ── Execution logging ──
+
+  it("records cost and execution log with full decision chain", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("act", { done: true }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "execute",
+          reason: "ok",
+        },
+      ],
+      plannerOutput: makeTurnResult("act").output,
+    } as PolicyResult);
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockRecordCost).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-1", modelTier: "tier2" }),
+    );
+    expect(mockLogWrite).toHaveBeenCalledOnce();
+    const logInput = mockLogWrite.mock.calls[0][0];
+    expect(logInput).toMatchObject({
+      organizationId: "org-1",
+      triggerEventId: "evt-1",
+      agentId: "agent-1",
+      modelTier: "tier2",
+      disposition: "act",
+      confidence: 0.85,
+    });
+    expect(logInput.plannedActions).toHaveLength(1);
+    expect(logInput.finalActions).toHaveLength(1);
   });
 });

@@ -22,6 +22,7 @@ Autonomy modes should be configurable at multiple levels: org, project, channel 
   2. Project-level override (if the scope belongs to a project with an override)
   3. Org-level default
 - Special defaults for chat types (from ticket 17): DMs default to `observe`, group chats default to `suggest`
+  <!-- Ticket 17 created: `ChatType` ("dm" | "group") is exported from `router.ts`. The `AgentContextPacket` now has an `isDm: boolean` field and the context builder detects DM scope via `scopeEntity.data.type === "dm"`. Use `getAgentChatType(orgId, chatId)` from the router or `packet.isDm` in the pipeline when resolving autonomy defaults for chat scopes. -->
 
 ### UI
 

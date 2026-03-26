@@ -18,6 +18,7 @@ import {
   setCostTracker,
   type AgentEvent,
   type CostTracker,
+  type ChatType,
 } from "./agent/router.js";
 import { EventAggregator, type AggregatedBatch } from "./agent/aggregator.js";
 import { costTrackingService } from "./services/cost-tracking.js";
@@ -245,7 +246,7 @@ async function loadAgentIdentities(): Promise<void> {
 
 /**
  * Seed the chat membership gate for all orgs where the agent is a member.
- * Queries the ChatMember table for rows matching the agent's identity ID.
+ * Queries the ChatMember table joined with Chat to get the chat type (dm/group).
  */
 async function seedChatMembershipGate(): Promise<void> {
   for (const [orgId, settings] of agentContexts) {
@@ -255,14 +256,20 @@ async function seedChatMembershipGate(): Promise<void> {
           userId: settings.agentId,
           leftAt: null,
         },
-        select: { chatId: true },
+        select: {
+          chatId: true,
+          chat: { select: { type: true } },
+        },
       });
 
-      const chatIds = memberships.map((m) => m.chatId);
-      seedChatMemberships(orgId, chatIds);
+      const chats = memberships.map((m: { chatId: string; chat: { type: string } }) => ({
+        chatId: m.chatId,
+        type: (m.chat.type === "dm" ? "dm" : "group") as ChatType,
+      }));
+      seedChatMemberships(orgId, chats);
 
-      if (chatIds.length > 0) {
-        log("seeded chat memberships", { orgId, chatCount: chatIds.length });
+      if (chats.length > 0) {
+        log("seeded chat memberships", { orgId, chatCount: chats.length });
       }
     } catch (err) {
       logError(`failed to seed chat memberships for org ${orgId}`, err);
@@ -397,6 +404,23 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
 
       // Update chat membership gate before routing
       updateChatMembership(event, agentContext.agentId);
+
+      // When the agent is removed from a chat, immediately close any open
+      // aggregation windows for that chat scope (ticket #17).
+      if (
+        event.eventType === "chat_member_removed" &&
+        event.payload.userId === agentContext.agentId
+      ) {
+        const scopePrefix = `chat:${event.scopeId}`;
+        const closed = await aggregator.closeWindowsForScope(orgId, scopePrefix);
+        if (closed > 0) {
+          log("closed aggregation windows for removed chat", {
+            orgId,
+            chatId: event.scopeId,
+            windowsClosed: closed,
+          });
+        }
+      }
 
       // Track event count for summary freshness (non-blocking)
       trackEventForSummary(orgId, event.scopeType, event.scopeId).catch(() => {});

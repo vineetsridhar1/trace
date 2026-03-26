@@ -1,37 +1,43 @@
 /**
- * Agent Pipeline — orchestrates the full decision chain for an event batch.
+ * Agent Pipeline — orchestrates the full multi-turn decision loop for an event batch.
  *
- * Sequence: context builder → planner → policy engine → executor/suggestion → logging.
+ * The pipeline runs up to MAX_ITERATIONS turns:
+ *   1. Build context and system prompt (once)
+ *   2. Loop: call planner → enforce policy → execute/suggest → feed results back
+ *   3. The planner sees execution results and decides what to do next
+ *   4. Loop ends when planner sets done=true, returns ignore, or hits the cap
  *
- * Handles all disposition types:
- * - ignore: log and return
- * - suggest/act: policy engine → executor or suggestion creator
- * - summarize: trigger summary refresh for the scope
- * - escalate: promote to Tier 3 (re-run with Opus-class model)
- *
- * Tier 3 promotion:
- * - Rule-based: router annotates maxTier=3 → skip Tier 2, run Tier 3 directly
- * - Model-requested: Tier 2 returns promotionReason → discard, re-run with Tier 3
- * - Budget-suppressed: if org budget is 10-50%, downgrade Tier 3 to Tier 2
- *
- * Every planner run is recorded via executionLoggingService and cost tracked
- * via costTrackingService.
+ * Key design decisions:
+ * - Context is built once — no DB re-queries mid-loop
+ * - Cost is aggregated across all turns into a single entry
+ * - Tier 3 promotion only on turn 1 — later escalations end the loop
+ * - Hard cap of 10 turns enforced in code, not by the LLM
+ * - @mention replies are forced deterministically (not LLM-dependent)
  *
  * Ticket: #15, #16
  * Dependencies: #04-14
  */
 
 import type { ExecutionDisposition, ExecutionStatus } from "@prisma/client";
+import type {
+  LLMAssistantContentBlock,
+  LLMMessage,
+  LLMResponse,
+} from "@trace/shared";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import { TIER3_TOKEN_BUDGET } from "./context-builder.js";
-import type { PlannerResult } from "./planner.js";
-import { DEFAULT_TIER3_MODEL } from "./planner.js";
+import type { PlannerOutput, PlannerTurnResult } from "./planner.js";
+import {
+  DEFAULT_SONNET_MODEL,
+  DEFAULT_OPUS_MODEL,
+  buildSystemPrompt,
+  runPlannerTurn,
+} from "./planner.js";
 import type { PolicyDecision, PolicyActionResult } from "./policy-engine.js";
 import type { ExecutionResult } from "./executor.js";
 import { buildContext } from "./context-builder.js";
-import { runPlanner } from "./planner.js";
 import { evaluatePolicy } from "./policy-engine.js";
 import { ActionExecutor } from "./executor.js";
 import { createSuggestions } from "./suggestion.js";
@@ -45,25 +51,43 @@ import { estimateCostCents } from "./cost-utils.js";
 // Constants
 // ---------------------------------------------------------------------------
 
-// Shared across all worker instances — dedup is per-event, not per-worker process.
 const CONSUMER_NAME = "agent-pipeline";
+const MAX_ITERATIONS = 10;
+
+const INITIAL_USER_MESSAGE =
+  `Analyze the context above and make your decision. ` +
+  `Call the planner_decision tool with your response. ` +
+  `You have up to ${MAX_ITERATIONS} turns. This is turn 1 of ${MAX_ITERATIONS}.`;
+
+const DEFAULT_MENTION_FALLBACK =
+  "Hey! I saw your mention but I'm not sure how to help here. Could you give me more details?";
 
 // ---------------------------------------------------------------------------
 // Logging helpers
 // ---------------------------------------------------------------------------
 
-function log(msg: string, data?: Record<string, unknown>): void {
-  const prefix = "[agent-pipeline]";
-  if (data) {
-    console.log(prefix, msg, JSON.stringify(data));
-  } else {
-    console.log(prefix, msg);
-  }
+interface PipelineLogger {
+  log: (msg: string, data?: Record<string, unknown>) => void;
+  logError: (msg: string, err: unknown) => void;
 }
 
-function logError(msg: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`[agent-pipeline] ${msg}:`, message);
+function createLogger(startTime: number): PipelineLogger {
+  return {
+    log(msg: string, data?: Record<string, unknown>): void {
+      const elapsed = `+${Date.now() - startTime}ms`;
+      const prefix = `[agent-pipeline] [${elapsed}]`;
+      if (data) {
+        console.log(prefix, msg, JSON.stringify(data));
+      } else {
+        console.log(prefix, msg);
+      }
+    },
+    logError(msg: string, err: unknown): void {
+      const elapsed = `+${Date.now() - startTime}ms`;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[agent-pipeline] [${elapsed}] ${msg}:`, message);
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -77,20 +101,56 @@ export interface PipelineInput {
 }
 
 // ---------------------------------------------------------------------------
+// Per-turn tracking
+// ---------------------------------------------------------------------------
+
+interface TurnResult {
+  turn: number;
+  plannerOutput: PlannerOutput;
+  executed: Array<{ actionType: string; status: string; error?: string }>;
+  suggested: Array<{ actionType: string }>;
+  dropped: Array<{ actionType: string; reason?: string }>;
+  latencyMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+}
+
+/** Mutable state carried across turns inside the loop. */
+interface LoopState {
+  packet: AgentContextPacket;
+  currentTier: "tier2" | "tier3";
+  promoted: boolean;
+  promotionReason: string | undefined;
+  promotedModel: string | null;
+  messageHistory: LLMMessage[];
+  turnResults: TurnResult[];
+  totalCostCents: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  lastModel: string;
+  anyMessageSendExecuted: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Main pipeline
 // ---------------------------------------------------------------------------
 
 /**
  * Run the full agent pipeline for a single event batch.
  *
- * This is the core orchestrator: builds context, runs the planner, evaluates
- * policy, executes or creates suggestions, and records the full decision chain.
+ * Operates in a multi-turn loop: the planner proposes actions, they are
+ * executed, and the results are fed back for the next turn. The loop
+ * continues until the planner sets done=true, returns ignore, or hits
+ * the hard cap of MAX_ITERATIONS.
  */
 export async function runPipeline(input: PipelineInput): Promise<void> {
   const { batch, agentSettings, executor } = input;
   const startTime = Date.now();
+  const logger = createLogger(startTime);
+  const { log, logError } = logger;
 
-  // ── Event dedup — skip events already processed ──
+  // ── Event dedup ──
   const triggerEvent = batch.events[batch.events.length - 1];
   if (!triggerEvent) {
     log("empty batch, skipping", { scopeKey: batch.scopeKey });
@@ -109,312 +169,229 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     return;
   }
 
-  // ── Determine tier — rule-based Tier 3 promotion ──
+  // ── Determine tier ──
   const isRuleBasedTier3 = batch.maxTier === 3;
-  let currentTier: "tier2" | "tier3" = isRuleBasedTier3 ? "tier3" : "tier2";
-  let promoted = false;
-  let promotionReason: string | undefined;
+  const sonnetModel = process.env.AGENT_SONNET_MODEL ?? DEFAULT_SONNET_MODEL;
+  const opusModel = process.env.AGENT_TIER3_MODEL ?? DEFAULT_OPUS_MODEL;
 
-  // ── 1. Build context (Tier 3 gets a larger token budget) ──
+  // ── Build context (once) ──
   let packet: AgentContextPacket;
   try {
     packet = await buildContext({
       batch,
       agentSettings,
-      tokenBudget: currentTier === "tier3" ? TIER3_TOKEN_BUDGET : undefined,
+      tokenBudget: isRuleBasedTier3 ? TIER3_TOKEN_BUDGET : undefined,
     });
     log("context built", {
       scopeKey: packet.scopeKey,
       triggerEventType: packet.triggerEvent.eventType,
       relevantEntities: packet.relevantEntities.length,
       tokensUsed: packet.tokenBudget.used,
-      tier: currentTier,
+      tier: isRuleBasedTier3 ? "tier3" : "tier2",
     });
   } catch (err) {
     logError("context builder failed", err);
     return;
   }
 
-  // ── 2. Run planner ──
-  const tier3Model = process.env.AGENT_TIER3_MODEL ?? DEFAULT_TIER3_MODEL;
-  let plannerResult: PlannerResult;
-  try {
-    plannerResult = await runPlanner(
-      packet,
-      currentTier === "tier3" ? { model: tier3Model } : undefined,
-    );
-  } catch (err) {
-    logError("planner failed unexpectedly", err);
-    return;
-  }
-
-  // ── 2a. Model-requested promotion — Tier 2 escalate → re-run with Tier 3 ──
-  if (
-    currentTier === "tier2" &&
-    plannerResult.output.disposition === "escalate" &&
-    plannerResult.output.promotionReason
-  ) {
-    // Record the Tier 2 cost before re-running
-    const tier2CostCents = estimateCostCents(
-      plannerResult.model,
-      plannerResult.usage.inputTokens,
-      plannerResult.usage.outputTokens,
-    );
-    try {
-      await costTrackingService.recordCost({
-        organizationId: packet.organizationId,
-        modelTier: "tier2",
-        costCents: tier2CostCents,
-      });
-    } catch (err) {
-      logError("tier2 cost tracking failed (non-fatal)", err);
-    }
-
-    // Check budget before promoting — suppress Tier 3 if budget is tight
-    let budgetAllowsTier3 = true;
-    try {
-      const budgetStatus = await costTrackingService.checkBudget(packet.organizationId);
-      if (budgetStatus.remainingPercent < 50) {
-        budgetAllowsTier3 = false;
-        log("Tier 3 promotion suppressed — budget below 50%", {
-          scopeKey: packet.scopeKey,
-          remainingPercent: budgetStatus.remainingPercent,
-        });
-      }
-    } catch (err) {
-      logError("budget check failed, suppressing Tier 3 (non-fatal)", err);
-      budgetAllowsTier3 = false;
-    }
-
-    if (budgetAllowsTier3) {
-      promoted = true;
-      promotionReason = plannerResult.output.promotionReason;
-      currentTier = "tier3";
-
-      log("promoting to Tier 3", {
-        scopeKey: packet.scopeKey,
-        promotionReason,
-      });
-
-      // Rebuild context with larger Tier 3 token budget
-      try {
-        packet = await buildContext({
-          batch,
-          agentSettings,
-          tokenBudget: TIER3_TOKEN_BUDGET,
-        });
-      } catch (err) {
-        logError("Tier 3 context rebuild failed", err);
-        return;
-      }
-
-      // Re-run planner with Tier 3 model (discard Tier 2 output entirely)
-      try {
-        plannerResult = await runPlanner(packet, { model: tier3Model });
-      } catch (err) {
-        logError("Tier 3 planner failed unexpectedly", err);
-        return;
-      }
-    } else {
-      // Budget suppressed — fall through with the Tier 2 escalate result
-      // which will be handled as a blocked escalation below
-    }
-  }
-
-  // For rule-based Tier 3, mark as promoted
-  if (isRuleBasedTier3) {
-    promoted = true;
-    promotionReason = "rule_based:router";
-  }
-
-  const { output: plannerOutput } = plannerResult;
-  const costCents = estimateCostCents(
-    plannerResult.model,
-    plannerResult.usage.inputTokens,
-    plannerResult.usage.outputTokens,
-  );
-
-  log("planner decided", {
-    scopeKey: packet.scopeKey,
-    disposition: plannerOutput.disposition,
-    confidence: plannerOutput.confidence,
-    actionCount: plannerOutput.proposedActions.length,
-    model: plannerResult.model,
-    tier: currentTier,
-    promoted,
-    latencyMs: plannerResult.latencyMs,
-    costCents: Math.round(costCents * 1000) / 1000,
-  });
-
-  // ── 3. Record cost ──
-  try {
-    await costTrackingService.recordCost({
-      organizationId: packet.organizationId,
-      modelTier: currentTier,
-      costCents,
-    });
-  } catch (err) {
-    logError("cost tracking failed (non-fatal)", err);
-  }
-
-  // ── 4. Map planner disposition to Prisma enum ──
-  const dispositionMap: Record<string, ExecutionDisposition> = {
-    ignore: "ignore",
-    suggest: "suggest",
-    act: "act",
-    summarize: "summarize",
-    escalate: "escalate",
+  // ── Initialize loop state ──
+  const state: LoopState = {
+    packet,
+    currentTier: isRuleBasedTier3 ? "tier3" : "tier2",
+    promoted: isRuleBasedTier3,
+    promotionReason: isRuleBasedTier3 ? "rule_based:router" : undefined,
+    promotedModel: isRuleBasedTier3 ? opusModel : null,
+    messageHistory: [{ role: "user", content: INITIAL_USER_MESSAGE }],
+    turnResults: [],
+    totalCostCents: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    lastModel: "",
+    anyMessageSendExecuted: false,
   };
-  const executionDisposition: ExecutionDisposition =
-    dispositionMap[plannerOutput.disposition] ?? "ignore";
 
-  // ── 5. Handle special dispositions before policy engine ──
+  const systemPrompt = buildSystemPrompt(packet);
 
-  // Ignore: log and return
-  if (plannerOutput.disposition === "ignore") {
-    await writeExecutionLog({
-      packet,
-      plannerResult,
-      costCents,
-      agentSettings,
-      batch,
-      disposition: executionDisposition,
-      status: "dropped",
-      policyDecision: {},
-      finalActions: [],
-      modelTier: currentTier,
-      promoted,
-      promotionReason,
-    });
-    await markProcessed(packet);
-    return;
-  }
+  // ── Multi-turn loop ──
+  for (let turn = 1; turn <= MAX_ITERATIONS; turn++) {
+    log(`── turn ${turn}/${MAX_ITERATIONS} start ──`, { scopeKey: packet.scopeKey });
 
-  // Escalate: either Tier 3 already ran and still escalated, or promotion was suppressed
-  if (plannerOutput.disposition === "escalate") {
-    const escalationReason = currentTier === "tier3"
-      ? "tier3_escalation_unresolvable"
-      : "tier3_promotion_suppressed_by_budget";
-    log("escalation unresolved", {
-      scopeKey: packet.scopeKey,
-      reason: escalationReason,
-      promotionReason: plannerOutput.promotionReason,
-      tier: currentTier,
-    });
-    await writeExecutionLog({
-      packet,
-      plannerResult,
-      costCents,
-      agentSettings,
-      batch,
-      disposition: executionDisposition,
-      status: "blocked",
-      policyDecision: { reason: escalationReason },
-      finalActions: [],
-      promoted,
-      promotionReason,
-      modelTier: currentTier,
-    });
-    await markProcessed(packet);
-    return;
-  }
-
-  // Summarize: trigger summary refresh for the scope
-  if (plannerOutput.disposition === "summarize") {
-    log("summary requested", { scopeKey: packet.scopeKey });
+    // Call planner
+    let turnResult: PlannerTurnResult;
     try {
-      const summaryResult = await refreshSummary(
-        packet.organizationId,
-        packet.scopeType,
-        packet.scopeId,
+      turnResult = await runPlannerTurn(
+        systemPrompt,
+        state.messageHistory,
+        state.packet.permissions.actions,
+        state.promotedModel ? { model: state.promotedModel } : undefined,
       );
-      log("summary refreshed", {
-        scopeKey: packet.scopeKey,
-        costCents: summaryResult?.costCents,
-      });
     } catch (err) {
-      logError("summary refresh failed (non-fatal)", err);
+      logError(`planner failed on turn ${turn}`, err);
+      break;
     }
-    await writeExecutionLog({
-      packet,
-      plannerResult,
-      costCents,
-      agentSettings,
-      batch,
-      disposition: executionDisposition,
-      status: "succeeded",
-      policyDecision: {},
-      finalActions: [],
-      modelTier: currentTier,
-      promoted,
-      promotionReason,
+
+    const { output: plannerOutput, response: llmResponse } = turnResult;
+    accumulateCost(state, llmResponse, turnResult.latencyMs);
+
+    log("planner decided", {
+      scopeKey: state.packet.scopeKey,
+      turn,
+      disposition: plannerOutput.disposition,
+      confidence: plannerOutput.confidence,
+      actionCount: plannerOutput.proposedActions.length,
+      actions: plannerOutput.proposedActions.map((a) => a.actionType),
+      done: plannerOutput.done ?? false,
+      rationale: plannerOutput.rationaleSummary,
+      model: llmResponse.model,
+      tier: state.currentTier,
+      promoted: state.promoted,
+      latencyMs: turnResult.latencyMs,
+      costCents: Math.round(estimateTurnCost(llmResponse) * 1000) / 1000,
     });
-    await markProcessed(packet);
-    return;
+
+    // ── Escalation (turn 1 only) ──
+    if (turn === 1 && shouldPromote(state, plannerOutput)) {
+      const promoted = await handlePromotion({
+        state,
+        plannerOutput,
+        llmResponse,
+        batch,
+        agentSettings,
+        sonnetModel,
+        opusModel,
+        logger,
+      });
+      if (promoted) continue; // Re-run turn 1 with promoted model
+      // Budget suppressed — fall through
+    }
+
+    // Later-turn escalation → end the loop
+    if (turn > 1 && plannerOutput.disposition === "escalate") {
+      log("escalation on later turn, treating as done", { scopeKey: state.packet.scopeKey, turn });
+      break;
+    }
+
+    // ── Terminal dispositions ──
+    if (plannerOutput.disposition === "escalate") {
+      logUnresolvedEscalation(state, log);
+      break;
+    }
+
+    if (plannerOutput.disposition === "summarize") {
+      await handleSummarize(state.packet, turnResult, llmResponse, state.turnResults, log, logError);
+      break;
+    }
+
+    if (plannerOutput.disposition === "ignore") {
+      const overridden = handleIgnore(plannerOutput, turn, state.packet, log);
+      if (!overridden) {
+        pushEmptyTurn(state.turnResults, turn, plannerOutput, turnResult, llmResponse);
+        break;
+      }
+      // overridden = forced @mention reply, fall through to execute
+    }
+
+    // ── Inject @mention threading ──
+    injectParentId(plannerOutput, state.packet);
+
+    // ── Policy → Execute → Suggest ──
+    const turnRecord = await executeTurn({
+      turn,
+      plannerOutput,
+      llmResponse,
+      turnResult,
+      state,
+      agentSettings,
+      executor,
+      logger,
+    });
+
+    state.turnResults.push(turnRecord);
+
+    // ── Check if done ──
+    if (plannerOutput.done) {
+      log("planner signaled done", { scopeKey: state.packet.scopeKey, turn });
+      break;
+    }
+    if (turn >= MAX_ITERATIONS) {
+      log("hard cap reached", { scopeKey: state.packet.scopeKey, turn });
+      break;
+    }
+
+    // ── Feed results back to planner ──
+    appendToolResult(state.messageHistory, llmResponse, turnRecord, turn, log, state.packet.scopeKey);
   }
 
-  // ── 6. Policy engine (for suggest/act dispositions) ──
+  // ── Post-loop ──
+  await postLoop({ state, agentSettings, executor, batch, startTime, logger });
+}
+
+// ---------------------------------------------------------------------------
+// Turn execution — policy + execute + suggest
+// ---------------------------------------------------------------------------
+
+interface ExecuteTurnInput {
+  turn: number;
+  plannerOutput: PlannerOutput;
+  llmResponse: LLMResponse;
+  turnResult: PlannerTurnResult;
+  state: LoopState;
+  agentSettings: OrgAgentSettings;
+  executor: ActionExecutor;
+  logger: PipelineLogger;
+}
+
+async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
+  const { turn, plannerOutput, llmResponse, turnResult, state, agentSettings, executor, logger } = input;
+  const { log, logError } = logger;
+
+  // ── Policy engine ──
   let policyActions: PolicyActionResult[];
   try {
     const policyResult = await evaluatePolicy({
       plannerOutput,
-      context: packet,
+      context: state.packet,
     });
     policyActions = policyResult.actions;
   } catch (err) {
-    logError("policy engine failed", err);
-    await writeExecutionLog({
-      packet,
-      plannerResult,
-      costCents,
-      agentSettings,
-      batch,
-      disposition: executionDisposition,
-      status: "failed",
-      policyDecision: { error: err instanceof Error ? err.message : String(err) },
-      finalActions: [],
-      modelTier: currentTier,
-      promoted,
-      promotionReason,
-    });
-    await markProcessed(packet);
-    return;
+    logError(`policy engine failed on turn ${turn}`, err);
+    return emptyTurnResult(turn, plannerOutput, turnResult, llmResponse);
   }
 
-  // Group actions by decision
-  const byDecision = new Map<PolicyDecision, PolicyActionResult[]>();
-  for (const actionResult of policyActions) {
-    const existing = byDecision.get(actionResult.decision) ?? [];
-    existing.push(actionResult);
-    byDecision.set(actionResult.decision, existing);
-  }
+  const byDecision = groupByDecision(policyActions);
 
   log("policy evaluated", {
-    scopeKey: packet.scopeKey,
+    scopeKey: state.packet.scopeKey,
+    turn,
     execute: byDecision.get("execute")?.length ?? 0,
     suggest: byDecision.get("suggest")?.length ?? 0,
     drop: byDecision.get("drop")?.length ?? 0,
   });
 
-  // ── 7. Execute actions ──
+  // ── Execute actions ──
   const executionResults: Array<ExecutionResult & { decision: PolicyDecision }> = [];
-  const executes = byDecision.get("execute") ?? [];
-  for (const actionResult of executes) {
+  for (const actionResult of byDecision.get("execute") ?? []) {
     try {
       const result = await executor.execute(actionResult.action, {
-        organizationId: packet.organizationId,
+        organizationId: state.packet.organizationId,
         agentId: agentSettings.agentId,
-        triggerEventId: packet.triggerEvent.id,
+        triggerEventId: state.packet.triggerEvent.id,
       });
       executionResults.push({ ...result, decision: "execute" });
+
+      if (actionResult.action.actionType === "message.send" && result.status === "success") {
+        state.anyMessageSendExecuted = true;
+      }
+
       log("action executed", {
-        scopeKey: packet.scopeKey,
+        scopeKey: state.packet.scopeKey,
+        turn,
         actionType: result.actionType,
         status: result.status,
         ...(result.error ? { error: result.error } : {}),
       });
     } catch (err) {
-      logError(`executor failed for ${actionResult.action.actionType}`, err);
+      logError(`executor failed for ${actionResult.action.actionType} on turn ${turn}`, err);
       executionResults.push({
         status: "failed",
         actionType: actionResult.action.actionType,
@@ -424,115 +401,519 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     }
   }
 
-  // ── 8. Create suggestions ──
+  // ── Create suggestions ──
   const suggests = byDecision.get("suggest") ?? [];
-  let inboxItemId: string | undefined;
   if (suggests.length > 0) {
     try {
-      const triggerActorType = packet.triggerEvent.actorType;
-      const triggerActorId = packet.triggerEvent.actorId;
+      const triggerActorType = state.packet.triggerEvent.actorType;
+      const triggerActorId = state.packet.triggerEvent.actorId;
       const userId = triggerActorType === "user" ? triggerActorId : agentSettings.agentId;
 
       const items = await createSuggestions({
         suggestions: suggests,
         plannerOutput,
-        context: packet,
+        context: state.packet,
         agentId: agentSettings.agentId,
         userId,
       });
-
-      // Capture first inbox item ID for the execution log
-      if (items.length > 0) {
-        inboxItemId = items[0].id;
-      }
-
       log("suggestions created", {
-        scopeKey: packet.scopeKey,
+        scopeKey: state.packet.scopeKey,
+        turn,
         count: items.length,
         types: items.map((i) => i.itemType),
       });
     } catch (err) {
-      logError("suggestion creation failed", err);
+      logError(`suggestion creation failed on turn ${turn}`, err);
     }
   }
 
-  // Log dropped actions
+  // ── Log dropped actions ──
   const drops = byDecision.get("drop") ?? [];
   for (const dropped of drops) {
     log("action dropped by policy", {
-      scopeKey: packet.scopeKey,
+      scopeKey: state.packet.scopeKey,
+      turn,
       actionType: dropped.action.actionType,
       reason: dropped.reason,
     });
   }
 
-  // ── 9. Determine overall execution status ──
-  let status: ExecutionStatus;
-  if (executes.length > 0) {
-    const anyFailed = executionResults.some((r) => r.status === "failed");
-    status = anyFailed ? "failed" : "succeeded";
-  } else if (suggests.length > 0) {
-    status = "suggested";
-  } else {
-    status = "dropped";
-  }
-
-  // ── 10. Write execution log ──
-  const finalActions = [
-    ...executionResults.map((r) => ({
+  return {
+    turn,
+    plannerOutput,
+    executed: executionResults.map((r) => ({
       actionType: r.actionType,
-      decision: r.decision,
       status: r.status,
       ...(r.error ? { error: r.error } : {}),
     })),
-    ...suggests.map((s) => ({
-      actionType: s.action.actionType,
+    suggested: suggests.map((s) => ({ actionType: s.action.actionType })),
+    dropped: drops.map((d) => ({ actionType: d.action.actionType, reason: d.reason })),
+    latencyMs: turnResult.latencyMs,
+    inputTokens: llmResponse.usage.inputTokens,
+    outputTokens: llmResponse.usage.outputTokens,
+    model: llmResponse.model,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Promotion handling
+// ---------------------------------------------------------------------------
+
+function shouldPromote(state: LoopState, output: PlannerOutput): boolean {
+  return (
+    state.currentTier === "tier2" &&
+    output.disposition === "escalate" &&
+    !!output.promotionReason
+  );
+}
+
+interface HandlePromotionInput {
+  state: LoopState;
+  plannerOutput: PlannerOutput;
+  llmResponse: LLMResponse;
+  batch: AggregatedBatch;
+  agentSettings: OrgAgentSettings;
+  sonnetModel: string;
+  opusModel: string;
+  logger: PipelineLogger;
+}
+
+async function handlePromotion(input: HandlePromotionInput): Promise<boolean> {
+  const { state, plannerOutput, llmResponse, batch, agentSettings, sonnetModel, opusModel, logger } = input;
+  const { log, logError } = logger;
+
+  // Record Tier 2 cost before re-running
+  const turnCostCents = estimateTurnCost(llmResponse);
+  try {
+    await costTrackingService.recordCost({
+      organizationId: state.packet.organizationId,
+      modelTier: "tier2",
+      costCents: turnCostCents,
+    });
+  } catch (err) {
+    logError("tier2 cost tracking failed (non-fatal)", err);
+  }
+
+  const target = plannerOutput.promotionTarget ?? "sonnet";
+  const targetModel = target === "opus" ? opusModel : sonnetModel;
+  const isOpus = target === "opus";
+
+  // Only budget-gate Opus
+  if (isOpus) {
+    try {
+      const budgetStatus = await costTrackingService.checkBudget(state.packet.organizationId);
+      if (budgetStatus.remainingPercent < 50) {
+        log("Opus promotion suppressed — budget below 50%", {
+          scopeKey: state.packet.scopeKey,
+          remainingPercent: budgetStatus.remainingPercent,
+        });
+        return false;
+      }
+    } catch (err) {
+      logError("budget check failed, suppressing promotion (non-fatal)", err);
+      return false;
+    }
+  }
+
+  state.promoted = true;
+  state.promotionReason = plannerOutput.promotionReason;
+  state.promotedModel = targetModel;
+  state.currentTier = isOpus ? "tier3" : "tier2";
+  log("promoting", {
+    scopeKey: state.packet.scopeKey,
+    target,
+    model: targetModel,
+    promotionReason: state.promotionReason,
+  });
+
+  // Rebuild context with larger budget for Opus
+  if (isOpus) {
+    try {
+      state.packet = await buildContext({
+        batch,
+        agentSettings,
+        tokenBudget: TIER3_TOKEN_BUDGET,
+      });
+    } catch (err) {
+      logError("Opus context rebuild failed", err);
+      return false;
+    }
+  }
+
+  // Reset message history for fresh start
+  state.messageHistory.length = 0;
+  state.messageHistory.push({ role: "user", content: INITIAL_USER_MESSAGE });
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Disposition handlers
+// ---------------------------------------------------------------------------
+
+function logUnresolvedEscalation(
+  state: LoopState,
+  log: PipelineLogger["log"],
+): void {
+  const reason = state.currentTier === "tier3"
+    ? "tier3_escalation_unresolvable"
+    : "tier3_promotion_suppressed_by_budget";
+  log("escalation unresolved", {
+    scopeKey: state.packet.scopeKey,
+    reason,
+    tier: state.currentTier,
+  });
+}
+
+async function handleSummarize(
+  packet: AgentContextPacket,
+  turnResult: PlannerTurnResult,
+  llmResponse: LLMResponse,
+  turnResults: TurnResult[],
+  log: PipelineLogger["log"],
+  logError: PipelineLogger["logError"],
+): Promise<void> {
+  log("summary requested", { scopeKey: packet.scopeKey });
+  try {
+    const summaryResult = await refreshSummary(
+      packet.organizationId,
+      packet.scopeType,
+      packet.scopeId,
+    );
+    log("summary refreshed", { scopeKey: packet.scopeKey, costCents: summaryResult?.costCents });
+  } catch (err) {
+    logError("summary refresh failed (non-fatal)", err);
+  }
+  pushEmptyTurn(turnResults, turnResults.length + 1, turnResult.output, turnResult, llmResponse);
+}
+
+/**
+ * Handle "ignore" disposition. Returns true if overridden (forced @mention reply),
+ * false if the loop should break.
+ */
+function handleIgnore(
+  plannerOutput: PlannerOutput,
+  turn: number,
+  packet: AgentContextPacket,
+  log: PipelineLogger["log"],
+): boolean {
+  if (turn === 1 && packet.isMention) {
+    const triggerMessageId = packet.triggerEvent.payload.messageId as string | undefined;
+    const replyText = isUsableRationale(plannerOutput.rationaleSummary)
+      ? plannerOutput.rationaleSummary
+      : DEFAULT_MENTION_FALLBACK;
+
+    plannerOutput.disposition = "act";
+    plannerOutput.proposedActions = [
+      {
+        actionType: "message.send",
+        args: {
+          chatId: packet.scopeId,
+          text: replyText,
+          ...(triggerMessageId ? { parentId: triggerMessageId } : {}),
+        },
+      },
+    ];
+    log("@mention override: planner ignored but forcing reply", {
+      scopeKey: packet.scopeKey,
+      turn,
+      triggerMessageId,
+    });
+    return true; // overridden — continue to execute
+  }
+  return false; // not overridden — loop should break
+}
+
+// ---------------------------------------------------------------------------
+// @mention threading
+// ---------------------------------------------------------------------------
+
+function injectParentId(plannerOutput: PlannerOutput, packet: AgentContextPacket): void {
+  if (!packet.isMention) return;
+  const triggerMessageId = packet.triggerEvent.payload.messageId as string | undefined;
+  if (!triggerMessageId) return;
+  for (const action of plannerOutput.proposedActions) {
+    if (action.actionType === "message.send" && !action.args.parentId) {
+      action.args.parentId = triggerMessageId;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tool result construction
+// ---------------------------------------------------------------------------
+
+function appendToolResult(
+  messageHistory: LLMMessage[],
+  llmResponse: LLMResponse,
+  turnRecord: TurnResult,
+  turn: number,
+  log: PipelineLogger["log"],
+  scopeKey: string,
+): void {
+  messageHistory.push({ role: "assistant", content: llmResponse.content });
+
+  const toolUseBlock = llmResponse.content.find(
+    (b: LLMAssistantContentBlock) => b.type === "tool_use" && b.name === "planner_decision",
+  );
+  const toolUseId = toolUseBlock && toolUseBlock.type === "tool_use" ? toolUseBlock.id : "unknown";
+
+  const turnsRemaining = MAX_ITERATIONS - turn;
+  const toolResultPayload = {
+    turn: turn + 1,
+    maxTurns: MAX_ITERATIONS,
+    executed: turnRecord.executed,
+    suggested: turnRecord.suggested,
+    dropped: turnRecord.dropped,
+    note: `Turn ${turn} of ${MAX_ITERATIONS} complete. ${turnsRemaining} turn${turnsRemaining === 1 ? "" : "s"} remaining. Set done=true if finished.`,
+  };
+
+  log("feeding results back to planner", { scopeKey, turn, toolResult: toolResultPayload });
+
+  messageHistory.push({
+    role: "tool",
+    content: [{ type: "tool_result", toolUseId, content: JSON.stringify(toolResultPayload) }],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Post-loop: fallback, cost, logging
+// ---------------------------------------------------------------------------
+
+interface PostLoopInput {
+  state: LoopState;
+  agentSettings: OrgAgentSettings;
+  executor: ActionExecutor;
+  batch: AggregatedBatch;
+  startTime: number;
+  logger: PipelineLogger;
+}
+
+async function postLoop(input: PostLoopInput): Promise<void> {
+  const { state, agentSettings, executor, batch, startTime, logger } = input;
+  const { log, logError } = logger;
+
+  // @mention fallback
+  if (state.packet.isMention && !state.anyMessageSendExecuted) {
+    await forceMentionReply(state, agentSettings, executor, log, logError);
+  }
+
+  // Record aggregated cost
+  try {
+    await costTrackingService.recordCost({
+      organizationId: state.packet.organizationId,
+      modelTier: state.currentTier,
+      costCents: state.totalCostCents,
+    });
+  } catch (err) {
+    logError("cost tracking failed (non-fatal)", err);
+  }
+
+  // Compute overall status
+  const allExecuted = state.turnResults.flatMap((t) => t.executed);
+  const allSuggested = state.turnResults.flatMap((t) => t.suggested);
+  const allDropped = state.turnResults.flatMap((t) => t.dropped);
+
+  let overallStatus: ExecutionStatus;
+  if (allExecuted.length > 0) {
+    overallStatus = allExecuted.some((r) => r.status === "failed") ? "failed" : "succeeded";
+  } else if (allSuggested.length > 0) {
+    overallStatus = "suggested";
+  } else {
+    overallStatus = "dropped";
+  }
+
+  const lastTurnOutput = state.turnResults.length > 0
+    ? state.turnResults[state.turnResults.length - 1].plannerOutput
+    : undefined;
+  const executionDisposition = toExecutionDisposition(lastTurnOutput?.disposition);
+
+  const finalActions = [
+    ...allExecuted.map((r) => ({
+      actionType: r.actionType,
+      decision: "execute" as const,
+      status: r.status,
+      ...(r.error ? { error: r.error } : {}),
+    })),
+    ...allSuggested.map((s) => ({
+      actionType: s.actionType,
       decision: "suggest" as const,
       status: "suggested",
     })),
-    ...drops.map((d) => ({
-      actionType: d.action.actionType,
+    ...allDropped.map((d) => ({
+      actionType: d.actionType,
       decision: "drop" as const,
       reason: d.reason,
     })),
   ];
 
+  const aggregatedPlannerResult = {
+    output: lastTurnOutput ?? {
+      disposition: "ignore" as const,
+      confidence: 0,
+      rationaleSummary: "No planner turns completed.",
+      proposedActions: [],
+    },
+    usage: { inputTokens: state.totalInputTokens, outputTokens: state.totalOutputTokens },
+    latencyMs: state.turnResults.reduce((sum, t) => sum + t.latencyMs, 0),
+    model: state.lastModel || (state.promotedModel ?? "unknown"),
+  };
+
   await writeExecutionLog({
-    packet,
-    plannerResult,
-    costCents,
+    packet: state.packet,
+    plannerResult: aggregatedPlannerResult,
+    costCents: state.totalCostCents,
     agentSettings,
     batch,
     disposition: executionDisposition,
-    status,
-    policyDecision: Object.fromEntries(
-      policyActions.map((a) => [a.action.actionType, { decision: a.decision, reason: a.reason }]),
-    ),
+    status: overallStatus,
+    policyDecision: { iterations: state.turnResults.length, turns: state.turnResults },
     finalActions,
-    inboxItemId,
-    modelTier: currentTier,
-    promoted,
-    promotionReason,
+    modelTier: state.currentTier,
+    promoted: state.promoted,
+    promotionReason: state.promotionReason,
+    logger,
   });
 
-  // ── 11. Mark trigger event as processed ──
-  await markProcessed(packet);
+  await markProcessed(state.packet, logger);
 
   log("pipeline complete", {
-    scopeKey: packet.scopeKey,
-    disposition: plannerOutput.disposition,
-    status,
+    scopeKey: state.packet.scopeKey,
+    iterations: state.turnResults.length,
+    disposition: executionDisposition,
+    status: overallStatus,
+    actionsExecuted: allExecuted.length,
+    actionsSuggested: allSuggested.length,
+    actionsDropped: allDropped.length,
+    totalCostCents: Math.round(state.totalCostCents * 1000) / 1000,
     durationMs: Date.now() - startTime,
   });
 }
 
+async function forceMentionReply(
+  state: LoopState,
+  agentSettings: OrgAgentSettings,
+  executor: ActionExecutor,
+  log: PipelineLogger["log"],
+  logError: PipelineLogger["logError"],
+): Promise<void> {
+  const triggerMessageId = state.packet.triggerEvent.payload.messageId as string | undefined;
+  const lastRationale = state.turnResults.length > 0
+    ? state.turnResults[state.turnResults.length - 1].plannerOutput.rationaleSummary
+    : undefined;
+  const replyText = isUsableRationale(lastRationale)
+    ? lastRationale
+    : DEFAULT_MENTION_FALLBACK;
+
+  log("@mention fallback: no message.send executed across all turns, forcing reply", {
+    scopeKey: state.packet.scopeKey,
+    totalTurns: state.turnResults.length,
+  });
+
+  try {
+    await executor.execute(
+      {
+        actionType: "message.send",
+        args: {
+          chatId: state.packet.scopeId,
+          text: replyText,
+          ...(triggerMessageId ? { parentId: triggerMessageId } : {}),
+        },
+      },
+      {
+        organizationId: state.packet.organizationId,
+        agentId: agentSettings.agentId,
+        triggerEventId: state.packet.triggerEvent.id,
+      },
+    );
+    state.anyMessageSendExecuted = true;
+  } catch (err) {
+    logError("@mention fallback execution failed", err);
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Helpers
+// Small helpers
+// ---------------------------------------------------------------------------
+
+function accumulateCost(state: LoopState, response: LLMResponse, latencyMs: number): void {
+  const cost = estimateTurnCost(response);
+  state.totalCostCents += cost;
+  state.totalInputTokens += response.usage.inputTokens;
+  state.totalOutputTokens += response.usage.outputTokens;
+  state.lastModel = response.model;
+}
+
+function estimateTurnCost(response: LLMResponse): number {
+  return estimateCostCents(response.model, response.usage.inputTokens, response.usage.outputTokens);
+}
+
+function groupByDecision(actions: PolicyActionResult[]): Map<PolicyDecision, PolicyActionResult[]> {
+  const map = new Map<PolicyDecision, PolicyActionResult[]>();
+  for (const a of actions) {
+    const existing = map.get(a.decision) ?? [];
+    existing.push(a);
+    map.set(a.decision, existing);
+  }
+  return map;
+}
+
+function emptyTurnResult(
+  turn: number,
+  plannerOutput: PlannerOutput,
+  turnResult: PlannerTurnResult,
+  llmResponse: LLMResponse,
+): TurnResult {
+  return {
+    turn,
+    plannerOutput,
+    executed: [],
+    suggested: [],
+    dropped: [],
+    latencyMs: turnResult.latencyMs,
+    inputTokens: llmResponse.usage.inputTokens,
+    outputTokens: llmResponse.usage.outputTokens,
+    model: llmResponse.model,
+  };
+}
+
+function pushEmptyTurn(
+  turnResults: TurnResult[],
+  turn: number,
+  plannerOutput: PlannerOutput,
+  turnResult: PlannerTurnResult,
+  llmResponse: LLMResponse,
+): void {
+  turnResults.push(emptyTurnResult(turn, plannerOutput, turnResult, llmResponse));
+}
+
+function isUsableRationale(rationale: string | undefined): rationale is string {
+  return !!rationale && rationale !== "Defaulted to ignore due to invalid or missing planner output.";
+}
+
+const DISPOSITION_MAP: Record<string, ExecutionDisposition> = {
+  ignore: "ignore",
+  suggest: "suggest",
+  act: "act",
+  summarize: "summarize",
+  escalate: "escalate",
+};
+
+function toExecutionDisposition(disposition: string | undefined): ExecutionDisposition {
+  return DISPOSITION_MAP[disposition ?? "ignore"] ?? "ignore";
+}
+
+// ---------------------------------------------------------------------------
+// Persistence helpers
 // ---------------------------------------------------------------------------
 
 interface WriteLogInput {
   packet: AgentContextPacket;
-  plannerResult: PlannerResult;
+  plannerResult: {
+    output: PlannerOutput;
+    usage: { inputTokens: number; outputTokens: number };
+    latencyMs: number;
+    model: string;
+  };
   costCents: number;
   agentSettings: OrgAgentSettings;
   batch: AggregatedBatch;
@@ -541,12 +922,10 @@ interface WriteLogInput {
   policyDecision: Record<string, unknown>;
   finalActions: Record<string, unknown>[];
   inboxItemId?: string;
-  /** Override model tier (defaults to "tier2" for backward compat). */
   modelTier?: "tier2" | "tier3";
-  /** Whether the call was promoted from Tier 2 to Tier 3. */
   promoted?: boolean;
-  /** Why the call was promoted. */
   promotionReason?: string;
+  logger: PipelineLogger;
 }
 
 async function writeExecutionLog(input: WriteLogInput): Promise<void> {
@@ -554,6 +933,7 @@ async function writeExecutionLog(input: WriteLogInput): Promise<void> {
     packet, plannerResult, costCents, agentSettings, batch,
     disposition, status, policyDecision, finalActions, inboxItemId,
     modelTier = "tier2", promoted: wasPromoted = false, promotionReason: promoReason,
+    logger,
   } = input;
   try {
     await executionLoggingService.write({
@@ -582,11 +962,11 @@ async function writeExecutionLog(input: WriteLogInput): Promise<void> {
       latencyMs: plannerResult.latencyMs,
     });
   } catch (err) {
-    logError("execution log write failed (non-fatal)", err);
+    logger.logError("execution log write failed (non-fatal)", err);
   }
 }
 
-async function markProcessed(packet: AgentContextPacket): Promise<void> {
+async function markProcessed(packet: AgentContextPacket, logger: PipelineLogger): Promise<void> {
   try {
     await processedEventService.markProcessed({
       consumerName: CONSUMER_NAME,
@@ -594,6 +974,6 @@ async function markProcessed(packet: AgentContextPacket): Promise<void> {
       organizationId: packet.organizationId,
     });
   } catch (err) {
-    logError("markProcessed failed (non-fatal)", err);
+    logger.logError("markProcessed failed (non-fatal)", err);
   }
 }

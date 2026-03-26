@@ -72,10 +72,10 @@ function getThresholds(risk: RiskLevel, mode: AutonomyMode): Thresholds {
 
 /** Default max suggestions per scope type per hour. */
 const SUGGESTION_RATE_LIMITS: Record<string, number> = {
-  channel: 2,
-  chat: 1,    // group chats
-  ticket: 2,
-  session: 2,
+  channel: 100,
+  chat: 100,
+  ticket: 100,
+  session: 100,
   project: 2,
   system: 0,
 };
@@ -253,8 +253,6 @@ export function clearBudgetCache(): void {
 export interface PolicyEngineInput {
   plannerOutput: PlannerOutput;
   context: AgentContextPacket;
-  /** Whether the scope is a DM (affects suggestion rate limits). */
-  isDm?: boolean;
 }
 
 /**
@@ -262,7 +260,7 @@ export interface PolicyEngineInput {
  * Returns a PolicyResult with a decision for each proposed action.
  */
 export async function evaluatePolicy(input: PolicyEngineInput): Promise<PolicyResult> {
-  const { plannerOutput, context, isDm } = input;
+  const { plannerOutput, context } = input;
   const autonomyMode = context.permissions.autonomyMode as AutonomyMode;
   const orgId = context.organizationId;
 
@@ -331,7 +329,7 @@ export async function evaluatePolicy(input: PolicyEngineInput): Promise<PolicyRe
       orgId,
       scopeType: context.scopeType,
       scopeId: context.scopeId,
-      isDm,
+      isDm: context.isDm,
     });
     results.push(result);
   }

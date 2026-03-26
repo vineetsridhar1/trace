@@ -15,7 +15,13 @@
  * Dependencies: #06 (Action Registry), #10 (Context Builder)
  */
 
-import type { LLMAdapter, LLMAssistantContentBlock, LLMToolDefinition } from "@trace/shared";
+import type {
+  LLMAdapter,
+  LLMAssistantContentBlock,
+  LLMMessage,
+  LLMResponse,
+  LLMToolDefinition,
+} from "@trace/shared";
 import { createLLMAdapter } from "../lib/llm/index.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import type { AgentActionRegistration } from "./action-registry.js";
@@ -31,6 +37,8 @@ export interface ProposedAction {
   args: Record<string, unknown>;
 }
 
+export type PromotionTarget = "sonnet" | "opus";
+
 export interface PlannerOutput {
   disposition: PlannerDisposition;
   confidence: number;
@@ -38,6 +46,10 @@ export interface PlannerOutput {
   proposedActions: ProposedAction[];
   userVisibleMessage?: string;
   promotionReason?: string;
+  /** Which model to escalate to. Only used when disposition is "escalate". Defaults to "sonnet". */
+  promotionTarget?: PromotionTarget;
+  /** When true, the planner has nothing more to do. Pipeline respects this as a stop hint. */
+  done?: boolean;
 }
 
 export interface PlannerResult {
@@ -54,8 +66,9 @@ export interface PlannerResult {
 // Model configuration per tier
 // ---------------------------------------------------------------------------
 
-const DEFAULT_TIER2_MODEL = "claude-sonnet-4-20250514";
-export const DEFAULT_TIER3_MODEL = "claude-opus-4-20250514";
+const DEFAULT_TIER2_MODEL = "claude-haiku-4-5-20251001";
+export const DEFAULT_SONNET_MODEL = "claude-sonnet-4-20250514";
+export const DEFAULT_OPUS_MODEL = "claude-opus-4-20250514";
 
 // ---------------------------------------------------------------------------
 // LLM adapter (lazy singleton, same pattern as summary-generator)
@@ -140,8 +153,23 @@ const PLANNER_TOOL: LLMToolDefinition = {
       promotionReason: {
         type: "string",
         description:
-          "If disposition is 'escalate', explain why Tier 3 is needed. " +
+          "If disposition is 'escalate', explain why a more capable model is needed. " +
           "Omit for other dispositions.",
+      },
+      promotionTarget: {
+        type: "string",
+        enum: ["sonnet", "opus"],
+        description:
+          "Which model to escalate to when disposition is 'escalate'. " +
+          "'sonnet' for moderate complexity (multi-step reasoning, nuanced responses). " +
+          "'opus' for high complexity (deep analysis, complex planning, ambiguous situations). " +
+          "Defaults to 'sonnet' if omitted.",
+      },
+      done: {
+        type: "boolean",
+        description:
+          "Set to true when you have completed all useful actions and have nothing more to do. " +
+          "Defaults to false if omitted. The pipeline will stop the loop when this is true.",
       },
     },
     additionalProperties: false,
@@ -152,7 +180,7 @@ const PLANNER_TOOL: LLMToolDefinition = {
 // System prompt construction
 // ---------------------------------------------------------------------------
 
-function buildSystemPrompt(ctx: AgentContextPacket): string {
+export function buildSystemPrompt(ctx: AgentContextPacket): string {
   const parts: string[] = [];
 
   // 1. System preamble
@@ -184,12 +212,20 @@ CRITICAL RULES:
 5. For "act" disposition, confidence must be >= 0.8 and the action must be low-risk.
 6. For "suggest" disposition, confidence should be >= 0.5.
 7. Below 0.5 confidence, always choose "ignore".
-8. Use "escalate" sparingly — only when a complex situation genuinely needs deeper analysis (Tier 3).
+8. Use "escalate" sparingly — only when the task exceeds your capabilities. Set promotionTarget to "sonnet" for moderate complexity or "opus" for very high complexity. Default is "sonnet".
 9. Use "summarize" when events are informational and a rolling summary update would be useful, but no user-facing action is needed.
 10. Check relevant entities carefully — do NOT suggest creating a ticket if one already exists for the same issue.
 11. Check recent events — do NOT suggest actions that have already been taken.
 
-You MUST call the planner_decision tool exactly once with your decision.`;
+MULTI-TURN LOOP:
+- You operate in a loop of up to 10 turns. Each turn, you propose actions, they are executed, and you see the results.
+- You may send multiple messages, create tickets, and perform other actions across turns.
+- After each turn, you'll receive a tool_result showing what was executed, suggested, or dropped, plus the current turn count.
+- Set done=true when you have nothing more to do. The pipeline enforces a hard cap of 10 turns regardless.
+- You do NOT need to do everything in one turn. Propose one or a few actions per turn, observe the results, and decide what's next.
+- If your first action is to reply to a message, you can then follow up with additional actions in subsequent turns.
+
+You MUST call the planner_decision tool exactly once per turn with your decision.`;
 
 function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
   const entries = actions.map((a) => {
@@ -218,10 +254,43 @@ function buildActionSchemaSection(actions: AgentActionRegistration[]): string {
 function buildContextSection(ctx: AgentContextPacket): string {
   const parts: string[] = [];
 
-  // Scope info
-  parts.push(
-    `<scope>\nType: ${ctx.scopeType}\nID: ${ctx.scopeId}\nOrganization: ${ctx.organizationId}\nAutonomy mode: ${ctx.permissions.autonomyMode}\n</scope>`,
-  );
+  // Scope info — include chat type (DM vs group) when applicable
+  const scopeLines = [
+    `Type: ${ctx.scopeType}`,
+    `ID: ${ctx.scopeId}`,
+    `Organization: ${ctx.organizationId}`,
+    `Autonomy mode: ${ctx.permissions.autonomyMode}`,
+  ];
+
+  // Add chat-specific context hints
+  if (ctx.scopeType === "chat" && ctx.scopeEntity) {
+    const chatType = ctx.scopeEntity.data.type as string | undefined;
+    if (chatType === "dm") {
+      scopeLines.push("Chat type: dm (direct message — 1:1 conversation with the user)");
+      scopeLines.push(
+        "DM behavior: This is a direct conversation with you. The user expects a response. " +
+        "Use 'act' disposition with a message.send action to reply directly. " +
+        "Do NOT use 'suggest' — reply in the DM."
+      );
+    } else if (chatType === "group") {
+      scopeLines.push("Chat type: group (multi-member chat)");
+      scopeLines.push(
+        "Group chat behavior: Be more reserved. Only suggest actions when genuinely helpful. " +
+        "@mentions directed at you should be treated as direct requests."
+      );
+    }
+  }
+
+  // Add @mention context hint
+  if (ctx.isMention) {
+    scopeLines.push(
+      "@mention: You were directly @mentioned in this message. " +
+      "The user is expecting a helpful reply. Respond with 'act' disposition and a message.send action. " +
+      "You may also propose additional actions (e.g., ticket.create) alongside the reply."
+    );
+  }
+
+  parts.push(`<scope>\n${scopeLines.join("\n")}\n</scope>`);
 
   // Trigger event
   parts.push(
@@ -380,6 +449,14 @@ function parsePlannerOutput(
     output.promotionReason = raw.promotionReason;
   }
 
+  if (raw.promotionTarget === "sonnet" || raw.promotionTarget === "opus") {
+    output.promotionTarget = raw.promotionTarget;
+  }
+
+  if (typeof raw.done === "boolean") {
+    output.done = raw.done;
+  }
+
   return output;
 }
 
@@ -471,4 +548,65 @@ export async function runPlanner(
       model,
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-turn planner entry point
+// ---------------------------------------------------------------------------
+
+export interface PlannerTurnResult {
+  output: PlannerOutput;
+  /** Raw LLM response — pipeline uses content blocks to build message history */
+  response: LLMResponse;
+  latencyMs: number;
+}
+
+/**
+ * Run a single planner turn with a full message history.
+ *
+ * Unlike `runPlanner`, this does not build the system prompt or construct the
+ * initial user message — the pipeline manages those. This is a thin wrapper
+ * around the LLM adapter that parses the tool_use output.
+ */
+export async function runPlannerTurn(
+  systemPrompt: string,
+  messages: LLMMessage[],
+  availableActions: AgentActionRegistration[],
+  options?: PlannerOptions,
+): Promise<PlannerTurnResult> {
+  const model = options?.model ?? process.env.AGENT_PLANNER_MODEL ?? DEFAULT_TIER2_MODEL;
+  const adapter = options?.adapter ?? getAdapter();
+  const startTime = Date.now();
+
+  const response = await adapter.complete({
+    model,
+    system: systemPrompt,
+    messages,
+    tools: [PLANNER_TOOL],
+    maxTokens: 1024,
+    temperature: 0,
+  });
+
+  const latencyMs = Date.now() - startTime;
+
+  const toolUseBlock = response.content.find(
+    (b: LLMAssistantContentBlock) => b.type === "tool_use" && b.name === "planner_decision",
+  );
+
+  if (!toolUseBlock || toolUseBlock.type !== "tool_use") {
+    return {
+      output: {
+        ...IGNORE_OUTPUT,
+        rationaleSummary: "LLM did not produce a tool_use response — defaulted to ignore.",
+        done: true,
+      },
+      response,
+      latencyMs,
+    };
+  }
+
+  const rawInput = toolUseBlock.input as Record<string, unknown>;
+  const output = parsePlannerOutput(rawInput, availableActions);
+
+  return { output, response, latencyMs };
 }

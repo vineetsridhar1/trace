@@ -60,6 +60,12 @@ export interface AgentContextPacket {
   scopeType: string;
   scopeId: string;
 
+  /** Whether this scope is a DM (direct message) chat. */
+  isDm: boolean;
+
+  /** Whether the trigger event is an @mention of the agent. */
+  isMention: boolean;
+
   /** The most recent event in the batch — the primary trigger. */
   triggerEvent: AgentEvent;
 
@@ -457,7 +463,12 @@ async function findRelevantEntities(input: {
   return truncateEntities(entities, input.tokenBudget);
 }
 
-/** Fetch a linked entity in a compact form. */
+/**
+ * Fetch a linked entity in a compact form.
+ *
+ * Privacy guard (ticket #17): DM chats are never included as relevant
+ * entities in non-DM context packets — their content must never leak.
+ */
 async function fetchLinkedEntity(
   entityType: string,
   entityId: string,
@@ -492,6 +503,9 @@ async function fetchLinkedEntity(
           select: { id: true, name: true, type: true },
         });
         if (!ch) return null;
+        // Privacy guard (ticket #17): never include DM chats as linked entities
+        // in context packets for other scopes.
+        if (ch.type === "dm") return null;
         return { type: "chat", id: ch.id, data: ch as unknown as Record<string, unknown> };
       }
       case "ticket": {
@@ -816,13 +830,19 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   recordSection("relevantEntities", estimateObjectTokens(relevantEntities));
 
   // --- 7. Summaries ---
-  const summaries = await fetchSummaries({
-    organizationId,
-    scopeType,
-    scopeId,
-    relevantEntities,
-    tokenBudget: budget.sections.summaries,
-  });
+  //    Privacy guard (ticket #17): DM summaries are never generated automatically.
+  //    They are only produced on explicit user request. Group chat summaries are
+  //    generated automatically but scoped — they never leak into unrelated contexts.
+  const isDmScope = scopeType === "chat" && scopeEntity?.data.type === "dm";
+  const summaries = isDmScope
+    ? [] // skip auto-summaries for DMs
+    : await fetchSummaries({
+        organizationId,
+        scopeType,
+        scopeId,
+        relevantEntities,
+        tokenBudget: budget.sections.summaries,
+      });
   recordSection("summaries", estimateObjectTokens(summaries));
 
   // --- 8. Recent events beyond the batch ---
@@ -847,6 +867,8 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     scopeKey,
     scopeType,
     scopeId,
+    isDm: isDmScope,
+    isMention: isTriggerMention(triggerEvent, agentSettings.agentId),
     triggerEvent,
     eventBatch,
     soulFile,
@@ -879,6 +901,17 @@ function parseScopeId(scopeKey: string): string {
   const parts = scopeKey.split(":");
   // For "chat:id:thread:parentId", the scope ID is the chat ID
   return parts[1] ?? parts[0];
+}
+
+/** Check if the trigger event is an @mention of the agent. */
+function isTriggerMention(triggerEvent: AgentEvent, agentId: string): boolean {
+  const mentions = triggerEvent.payload.mentions;
+  return (
+    Array.isArray(mentions) &&
+    mentions.some(
+      (m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
+    )
+  );
 }
 
 /** Map raw scope type strings to the typed ScopeType union. */

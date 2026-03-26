@@ -87,18 +87,8 @@ function shouldPromoteToTier3(event: AgentEvent, agentId: string): boolean {
     if (priority === "urgent" || priority === "high") return true;
   }
 
-  // 3. Explicit @mention of the agent in a message (complex question indicator)
-  if (event.eventType === "message_sent") {
-    const mentions = event.payload.mentions;
-    if (
-      Array.isArray(mentions) &&
-      mentions.some(
-        (m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
-      )
-    ) {
-      return true;
-    }
-  }
+  // 3. @mentions no longer auto-promote to Tier 3. The planner (Haiku by default)
+  //    can escalate via promotionReason if the question is complex enough for Opus.
 
   return false;
 }
@@ -138,26 +128,57 @@ const SELF_TRIGGER_ALLOWLIST = new Set<string>([
 // Chat membership gate
 // ---------------------------------------------------------------------------
 
+export type ChatType = "dm" | "group";
+
 /**
  * Tracks which chats the agent is a member of, per org.
- * Key: orgId, Value: Set of chatIds
+ * Key: orgId, Value: Map of chatId → chat type ("dm" | "group").
  */
-const chatMemberships = new Map<string, Set<string>>();
+const chatMemberships = new Map<string, Map<string, ChatType>>();
 
 /**
  * Update chat membership based on membership events.
  * Called by the agent worker for every event before routing.
+ *
+ * Handles three event types:
+ * - `chat_created`: The initial members are embedded in the payload. If the
+ *   agent is one of them, register the chat (this is how DM creation works —
+ *   ChatService.create() emits chat_created but not individual chat_member_added).
+ * - `chat_member_added`: A member was added after creation.
+ * - `chat_member_removed`: A member left or was removed.
+ *
+ * Falls back to "group" if the chat type cannot be determined.
  */
 export function updateChatMembership(event: AgentEvent, agentId: string): void {
-  if (event.eventType === "chat_member_added") {
+  if (event.eventType === "chat_created") {
+    // chat_created includes all initial members in payload.chat.members
+    const chat = event.payload.chat as Record<string, unknown> | undefined;
+    if (!chat) return;
+    const members = chat.members as Array<{ user?: { id?: string } }> | undefined;
+    if (!Array.isArray(members)) return;
+    const isAgentMember = members.some(
+      (m) => m?.user?.id === agentId,
+    );
+    if (isAgentMember) {
+      let chats = chatMemberships.get(event.organizationId);
+      if (!chats) {
+        chats = new Map();
+        chatMemberships.set(event.organizationId, chats);
+      }
+      const chatType = (chat.type === "dm" ? "dm" : "group") as ChatType;
+      chats.set(event.scopeId, chatType);
+    }
+  } else if (event.eventType === "chat_member_added") {
     const userId = event.payload.userId as string | undefined;
     if (userId === agentId) {
       let chats = chatMemberships.get(event.organizationId);
       if (!chats) {
-        chats = new Set();
+        chats = new Map();
         chatMemberships.set(event.organizationId, chats);
       }
-      chats.add(event.scopeId);
+      // Infer chat type from payload if available
+      const chatType = inferChatTypeFromPayload(event) ?? "group";
+      chats.set(event.scopeId, chatType);
     }
   } else if (event.eventType === "chat_member_removed") {
     const userId = event.payload.userId as string | undefined;
@@ -170,13 +191,41 @@ export function updateChatMembership(event: AgentEvent, agentId: string): void {
   }
 }
 
+/**
+ * Try to infer chat type from a chat_member_added event's payload.
+ * The chat_created event includes `chat.type` directly. For other membership
+ * events where the type can't be determined, returns null and the caller
+ * falls back to "group" (the safer default — group behavior is more
+ * conservative than DM behavior).
+ */
+function inferChatTypeFromPayload(event: AgentEvent): ChatType | null {
+  // chat_created payload includes chat.type directly
+  const chat = event.payload.chat as Record<string, unknown> | undefined;
+  if (chat && typeof chat.type === "string") {
+    return chat.type === "dm" ? "dm" : "group";
+  }
+  return null;
+}
+
 export function isAgentChatMember(orgId: string, chatId: string): boolean {
   return chatMemberships.get(orgId)?.has(chatId) ?? false;
 }
 
-/** Seed chat memberships from the database on startup */
-export function seedChatMemberships(orgId: string, chatIds: string[]): void {
-  chatMemberships.set(orgId, new Set(chatIds));
+/** Get the chat type for a chat the agent is a member of. */
+export function getAgentChatType(orgId: string, chatId: string): ChatType | null {
+  return chatMemberships.get(orgId)?.get(chatId) ?? null;
+}
+
+/** Seed chat memberships from the database on startup (with chat types). */
+export function seedChatMemberships(
+  orgId: string,
+  chats: Array<{ chatId: string; type: ChatType }>,
+): void {
+  const map = new Map<string, ChatType>();
+  for (const chat of chats) {
+    map.set(chat.chatId, chat.type);
+  }
+  chatMemberships.set(orgId, map);
 }
 
 /** Clear all memberships (for testing) */
@@ -307,7 +356,11 @@ export function routeEvent(
   // 5. Chat membership gate — drop chat-scoped events if agent not a member
   if (event.scopeType === "chat") {
     // Always process membership events (they update the gate itself)
-    if (event.eventType !== "chat_member_added" && event.eventType !== "chat_member_removed") {
+    const isMembershipEvent =
+      event.eventType === "chat_member_added" ||
+      event.eventType === "chat_member_removed" ||
+      event.eventType === "chat_created";
+    if (!isMembershipEvent) {
       if (!isAgentChatMember(event.organizationId, event.scopeId)) {
         return { decision: "drop", reason: "not_chat_member" };
       }
@@ -327,7 +380,15 @@ export function routeEvent(
     ? (budgetMaxTier === 2 ? 2 : 3) // respect budget suppression
     : budgetMaxTier;
 
-  // 7. Direct routing — check if this event should bypass aggregation
+  // 7a. DM direct routing — all messages in DMs bypass aggregation
+  if (event.scopeType === "chat" && event.eventType === "message_sent") {
+    const chatType = getAgentChatType(event.organizationId, event.scopeId);
+    if (chatType === "dm") {
+      return { decision: "direct", reason: "direct:dm_message", maxTier };
+    }
+  }
+
+  // 7b. Direct routing — check if this event should bypass aggregation
   const directRule = DIRECT_RULES[event.eventType];
   if (directRule && directRule(event, agentId)) {
     return { decision: "direct", reason: `direct:${event.eventType}`, maxTier };
