@@ -270,24 +270,49 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
 
   // ── 5. Handle special dispositions before policy engine ──
 
-  // Ignore: log and return
+  // Ignore: log and return — unless this is an @mention (must always reply)
   if (plannerOutput.disposition === "ignore") {
-    await writeExecutionLog({
-      packet,
-      plannerResult,
-      costCents,
-      agentSettings,
-      batch,
-      disposition: executionDisposition,
-      status: "dropped",
-      policyDecision: {},
-      finalActions: [],
-      modelTier: currentTier,
-      promoted,
-      promotionReason,
-    });
-    await markProcessed(packet);
-    return;
+    if (packet.isMention) {
+      // Override: force a reply for @mentions
+      const triggerMessageId = packet.triggerEvent.payload.messageId as string | undefined;
+      const replyText =
+        plannerOutput.rationaleSummary &&
+        plannerOutput.rationaleSummary !== "Defaulted to ignore due to invalid or missing planner output."
+          ? plannerOutput.rationaleSummary
+          : "Hey! I saw your mention but I'm not sure how to help here. Could you give me more details?";
+      plannerOutput.disposition = "act";
+      plannerOutput.proposedActions = [
+        {
+          actionType: "message.send",
+          args: {
+            chatId: packet.scopeId,
+            text: replyText,
+            ...(triggerMessageId ? { parentId: triggerMessageId } : {}),
+          },
+        },
+      ];
+      log("@mention override: planner ignored but forcing reply", {
+        scopeKey: packet.scopeKey,
+        triggerMessageId,
+      });
+    } else {
+      await writeExecutionLog({
+        packet,
+        plannerResult,
+        costCents,
+        agentSettings,
+        batch,
+        disposition: executionDisposition,
+        status: "dropped",
+        policyDecision: {},
+        finalActions: [],
+        modelTier: currentTier,
+        promoted,
+        promotionReason,
+      });
+      await markProcessed(packet);
+      return;
+    }
   }
 
   // Escalate: either Tier 3 already ran and still escalated, or promotion was suppressed
@@ -351,6 +376,20 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     });
     await markProcessed(packet);
     return;
+  }
+
+  // ── 5b. Inject parentId for @mention threading ──
+  //    When the trigger is an @mention, force all message.send actions to reply
+  //    in-thread by injecting the trigger message's ID as parentId.
+  if (packet.isMention) {
+    const triggerMessageId = packet.triggerEvent.payload.messageId as string | undefined;
+    if (triggerMessageId) {
+      for (const action of plannerOutput.proposedActions) {
+        if (action.actionType === "message.send" && !action.args.parentId) {
+          action.args.parentId = triggerMessageId;
+        }
+      }
+    }
   }
 
   // ── 6. Policy engine (for suggest/act dispositions) ──

@@ -245,6 +245,15 @@ function buildContextSection(ctx: AgentContextPacket): string {
     }
   }
 
+  // Add @mention context hint
+  if (ctx.isMention) {
+    scopeLines.push(
+      "@mention: You were directly @mentioned in this message. " +
+      "The user is expecting a helpful reply. Respond with 'act' disposition and a message.send action. " +
+      "You may also propose additional actions (e.g., ticket.create) alongside the reply."
+    );
+  }
+
   parts.push(`<scope>\n${scopeLines.join("\n")}\n</scope>`);
 
   // Trigger event

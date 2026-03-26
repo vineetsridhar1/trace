@@ -63,6 +63,9 @@ export interface AgentContextPacket {
   /** Whether this scope is a DM (direct message) chat. */
   isDm: boolean;
 
+  /** Whether the trigger event is an @mention of the agent. */
+  isMention: boolean;
+
   /** The most recent event in the batch — the primary trigger. */
   triggerEvent: AgentEvent;
 
@@ -865,6 +868,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     scopeType,
     scopeId,
     isDm: isDmScope,
+    isMention: isTriggerMention(triggerEvent, agentSettings.agentId),
     triggerEvent,
     eventBatch,
     soulFile,
@@ -897,6 +901,17 @@ function parseScopeId(scopeKey: string): string {
   const parts = scopeKey.split(":");
   // For "chat:id:thread:parentId", the scope ID is the chat ID
   return parts[1] ?? parts[0];
+}
+
+/** Check if the trigger event is an @mention of the agent. */
+function isTriggerMention(triggerEvent: AgentEvent, agentId: string): boolean {
+  const mentions = triggerEvent.payload.mentions;
+  return (
+    Array.isArray(mentions) &&
+    mentions.some(
+      (m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
+    )
+  );
 }
 
 /** Map raw scope type strings to the typed ScopeType union. */
