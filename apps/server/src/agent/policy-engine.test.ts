@@ -14,6 +14,19 @@ import type { AgentContextPacket } from "./context-builder.js";
 // Mock cost-tracking service
 // ---------------------------------------------------------------------------
 
+// Mock modules that would pull in @prisma/client
+vi.mock("../services/inbox.js", () => ({
+  inboxService: {},
+}));
+
+vi.mock("../lib/db.js", () => ({
+  prisma: {},
+}));
+
+vi.mock("../services/event.js", () => ({
+  eventService: {},
+}));
+
 vi.mock("../services/cost-tracking.js", () => ({
   costTrackingService: {
     checkBudget: vi.fn().mockResolvedValue({
@@ -21,6 +34,26 @@ vi.mock("../services/cost-tracking.js", () => ({
       spentCents: 0,
       remainingCents: 1000,
       remainingPercent: 100,
+    }),
+  },
+}));
+
+// Mock Redis for dismissal cooldown (now Redis-backed)
+const mockRedisStore = new Map<string, string>();
+vi.mock("../lib/redis.js", () => ({
+  redis: {
+    set: vi.fn(async (key: string, value: string, _ex: string, _ttl: number) => {
+      mockRedisStore.set(key, value);
+      return "OK";
+    }),
+    exists: vi.fn(async (key: string) => (mockRedisStore.has(key) ? 1 : 0)),
+    keys: vi.fn(async (pattern: string) => {
+      const prefix = pattern.replace("*", "");
+      return [...mockRedisStore.keys()].filter((k) => k.startsWith(prefix));
+    }),
+    del: vi.fn(async (...keys: string[]) => {
+      for (const k of keys) mockRedisStore.delete(k);
+      return keys.length;
     }),
   },
 }));
@@ -90,10 +123,11 @@ function makeInput(overrides: Partial<PolicyEngineInput> = {}): PolicyEngineInpu
 // Tests
 // ---------------------------------------------------------------------------
 
-afterEach(() => {
+afterEach(async () => {
   clearSuggestionRates();
-  clearDismissals();
+  await clearDismissals();
   clearBudgetCache();
+  mockRedisStore.clear();
   mockCheckBudget.mockResolvedValue({
     dailyLimitCents: 1000,
     spentCents: 0,
@@ -319,12 +353,12 @@ describe("policy-engine", () => {
   // ── Anti-chaos: dismissal cooldown ──
 
   describe("dismissal cooldown", () => {
-    it("suppresses suggestions of the same type after dismissal", async () => {
-      recordDismissal({
+    it("suppresses suggestions of the same itemType after dismissal", async () => {
+      await recordDismissal({
         organizationId: "org-1",
         scopeType: "channel",
         scopeId: "chan-1",
-        actionType: "ticket.create",
+        itemType: "ticket_suggestion",
       });
 
       const result = await evaluatePolicy(
@@ -343,12 +377,37 @@ describe("policy-engine", () => {
       expect(result.actions[0].reason).toBe("dismissal_cooldown");
     });
 
-    it("does not affect execute decisions", async () => {
-      recordDismissal({
+    it("does not suppress different itemTypes in the same scope", async () => {
+      await recordDismissal({
         organizationId: "org-1",
         scopeType: "channel",
         scopeId: "chan-1",
-        actionType: "ticket.create",
+        itemType: "ticket_suggestion",
+      });
+
+      // link.create maps to link_suggestion, not ticket_suggestion — should not be suppressed
+      // Use confidence 0.5, which is >= suggestMin 0.3 but < actMin 0.6 for low:suggest
+      const result = await evaluatePolicy(
+        makeInput({
+          plannerOutput: makePlannerOutput({
+            confidence: 0.5,
+            proposedActions: [{ actionType: "link.create", args: { ticketId: "t-1", entityType: "chat", entityId: "c-1" } }],
+          }),
+          context: makeContext({
+            permissions: { autonomyMode: "suggest", actions: [] },
+          }),
+        }),
+      );
+
+      expect(result.actions[0].decision).toBe("suggest");
+    });
+
+    it("does not affect execute decisions", async () => {
+      await recordDismissal({
+        organizationId: "org-1",
+        scopeType: "channel",
+        scopeId: "chan-1",
+        itemType: "ticket_suggestion",
       });
 
       // In act mode with confidence 0.8 >= actMin 0.7 → execute (not suggest)

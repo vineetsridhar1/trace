@@ -213,6 +213,37 @@ export class InboxService {
   }
 
   /**
+   * Find active suggestions in a given scope with a specific item type.
+   * Used by semantic deduplication to check for existing similar suggestions.
+   */
+  async findActiveSuggestionsByScope(input: {
+    orgId: string;
+    scopeType: string;
+    scopeId: string;
+    itemType: InboxItemType;
+  }) {
+    return prisma.inboxItem.findMany({
+      where: {
+        organizationId: input.orgId,
+        itemType: input.itemType,
+        status: "active",
+        sourceType: "agent_suggestion",
+        payload: {
+          path: ["scopeType"],
+          equals: input.scopeType,
+        },
+      },
+    }).then((items) =>
+      // Prisma JSON filtering only supports one path at a time,
+      // so filter scopeId in application code
+      items.filter((item) => {
+        const payload = (item.payload ?? {}) as Record<string, unknown>;
+        return payload.scopeId === input.scopeId;
+      }),
+    );
+  }
+
+  /**
    * Expire suggestions past their expiresAt timestamp.
    * Called by a periodic background job.
    */

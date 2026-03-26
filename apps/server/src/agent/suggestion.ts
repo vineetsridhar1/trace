@@ -5,7 +5,11 @@
  * this module creates an InboxItem carrying the full proposed action so that a human
  * can accept, edit, or dismiss it.
  *
- * Ticket: #14
+ * Includes semantic deduplication: before creating a suggestion, checks for existing
+ * active suggestions with the same item type in the same scope and compares titles
+ * using Levenshtein distance. Duplicates are suppressed and logged.
+ *
+ * Ticket: #14, #19
  * Dependencies: #07 (Action Executor), #12 (Policy Engine)
  */
 
@@ -29,7 +33,7 @@ const ACTION_TO_ITEM_TYPE: Record<string, InboxItemType> = {
   "message.send": "message_suggestion",
 };
 
-function mapActionToItemType(actionType: string): InboxItemType {
+export function mapActionToItemType(actionType: string): InboxItemType {
   return ACTION_TO_ITEM_TYPE[actionType] ?? "agent_suggestion";
 }
 
@@ -52,6 +56,66 @@ const DEFAULT_EXPIRY_MS = 48 * 60 * 60 * 1000; // 48h
 function getExpiryTimestamp(itemType: InboxItemType): string {
   const ms = EXPIRY_DEFAULTS_MS[itemType] ?? DEFAULT_EXPIRY_MS;
   return new Date(Date.now() + ms).toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Semantic deduplication — Levenshtein similarity
+// ---------------------------------------------------------------------------
+
+const DEDUP_SIMILARITY_THRESHOLD = 0.7;
+
+/**
+ * Compute Levenshtein distance between two strings.
+ * Uses the classic dynamic-programming approach with O(min(a,b)) space.
+ */
+export function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  // Ensure `a` is the shorter string for O(min) space
+  if (a.length > b.length) [a, b] = [b, a];
+
+  const aLen = a.length;
+  const bLen = b.length;
+  let prev = new Array<number>(aLen + 1);
+  let curr = new Array<number>(aLen + 1);
+
+  for (let i = 0; i <= aLen; i++) prev[i] = i;
+
+  for (let j = 1; j <= bLen; j++) {
+    curr[0] = j;
+    for (let i = 1; i <= aLen; i++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[i] = Math.min(
+        prev[i] + 1,     // deletion
+        curr[i - 1] + 1, // insertion
+        prev[i - 1] + cost, // substitution
+      );
+    }
+    [prev, curr] = [curr, prev];
+  }
+
+  return prev[aLen];
+}
+
+/**
+ * Compute similarity between two strings as a ratio in [0, 1].
+ * 1.0 = identical, 0.0 = completely different.
+ */
+export function titleSimilarity(a: string, b: string): number {
+  const aNorm = a.toLowerCase().trim();
+  const bNorm = b.toLowerCase().trim();
+  const maxLen = Math.max(aNorm.length, bNorm.length);
+  if (maxLen === 0) return 1;
+  return 1 - levenshteinDistance(aNorm, bNorm) / maxLen;
+}
+
+export interface DedupResult {
+  isDuplicate: boolean;
+  existingId?: string;
+  existingTitle?: string;
+  similarity?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +151,10 @@ export interface CreateSuggestionInput {
 /**
  * Create an InboxItem representing a suggestion from the agent.
  * Called by the agent pipeline when the policy engine returns "suggest".
+ *
+ * Before creating, checks for semantic duplicates — active suggestions of the
+ * same item type in the same scope whose title is similar (Levenshtein ≥ 0.7).
+ * Returns null if the suggestion is suppressed as a duplicate.
  */
 export async function createSuggestion(input: CreateSuggestionInput) {
   const { policyResult, plannerOutput, context, agentId, userId } = input;
@@ -98,6 +166,32 @@ export async function createSuggestion(input: CreateSuggestionInput) {
   const title =
     plannerOutput.userVisibleMessage ??
     generateTitle(action.actionType, action.args);
+
+  // ── Semantic dedup: check for existing similar suggestions ──
+  const dedup = await checkDuplicate({
+    orgId: context.organizationId,
+    scopeType: context.scopeType,
+    scopeId: context.scopeId,
+    itemType,
+    title,
+  });
+
+  if (dedup.isDuplicate) {
+    console.log(
+      `[suggestion-dedup] suppressed duplicate suggestion`,
+      JSON.stringify({
+        itemType,
+        title,
+        existingId: dedup.existingId,
+        existingTitle: dedup.existingTitle,
+        similarity: dedup.similarity?.toFixed(3),
+        scopeType: context.scopeType,
+        scopeId: context.scopeId,
+        orgId: context.organizationId,
+      }),
+    );
+    return null;
+  }
 
   const payload: SuggestionPayload = {
     actionType: action.actionType,
@@ -123,6 +217,40 @@ export async function createSuggestion(input: CreateSuggestionInput) {
   });
 }
 
+/**
+ * Check if a semantically similar suggestion already exists.
+ * Queries active suggestions of the same item type whose payload matches
+ * the same scope, then compares titles via Levenshtein similarity.
+ */
+async function checkDuplicate(input: {
+  orgId: string;
+  scopeType: string;
+  scopeId: string;
+  itemType: InboxItemType;
+  title: string;
+}): Promise<DedupResult> {
+  const existing = await inboxService.findActiveSuggestionsByScope({
+    orgId: input.orgId,
+    scopeType: input.scopeType,
+    scopeId: input.scopeId,
+    itemType: input.itemType,
+  });
+
+  for (const item of existing) {
+    const similarity = titleSimilarity(input.title, item.title);
+    if (similarity >= DEDUP_SIMILARITY_THRESHOLD) {
+      return {
+        isDuplicate: true,
+        existingId: item.id,
+        existingTitle: item.title,
+        similarity,
+      };
+    }
+  }
+
+  return { isDuplicate: false };
+}
+
 // ---------------------------------------------------------------------------
 // Batch create suggestions
 // ---------------------------------------------------------------------------
@@ -137,7 +265,7 @@ export interface CreateSuggestionsInput {
 
 /**
  * Create InboxItems for all "suggest" decisions from a policy evaluation.
- * Returns the created inbox items.
+ * Returns the created inbox items (duplicates are silently suppressed).
  */
 export async function createSuggestions(input: CreateSuggestionsInput) {
   const { suggestions, plannerOutput, context, agentId, userId } = input;
@@ -151,7 +279,7 @@ export async function createSuggestions(input: CreateSuggestionsInput) {
       agentId,
       userId,
     });
-    results.push(item);
+    if (item) results.push(item);
   }
   return results;
 }
