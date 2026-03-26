@@ -1,4 +1,4 @@
-import type { Ticket } from "@trace/gql";
+import type { Ticket, TicketStatus, Priority } from "@trace/gql";
 
 export type TicketRow = Ticket & {
   id: string;
@@ -6,7 +6,7 @@ export type TicketRow = Ticket & {
 
 export const TICKET_FILTER_STORAGE_KEY = "trace:tickets-filter";
 
-export const ticketStatusOrder: Record<string, number> = {
+export const ticketStatusOrder: Record<TicketStatus, number> = {
   in_progress: 0,
   in_review: 1,
   todo: 2,
@@ -15,7 +15,7 @@ export const ticketStatusOrder: Record<string, number> = {
   cancelled: 5,
 };
 
-export const ticketStatusLabel: Record<string, string> = {
+export const ticketStatusLabel: Record<TicketStatus, string> = {
   backlog: "Backlog",
   todo: "Todo",
   in_progress: "In Progress",
@@ -24,7 +24,7 @@ export const ticketStatusLabel: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-export const ticketStatusColor: Record<string, string> = {
+export const ticketStatusColor: Record<TicketStatus, string> = {
   backlog: "text-muted-foreground",
   todo: "text-foreground",
   in_progress: "text-blue-400",
@@ -33,14 +33,14 @@ export const ticketStatusColor: Record<string, string> = {
   cancelled: "text-muted-foreground",
 };
 
-export const ticketPriorityLabel: Record<string, string> = {
+export const ticketPriorityLabel: Record<Priority, string> = {
   urgent: "Urgent",
   high: "High",
   medium: "Medium",
   low: "Low",
 };
 
-export const ticketPriorityColor: Record<string, string> = {
+export const ticketPriorityColor: Record<Priority, string> = {
   urgent: "text-red-400",
   high: "text-orange-400",
   medium: "text-yellow-400",

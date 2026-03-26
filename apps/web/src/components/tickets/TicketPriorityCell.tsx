@@ -3,11 +3,13 @@ import {
   ArrowUp,
   Minus,
   ArrowDown,
+  type LucideIcon,
 } from "lucide-react";
+import type { Priority } from "@trace/gql";
 import type { TicketRow } from "./tickets-table-types";
 import { ticketPriorityLabel, ticketPriorityColor } from "./tickets-table-types";
 
-const priorityIcon: Record<string, typeof AlertTriangle> = {
+const priorityIcon: Record<Priority, LucideIcon> = {
   urgent: AlertTriangle,
   high: ArrowUp,
   medium: Minus,

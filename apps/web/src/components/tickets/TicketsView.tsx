@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { SquareCheck } from "lucide-react";
 import { gql } from "@urql/core";
+import type { FilterChangedEvent, GridReadyEvent } from "ag-grid-community";
 import type { Ticket } from "@trace/gql";
 import { useEntityStore } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
@@ -13,6 +14,7 @@ import { ticketsGridTableInstance } from "./tickets-grid-table-instance";
 import { TicketsGridTable } from "./TicketsGridTable";
 import type { TicketRow } from "./tickets-table-types";
 import { TICKET_FILTER_STORAGE_KEY } from "./tickets-table-types";
+import { useTicketRows } from "./useTicketRows";
 
 const TICKETS_QUERY = gql`
   query Tickets($organizationId: ID!) {
@@ -57,7 +59,6 @@ export function TicketsView() {
     if (result.data?.tickets) {
       const fetched = result.data.tickets as Array<Ticket & { id: string }>;
       upsertMany("tickets", fetched);
-      ticketsGridTableInstance.useTable.getState().setRows(fetched as TicketRow[]);
     }
 
     setLoading(false);
@@ -68,11 +69,18 @@ export function TicketsView() {
     fetchTickets();
   }, [fetchTickets, refreshTick]);
 
-  const agGridOptions = {
+  // Derive grid rows from entity store — single source of truth
+  const ticketRows = useTicketRows();
+
+  useEffect(() => {
+    ticketsGridTableInstance.useTable.getState().setRows(ticketRows);
+  }, [ticketRows]);
+
+  const agGridOptions = useMemo(() => ({
     rowHeight: 40,
     headerHeight: 32,
     suppressCellFocus: true,
-    onGridReady: (event: { api: { setFilterModel: (model: Record<string, unknown>) => void } }) => {
+    onGridReady: (event: GridReadyEvent<TicketRow>) => {
       try {
         const saved = localStorage.getItem(TICKET_FILTER_STORAGE_KEY);
         if (saved) {
@@ -82,7 +90,7 @@ export function TicketsView() {
         // ignore corrupt data
       }
     },
-    onFilterChanged: (event: { api: { getFilterModel: () => Record<string, unknown> } }) => {
+    onFilterChanged: (event: FilterChangedEvent<TicketRow>) => {
       const model = event.api.getFilterModel();
       if (Object.keys(model).length === 0) {
         localStorage.removeItem(TICKET_FILTER_STORAGE_KEY);
@@ -90,7 +98,7 @@ export function TicketsView() {
         localStorage.setItem(TICKET_FILTER_STORAGE_KEY, JSON.stringify(model));
       }
     },
-  };
+  }), []);
 
   return (
     <div className="flex h-full flex-col">
