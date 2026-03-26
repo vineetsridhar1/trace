@@ -9,6 +9,7 @@
 
 import { redis } from "../lib/redis.js";
 import type { AgentEvent, RoutingResult } from "./router.js";
+import { getScopeAdapter } from "./scope-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,30 +81,17 @@ const TIMER_CHECK_INTERVAL_MS = 1_000; // check timers every second
 // ---------------------------------------------------------------------------
 
 /**
- * Build a scope key from an event. Handles all current scope types and
- * provides a generic fallback so adding new scopes is trivial.
+ * Build a scope key from an event. Delegates to scope adapters for
+ * scope-specific key construction (e.g., thread support for chat/channel).
+ * Falls back to a generic "scopeType:scopeId" for unknown scopes.
  */
 export function buildScopeKey(event: AgentEvent): string {
-  const { scopeType, scopeId, payload } = event;
-
-  if (scopeType === "chat") {
-    const parentMessageId = payload.parentMessageId as string | undefined;
-    if (parentMessageId) {
-      return `chat:${scopeId}:thread:${parentMessageId}`;
-    }
-    return `chat:${scopeId}`;
+  const adapter = getScopeAdapter(event.scopeType);
+  if (adapter) {
+    return adapter.buildScopeKey(event);
   }
-
-  if (scopeType === "ticket") {
-    return `ticket:${scopeId}`;
-  }
-
-  if (scopeType === "session") {
-    return `session:${scopeId}`;
-  }
-
-  // Generic fallback — future scope types (channels, etc.) work automatically
-  return `${scopeType}:${scopeId}`;
+  // Generic fallback for unknown scope types
+  return `${event.scopeType}:${event.scopeId}`;
 }
 
 function getSilenceTimeout(scopeType: string): number {

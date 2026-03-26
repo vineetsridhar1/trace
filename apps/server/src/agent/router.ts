@@ -119,6 +119,7 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
 const LOW_VALUE_EVENT_TYPES = new Set<string>([
   "inbox_item_created",
   "inbox_item_resolved",
+  "channel_created", // Not actionable by agent — just a structural event
 ]);
 
 /**

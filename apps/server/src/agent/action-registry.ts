@@ -137,6 +137,24 @@ const actionRegistry: AgentActionRegistration[] = [
     scopes: ["chat"],
   },
   {
+    name: "message.sendToChannel",
+    service: "channelService",
+    method: "sendMessage",
+    description:
+      "Send a message in a channel thread. Use to communicate with the team in a channel context. Only for channel-scoped conversations — use message.send for direct/group chats.",
+    risk: "medium",
+    suggestable: true,
+    parameters: {
+      fields: {
+        channelId: { type: "string", description: "The channel to send the message in", required: true },
+        text: { type: "string", description: "Plain text message content" },
+        html: { type: "string", description: "HTML-formatted message content" },
+        threadId: { type: "string", description: "Thread ID for threaded replies" },
+      },
+    },
+    scopes: ["channel"],
+  },
+  {
     name: "link.create",
     service: "ticketService",
     method: "link",

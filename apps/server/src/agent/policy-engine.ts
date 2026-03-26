@@ -20,6 +20,7 @@ import { findAction } from "./action-registry.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { redis } from "../lib/redis.js";
 import { mapActionToItemType } from "./action-types.js";
+import { getScopeAdapter } from "./scope-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,9 +73,14 @@ function getThresholds(risk: RiskLevel, mode: AutonomyMode): Thresholds {
 // Per-scope suggestion rate limiting
 // ---------------------------------------------------------------------------
 
-/** Default max suggestions per scope type per hour. */
+/**
+ * Default max suggestions per scope key per hour.
+ * Channel rate limits are intentionally low (2/thread/hour) because channels
+ * are team-visible and unsolicited suggestions are more disruptive.
+ * Scope adapters are the source of truth — this map is a fallback.
+ */
 const SUGGESTION_RATE_LIMITS: Record<string, number> = {
-  channel: 100,
+  channel: 2, // Ticket #21: max 2 suggestions per thread per hour for channels
   chat: 100,
   ticket: 100,
   session: 100,
@@ -103,20 +109,30 @@ function suggestionRateKey(orgId: string, scopeType: string, scopeId: string): s
  * Check if a suggestion would exceed the per-scope rate limit.
  * Returns true if the suggestion should be suppressed.
  * Increments the counter as a side effect when not suppressed.
+ *
+ * When a scopeKey is provided (e.g., "channel:abc:thread:xyz"), rate limiting
+ * is applied per scope key rather than per scope entity. This enables
+ * per-thread rate limiting for channels.
  */
 function isSuggestionRateLimited(input: {
   organizationId: string;
   scopeType: string;
   scopeId: string;
+  scopeKey?: string;
   isDm?: boolean;
 }): boolean {
+  // Resolve rate limit from scope adapter first, then fall back to static map
+  const adapter = getScopeAdapter(input.scopeType);
   const limit = input.isDm
     ? DM_RATE_LIMIT
-    : (SUGGESTION_RATE_LIMITS[input.scopeType] ?? 2);
+    : (adapter?.getRateLimit() ?? SUGGESTION_RATE_LIMITS[input.scopeType] ?? 2);
 
   if (limit <= 0) return true;
 
-  const key = suggestionRateKey(input.organizationId, input.scopeType, input.scopeId);
+  // Use scopeKey for rate limiting when available (enables per-thread limiting)
+  const key = input.scopeKey
+    ? `${input.organizationId}:${input.scopeKey}`
+    : suggestionRateKey(input.organizationId, input.scopeType, input.scopeId);
   const now = Date.now();
   const entry = suggestionRates.get(key);
 
@@ -313,6 +329,7 @@ export async function evaluatePolicy(input: PolicyEngineInput): Promise<PolicyRe
       orgId,
       scopeType: context.scopeType,
       scopeId: context.scopeId,
+      scopeKey: context.scopeKey,
       isDm: context.isDm,
     });
     results.push(result);
@@ -328,9 +345,10 @@ async function evaluateAction(input: {
   orgId: string;
   scopeType: string;
   scopeId: string;
+  scopeKey?: string;
   isDm?: boolean;
 }): Promise<PolicyActionResult> {
-  const { action, confidence, autonomyMode, orgId, scopeType, scopeId, isDm } = input;
+  const { action, confidence, autonomyMode, orgId, scopeType, scopeId, scopeKey, isDm } = input;
 
   // ── Hard rule: unknown action → drop ──
   const registration = findAction(action.actionType);
@@ -377,7 +395,7 @@ async function evaluateAction(input: {
 
   // ── Anti-chaos: suggestion rate limit ──
   if (decision === "suggest") {
-    if (isSuggestionRateLimited({ organizationId: orgId, scopeType, scopeId, isDm })) {
+    if (isSuggestionRateLimited({ organizationId: orgId, scopeType, scopeId, scopeKey, isDm })) {
       return { action, decision: "drop", reason: "suggestion_rate_limited" };
     }
   }
