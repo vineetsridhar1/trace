@@ -2,6 +2,18 @@ import type { SummaryType, Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * session_output payload types that are infrastructure noise (connection
+ * churn) and should not count toward summary staleness. Without this filter,
+ * sessions with flaky runtimes trigger endless summary refreshes that produce
+ * the same output and waste LLM calls.
+ */
+const IGNORED_PAYLOAD_TYPES = ["connection_lost", "connection_restored"];
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -153,6 +165,8 @@ export class SummaryService {
 
   /**
    * Count events in a scope since the last summary was produced.
+   * Excludes infrastructure noise (connection churn) so that flaky runtimes
+   * don't trigger pointless summary refreshes.
    */
   async countEventsSince(input: {
     organizationId: string;
@@ -164,6 +178,11 @@ export class SummaryService {
       organizationId: input.organizationId,
       scopeType: input.scopeType as Prisma.EventWhereInput["scopeType"],
       scopeId: input.scopeId,
+      // Exclude connection infrastructure events from the count
+      NOT: IGNORED_PAYLOAD_TYPES.map((type) => ({
+        eventType: "session_output" as const,
+        payload: { path: ["type"], equals: type },
+      })),
     };
 
     if (input.afterEventId) {

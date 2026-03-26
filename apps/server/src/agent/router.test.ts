@@ -275,6 +275,36 @@ describe("router", () => {
     expect(result.reason).toBe("aggregate:session_output");
   });
 
+  it("drops connection_lost session_output events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_output",
+        payload: { type: "connection_lost", reason: "bridge_closed" },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("drop");
+    expect(result.reason).toBe("connection_lifecycle");
+  });
+
+  it("drops connection_restored session_output events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_output",
+        payload: { type: "connection_restored", runtimeInstanceId: "rt-1" },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("drop");
+    expect(result.reason).toBe("connection_lifecycle");
+  });
+
   it("aggregates session_pr_opened events", () => {
     const result = routeEvent(
       event({

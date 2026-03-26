@@ -88,10 +88,38 @@ async function getAndResetScopeEventCount(
 const SUMMARY_MODEL = process.env.AGENT_SUMMARY_MODEL ?? "claude-haiku-4-5-20251001";
 
 /**
+ * In-flight refresh dedup — prevents the pipeline and summary worker from
+ * generating the same summary concurrently. The second caller awaits the
+ * first's promise instead of making a redundant LLM call.
+ */
+const inflightRefreshes = new Map<string, Promise<{ costCents: number } | null>>();
+
+function refreshKey(orgId: string, entityType: string, entityId: string): string {
+  return `${orgId}:${entityType}:${entityId}`;
+}
+
+/**
  * Refresh one entity's rolling summary.
  * Exported so the context builder (ticket #10) can trigger synchronous refresh.
+ * Deduplicates concurrent calls for the same entity.
  */
 export async function refreshSummary(
+  organizationId: string,
+  entityType: string,
+  entityId: string,
+): Promise<{ costCents: number } | null> {
+  const key = refreshKey(organizationId, entityType, entityId);
+  const inflight = inflightRefreshes.get(key);
+  if (inflight) return inflight;
+
+  const promise = refreshSummaryInner(organizationId, entityType, entityId).finally(() => {
+    inflightRefreshes.delete(key);
+  });
+  inflightRefreshes.set(key, promise);
+  return promise;
+}
+
+async function refreshSummaryInner(
   organizationId: string,
   entityType: string,
   entityId: string,
@@ -310,6 +338,8 @@ async function findStaleByTime(): Promise<StaleScopeCandidate[]> {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let running = false;
+/** Guard against overlapping refresh cycles */
+let cycleInProgress = false;
 
 function log(msg: string, data?: Record<string, unknown>): void {
   const prefix = "[summary-worker]";
@@ -322,8 +352,20 @@ function log(msg: string, data?: Record<string, unknown>): void {
 
 /**
  * One refresh cycle: find stale summaries and regenerate them.
+ * Guarded against concurrent execution — if a previous cycle is still
+ * running when the interval fires, the new cycle is skipped.
  */
 async function refreshCycle(activeOrgIds: Iterable<string>): Promise<void> {
+  if (cycleInProgress) return;
+  cycleInProgress = true;
+  try {
+    await refreshCycleInner(activeOrgIds);
+  } finally {
+    cycleInProgress = false;
+  }
+}
+
+async function refreshCycleInner(activeOrgIds: Iterable<string>): Promise<void> {
   // Collect candidates from both sources, deduplicate
   const [byCount, byTime] = await Promise.all([
     findStaleByEventCount(activeOrgIds),

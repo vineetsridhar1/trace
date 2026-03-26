@@ -366,6 +366,17 @@ export function routeEvent(
     return { decision: "drop", reason: "low_value_event" };
   }
 
+  // 4a. Connection lifecycle events — pure infrastructure noise, never actionable.
+  // These are session_output events with payload.type of "connection_lost" or
+  // "connection_restored". They fire for every bound session on each bridge
+  // reconnect and should never reach the planner.
+  if (event.eventType === "session_output") {
+    const payloadType = event.payload.type;
+    if (payloadType === "connection_lost" || payloadType === "connection_restored") {
+      return { decision: "drop", reason: "connection_lifecycle" };
+    }
+  }
+
   // 5. Chat membership gate — drop chat-scoped events if agent not a member
   if (event.scopeType === "chat") {
     // Always process membership events (they update the gate itself)

@@ -308,8 +308,13 @@ export class ChannelService {
   }) {
     const normalized = normalizeMessageInput(text, html);
 
+    // Agents can post to any channel in their org without membership
+    const memberFilter = actorType === "agent"
+      ? {}
+      : { members: { some: { userId: actorId, leftAt: null } } };
+
     const channel = await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, members: { some: { userId: actorId, leftAt: null } } },
+      where: { id: channelId, ...memberFilter },
       select: { id: true, organizationId: true, type: true },
     });
 
@@ -600,8 +605,13 @@ export class ChannelService {
     actorType: ActorType,
     actorId: string,
   ) {
+    // Agents can post to any channel in their org without membership
+    const memberFilter = actorType === "agent"
+      ? {}
+      : { members: { some: { userId: actorId, leftAt: null } } };
+
     const channel = await prisma.channel.findFirstOrThrow({
-      where: { id: channelId, type: "coding", members: { some: { userId: actorId, leftAt: null } } },
+      where: { id: channelId, type: "coding", ...memberFilter },
       select: { organizationId: true },
     });
 

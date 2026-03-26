@@ -225,6 +225,7 @@ MULTI-TURN LOOP:
 - You do NOT need to do everything in one turn. Propose one or a few actions per turn, observe the results, and decide what's next.
 - If your first action is to reply to a message, you can then follow up with additional actions in subsequent turns.
 - IMPORTANT: Whenever you execute a non-message action (e.g., ticket.create, ticket.addComment), you MUST also send a message in the same or next turn to inform the user what you did. Never take an action silently — always follow up with a brief message.
+- SUGGESTED ACTIONS: When the tool_result shows actions in "suggested" (not "executed"), it means the policy downgraded them to suggestions for the user to approve. The system will automatically notify the user about pending suggestions — you do NOT need to send a separate message. Set done=true unless you have additional actions to propose.
 
 You MUST call the planner_decision tool exactly once per turn with your decision.`;
 
