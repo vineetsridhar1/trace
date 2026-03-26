@@ -40,7 +40,16 @@ vi.mock("./policy-engine.js", () => ({
 }));
 
 vi.mock("./suggestion.js", () => ({
-  createSuggestions: vi.fn().mockResolvedValue([{ id: "inbox-1", itemType: "ticket_suggestion" }]),
+  createSuggestions: vi.fn().mockResolvedValue({
+    created: [
+      {
+        actionType: "ticket.create",
+        itemId: "inbox-1",
+        itemType: "ticket_suggestion",
+      },
+    ],
+    suppressed: [],
+  }),
 }));
 
 vi.mock("./summary-worker.js", () => ({
@@ -295,6 +304,35 @@ describe("runPipeline", () => {
     expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
     expect(mockLogWrite).toHaveBeenCalledOnce();
     expect(mockLogWrite.mock.calls[0][0].status).toBe("suggested");
+  });
+
+  it("treats dedup-suppressed suggestions as dropped, not suggested", async () => {
+    mockBuildContext.mockResolvedValue(makePacket());
+    mockRunPlannerTurn.mockResolvedValue(makeTurnResult("suggest", { done: true }));
+    mockEvaluatePolicy.mockResolvedValue({
+      actions: [
+        {
+          action: { actionType: "ticket.create", args: { title: "Bug" } },
+          decision: "suggest",
+          reason: "confidence below act threshold",
+        },
+      ],
+      plannerOutput: makeTurnResult("suggest").output,
+    } as PolicyResult);
+    mockCreateSuggestions.mockResolvedValueOnce({
+      created: [],
+      suppressed: [{ actionType: "ticket.create", reason: "duplicate_suppressed" }],
+    });
+
+    await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
+
+    expect(mockLogWrite).toHaveBeenCalledOnce();
+    expect(mockLogWrite.mock.calls[0][0].status).toBe("dropped");
+    expect(mockLogWrite.mock.calls[0][0].finalActions).toContainEqual({
+      actionType: "ticket.create",
+      decision: "drop",
+      reason: "duplicate_suppressed",
+    });
   });
 
   it("runs full pipeline for act disposition with execute decision", async () => {

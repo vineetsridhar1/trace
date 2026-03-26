@@ -13,7 +13,10 @@ import type { AgentContextPacket } from "./context-builder.js";
 // Mock inbox service
 // ---------------------------------------------------------------------------
 
-const mockCreateItem = vi.fn().mockResolvedValue({ id: "inbox-1" });
+const mockCreateItem = vi.fn().mockResolvedValue({
+  id: "inbox-1",
+  itemType: "ticket_suggestion",
+});
 const mockFindActiveSuggestionsByScope = vi.fn().mockResolvedValue([]);
 
 vi.mock("../services/inbox.js", () => ({
@@ -133,13 +136,24 @@ describe("semantic deduplication in createSuggestion", () => {
     mockFindActiveSuggestionsByScope.mockResolvedValue([]);
 
     const result = await createSuggestion(makeInput());
-    expect(result).toEqual({ id: "inbox-1" });
+    expect(result).toEqual({
+      id: "inbox-1",
+      itemType: "ticket_suggestion",
+    });
     expect(mockCreateItem).toHaveBeenCalledOnce();
   });
 
   it("suppresses duplicate when existing similar suggestion found", async () => {
     mockFindActiveSuggestionsByScope.mockResolvedValue([
-      { id: "existing-1", title: "Suggested ticket: Login timeout issue", itemType: "ticket_suggestion" },
+      {
+        id: "existing-1",
+        title: "Suggested ticket: Login timeout issue",
+        itemType: "ticket_suggestion",
+        payload: {
+          actionType: "ticket.create",
+          args: { title: "Login timeout issue" },
+        },
+      },
     ]);
 
     const result = await createSuggestion(makeInput());
@@ -149,11 +163,22 @@ describe("semantic deduplication in createSuggestion", () => {
 
   it("allows suggestion when existing titles are dissimilar", async () => {
     mockFindActiveSuggestionsByScope.mockResolvedValue([
-      { id: "existing-1", title: "Deploy pipeline failure", itemType: "ticket_suggestion" },
+      {
+        id: "existing-1",
+        title: "Deploy pipeline failure",
+        itemType: "ticket_suggestion",
+        payload: {
+          actionType: "ticket.create",
+          args: { title: "Deploy pipeline failure" },
+        },
+      },
     ]);
 
     const result = await createSuggestion(makeInput());
-    expect(result).toEqual({ id: "inbox-1" });
+    expect(result).toEqual({
+      id: "inbox-1",
+      itemType: "ticket_suggestion",
+    });
     expect(mockCreateItem).toHaveBeenCalledOnce();
   });
 
@@ -166,5 +191,40 @@ describe("semantic deduplication in createSuggestion", () => {
       scopeId: "chan-1",
       itemType: "ticket_suggestion",
     });
+  });
+
+  it("uses payload-derived titles for dedup when user-visible titles are generic", async () => {
+    const input = makeInput();
+    mockFindActiveSuggestionsByScope.mockResolvedValue([
+      {
+        id: "existing-1",
+        title: "Should I create a ticket for this?",
+        itemType: "ticket_suggestion",
+        payload: {
+          actionType: "ticket.create",
+          args: { title: "Deploy pipeline failure" },
+        },
+      },
+    ]);
+
+    const result = await createSuggestion(
+      makeInput({
+        plannerOutput: {
+          ...input.plannerOutput,
+          userVisibleMessage: "Should I create a ticket for this?",
+        },
+        policyResult: {
+          action: { actionType: "ticket.create", args: { title: "Login timeout bug" } },
+          decision: "suggest",
+          reason: "test",
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      id: "inbox-1",
+      itemType: "ticket_suggestion",
+    });
+    expect(mockCreateItem).toHaveBeenCalledOnce();
   });
 });

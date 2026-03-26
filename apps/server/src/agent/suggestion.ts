@@ -139,8 +139,8 @@ export interface CreateSuggestionInput {
  * Called by the agent pipeline when the policy engine returns "suggest".
  *
  * Before creating, checks for semantic duplicates — active suggestions of the
- * same item type in the same scope whose title is similar (Levenshtein ≥ 0.7).
- * Returns null if the suggestion is suppressed as a duplicate.
+ * same item type in the same scope whose action-derived title is similar
+ * (Levenshtein ≥ 0.7). Returns null if the suggestion is suppressed as a duplicate.
  */
 export async function createSuggestion(input: CreateSuggestionInput) {
   const { policyResult, plannerOutput, context, agentId, userId } = input;
@@ -148,10 +148,11 @@ export async function createSuggestion(input: CreateSuggestionInput) {
 
   const itemType = mapActionToItemType(action.actionType);
   const expiresAt = getExpiryTimestamp(itemType);
+  const generatedTitle = generateTitle(action.actionType, action.args);
 
   const title =
     plannerOutput.userVisibleMessage ??
-    generateTitle(action.actionType, action.args);
+    generatedTitle;
 
   // ── Semantic dedup: check for existing similar suggestions ──
   const dedup = await checkDuplicate({
@@ -159,7 +160,7 @@ export async function createSuggestion(input: CreateSuggestionInput) {
     scopeType: context.scopeType,
     scopeId: context.scopeId,
     itemType,
-    title,
+    title: generatedTitle,
   });
 
   if (dedup.isDuplicate) {
@@ -206,7 +207,7 @@ export async function createSuggestion(input: CreateSuggestionInput) {
 /**
  * Check if a semantically similar suggestion already exists.
  * Queries active suggestions of the same item type whose payload matches
- * the same scope, then compares titles via Levenshtein similarity.
+ * the same scope, then compares action-derived titles via Levenshtein similarity.
  */
 async function checkDuplicate(input: {
   orgId: string;
@@ -223,7 +224,10 @@ async function checkDuplicate(input: {
   });
 
   for (const item of existing) {
-    const similarity = titleSimilarity(input.title, item.title);
+    const similarity = titleSimilarity(
+      input.title,
+      getDedupComparisonTitle(item),
+    );
     if (similarity >= DEDUP_SIMILARITY_THRESHOLD) {
       return {
         isDuplicate: true,
@@ -249,14 +253,31 @@ export interface CreateSuggestionsInput {
   userId: string;
 }
 
+export interface CreatedSuggestionRecord {
+  actionType: string;
+  itemId: string;
+  itemType: InboxItemType;
+}
+
+export interface SuppressedSuggestionRecord {
+  actionType: string;
+  reason: "duplicate_suppressed";
+}
+
+export interface CreateSuggestionsResult {
+  created: CreatedSuggestionRecord[];
+  suppressed: SuppressedSuggestionRecord[];
+}
+
 /**
  * Create InboxItems for all "suggest" decisions from a policy evaluation.
- * Returns the created inbox items (duplicates are silently suppressed).
+ * Returns both created suggestions and duplicates that were suppressed.
  */
 export async function createSuggestions(input: CreateSuggestionsInput) {
   const { suggestions, plannerOutput, context, agentId, userId } = input;
 
-  const results = [];
+  const created: CreatedSuggestionRecord[] = [];
+  const suppressed: SuppressedSuggestionRecord[] = [];
   for (const policyResult of suggestions) {
     const item = await createSuggestion({
       policyResult,
@@ -265,9 +286,20 @@ export async function createSuggestions(input: CreateSuggestionsInput) {
       agentId,
       userId,
     });
-    if (item) results.push(item);
+    if (item) {
+      created.push({
+        actionType: policyResult.action.actionType,
+        itemId: item.id,
+        itemType: item.itemType,
+      });
+    } else {
+      suppressed.push({
+        actionType: policyResult.action.actionType,
+        reason: "duplicate_suppressed",
+      });
+    }
   }
-  return results;
+  return { created, suppressed };
 }
 
 // ---------------------------------------------------------------------------
@@ -291,4 +323,25 @@ function generateTitle(actionType: string, args: Record<string, unknown>): strin
     default:
       return `Agent suggestion: ${actionType}`;
   }
+}
+
+function getDedupComparisonTitle(item: {
+  title: string;
+  payload?: unknown;
+}): string {
+  const payload =
+    item.payload && typeof item.payload === "object"
+      ? item.payload as Record<string, unknown>
+      : null;
+  const actionType = typeof payload?.actionType === "string" ? payload.actionType : null;
+  const args =
+    payload?.args && typeof payload.args === "object"
+      ? payload.args as Record<string, unknown>
+      : null;
+
+  if (actionType && args) {
+    return generateTitle(actionType, args);
+  }
+
+  return item.title;
 }

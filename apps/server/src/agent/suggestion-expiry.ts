@@ -42,6 +42,7 @@ export function stopSuggestionExpiryWorker(): void {
     clearInterval(timer);
     timer = null;
   }
+  cycleCount = 0;
 }
 
 async function runMaintenanceCycle(): Promise<void> {
@@ -76,4 +77,6 @@ async function runMaintenanceCycle(): Promise<void> {
       console.error("[maintenance-worker] processed event cleanup failed:", message);
     }
   }
+
+  cycleCount %= PROCESSED_EVENT_CLEANUP_INTERVAL;
 }

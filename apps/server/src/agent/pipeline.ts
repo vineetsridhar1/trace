@@ -403,24 +403,36 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
 
   // ── Create suggestions ──
   const suggests = byDecision.get("suggest") ?? [];
+  let createdSuggestions: Array<{ actionType: string; itemType: string }> = [];
+  let suppressedSuggestions: Array<{ actionType: string; reason: string }> = [];
   if (suggests.length > 0) {
     try {
       const triggerActorType = state.packet.triggerEvent.actorType;
       const triggerActorId = state.packet.triggerEvent.actorId;
       const userId = triggerActorType === "user" ? triggerActorId : agentSettings.agentId;
 
-      const items = await createSuggestions({
+      const outcome = await createSuggestions({
         suggestions: suggests,
         plannerOutput,
         context: state.packet,
         agentId: agentSettings.agentId,
         userId,
       });
-      log("suggestions created", {
+      createdSuggestions = outcome.created.map((record) => ({
+        actionType: record.actionType,
+        itemType: record.itemType,
+      }));
+      suppressedSuggestions = outcome.suppressed.map((record) => ({
+        actionType: record.actionType,
+        reason: record.reason,
+      }));
+
+      log("suggestions handled", {
         scopeKey: state.packet.scopeKey,
         turn,
-        count: items.length,
-        types: items.map((i) => i.itemType),
+        createdCount: outcome.created.length,
+        createdTypes: outcome.created.map((record) => record.itemType),
+        suppressedCount: outcome.suppressed.length,
       });
     } catch (err) {
       logError(`suggestion creation failed on turn ${turn}`, err);
@@ -437,6 +449,14 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
       reason: dropped.reason,
     });
   }
+  for (const dropped of suppressedSuggestions) {
+    log("action suppressed during suggestion creation", {
+      scopeKey: state.packet.scopeKey,
+      turn,
+      actionType: dropped.actionType,
+      reason: dropped.reason,
+    });
+  }
 
   return {
     turn,
@@ -446,8 +466,11 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
       status: r.status,
       ...(r.error ? { error: r.error } : {}),
     })),
-    suggested: suggests.map((s) => ({ actionType: s.action.actionType })),
-    dropped: drops.map((d) => ({ actionType: d.action.actionType, reason: d.reason })),
+    suggested: createdSuggestions.map((record) => ({ actionType: record.actionType })),
+    dropped: [
+      ...drops.map((d) => ({ actionType: d.action.actionType, reason: d.reason })),
+      ...suppressedSuggestions,
+    ],
     latencyMs: turnResult.latencyMs,
     inputTokens: llmResponse.usage.inputTokens,
     outputTokens: llmResponse.usage.outputTokens,
