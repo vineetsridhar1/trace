@@ -301,7 +301,8 @@ describe("runPipeline", () => {
 
     expect(mockEvaluatePolicy).toHaveBeenCalledOnce();
     expect(mockCreateSuggestions).toHaveBeenCalledOnce();
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    // The executor is called once by sendActionConfirmation (auto-reply in thread)
+    // but not by the policy engine for action execution
     expect(mockLogWrite).toHaveBeenCalledOnce();
     expect(mockLogWrite.mock.calls[0][0].status).toBe("suggested");
   });
@@ -351,7 +352,8 @@ describe("runPipeline", () => {
 
     await runPipeline({ batch: makeBatch(), agentSettings, executor: mockExecutor });
 
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    // Executor called twice: once for ticket.create, once for sendActionConfirmation auto-reply
+    expect((mockExecutor.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
     expect(mockCreateSuggestions).not.toHaveBeenCalled();
     expect(mockLogWrite.mock.calls[0][0].status).toBe("succeeded");
   });

@@ -14,6 +14,7 @@ const ACTION_TO_ITEM_TYPE: Record<string, InboxItemType> = {
   "link.create": "link_suggestion",
   "session.start": "session_suggestion",
   "message.send": "message_suggestion",
+  "message.sendToChannel": "message_suggestion",
 };
 
 export function mapActionToItemType(actionType: string): InboxItemType {

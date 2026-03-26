@@ -61,7 +61,6 @@ export const scopeAutonomyMutations = {
     args: { organizationId: string; scopeType: string; scopeId: string; aiMode: AutonomyMode | null },
     ctx: Context,
   ) => {
-    await orgMemberService.assertAdmin(ctx.userId, args.organizationId);
     if (!VALID_WRITE_SCOPES.has(args.scopeType)) {
       throw new Error(`Cannot set aiMode on scope type: ${args.scopeType}`);
     }
@@ -70,6 +69,8 @@ export const scopeAutonomyMutations = {
       scopeType: args.scopeType as WritableAiModeScopeType,
       scopeId: args.scopeId,
       aiMode: args.aiMode ?? null,
+      userId: ctx.userId,
+      organizationId: args.organizationId,
     });
 
     return true;

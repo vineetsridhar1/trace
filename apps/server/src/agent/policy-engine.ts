@@ -200,9 +200,14 @@ async function isDismissalCooldownActive(input: {
   scopeId: string;
   itemType: string;
 }): Promise<boolean> {
-  const key = dismissalRedisKey(input.organizationId, input.scopeType, input.scopeId, input.itemType);
-  const exists = await redis.exists(key);
-  return exists === 1;
+  try {
+    const key = dismissalRedisKey(input.organizationId, input.scopeType, input.scopeId, input.itemType);
+    const exists = await redis.exists(key);
+    return exists === 1;
+  } catch {
+    // If Redis is unavailable, allow the suggestion through rather than crashing the pipeline
+    return false;
+  }
 }
 
 /** Clear all dismissals matching a pattern (for testing). */

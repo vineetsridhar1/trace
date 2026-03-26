@@ -12,6 +12,7 @@
 
 import type { AutonomyMode } from "@prisma/client";
 import { prisma } from "../lib/db.js";
+import { orgMemberService } from "./org-member.js";
 
 /** Scope types that support aiMode overrides or participate in resolution. */
 export type AutonomyScopeType = "chat" | "ticket" | "channel" | "session" | "project";
@@ -168,12 +169,19 @@ export type WritableAiModeScopeType = "chat" | "ticket" | "channel" | "project";
 /**
  * Update the aiMode on a scope entity. Pass null to clear the override
  * (inherit from parent/org default).
+ *
+ * Requires admin membership in the organization. The `userId` and
+ * `organizationId` params are used for authorization so that this function
+ * is safe to call from any entry point (GraphQL, agent runtime, etc.).
  */
 export async function updateScopeAiMode(input: {
   scopeType: WritableAiModeScopeType;
   scopeId: string;
   aiMode: AutonomyMode | null;
+  userId: string;
+  organizationId: string;
 }): Promise<void> {
+  await orgMemberService.assertAdmin(input.userId, input.organizationId);
   const { scopeType, scopeId, aiMode } = input;
 
   switch (scopeType) {

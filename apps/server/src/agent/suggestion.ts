@@ -315,8 +315,11 @@ function generateTitle(actionType: string, args: Record<string, unknown>): strin
   switch (actionType) {
     case "ticket.create":
       return `Suggested ticket: ${(args.title as string) || "New ticket"}`;
-    case "ticket.update":
-      return `Suggested update to ticket ${(args.id as string) || ""}`.trim();
+    case "ticket.update": {
+      const ticketId = (args.id as string) || "";
+      const fields = Object.keys(args).filter((k) => k !== "id").join(", ");
+      return `Suggested update to ticket ${ticketId}: ${fields || "fields"}`.trim();
+    }
     case "ticket.addComment": {
       const preview = typeof args.text === "string" ? args.text.slice(0, 80) : "";
       return `Suggested comment on ticket ${(args.ticketId as string) || ""}: ${preview}`.trim();
@@ -329,7 +332,7 @@ function generateTitle(actionType: string, args: Record<string, unknown>): strin
     }
     case "message.send":
     case "message.sendToChannel": {
-      const text = typeof args.text === "string" ? args.text.slice(0, 80) : "";
+      const text = typeof args.text === "string" ? args.text.slice(0, 200) : "";
       return `Suggested message: ${text || "no content"}`;
     }
     default:
