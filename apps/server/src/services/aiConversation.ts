@@ -1,7 +1,7 @@
 import type { AiConversationVisibility, Prisma } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
-import { pubsub, topics } from "../lib/pubsub.js";
+import { eventService } from "./event.js";
 
 export class AiConversationService {
   /**
@@ -50,6 +50,44 @@ export class AiConversationService {
         data: { rootBranchId: rootBranch.id },
         include: { branches: true },
       });
+
+      // Emit ai_conversation.created event
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "ai_conversation",
+        scopeId: conversation.id,
+        eventType: "ai_conversation_created",
+        payload: {
+          conversationId: conversation.id,
+          title: conversation.title,
+          visibility: conversation.visibility,
+          createdById: actorId,
+          rootBranchId: rootBranch.id,
+          createdAt: conversation.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+        actorType,
+        actorId,
+      }, tx);
+
+      // Emit branch.created event for the root branch
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "ai_conversation",
+        scopeId: conversation.id,
+        eventType: "ai_branch_created",
+        payload: {
+          branchId: rootBranch.id,
+          conversationId: conversation.id,
+          parentBranchId: null,
+          forkTurnId: null,
+          label: rootBranch.label,
+          createdById: actorId,
+          createdAt: rootBranch.createdAt.toISOString(),
+        },
+        actorType,
+        actorId,
+      }, tx);
 
       return updated;
     });
@@ -240,13 +278,18 @@ export class AiConversationService {
       data: { title: input.title },
     });
 
-    pubsub.publish(topics.conversationEvents(input.conversationId), {
-      conversationEvents: {
+    await eventService.create({
+      organizationId: conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: input.conversationId,
+      eventType: "ai_conversation_title_updated",
+      payload: {
         conversationId: input.conversationId,
-        type: "title_updated",
-        payload: { title: input.title },
-        timestamp: new Date().toISOString(),
+        title: input.title,
+        updatedAt: updated.updatedAt.toISOString(),
       },
+      actorType,
+      actorId,
     });
 
     return updated;

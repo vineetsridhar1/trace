@@ -27,12 +27,12 @@ export interface EventQueryOpts {
   excludeReplies?: boolean;
 }
 
-// Maps scope types to their pubsub topic builders.
-// Keys must match the GraphQL subscription field names (e.g. "channel" → "channelEvents").
-const scopeTopicMap: Record<string, (id: string) => string> = {
-  channel: topics.channelEvents,
-  chat: topics.chatEvents,
-  ticket: topics.ticketEvents,
+// Maps scope types to their pubsub topic builder and subscription field name.
+const scopeTopicMap: Record<string, { topic: (id: string) => string; field: string }> = {
+  channel: { topic: topics.channelEvents, field: "channelEvents" },
+  chat: { topic: topics.chatEvents, field: "chatEvents" },
+  ticket: { topic: topics.ticketEvents, field: "ticketEvents" },
+  ai_conversation: { topic: topics.conversationEvents, field: "conversationEvents" },
   // "system" scope has no entity-level topic — events are broadcast on the org topic only
 };
 
@@ -57,9 +57,9 @@ export class EventService {
     });
 
     // Broadcast to entity-scoped topic (e.g. channel:<id>:events)
-    const topicBuilder = scopeTopicMap[input.scopeType];
-    if (topicBuilder) {
-      pubsub.publish(topicBuilder(input.scopeId), { [`${input.scopeType}Events`]: event });
+    const scopeEntry = scopeTopicMap[input.scopeType];
+    if (scopeEntry) {
+      pubsub.publish(scopeEntry.topic(input.scopeId), { [scopeEntry.field]: event });
     }
 
     // Always broadcast to org-level topic for discovery (e.g. new channels)

@@ -75,6 +75,7 @@ export type AiConversation = {
   visibility: AiConversationVisibility;
 };
 
+/** Deprecated: Use Event type via conversationEvents subscription instead. */
 export type AiConversationEvent = {
   __typename?: 'AiConversationEvent';
   conversationId: Scalars['ID']['output'];
@@ -283,6 +284,12 @@ export type Event = {
 };
 
 export type EventType =
+  | 'ai_branch_created'
+  | 'ai_branch_labeled'
+  | 'ai_conversation_created'
+  | 'ai_conversation_title_updated'
+  | 'ai_conversation_visibility_changed'
+  | 'ai_turn_created'
   | 'channel_created'
   | 'channel_group_created'
   | 'channel_group_deleted'
@@ -1160,6 +1167,7 @@ export type ScopeInput = {
 };
 
 export type ScopeType =
+  | 'ai_conversation'
   | 'channel'
   | 'chat'
   | 'session'
@@ -1294,7 +1302,7 @@ export type Subscription = {
   branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
-  conversationEvents: AiConversationEvent;
+  conversationEvents: Event;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;

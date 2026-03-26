@@ -76,6 +76,7 @@ export type AiConversation = {
   visibility: AiConversationVisibility;
 };
 
+/** Deprecated: Use Event type via conversationEvents subscription instead. */
 export type AiConversationEvent = {
   __typename?: 'AiConversationEvent';
   conversationId: Scalars['ID']['output'];
@@ -284,6 +285,12 @@ export type Event = {
 };
 
 export type EventType =
+  | 'ai_branch_created'
+  | 'ai_branch_labeled'
+  | 'ai_conversation_created'
+  | 'ai_conversation_title_updated'
+  | 'ai_conversation_visibility_changed'
+  | 'ai_turn_created'
   | 'channel_created'
   | 'channel_group_created'
   | 'channel_group_deleted'
@@ -1161,6 +1168,7 @@ export type ScopeInput = {
 };
 
 export type ScopeType =
+  | 'ai_conversation'
   | 'channel'
   | 'chat'
   | 'session'
@@ -1295,7 +1303,7 @@ export type Subscription = {
   branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
-  conversationEvents: AiConversationEvent;
+  conversationEvents: Event;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -2156,7 +2164,7 @@ export type SubscriptionResolvers<ContextType = Context, ParentType extends Reso
   branchTurns?: SubscriptionResolver<ResolversTypes['Turn'], "branchTurns", ParentType, ContextType, RequireFields<SubscriptionBranchTurnsArgs, 'branchId'>>;
   channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId' | 'organizationId'>>;
   chatEvents?: SubscriptionResolver<ResolversTypes['Event'], "chatEvents", ParentType, ContextType, RequireFields<SubscriptionChatEventsArgs, 'chatId'>>;
-  conversationEvents?: SubscriptionResolver<ResolversTypes['AiConversationEvent'], "conversationEvents", ParentType, ContextType, RequireFields<SubscriptionConversationEventsArgs, 'conversationId'>>;
+  conversationEvents?: SubscriptionResolver<ResolversTypes['Event'], "conversationEvents", ParentType, ContextType, RequireFields<SubscriptionConversationEventsArgs, 'conversationId'>>;
   orgEvents?: SubscriptionResolver<ResolversTypes['Event'], "orgEvents", ParentType, ContextType, RequireFields<SubscriptionOrgEventsArgs, 'organizationId'>>;
   sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'organizationId' | 'sessionId'>>;
   sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'organizationId' | 'sessionId'>>;

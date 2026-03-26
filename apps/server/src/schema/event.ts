@@ -3,7 +3,7 @@ import type { ScopeInput, EventType } from "@trace/gql";
 import { eventService } from "../services/event.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { filterAsyncIterator } from "../lib/async-iterator.js";
-import { assertChannelAccess, assertChatAccess, isActiveChannelMember, isActiveChatMember } from "../services/access.js";
+import { assertChannelAccess, assertChatAccess, isActiveChannelMember, isActiveChatMember, isAiConversationAccessible } from "../services/access.js";
 import { requireOrgContext } from "../lib/require-org.js";
 
 const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
@@ -85,6 +85,9 @@ export const eventSubscriptions = {
           }
           if (event.scopeType === "channel" && CHANNEL_MESSAGE_EVENTS.has(event.eventType as EventType)) {
             return isActiveChannelMember(event.scopeId, ctx.userId);
+          }
+          if (event.scopeType === "ai_conversation") {
+            return isAiConversationAccessible(event.scopeId, ctx.userId);
           }
           return true;
         },

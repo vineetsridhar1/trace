@@ -8,6 +8,7 @@ import type {
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
 import { pubsub, topics } from "../lib/pubsub.js";
+import { eventService } from "./event.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -124,7 +125,30 @@ export class AiTurnService {
       },
     );
 
-    // Publish turn events for subscriptions
+    // Emit turn.created events via the event service (persisted + org-wide + conversation-scoped)
+    const emitTurnEvent = (turn: AiTurn) =>
+      eventService.create({
+        organizationId: branch.conversation.organizationId,
+        scopeType: "ai_conversation",
+        scopeId: branch.conversationId,
+        eventType: "ai_turn_created",
+        payload: {
+          turnId: turn.id,
+          branchId: input.branchId,
+          conversationId: branch.conversationId,
+          role: turn.role,
+          content: turn.content,
+          parentTurnId: turn.parentTurnId,
+          createdAt: turn.createdAt.toISOString(),
+        },
+        actorType,
+        actorId,
+      });
+
+    await emitTurnEvent(userTurn);
+    await emitTurnEvent(assistantTurn);
+
+    // Also publish Turn objects to the branch-scoped subscription for real-time UI
     pubsub.publish(topics.branchTurns(input.branchId), {
       branchTurns: userTurn,
     });
@@ -190,6 +214,30 @@ export class AiTurnService {
       },
     });
 
+    // Emit turn.created event for user turn
+    await eventService.create({
+      organizationId: branch.conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: branch.conversationId,
+      eventType: "ai_turn_created",
+      payload: {
+        turnId: userTurn.id,
+        branchId: input.branchId,
+        conversationId: branch.conversationId,
+        role: userTurn.role,
+        content: userTurn.content,
+        parentTurnId: userTurn.parentTurnId,
+        createdAt: userTurn.createdAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish Turn to branch-scoped subscription
+    pubsub.publish(topics.branchTurns(input.branchId), {
+      branchTurns: userTurn,
+    });
+
     yield { type: "user_turn_created" as const, turn: userTurn };
 
     // Assemble context
@@ -245,6 +293,30 @@ export class AiTurnService {
         return turn;
       },
     );
+
+    // Emit turn.created event for assistant turn
+    await eventService.create({
+      organizationId: branch.conversation.organizationId,
+      scopeType: "ai_conversation",
+      scopeId: branch.conversationId,
+      eventType: "ai_turn_created",
+      payload: {
+        turnId: assistantTurn.id,
+        branchId: input.branchId,
+        conversationId: branch.conversationId,
+        role: assistantTurn.role,
+        content: assistantTurn.content,
+        parentTurnId: assistantTurn.parentTurnId,
+        createdAt: assistantTurn.createdAt.toISOString(),
+      },
+      actorType,
+      actorId,
+    });
+
+    // Publish Turn to branch-scoped subscription
+    pubsub.publish(topics.branchTurns(input.branchId), {
+      branchTurns: assistantTurn,
+    });
 
     return assistantTurn;
   }
