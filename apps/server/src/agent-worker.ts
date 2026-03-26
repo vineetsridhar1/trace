@@ -15,6 +15,8 @@ import {
   updateChatMembership,
   seedChatMemberships,
   cleanupRateLimits,
+  cleanupAgentActiveScopes,
+  trackAgentActivity,
   setCostTracker,
   type AgentEvent,
   type CostTracker,
@@ -407,6 +409,10 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
       // Update chat membership gate before routing
       updateChatMembership(event, agentContext.agentId);
 
+      // Track agent message activity (before routing — self-trigger drops the event
+      // but we still need to know the agent was active in this conversation scope)
+      trackAgentActivity(event, agentContext.agentId);
+
       // When the agent is removed from a chat, immediately close any open
       // aggregation windows for that chat scope (ticket #17).
       if (
@@ -498,9 +504,10 @@ function startOrgPolling(): void {
 }
 
 function startRateLimitCleanup(): void {
-  // Clean up stale rate limit entries every 30 seconds
+  // Clean up stale rate limit and agent-active scope entries every 30 seconds
   rateLimitCleanupTimer = setInterval(() => {
     cleanupRateLimits();
+    cleanupAgentActiveScopes();
   }, 30_000);
 }
 

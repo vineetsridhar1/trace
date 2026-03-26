@@ -295,6 +295,100 @@ export function cleanupRateLimits(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Agent-active conversation tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * Tracks conversation scopes where the agent has recently sent messages.
+ * Messages from users in these scopes are dropped (unless they @mention the
+ * agent) because the agent is already handling the conversation directly.
+ *
+ * Key: "orgId:scopeType:scopeId:thread:threadId" (thread-level granularity)
+ * Value: timestamp of last agent activity
+ */
+const agentActiveScopes = new Map<string, number>();
+
+const ACTIVE_SCOPE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Build a thread-level conversation key for agent-active tracking.
+ * Returns null for top-level (non-threaded) messages — we only suppress
+ * follow-ups within threads the agent is actively participating in.
+ */
+function conversationKey(orgId: string, event: AgentEvent): string | null {
+  // Channel threads: metadata.threadId or payload.parentMessageId
+  if (event.scopeType === "channel") {
+    const threadId =
+      (event.metadata?.threadId as string | undefined) ??
+      (event.payload.parentMessageId as string | undefined);
+    if (threadId) {
+      return `${orgId}:channel:${event.scopeId}:thread:${threadId}`;
+    }
+    return null;
+  }
+
+  // Chat threads: payload.parentMessageId
+  if (event.scopeType === "chat") {
+    const parentId = event.payload.parentMessageId as string | undefined;
+    if (parentId) {
+      return `${orgId}:chat:${event.scopeId}:thread:${parentId}`;
+    }
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Record that the agent sent a message in a conversation scope.
+ * Call this for every event BEFORE routing — the agent's own events are
+ * dropped by self-trigger suppression but we still need to track them.
+ */
+export function trackAgentActivity(event: AgentEvent, agentId: string): void {
+  if (event.actorType !== "agent" || event.actorId !== agentId) return;
+  if (event.eventType !== "message_sent") return;
+
+  const key = conversationKey(event.organizationId, event);
+  if (!key) return;
+
+  agentActiveScopes.set(key, Date.now());
+}
+
+/**
+ * Check whether a user message is a follow-up in a thread the agent is
+ * actively participating in.
+ */
+function isAgentActiveConversation(orgId: string, event: AgentEvent): boolean {
+  const key = conversationKey(orgId, event);
+  if (!key) return false;
+
+  const lastActive = agentActiveScopes.get(key);
+  if (lastActive === undefined) return false;
+
+  if (Date.now() - lastActive > ACTIVE_SCOPE_TTL_MS) {
+    agentActiveScopes.delete(key);
+    return false;
+  }
+
+  return true;
+}
+
+/** Periodically clean up stale agent-active scope entries. */
+export function cleanupAgentActiveScopes(): void {
+  const now = Date.now();
+  for (const [key, ts] of agentActiveScopes) {
+    if (now - ts > ACTIVE_SCOPE_TTL_MS) {
+      agentActiveScopes.delete(key);
+    }
+  }
+}
+
+/** Clear all active scopes (for testing). */
+export function clearAgentActiveScopes(): void {
+  agentActiveScopes.clear();
+}
+
+// ---------------------------------------------------------------------------
 // Cost budget degradation
 // ---------------------------------------------------------------------------
 
@@ -358,6 +452,22 @@ export function routeEvent(
     const allowKey = `${event.eventType}:${event.scopeType}`;
     if (!SELF_TRIGGER_ALLOWLIST.has(allowKey)) {
       return { decision: "drop", reason: "self_trigger" };
+    }
+  }
+
+  // 3b. Agent-active conversation — drop user follow-ups in threads where the
+  //     agent is already responding. @mentions still pass through (new request).
+  if (event.eventType === "message_sent" && event.actorType === "user") {
+    if (isAgentActiveConversation(event.organizationId, event)) {
+      const mentions = event.payload.mentions;
+      const mentionsAgent =
+        Array.isArray(mentions) &&
+        mentions.some(
+          (m) => typeof m === "object" && m !== null && (m as Record<string, unknown>).userId === agentId,
+        );
+      if (!mentionsAgent) {
+        return { decision: "drop", reason: "agent_active_conversation" };
+      }
     }
   }
 

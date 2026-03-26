@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanupRateLimits,
   clearChatMemberships,
+  clearAgentActiveScopes,
   isAgentChatMember,
   routeEvent,
   seedChatMemberships,
   setCostTracker,
+  trackAgentActivity,
   updateChatMembership,
 } from "./router.js";
 
@@ -36,6 +38,7 @@ const settings = {
 
 afterEach(() => {
   clearChatMemberships();
+  clearAgentActiveScopes();
   setCostTracker({ getRemainingBudgetFraction: () => 1 });
   vi.useRealTimers();
 });
@@ -67,22 +70,23 @@ describe("router", () => {
   });
 
   it("routes mention events directly", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({ payload: { mentions: [{ userId: "agent-1" }] } }),
       settings,
     );
 
+    // @mentions no longer auto-promote to Tier 3 (planner can escalate if needed)
     expect(result).toEqual({
       decision: "direct",
       reason: "direct:message_sent",
-      maxTier: 3,
+      maxTier: undefined,
     });
   });
 
   it("aggregates configured event types", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(event(), settings);
 
@@ -94,7 +98,7 @@ describe("router", () => {
   });
 
   it("suppresses agent self-triggers outside the allowlist", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({ actorType: "agent", actorId: "agent-1" }),
@@ -105,7 +109,7 @@ describe("router", () => {
   });
 
   it("drops events when cost budget is exhausted", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
     setCostTracker({ getRemainingBudgetFraction: () => 0 });
 
     const result = routeEvent(event(), settings);
@@ -114,7 +118,7 @@ describe("router", () => {
   });
 
   it("degrades tier 3 actions when budget is low but not exhausted", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
     setCostTracker({ getRemainingBudgetFraction: () => 0.4 });
 
     const result = routeEvent(event(), settings);
@@ -127,7 +131,7 @@ describe("router", () => {
   });
 
   it("rate limits noisy scopes", () => {
-    seedChatMemberships("org-1", ["chat-rate"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-rate", type: "group" }]);
 
     for (let index = 0; index < 20; index += 1) {
       expect(
@@ -144,7 +148,7 @@ describe("router", () => {
   it("cleans up stale rate limit entries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-21T00:00:00.000Z"));
-    seedChatMemberships("org-1", ["chat-clean"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-clean", type: "group" }]);
 
     routeEvent(event({ scopeId: "chat-clean" }), settings);
 
@@ -172,7 +176,7 @@ describe("router", () => {
   });
 
   it("promotes urgent ticket_created to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({
@@ -189,7 +193,7 @@ describe("router", () => {
   });
 
   it("promotes high priority ticket_updated to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({
@@ -205,20 +209,21 @@ describe("router", () => {
     expect(result.maxTier).toBe(3);
   });
 
-  it("promotes @mention of agent to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+  it("routes @mention of agent as direct (no Tier 3 auto-promotion)", () => {
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({ payload: { mentions: [{ userId: "agent-1" }] } }),
       settings,
     );
 
+    // @mentions no longer auto-promote to Tier 3 — planner can escalate if needed
     expect(result.decision).toBe("direct");
-    expect(result.maxTier).toBe(3);
+    expect(result.maxTier).toBeUndefined();
   });
 
   it("suppresses Tier 3 promotion when budget is below 50%", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
     setCostTracker({ getRemainingBudgetFraction: () => 0.3 });
 
     const result = routeEvent(
@@ -412,7 +417,7 @@ describe("router", () => {
   });
 
   it("does not promote normal priority tickets to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({
@@ -426,5 +431,124 @@ describe("router", () => {
 
     expect(result.decision).toBe("aggregate");
     expect(result.maxTier).toBeUndefined();
+  });
+
+  // ---- Agent-active conversation filtering ----
+
+  it("drops user messages in threads where the agent is active", () => {
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
+
+    // Agent sends a message in a thread
+    trackAgentActivity(
+      event({
+        actorType: "agent",
+        actorId: "agent-1",
+        payload: { parentMessageId: "root-msg-1" },
+      }),
+      "agent-1",
+    );
+
+    // User replies in the same thread — should be dropped
+    const result = routeEvent(
+      event({ payload: { parentMessageId: "root-msg-1" } }),
+      settings,
+    );
+
+    expect(result).toEqual({ decision: "drop", reason: "agent_active_conversation" });
+  });
+
+  it("still routes @mentions in agent-active threads", () => {
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
+
+    trackAgentActivity(
+      event({
+        actorType: "agent",
+        actorId: "agent-1",
+        payload: { parentMessageId: "root-msg-1" },
+      }),
+      "agent-1",
+    );
+
+    // User @mentions agent in the same thread — should still route
+    const result = routeEvent(
+      event({
+        payload: {
+          parentMessageId: "root-msg-1",
+          mentions: [{ userId: "agent-1" }],
+        },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("direct");
+  });
+
+  it("does not drop top-level messages (no thread) even if agent was active in a thread", () => {
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
+
+    trackAgentActivity(
+      event({
+        actorType: "agent",
+        actorId: "agent-1",
+        payload: { parentMessageId: "root-msg-1" },
+      }),
+      "agent-1",
+    );
+
+    // Top-level message (no parentMessageId) — should still be aggregated
+    const result = routeEvent(event(), settings);
+
+    expect(result.decision).toBe("aggregate");
+  });
+
+  it("drops user messages in channel threads where agent is active", () => {
+    // Channel-scoped message in a thread where agent replied
+    trackAgentActivity(
+      event({
+        scopeType: "channel",
+        scopeId: "channel-1",
+        actorType: "agent",
+        actorId: "agent-1",
+        metadata: { threadId: "thread-1" },
+      }),
+      "agent-1",
+    );
+
+    const result = routeEvent(
+      event({
+        scopeType: "channel",
+        scopeId: "channel-1",
+        metadata: { threadId: "thread-1" },
+      }),
+      settings,
+    );
+
+    expect(result).toEqual({ decision: "drop", reason: "agent_active_conversation" });
+  });
+
+  it("expires agent-active scope after TTL", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-21T00:00:00.000Z"));
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
+
+    trackAgentActivity(
+      event({
+        actorType: "agent",
+        actorId: "agent-1",
+        payload: { parentMessageId: "root-msg-1" },
+      }),
+      "agent-1",
+    );
+
+    // Advance past the 5-minute TTL
+    vi.setSystemTime(new Date("2026-03-21T00:06:00.000Z"));
+
+    const result = routeEvent(
+      event({ payload: { parentMessageId: "root-msg-1" } }),
+      settings,
+    );
+
+    // Should no longer be dropped — TTL expired
+    expect(result.decision).toBe("aggregate");
   });
 });
