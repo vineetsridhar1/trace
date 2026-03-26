@@ -432,6 +432,33 @@ export class EventAggregator {
   get openWindowCount(): number {
     return this.windows.size;
   }
+
+  /** Get info about all currently open aggregation windows (for debug console) */
+  getOpenWindows(): Array<{
+    scopeKey: string;
+    organizationId: string;
+    eventCount: number;
+    openedAt: number;
+    lastEventAt: number;
+  }> {
+    const result: Array<{
+      scopeKey: string;
+      organizationId: string;
+      eventCount: number;
+      openedAt: number;
+      lastEventAt: number;
+    }> = [];
+    for (const window of this.windows.values()) {
+      result.push({
+        scopeKey: window.scopeKey,
+        organizationId: window.organizationId,
+        eventCount: window.events.length,
+        openedAt: window.openedAt,
+        lastEventAt: window.lastEventAt,
+      });
+    }
+    return result;
+  }
 }
 
 // ---------------------------------------------------------------------------
