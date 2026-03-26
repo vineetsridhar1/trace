@@ -6,6 +6,8 @@ export type TicketRow = Ticket & {
 
 export const TICKET_FILTER_STORAGE_KEY = "trace:tickets-filter";
 
+export const TICKET_DETAIL_PANEL_WIDTH = 400;
+
 export const ticketStatusOrder: Record<TicketStatus, number> = {
   in_progress: 0,
   in_review: 1,

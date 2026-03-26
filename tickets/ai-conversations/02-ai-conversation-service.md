@@ -9,7 +9,7 @@ Create the service layer for managing AI conversations and branches. This servic
 - Create `apps/server/src/services/aiConversation.ts` with an `AiConversationService` class
 - Implement `createConversation({ organizationId, createdById, title?, visibility? })`:
   - Creates the `AiConversation` record
-  - Creates the root `Branch` (parentBranchId = null, forkTurnId = null)
+  - Creates the root `AiBranch` (parentBranchId = null, forkTurnId = null)
   - Updates `AiConversation.rootBranchId` to point to the root branch
   - Returns the full conversation with root branch
 - Implement `getConversation(id)`:
@@ -33,17 +33,17 @@ Create the service layer for managing AI conversations and branches. This servic
 ## Dependencies
 
 - 01 (Database Schema)
-  <!-- Ticket 01 creates: AiConversation, Branch, Turn Prisma models with all relations -->
+  <!-- Ticket 01 creates: AiConversation, AiBranch, AiTurn Prisma models with all relations -->
 
 ## Completion requirements
 
-- [ ] `AiConversationService` exists at `apps/server/src/services/aiConversation.ts`
-- [ ] `createConversation` creates both the conversation and root branch atomically
-- [ ] `getConversations` correctly filters by visibility and ownership
-- [ ] `getConversation` enforces access control (private conversations only visible to creator)
-- [ ] `getBranch` returns turns in correct order
-- [ ] `getBranchDepth` correctly computes depth by walking the parent chain
-- [ ] Service is registered and accessible from resolvers and agent runtime
+- [x] `AiConversationService` exists at `apps/server/src/services/aiConversation.ts`
+- [x] `createConversation` creates both the conversation and root branch atomically
+- [x] `getConversations` correctly filters by visibility and ownership
+- [x] `getConversation` enforces access control (private conversations only visible to creator)
+- [x] `getBranch` returns turns in correct order
+- [x] `getBranchDepth` correctly computes depth by walking the parent chain
+- [x] Service is registered and accessible from resolvers and agent runtime
 
 ## How to test
 

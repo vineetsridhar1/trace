@@ -37,66 +37,6 @@ export type AddChatMemberInput = {
   userId: Scalars['ID']['input'];
 };
 
-export type AgentBudgetStatus = {
-  __typename?: 'AgentBudgetStatus';
-  dailyLimitCents: Scalars['Int']['output'];
-  remainingCents: Scalars['Float']['output'];
-  remainingPercent: Scalars['Float']['output'];
-  spentCents: Scalars['Float']['output'];
-};
-
-export type AgentCostEntry = {
-  __typename?: 'AgentCostEntry';
-  date: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  organizationId: Scalars['ID']['output'];
-  summaryCalls: Scalars['Int']['output'];
-  summaryCostCents: Scalars['Float']['output'];
-  tier2Calls: Scalars['Int']['output'];
-  tier2CostCents: Scalars['Float']['output'];
-  tier3Calls: Scalars['Int']['output'];
-  tier3CostCents: Scalars['Float']['output'];
-  totalCostCents: Scalars['Float']['output'];
-};
-
-export type AgentCostSummary = {
-  __typename?: 'AgentCostSummary';
-  budget: AgentBudgetStatus;
-  dailyCosts: Array<AgentCostEntry>;
-};
-
-export type AgentExecutionLog = {
-  __typename?: 'AgentExecutionLog';
-  agentId: Scalars['String']['output'];
-  batchSize: Scalars['Int']['output'];
-  confidence: Scalars['Float']['output'];
-  contextTokenAllocation?: Maybe<Scalars['JSON']['output']>;
-  createdAt: Scalars['DateTime']['output'];
-  disposition: ExecutionDisposition;
-  estimatedCostCents: Scalars['Float']['output'];
-  finalActions?: Maybe<Scalars['JSON']['output']>;
-  id: Scalars['ID']['output'];
-  inboxItemId?: Maybe<Scalars['String']['output']>;
-  inputTokens: Scalars['Int']['output'];
-  latencyMs: Scalars['Int']['output'];
-  model: Scalars['String']['output'];
-  modelTier: ModelTier;
-  organizationId: Scalars['ID']['output'];
-  outputTokens: Scalars['Int']['output'];
-  plannedActions?: Maybe<Scalars['JSON']['output']>;
-  policyDecision?: Maybe<Scalars['JSON']['output']>;
-  promoted: Scalars['Boolean']['output'];
-  promotionReason?: Maybe<Scalars['String']['output']>;
-  status: ExecutionStatus;
-  triggerEventId: Scalars['String']['output'];
-};
-
-export type AgentExecutionLogConnection = {
-  __typename?: 'AgentExecutionLogConnection';
-  items: Array<AgentExecutionLog>;
-  totalCount: Scalars['Int']['output'];
-};
-
 export type AgentIdentity = {
   __typename?: 'AgentIdentity';
   autonomyMode: AutonomyMode;
@@ -122,22 +62,30 @@ export type AgentTrustLevel =
   | 'blocked'
   | 'suggest';
 
-export type AgentWorkerStatus = {
-  __typename?: 'AgentWorkerStatus';
-  activeOrganizations: Scalars['Int']['output'];
-  openAggregationWindows: Scalars['Int']['output'];
-  running: Scalars['Boolean']['output'];
-  uptime?: Maybe<Scalars['Int']['output']>;
+export type AiConversation = {
+  __typename?: 'AiConversation';
+  branchCount: Scalars['Int']['output'];
+  branches: Array<Branch>;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
+  id: Scalars['ID']['output'];
+  rootBranch: Branch;
+  title?: Maybe<Scalars['String']['output']>;
+  updatedAt: Scalars['DateTime']['output'];
+  visibility: AiConversationVisibility;
 };
 
-export type AggregationWindowInfo = {
-  __typename?: 'AggregationWindowInfo';
-  eventCount: Scalars['Int']['output'];
-  lastEventAt: Scalars['DateTime']['output'];
-  openedAt: Scalars['DateTime']['output'];
-  organizationId: Scalars['ID']['output'];
-  scopeKey: Scalars['String']['output'];
+export type AiConversationEvent = {
+  __typename?: 'AiConversationEvent';
+  conversationId: Scalars['ID']['output'];
+  payload: Scalars['JSON']['output'];
+  timestamp: Scalars['DateTime']['output'];
+  type: Scalars['String']['output'];
 };
+
+export type AiConversationVisibility =
+  | 'ORG'
+  | 'PRIVATE';
 
 export type ApiTokenProvider =
   | 'anthropic'
@@ -157,6 +105,21 @@ export type AutonomyMode =
   | 'observe'
   | 'suggest';
 
+export type Branch = {
+  __typename?: 'Branch';
+  childBranches: Array<Branch>;
+  conversation: AiConversation;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
+  depth: Scalars['Int']['output'];
+  forkTurn?: Maybe<Turn>;
+  id: Scalars['ID']['output'];
+  label?: Maybe<Scalars['String']['output']>;
+  parentBranch?: Maybe<Branch>;
+  turnCount: Scalars['Int']['output'];
+  turns: Array<Turn>;
+};
+
 export type BranchDiffFile = {
   __typename?: 'BranchDiffFile';
   additions: Scalars['Int']['output'];
@@ -167,8 +130,6 @@ export type BranchDiffFile = {
 
 export type Channel = {
   __typename?: 'Channel';
-  aiMode?: Maybe<AutonomyMode>;
-  baseBranch?: Maybe<Scalars['String']['output']>;
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   members: Array<ChannelMember>;
@@ -207,7 +168,6 @@ export type ChannelType =
 
 export type Chat = {
   __typename?: 'Chat';
-  aiMode?: Maybe<AutonomyMode>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
@@ -245,6 +205,11 @@ export type CostBudget = {
   dailyLimitCents: Scalars['Int']['output'];
 };
 
+export type CreateAiConversationInput = {
+  title?: InputMaybe<Scalars['String']['input']>;
+  visibility?: InputMaybe<AiConversationVisibility>;
+};
+
 export type CreateChannelGroupInput = {
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];
@@ -252,7 +217,6 @@ export type CreateChannelGroupInput = {
 };
 
 export type CreateChannelInput = {
-  baseBranch?: InputMaybe<Scalars['String']['input']>;
   groupId?: InputMaybe<Scalars['ID']['input']>;
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];
@@ -357,29 +321,6 @@ export type EventType =
   | 'ticket_unlinked'
   | 'ticket_updated';
 
-export type ExecutionDisposition =
-  | 'act'
-  | 'escalate'
-  | 'ignore'
-  | 'suggest'
-  | 'summarize';
-
-export type ExecutionLogFilters = {
-  disposition?: InputMaybe<ExecutionDisposition>;
-  endDate?: InputMaybe<Scalars['DateTime']['input']>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  startDate?: InputMaybe<Scalars['DateTime']['input']>;
-  status?: InputMaybe<ExecutionStatus>;
-};
-
-export type ExecutionStatus =
-  | 'blocked'
-  | 'dropped'
-  | 'failed'
-  | 'succeeded'
-  | 'suggested';
-
 export type GitCheckpoint = {
   __typename?: 'GitCheckpoint';
   author: Scalars['String']['output'];
@@ -457,10 +398,6 @@ export type Message = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
-export type ModelTier =
-  | 'tier2'
-  | 'tier3';
-
 export type MoveChannelInput = {
   channelId: Scalars['ID']['input'];
   groupId?: InputMaybe<Scalars['ID']['input']>;
@@ -474,6 +411,7 @@ export type Mutation = {
   addOrgMember: OrgMember;
   assignTicket: Ticket;
   commentOnTicket: Event;
+  createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
   createChat: Chat;
@@ -513,6 +451,7 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
+  sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   startSession: Session;
   subscribe: Participant;
@@ -523,11 +462,10 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
-  updateChannel: Channel;
+  updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
-  updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
   updateTicket: Ticket;
 };
@@ -560,6 +498,12 @@ export type MutationAssignTicketArgs = {
 export type MutationCommentOnTicketArgs = {
   text: Scalars['String']['input'];
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateAiConversationArgs = {
+  input: CreateAiConversationInput;
+  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -782,6 +726,12 @@ export type MutationSendSessionMessageArgs = {
 };
 
 
+export type MutationSendTurnArgs = {
+  branchId: Scalars['ID']['input'];
+  content: Scalars['String']['input'];
+};
+
+
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
 };
@@ -839,9 +789,9 @@ export type MutationUpdateAgentSettingsArgs = {
 };
 
 
-export type MutationUpdateChannelArgs = {
-  id: Scalars['ID']['input'];
-  input: UpdateChannelInput;
+export type MutationUpdateAiConversationTitleArgs = {
+  conversationId: Scalars['ID']['input'];
+  title: Scalars['String']['input'];
 };
 
 
@@ -861,14 +811,6 @@ export type MutationUpdateOrgMemberRoleArgs = {
 export type MutationUpdateRepoArgs = {
   id: Scalars['ID']['input'];
   input: UpdateRepoInput;
-};
-
-
-export type MutationUpdateScopeAiModeArgs = {
-  aiMode?: InputMaybe<AutonomyMode>;
-  organizationId: Scalars['ID']['input'];
-  scopeId: Scalars['ID']['input'];
-  scopeType: Scalars['String']['input'];
 };
 
 
@@ -940,7 +882,6 @@ export type Priority =
 
 export type Project = {
   __typename?: 'Project';
-  aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -951,14 +892,12 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
-  agentAggregationWindows: Array<AggregationWindowInfo>;
-  agentCostSummary: AgentCostSummary;
-  agentExecutionLog?: Maybe<AgentExecutionLog>;
-  agentExecutionLogs: AgentExecutionLogConnection;
   agentIdentity?: Maybe<AgentIdentity>;
-  agentWorkerStatus: AgentWorkerStatus;
+  aiConversation?: Maybe<AiConversation>;
+  aiConversations: Array<AiConversation>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
+  branch?: Maybe<Branch>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -978,7 +917,6 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
-  resolvedAiMode: AutonomyMode;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -995,37 +933,19 @@ export type Query = {
 };
 
 
-export type QueryAgentAggregationWindowsArgs = {
-  organizationId: Scalars['ID']['input'];
-};
-
-
-export type QueryAgentCostSummaryArgs = {
-  endDate: Scalars['String']['input'];
-  organizationId: Scalars['ID']['input'];
-  startDate: Scalars['String']['input'];
-};
-
-
-export type QueryAgentExecutionLogArgs = {
-  id: Scalars['ID']['input'];
-  organizationId: Scalars['ID']['input'];
-};
-
-
-export type QueryAgentExecutionLogsArgs = {
-  filters?: InputMaybe<ExecutionLogFilters>;
-  organizationId: Scalars['ID']['input'];
-};
-
-
 export type QueryAgentIdentityArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
 
-export type QueryAgentWorkerStatusArgs = {
+export type QueryAiConversationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryAiConversationsArgs = {
   organizationId: Scalars['ID']['input'];
+  visibility?: InputMaybe<AiConversationVisibility>;
 };
 
 
@@ -1036,6 +956,11 @@ export type QueryAvailableRuntimesArgs = {
 
 export type QueryAvailableSessionRuntimesArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type QueryBranchArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1134,13 +1059,6 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars['ID']['input'];
-};
-
-
-export type QueryResolvedAiModeArgs = {
-  organizationId: Scalars['ID']['input'];
-  scopeId: Scalars['ID']['input'];
-  scopeType: Scalars['String']['input'];
 };
 
 
@@ -1373,13 +1291,20 @@ export type StartSessionInput = {
 
 export type Subscription = {
   __typename?: 'Subscription';
+  branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
+  conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
   userNotifications: Notification;
+};
+
+
+export type SubscriptionBranchTurnsArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1393,6 +1318,11 @@ export type SubscriptionChannelEventsArgs = {
 export type SubscriptionChatEventsArgs = {
   chatId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionConversationEventsArgs = {
+  conversationId: Scalars['ID']['input'];
 };
 
 
@@ -1447,7 +1377,6 @@ export type ThreadSummary = {
 
 export type Ticket = {
   __typename?: 'Ticket';
-  aiMode?: Maybe<AutonomyMode>;
   assignees: Array<User>;
   channel?: Maybe<Channel>;
   createdAt: Scalars['DateTime']['output'];
@@ -1487,6 +1416,22 @@ export type TicketStatus =
   | 'in_review'
   | 'todo';
 
+export type Turn = {
+  __typename?: 'Turn';
+  branch: Branch;
+  branchCount: Scalars['Int']['output'];
+  childBranches: Array<Branch>;
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  parentTurn?: Maybe<Turn>;
+  role: TurnRole;
+};
+
+export type TurnRole =
+  | 'ASSISTANT'
+  | 'USER';
+
 export type UpdateAgentSettingsInput = {
   autonomyMode?: InputMaybe<AutonomyMode>;
   dailyLimitCents?: InputMaybe<Scalars['Int']['input']>;
@@ -1499,11 +1444,6 @@ export type UpdateChannelGroupInput = {
   isCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   position?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type UpdateChannelInput = {
-  baseBranch?: InputMaybe<Scalars['String']['input']>;
-  name?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRepoInput = {
@@ -1835,7 +1775,7 @@ export type ChannelsQueryVariables = Exact<{
 }>;
 
 
-export type ChannelsQuery = { __typename?: 'Query', channels: Array<{ __typename?: 'Channel', id: string, name: string, type: ChannelType, position: number, groupId?: string | null, baseBranch?: string | null, repo?: { __typename?: 'Repo', id: string, name: string } | null }> };
+export type ChannelsQuery = { __typename?: 'Query', channels: Array<{ __typename?: 'Channel', id: string, name: string, type: ChannelType, position: number, groupId?: string | null, repo?: { __typename?: 'Repo', id: string, name: string } | null }> };
 
 export type ChannelGroupsQueryVariables = Exact<{
   organizationId: Scalars['ID']['input'];
@@ -2104,7 +2044,7 @@ export const ChatMessagesDocument = {"kind":"Document","definitions":[{"kind":"O
 export const ChatEventsSubscriptionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"ChatEventsSubscription"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"chatId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"types"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"chatEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"chatId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"chatId"}}},{"kind":"Argument","name":{"kind":"Name","value":"types"},"value":{"kind":"Variable","name":{"kind":"Name","value":"types"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"scopeType"}},{"kind":"Field","name":{"kind":"Name","value":"scopeId"}},{"kind":"Field","name":{"kind":"Name","value":"eventType"}},{"kind":"Field","name":{"kind":"Name","value":"payload"}},{"kind":"Field","name":{"kind":"Name","value":"actor"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}},{"kind":"Field","name":{"kind":"Name","value":"parentId"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}},{"kind":"Field","name":{"kind":"Name","value":"metadata"}}]}}]}}]} as unknown as DocumentNode<ChatEventsSubscriptionSubscription, ChatEventsSubscriptionSubscriptionVariables>;
 export const OrgEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"OrgEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"orgEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"scopeType"}},{"kind":"Field","name":{"kind":"Name","value":"scopeId"}},{"kind":"Field","name":{"kind":"Name","value":"eventType"}},{"kind":"Field","name":{"kind":"Name","value":"payload"}},{"kind":"Field","name":{"kind":"Name","value":"actor"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}},{"kind":"Field","name":{"kind":"Name","value":"parentId"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}},{"kind":"Field","name":{"kind":"Name","value":"metadata"}}]}}]}}]} as unknown as DocumentNode<OrgEventsSubscription, OrgEventsSubscriptionVariables>;
 export const SessionEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"scope"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ScopeInput"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"before"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"DateTime"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"events"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}},{"kind":"Argument","name":{"kind":"Name","value":"scope"},"value":{"kind":"Variable","name":{"kind":"Name","value":"scope"}}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"before"},"value":{"kind":"Variable","name":{"kind":"Name","value":"before"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"scopeType"}},{"kind":"Field","name":{"kind":"Name","value":"scopeId"}},{"kind":"Field","name":{"kind":"Name","value":"eventType"}},{"kind":"Field","name":{"kind":"Name","value":"payload"}},{"kind":"Field","name":{"kind":"Name","value":"actor"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}},{"kind":"Field","name":{"kind":"Name","value":"parentId"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}},{"kind":"Field","name":{"kind":"Name","value":"metadata"}}]}}]}}]} as unknown as DocumentNode<SessionEventsQuery, SessionEventsQueryVariables>;
-export const ChannelsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Channels"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"memberOnly"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"channels"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}},{"kind":"Argument","name":{"kind":"Name","value":"memberOnly"},"value":{"kind":"Variable","name":{"kind":"Name","value":"memberOnly"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"groupId"}},{"kind":"Field","name":{"kind":"Name","value":"baseBranch"}},{"kind":"Field","name":{"kind":"Name","value":"repo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<ChannelsQuery, ChannelsQueryVariables>;
+export const ChannelsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Channels"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"memberOnly"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"channels"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}},{"kind":"Argument","name":{"kind":"Name","value":"memberOnly"},"value":{"kind":"Variable","name":{"kind":"Name","value":"memberOnly"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"groupId"}},{"kind":"Field","name":{"kind":"Name","value":"repo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<ChannelsQuery, ChannelsQueryVariables>;
 export const ChannelGroupsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ChannelGroups"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"channelGroups"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"isCollapsed"}}]}}]}}]} as unknown as DocumentNode<ChannelGroupsQuery, ChannelGroupsQueryVariables>;
 export const ReposDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Repos"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"repos"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"organizationId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"organizationId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"remoteUrl"}},{"kind":"Field","name":{"kind":"Name","value":"defaultBranch"}},{"kind":"Field","name":{"kind":"Name","value":"webhookActive"}}]}}]}}]} as unknown as DocumentNode<ReposQuery, ReposQueryVariables>;
 export const ChatsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Chats"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"chats"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"avatarUrl"}}]}},{"kind":"Field","name":{"kind":"Name","value":"joinedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<ChatsQuery, ChatsQueryVariables>;

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add Prisma models for the three core entities: `AiConversation`, `Branch`, and `Turn`. These are peer-level entities scoped to an organization, following the existing flat entity model. The schema uses `Turn` (not `Message`) and `Branch` (not `Thread`) to avoid collision with existing models.
+Add Prisma models for the three core entities: `AiConversation`, `AiBranch`, and `AiTurn`. These are peer-level entities scoped to an organization, following the existing flat entity model. The schema uses `AiTurn` (not `Message`) and `AiBranch` (not `Thread`) to avoid collision with existing models.
 
 ## What needs to happen
 
@@ -16,19 +16,19 @@ Add Prisma models for the three core entities: `AiConversation`, `Branch`, and `
   - `createdAt`, `updatedAt` timestamps
   - Relations: `branches`, `createdBy`, `organization`
 - Add `AiConversationVisibility` enum: `PRIVATE`, `ORG`
-- Add `Branch` model:
+- Add `AiBranch` model:
   - `id` (UUID, default cuid)
   - `conversationId` (relation to AiConversation)
   - `parentBranchId` (self-relation, optional — null for root branch)
-  - `forkTurnId` (relation to Turn, optional — null for root branch)
+  - `forkTurnId` (relation to AiTurn, optional — null for root branch)
   - `label` (String, optional)
   - `createdById` (relation to User)
   - `createdAt` timestamp
   - Relations: `conversation`, `parentBranch`, `childBranches`, `forkTurn`, `turns`, `createdBy`
 - Add `TurnRole` enum: `USER`, `ASSISTANT`
-- Add `Turn` model:
+- Add `AiTurn` model:
   - `id` (UUID, default cuid)
-  - `branchId` (relation to Branch)
+  - `branchId` (relation to AiBranch)
   - `role` (TurnRole enum)
   - `content` (String — text, not limited length)
   - `parentTurnId` (self-relation, optional — null for first turn in branch)
@@ -45,13 +45,13 @@ None — this is the foundation for AI Conversations.
 
 ## Completion requirements
 
-- [ ] `AiConversation`, `Branch`, and `Turn` models exist in `schema.prisma`
-- [ ] `AiConversationVisibility` and `TurnRole` enums exist
-- [ ] Self-relations work for `Branch.parentBranch` → `Branch.childBranches` and `Turn.parentTurn` → `Turn.childTurn`
-- [ ] `Turn.forkedBranches` relation returns all branches that fork from that turn
-- [ ] Migration runs successfully against a clean database
-- [ ] Prisma client generates without errors
-- [ ] Existing models and migrations are unaffected
+- [x] `AiConversation`, `AiBranch`, and `AiTurn` models exist in `schema.prisma`
+- [x] `AiConversationVisibility` and `TurnRole` enums exist
+- [x] Self-relations work for `AiBranch.parentBranch` → `AiBranch.childBranches` and `AiTurn.parentTurn` → `AiTurn.childTurn`
+- [x] `AiTurn.forkedBranches` relation returns all branches that fork from that turn
+- [x] Migration runs successfully against a clean database
+- [x] Prisma client generates without errors
+- [x] Existing models and migrations are unaffected
 
 ## How to test
 

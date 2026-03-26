@@ -14,7 +14,7 @@ Tickets for building AI Conversations with branching conversation trees. Work se
 
 | # | Ticket | What it does |
 |---|--------|-------------|
-| 01 | [Database Schema](01-database-schema.md) | Prisma models for AiConversation, Branch, Turn |
+| 01 | [Database Schema](01-database-schema.md) | Prisma models for AiConversation, AiBranch, AiTurn |
 | 02 | [AI Conversation Service](02-ai-conversation-service.md) | Create, query, update conversations and branches |
 | 03 | [Turn Service & LLM Integration](03-turn-service-and-llm.md) | Send turns, call LLM, store responses, streaming |
 | 04 | [GraphQL Schema & Resolvers](04-graphql-schema-and-resolvers.md) | Types, queries, mutations, subscriptions |

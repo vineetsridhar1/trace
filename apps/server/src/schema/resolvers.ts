@@ -15,6 +15,7 @@ import { threadQueries } from "./thread.js";
 import { agentIdentityQueries, agentIdentityMutations, agentIdentityTypeResolvers } from "./agent-identity.js";
 import { agentDebugQueries } from "./agent-debug.js";
 import { scopeAutonomyQueries, scopeAutonomyMutations } from "./scope-autonomy.js";
+import { aiConversationQueries, aiConversationMutations, aiConversationSubscriptions, aiConversationTypeResolvers } from "./ai-conversation.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
@@ -30,6 +31,7 @@ export const resolvers = {
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
   ...agentIdentityTypeResolvers,
+  ...aiConversationTypeResolvers,
 
   User: {
     organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),
@@ -56,6 +58,7 @@ export const resolvers = {
     ...agentIdentityQueries,
     ...agentDebugQueries,
     ...scopeAutonomyQueries,
+    ...aiConversationQueries,
   },
 
   Mutation: {
@@ -71,6 +74,7 @@ export const resolvers = {
     ...participantMutations,
     ...agentIdentityMutations,
     ...scopeAutonomyMutations,
+    ...aiConversationMutations,
   },
 
   Subscription: {
@@ -79,5 +83,6 @@ export const resolvers = {
     ...ticketSubscriptions,
     ...chatSubscriptions,
     ...eventSubscriptions,
+    ...aiConversationSubscriptions,
   },
 };
