@@ -9,12 +9,12 @@ import {
   Users,
   Tag,
   Hash,
-  User,
+  User as UserIcon,
   Calendar,
   type LucideIcon,
 } from "lucide-react";
-import type { Priority, TicketStatus } from "@trace/gql";
-import { useEntityField } from "../../stores/entity";
+import type { Priority, TicketStatus, Ticket, User } from "@trace/gql";
+import { useEntityStore, useEntityField } from "../../stores/entity";
 import { timeAgo } from "../../lib/utils";
 import {
   ticketStatusLabel,
@@ -22,7 +22,6 @@ import {
   ticketPriorityLabel,
   ticketPriorityColor,
 } from "./tickets-table-types";
-import type { TicketRow } from "./tickets-table-types";
 
 const priorityIcon: Record<Priority, LucideIcon> = {
   urgent: AlertTriangle,
@@ -78,14 +77,14 @@ function PriorityValue({ priority }: { priority: Priority }) {
   );
 }
 
-function AssigneesValue({ assignees }: { assignees: Array<{ id: string; name: string; avatarUrl?: string | null }> }) {
-  if (assignees.length === 0) {
+function AssigneesValue({ assignees }: { assignees: User[] }) {
+  if (!assignees || assignees.length === 0) {
     return <span className="text-sm text-muted-foreground/50">Unassigned</span>;
   }
 
   return (
     <div className="flex flex-col gap-1">
-      {assignees.map((user) => (
+      {assignees.map((user: User) => (
         <div key={user.id} className="flex items-center gap-1.5">
           {user.avatarUrl && (
             <img src={user.avatarUrl} alt={user.name} className="h-4 w-4 rounded-full" />
@@ -109,6 +108,7 @@ function UserValue({ user }: { user: { name: string; avatarUrl?: string | null }
 }
 
 function ChannelValue({ channelId }: { channelId?: string | null }) {
+  // Hook must be called unconditionally; passes "" when no channelId (returns undefined safely)
   const channelName = useEntityField("channels", channelId ?? "", "name");
 
   if (!channelId) {
@@ -142,12 +142,13 @@ function LabelsValue({ labels }: { labels: string[] }) {
   );
 }
 
-export function TicketDetailsSection({ ticket }: { ticket: TicketRow }) {
+export function TicketDetailsSection({ ticketId }: { ticketId: string }) {
+  const ticket = useEntityStore((s) => s.tickets[ticketId]) as Ticket | undefined;
+
+  if (!ticket) return null;
+
   return (
-    <div
-      className="grid gap-x-3 gap-y-4 items-start"
-      style={{ gridTemplateColumns: "20px 80px 1fr" }}
-    >
+    <div className="grid grid-cols-[20px_80px_1fr] gap-x-3 gap-y-4 items-start">
       <DetailItem
         icon={Pencil}
         label="Title"
@@ -171,7 +172,7 @@ export function TicketDetailsSection({ ticket }: { ticket: TicketRow }) {
       <DetailItem
         icon={Users}
         label="Assignees"
-        value={<AssigneesValue assignees={ticket.assignees ?? []} />}
+        value={<AssigneesValue assignees={ticket.assignees} />}
       />
       <DetailItem
         icon={Tag}
@@ -184,7 +185,7 @@ export function TicketDetailsSection({ ticket }: { ticket: TicketRow }) {
         value={<ChannelValue channelId={ticket.channel?.id} />}
       />
       <DetailItem
-        icon={User}
+        icon={UserIcon}
         label="Created by"
         value={
           ticket.createdBy ? (

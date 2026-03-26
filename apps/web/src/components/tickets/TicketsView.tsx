@@ -7,7 +7,6 @@ import { useEntityStore } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
-import { cn } from "../../lib/utils";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
@@ -15,7 +14,7 @@ import { ticketsGridTableInstance } from "./tickets-grid-table-instance";
 import { TicketsGridTable } from "./TicketsGridTable";
 import { TicketDetailPanel } from "./TicketDetailPanel";
 import type { TicketRow } from "./tickets-table-types";
-import { TICKET_FILTER_STORAGE_KEY } from "./tickets-table-types";
+import { TICKET_FILTER_STORAGE_KEY, TICKET_DETAIL_PANEL_WIDTH } from "./tickets-table-types";
 import { useTicketRows } from "./useTicketRows";
 
 const TICKETS_QUERY = gql`
@@ -79,14 +78,10 @@ export function TicketsView() {
     ticketsGridTableInstance.useTable.getState().setRows(ticketRows);
   }, [ticketRows]);
 
-  const selectedTicket = useMemo(() => {
-    if (!selectedTicketId) return null;
-    return ticketRows.find((t) => t.id === selectedTicketId) ?? null;
-  }, [selectedTicketId, ticketRows]);
-
   const handleRowClick = useCallback((event: RowClickedEvent<TicketRow>) => {
-    if (event.data) {
-      setSelectedTicketId((prev) => prev === event.data!.id ? null : event.data!.id);
+    const id = event.data?.id;
+    if (id) {
+      setSelectedTicketId((prev) => prev === id ? null : id);
     }
   }, []);
 
@@ -130,10 +125,8 @@ export function TicketsView() {
 
       <div className="relative flex-1 overflow-hidden">
         <div
-          className={cn(
-            "h-full transition-[margin] duration-200 ease-in-out",
-            selectedTicket ? "mr-[400px]" : "mr-0",
-          )}
+          className="h-full transition-[margin] duration-200 ease-in-out"
+          style={{ marginRight: selectedTicketId ? TICKET_DETAIL_PANEL_WIDTH : 0 }}
         >
           {loading ? (
             <div className="space-y-1 px-4 pt-2">
@@ -154,7 +147,7 @@ export function TicketsView() {
           )}
         </div>
 
-        <TicketDetailPanel ticket={selectedTicket} onClose={handleCloseDetail} />
+        <TicketDetailPanel ticketId={selectedTicketId} onClose={handleCloseDetail} />
       </div>
     </div>
   );
