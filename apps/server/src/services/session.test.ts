@@ -1161,6 +1161,111 @@ describe("SessionService", () => {
       );
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
     });
+
+    it("rejects moving a merged session", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({ sessionStatus: "merged" }),
+      );
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+
+      await expect(
+        service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow("Cannot move a merged session");
+    });
+
+    it("allows moving a stopped session", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "stopped",
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Local Dev",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(makeSession());
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      const result = await service.moveToRuntime(
+        "session-1",
+        "runtime-1",
+        "org-1",
+        "user",
+        "user-1",
+      );
+
+      expect(result.id).toBe("session-2");
+    });
+
+    it("allows moving a failed session", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "failed",
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Local Dev",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(makeSession());
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      const result = await service.moveToRuntime(
+        "session-1",
+        "runtime-1",
+        "org-1",
+        "user",
+        "user-1",
+      );
+
+      expect(result.id).toBe("session-2");
+    });
   });
 
   describe("moveToCloud", () => {
@@ -1213,6 +1318,47 @@ describe("SessionService", () => {
         "terminate",
       );
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+    });
+
+    it("rejects moving a merged session to cloud", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({ sessionStatus: "merged" }),
+      );
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+
+      await expect(
+        service.moveToCloud("session-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow("Cannot move a merged session");
+    });
+
+    it("allows moving a stopped session to cloud", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "stopped",
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.ticketLink.findMany.mockResolvedValueOnce([]);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.create.mockResolvedValueOnce(
+        makeSession({
+          id: "session-3",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          hosting: "cloud",
+          sessionGroupId: "group-1",
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(makeSession());
+
+      const result = await service.moveToCloud(
+        "session-1",
+        "org-1",
+        "user",
+        "user-1",
+      );
+
+      expect(result.id).toBe("session-3");
     });
   });
 
