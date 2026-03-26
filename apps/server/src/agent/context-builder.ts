@@ -307,6 +307,10 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
     const channel = await prisma.channel.findUnique({
       where: { id: scopeId },
       include: {
+        members: {
+          where: { leftAt: null },
+          include: { user: { select: { id: true, name: true } } },
+        },
         projects: { include: { project: { select: { id: true, name: true } } } },
         repo: { select: { id: true, name: true } },
       },
@@ -317,6 +321,11 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       name: channel.name,
       type: channel.type,
       aiMode: channel.aiMode,
+      memberCount: channel.members.length,
+      members: channel.members.map((m: { user: { id: string; name: string | null } }) => ({
+        id: m.user.id,
+        name: m.user.name,
+      })),
       projects: channel.projects.map((p: { project: { id: string; name: string } }) => ({
         id: p.project.id,
         name: p.project.name,
