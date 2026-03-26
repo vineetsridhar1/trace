@@ -48,6 +48,7 @@ Tickets for building the ambient AI agent runtime. Work sequentially — each ti
 | 20 | [Per-Scope Autonomy](20-per-scope-autonomy-settings.md) | Autonomy overrides at chat, ticket, project, channel level |
 | 21 | [Channel Message Adapter](21-channel-message-adapter.md) | Pre-wire for channel messages. Scope adapter pattern |
 | 22 | [Agent Debug Console](22-agent-debug-console.md) | Internal UI for observing and debugging the pipeline |
+| 23 | [Debug Event Feed](23-debug-event-feed.md) | Real-time event feed with routing decisions in the debug console |
 
 ## Dependency graph
 
@@ -80,4 +81,5 @@ Tickets for building the ambient AI agent runtime. Work sequentially — each ti
 ├─ 20 Per-Scope Autonomy
 ├─ 21 Channel Message Adapter
 └─ 22 Agent Debug Console
+   └─ 23 Debug Event Feed
 ```

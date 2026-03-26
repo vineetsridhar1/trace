@@ -35,6 +35,66 @@ export type AddChatMemberInput = {
   userId: Scalars['ID']['input'];
 };
 
+export type AgentBudgetStatus = {
+  __typename?: 'AgentBudgetStatus';
+  dailyLimitCents: Scalars['Int']['output'];
+  remainingCents: Scalars['Float']['output'];
+  remainingPercent: Scalars['Float']['output'];
+  spentCents: Scalars['Float']['output'];
+};
+
+export type AgentCostEntry = {
+  __typename?: 'AgentCostEntry';
+  date: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  organizationId: Scalars['ID']['output'];
+  summaryCalls: Scalars['Int']['output'];
+  summaryCostCents: Scalars['Float']['output'];
+  tier2Calls: Scalars['Int']['output'];
+  tier2CostCents: Scalars['Float']['output'];
+  tier3Calls: Scalars['Int']['output'];
+  tier3CostCents: Scalars['Float']['output'];
+  totalCostCents: Scalars['Float']['output'];
+};
+
+export type AgentCostSummary = {
+  __typename?: 'AgentCostSummary';
+  budget: AgentBudgetStatus;
+  dailyCosts: Array<AgentCostEntry>;
+};
+
+export type AgentExecutionLog = {
+  __typename?: 'AgentExecutionLog';
+  agentId: Scalars['String']['output'];
+  batchSize: Scalars['Int']['output'];
+  confidence: Scalars['Float']['output'];
+  contextTokenAllocation?: Maybe<Scalars['JSON']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  disposition: ExecutionDisposition;
+  estimatedCostCents: Scalars['Float']['output'];
+  finalActions?: Maybe<Scalars['JSON']['output']>;
+  id: Scalars['ID']['output'];
+  inboxItemId?: Maybe<Scalars['String']['output']>;
+  inputTokens: Scalars['Int']['output'];
+  latencyMs: Scalars['Int']['output'];
+  model: Scalars['String']['output'];
+  modelTier: ModelTier;
+  organizationId: Scalars['ID']['output'];
+  outputTokens: Scalars['Int']['output'];
+  plannedActions?: Maybe<Scalars['JSON']['output']>;
+  policyDecision?: Maybe<Scalars['JSON']['output']>;
+  promoted: Scalars['Boolean']['output'];
+  promotionReason?: Maybe<Scalars['String']['output']>;
+  status: ExecutionStatus;
+  triggerEventId: Scalars['String']['output'];
+};
+
+export type AgentExecutionLogConnection = {
+  __typename?: 'AgentExecutionLogConnection';
+  items: Array<AgentExecutionLog>;
+  totalCount: Scalars['Int']['output'];
+};
+
 export type AgentIdentity = {
   __typename?: 'AgentIdentity';
   autonomyMode: AutonomyMode;
@@ -59,6 +119,23 @@ export type AgentTrustLevel =
   | 'autonomous'
   | 'blocked'
   | 'suggest';
+
+export type AgentWorkerStatus = {
+  __typename?: 'AgentWorkerStatus';
+  activeOrganizations: Scalars['Int']['output'];
+  openAggregationWindows: Scalars['Int']['output'];
+  running: Scalars['Boolean']['output'];
+  uptime?: Maybe<Scalars['Int']['output']>;
+};
+
+export type AggregationWindowInfo = {
+  __typename?: 'AggregationWindowInfo';
+  eventCount: Scalars['Int']['output'];
+  lastEventAt: Scalars['DateTime']['output'];
+  openedAt: Scalars['DateTime']['output'];
+  organizationId: Scalars['ID']['output'];
+  scopeKey: Scalars['String']['output'];
+};
 
 export type ApiTokenProvider =
   | 'anthropic'
@@ -278,6 +355,29 @@ export type EventType =
   | 'ticket_unlinked'
   | 'ticket_updated';
 
+export type ExecutionDisposition =
+  | 'act'
+  | 'escalate'
+  | 'ignore'
+  | 'suggest'
+  | 'summarize';
+
+export type ExecutionLogFilters = {
+  disposition?: InputMaybe<ExecutionDisposition>;
+  endDate?: InputMaybe<Scalars['DateTime']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  startDate?: InputMaybe<Scalars['DateTime']['input']>;
+  status?: InputMaybe<ExecutionStatus>;
+};
+
+export type ExecutionStatus =
+  | 'blocked'
+  | 'dropped'
+  | 'failed'
+  | 'succeeded'
+  | 'suggested';
+
 export type GitCheckpoint = {
   __typename?: 'GitCheckpoint';
   author: Scalars['String']['output'];
@@ -354,6 +454,10 @@ export type Message = {
   threadRepliers: Array<Actor>;
   updatedAt: Scalars['DateTime']['output'];
 };
+
+export type ModelTier =
+  | 'tier2'
+  | 'tier3';
 
 export type MoveChannelInput = {
   channelId: Scalars['ID']['input'];
@@ -845,7 +949,12 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
+  agentAggregationWindows: Array<AggregationWindowInfo>;
+  agentCostSummary: AgentCostSummary;
+  agentExecutionLog?: Maybe<AgentExecutionLog>;
+  agentExecutionLogs: AgentExecutionLogConnection;
   agentIdentity?: Maybe<AgentIdentity>;
+  agentWorkerStatus: AgentWorkerStatus;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
@@ -884,7 +993,36 @@ export type Query = {
 };
 
 
+export type QueryAgentAggregationWindowsArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentCostSummaryArgs = {
+  endDate: Scalars['String']['input'];
+  organizationId: Scalars['ID']['input'];
+  startDate: Scalars['String']['input'];
+};
+
+
+export type QueryAgentExecutionLogArgs = {
+  id: Scalars['ID']['input'];
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentExecutionLogsArgs = {
+  filters?: InputMaybe<ExecutionLogFilters>;
+  organizationId: Scalars['ID']['input'];
+};
+
+
 export type QueryAgentIdentityArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentWorkerStatusArgs = {
   organizationId: Scalars['ID']['input'];
 };
 

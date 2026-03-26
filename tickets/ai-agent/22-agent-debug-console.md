@@ -36,11 +36,16 @@ Build an internal UI for observing and debugging the agent pipeline. Without thi
 
 ## Completion requirements
 
-- [ ] Execution logs are queryable via GraphQL
-- [ ] Cost data is queryable via GraphQL
-- [ ] Debug page exists in the web app with event feed, execution log, and cost dashboard
-- [ ] Execution detail view shows the full decision chain
-- [ ] Settings are viewable and editable from the debug page
+- [x] Execution logs are queryable via GraphQL
+  <!-- Done: `agentExecutionLogs` (paginated, filterable) and `agentExecutionLog` (detail) queries. Resolver: `apps/server/src/schema/agent-debug.ts`. -->
+- [x] Cost data is queryable via GraphQL
+  <!-- Done: `agentCostSummary` query returns budget status + daily cost breakdown. Resolver: `apps/server/src/schema/agent-debug.ts`. -->
+- [~] Debug page exists in the web app with event feed, execution log, and cost dashboard
+  <!-- Execution log table and cost dashboard are complete. Event feed (real-time stream with routing decisions) is NOT yet implemented — see ticket #23 for follow-up. Worker status bar shows aggregation window counts but not individual event routing. -->
+- [x] Execution detail view shows the full decision chain
+  <!-- Done: `apps/web/src/components/agent-debug/ExecutionDetailView.tsx` shows context allocation, planned actions, policy decision, final actions. -->
+- [x] Settings are viewable and editable from the debug page
+  <!-- Done: `apps/web/src/components/agent-debug/AgentSettingsTab.tsx` with name, status, autonomy, budget, soul file. -->
 
 ## How to test
 

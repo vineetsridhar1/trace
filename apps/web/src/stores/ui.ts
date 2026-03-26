@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEntityStore } from "./entity";
 import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
-export type ActivePage = "main" | "settings" | "inbox";
+export type ActivePage = "main" | "settings" | "inbox" | "agent-debug";
 
 interface UIState {
   activePage: ActivePage;
