@@ -1689,6 +1689,9 @@ export class SessionService {
       prompt = await prependSourceSessionContext(startMeta.sourceSessionId, prompt);
     }
 
+    // Append title instruction so the AI can update the session title
+    prompt = prompt + TITLE_INSTRUCTION;
+
     // Append auto-save instruction for repo-based sessions
     prompt = appendAutoSave(prompt, !!session.repoId);
 
@@ -3227,6 +3230,11 @@ export class SessionService {
       if (context) {
         prompt = `${context}\n\n${prompt}`;
       }
+    }
+
+    // Append title instruction so the AI can set or update the session title
+    if (prompt) {
+      prompt = prompt + TITLE_INSTRUCTION;
     }
 
     // Append auto-save instruction for repo-based sessions
