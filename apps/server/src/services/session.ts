@@ -334,8 +334,11 @@ function buildSessionGroupSnapshot(
 /** Maximum length for session names (prompt-derived or title-tag-extracted). */
 const MAX_SESSION_NAME_LENGTH = 80;
 
-/** Instruction appended to the initial session prompt so the AI generates a title inline. */
-const TITLE_INSTRUCTION = `\n\nIMPORTANT: At the very beginning of your first response, output a short title (5-8 words) for this task wrapped in XML tags like this: <session-title>Your title here</session-title>. Then continue with your normal response.`;
+/** Instruction appended to every session prompt so the AI can set or update the title at any time. */
+const TITLE_INSTRUCTION = `\n\n<system-instruction>
+You may set or update the session title at any time by outputting a short title (5-8 words) wrapped in XML tags: <trace-title>Your title here</trace-title>.
+Do this at the start of your first response, and again later whenever the conversation's focus changes significantly enough that the current title feels out of date. The tag will be stripped and not shown to the user.
+</system-instruction>`;
 
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
@@ -351,14 +354,21 @@ function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
+/** Append all system instructions (title, auto-save) to a prompt in the correct order. */
+function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolean }): string {
+  let result = prompt + TITLE_INSTRUCTION;
+  result = appendAutoSave(result, hasRepo);
+  return result;
+}
+
 function buildBaseBranchInstruction(baseBranch: string): string {
   return `\n\n<system-instruction>
 This session is working off the base branch "${baseBranch}". All work should be branched from this base branch, and when merging, merge into "${baseBranch}" (not main/master). When pushing, ensure your branch is based on origin/${baseBranch}.
 </system-instruction>`;
 }
 
-/** Regex to extract <session-title>…</session-title> from assistant output. */
-const TITLE_TAG_RE = /<session-title>([\s\S]*?)<\/session-title>/;
+/** Regex to extract <trace-title>…</trace-title> from assistant output. */
+const TITLE_TAG_RE = /<trace-title>([\s\S]*?)<\/trace-title>/;
 
 /**
  * Build a conversation transcript from session events.
@@ -1036,15 +1046,10 @@ export class SessionService {
       }
     }
 
-    // On the very first run, append instruction so the AI generates a session title inline
+    // Append system instructions (title, auto-save) to the prompt
     const isFirstRun = !session.toolSessionId;
-    if (isFirstRun && resolvedPrompt) {
-      resolvedPrompt = resolvedPrompt + TITLE_INSTRUCTION;
-    }
-
-    // Append auto-save instruction for repo-based sessions
     if (resolvedPrompt) {
-      resolvedPrompt = appendAutoSave(resolvedPrompt, !!session.repo);
+      resolvedPrompt = appendPromptInstructions(resolvedPrompt, { hasRepo: !!session.repo });
     }
 
     // Append base branch instruction when the channel specifies one
@@ -1390,7 +1395,7 @@ export class SessionService {
   }
 
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
-    // Extract and strip <session-title> tags from assistant text before persisting
+    // Extract and strip <trace-title> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
 
     const session = await prisma.session.findUnique({
@@ -1529,8 +1534,8 @@ export class SessionService {
       const match = TITLE_TAG_RE.exec(b.text);
       if (match) {
         const title = match[1].trim().slice(0, MAX_SESSION_NAME_LENGTH);
-        // Strip the tag from the text so it doesn't show in the UI
-        b.text = b.text.replace(TITLE_TAG_RE, "").trimStart();
+        // Strip all title tags from the text so none leak to the UI
+        b.text = b.text.replace(/<trace-title>[\s\S]*?<\/trace-title>/g, "").trimStart();
         return title || null;
       }
     }
@@ -1686,8 +1691,8 @@ export class SessionService {
       prompt = await prependSourceSessionContext(startMeta.sourceSessionId, prompt);
     }
 
-    // Append auto-save instruction for repo-based sessions
-    prompt = appendAutoSave(prompt, !!session.repoId);
+    // Append system instructions (title, auto-save) to the prompt
+    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
 
     const checkpointContext =
       session.repoId && session.sessionGroupId
@@ -3226,9 +3231,9 @@ export class SessionService {
       }
     }
 
-    // Append auto-save instruction for repo-based sessions
+    // Append system instructions (title, auto-save) to the prompt
     if (prompt) {
-      prompt = appendAutoSave(prompt, !!session.repoId);
+      prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
     }
 
     const fallbackCheckpointContext =
