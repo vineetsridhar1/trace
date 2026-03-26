@@ -3,14 +3,8 @@ import { gql } from "@urql/core";
 import { Cloud, Monitor } from "lucide-react";
 import type { CodingTool, SessionRuntimeInstance } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
-import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
-import {
-  AVAILABLE_RUNTIMES_QUERY,
-  START_SESSION_MUTATION,
-  DELETE_SESSION_MUTATION,
-} from "../../lib/mutations";
-import { optimisticallyInsertSession } from "../../lib/optimistic-session";
+import { AVAILABLE_RUNTIMES_QUERY } from "../../lib/mutations";
 import {
   Select,
   SelectContent,
@@ -27,11 +21,17 @@ import { CLOUD_RUNTIME_ID } from "./RuntimeSelector";
 import { cn } from "../../lib/utils";
 
 const UPDATE_SESSION_CONFIG_MUTATION = gql`
-  mutation UpdateSessionConfig($sessionId: ID!, $tool: CodingTool, $model: String) {
-    updateSessionConfig(sessionId: $sessionId, tool: $tool, model: $model) {
+  mutation UpdateSessionConfig($sessionId: ID!, $tool: CodingTool, $model: String, $hosting: HostingMode, $runtimeInstanceId: ID) {
+    updateSessionConfig(sessionId: $sessionId, tool: $tool, model: $model, hosting: $hosting, runtimeInstanceId: $runtimeInstanceId) {
       id
       tool
       model
+      hosting
+      connection {
+        state
+        runtimeInstanceId
+        runtimeLabel
+      }
     }
   }
 `;
@@ -98,55 +98,28 @@ export function SessionInputOptions({
     await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel }).toPromise();
   }, [sessionId]);
 
-  // Switch runtime by creating a replacement session with the new runtime
   const handleRuntimeChange = useCallback(async (value: string) => {
     if (value === currentRuntimeValue) return;
-
-    const session = useEntityStore.getState().sessions[sessionId];
-    if (!session) return;
-
-    const channelRaw = session.channel as { id: string } | null | undefined;
-    const channelId = channelRaw?.id ?? null;
-    const repoRaw = session.repo as { id: string } | null | undefined;
-    const repoId = repoRaw?.id ?? undefined;
     const newIsCloud = value === CLOUD_RUNTIME_ID;
-
-    const result = await client
-      .mutation(START_SESSION_MUTATION, {
-        input: {
-          tool: currentTool,
-          model: currentModel ?? undefined,
-          hosting: newIsCloud ? "cloud" : undefined,
-          runtimeInstanceId: newIsCloud ? undefined : value,
-          channelId: channelId ?? undefined,
-          repoId,
-        },
-      })
-      .toPromise();
-
-    const newSession = result.data?.startSession;
-    if (!newSession?.id) return;
-
-    const newGroupId = newSession.sessionGroupId;
     const rt = runtimes.find((r) => r.id === value);
 
-    if (newGroupId) {
-      optimisticallyInsertSession({
-        id: newSession.id,
-        sessionGroupId: newGroupId,
-        tool: currentTool,
-        model: currentModel ?? null,
-        hosting: newIsCloud ? "cloud" : (rt?.hostingMode ?? "local"),
-        channel: channelId ? { id: channelId } : null,
-        repo: repoId ? { id: repoId } : null,
-      });
-      useUIStore.getState().openSessionTab(newGroupId, newSession.id);
-      useUIStore.getState().setActiveSessionGroupId(newGroupId, newSession.id);
-    }
+    // Optimistically update the entity store
+    useEntityStore.getState().patch("sessions", sessionId, {
+      hosting: newIsCloud ? "cloud" : (rt?.hostingMode ?? "local"),
+      connection: {
+        ...(connection ?? {}),
+        runtimeInstanceId: newIsCloud ? null : value,
+        runtimeLabel: newIsCloud ? null : (rt?.label ?? null),
+        state: "connecting",
+      },
+    });
 
-    // Clean up the old session in the background
-    client.mutation(DELETE_SESSION_MUTATION, { id: sessionId }).toPromise();
-  }, [sessionId, currentRuntimeValue, currentTool, currentModel, runtimes]);
+    await client.mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+      sessionId,
+      hosting: newIsCloud ? "cloud" : undefined,
+      runtimeInstanceId: newIsCloud ? undefined : value,
+    }).toPromise();
+  }, [sessionId, currentRuntimeValue, runtimes, connection]);
 
   const modeConfig = MODE_CONFIG[mode];
   const ModeIcon = modeConfig.icon;

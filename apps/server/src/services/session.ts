@@ -1360,13 +1360,13 @@ export class SessionService {
   async updateConfig(
     sessionId: string,
     organizationId: string,
-    config: { tool?: CodingTool; model?: string },
+    config: { tool?: CodingTool; model?: string; hosting?: string; runtimeInstanceId?: string },
     actorType: ActorType,
     actorId: string,
   ) {
     const prev = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      select: { id: true, tool: true, model: true },
+      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true },
     });
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
@@ -1386,11 +1386,70 @@ export class SessionService {
       data.toolSessionId = null;
     }
 
+    // Allow runtime switching for not_started sessions
+    const runtimeChanged = prev.agentStatus === "not_started" && (config.hosting != null || config.runtimeInstanceId != null);
+    if (runtimeChanged) {
+      let newHosting = config.hosting ?? prev.hosting;
+      let runtimeLabel: string | undefined;
+      if (config.runtimeInstanceId) {
+        const runtime = sessionRouter.getRuntime(config.runtimeInstanceId);
+        if (!runtime) throw new Error("Requested runtime not found");
+        newHosting = runtime.hostingMode;
+        runtimeLabel = runtime.label;
+        sessionRouter.bindSession(sessionId, config.runtimeInstanceId);
+      }
+      data.hosting = newHosting;
+      data.connection = connJson(
+        defaultConnection({
+          ...(config.runtimeInstanceId && { runtimeInstanceId: config.runtimeInstanceId }),
+          ...(runtimeLabel && { runtimeLabel }),
+        }),
+      );
+      data.workdir = null;
+      data.pendingRun = Prisma.DbNull;
+
+      // Provision the new runtime
+      const needsProvisioning = !!prev.repoId || newHosting === "cloud";
+      if (needsProvisioning) {
+        const sessionForRepo = await prisma.session.findUniqueOrThrow({
+          where: { id: sessionId },
+          include: { repo: true },
+        });
+        sessionRouter.createRuntime({
+          sessionId,
+          hosting: newHosting as "cloud" | "local",
+          tool: nextTool,
+          model: (nextModel !== undefined ? nextModel : sessionForRepo.model) ?? undefined,
+          repo: sessionForRepo.repo
+            ? {
+                id: sessionForRepo.repo.id,
+                name: sessionForRepo.repo.name,
+                remoteUrl: sessionForRepo.repo.remoteUrl,
+                defaultBranch: sessionForRepo.repo.defaultBranch,
+              }
+            : null,
+          branch: sessionForRepo.branch ?? undefined,
+          createdById: actorId,
+          organizationId,
+          onFailed: (error) => this.workspaceFailed(sessionId, error),
+          onWorkspaceReady: (workdir) => this.workspaceReady(sessionId, workdir),
+        });
+      }
+    }
+
     const session = await prisma.session.update({
       where: { id: prev.id },
       data,
       include: SESSION_INCLUDE,
     });
+
+    // Sync group connection if runtime changed
+    if (runtimeChanged && session.sessionGroupId) {
+      await this.syncGroupWorkspaceState(session.sessionGroupId, {
+        connection: session.connection as Prisma.InputJsonValue,
+        worktreeDeleted: false,
+      });
+    }
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1402,6 +1461,7 @@ export class SessionService {
         tool: config.tool ?? session.tool,
         model: nextModel !== undefined ? nextModel : session.model,
         toolChanged,
+        ...(runtimeChanged && { hosting: session.hosting, connection: session.connection }),
       },
       actorType,
       actorId,

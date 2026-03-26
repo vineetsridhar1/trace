@@ -115,13 +115,18 @@ export const sessionMutations = {
   },
   updateSessionConfig: (
     _: unknown,
-    args: { sessionId: string; tool?: CodingTool | null; model?: string | null },
+    args: { sessionId: string; tool?: CodingTool | null; model?: string | null; hosting?: string | null; runtimeInstanceId?: string | null },
     ctx: Context,
   ) => {
     return sessionService.updateConfig(
       args.sessionId,
       requireOrgContext(ctx),
-      { tool: args.tool ?? undefined, model: args.model ?? undefined },
+      {
+        tool: args.tool ?? undefined,
+        model: args.model ?? undefined,
+        hosting: args.hosting ?? undefined,
+        runtimeInstanceId: args.runtimeInstanceId ?? undefined,
+      },
       ctx.actorType,
       ctx.userId,
     );
