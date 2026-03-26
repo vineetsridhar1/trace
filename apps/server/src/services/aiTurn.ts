@@ -1,4 +1,4 @@
-import type { AiTurn, Prisma } from "@prisma/client";
+import { Prisma, type AiTurn } from "@prisma/client";
 import type { ActorType } from "@trace/gql";
 import type {
   LLMAssistantContentBlock,
@@ -7,6 +7,7 @@ import type {
 } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
+import { aiConversationService } from "./aiConversation.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -26,47 +27,44 @@ export class AiTurnService {
   ): Promise<{ userTurn: AiTurn; assistantTurn: AiTurn }> {
     const model = input.model ?? DEFAULT_MODEL;
 
-    // Load the branch and verify access to the conversation
+    // Load the branch
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
-      include: {
-        conversation: true,
-      },
     });
 
-    // Verify user belongs to org
-    await prisma.orgMember.findUniqueOrThrow({
-      where: {
-        userId_organizationId: {
-          userId: actorId,
-          organizationId: branch.conversation.organizationId,
+    // Verify access via the conversation service (single source of truth for access control)
+    const conversation = await aiConversationService.getConversation(
+      branch.conversationId,
+      actorId,
+    );
+
+    // Create user turn with race condition protection on parentTurnId
+    let userTurn: AiTurn;
+    try {
+      const lastTurn = await prisma.aiTurn.findFirst({
+        where: { branchId: input.branchId },
+        orderBy: { createdAt: "desc" },
+      });
+
+      userTurn = await prisma.aiTurn.create({
+        data: {
+          branchId: input.branchId,
+          role: "USER",
+          content: input.content,
+          parentTurnId: lastTurn?.id ?? null,
         },
-      },
-    });
-
-    // Verify access: private conversations only accessible to creator
-    if (
-      branch.conversation.visibility === "PRIVATE" &&
-      branch.conversation.createdById !== actorId
-    ) {
-      throw new Error("Conversation not found");
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new Error(
+          "Another message is being sent to this branch. Please try again.",
+        );
+      }
+      throw error;
     }
-
-    // Get the last turn in the branch to set parentTurnId
-    const lastTurn = await prisma.aiTurn.findFirst({
-      where: { branchId: input.branchId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // Create user turn
-    const userTurn = await prisma.aiTurn.create({
-      data: {
-        branchId: input.branchId,
-        role: "USER",
-        content: input.content,
-        parentTurnId: lastTurn?.id ?? null,
-      },
-    });
 
     // Assemble context: all turns in the branch in chronological order
     const turns = await prisma.aiTurn.findMany({
@@ -80,7 +78,7 @@ export class AiTurnService {
     let assistantContent: string;
     try {
       const response = await aiService.complete({
-        organizationId: branch.conversation.organizationId,
+        organizationId: conversation.organizationId,
         userId: actorId,
         model,
         messages,
@@ -91,9 +89,8 @@ export class AiTurnService {
         .filter(
           (block: LLMAssistantContentBlock) => block.type === "text",
         )
-        .map(
-          (block: LLMAssistantContentBlock) =>
-            block.type === "text" ? block.text : "",
+        .map((block: LLMAssistantContentBlock) =>
+          block.type === "text" ? block.text : "",
         )
         .join("");
     } catch (error) {
@@ -129,7 +126,8 @@ export class AiTurnService {
   /**
    * Streams a user turn response from the LLM. Creates the user turn
    * immediately, yields stream events, then creates the assistant turn
-   * after the stream completes.
+   * after the stream completes. On LLM failure, the user turn is kept
+   * and a stream_error event is yielded so the frontend can show a retry UI.
    */
   async *streamTurn(
     input: {
@@ -140,46 +138,51 @@ export class AiTurnService {
     actorType: ActorType,
     actorId: string,
   ): AsyncGenerator<
-    LLMStreamEvent | { type: "user_turn_created"; turn: AiTurn },
-    AiTurn | undefined
+    | LLMStreamEvent
+    | { type: "user_turn_created"; turn: AiTurn }
+    | { type: "assistant_turn_created"; turn: AiTurn }
+    | { type: "stream_error"; error: string; userTurn: AiTurn }
   > {
     const model = input.model ?? DEFAULT_MODEL;
 
-    // Load the branch and verify access
+    // Load the branch
     const branch = await prisma.aiBranch.findUniqueOrThrow({
       where: { id: input.branchId },
-      include: { conversation: true },
     });
 
-    await prisma.orgMember.findUniqueOrThrow({
-      where: {
-        userId_organizationId: {
-          userId: actorId,
-          organizationId: branch.conversation.organizationId,
+    // Verify access via the conversation service
+    const conversation = await aiConversationService.getConversation(
+      branch.conversationId,
+      actorId,
+    );
+
+    // Create user turn with race condition protection
+    let userTurn: AiTurn;
+    try {
+      const lastTurn = await prisma.aiTurn.findFirst({
+        where: { branchId: input.branchId },
+        orderBy: { createdAt: "desc" },
+      });
+
+      userTurn = await prisma.aiTurn.create({
+        data: {
+          branchId: input.branchId,
+          role: "USER",
+          content: input.content,
+          parentTurnId: lastTurn?.id ?? null,
         },
-      },
-    });
-
-    if (
-      branch.conversation.visibility === "PRIVATE" &&
-      branch.conversation.createdById !== actorId
-    ) {
-      throw new Error("Conversation not found");
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new Error(
+          "Another message is being sent to this branch. Please try again.",
+        );
+      }
+      throw error;
     }
-
-    const lastTurn = await prisma.aiTurn.findFirst({
-      where: { branchId: input.branchId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const userTurn = await prisma.aiTurn.create({
-      data: {
-        branchId: input.branchId,
-        role: "USER",
-        content: input.content,
-        parentTurnId: lastTurn?.id ?? null,
-      },
-    });
 
     yield { type: "user_turn_created" as const, turn: userTurn };
 
@@ -194,7 +197,7 @@ export class AiTurnService {
     let fullText = "";
     try {
       for await (const event of aiService.stream({
-        organizationId: branch.conversation.organizationId,
+        organizationId: conversation.organizationId,
         userId: actorId,
         model,
         messages,
@@ -205,15 +208,23 @@ export class AiTurnService {
         yield event;
       }
     } catch (error) {
-      // Clean up user turn on failure
-      await prisma.aiTurn.delete({ where: { id: userTurn.id } });
-      throw error;
+      // Keep the user turn — yield an error event so the frontend can show retry UI
+      yield {
+        type: "stream_error" as const,
+        error: error instanceof Error ? error.message : "LLM stream failed",
+        userTurn,
+      };
+      return;
     }
 
     if (!fullText) {
-      // No content received — clean up
-      await prisma.aiTurn.delete({ where: { id: userTurn.id } });
-      return undefined;
+      // No content received — yield error, keep user turn for retry
+      yield {
+        type: "stream_error" as const,
+        error: "No response received from the model",
+        userTurn,
+      };
+      return;
     }
 
     // Create assistant turn
@@ -237,7 +248,7 @@ export class AiTurnService {
       },
     );
 
-    return assistantTurn;
+    yield { type: "assistant_turn_created" as const, turn: assistantTurn };
   }
 
   /**

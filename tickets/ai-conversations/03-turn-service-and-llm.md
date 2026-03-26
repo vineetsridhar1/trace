@@ -42,11 +42,11 @@ Build the service for sending turns and getting AI responses. When a user sends 
 - [x] `getTurns` returns turns in correct chronological order
 - [x] Conversation `updatedAt` is updated on each new turn
 
-## Known issues to address
+## Known issues (resolved)
 
-- **Concurrent sendTurn race condition**: The "find last turn" + "create user turn" sequence is non-atomic. Two concurrent sends to the same branch can read the same `lastTurn`, violating the `parentTurnId` unique constraint. Fix: wrap in a serializable transaction or catch unique-constraint errors and retry.
-- **Duplicated access control**: The org membership + visibility check in `AiTurnService.sendTurn` duplicates `AiConversationService.getConversation`. Refactor to delegate access verification to the conversation service.
-- **streamTurn orphan UX**: Deleting the user turn after a partial stream failure removes a turn the user already saw. Consider keeping the user turn and marking the error inline instead.
+- ~~**Concurrent sendTurn race condition**~~: Fixed — user turn creation now catches `P2002` unique constraint violations and throws a user-friendly "concurrent send" error.
+- ~~**Duplicated access control**~~: Fixed — both `sendTurn` and `streamTurn` now delegate to `aiConversationService.getConversation()` instead of duplicating org/visibility checks.
+- ~~**streamTurn orphan UX**~~: Fixed — on stream failure, the user turn is kept and a `stream_error` event is yielded so the frontend can display an inline error with retry. The generator return type now yields `assistant_turn_created` as a final event instead of using the uncommon generator return value.
 
 ## How to test
 
