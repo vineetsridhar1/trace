@@ -22,6 +22,7 @@ import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentEvent } from "./router.js";
 import type { OrgAgentSettings } from "../services/agent-identity.js";
 import { resolveSoulFile } from "./soul-file-resolver.js";
+import { resolveAutonomyMode, type AutonomyScopeType } from "../services/scope-autonomy.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -194,6 +195,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       id: chat.id,
       type: chat.type,
       name: chat.name,
+      aiMode: chat.aiMode,
       memberCount: chat.members.length,
       members: chat.members.map((m: { user: { id: string; name: string | null } }) => ({
         id: m.user.id,
@@ -220,6 +222,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       status: ticket.status,
       priority: ticket.priority,
       labels: ticket.labels,
+      aiMode: ticket.aiMode,
       assignees: ticket.assignees.map((a: { user: { id: string; name: string | null } }) => ({
         id: a.user.id,
         name: a.user.name,
@@ -313,6 +316,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
       id: channel.id,
       name: channel.name,
       type: channel.type,
+      aiMode: channel.aiMode,
       projects: channel.projects.map((p: { project: { id: string; name: string } }) => ({
         id: p.project.id,
         name: p.project.name,
@@ -890,11 +894,24 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   });
   recordSection("relevantEntities", estimateObjectTokens(relevantEntities));
 
+  // --- 6b. Resolve effective autonomy mode (ticket #20) ---
+  const isDmScope = scopeType === "chat" && scopeEntity?.data.type === "dm";
+  const scopeEntityAiMode = scopeEntity?.data.aiMode as string | null | undefined;
+  const effectiveAutonomyMode = await resolveAutonomyMode({
+    scopeType: scopeType as AutonomyScopeType,
+    scopeId,
+    organizationId,
+    isDm: isDmScope,
+    orgDefault: agentSettings.autonomyMode,
+    prefetchedAiMode: scopeEntityAiMode != null
+      ? (scopeEntityAiMode as import("@prisma/client").AutonomyMode)
+      : scopeEntity ? null : undefined,
+  });
+
   // --- 7. Summaries ---
   //    Privacy guard (ticket #17): DM summaries are never generated automatically.
   //    They are only produced on explicit user request. Group chat summaries are
   //    generated automatically but scoped — they never leak into unrelated contexts.
-  const isDmScope = scopeType === "chat" && scopeEntity?.data.type === "dm";
   const summaries = isDmScope
     ? [] // skip auto-summaries for DMs
     : await fetchSummaries({
@@ -939,7 +956,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     summaries,
     actors,
     permissions: {
-      autonomyMode: agentSettings.autonomyMode,
+      autonomyMode: effectiveAutonomyMode,
       actions,
     },
     tokenBudget: {

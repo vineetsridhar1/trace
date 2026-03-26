@@ -91,6 +91,7 @@ export type BranchDiffFile = {
 
 export type Channel = {
   __typename?: 'Channel';
+  aiMode?: Maybe<AutonomyMode>;
   baseBranch?: Maybe<Scalars['String']['output']>;
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
@@ -130,6 +131,7 @@ export type ChannelType =
 
 export type Chat = {
   __typename?: 'Chat';
+  aiMode?: Maybe<AutonomyMode>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
@@ -422,6 +424,7 @@ export type Mutation = {
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
+  updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
   updateTicket: Ticket;
 };
@@ -758,6 +761,14 @@ export type MutationUpdateRepoArgs = {
 };
 
 
+export type MutationUpdateScopeAiModeArgs = {
+  aiMode?: InputMaybe<AutonomyMode>;
+  organizationId: Scalars['ID']['input'];
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
+};
+
+
 export type MutationUpdateSessionConfigArgs = {
   model?: InputMaybe<Scalars['String']['input']>;
   sessionId: Scalars['ID']['input'];
@@ -826,6 +837,7 @@ export type Priority =
 
 export type Project = {
   __typename?: 'Project';
+  aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -858,6 +870,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
+  resolvedAiMode: AutonomyMode;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -984,6 +997,13 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryResolvedAiModeArgs = {
+  organizationId: Scalars['ID']['input'];
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
 };
 
 
@@ -1290,6 +1310,7 @@ export type ThreadSummary = {
 
 export type Ticket = {
   __typename?: 'Ticket';
+  aiMode?: Maybe<AutonomyMode>;
   assignees: Array<User>;
   channel?: Maybe<Channel>;
   createdAt: Scalars['DateTime']['output'];
@@ -1634,6 +1655,7 @@ export type BranchDiffFileResolvers<ContextType = Context, ParentType extends Re
 }>;
 
 export type ChannelResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Channel'] = ResolversParentTypes['Channel']> = ResolversObject<{
+  aiMode?: Resolver<Maybe<ResolversTypes['AutonomyMode']>, ParentType, ContextType>;
   baseBranch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   groupId?: Resolver<Maybe<ResolversTypes['ID']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -1663,6 +1685,7 @@ export type ChannelMemberResolvers<ContextType = Context, ParentType extends Res
 }>;
 
 export type ChatResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Chat'] = ResolversParentTypes['Chat']> = ResolversObject<{
+  aiMode?: Resolver<Maybe<ResolversTypes['AutonomyMode']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -1820,6 +1843,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;
   updateOrgMemberRole?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationUpdateOrgMemberRoleArgs, 'organizationId' | 'role' | 'userId'>>;
   updateRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUpdateRepoArgs, 'id' | 'input'>>;
+  updateScopeAiMode?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUpdateScopeAiModeArgs, 'organizationId' | 'scopeId' | 'scopeType'>>;
   updateSessionConfig?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationUpdateSessionConfigArgs, 'sessionId'>>;
   updateTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationUpdateTicketArgs, 'id' | 'input'>>;
 }>;
@@ -1869,6 +1893,7 @@ export type PortEndpointResolvers<ContextType = Context, ParentType extends Reso
 }>;
 
 export type ProjectResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Project'] = ResolversParentTypes['Project']> = ResolversObject<{
+  aiMode?: Resolver<Maybe<ResolversTypes['AutonomyMode']>, ParentType, ContextType>;
   channels?: Resolver<Array<ResolversTypes['Channel']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1901,6 +1926,7 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   repo?: Resolver<Maybe<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryRepoArgs, 'id'>>;
   repoBranches?: Resolver<Array<ResolversTypes['String']>, ParentType, ContextType, RequireFields<QueryRepoBranchesArgs, 'repoId'>>;
   repos?: Resolver<Array<ResolversTypes['Repo']>, ParentType, ContextType, RequireFields<QueryReposArgs, 'organizationId'>>;
+  resolvedAiMode?: Resolver<ResolversTypes['AutonomyMode'], ParentType, ContextType, RequireFields<QueryResolvedAiModeArgs, 'organizationId' | 'scopeId' | 'scopeType'>>;
   session?: Resolver<Maybe<ResolversTypes['Session']>, ParentType, ContextType, RequireFields<QuerySessionArgs, 'id'>>;
   sessionGroup?: Resolver<Maybe<ResolversTypes['SessionGroup']>, ParentType, ContextType, RequireFields<QuerySessionGroupArgs, 'id'>>;
   sessionGroupBranchDiff?: Resolver<Array<ResolversTypes['BranchDiffFile']>, ParentType, ContextType, RequireFields<QuerySessionGroupBranchDiffArgs, 'sessionGroupId'>>;
@@ -2035,6 +2061,7 @@ export type ThreadSummaryResolvers<ContextType = Context, ParentType extends Res
 }>;
 
 export type TicketResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Ticket'] = ResolversParentTypes['Ticket']> = ResolversObject<{
+  aiMode?: Resolver<Maybe<ResolversTypes['AutonomyMode']>, ParentType, ContextType>;
   assignees?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;

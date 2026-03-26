@@ -133,6 +133,14 @@ export class OrgMemberService {
     }
     return membership;
   }
+
+  async assertAdmin(userId: string, organizationId: string) {
+    const membership = await this.assertMembership(userId, organizationId);
+    if (membership.role !== "admin") {
+      throw new Error("Only admins can perform this action");
+    }
+    return membership;
+  }
 }
 
 export const orgMemberService = new OrgMemberService();

@@ -13,6 +13,7 @@ import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from
 import { participantQueries, participantMutations, participantTypeResolvers } from "./participant.js";
 import { threadQueries } from "./thread.js";
 import { agentIdentityQueries, agentIdentityMutations, agentIdentityTypeResolvers } from "./agent-identity.js";
+import { scopeAutonomyQueries, scopeAutonomyMutations } from "./scope-autonomy.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
@@ -52,6 +53,7 @@ export const resolvers = {
     ...participantQueries,
     ...threadQueries,
     ...agentIdentityQueries,
+    ...scopeAutonomyQueries,
   },
 
   Mutation: {
@@ -66,6 +68,7 @@ export const resolvers = {
     ...chatMutations,
     ...participantMutations,
     ...agentIdentityMutations,
+    ...scopeAutonomyMutations,
   },
 
   Subscription: {
