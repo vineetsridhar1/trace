@@ -63,6 +63,23 @@ export type AgentTrustLevel =
   | 'blocked'
   | 'suggest';
 
+export type AiConversation = {
+  __typename?: 'AiConversation';
+  branchCount: Scalars['Int']['output'];
+  branches: Array<Branch>;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
+  id: Scalars['ID']['output'];
+  rootBranch: Branch;
+  title?: Maybe<Scalars['String']['output']>;
+  updatedAt: Scalars['DateTime']['output'];
+  visibility: AiConversationVisibility;
+};
+
+export type AiConversationVisibility =
+  | 'ORG'
+  | 'PRIVATE';
+
 export type ApiTokenProvider =
   | 'anthropic'
   | 'github'
@@ -80,6 +97,21 @@ export type AutonomyMode =
   | 'act'
   | 'observe'
   | 'suggest';
+
+export type Branch = {
+  __typename?: 'Branch';
+  childBranches: Array<Branch>;
+  conversation: AiConversation;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
+  depth: Scalars['Int']['output'];
+  forkTurn?: Maybe<Turn>;
+  id: Scalars['ID']['output'];
+  label?: Maybe<Scalars['String']['output']>;
+  parentBranch?: Maybe<Branch>;
+  turnCount: Scalars['Int']['output'];
+  turns: Array<Turn>;
+};
 
 export type BranchDiffFile = {
   __typename?: 'BranchDiffFile';
@@ -164,6 +196,11 @@ export type CodingTool =
 export type CostBudget = {
   __typename?: 'CostBudget';
   dailyLimitCents: Scalars['Int']['output'];
+};
+
+export type CreateAiConversationInput = {
+  title?: InputMaybe<Scalars['String']['input']>;
+  visibility?: InputMaybe<AiConversationVisibility>;
 };
 
 export type CreateChannelGroupInput = {
@@ -367,6 +404,7 @@ export type Mutation = {
   addOrgMember: OrgMember;
   assignTicket: Ticket;
   commentOnTicket: Event;
+  createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
   createChat: Chat;
@@ -406,6 +444,7 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
+  sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   startSession: Session;
   subscribe: Participant;
@@ -416,6 +455,7 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
+  updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
@@ -451,6 +491,12 @@ export type MutationAssignTicketArgs = {
 export type MutationCommentOnTicketArgs = {
   text: Scalars['String']['input'];
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateAiConversationArgs = {
+  input: CreateAiConversationInput;
+  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -673,6 +719,12 @@ export type MutationSendSessionMessageArgs = {
 };
 
 
+export type MutationSendTurnArgs = {
+  branchId: Scalars['ID']['input'];
+  content: Scalars['String']['input'];
+};
+
+
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
 };
@@ -727,6 +779,12 @@ export type MutationUnsubscribeArgs = {
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateAiConversationTitleArgs = {
+  conversationId: Scalars['ID']['input'];
+  title: Scalars['String']['input'];
 };
 
 
@@ -828,8 +886,11 @@ export type Project = {
 export type Query = {
   __typename?: 'Query';
   agentIdentity?: Maybe<AgentIdentity>;
+  aiConversation?: Maybe<AiConversation>;
+  aiConversations: Array<AiConversation>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
+  branch?: Maybe<Branch>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -870,6 +931,17 @@ export type QueryAgentIdentityArgs = {
 };
 
 
+export type QueryAiConversationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryAiConversationsArgs = {
+  organizationId: Scalars['ID']['input'];
+  visibility?: InputMaybe<AiConversationVisibility>;
+};
+
+
 export type QueryAvailableRuntimesArgs = {
   tool: CodingTool;
 };
@@ -877,6 +949,11 @@ export type QueryAvailableRuntimesArgs = {
 
 export type QueryAvailableSessionRuntimesArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type QueryBranchArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1207,13 +1284,20 @@ export type StartSessionInput = {
 
 export type Subscription = {
   __typename?: 'Subscription';
+  branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
+  conversationEvents: Event;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
   userNotifications: Notification;
+};
+
+
+export type SubscriptionBranchTurnsArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1227,6 +1311,11 @@ export type SubscriptionChannelEventsArgs = {
 export type SubscriptionChatEventsArgs = {
   chatId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionConversationEventsArgs = {
+  conversationId: Scalars['ID']['input'];
 };
 
 
@@ -1319,6 +1408,22 @@ export type TicketStatus =
   | 'in_progress'
   | 'in_review'
   | 'todo';
+
+export type Turn = {
+  __typename?: 'Turn';
+  branch: Branch;
+  branchCount: Scalars['Int']['output'];
+  childBranches: Array<Branch>;
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  parentTurn?: Maybe<Turn>;
+  role: TurnRole;
+};
+
+export type TurnRole =
+  | 'ASSISTANT'
+  | 'USER';
 
 export type UpdateAgentSettingsInput = {
   autonomyMode?: InputMaybe<AutonomyMode>;
@@ -1439,10 +1544,13 @@ export type ResolversTypes = ResolversObject<{
   AgentIdentity: ResolverTypeWrapper<AgentIdentity>;
   AgentStatus: AgentStatus;
   AgentTrustLevel: AgentTrustLevel;
+  AiConversation: ResolverTypeWrapper<AiConversation>;
+  AiConversationVisibility: AiConversationVisibility;
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
   AutonomyMode: AutonomyMode;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
+  Branch: ResolverTypeWrapper<Branch>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
   Channel: ResolverTypeWrapper<Channel>;
   ChannelGroup: ResolverTypeWrapper<ChannelGroup>;
@@ -1453,6 +1561,7 @@ export type ResolversTypes = ResolversObject<{
   ChatType: ChatType;
   CodingTool: CodingTool;
   CostBudget: ResolverTypeWrapper<CostBudget>;
+  CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
@@ -1509,6 +1618,8 @@ export type ResolversTypes = ResolversObject<{
   TicketFilters: TicketFilters;
   TicketLink: ResolverTypeWrapper<TicketLink>;
   TicketStatus: TicketStatus;
+  Turn: ResolverTypeWrapper<Turn>;
+  TurnRole: TurnRole;
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateRepoInput: UpdateRepoInput;
@@ -1522,8 +1633,10 @@ export type ResolversParentTypes = ResolversObject<{
   Actor: Actor;
   AddChatMemberInput: AddChatMemberInput;
   AgentIdentity: AgentIdentity;
+  AiConversation: AiConversation;
   ApiTokenStatus: ApiTokenStatus;
   Boolean: Scalars['Boolean']['output'];
+  Branch: Branch;
   BranchDiffFile: BranchDiffFile;
   Channel: Channel;
   ChannelGroup: ChannelGroup;
@@ -1531,6 +1644,7 @@ export type ResolversParentTypes = ResolversObject<{
   Chat: Chat;
   ChatMember: ChatMember;
   CostBudget: CostBudget;
+  CreateAiConversationInput: CreateAiConversationInput;
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
@@ -1574,6 +1688,7 @@ export type ResolversParentTypes = ResolversObject<{
   Ticket: Ticket;
   TicketFilters: TicketFilters;
   TicketLink: TicketLink;
+  Turn: Turn;
   UpdateAgentSettingsInput: UpdateAgentSettingsInput;
   UpdateChannelGroupInput: UpdateChannelGroupInput;
   UpdateRepoInput: UpdateRepoInput;
@@ -1602,10 +1717,38 @@ export type AgentIdentityResolvers<ContextType = Context, ParentType extends Res
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type AiConversationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AiConversation'] = ResolversParentTypes['AiConversation']> = ResolversObject<{
+  branchCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  branches?: Resolver<Array<ResolversTypes['Branch']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  rootBranch?: Resolver<ResolversTypes['Branch'], ParentType, ContextType>;
+  title?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  visibility?: Resolver<ResolversTypes['AiConversationVisibility'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type ApiTokenStatusResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ApiTokenStatus'] = ResolversParentTypes['ApiTokenStatus']> = ResolversObject<{
   isSet?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   provider?: Resolver<ResolversTypes['ApiTokenProvider'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type BranchResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Branch'] = ResolversParentTypes['Branch']> = ResolversObject<{
+  childBranches?: Resolver<Array<ResolversTypes['Branch']>, ParentType, ContextType>;
+  conversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  createdBy?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  depth?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  forkTurn?: Resolver<Maybe<ResolversTypes['Turn']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  label?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  parentBranch?: Resolver<Maybe<ResolversTypes['Branch']>, ParentType, ContextType>;
+  turnCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  turns?: Resolver<Array<ResolversTypes['Turn']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1750,6 +1893,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   addOrgMember?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationAddOrgMemberArgs, 'organizationId' | 'userId'>>;
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
+  createAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationCreateAiConversationArgs, 'input' | 'organizationId'>>;
   createChannel?: Resolver<ResolversTypes['Channel'], ParentType, ContextType, RequireFields<MutationCreateChannelArgs, 'input'>>;
   createChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationCreateChannelGroupArgs, 'input'>>;
   createChat?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationCreateChatArgs, 'input'>>;
@@ -1789,6 +1933,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   sendChatMessage?: Resolver<ResolversTypes['Message'], ParentType, ContextType, RequireFields<MutationSendChatMessageArgs, 'chatId'>>;
   sendMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendMessageArgs, 'channelId' | 'text'>>;
   sendSessionMessage?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationSendSessionMessageArgs, 'sessionId' | 'text'>>;
+  sendTurn?: Resolver<ResolversTypes['Turn'], ParentType, ContextType, RequireFields<MutationSendTurnArgs, 'branchId' | 'content'>>;
   setApiToken?: Resolver<ResolversTypes['ApiTokenStatus'], ParentType, ContextType, RequireFields<MutationSetApiTokenArgs, 'input'>>;
   startSession?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationStartSessionArgs, 'input'>>;
   subscribe?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationSubscribeArgs, 'scopeId' | 'scopeType'>>;
@@ -1799,6 +1944,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   unregisterRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUnregisterRepoWebhookArgs, 'repoId'>>;
   unsubscribe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'scopeId' | 'scopeType'>>;
   updateAgentSettings?: Resolver<ResolversTypes['AgentIdentity'], ParentType, ContextType, RequireFields<MutationUpdateAgentSettingsArgs, 'input' | 'organizationId'>>;
+  updateAiConversationTitle?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationUpdateAiConversationTitleArgs, 'conversationId' | 'title'>>;
   updateChannelGroup?: Resolver<ResolversTypes['ChannelGroup'], ParentType, ContextType, RequireFields<MutationUpdateChannelGroupArgs, 'id' | 'input'>>;
   updateOrgMemberRole?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationUpdateOrgMemberRoleArgs, 'organizationId' | 'role' | 'userId'>>;
   updateRepo?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationUpdateRepoArgs, 'id' | 'input'>>;
@@ -1862,8 +2008,11 @@ export type ProjectResolvers<ContextType = Context, ParentType extends Resolvers
 
 export type QueryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
   agentIdentity?: Resolver<Maybe<ResolversTypes['AgentIdentity']>, ParentType, ContextType, RequireFields<QueryAgentIdentityArgs, 'organizationId'>>;
+  aiConversation?: Resolver<Maybe<ResolversTypes['AiConversation']>, ParentType, ContextType, RequireFields<QueryAiConversationArgs, 'id'>>;
+  aiConversations?: Resolver<Array<ResolversTypes['AiConversation']>, ParentType, ContextType, RequireFields<QueryAiConversationsArgs, 'organizationId'>>;
   availableRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableRuntimesArgs, 'tool'>>;
   availableSessionRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableSessionRuntimesArgs, 'sessionId'>>;
+  branch?: Resolver<Maybe<ResolversTypes['Branch']>, ParentType, ContextType, RequireFields<QueryBranchArgs, 'id'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
   channelGroups?: Resolver<Array<ResolversTypes['ChannelGroup']>, ParentType, ContextType, RequireFields<QueryChannelGroupsArgs, 'organizationId'>>;
   channelMessages?: Resolver<Array<ResolversTypes['Message']>, ParentType, ContextType, RequireFields<QueryChannelMessagesArgs, 'channelId'>>;
@@ -1986,8 +2135,10 @@ export type SessionRuntimeInstanceResolvers<ContextType = Context, ParentType ex
 }>;
 
 export type SubscriptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
+  branchTurns?: SubscriptionResolver<ResolversTypes['Turn'], "branchTurns", ParentType, ContextType, RequireFields<SubscriptionBranchTurnsArgs, 'branchId'>>;
   channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId' | 'organizationId'>>;
   chatEvents?: SubscriptionResolver<ResolversTypes['Event'], "chatEvents", ParentType, ContextType, RequireFields<SubscriptionChatEventsArgs, 'chatId'>>;
+  conversationEvents?: SubscriptionResolver<ResolversTypes['Event'], "conversationEvents", ParentType, ContextType, RequireFields<SubscriptionConversationEventsArgs, 'conversationId'>>;
   orgEvents?: SubscriptionResolver<ResolversTypes['Event'], "orgEvents", ParentType, ContextType, RequireFields<SubscriptionOrgEventsArgs, 'organizationId'>>;
   sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'organizationId' | 'sessionId'>>;
   sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'organizationId' | 'sessionId'>>;
@@ -2043,6 +2194,18 @@ export type TicketLinkResolvers<ContextType = Context, ParentType extends Resolv
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type TurnResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Turn'] = ResolversParentTypes['Turn']> = ResolversObject<{
+  branch?: Resolver<ResolversTypes['Branch'], ParentType, ContextType>;
+  branchCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  childBranches?: Resolver<Array<ResolversTypes['Branch']>, ParentType, ContextType>;
+  content?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  parentTurn?: Resolver<Maybe<ResolversTypes['Turn']>, ParentType, ContextType>;
+  role?: Resolver<ResolversTypes['TurnRole'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type UserResolvers<ContextType = Context, ParentType extends ResolversParentTypes['User'] = ResolversParentTypes['User']> = ResolversObject<{
   avatarUrl?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -2055,7 +2218,9 @@ export type UserResolvers<ContextType = Context, ParentType extends ResolversPar
 export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
   AgentIdentity?: AgentIdentityResolvers<ContextType>;
+  AiConversation?: AiConversationResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
+  Branch?: BranchResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
   ChannelGroup?: ChannelGroupResolvers<ContextType>;
@@ -2089,6 +2254,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ThreadSummary?: ThreadSummaryResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;
   TicketLink?: TicketLinkResolvers<ContextType>;
+  Turn?: TurnResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
 }>;
 

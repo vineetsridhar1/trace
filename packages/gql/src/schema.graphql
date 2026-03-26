@@ -148,6 +148,16 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum AiConversationVisibility {
+  PRIVATE
+  ORG
+}
+
+enum TurnRole {
+  USER
+  ASSISTANT
+}
+
 enum EventType {
   message_sent
   message_edited
@@ -508,6 +518,45 @@ type Notification {
   timestamp: DateTime!
 }
 
+# --- AI Conversation Types ---
+
+type AiConversation {
+  id: ID!
+  title: String
+  visibility: AiConversationVisibility!
+  createdBy: User!
+  rootBranch: Branch!
+  branches: [Branch!]!
+  branchCount: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Branch {
+  id: ID!
+  conversation: AiConversation!
+  label: String
+  parentBranch: Branch
+  forkTurn: Turn
+  turns: [Turn!]!
+  childBranches: [Branch!]!
+  depth: Int!
+  turnCount: Int!
+  createdBy: User!
+  createdAt: DateTime!
+}
+
+type Turn {
+  id: ID!
+  branch: Branch!
+  role: TurnRole!
+  content: String!
+  parentTurn: Turn
+  branchCount: Int!
+  childBranches: [Branch!]!
+  createdAt: DateTime!
+}
+
 # --- Inputs ---
 
 input CreateChannelInput {
@@ -642,6 +691,11 @@ input UpdateAgentSettingsInput {
   dailyLimitCents: Int
 }
 
+input CreateAiConversationInput {
+  title: String
+  visibility: AiConversationVisibility
+}
+
 # --- Queries ---
 
 type Query {
@@ -687,6 +741,9 @@ type Query {
   myApiTokens: [ApiTokenStatus!]!
   sessionTerminals(sessionId: ID!): [Terminal!]!
   agentIdentity(organizationId: ID!): AgentIdentity
+  aiConversations(organizationId: ID!, visibility: AiConversationVisibility): [AiConversation!]!
+  aiConversation(id: ID!): AiConversation
+  branch(id: ID!): Branch
 }
 
 type Terminal {
@@ -756,6 +813,9 @@ type Mutation {
   addOrgMember(organizationId: ID!, userId: ID!, role: UserRole): OrgMember!
   removeOrgMember(organizationId: ID!, userId: ID!): Boolean!
   updateOrgMemberRole(organizationId: ID!, userId: ID!, role: UserRole!): OrgMember!
+  createAiConversation(organizationId: ID!, input: CreateAiConversationInput!): AiConversation!
+  sendTurn(branchId: ID!, content: String!): Turn!
+  updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
 }
 
 # --- Subscriptions ---
@@ -768,4 +828,6 @@ type Subscription {
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
+  branchTurns(branchId: ID!): Turn!
+  conversationEvents(conversationId: ID!): Event!
 }

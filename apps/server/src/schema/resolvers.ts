@@ -13,6 +13,7 @@ import { chatQueries, chatMutations, chatSubscriptions, chatTypeResolvers } from
 import { participantQueries, participantMutations, participantTypeResolvers } from "./participant.js";
 import { threadQueries } from "./thread.js";
 import { agentIdentityQueries, agentIdentityMutations, agentIdentityTypeResolvers } from "./agent-identity.js";
+import { aiConversationQueries, aiConversationMutations, aiConversationSubscriptions, aiConversationTypeResolvers } from "./ai-conversation.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 
@@ -28,6 +29,7 @@ export const resolvers = {
   ...ticketTypeResolvers,
   ...sessionTypeResolvers,
   ...agentIdentityTypeResolvers,
+  ...aiConversationTypeResolvers,
 
   User: {
     organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),
@@ -52,6 +54,7 @@ export const resolvers = {
     ...participantQueries,
     ...threadQueries,
     ...agentIdentityQueries,
+    ...aiConversationQueries,
   },
 
   Mutation: {
@@ -66,6 +69,7 @@ export const resolvers = {
     ...chatMutations,
     ...participantMutations,
     ...agentIdentityMutations,
+    ...aiConversationMutations,
   },
 
   Subscription: {
@@ -74,5 +78,6 @@ export const resolvers = {
     ...ticketSubscriptions,
     ...chatSubscriptions,
     ...eventSubscriptions,
+    ...aiConversationSubscriptions,
   },
 };

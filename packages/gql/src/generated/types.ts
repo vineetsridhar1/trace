@@ -60,6 +60,23 @@ export type AgentTrustLevel =
   | 'blocked'
   | 'suggest';
 
+export type AiConversation = {
+  __typename?: 'AiConversation';
+  branchCount: Scalars['Int']['output'];
+  branches: Array<Branch>;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
+  id: Scalars['ID']['output'];
+  rootBranch: Branch;
+  title?: Maybe<Scalars['String']['output']>;
+  updatedAt: Scalars['DateTime']['output'];
+  visibility: AiConversationVisibility;
+};
+
+export type AiConversationVisibility =
+  | 'ORG'
+  | 'PRIVATE';
+
 export type ApiTokenProvider =
   | 'anthropic'
   | 'github'
@@ -77,6 +94,21 @@ export type AutonomyMode =
   | 'act'
   | 'observe'
   | 'suggest';
+
+export type Branch = {
+  __typename?: 'Branch';
+  childBranches: Array<Branch>;
+  conversation: AiConversation;
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: User;
+  depth: Scalars['Int']['output'];
+  forkTurn?: Maybe<Turn>;
+  id: Scalars['ID']['output'];
+  label?: Maybe<Scalars['String']['output']>;
+  parentBranch?: Maybe<Branch>;
+  turnCount: Scalars['Int']['output'];
+  turns: Array<Turn>;
+};
 
 export type BranchDiffFile = {
   __typename?: 'BranchDiffFile';
@@ -161,6 +193,11 @@ export type CodingTool =
 export type CostBudget = {
   __typename?: 'CostBudget';
   dailyLimitCents: Scalars['Int']['output'];
+};
+
+export type CreateAiConversationInput = {
+  title?: InputMaybe<Scalars['String']['input']>;
+  visibility?: InputMaybe<AiConversationVisibility>;
 };
 
 export type CreateChannelGroupInput = {
@@ -364,6 +401,7 @@ export type Mutation = {
   addOrgMember: OrgMember;
   assignTicket: Ticket;
   commentOnTicket: Event;
+  createAiConversation: AiConversation;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
   createChat: Chat;
@@ -403,6 +441,7 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
+  sendTurn: Turn;
   setApiToken: ApiTokenStatus;
   startSession: Session;
   subscribe: Participant;
@@ -413,6 +452,7 @@ export type Mutation = {
   unregisterRepoWebhook: Repo;
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
+  updateAiConversationTitle: AiConversation;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
@@ -448,6 +488,12 @@ export type MutationAssignTicketArgs = {
 export type MutationCommentOnTicketArgs = {
   text: Scalars['String']['input'];
   ticketId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateAiConversationArgs = {
+  input: CreateAiConversationInput;
+  organizationId: Scalars['ID']['input'];
 };
 
 
@@ -670,6 +716,12 @@ export type MutationSendSessionMessageArgs = {
 };
 
 
+export type MutationSendTurnArgs = {
+  branchId: Scalars['ID']['input'];
+  content: Scalars['String']['input'];
+};
+
+
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
 };
@@ -724,6 +776,12 @@ export type MutationUnsubscribeArgs = {
 export type MutationUpdateAgentSettingsArgs = {
   input: UpdateAgentSettingsInput;
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateAiConversationTitleArgs = {
+  conversationId: Scalars['ID']['input'];
+  title: Scalars['String']['input'];
 };
 
 
@@ -825,8 +883,11 @@ export type Project = {
 export type Query = {
   __typename?: 'Query';
   agentIdentity?: Maybe<AgentIdentity>;
+  aiConversation?: Maybe<AiConversation>;
+  aiConversations: Array<AiConversation>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
+  branch?: Maybe<Branch>;
   channel?: Maybe<Channel>;
   channelGroups: Array<ChannelGroup>;
   channelMessages: Array<Message>;
@@ -867,6 +928,17 @@ export type QueryAgentIdentityArgs = {
 };
 
 
+export type QueryAiConversationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryAiConversationsArgs = {
+  organizationId: Scalars['ID']['input'];
+  visibility?: InputMaybe<AiConversationVisibility>;
+};
+
+
 export type QueryAvailableRuntimesArgs = {
   tool: CodingTool;
 };
@@ -874,6 +946,11 @@ export type QueryAvailableRuntimesArgs = {
 
 export type QueryAvailableSessionRuntimesArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type QueryBranchArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1204,13 +1281,20 @@ export type StartSessionInput = {
 
 export type Subscription = {
   __typename?: 'Subscription';
+  branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
+  conversationEvents: Event;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
   userNotifications: Notification;
+};
+
+
+export type SubscriptionBranchTurnsArgs = {
+  branchId: Scalars['ID']['input'];
 };
 
 
@@ -1224,6 +1308,11 @@ export type SubscriptionChannelEventsArgs = {
 export type SubscriptionChatEventsArgs = {
   chatId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionConversationEventsArgs = {
+  conversationId: Scalars['ID']['input'];
 };
 
 
@@ -1316,6 +1405,22 @@ export type TicketStatus =
   | 'in_progress'
   | 'in_review'
   | 'todo';
+
+export type Turn = {
+  __typename?: 'Turn';
+  branch: Branch;
+  branchCount: Scalars['Int']['output'];
+  childBranches: Array<Branch>;
+  content: Scalars['String']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  id: Scalars['ID']['output'];
+  parentTurn?: Maybe<Turn>;
+  role: TurnRole;
+};
+
+export type TurnRole =
+  | 'ASSISTANT'
+  | 'USER';
 
 export type UpdateAgentSettingsInput = {
   autonomyMode?: InputMaybe<AutonomyMode>;
