@@ -242,6 +242,62 @@ const actionRegistry: AgentActionRegistration[] = [
     scopes: ["chat", "channel", "ticket", "session"],
   },
   {
+    name: "ticket.query",
+    service: "ticketService",
+    method: "searchByRelevance",
+    description:
+      "Search for tickets by keyword. Use to check if a ticket already exists before creating one, " +
+      "to look up the status of a ticket, or to find related work. Returns matching tickets with their current status, priority, and assignees.",
+    risk: "low",
+    suggestable: false,
+    parameters: {
+      fields: {
+        query: { type: "string", description: "Search keywords to match against ticket titles and descriptions", required: true },
+        limit: { type: "number", description: "Maximum number of results to return (default 5, max 10)" },
+      },
+    },
+    scopes: ["chat", "channel", "ticket", "session", "project"],
+  },
+  {
+    name: "ticket.get",
+    service: "ticketService",
+    method: "getById",
+    description:
+      "Get a specific ticket by its exact ID. Use when a user asks about the status of a specific ticket, " +
+      "or when you need to check a ticket's current state before taking action on it. " +
+      "Returns the full ticket with status, priority, assignees, and labels, or null if not found.",
+    risk: "low",
+    suggestable: false,
+    parameters: {
+      fields: {
+        ticketId: { type: "string", description: "The exact ticket ID to look up", required: true },
+      },
+    },
+    scopes: ["chat", "channel", "ticket", "session", "project"],
+  },
+  {
+    name: "suggestion.query",
+    service: "inboxService",
+    method: "listAgentSuggestions",
+    description:
+      "Query the agent's own pending suggestions (inbox items). Use to check whether a suggestion was already made, " +
+      "whether it was accepted or dismissed, or to avoid creating duplicate suggestions. " +
+      "Returns inbox items with their status (active, resolved, expired) and payload.",
+    risk: "low",
+    suggestable: false,
+    parameters: {
+      fields: {
+        status: {
+          type: "string",
+          description: "Filter by status",
+          enum: ["active", "resolved"],
+        },
+        limit: { type: "number", description: "Maximum number of results to return (default 10, max 25)" },
+      },
+    },
+    scopes: ["chat", "channel", "ticket", "session", "project"],
+  },
+  {
     name: "no_op",
     service: "",
     method: "",

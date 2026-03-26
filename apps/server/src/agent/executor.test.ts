@@ -39,7 +39,7 @@ describe("ActionExecutor", () => {
   });
 
   it("returns success immediately for no_op actions", async () => {
-    const executor = new ActionExecutor(services);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     await expect(executor.execute({ actionType: "no_op", args: {} }, ctx)).resolves.toEqual({
       status: "success",
@@ -48,7 +48,7 @@ describe("ActionExecutor", () => {
   });
 
   it("rejects unknown actions", async () => {
-    const executor = new ActionExecutor(services);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     await expect(
       executor.execute({ actionType: "unknown.action", args: {} }, ctx),
@@ -60,7 +60,7 @@ describe("ActionExecutor", () => {
   });
 
   it("rejects invalid parameters before dispatching", async () => {
-    const executor = new ActionExecutor(services);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const result = await executor.execute({ actionType: "ticket.create", args: {} }, ctx);
 
@@ -70,7 +70,7 @@ describe("ActionExecutor", () => {
   });
 
   it("injects agent context into ticket creation", async () => {
-    const executor = new ActionExecutor(services);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const result = await executor.execute(
       {
@@ -100,7 +100,7 @@ describe("ActionExecutor", () => {
   });
 
   it("dispatches update, comment, link, chat, and session methods", async () => {
-    const executor = new ActionExecutor(services);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     await executor.execute(
       { actionType: "ticket.update", args: { id: "ticket-1", status: "in_progress" } },
@@ -151,7 +151,7 @@ describe("ActionExecutor", () => {
   });
 
   it("uses idempotency keys per agent, action, and trigger event", async () => {
-    const executor = new ActionExecutor(services);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     const first = await executor.execute(
       { actionType: "ticket.create", args: { title: "Same" } },
@@ -175,17 +175,23 @@ describe("ActionExecutor", () => {
     const store = new InMemoryIdempotencyStore();
     const executor = new ActionExecutor(services, store);
 
-    await expect(store.has("agent:agent-1:ticket.create:evt-store")).resolves.toBe(false);
     await executor.execute(
       { actionType: "ticket.create", args: { title: "Stored" } },
       { ...ctx, triggerEventId: "evt-store" },
     );
-    await expect(store.has("agent:agent-1:ticket.create:evt-store")).resolves.toBe(true);
+
+    // Verify idempotency: a duplicate call should return the dedup result
+    const duplicate = await executor.execute(
+      { actionType: "ticket.create", args: { title: "Stored" } },
+      { ...ctx, triggerEventId: "evt-store" },
+    );
+    expect(duplicate.result).toBe("duplicate — already executed for this trigger event");
+    expect(services.ticketService.create).toHaveBeenCalledTimes(1);
   });
 
   it("returns service errors instead of throwing", async () => {
     (services.ticketService.create as any).mockRejectedValueOnce(new Error("DB lost"));
-    const executor = new ActionExecutor(services);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
 
     await expect(
       executor.execute(
@@ -197,5 +203,90 @@ describe("ActionExecutor", () => {
       actionType: "ticket.create",
       error: "DB lost",
     });
+  });
+
+  it("dispatches ticket.query via searchByRelevance", async () => {
+    (services.ticketService as any).searchByRelevance = vi.fn().mockResolvedValue([
+      { id: "ticket-1", title: "Login bug" },
+    ]);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "ticket.query", args: { query: "login bug", limit: 3 } },
+      { ...ctx, triggerEventId: "evt-query" },
+    );
+
+    expect(result.status).toBe("success");
+    expect((services.ticketService as any).searchByRelevance).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      query: "login bug",
+      limit: 3,
+    });
+  });
+
+  it("dispatches ticket.get via getById", async () => {
+    (services.ticketService as any).getById = vi.fn().mockResolvedValue({
+      id: "ticket-42", title: "Login bug", status: "in_progress",
+    });
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "ticket.get", args: { ticketId: "ticket-42" } },
+      { ...ctx, triggerEventId: "evt-get" },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.result).toEqual({ id: "ticket-42", title: "Login bug", status: "in_progress" });
+    expect((services.ticketService as any).getById).toHaveBeenCalledWith("org-1", "ticket-42");
+  });
+
+  it("caps ticket.query limit at 10", async () => {
+    (services.ticketService as any).searchByRelevance = vi.fn().mockResolvedValue([]);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    await executor.execute(
+      { actionType: "ticket.query", args: { query: "test", limit: 50 } },
+      { ...ctx, triggerEventId: "evt-query-cap" },
+    );
+
+    expect((services.ticketService as any).searchByRelevance).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 10 }),
+    );
+  });
+
+  it("dispatches suggestion.query via listAgentSuggestions", async () => {
+    (services.inboxService as any).listAgentSuggestions = vi.fn().mockResolvedValue([
+      { id: "inbox-1", title: "Create ticket", status: "active" },
+    ]);
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "suggestion.query", args: { status: "active" } },
+      { ...ctx, triggerEventId: "evt-suggest-query" },
+    );
+
+    expect(result.status).toBe("success");
+    expect((services.inboxService as any).listAgentSuggestions).toHaveBeenCalledWith(
+      "org-1",
+      { status: "active", limit: 10 },
+    );
+  });
+
+  it("dispatches message.sendToChannel", async () => {
+    const executor = new ActionExecutor(services, new InMemoryIdempotencyStore());
+
+    const result = await executor.execute(
+      { actionType: "message.sendToChannel", args: { channelId: "chan-1", text: "hello", threadId: "msg-1" } },
+      { ...ctx, triggerEventId: "evt-channel" },
+    );
+
+    expect(result.status).toBe("success");
+    expect(services.channelService.sendMessage).toHaveBeenCalledWith(
+      "chan-1",
+      "hello",
+      "msg-1",
+      "agent",
+      "agent-1",
+    );
   });
 });

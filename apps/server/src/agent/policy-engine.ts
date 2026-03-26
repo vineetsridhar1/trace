@@ -165,6 +165,17 @@ export function clearSuggestionRates(): void {
 }
 
 // ---------------------------------------------------------------------------
+// DM promotion helpers
+// ---------------------------------------------------------------------------
+
+const MESSAGE_ACTIONS = new Set(["message.send", "message.sendToChannel"]);
+
+/** Returns true for actions that send a message (safe to auto-execute in DMs). */
+function isMessageAction(actionType: string): boolean {
+  return MESSAGE_ACTIONS.has(actionType);
+}
+
+// ---------------------------------------------------------------------------
 // Dismissal cooldown tracking (Redis-backed, keyed by itemType)
 //
 // Ticket #19: dismissals are stored in Redis with automatic TTL expiry.
@@ -385,6 +396,15 @@ async function evaluateAction(input: {
     reason = `confidence_${confidence}_gte_suggest_${thresholds.suggestMin}`;
   } else {
     return { action, decision: "drop", reason: `confidence_${confidence}_below_suggest_${thresholds.suggestMin}` };
+  }
+
+  // ── DM promotion: suggest → execute (message actions only) ──
+  // In DMs the user expects a direct reply, not a suggestion in their inbox.
+  // Only promote message actions — side-effect actions (ticket.create, session.start)
+  // should still respect the confidence thresholds from the matrix.
+  if (decision === "suggest" && isDm && isMessageAction(action.actionType)) {
+    decision = "execute";
+    reason = `dm_promote_suggest_to_execute (original: ${reason})`;
   }
 
   // ── Hard rule: not suggestable and only reached suggest threshold → drop ──

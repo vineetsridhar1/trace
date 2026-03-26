@@ -84,7 +84,7 @@ describe("resolveAutonomyMode", () => {
     expect(result).toBe("observe");
   });
 
-  it("DMs default to suggest when no explicit override", async () => {
+  it("DMs default to act when no explicit override", async () => {
     prismaMock.chat.findUnique.mockResolvedValueOnce({ aiMode: null });
 
     const result = await resolveAutonomyMode({
@@ -92,10 +92,10 @@ describe("resolveAutonomyMode", () => {
       scopeId: "chat-1",
       organizationId: "org-1",
       isDm: true,
-      orgDefault: "act",
+      orgDefault: "observe",
     });
 
-    expect(result).toBe("suggest");
+    expect(result).toBe("act");
   });
 
   it("group chats default to suggest when no explicit override", async () => {
@@ -126,7 +126,7 @@ describe("resolveAutonomyMode", () => {
     expect(result).toBe("act");
   });
 
-  it("null override falls through to parent/org default", async () => {
+  it("null override on DM falls through to DM default (act)", async () => {
     prismaMock.chat.findUnique.mockResolvedValueOnce({ aiMode: null });
 
     const result = await resolveAutonomyMode({
@@ -134,11 +134,11 @@ describe("resolveAutonomyMode", () => {
       scopeId: "chat-1",
       organizationId: "org-1",
       isDm: true,
-      orgDefault: "act",
+      orgDefault: "observe",
     });
 
-    // DM defaults to suggest
-    expect(result).toBe("suggest");
+    // DM defaults to act regardless of org default
+    expect(result).toBe("act");
   });
 
   it("scope override wins over project override", async () => {

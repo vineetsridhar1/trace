@@ -11,6 +11,7 @@ import type { SessionEntity } from "../stores/entity";
  */
 export function optimisticallyInsertSession(params: {
   id: string;
+  name?: string | null;
   sessionGroupId: string;
   tool: string;
   model?: string | null;
@@ -22,6 +23,7 @@ export function optimisticallyInsertSession(params: {
   const now = new Date().toISOString();
   useEntityStore.getState().upsert("sessions", params.id, {
     id: params.id,
+    name: params.name ?? "New session",
     sessionGroupId: params.sessionGroupId,
     agentStatus: "not_started",
     sessionStatus: "in_progress",

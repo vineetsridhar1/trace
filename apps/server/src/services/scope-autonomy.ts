@@ -51,9 +51,9 @@ export async function resolveAutonomyMode(input: ResolveAutonomyInput): Promise<
   const projectOverride = await getProjectOverride(scopeType, scopeId, organizationId);
   if (projectOverride) return projectOverride;
 
-  // 3. Chat-type defaults: DMs and group chats → suggest
+  // 3. Chat-type defaults: DMs → act (always respond), group chats → suggest
   if (scopeType === "chat") {
-    return "suggest";
+    return isDm ? "act" : "suggest";
   }
 
   // 4. Org-level default

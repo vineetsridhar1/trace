@@ -270,20 +270,34 @@ function buildContextSection(ctx: AgentContextPacket): string {
     if (chatType === "dm") {
       scopeLines.push("Chat type: dm (direct message — 1:1 conversation with the user)");
       scopeLines.push(
-        "DM behavior: This is a direct conversation with you. The user expects a response. " +
-        "Use 'act' disposition with a message.send action to reply directly. " +
-        "Do NOT use 'suggest' — reply in the DM."
+        "DM behavior: This is a direct conversation with you. The user expects a response EVERY TIME. " +
+        "You MUST always reply — use 'act' disposition with a message.send action. " +
+        "Do NOT use 'suggest' or 'ignore' in DMs — always reply directly. " +
+        "You may also perform additional actions (create tickets, etc.) alongside your reply."
       );
     } else if (chatType === "group") {
       scopeLines.push("Chat type: group (multi-member chat)");
       scopeLines.push(
-        "Group chat behavior: Be more reserved. Only suggest actions when genuinely helpful. " +
-        "@mentions directed at you should be treated as direct requests."
+        "Group chat behavior: You can read all messages. Be more reserved — only act when genuinely helpful. " +
+        "@mentions directed at you MUST be treated as direct requests and always receive a reply in thread. " +
+        "For non-mention messages, you may choose to ignore, suggest, or act based on relevance."
       );
     }
   }
 
-  // Add session-specific context hints
+  // Add channel-specific context hints
+  if (ctx.scopeType === "channel") {
+    scopeLines.push(
+      "Channel behavior: You can read all messages in this channel. " +
+      "You should generally observe and only reply when genuinely helpful. " +
+      "When replying, ALWAYS use message.sendToChannel (not message.send). " +
+      "Prefer threaded replies (set threadId) to minimize noise in the main channel. " +
+      "Only post without a threadId for important org-wide announcements or summaries. " +
+      "@mentions directed at you MUST always receive a threaded reply."
+    );
+  }
+
+  // Add session-specific context hints (terminal events only — ongoing monitoring disabled)
   if (ctx.scopeType === "session") {
     const linkedTickets = (ctx.scopeEntity?.data.linkedTickets ?? []) as Array<{
       id: string;
@@ -292,23 +306,10 @@ function buildContextSection(ctx: AgentContextPacket): string {
     }>;
     const triggerType = ctx.triggerEvent.eventType;
 
-    if (triggerType === "session_paused" && ctx.triggerEvent.payload.needsInput === true) {
-      scopeLines.push(
-        "BLOCKED SESSION: This session is paused and needs human input. " +
-        "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
-        "Include what the session was trying to do and where it got stuck."
-      );
-    } else if (triggerType === "session_terminated" && ctx.triggerEvent.payload.status === "failed") {
+    if (triggerType === "session_terminated" && ctx.triggerEvent.payload.status === "failed") {
       scopeLines.push(
         "FAILED SESSION: This session terminated with a failure. " +
-        "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
-        "Include what went wrong and any error information."
-      );
-    } else if (triggerType === "session_terminated" && ctx.triggerEvent.payload.needsInput === true) {
-      scopeLines.push(
-        "BLOCKED SESSION: This session terminated while waiting for input. " +
-        "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
-        "Include what the session was trying to do and where it got stuck."
+        "If there are linked tickets, notify the assignee(s) via ticket.addComment with what went wrong."
       );
     } else if (triggerType === "session_terminated" || triggerType === "session_pr_opened") {
       scopeLines.push(
@@ -316,11 +317,10 @@ function buildContextSection(ctx: AgentContextPacket): string {
         "If there are linked tickets, post a completion summary via ticket.addComment " +
         "with key information: what was changed, test results, PR link."
       );
-    } else if (triggerType === "session_output") {
+    } else if (triggerType === "session_pr_merged" || triggerType === "session_pr_closed") {
       scopeLines.push(
-        "SESSION PROGRESS: Output from an active session. " +
-        "Consider updating rolling summaries. If linked tickets exist, " +
-        "post a progress update via ticket.addComment (silent enrichment — act directly with high confidence)."
+        "SESSION PR UPDATE: A PR from this session was merged or closed. " +
+        "If there are linked tickets, consider updating their status."
       );
     }
 
@@ -331,16 +331,17 @@ function buildContextSection(ctx: AgentContextPacket): string {
       scopeLines.push(`Linked tickets: ${ticketList}`);
     } else {
       scopeLines.push(
-        "No linked tickets. Track the session but do not try to post comments to nonexistent tickets."
+        "No linked tickets. Do not try to post comments to nonexistent tickets."
       );
     }
   }
 
   // Add @mention context hint
   if (ctx.isMention) {
+    const replyAction = ctx.scopeType === "channel" ? "message.sendToChannel" : "message.send";
     scopeLines.push(
       "@mention: You were directly @mentioned in this message. " +
-      "The user is expecting a helpful reply. Respond with 'act' disposition and a message.send action. " +
+      `The user is expecting a helpful reply. Respond with 'act' disposition and a ${replyAction} action. ` +
       "You may also propose additional actions (e.g., ticket.create) alongside the reply."
     );
   }

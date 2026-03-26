@@ -123,6 +123,22 @@ export class InboxService {
     });
   }
 
+  /**
+   * List suggestions created by the agent. Filters by sourceType="agent_suggestion"
+   * so the agent can query its own past suggestions to avoid duplicates or check status.
+   */
+  async listAgentSuggestions(orgId: string, options?: { status?: InboxItemStatus; limit?: number }) {
+    return prisma.inboxItem.findMany({
+      where: {
+        organizationId: orgId,
+        sourceType: "agent_suggestion",
+        ...(options?.status ? { status: options.status } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: options?.limit ?? 10,
+    });
+  }
+
   async countForUser(orgId: string, userId: string) {
     return prisma.inboxItem.count({
       where: {

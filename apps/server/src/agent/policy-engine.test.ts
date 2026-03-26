@@ -317,7 +317,27 @@ describe("policy-engine", () => {
       expect(r1.actions[0].reason).toBe("suggestion_rate_limited");
     });
 
-    it("suppresses all unsolicited suggestions in DMs", async () => {
+    it("promotes DM message suggestions to execute", async () => {
+      const result = await evaluatePolicy(
+        makeInput({
+          plannerOutput: makePlannerOutput({
+            confidence: 0.8,
+            proposedActions: [{ actionType: "message.send", args: { chatId: "chat-1", text: "hi" } }],
+          }),
+          context: makeContext({
+            scopeType: "chat",
+            isDm: true,
+            permissions: { autonomyMode: "suggest", actions: [] },
+          }),
+        }),
+      );
+
+      // DMs promote message suggest→execute so the agent always replies directly
+      expect(result.actions[0].decision).toBe("execute");
+      expect(result.actions[0].reason).toContain("dm_promote_suggest_to_execute");
+    });
+
+    it("does not promote DM non-message suggestions to execute", async () => {
       const result = await evaluatePolicy(
         makeInput({
           plannerOutput: makePlannerOutput({
@@ -332,6 +352,8 @@ describe("policy-engine", () => {
         }),
       );
 
+      // Side-effect actions are not promoted to execute in DMs.
+      // They stay as "suggest" but DM rate limit (0/hour) drops them.
       expect(result.actions[0].decision).toBe("drop");
       expect(result.actions[0].reason).toBe("suggestion_rate_limited");
     });

@@ -331,8 +331,8 @@ const MAX_SESSION_NAME_LENGTH = 80;
 
 /** Instruction appended to every session prompt so the AI can set or update the title at any time. */
 const TITLE_INSTRUCTION = `\n\n<system-instruction>
-You may set or update the session title at any time by outputting a short title (5-8 words) wrapped in XML tags: <trace-title>Your title here</trace-title>.
-Do this at the start of your first response, and again later whenever the conversation's focus changes significantly enough that the current title feels out of date. The tag will be stripped and not shown to the user.
+You may set or update the session title by outputting a short title (5-8 words) wrapped in XML tags: <trace-title>Your title here</trace-title>.
+Do this ONCE at the start of your very first response to capture the overall goal of the session. After that, do NOT update the title unless the user explicitly asks you to rename/retitle it. Debugging, iterating, or continuing work on the same goal is not a reason to change the title. The tag will be stripped and not shown to the user.
 </system-instruction>`;
 
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */

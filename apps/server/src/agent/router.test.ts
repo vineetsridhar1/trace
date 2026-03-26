@@ -67,7 +67,7 @@ describe("router", () => {
   });
 
   it("routes mention events directly", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({ payload: { mentions: [{ userId: "agent-1" }] } }),
@@ -77,12 +77,12 @@ describe("router", () => {
     expect(result).toEqual({
       decision: "direct",
       reason: "direct:message_sent",
-      maxTier: 3,
+      maxTier: undefined,
     });
   });
 
   it("aggregates configured event types", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(event(), settings);
 
@@ -94,7 +94,7 @@ describe("router", () => {
   });
 
   it("suppresses agent self-triggers outside the allowlist", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({ actorType: "agent", actorId: "agent-1" }),
@@ -105,7 +105,7 @@ describe("router", () => {
   });
 
   it("drops events when cost budget is exhausted", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
     setCostTracker({ getRemainingBudgetFraction: () => 0 });
 
     const result = routeEvent(event(), settings);
@@ -114,7 +114,7 @@ describe("router", () => {
   });
 
   it("degrades tier 3 actions when budget is low but not exhausted", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
     setCostTracker({ getRemainingBudgetFraction: () => 0.4 });
 
     const result = routeEvent(event(), settings);
@@ -127,7 +127,7 @@ describe("router", () => {
   });
 
   it("rate limits noisy scopes", () => {
-    seedChatMemberships("org-1", ["chat-rate"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-rate", type: "group" }]);
 
     for (let index = 0; index < 20; index += 1) {
       expect(
@@ -144,7 +144,7 @@ describe("router", () => {
   it("cleans up stale rate limit entries", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-21T00:00:00.000Z"));
-    seedChatMemberships("org-1", ["chat-clean"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-clean", type: "group" }]);
 
     routeEvent(event({ scopeId: "chat-clean" }), settings);
 
@@ -172,7 +172,7 @@ describe("router", () => {
   });
 
   it("promotes urgent ticket_created to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({
@@ -189,7 +189,7 @@ describe("router", () => {
   });
 
   it("promotes high priority ticket_updated to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({
@@ -205,35 +205,44 @@ describe("router", () => {
     expect(result.maxTier).toBe(3);
   });
 
-  it("promotes @mention of agent to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+  it("routes @mention of agent directly without tier 3 promotion", () => {
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({ payload: { mentions: [{ userId: "agent-1" }] } }),
       settings,
     );
 
+    // @mentions route directly but don't auto-promote to Tier 3.
+    // The planner can escalate via promotionReason if the question is complex.
     expect(result.decision).toBe("direct");
-    expect(result.maxTier).toBe(3);
+    expect(result.maxTier).toBeUndefined();
   });
 
   it("suppresses Tier 3 promotion when budget is below 50%", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
     setCostTracker({ getRemainingBudgetFraction: () => 0.3 });
 
+    // Use ticket_assigned to agent (qualifies for Tier 3) to test budget suppression
     const result = routeEvent(
-      event({ payload: { mentions: [{ userId: "agent-1" }] } }),
+      event({
+        scopeType: "ticket",
+        scopeId: "ticket-1",
+        eventType: "ticket_assigned",
+        payload: { assigneeId: "agent-1" },
+      }),
       settings,
     );
 
-    // Budget suppression: even though event qualifies for Tier 3, maxTier stays at 2
+    // Budget suppression: event qualifies for Tier 3 but maxTier stays at 2
     expect(result.decision).toBe("direct");
     expect(result.maxTier).toBe(2);
   });
 
-  // ---- Session monitoring routing (ticket #18) ----
+  // ---- Session monitoring routing ----
+  // Only terminal/milestone session events are processed; ongoing events
+  // (session_output, session_started, session_resumed) are dropped.
 
-  it("aggregates session_started events", () => {
+  it("drops session_started events (ongoing monitoring disabled)", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -243,11 +252,11 @@ describe("router", () => {
       settings,
     );
 
-    expect(result.decision).toBe("aggregate");
-    expect(result.reason).toBe("aggregate:session_started");
+    expect(result.decision).toBe("drop");
+    expect(result.reason).toBe("no_matching_rule");
   });
 
-  it("aggregates session_resumed events", () => {
+  it("drops session_resumed events (ongoing monitoring disabled)", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -257,11 +266,11 @@ describe("router", () => {
       settings,
     );
 
-    expect(result.decision).toBe("aggregate");
-    expect(result.reason).toBe("aggregate:session_resumed");
+    expect(result.decision).toBe("drop");
+    expect(result.reason).toBe("no_matching_rule");
   });
 
-  it("aggregates session_output events", () => {
+  it("drops session_output events (ongoing monitoring disabled)", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -271,11 +280,11 @@ describe("router", () => {
       settings,
     );
 
-    expect(result.decision).toBe("aggregate");
-    expect(result.reason).toBe("aggregate:session_output");
+    expect(result.decision).toBe("drop");
+    expect(result.reason).toBe("no_matching_rule");
   });
 
-  it("drops connection_lost session_output events", () => {
+  it("drops connection_lost session_output events (via no_matching_rule)", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -286,11 +295,11 @@ describe("router", () => {
       settings,
     );
 
+    // session_output is not in any routing set, so it falls through to no_matching_rule
     expect(result.decision).toBe("drop");
-    expect(result.reason).toBe("connection_lifecycle");
   });
 
-  it("drops connection_restored session_output events", () => {
+  it("drops connection_restored session_output events (via no_matching_rule)", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -302,7 +311,6 @@ describe("router", () => {
     );
 
     expect(result.decision).toBe("drop");
-    expect(result.reason).toBe("connection_lifecycle");
   });
 
   it("aggregates session_pr_opened events", () => {
@@ -347,7 +355,7 @@ describe("router", () => {
     expect(result.reason).toBe("aggregate:session_pr_closed");
   });
 
-  it("routes session_paused with needsInput directly", () => {
+  it("drops session_paused events (ongoing monitoring disabled)", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -358,11 +366,10 @@ describe("router", () => {
       settings,
     );
 
-    expect(result.decision).toBe("direct");
-    expect(result.reason).toBe("direct:session_paused");
+    expect(result.decision).toBe("drop");
   });
 
-  it("routes session_terminated with needsInput directly", () => {
+  it("aggregates session_terminated (terminal event)", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -373,11 +380,11 @@ describe("router", () => {
       settings,
     );
 
-    expect(result.decision).toBe("direct");
-    expect(result.reason).toBe("direct:session_terminated");
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_terminated");
   });
 
-  it("routes session_terminated with failure directly", () => {
+  it("aggregates session_terminated with failure", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -388,8 +395,8 @@ describe("router", () => {
       settings,
     );
 
-    expect(result.decision).toBe("direct");
-    expect(result.reason).toBe("direct:session_terminated");
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_terminated");
   });
 
   it("aggregates session_terminated with successful completion", () => {
@@ -403,18 +410,16 @@ describe("router", () => {
       settings,
     );
 
-    // Successful completion: DIRECT_RULE predicate doesn't match (no failure/needsInput),
-    // so it falls through to AGGREGATE_EVENT_TYPES where session_terminated is listed.
     expect(result.decision).toBe("aggregate");
     expect(result.reason).toBe("aggregate:session_terminated");
   });
 
-  it("allows agent self-triggered session events through the allowlist", () => {
+  it("allows agent self-triggered session_terminated through the allowlist", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
         scopeId: "session-1",
-        eventType: "session_output",
+        eventType: "session_terminated",
         actorType: "agent",
         actorId: "agent-1",
       }),
@@ -422,15 +427,15 @@ describe("router", () => {
     );
 
     expect(result.decision).toBe("aggregate");
-    expect(result.reason).toBe("aggregate:session_output");
+    expect(result.reason).toBe("aggregate:session_terminated");
   });
 
-  it("allows agent self-triggered session_started through the allowlist", () => {
+  it("allows agent self-triggered session_pr_opened through the allowlist", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
         scopeId: "session-1",
-        eventType: "session_started",
+        eventType: "session_pr_opened",
         actorType: "agent",
         actorId: "agent-1",
       }),
@@ -438,11 +443,11 @@ describe("router", () => {
     );
 
     expect(result.decision).toBe("aggregate");
-    expect(result.reason).toBe("aggregate:session_started");
+    expect(result.reason).toBe("aggregate:session_pr_opened");
   });
 
   it("does not promote normal priority tickets to Tier 3", () => {
-    seedChatMemberships("org-1", ["chat-1"]);
+    seedChatMemberships("org-1", [{ chatId: "chat-1", type: "group" }]);
 
     const result = routeEvent(
       event({

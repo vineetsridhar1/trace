@@ -244,6 +244,17 @@ export class TicketService {
   }
 
   /**
+   * Get a ticket by its exact ID. Returns null if not found or not in the org.
+   * Used by the agent to look up specific ticket status/details.
+   */
+  async getById(organizationId: string, ticketId: string) {
+    return prisma.ticket.findFirst({
+      where: { id: ticketId, organizationId },
+      include: TICKET_INCLUDE,
+    });
+  }
+
+  /**
    * Search tickets by relevance to a query string.
    * Uses ILIKE against title and description to find potentially related tickets.
    * Returns top N matches ordered by best match (title match first, then description).

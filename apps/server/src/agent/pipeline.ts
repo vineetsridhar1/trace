@@ -28,7 +28,7 @@ import type { OrgAgentSettings } from "../services/agent-identity.js";
 import type { AggregatedBatch } from "./aggregator.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import { TIER3_TOKEN_BUDGET } from "./context-builder.js";
-import type { PlannerOutput, PlannerTurnResult } from "./planner.js";
+import type { PlannerOutput, PlannerTurnResult, ProposedAction } from "./planner.js";
 import {
   DEFAULT_SONNET_MODEL,
   DEFAULT_OPUS_MODEL,
@@ -614,8 +614,12 @@ async function handleSummarize(
 }
 
 /**
- * Handle "ignore" disposition. Returns true if overridden (forced @mention reply),
+ * Handle "ignore" disposition. Returns true if overridden (forced reply),
  * false if the loop should break.
+ *
+ * Override triggers:
+ * - @mention: user explicitly addressed the agent — always reply
+ * - DM: user is in a 1:1 conversation — always reply (rule 1)
  */
 function handleIgnore(
   plannerOutput: PlannerOutput,
@@ -623,35 +627,30 @@ function handleIgnore(
   packet: AgentContextPacket,
   log: PipelineLogger["log"],
 ): boolean {
-  if (turn === 1 && packet.isMention) {
-    const triggerMessageId = packet.triggerEvent.payload.messageId as string | undefined;
-    const replyText = isUsableRationale(plannerOutput.rationaleSummary)
-      ? plannerOutput.rationaleSummary
-      : DEFAULT_MENTION_FALLBACK;
+  const shouldForceReply = turn === 1 && (packet.isMention || packet.isDm);
+  if (!shouldForceReply) return false;
 
-    plannerOutput.disposition = "act";
-    plannerOutput.proposedActions = [
-      {
-        actionType: "message.send",
-        args: {
-          chatId: packet.scopeId,
-          text: replyText,
-          ...(triggerMessageId ? { parentId: triggerMessageId } : {}),
-        },
-      },
-    ];
-    log("@mention override: planner ignored but forcing reply", {
-      scopeKey: packet.scopeKey,
-      turn,
-      triggerMessageId,
-    });
-    return true; // overridden — continue to execute
-  }
-  return false; // not overridden — loop should break
+  const triggerMessageId = packet.triggerEvent.payload.messageId as string | undefined;
+  const replyText = isUsableRationale(plannerOutput.rationaleSummary)
+    ? plannerOutput.rationaleSummary
+    : DEFAULT_MENTION_FALLBACK;
+
+  plannerOutput.disposition = "act";
+  plannerOutput.proposedActions = [
+    buildReplyAction(packet, replyText, triggerMessageId),
+  ];
+
+  const reason = packet.isMention ? "@mention" : "dm";
+  log(`${reason} override: planner ignored but forcing reply`, {
+    scopeKey: packet.scopeKey,
+    turn,
+    triggerMessageId,
+  });
+  return true; // overridden — continue to execute
 }
 
 // ---------------------------------------------------------------------------
-// @mention threading
+// @mention threading + scope-aware reply helpers
 // ---------------------------------------------------------------------------
 
 function injectParentId(plannerOutput: PlannerOutput, packet: AgentContextPacket): void {
@@ -662,7 +661,39 @@ function injectParentId(plannerOutput: PlannerOutput, packet: AgentContextPacket
     if (action.actionType === "message.send" && !action.args.parentId) {
       action.args.parentId = triggerMessageId;
     }
+    if (action.actionType === "message.sendToChannel" && !action.args.threadId) {
+      action.args.threadId = triggerMessageId;
+    }
   }
+}
+
+/**
+ * Build a scope-aware reply action. Uses message.sendToChannel for channel
+ * scopes and message.send for chat scopes.
+ */
+function buildReplyAction(
+  packet: AgentContextPacket,
+  text: string,
+  triggerMessageId: string | undefined,
+): ProposedAction {
+  if (packet.scopeType === "channel") {
+    return {
+      actionType: "message.sendToChannel",
+      args: {
+        channelId: packet.scopeId,
+        text,
+        ...(triggerMessageId ? { threadId: triggerMessageId } : {}),
+      },
+    };
+  }
+  return {
+    actionType: "message.send",
+    args: {
+      chatId: packet.scopeId,
+      text,
+      ...(triggerMessageId ? { parentId: triggerMessageId } : {}),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -719,9 +750,9 @@ async function postLoop(input: PostLoopInput): Promise<void> {
   const { state, agentSettings, executor, batch, startTime, logger } = input;
   const { log, logError } = logger;
 
-  // @mention fallback
-  if (state.packet.isMention && !state.anyMessageSendExecuted) {
-    await forceMentionReply(state, agentSettings, executor, log, logError);
+  // @mention / DM fallback — guarantee a reply was sent
+  if ((state.packet.isMention || state.packet.isDm) && !state.anyMessageSendExecuted) {
+    await forceReplyFallback(state, agentSettings, executor, log, logError);
   }
 
   // ── Auto-reply in thread after taking action ──
@@ -823,7 +854,11 @@ async function postLoop(input: PostLoopInput): Promise<void> {
   });
 }
 
-async function forceMentionReply(
+/**
+ * Fallback reply for @mentions and DMs. Guarantees a message is sent even if
+ * the planner didn't produce one across all turns.
+ */
+async function forceReplyFallback(
   state: LoopState,
   agentSettings: OrgAgentSettings,
   executor: ActionExecutor,
@@ -838,30 +873,22 @@ async function forceMentionReply(
     ? lastRationale
     : DEFAULT_MENTION_FALLBACK;
 
-  log("@mention fallback: no message.send executed across all turns, forcing reply", {
+  const reason = state.packet.isMention ? "@mention" : "dm";
+  log(`${reason} fallback: no message sent across all turns, forcing reply`, {
     scopeKey: state.packet.scopeKey,
     totalTurns: state.turnResults.length,
   });
 
   try {
-    await executor.execute(
-      {
-        actionType: "message.send",
-        args: {
-          chatId: state.packet.scopeId,
-          text: replyText,
-          ...(triggerMessageId ? { parentId: triggerMessageId } : {}),
-        },
-      },
-      {
-        organizationId: state.packet.organizationId,
-        agentId: agentSettings.agentId,
-        triggerEventId: state.packet.triggerEvent.id,
-      },
-    );
+    const action = buildReplyAction(state.packet, replyText, triggerMessageId);
+    await executor.execute(action, {
+      organizationId: state.packet.organizationId,
+      agentId: agentSettings.agentId,
+      triggerEventId: state.packet.triggerEvent.id,
+    });
     state.anyMessageSendExecuted = true;
   } catch (err) {
-    logError("@mention fallback execution failed", err);
+    logError(`${reason} fallback execution failed`, err);
   }
 }
 
@@ -916,15 +943,14 @@ async function sendActionConfirmation(
 
   const text = parts.join("\n");
 
-  // Thread to the trigger message
+  // Thread to the trigger message — only use actual message IDs, not event IDs
   const triggerMessageId = state.packet.triggerEvent.payload.messageId as string | undefined;
-  const parentId = triggerMessageId ?? state.packet.triggerEvent.id;
 
   const actionType = scopeType === "channel" ? "message.sendToChannel" : "message.send";
   const args =
     scopeType === "channel"
-      ? { channelId: scopeId, text, threadId: parentId }
-      : { chatId: scopeId, text, parentId };
+      ? { channelId: scopeId, text, ...(triggerMessageId ? { threadId: triggerMessageId } : {}) }
+      : { chatId: scopeId, text, ...(triggerMessageId ? { parentId: triggerMessageId } : {}) };
 
   try {
     await executor.execute(

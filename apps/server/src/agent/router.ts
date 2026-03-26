@@ -54,9 +54,6 @@ const DIRECT_RULES: Record<string, (event: AgentEvent, agentId: string) => boole
     const assigneeId = event.payload.assigneeId;
     return typeof assigneeId === "string" && assigneeId === agentId;
   },
-  session_terminated: (event) =>
-    event.payload.needsInput === true || event.payload.status === "failed",
-  session_paused: (event) => event.payload.needsInput === true,
   message_sent: (event, agentId) => {
     const mentions = event.payload.mentions;
     return (
@@ -104,9 +101,9 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
   "ticket_created",
   "ticket_updated",
   "ticket_commented",
-  "session_output",
-  "session_started",
-  "session_resumed",
+  // Session events: only terminal/milestone events are aggregated.
+  // Ongoing session monitoring (session_output, session_started, session_resumed)
+  // is dropped — the session's own AI handles those.
   "session_terminated",
   "session_pr_opened",
   "session_pr_merged",
@@ -123,15 +120,11 @@ const LOW_VALUE_EVENT_TYPES = new Set<string>([
 ]);
 
 /**
- * Self-trigger allowlist: event type + scope type combos where the agent
- * should still observe its own events (e.g., monitoring sessions it started).
+ * Self-trigger allowlist: only terminal session events that the agent should
+ * still see when it was the actor (e.g., a session it started completed).
  */
 const SELF_TRIGGER_ALLOWLIST = new Set<string>([
-  "session_output:session",
   "session_terminated:session",
-  "session_paused:session",
-  "session_started:session",
-  "session_resumed:session",
   "session_pr_opened:session",
   "session_pr_merged:session",
   "session_pr_closed:session",
@@ -364,17 +357,6 @@ export function routeEvent(
   // 4. Low-value events
   if (LOW_VALUE_EVENT_TYPES.has(event.eventType)) {
     return { decision: "drop", reason: "low_value_event" };
-  }
-
-  // 4a. Connection lifecycle events — pure infrastructure noise, never actionable.
-  // These are session_output events with payload.type of "connection_lost" or
-  // "connection_restored". They fire for every bound session on each bridge
-  // reconnect and should never reach the planner.
-  if (event.eventType === "session_output") {
-    const payloadType = event.payload.type;
-    if (payloadType === "connection_lost" || payloadType === "connection_restored") {
-      return { decision: "drop", reason: "connection_lifecycle" };
-    }
   }
 
   // 5. Chat membership gate — drop chat-scoped events if agent not a member

@@ -13,6 +13,7 @@ import type { ChannelService } from "../services/channel.js";
 import type { InboxService } from "../services/inbox.js";
 import type { CreateTicketServiceInput, TicketService } from "../services/ticket.js";
 import { findAction, validateActionParams } from "./action-registry.js";
+import { redis } from "../lib/redis.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,7 +70,6 @@ export interface IdempotencyStore {
 
 /**
  * In-memory idempotency store with TTL — suitable for development and tests.
- * For production, use a Redis-backed store so keys survive worker restarts.
  */
 export class InMemoryIdempotencyStore implements IdempotencyStore {
   private keys = new Map<string, number>();
@@ -93,6 +93,37 @@ export class InMemoryIdempotencyStore implements IdempotencyStore {
       for (const [k, ts] of this.keys) {
         if (now - ts > IDEMPOTENCY_TTL_MS) this.keys.delete(k);
       }
+    }
+  }
+}
+
+/**
+ * Redis-backed idempotency store — survives worker restarts.
+ * Keys are stored with automatic TTL expiry so no cleanup is needed.
+ */
+export class RedisIdempotencyStore implements IdempotencyStore {
+  private prefix: string;
+
+  constructor(prefix = "agent:idempotency") {
+    this.prefix = prefix;
+  }
+
+  async has(key: string): Promise<boolean> {
+    try {
+      const exists = await redis.exists(`${this.prefix}:${key}`);
+      return exists === 1;
+    } catch {
+      // If Redis is unavailable, allow the action through rather than blocking
+      return false;
+    }
+  }
+
+  async set(key: string): Promise<void> {
+    try {
+      const ttlSeconds = Math.ceil(IDEMPOTENCY_TTL_MS / 1000);
+      await redis.set(`${this.prefix}:${key}`, "1", "EX", ttlSeconds);
+    } catch {
+      // Non-fatal — worst case we might execute a duplicate on restart
     }
   }
 }
@@ -122,7 +153,7 @@ export class ActionExecutor {
     private services: ServiceContainer,
     idempotency?: IdempotencyStore,
   ) {
-    this.idempotency = idempotency ?? new InMemoryIdempotencyStore();
+    this.idempotency = idempotency ?? new RedisIdempotencyStore();
   }
 
   async execute(action: PlannedAction, ctx: AgentContext): Promise<ExecutionResult> {
@@ -235,6 +266,18 @@ export class ActionExecutor {
               actorId,
             });
 
+          case "searchByRelevance": {
+            const limit = Math.min(typeof args.limit === "number" ? args.limit : 5, 10);
+            return svc.searchByRelevance({
+              organizationId: orgId,
+              query: args.query as string,
+              limit,
+            });
+          }
+
+          case "getById":
+            return svc.getById(orgId, args.ticketId as string);
+
           default:
             throw new Error(`Unknown ticketService method: ${method}`);
         }
@@ -299,6 +342,14 @@ export class ActionExecutor {
               sourceType: args.sourceType as string,
               sourceId: args.sourceId as string,
             });
+
+          case "listAgentSuggestions": {
+            const limit = Math.min(typeof args.limit === "number" ? args.limit : 10, 25);
+            return svc.listAgentSuggestions(orgId, {
+              status: args.status as "active" | "resolved" | undefined,
+              limit,
+            });
+          }
 
           default:
             throw new Error(`Unknown inboxService method: ${method}`);
