@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useEntityStore } from "./entity";
 import { getSessionChannelId, getSessionGroupChannelId } from "../lib/session-group";
 
-export type ActivePage = "main" | "settings" | "inbox" | "agent-debug";
+export type ActivePage = "main" | "settings" | "inbox" | "tickets" | "agent-debug";
 
 interface UIState {
   activePage: ActivePage;
@@ -48,6 +48,7 @@ export function buildPath(
 ): string {
   if (page === "settings") return "/settings";
   if (page === "inbox") return "/inbox";
+  if (page === "tickets") return "/tickets";
   if (chatId) return `/dm/${chatId}`;
   if (channelId && sessionGroupId && sessionId) return `/c/${channelId}/g/${sessionGroupId}/s/${sessionId}`;
   if (channelId && sessionGroupId) return `/c/${channelId}/g/${sessionGroupId}`;
@@ -204,6 +205,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
     if (page === "inbox") {
       pushNav(null, null, null, "inbox");
+      return;
+    }
+    if (page === "tickets") {
+      pushNav(null, null, null, "tickets");
       return;
     }
 

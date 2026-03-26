@@ -7,6 +7,7 @@ import { ChannelView } from "./components/channel/ChannelView";
 import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { InboxView } from "./components/inbox/InboxView";
+import { TicketsView } from "./components/tickets/TicketsView";
 import { AgentDebugPage } from "./components/agent-debug/AgentDebugPage";
 import { SessionGroupDetailView } from "./components/session/SessionGroupDetailView";
 import { DetailPanel } from "./components/ui/detail-panel";
@@ -109,6 +110,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
                   <AgentDebugPage />
                 ) : activePage === "inbox" ? (
                   <InboxView />
+                ) : activePage === "tickets" ? (
+                  <TicketsView />
                 ) : activeChatId ? (
                   <ChatView chatId={activeChatId} />
                 ) : activeChannelId ? (

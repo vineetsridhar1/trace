@@ -4,6 +4,7 @@ import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { InboxButton } from "./InboxButton";
+import { TicketsButton } from "./TicketsButton";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { SidebarChannelTree } from "./SidebarChannelTree";
 
@@ -44,8 +45,9 @@ export function SidebarChannelsPane({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        <div className="pt-0.5 pb-1">
+        <div className="space-y-0.5 pt-0.5 pb-1">
           <InboxButton />
+          <TicketsButton />
         </div>
 
         <div className="mb-1 flex items-center justify-between px-2">
