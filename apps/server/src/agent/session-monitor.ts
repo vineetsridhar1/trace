@@ -127,7 +127,11 @@ export function isBlockedSessionEvent(event: AgentEvent): boolean {
 export function isSessionCompletionEvent(event: AgentEvent): boolean {
   if (event.scopeType !== "session") return false;
 
-  if (event.eventType === "session_terminated" && event.payload.status !== "failed") {
+  if (
+    event.eventType === "session_terminated" &&
+    event.payload.status !== "failed" &&
+    event.payload.needsInput !== true
+  ) {
     return true;
   }
   if (event.eventType === "session_pr_opened") {

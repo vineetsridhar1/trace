@@ -362,7 +362,7 @@ describe("router", () => {
     expect(result.reason).toBe("direct:session_terminated");
   });
 
-  it("drops session_terminated without failure or needsInput", () => {
+  it("aggregates session_terminated with successful completion", () => {
     const result = routeEvent(
       event({
         scopeType: "session",
@@ -373,10 +373,10 @@ describe("router", () => {
       settings,
     );
 
-    // session_terminated is in DIRECT_RULES but predicate doesn't match,
-    // and it's not in AGGREGATE_EVENT_TYPES, so it falls to no_matching_rule
-    expect(result.decision).toBe("drop");
-    expect(result.reason).toBe("no_matching_rule");
+    // Successful completion: DIRECT_RULE predicate doesn't match (no failure/needsInput),
+    // so it falls through to AGGREGATE_EVENT_TYPES where session_terminated is listed.
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_terminated");
   });
 
   it("allows agent self-triggered session events through the allowlist", () => {

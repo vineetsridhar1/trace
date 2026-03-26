@@ -302,6 +302,12 @@ function buildContextSection(ctx: AgentContextPacket): string {
         "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
         "Include what went wrong and any error information."
       );
+    } else if (triggerType === "session_terminated" && ctx.triggerEvent.payload.needsInput === true) {
+      scopeLines.push(
+        "BLOCKED SESSION: This session terminated while waiting for input. " +
+        "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
+        "Include what the session was trying to do and where it got stuck."
+      );
     } else if (triggerType === "session_terminated" || triggerType === "session_pr_opened") {
       scopeLines.push(
         "SESSION COMPLETED: This session has completed or opened a PR. " +

@@ -112,6 +112,14 @@ describe("isSessionCompletionEvent", () => {
     ).toBe(false);
   });
 
+  it("returns false for session_terminated with needsInput (blocked, not completed)", () => {
+    expect(
+      isSessionCompletionEvent(
+        sessionEvent({ eventType: "session_terminated", payload: { needsInput: true } }),
+      ),
+    ).toBe(false);
+  });
+
   it("returns false for non-session scope", () => {
     expect(
       isSessionCompletionEvent(

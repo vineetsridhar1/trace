@@ -107,6 +107,7 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
   "session_output",
   "session_started",
   "session_resumed",
+  "session_terminated",
   "session_pr_opened",
   "session_pr_merged",
   "session_pr_closed",
