@@ -18,6 +18,8 @@ import type { PlannerOutput, ProposedAction } from "./planner.js";
 import type { RiskLevel } from "./action-registry.js";
 import { findAction } from "./action-registry.js";
 import { costTrackingService } from "../services/cost-tracking.js";
+import { redis } from "../lib/redis.js";
+import { mapActionToItemType } from "./action-types.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -145,70 +147,52 @@ export function clearSuggestionRates(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Dismissal cooldown tracking
+// Dismissal cooldown tracking (Redis-backed, keyed by itemType)
+//
+// Ticket #19: dismissals are stored in Redis with automatic TTL expiry.
+// Key format: suppress:{orgId}:{scopeType}:{scopeId}:{itemType}
 // ---------------------------------------------------------------------------
 
-const DISMISSAL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DISMISSAL_COOLDOWN_SECONDS = 24 * 60 * 60; // 24 hours
 
-interface DismissalRecord {
-  timestamp: number;
-}
-
-/** Key: "orgId:scopeType:scopeId:actionType" */
-const dismissals = new Map<string, DismissalRecord>();
-
-function dismissalKey(orgId: string, scopeType: string, scopeId: string, actionType: string): string {
-  return `${orgId}:${scopeType}:${scopeId}:${actionType}`;
+function dismissalRedisKey(orgId: string, scopeType: string, scopeId: string, itemType: string): string {
+  return `suppress:${orgId}:${scopeType}:${scopeId}:${itemType}`;
 }
 
 /**
- * Record that a user dismissed a suggestion of the given action type in a scope.
- * Call this when the user dismisses a suggestion in the UI.
+ * Record that a user dismissed a suggestion of the given item type in a scope.
+ * Stores in Redis with automatic 24h TTL — no cleanup needed.
  */
-export function recordDismissal(input: {
+export async function recordDismissal(input: {
   organizationId: string;
   scopeType: string;
   scopeId: string;
-  actionType: string;
-}): void {
-  const key = dismissalKey(input.organizationId, input.scopeType, input.scopeId, input.actionType);
-  dismissals.set(key, { timestamp: Date.now() });
+  itemType: string;
+}): Promise<void> {
+  const key = dismissalRedisKey(input.organizationId, input.scopeType, input.scopeId, input.itemType);
+  await redis.set(key, "1", "EX", DISMISSAL_COOLDOWN_SECONDS);
 }
 
 /**
- * Check if a suggestion of the given action type is on cooldown in a scope.
+ * Check if a suggestion of the given item type is on cooldown in a scope.
  */
-function isDismissalCooldownActive(input: {
+async function isDismissalCooldownActive(input: {
   organizationId: string;
   scopeType: string;
   scopeId: string;
-  actionType: string;
-}): boolean {
-  const key = dismissalKey(input.organizationId, input.scopeType, input.scopeId, input.actionType);
-  const record = dismissals.get(key);
-  if (!record) return false;
-
-  const elapsed = Date.now() - record.timestamp;
-  if (elapsed > DISMISSAL_COOLDOWN_MS) {
-    dismissals.delete(key);
-    return false;
-  }
-  return true;
+  itemType: string;
+}): Promise<boolean> {
+  const key = dismissalRedisKey(input.organizationId, input.scopeType, input.scopeId, input.itemType);
+  const exists = await redis.exists(key);
+  return exists === 1;
 }
 
-/** Clean up expired dismissals. */
-export function cleanupDismissals(): void {
-  const now = Date.now();
-  for (const [key, record] of dismissals) {
-    if (now - record.timestamp > DISMISSAL_COOLDOWN_MS) {
-      dismissals.delete(key);
-    }
+/** Clear all dismissals matching a pattern (for testing). */
+export async function clearDismissals(): Promise<void> {
+  const keys = await redis.keys("suppress:*");
+  if (keys.length > 0) {
+    await redis.del(...keys);
   }
-}
-
-/** Clear all dismissals (for testing). */
-export function clearDismissals(): void {
-  dismissals.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +306,7 @@ export async function evaluatePolicy(input: PolicyEngineInput): Promise<PolicyRe
   const confidence = plannerOutput.confidence;
 
   for (const action of plannerOutput.proposedActions) {
-    const result = evaluateAction({
+    const result = await evaluateAction({
       action,
       confidence,
       autonomyMode,
@@ -337,7 +321,7 @@ export async function evaluatePolicy(input: PolicyEngineInput): Promise<PolicyRe
   return { actions: results, plannerOutput };
 }
 
-function evaluateAction(input: {
+async function evaluateAction(input: {
   action: ProposedAction;
   confidence: number;
   autonomyMode: AutonomyMode;
@@ -345,7 +329,7 @@ function evaluateAction(input: {
   scopeType: string;
   scopeId: string;
   isDm?: boolean;
-}): PolicyActionResult {
+}): Promise<PolicyActionResult> {
   const { action, confidence, autonomyMode, orgId, scopeType, scopeId, isDm } = input;
 
   // ── Hard rule: unknown action → drop ──
@@ -383,9 +367,10 @@ function evaluateAction(input: {
     return { action, decision: "drop", reason: "not_suggestable" };
   }
 
-  // ── Anti-chaos: dismissal cooldown (only for suggestions) ──
+  // ── Anti-chaos: dismissal cooldown by itemType (only for suggestions) ──
   if (decision === "suggest") {
-    if (isDismissalCooldownActive({ organizationId: orgId, scopeType, scopeId, actionType: action.actionType })) {
+    const itemType = mapActionToItemType(action.actionType);
+    if (await isDismissalCooldownActive({ organizationId: orgId, scopeType, scopeId, itemType })) {
       return { action, decision: "drop", reason: "dismissal_cooldown" };
     }
   }

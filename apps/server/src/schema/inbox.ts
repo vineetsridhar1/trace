@@ -73,19 +73,16 @@ export const inboxMutations = {
     const orgId = requireOrgContext(ctx);
     const item = await inboxService.dismissSuggestion(args.inboxItemId, ctx.userId, orgId);
 
-    // Record dismissal for the policy engine's 24h cooldown
+    // Record dismissal for the policy engine's 24h cooldown (keyed by itemType)
     const payload = (item.payload ?? {}) as Record<string, unknown>;
-    const actionType = payload.actionType as string | undefined;
-    if (actionType) {
-      const scopeType = (payload.scopeType as string) ?? "system";
-      const scopeId = (payload.scopeId as string) ?? orgId;
-      recordDismissal({
-        organizationId: orgId,
-        scopeType,
-        scopeId,
-        actionType,
-      });
-    }
+    const scopeType = (payload.scopeType as string) ?? "system";
+    const scopeId = (payload.scopeId as string) ?? orgId;
+    await recordDismissal({
+      organizationId: orgId,
+      scopeType,
+      scopeId,
+      itemType: item.itemType,
+    });
 
     return item;
   },

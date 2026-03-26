@@ -89,4 +89,17 @@ describe("ProcessedEventService", () => {
       take: 50,
     });
   });
+
+  it("cleans up processed events older than the max age", async () => {
+    prismaMock.processedAgentEvent.deleteMany.mockResolvedValueOnce({ count: 3 });
+
+    const result = await service.cleanupOldRecords(7 * 24 * 60 * 60 * 1000);
+
+    expect(result).toBe(3);
+    expect(prismaMock.processedAgentEvent.deleteMany).toHaveBeenCalledWith({
+      where: {
+        processedAt: { lt: expect.any(Date) },
+      },
+    });
+  });
 });

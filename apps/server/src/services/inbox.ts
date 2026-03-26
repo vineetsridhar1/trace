@@ -1,5 +1,4 @@
-import type { InboxItemType, InboxItemStatus } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
+import type { InboxItemType, InboxItemStatus, Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
@@ -213,35 +212,64 @@ export class InboxService {
   }
 
   /**
+   * Find active suggestions in a given scope with a specific item type.
+   * Used by semantic deduplication to check for existing similar suggestions.
+   */
+  async findActiveSuggestionsByScope(input: {
+    orgId: string;
+    scopeType: string;
+    scopeId: string;
+    itemType: InboxItemType;
+  }) {
+    return prisma.inboxItem.findMany({
+      where: {
+        organizationId: input.orgId,
+        itemType: input.itemType,
+        status: "active",
+        sourceType: "agent_suggestion",
+        AND: [
+          { payload: { path: ["scopeType"], equals: input.scopeType } },
+          { payload: { path: ["scopeId"], equals: input.scopeId } },
+        ],
+      },
+      select: { id: true, title: true, payload: true },
+    });
+  }
+
+  /**
    * Expire suggestions past their expiresAt timestamp.
    * Called by a periodic background job.
    */
   async expireSuggestions() {
     const now = new Date();
-    // Find active suggestion items where the payload contains an expiresAt in the past
-    const items = await prisma.inboxItem.findMany({
-      where: {
-        status: "active",
-        itemType: {
-          in: [
-            "ticket_suggestion",
-            "link_suggestion",
-            "session_suggestion",
-            "field_change_suggestion",
-            "comment_suggestion",
-            "message_suggestion",
-            "agent_suggestion",
-          ],
-        },
-      },
-    });
+    const nowIso = now.toISOString();
+    type ExpirableSuggestionRow = {
+      id: string;
+      organizationId: string;
+      payload: Prisma.JsonValue | null;
+    };
+
+    // `expiresAt` is stored as an ISO timestamp, so string comparison preserves time order.
+    const items = await prisma.$queryRaw<ExpirableSuggestionRow[]>`
+      SELECT "id", "organizationId", "payload"
+      FROM "InboxItem"
+      WHERE "status" = 'active'
+        AND "itemType" IN (
+          ${"ticket_suggestion"},
+          ${"link_suggestion"},
+          ${"session_suggestion"},
+          ${"field_change_suggestion"},
+          ${"comment_suggestion"},
+          ${"message_suggestion"},
+          ${"agent_suggestion"}
+        )
+        AND COALESCE("payload"->>'expiresAt', '') <> ''
+        AND "payload"->>'expiresAt' <= ${nowIso}
+    `;
 
     const expired = [];
     for (const item of items) {
       const payload = (item.payload ?? {}) as Record<string, unknown>;
-      const expiresAt = payload.expiresAt as string | undefined;
-      if (!expiresAt || new Date(expiresAt) > now) continue;
-
       const updatedPayload = { ...payload, resolution: "expired" };
       const updated = await prisma.inboxItem.update({
         where: { id: item.id },

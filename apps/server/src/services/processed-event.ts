@@ -43,6 +43,22 @@ export class ProcessedEventService {
   }
 
   /**
+   * Delete processed event records older than the given age.
+   * Returns the count of deleted records.
+   *
+   * Ticket: #19 — events older than 7 days are safe to reprocess if replayed.
+   */
+  async cleanupOldRecords(maxAgeMs: number = 7 * 24 * 60 * 60 * 1000): Promise<number> {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+    const result = await prisma.processedAgentEvent.deleteMany({
+      where: {
+        processedAt: { lt: cutoff },
+      },
+    });
+    return result.count;
+  }
+
+  /**
    * Get all processed events for a consumer within an org, ordered by processedAt.
    */
   async getProcessedEvents(input: {

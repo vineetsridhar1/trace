@@ -207,6 +207,7 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       upsert: vi.fn(),
       findMany: vi.fn(),
+      deleteMany: vi.fn(),
     },
     agentCostTracker: {
       upsert: vi.fn(),
@@ -214,6 +215,7 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
   };
 

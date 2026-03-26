@@ -102,4 +102,70 @@ describe("InboxService", () => {
       actorId: "user-1",
     });
   });
+
+  it("expires only suggestions returned by the expiry query and emits resolution events", async () => {
+    prismaMock.$queryRaw.mockResolvedValueOnce([
+      {
+        id: "item-1",
+        organizationId: "org-1",
+        payload: { expiresAt: "2026-03-25T00:00:00.000Z", existing: true },
+      },
+    ]);
+    prismaMock.inboxItem.update.mockResolvedValueOnce({
+      id: "item-1",
+      organizationId: "org-1",
+      itemType: "ticket_suggestion",
+      payload: { expiresAt: "2026-03-25T00:00:00.000Z", existing: true, resolution: "expired" },
+    });
+
+    const service = new InboxService();
+    const result = await service.expireSuggestions();
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalledOnce();
+    expect(prismaMock.inboxItem.update).toHaveBeenCalledWith({
+      where: { id: "item-1" },
+      data: {
+        status: "expired",
+        resolvedAt: expect.any(Date),
+        payload: {
+          expiresAt: "2026-03-25T00:00:00.000Z",
+          existing: true,
+          resolution: "expired",
+        },
+      },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      scopeType: "system",
+      scopeId: "org-1",
+      eventType: "inbox_item_resolved",
+      payload: {
+        inboxItem: {
+          id: "item-1",
+          organizationId: "org-1",
+          itemType: "ticket_suggestion",
+          payload: {
+            expiresAt: "2026-03-25T00:00:00.000Z",
+            existing: true,
+            resolution: "expired",
+          },
+        },
+        resolution: "expired",
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+    expect(result).toEqual([
+      {
+        id: "item-1",
+        organizationId: "org-1",
+        itemType: "ticket_suggestion",
+        payload: {
+          expiresAt: "2026-03-25T00:00:00.000Z",
+          existing: true,
+          resolution: "expired",
+        },
+      },
+    ]);
+  });
 });
