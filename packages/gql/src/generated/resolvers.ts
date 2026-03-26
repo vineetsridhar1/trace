@@ -76,6 +76,14 @@ export type AiConversation = {
   visibility: AiConversationVisibility;
 };
 
+export type AiConversationEvent = {
+  __typename?: 'AiConversationEvent';
+  conversationId: Scalars['ID']['output'];
+  payload: Scalars['JSON']['output'];
+  timestamp: Scalars['DateTime']['output'];
+  type: Scalars['String']['output'];
+};
+
 export type AiConversationVisibility =
   | 'ORG'
   | 'PRIVATE';
@@ -1287,7 +1295,7 @@ export type Subscription = {
   branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
-  conversationEvents: Event;
+  conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
@@ -1545,6 +1553,7 @@ export type ResolversTypes = ResolversObject<{
   AgentStatus: AgentStatus;
   AgentTrustLevel: AgentTrustLevel;
   AiConversation: ResolverTypeWrapper<AiConversation>;
+  AiConversationEvent: ResolverTypeWrapper<AiConversationEvent>;
   AiConversationVisibility: AiConversationVisibility;
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
@@ -1634,6 +1643,7 @@ export type ResolversParentTypes = ResolversObject<{
   AddChatMemberInput: AddChatMemberInput;
   AgentIdentity: AgentIdentity;
   AiConversation: AiConversation;
+  AiConversationEvent: AiConversationEvent;
   ApiTokenStatus: ApiTokenStatus;
   Boolean: Scalars['Boolean']['output'];
   Branch: Branch;
@@ -1727,6 +1737,14 @@ export type AiConversationResolvers<ContextType = Context, ParentType extends Re
   title?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   visibility?: Resolver<ResolversTypes['AiConversationVisibility'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AiConversationEventResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AiConversationEvent'] = ResolversParentTypes['AiConversationEvent']> = ResolversObject<{
+  conversationId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  payload?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  timestamp?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2138,7 +2156,7 @@ export type SubscriptionResolvers<ContextType = Context, ParentType extends Reso
   branchTurns?: SubscriptionResolver<ResolversTypes['Turn'], "branchTurns", ParentType, ContextType, RequireFields<SubscriptionBranchTurnsArgs, 'branchId'>>;
   channelEvents?: SubscriptionResolver<ResolversTypes['Event'], "channelEvents", ParentType, ContextType, RequireFields<SubscriptionChannelEventsArgs, 'channelId' | 'organizationId'>>;
   chatEvents?: SubscriptionResolver<ResolversTypes['Event'], "chatEvents", ParentType, ContextType, RequireFields<SubscriptionChatEventsArgs, 'chatId'>>;
-  conversationEvents?: SubscriptionResolver<ResolversTypes['Event'], "conversationEvents", ParentType, ContextType, RequireFields<SubscriptionConversationEventsArgs, 'conversationId'>>;
+  conversationEvents?: SubscriptionResolver<ResolversTypes['AiConversationEvent'], "conversationEvents", ParentType, ContextType, RequireFields<SubscriptionConversationEventsArgs, 'conversationId'>>;
   orgEvents?: SubscriptionResolver<ResolversTypes['Event'], "orgEvents", ParentType, ContextType, RequireFields<SubscriptionOrgEventsArgs, 'organizationId'>>;
   sessionPortsChanged?: SubscriptionResolver<ResolversTypes['SessionEndpoints'], "sessionPortsChanged", ParentType, ContextType, RequireFields<SubscriptionSessionPortsChangedArgs, 'organizationId' | 'sessionId'>>;
   sessionStatusChanged?: SubscriptionResolver<ResolversTypes['Session'], "sessionStatusChanged", ParentType, ContextType, RequireFields<SubscriptionSessionStatusChangedArgs, 'organizationId' | 'sessionId'>>;
@@ -2219,6 +2237,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
   AgentIdentity?: AgentIdentityResolvers<ContextType>;
   AiConversation?: AiConversationResolvers<ContextType>;
+  AiConversationEvent?: AiConversationEventResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   Branch?: BranchResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;

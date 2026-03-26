@@ -14,7 +14,7 @@ export const aiConversationQueries = {
     return aiConversationService.getConversations({
       organizationId: args.organizationId,
       userId: ctx.userId,
-      visibility: args.visibility ?? undefined,
+      visibility: args.visibility,
     });
   },
 
@@ -22,18 +22,18 @@ export const aiConversationQueries = {
     return aiConversationService.getConversation(args.id, ctx.userId);
   },
 
-  branch: (_: unknown, args: { id: string }) => {
-    return aiConversationService.getBranch(args.id);
+  branch: (_: unknown, args: { id: string }, ctx: Context) => {
+    return aiConversationService.getBranch(args.id, ctx.userId);
   },
 };
 
 export const aiConversationMutations = {
-  createAiConversation: async (
+  createAiConversation: (
     _: unknown,
     args: { organizationId: string; input: CreateAiConversationInput },
     ctx: Context,
   ) => {
-    const conversation = await aiConversationService.createConversation(
+    return aiConversationService.createConversation(
       {
         organizationId: args.organizationId,
         title: args.input.title ?? undefined,
@@ -42,7 +42,6 @@ export const aiConversationMutations = {
       ctx.actorType,
       ctx.userId,
     );
-    return conversation;
   },
 
   sendTurn: async (
@@ -50,56 +49,33 @@ export const aiConversationMutations = {
     args: { branchId: string; content: string },
     ctx: Context,
   ) => {
-    const { userTurn, assistantTurn } = await aiTurnService.sendTurn(
+    const { assistantTurn } = await aiTurnService.sendTurn(
       { branchId: args.branchId, content: args.content },
       ctx.actorType,
       ctx.userId,
     );
 
-    // Publish both turns to the branch subscription
-    pubsub.publish(topics.branchTurns(args.branchId), {
-      branchTurns: userTurn,
-    });
-    pubsub.publish(topics.branchTurns(args.branchId), {
-      branchTurns: assistantTurn,
-    });
-
-    // Return the assistant turn per the schema (Turn!)
     return assistantTurn;
   },
 
-  updateAiConversationTitle: async (
+  updateAiConversationTitle: (
     _: unknown,
     args: { conversationId: string; title: string },
     ctx: Context,
   ) => {
-    const conversation = await aiConversationService.updateTitle(
+    return aiConversationService.updateTitle(
       { conversationId: args.conversationId, title: args.title },
       ctx.actorType,
       ctx.userId,
     );
-
-    // Publish a conversation event for title change
-    pubsub.publish(topics.conversationEvents(args.conversationId), {
-      conversationEvents: {
-        id: `title-update-${Date.now()}`,
-        scopeType: "system",
-        scopeId: args.conversationId,
-        eventType: "ai_conversation_title_updated",
-        payload: { conversationId: args.conversationId, title: args.title },
-        actorType: ctx.actorType,
-        actorId: ctx.userId,
-        timestamp: new Date().toISOString(),
-      },
-    });
-
-    return conversation;
   },
 };
 
 export const aiConversationSubscriptions = {
   branchTurns: {
-    subscribe: (_: unknown, args: { branchId: string }) => {
+    subscribe: async (_: unknown, args: { branchId: string }, ctx: Context) => {
+      await aiConversationService.assertBranchAccess(args.branchId, ctx.userId);
+
       return pubsub.asyncIterator<{ branchTurns: unknown }>(
         topics.branchTurns(args.branchId),
       );
@@ -107,7 +83,9 @@ export const aiConversationSubscriptions = {
   },
 
   conversationEvents: {
-    subscribe: (_: unknown, args: { conversationId: string }) => {
+    subscribe: async (_: unknown, args: { conversationId: string }, ctx: Context) => {
+      await aiConversationService.assertConversationAccess(args.conversationId, ctx.userId);
+
       return pubsub.asyncIterator<{ conversationEvents: unknown }>(
         topics.conversationEvents(args.conversationId),
       );
@@ -129,7 +107,6 @@ export const aiConversationTypeResolvers = {
 
     rootBranch: (conversation: { rootBranchId: string | null; id: string }) => {
       if (!conversation.rootBranchId) {
-        // Fallback: find the branch with no parent
         return prisma.aiBranch.findFirst({
           where: { conversationId: conversation.id, parentBranchId: null },
         });
@@ -145,7 +122,7 @@ export const aiConversationTypeResolvers = {
       });
     },
 
-    branchCount: async (conversation: { id: string }) => {
+    branchCount: (conversation: { id: string }) => {
       return prisma.aiBranch.count({
         where: { conversationId: conversation.id },
       });

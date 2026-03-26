@@ -73,6 +73,14 @@ export type AiConversation = {
   visibility: AiConversationVisibility;
 };
 
+export type AiConversationEvent = {
+  __typename?: 'AiConversationEvent';
+  conversationId: Scalars['ID']['output'];
+  payload: Scalars['JSON']['output'];
+  timestamp: Scalars['DateTime']['output'];
+  type: Scalars['String']['output'];
+};
+
 export type AiConversationVisibility =
   | 'ORG'
   | 'PRIVATE';
@@ -1284,7 +1292,7 @@ export type Subscription = {
   branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
-  conversationEvents: Event;
+  conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;

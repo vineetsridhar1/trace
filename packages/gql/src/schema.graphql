@@ -557,6 +557,13 @@ type Turn {
   createdAt: DateTime!
 }
 
+type AiConversationEvent {
+  conversationId: ID!
+  type: String!
+  payload: JSON!
+  timestamp: DateTime!
+}
+
 # --- Inputs ---
 
 input CreateChannelInput {
@@ -829,5 +836,5 @@ type Subscription {
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
   branchTurns(branchId: ID!): Turn!
-  conversationEvents(conversationId: ID!): Event!
+  conversationEvents(conversationId: ID!): AiConversationEvent!
 }
