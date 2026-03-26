@@ -66,11 +66,23 @@ async function main() {
   const wsServerCleanup = useServer(
     {
       schema,
-      context: async (ctx) =>
-        buildWsContext(
-          ctx.connectionParams as Record<string, unknown> | undefined,
-          ctx.extra?.request?.headers?.cookie,
-        ),
+      onConnect: async (ctx) => {
+        try {
+          const context = await buildWsContext(
+            ctx.connectionParams as Record<string, unknown> | undefined,
+            ctx.extra?.request?.headers?.cookie,
+          );
+          (ctx.extra as Record<string, unknown>).__context = context;
+          return true;
+        } catch {
+          // Reject unauthenticated connections silently — avoids log spam
+          // from bots, crawlers, or stale clients retrying with expired tokens.
+          return false;
+        }
+      },
+      context: async (ctx) => {
+        return (ctx.extra as Record<string, unknown>).__context as Context;
+      },
     },
     wsServer,
   );
@@ -163,7 +175,7 @@ async function main() {
   await cloudMachineService.restoreFromDb();
 
   const PORT = process.env.PORT ?? 4000 + Number(process.env.TRACE_PORT || 0);
-  httpServer.listen(PORT, () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server ready at http://localhost:${PORT}/graphql`);
     console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
     console.log(`Bridge ready at ws://localhost:${PORT}/bridge`);
