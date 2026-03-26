@@ -26,7 +26,10 @@ export interface ScopeAdapter {
 
   /**
    * Default autonomy mode for this scope type.
-   * Used as a fallback when no scope/project/org override is set.
+   * This is a reference value — the actual resolution happens in
+   * `services/scope-autonomy.ts` which walks: scope → project → chat-type → org.
+   * This method documents what the scope type's natural default is, but it is
+   * not called by the autonomy resolution chain directly.
    */
   getDefaultAutonomyMode(): "observe" | "suggest" | "act";
 

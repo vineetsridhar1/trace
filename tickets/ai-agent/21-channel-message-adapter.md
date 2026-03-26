@@ -57,7 +57,7 @@ Implement adapters for `chat`, `ticket`, `session`, and `channel`. The context b
 - [x] Channel context building logic exists — channel scope fetcher enhanced with member fetching in `context-builder.ts`
 - [x] `ScopeAdapter` interface is defined and implemented for all scope types — `scope-adapter.ts` with chat, ticket, session, channel adapters; wired into aggregator and policy engine
 - [x] Documentation exists describing what channel message events must look like for the agent to process them — `CHANNEL_EVENTS.md`
-- [~] When channel messages are eventually built, adding agent support requires: adding routing entries and implementing the channel scope adapter — no pipeline changes — **Mostly done.** One remaining gap: `executor.ts` needs a `channelService` dispatch case and `ServiceContainer` needs the type. Without this, `message.sendToChannel` will fail at runtime. This is a small addition when channel messages are built.
+- [x] When channel messages are eventually built, adding agent support requires: adding routing entries and implementing the channel scope adapter — no pipeline changes — `executor.ts` has `channelService` dispatch, `ServiceContainer` includes the type, and both `agent-worker.ts` and `schema/inbox.ts` wire it in.
 
 ## Implementation notes
 
@@ -66,7 +66,7 @@ Implement adapters for `chat`, `ticket`, `session`, and `channel`. The context b
 - **Aggregator refactored** to delegate scope key construction to adapters via `getScopeAdapter()` instead of hardcoded switch.
 - **Policy engine** updated: channel suggestion rate limit set to 2/thread/hour; rate limiter now uses `scopeKey` for per-thread granularity.
 - **Channel context builder** now fetches active members (`where: { leftAt: null }`) with user id/name.
-- **Executor gap**: `channelService` is not yet in the executor's `ServiceContainer` or `dispatch()` method. This is intentional — the channel message service API isn't finalized yet. When channel messages are built, add `channelService` to `ServiceContainer` and a dispatch case in `executor.ts`.
+- **Executor wired**: `channelService` added to `ServiceContainer` interface, dispatch case in `executor.ts`, and wired in both `agent-worker.ts` and `schema/inbox.ts`.
 
 ## How to test
 

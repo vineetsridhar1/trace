@@ -129,8 +129,10 @@ function isSuggestionRateLimited(input: {
 
   if (limit <= 0) return true;
 
-  // Use scopeKey for rate limiting when available (enables per-thread limiting)
-  const key = input.scopeKey
+  // Use scopeKey for per-thread rate limiting in channels only.
+  // Chat scopes rate-limit per chat (not per thread) to preserve existing behavior.
+  const usePerThreadKey = input.scopeKey && input.scopeType === "channel";
+  const key = usePerThreadKey
     ? `${input.organizationId}:${input.scopeKey}`
     : suggestionRateKey(input.organizationId, input.scopeType, input.scopeId);
   const now = Date.now();

@@ -9,6 +9,7 @@
 import type { ActorType, EntityType } from "@trace/gql";
 import type { StartSessionServiceInput, SessionService } from "../services/session.js";
 import type { ChatService } from "../services/chat.js";
+import type { ChannelService } from "../services/channel.js";
 import type { InboxService } from "../services/inbox.js";
 import type { CreateTicketServiceInput, TicketService } from "../services/ticket.js";
 import { findAction, validateActionParams } from "./action-registry.js";
@@ -43,6 +44,7 @@ export interface ExecutionResult {
 export interface ServiceContainer {
   ticketService: TicketService;
   chatService: ChatService;
+  channelService: ChannelService;
   sessionService: SessionService;
   inboxService: InboxService;
   /** Forward reference — created in ticket #09 (Entity Summaries). */
@@ -300,6 +302,24 @@ export class ActionExecutor {
 
           default:
             throw new Error(`Unknown inboxService method: ${method}`);
+        }
+      }
+
+      // ---- channelService (ticket #21 — channel message adapter) ----
+      case "channelService": {
+        const svc = this.services.channelService;
+        switch (method) {
+          case "sendMessage":
+            return svc.sendMessage(
+              args.channelId as string,
+              args.text as string,
+              (args.threadId as string | undefined) ?? null,
+              actorType,
+              actorId,
+            );
+
+          default:
+            throw new Error(`Unknown channelService method: ${method}`);
         }
       }
 

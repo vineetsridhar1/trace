@@ -14,11 +14,14 @@ When channel messages are implemented, they must emit events matching this schem
   actorType: "user" | "agent";   // who sent the message
   actorId: string;               // user or agent ID
   payload: {
-    content: string;             // message text content
+    text: string;                // message text content (matches existing event convention)
     html?: string;               // optional HTML-formatted content
     mentions?: Array<{           // @mentions in the message
       userId: string;
     }>;
+    parentMessageId?: string;    // alternative to metadata.threadId for threading
+                                 // (used by chat events — channels should prefer
+                                 // metadata.threadId but both are supported)
   };
   metadata: {
     threadId?: string;           // thread ID for threaded messages
