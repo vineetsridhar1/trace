@@ -52,12 +52,21 @@ Implement adapters for `chat`, `ticket`, `session`, and `channel`. The context b
 
 ## Completion requirements
 
-- [ ] Channel routing rules exist in the router (will activate when channel events start flowing)
-- [ ] Channel action exists in the registry
-- [ ] Channel context building logic exists
-- [ ] `ScopeAdapter` interface is defined and implemented for all scope types
-- [ ] Documentation exists describing what channel message events must look like for the agent to process them
-- [ ] When channel messages are eventually built, adding agent support requires: adding routing entries and implementing the channel scope adapter — no pipeline changes
+- [x] Channel routing rules exist in the router (will activate when channel events start flowing) — `channel_created` added to `LOW_VALUE_EVENT_TYPES` in `router.ts`; `message_sent`/`message_edited` already in `AGGREGATE_EVENT_TYPES`
+- [x] Channel action exists in the registry — `message.sendToChannel` registered in `action-registry.ts`
+- [x] Channel context building logic exists — channel scope fetcher enhanced with member fetching in `context-builder.ts`
+- [x] `ScopeAdapter` interface is defined and implemented for all scope types — `scope-adapter.ts` with chat, ticket, session, channel adapters; wired into aggregator and policy engine
+- [x] Documentation exists describing what channel message events must look like for the agent to process them — `CHANNEL_EVENTS.md`
+- [x] When channel messages are eventually built, adding agent support requires: adding routing entries and implementing the channel scope adapter — no pipeline changes — `executor.ts` has `channelService` dispatch, `ServiceContainer` includes the type, and both `agent-worker.ts` and `schema/inbox.ts` wire it in.
+
+## Implementation notes
+
+<!-- Added after implementation -->
+- **ScopeAdapter interface** is lighter than the spec: includes `buildScopeKey`, `getDefaultAutonomyMode`, `getRateLimit` but omits `fetchEntity` and `fetchParticipants`. Entity fetching remains in the context builder's `scopeFetchers` map to avoid coupling the adapter to Prisma/database concerns. This keeps adapters pure-logic and easy to test.
+- **Aggregator refactored** to delegate scope key construction to adapters via `getScopeAdapter()` instead of hardcoded switch.
+- **Policy engine** updated: channel suggestion rate limit set to 2/thread/hour; rate limiter now uses `scopeKey` for per-thread granularity.
+- **Channel context builder** now fetches active members (`where: { leftAt: null }`) with user id/name.
+- **Executor wired**: `channelService` added to `ServiceContainer` interface, dispatch case in `executor.ts`, and wired in both `agent-worker.ts` and `schema/inbox.ts`.
 
 ## How to test
 

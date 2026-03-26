@@ -1,4 +1,4 @@
-import type { InboxItemType, InboxItemStatus, Prisma } from "@prisma/client";
+import { Prisma, type InboxItemType, type InboxItemStatus } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 
@@ -250,19 +250,22 @@ export class InboxService {
     };
 
     // `expiresAt` is stored as an ISO timestamp, so string comparison preserves time order.
+    // Use Prisma.sql for the enum array to avoid text-vs-enum type mismatch in Postgres.
+    const suggestionTypes = Prisma.sql`ARRAY[
+      'ticket_suggestion',
+      'link_suggestion',
+      'session_suggestion',
+      'field_change_suggestion',
+      'comment_suggestion',
+      'message_suggestion',
+      'agent_suggestion'
+    ]::"InboxItemType"[]`;
+
     const items = await prisma.$queryRaw<ExpirableSuggestionRow[]>`
       SELECT "id", "organizationId", "payload"
       FROM "InboxItem"
-      WHERE "status" = 'active'
-        AND "itemType" IN (
-          ${"ticket_suggestion"},
-          ${"link_suggestion"},
-          ${"session_suggestion"},
-          ${"field_change_suggestion"},
-          ${"comment_suggestion"},
-          ${"message_suggestion"},
-          ${"agent_suggestion"}
-        )
+      WHERE "status" = 'active'::"InboxItemStatus"
+        AND "itemType" = ANY(${suggestionTypes})
         AND COALESCE("payload"->>'expiresAt', '') <> ''
         AND "payload"->>'expiresAt' <= ${nowIso}
     `;

@@ -379,7 +379,11 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
       });
       executionResults.push({ ...result, decision: "execute" });
 
-      if (actionResult.action.actionType === "message.send" && result.status === "success") {
+      if (
+        (actionResult.action.actionType === "message.send" ||
+          actionResult.action.actionType === "message.sendToChannel") &&
+        result.status === "success"
+      ) {
         state.anyMessageSendExecuted = true;
       }
 
@@ -720,6 +724,13 @@ async function postLoop(input: PostLoopInput): Promise<void> {
     await forceMentionReply(state, agentSettings, executor, log, logError);
   }
 
+  // ── Auto-reply in thread after taking action ──
+  // In chat/channel scopes, send a brief thread reply so people know
+  // the agent did something. Skip if we already sent a message or in observe mode.
+  if (!state.anyMessageSendExecuted && state.packet.permissions.autonomyMode !== "observe") {
+    await sendActionConfirmation(state, agentSettings, executor, logger);
+  }
+
   // Record aggregated cost
   try {
     await costTrackingService.recordCost({
@@ -851,6 +862,109 @@ async function forceMentionReply(
     state.anyMessageSendExecuted = true;
   } catch (err) {
     logError("@mention fallback execution failed", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Action confirmation reply
+// ---------------------------------------------------------------------------
+
+/**
+ * Send a brief thread reply in chat/channel scopes after the agent executes
+ * actions or creates suggestions, so people know the agent did something.
+ *
+ * Only fires when:
+ * - Scope is chat or channel
+ * - At least one action was executed or suggestion was created
+ * - No message.send was already executed this pipeline run
+ */
+async function sendActionConfirmation(
+  state: LoopState,
+  agentSettings: OrgAgentSettings,
+  executor: ActionExecutor,
+  logger: PipelineLogger,
+): Promise<void> {
+  const { scopeType, scopeId } = state.packet;
+  if (scopeType !== "chat" && scopeType !== "channel") return;
+
+  const allExecuted = state.turnResults.flatMap((t) => t.executed);
+  const allSuggested = state.turnResults.flatMap((t) => t.suggested);
+
+  // Only reply if something actually happened
+  const executedNonMessage = allExecuted.filter(
+    (r) => r.status === "success" && r.actionType !== "message.send" && r.actionType !== "message.sendToChannel" && r.actionType !== "no_op",
+  );
+  const hasSuggestions = allSuggested.length > 0;
+
+  if (executedNonMessage.length === 0 && !hasSuggestions) return;
+
+  // Build a brief confirmation message
+  const parts: string[] = [];
+  for (const action of executedNonMessage) {
+    parts.push(formatActionConfirmation(action.actionType));
+  }
+  if (hasSuggestions) {
+    const count = allSuggested.length;
+    parts.push(
+      count === 1
+        ? "I have a suggestion — check your inbox."
+        : `I have ${count} suggestions — check your inbox.`,
+    );
+  }
+
+  if (parts.length === 0) return;
+
+  const text = parts.join("\n");
+
+  // Thread to the trigger message
+  const triggerMessageId = state.packet.triggerEvent.payload.messageId as string | undefined;
+  const parentId = triggerMessageId ?? state.packet.triggerEvent.id;
+
+  const actionType = scopeType === "channel" ? "message.sendToChannel" : "message.send";
+  const args =
+    scopeType === "channel"
+      ? { channelId: scopeId, text, threadId: parentId }
+      : { chatId: scopeId, text, parentId };
+
+  try {
+    await executor.execute(
+      { actionType, args },
+      {
+        organizationId: state.packet.organizationId,
+        agentId: agentSettings.agentId,
+        triggerEventId: state.packet.triggerEvent.id,
+      },
+    );
+    state.anyMessageSendExecuted = true;
+    logger.log("action confirmation sent", {
+      scopeKey: state.packet.scopeKey,
+      executedActions: executedNonMessage.length,
+      suggestions: allSuggested.length,
+    });
+  } catch (err) {
+    logger.logError("action confirmation failed (non-fatal)", err);
+  }
+}
+
+/** Map action types to human-readable confirmation messages. */
+function formatActionConfirmation(actionType: string): string {
+  switch (actionType) {
+    case "ticket.create":
+      return "Done — I created a ticket for this.";
+    case "ticket.update":
+      return "Done — I updated the ticket.";
+    case "ticket.addComment":
+      return "Done — I added a comment to the ticket.";
+    case "link.create":
+      return "Done — I linked the related items.";
+    case "session.start":
+      return "Done — I started a coding session.";
+    case "summary.update":
+      return "Done — I updated the summary.";
+    case "escalate.toHuman":
+      return "I've escalated this to a human — check your inbox.";
+    default:
+      return `Done — I completed: ${actionType}.`;
   }
 }
 

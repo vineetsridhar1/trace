@@ -6,12 +6,14 @@ import { ActionExecutor, type PlannedAction, type AgentContext } from "../agent/
 import { ticketService } from "../services/ticket.js";
 import { chatService } from "../services/chat.js";
 import { sessionService } from "../services/session.js";
+import { channelService } from "../services/channel.js";
 import { recordDismissal } from "../agent/policy-engine.js";
 
 /** Shared executor — reused across resolver calls to preserve idempotency state. */
 const executor = new ActionExecutor({
   ticketService,
   chatService,
+  channelService,
   sessionService,
   inboxService,
 });

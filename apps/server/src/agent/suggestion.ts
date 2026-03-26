@@ -306,20 +306,35 @@ export async function createSuggestions(input: CreateSuggestionsInput) {
 // Title generation
 // ---------------------------------------------------------------------------
 
+/**
+ * Generate a dedup-friendly title that includes distinguishing content.
+ * This title is used for Levenshtein comparison — it must include enough
+ * detail to differentiate suggestions of the same type with different content.
+ */
 function generateTitle(actionType: string, args: Record<string, unknown>): string {
   switch (actionType) {
     case "ticket.create":
       return `Suggested ticket: ${(args.title as string) || "New ticket"}`;
-    case "ticket.update":
-      return `Suggested update to ticket`;
-    case "ticket.addComment":
-      return `Suggested comment on ticket`;
+    case "ticket.update": {
+      const ticketId = (args.id as string) || "";
+      const fields = Object.keys(args).filter((k) => k !== "id").join(", ");
+      return `Suggested update to ticket ${ticketId}: ${fields || "fields"}`.trim();
+    }
+    case "ticket.addComment": {
+      const preview = typeof args.text === "string" ? args.text.slice(0, 80) : "";
+      return `Suggested comment on ticket ${(args.ticketId as string) || ""}: ${preview}`.trim();
+    }
     case "link.create":
-      return `Suggested link between entities`;
-    case "session.start":
-      return `Suggested coding session`;
+      return `Suggested link: ${(args.entityType as string) || ""} ${(args.entityId as string) || ""}`.trim();
+    case "session.start": {
+      const prompt = typeof args.prompt === "string" ? args.prompt.slice(0, 120) : "";
+      return `Suggested coding session: ${prompt || "no prompt"}`;
+    }
     case "message.send":
-      return `Suggested message`;
+    case "message.sendToChannel": {
+      const text = typeof args.text === "string" ? args.text.slice(0, 200) : "";
+      return `Suggested message: ${text || "no content"}`;
+    }
     default:
       return `Agent suggestion: ${actionType}`;
   }
