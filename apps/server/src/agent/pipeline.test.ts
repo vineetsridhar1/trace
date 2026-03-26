@@ -138,6 +138,7 @@ function makePacket(overrides?: Partial<AgentContextPacket>): AgentContextPacket
     scopeId: "ch-1",
     isDm: false,
     isMention: false,
+    isAgentActiveThread: false,
     triggerEvent: {
       id: "evt-1",
       organizationId: "org-1",

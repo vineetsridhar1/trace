@@ -46,6 +46,9 @@ function makeContextPacket(overrides?: Partial<AgentContextPacket>): AgentContex
         timestamp: "2026-03-24T10:00:00Z",
       },
     ],
+    isDm: false,
+    isMention: false,
+    isAgentActiveThread: false,
     soulFile: "You are a helpful assistant.",
     scopeEntity: {
       type: "chat",

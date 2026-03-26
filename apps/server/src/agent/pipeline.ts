@@ -406,10 +406,30 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
   }
 
   // ── Create suggestions ──
+  // Skip suggestion creation when the user is already in a conversation with
+  // the agent. The agent is handling these messages directly — creating sidebar
+  // suggestions or inbox items would be redundant noise.
+  const suppressSuggestions =
+    state.packet.isDm || state.packet.isMention || state.packet.isAgentActiveThread;
   const suggests = byDecision.get("suggest") ?? [];
   let createdSuggestions: Array<{ actionType: string; itemType: string }> = [];
   let suppressedSuggestions: Array<{ actionType: string; reason: string }> = [];
-  if (suggests.length > 0) {
+  if (suppressSuggestions && suggests.length > 0) {
+    suppressedSuggestions = suggests.map((s) => ({
+      actionType: s.action.actionType,
+      reason: state.packet.isDm
+        ? "dm_conversation"
+        : state.packet.isMention
+          ? "mention_conversation"
+          : "agent_active_thread",
+    }));
+    log("suggestions suppressed — agent is handling conversation directly", {
+      scopeKey: state.packet.scopeKey,
+      turn,
+      suppressedCount: suggests.length,
+      reason: suppressedSuggestions[0]?.reason,
+    });
+  } else if (suggests.length > 0) {
     try {
       const triggerActorType = state.packet.triggerEvent.actorType;
       const triggerActorId = state.packet.triggerEvent.actorId;

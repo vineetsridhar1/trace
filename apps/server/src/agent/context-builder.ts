@@ -67,6 +67,15 @@ export interface AgentContextPacket {
   /** Whether the trigger event is an @mention of the agent. */
   isMention: boolean;
 
+  /**
+   * Whether the agent has recently been active in this scope (sent messages).
+   * True when the batch or recent events contain agent-authored messages,
+   * indicating the user is in an active conversation with the agent.
+   * Used to suppress suggestion/inbox item generation — the agent is already
+   * handling this conversation directly.
+   */
+  isAgentActiveThread: boolean;
+
   /** The most recent event in the batch — the primary trigger. */
   triggerEvent: AgentEvent;
 
@@ -949,6 +958,18 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
   const actors = await resolveActors([...events, ...recentTruncated]);
   recordSection("actors", estimateObjectTokens(actors));
 
+  // --- 10. Detect active agent thread ---
+  // If the agent has recently sent messages in this scope, the user is in an
+  // active conversation with the agent. Suggestions would be redundant.
+  const agentId = agentSettings.agentId;
+  const allScopeEvents = [...events, ...recentTruncated];
+  const isAgentActiveThread = allScopeEvents.some(
+    (e) =>
+      e.actorType === "agent" &&
+      e.actorId === agentId &&
+      (e.eventType === "message_sent" || e.eventType === "message_edited"),
+  );
+
   return {
     organizationId,
     scopeKey,
@@ -956,6 +977,7 @@ export async function buildContext(input: BuildContextInput): Promise<AgentConte
     scopeId,
     isDm: isDmScope,
     isMention: isTriggerMention(triggerEvent, agentSettings.agentId),
+    isAgentActiveThread,
     triggerEvent,
     eventBatch,
     soulFile,
