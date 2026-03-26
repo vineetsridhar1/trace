@@ -172,6 +172,8 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
 
   // ── Multi-turn loop ──
   for (let turn = 1; turn <= MAX_ITERATIONS; turn++) {
+    log(`── turn ${turn}/${MAX_ITERATIONS} start ──`, { scopeKey: packet.scopeKey });
+
     // ── Step 1: Construct user message ──
     if (turn === 1) {
       messageHistory.push({
@@ -217,7 +219,9 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       disposition: plannerOutput.disposition,
       confidence: plannerOutput.confidence,
       actionCount: plannerOutput.proposedActions.length,
+      actions: plannerOutput.proposedActions.map((a) => a.actionType),
       done: plannerOutput.done ?? false,
+      rationale: plannerOutput.rationaleSummary,
       model: llmResponse.model,
       tier: currentTier,
       promoted,
@@ -569,6 +573,12 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       dropped: turnRecord.dropped,
       note: `Turn ${turn} of ${MAX_ITERATIONS} complete. ${turnsRemaining} turn${turnsRemaining === 1 ? "" : "s"} remaining. Set done=true if finished.`,
     };
+
+    log("feeding results back to planner", {
+      scopeKey: packet.scopeKey,
+      turn,
+      toolResult: toolResultPayload,
+    });
 
     messageHistory.push({
       role: "tool",
