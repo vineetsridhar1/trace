@@ -354,6 +354,13 @@ function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
+/** Append all system instructions (title, auto-save) to a prompt in the correct order. */
+function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolean }): string {
+  let result = prompt + TITLE_INSTRUCTION;
+  result = appendAutoSave(result, hasRepo);
+  return result;
+}
+
 function buildBaseBranchInstruction(baseBranch: string): string {
   return `\n\n<system-instruction>
 This session is working off the base branch "${baseBranch}". All work should be branched from this base branch, and when merging, merge into "${baseBranch}" (not main/master). When pushing, ensure your branch is based on origin/${baseBranch}.
@@ -1039,15 +1046,10 @@ export class SessionService {
       }
     }
 
-    // Append title instruction on every prompt so the AI can update the title at any time
+    // Append system instructions (title, auto-save) to the prompt
     const isFirstRun = !session.toolSessionId;
     if (resolvedPrompt) {
-      resolvedPrompt = resolvedPrompt + TITLE_INSTRUCTION;
-    }
-
-    // Append auto-save instruction for repo-based sessions
-    if (resolvedPrompt) {
-      resolvedPrompt = appendAutoSave(resolvedPrompt, !!session.repo);
+      resolvedPrompt = appendPromptInstructions(resolvedPrompt, { hasRepo: !!session.repo });
     }
 
     // Append base branch instruction when the channel specifies one
@@ -1689,11 +1691,8 @@ export class SessionService {
       prompt = await prependSourceSessionContext(startMeta.sourceSessionId, prompt);
     }
 
-    // Append title instruction so the AI can update the session title
-    prompt = prompt + TITLE_INSTRUCTION;
-
-    // Append auto-save instruction for repo-based sessions
-    prompt = appendAutoSave(prompt, !!session.repoId);
+    // Append system instructions (title, auto-save) to the prompt
+    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
 
     const checkpointContext =
       session.repoId && session.sessionGroupId
@@ -3232,14 +3231,9 @@ export class SessionService {
       }
     }
 
-    // Append title instruction so the AI can set or update the session title
+    // Append system instructions (title, auto-save) to the prompt
     if (prompt) {
-      prompt = prompt + TITLE_INSTRUCTION;
-    }
-
-    // Append auto-save instruction for repo-based sessions
-    if (prompt) {
-      prompt = appendAutoSave(prompt, !!session.repoId);
+      prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
     }
 
     const fallbackCheckpointContext =

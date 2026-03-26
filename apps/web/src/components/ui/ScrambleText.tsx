@@ -36,11 +36,12 @@ export function ScrambleText({ text, className, speed = 20 }: ScrambleTextProps)
     if (intervalRef.current) clearInterval(intervalRef.current);
 
     let rev = 0;
+    const step = Math.max(1, Math.ceil(text.length / 20));
     setRevealed(0);
     setScrambled(scramble(text));
 
     intervalRef.current = setInterval(() => {
-      rev += 3;
+      rev += step;
       if (rev >= text.length) {
         setRevealed(text.length);
         setScrambled("");
