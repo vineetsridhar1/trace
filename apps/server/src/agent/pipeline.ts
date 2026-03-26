@@ -726,8 +726,8 @@ async function postLoop(input: PostLoopInput): Promise<void> {
 
   // ── Auto-reply in thread after taking action ──
   // In chat/channel scopes, send a brief thread reply so people know
-  // the agent did something. Skip if we already sent a message.
-  if (!state.anyMessageSendExecuted) {
+  // the agent did something. Skip if we already sent a message or in observe mode.
+  if (!state.anyMessageSendExecuted && state.packet.permissions.autonomyMode !== "observe") {
     await sendActionConfirmation(state, agentSettings, executor, logger);
   }
 

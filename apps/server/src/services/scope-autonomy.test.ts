@@ -5,6 +5,12 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
+vi.mock("./org-member.js", () => ({
+  orgMemberService: {
+    assertAdmin: vi.fn().mockResolvedValue({ role: "admin" }),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { resolveAutonomyMode, updateScopeAiMode } from "./scope-autonomy.js";
 
@@ -159,7 +165,7 @@ describe("updateScopeAiMode", () => {
   it("updates chat aiMode", async () => {
     prismaMock.chat.update.mockResolvedValueOnce({});
 
-    await updateScopeAiMode({ scopeType: "chat", scopeId: "chat-1", aiMode: "observe" });
+    await updateScopeAiMode({ scopeType: "chat", scopeId: "chat-1", aiMode: "observe", userId: "user-1", organizationId: "org-1" });
 
     expect(prismaMock.chat.update).toHaveBeenCalledWith({
       where: { id: "chat-1" },
@@ -170,7 +176,7 @@ describe("updateScopeAiMode", () => {
   it("clears override when aiMode is null", async () => {
     prismaMock.ticket.update.mockResolvedValueOnce({});
 
-    await updateScopeAiMode({ scopeType: "ticket", scopeId: "ticket-1", aiMode: null });
+    await updateScopeAiMode({ scopeType: "ticket", scopeId: "ticket-1", aiMode: null, userId: "user-1", organizationId: "org-1" });
 
     expect(prismaMock.ticket.update).toHaveBeenCalledWith({
       where: { id: "ticket-1" },
@@ -180,7 +186,7 @@ describe("updateScopeAiMode", () => {
 
   it("throws for unsupported scope type", async () => {
     await expect(
-      updateScopeAiMode({ scopeType: "session", scopeId: "sess-1", aiMode: "act" }),
+      updateScopeAiMode({ scopeType: "session", scopeId: "sess-1", aiMode: "act", userId: "user-1", organizationId: "org-1" }),
     ).rejects.toThrow("Cannot set aiMode on scope type: session");
   });
 });
