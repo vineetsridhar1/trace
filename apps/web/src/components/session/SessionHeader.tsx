@@ -23,6 +23,7 @@ import {
 } from "./sessionStatus";
 import { AgentStatusIcon } from "./AgentStatusIcon";
 import { SessionHistory } from "./SessionHistory";
+import { ScrambleText } from "../ui/ScrambleText";
 
 export function SessionHeader({
   sessionId,
@@ -122,7 +123,9 @@ export function SessionHeader({
       )}
 
       <div className="min-w-0 flex-1">
-        <h2 className="text-sm font-semibold text-foreground truncate">{name ?? "Session"}</h2>
+        <h2 className="text-sm font-semibold text-foreground truncate">
+          <ScrambleText text={name ?? "Session"} />
+        </h2>
       </div>
 
       {runtimeDisplayLabel && (

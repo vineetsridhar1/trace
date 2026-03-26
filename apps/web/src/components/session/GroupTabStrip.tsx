@@ -3,6 +3,7 @@ import { Circle, FileCode, GitCompareArrows, MessageSquarePlus, Plus, TerminalSq
 import type { SessionEntity } from "../../stores/entity";
 import type { TerminalEntry } from "../../stores/terminal";
 import { cn } from "../../lib/utils";
+import { ScrambleText } from "../ui/ScrambleText";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
 import {
   DropdownMenu,
@@ -142,7 +143,7 @@ export function GroupTabStrip({
                   className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
                 >
                   <Circle size={6} className={cn("shrink-0 fill-current", color)} />
-                  <span className="truncate">{session.name}</span>
+                  <span className="truncate"><ScrambleText text={session.name} /></span>
                 </button>
                 {canCloseSessions && onCloseSession && (
                   <button
