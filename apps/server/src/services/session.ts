@@ -538,11 +538,17 @@ export class SessionService {
     throw new Error("No connected runtime available for this session group");
   }
 
-  async listGroups(channelId: string, organizationId: string) {
+  async listGroups(
+    channelId: string,
+    organizationId: string,
+    options?: { excludeStatuses?: string[] },
+  ) {
     const groups = await prisma.sessionGroup.findMany({
       where: { channelId, organizationId },
       include: SESSION_GROUP_INCLUDE,
     });
+
+    const excludeStatuses = options?.excludeStatuses;
 
     return groups
       .map((group) => {
@@ -551,6 +557,12 @@ export class SessionService {
           ...buildSessionGroupSnapshot(group, sessions),
           sessions,
         };
+      })
+      .filter((group) => {
+        if (excludeStatuses && excludeStatuses.length > 0) {
+          return !excludeStatuses.includes(group.status);
+        }
+        return true;
       })
       .sort((a, b) => {
         const aLatest = a.sessions[0];

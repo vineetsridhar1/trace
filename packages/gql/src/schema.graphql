@@ -828,7 +828,7 @@ type Query {
   channels(organizationId: ID!, projectId: ID, memberOnly: Boolean): [Channel!]!
   channelGroups(organizationId: ID!): [ChannelGroup!]!
   channel(id: ID!): Channel
-  sessionGroups(channelId: ID!): [SessionGroup!]!
+  sessionGroups(channelId: ID!, excludeStatuses: [SessionGroupStatus!]): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session

@@ -23,6 +23,9 @@ export function bucketize(ts: string | undefined): number {
 
 export const collapsedByDefault = new Set(["merged", "failed", "stopped"]);
 
+/** Sentinel ID for the placeholder row that keeps the "Merged" group visible before data is fetched. */
+export const MERGED_PLACEHOLDER_ID = "__merged_placeholder__";
+
 export const sessionStatusGroupOrder: Record<string, number> = {
   needs_input: 0,
   in_review: 1,
