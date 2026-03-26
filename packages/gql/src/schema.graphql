@@ -437,6 +437,108 @@ type CostBudget {
   dailyLimitCents: Int!
 }
 
+# --- Agent Debug Console Types ---
+
+enum ExecutionDisposition {
+  ignore
+  suggest
+  act
+  summarize
+  escalate
+}
+
+enum ExecutionStatus {
+  succeeded
+  suggested
+  blocked
+  dropped
+  failed
+}
+
+enum ModelTier {
+  tier2
+  tier3
+}
+
+type AgentExecutionLog {
+  id: ID!
+  organizationId: ID!
+  triggerEventId: String!
+  batchSize: Int!
+  agentId: String!
+  modelTier: ModelTier!
+  model: String!
+  promoted: Boolean!
+  promotionReason: String
+  inputTokens: Int!
+  outputTokens: Int!
+  estimatedCostCents: Float!
+  contextTokenAllocation: JSON
+  disposition: ExecutionDisposition!
+  confidence: Float!
+  plannedActions: JSON
+  policyDecision: JSON
+  finalActions: JSON
+  status: ExecutionStatus!
+  inboxItemId: String
+  latencyMs: Int!
+  createdAt: DateTime!
+}
+
+type AgentExecutionLogConnection {
+  items: [AgentExecutionLog!]!
+  totalCount: Int!
+}
+
+type AgentCostEntry {
+  id: ID!
+  organizationId: ID!
+  date: String!
+  totalCostCents: Float!
+  tier2Calls: Int!
+  tier2CostCents: Float!
+  tier3Calls: Int!
+  tier3CostCents: Float!
+  summaryCalls: Int!
+  summaryCostCents: Float!
+}
+
+type AgentBudgetStatus {
+  dailyLimitCents: Int!
+  spentCents: Float!
+  remainingCents: Float!
+  remainingPercent: Float!
+}
+
+type AgentCostSummary {
+  budget: AgentBudgetStatus!
+  dailyCosts: [AgentCostEntry!]!
+}
+
+type AgentWorkerStatus {
+  running: Boolean!
+  uptime: Int
+  openAggregationWindows: Int!
+  activeOrganizations: Int!
+}
+
+type AggregationWindowInfo {
+  scopeKey: String!
+  organizationId: ID!
+  eventCount: Int!
+  openedAt: DateTime!
+  lastEventAt: DateTime!
+}
+
+input ExecutionLogFilters {
+  status: ExecutionStatus
+  disposition: ExecutionDisposition
+  startDate: DateTime
+  endDate: DateTime
+  limit: Int
+  offset: Int
+}
+
 type ThreadSummary {
   rootMessageId: ID!
   replyCount: Int!
@@ -699,6 +801,11 @@ type Query {
   sessionTerminals(sessionId: ID!): [Terminal!]!
   agentIdentity(organizationId: ID!): AgentIdentity
   resolvedAiMode(organizationId: ID!, scopeType: String!, scopeId: ID!): AutonomyMode!
+  agentExecutionLogs(organizationId: ID!, filters: ExecutionLogFilters): AgentExecutionLogConnection!
+  agentExecutionLog(organizationId: ID!, id: ID!): AgentExecutionLog
+  agentCostSummary(organizationId: ID!, startDate: String!, endDate: String!): AgentCostSummary!
+  agentWorkerStatus(organizationId: ID!): AgentWorkerStatus!
+  agentAggregationWindows(organizationId: ID!): [AggregationWindowInfo!]!
 }
 
 type Terminal {

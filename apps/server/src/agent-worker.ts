@@ -31,6 +31,7 @@ import { sessionService } from "./services/session.js";
 import { inboxService } from "./services/inbox.js";
 import { channelService } from "./services/channel.js";
 import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
+import { publishWorkerStatus, publishAggregationWindows } from "./services/agent-worker-status.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -488,6 +489,24 @@ function sleep(ms: number): Promise<void> {
 
 let orgPollTimer: ReturnType<typeof setInterval> | null = null;
 let rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null;
+let statusHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+const workerStartedAt = Date.now();
+
+function startStatusHeartbeat(): void {
+  // Publish status immediately, then every 15 seconds
+  const publish = () => {
+    publishWorkerStatus({
+      running: !shuttingDown,
+      startedAt: workerStartedAt,
+      openAggregationWindows: aggregator.openWindowCount,
+      activeOrganizations: activeOrgs.size,
+      lastHeartbeat: Date.now(),
+    }).catch(() => {});
+    publishAggregationWindows(aggregator.getOpenWindows()).catch(() => {});
+  };
+  publish();
+  statusHeartbeatTimer = setInterval(publish, 15_000);
+}
 
 function startOrgPolling(): void {
   orgPollTimer = setInterval(() => {
@@ -512,6 +531,10 @@ function stopTimers(): void {
   if (rateLimitCleanupTimer) {
     clearInterval(rateLimitCleanupTimer);
     rateLimitCleanupTimer = null;
+  }
+  if (statusHeartbeatTimer) {
+    clearInterval(statusHeartbeatTimer);
+    statusHeartbeatTimer = null;
   }
 }
 
@@ -613,6 +636,10 @@ async function main(): Promise<void> {
   // Start the suggestion expiry worker
   startSuggestionExpiryWorker();
   log("suggestion expiry worker started");
+
+  // Start publishing worker status to Redis for the debug console
+  startStatusHeartbeat();
+  log("status heartbeat started");
 
   // Enter the main consume loop (blocks until shutdown)
   await consumeLoop();

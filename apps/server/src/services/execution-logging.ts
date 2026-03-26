@@ -91,6 +91,33 @@ export class ExecutionLoggingService {
     });
   }
 
+  async getById(input: { organizationId: string; id: string }) {
+    return prisma.agentExecutionLog.findFirst({
+      where: {
+        id: input.id,
+        organizationId: input.organizationId,
+      },
+    });
+  }
+
+  async count(input: Omit<QueryExecutionLogsInput, "limit" | "offset">) {
+    const where: Prisma.AgentExecutionLogWhereInput = {
+      organizationId: input.organizationId,
+    };
+
+    if (input.startDate || input.endDate) {
+      const createdAt: { gte?: Date; lte?: Date } = {};
+      if (input.startDate) createdAt.gte = input.startDate;
+      if (input.endDate) createdAt.lte = input.endDate;
+      where.createdAt = createdAt;
+    }
+
+    if (input.status) where.status = input.status;
+    if (input.agentId) where.agentId = input.agentId;
+
+    return prisma.agentExecutionLog.count({ where });
+  }
+
   async getByTriggerEvent(input: {
     organizationId: string;
     triggerEventId: string;

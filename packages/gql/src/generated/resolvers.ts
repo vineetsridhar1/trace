@@ -38,6 +38,66 @@ export type AddChatMemberInput = {
   userId: Scalars['ID']['input'];
 };
 
+export type AgentBudgetStatus = {
+  __typename?: 'AgentBudgetStatus';
+  dailyLimitCents: Scalars['Int']['output'];
+  remainingCents: Scalars['Float']['output'];
+  remainingPercent: Scalars['Float']['output'];
+  spentCents: Scalars['Float']['output'];
+};
+
+export type AgentCostEntry = {
+  __typename?: 'AgentCostEntry';
+  date: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  organizationId: Scalars['ID']['output'];
+  summaryCalls: Scalars['Int']['output'];
+  summaryCostCents: Scalars['Float']['output'];
+  tier2Calls: Scalars['Int']['output'];
+  tier2CostCents: Scalars['Float']['output'];
+  tier3Calls: Scalars['Int']['output'];
+  tier3CostCents: Scalars['Float']['output'];
+  totalCostCents: Scalars['Float']['output'];
+};
+
+export type AgentCostSummary = {
+  __typename?: 'AgentCostSummary';
+  budget: AgentBudgetStatus;
+  dailyCosts: Array<AgentCostEntry>;
+};
+
+export type AgentExecutionLog = {
+  __typename?: 'AgentExecutionLog';
+  agentId: Scalars['String']['output'];
+  batchSize: Scalars['Int']['output'];
+  confidence: Scalars['Float']['output'];
+  contextTokenAllocation?: Maybe<Scalars['JSON']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  disposition: ExecutionDisposition;
+  estimatedCostCents: Scalars['Float']['output'];
+  finalActions?: Maybe<Scalars['JSON']['output']>;
+  id: Scalars['ID']['output'];
+  inboxItemId?: Maybe<Scalars['String']['output']>;
+  inputTokens: Scalars['Int']['output'];
+  latencyMs: Scalars['Int']['output'];
+  model: Scalars['String']['output'];
+  modelTier: ModelTier;
+  organizationId: Scalars['ID']['output'];
+  outputTokens: Scalars['Int']['output'];
+  plannedActions?: Maybe<Scalars['JSON']['output']>;
+  policyDecision?: Maybe<Scalars['JSON']['output']>;
+  promoted: Scalars['Boolean']['output'];
+  promotionReason?: Maybe<Scalars['String']['output']>;
+  status: ExecutionStatus;
+  triggerEventId: Scalars['String']['output'];
+};
+
+export type AgentExecutionLogConnection = {
+  __typename?: 'AgentExecutionLogConnection';
+  items: Array<AgentExecutionLog>;
+  totalCount: Scalars['Int']['output'];
+};
+
 export type AgentIdentity = {
   __typename?: 'AgentIdentity';
   autonomyMode: AutonomyMode;
@@ -62,6 +122,23 @@ export type AgentTrustLevel =
   | 'autonomous'
   | 'blocked'
   | 'suggest';
+
+export type AgentWorkerStatus = {
+  __typename?: 'AgentWorkerStatus';
+  activeOrganizations: Scalars['Int']['output'];
+  openAggregationWindows: Scalars['Int']['output'];
+  running: Scalars['Boolean']['output'];
+  uptime?: Maybe<Scalars['Int']['output']>;
+};
+
+export type AggregationWindowInfo = {
+  __typename?: 'AggregationWindowInfo';
+  eventCount: Scalars['Int']['output'];
+  lastEventAt: Scalars['DateTime']['output'];
+  openedAt: Scalars['DateTime']['output'];
+  organizationId: Scalars['ID']['output'];
+  scopeKey: Scalars['String']['output'];
+};
 
 export type ApiTokenProvider =
   | 'anthropic'
@@ -281,6 +358,29 @@ export type EventType =
   | 'ticket_unlinked'
   | 'ticket_updated';
 
+export type ExecutionDisposition =
+  | 'act'
+  | 'escalate'
+  | 'ignore'
+  | 'suggest'
+  | 'summarize';
+
+export type ExecutionLogFilters = {
+  disposition?: InputMaybe<ExecutionDisposition>;
+  endDate?: InputMaybe<Scalars['DateTime']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  startDate?: InputMaybe<Scalars['DateTime']['input']>;
+  status?: InputMaybe<ExecutionStatus>;
+};
+
+export type ExecutionStatus =
+  | 'blocked'
+  | 'dropped'
+  | 'failed'
+  | 'succeeded'
+  | 'suggested';
+
 export type GitCheckpoint = {
   __typename?: 'GitCheckpoint';
   author: Scalars['String']['output'];
@@ -357,6 +457,10 @@ export type Message = {
   threadRepliers: Array<Actor>;
   updatedAt: Scalars['DateTime']['output'];
 };
+
+export type ModelTier =
+  | 'tier2'
+  | 'tier3';
 
 export type MoveChannelInput = {
   channelId: Scalars['ID']['input'];
@@ -848,7 +952,12 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
+  agentAggregationWindows: Array<AggregationWindowInfo>;
+  agentCostSummary: AgentCostSummary;
+  agentExecutionLog?: Maybe<AgentExecutionLog>;
+  agentExecutionLogs: AgentExecutionLogConnection;
   agentIdentity?: Maybe<AgentIdentity>;
+  agentWorkerStatus: AgentWorkerStatus;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   channel?: Maybe<Channel>;
@@ -887,7 +996,36 @@ export type Query = {
 };
 
 
+export type QueryAgentAggregationWindowsArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentCostSummaryArgs = {
+  endDate: Scalars['String']['input'];
+  organizationId: Scalars['ID']['input'];
+  startDate: Scalars['String']['input'];
+};
+
+
+export type QueryAgentExecutionLogArgs = {
+  id: Scalars['ID']['input'];
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentExecutionLogsArgs = {
+  filters?: InputMaybe<ExecutionLogFilters>;
+  organizationId: Scalars['ID']['input'];
+};
+
+
 export type QueryAgentIdentityArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentWorkerStatusArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
@@ -1471,9 +1609,16 @@ export type ResolversTypes = ResolversObject<{
   Actor: ResolverTypeWrapper<Actor>;
   ActorType: ActorType;
   AddChatMemberInput: AddChatMemberInput;
+  AgentBudgetStatus: ResolverTypeWrapper<AgentBudgetStatus>;
+  AgentCostEntry: ResolverTypeWrapper<AgentCostEntry>;
+  AgentCostSummary: ResolverTypeWrapper<AgentCostSummary>;
+  AgentExecutionLog: ResolverTypeWrapper<AgentExecutionLog>;
+  AgentExecutionLogConnection: ResolverTypeWrapper<AgentExecutionLogConnection>;
   AgentIdentity: ResolverTypeWrapper<AgentIdentity>;
   AgentStatus: AgentStatus;
   AgentTrustLevel: AgentTrustLevel;
+  AgentWorkerStatus: ResolverTypeWrapper<AgentWorkerStatus>;
+  AggregationWindowInfo: ResolverTypeWrapper<AggregationWindowInfo>;
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
   AutonomyMode: AutonomyMode;
@@ -1499,6 +1644,10 @@ export type ResolversTypes = ResolversObject<{
   EntityType: EntityType;
   Event: ResolverTypeWrapper<Event>;
   EventType: EventType;
+  ExecutionDisposition: ExecutionDisposition;
+  ExecutionLogFilters: ExecutionLogFilters;
+  ExecutionStatus: ExecutionStatus;
+  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   GitCheckpoint: ResolverTypeWrapper<GitCheckpoint>;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
@@ -1508,6 +1657,7 @@ export type ResolversTypes = ResolversObject<{
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   Message: ResolverTypeWrapper<Message>;
+  ModelTier: ModelTier;
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
   Notification: ResolverTypeWrapper<Notification>;
@@ -1557,7 +1707,14 @@ export type ResolversTypes = ResolversObject<{
 export type ResolversParentTypes = ResolversObject<{
   Actor: Actor;
   AddChatMemberInput: AddChatMemberInput;
+  AgentBudgetStatus: AgentBudgetStatus;
+  AgentCostEntry: AgentCostEntry;
+  AgentCostSummary: AgentCostSummary;
+  AgentExecutionLog: AgentExecutionLog;
+  AgentExecutionLogConnection: AgentExecutionLogConnection;
   AgentIdentity: AgentIdentity;
+  AgentWorkerStatus: AgentWorkerStatus;
+  AggregationWindowInfo: AggregationWindowInfo;
   ApiTokenStatus: ApiTokenStatus;
   Boolean: Scalars['Boolean']['output'];
   BranchDiffFile: BranchDiffFile;
@@ -1575,6 +1732,8 @@ export type ResolversParentTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars['DateTime']['output'];
   Event: Event;
+  ExecutionLogFilters: ExecutionLogFilters;
+  Float: Scalars['Float']['output'];
   GitCheckpoint: GitCheckpoint;
   ID: Scalars['ID']['output'];
   InboxItem: InboxItem;
@@ -1626,6 +1785,66 @@ export type ActorResolvers<ContextType = Context, ParentType extends ResolversPa
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type AgentBudgetStatusResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentBudgetStatus'] = ResolversParentTypes['AgentBudgetStatus']> = ResolversObject<{
+  dailyLimitCents?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  remainingCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  remainingPercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  spentCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AgentCostEntryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentCostEntry'] = ResolversParentTypes['AgentCostEntry']> = ResolversObject<{
+  date?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  summaryCalls?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  summaryCostCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  tier2Calls?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  tier2CostCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  tier3Calls?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  tier3CostCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  totalCostCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AgentCostSummaryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentCostSummary'] = ResolversParentTypes['AgentCostSummary']> = ResolversObject<{
+  budget?: Resolver<ResolversTypes['AgentBudgetStatus'], ParentType, ContextType>;
+  dailyCosts?: Resolver<Array<ResolversTypes['AgentCostEntry']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AgentExecutionLogResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentExecutionLog'] = ResolversParentTypes['AgentExecutionLog']> = ResolversObject<{
+  agentId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  batchSize?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  confidence?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  contextTokenAllocation?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  disposition?: Resolver<ResolversTypes['ExecutionDisposition'], ParentType, ContextType>;
+  estimatedCostCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  finalActions?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  inboxItemId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  latencyMs?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  model?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  modelTier?: Resolver<ResolversTypes['ModelTier'], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  outputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  plannedActions?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  policyDecision?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
+  promoted?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  promotionReason?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['ExecutionStatus'], ParentType, ContextType>;
+  triggerEventId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AgentExecutionLogConnectionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentExecutionLogConnection'] = ResolversParentTypes['AgentExecutionLogConnection']> = ResolversObject<{
+  items?: Resolver<Array<ResolversTypes['AgentExecutionLog']>, ParentType, ContextType>;
+  totalCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type AgentIdentityResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentIdentity'] = ResolversParentTypes['AgentIdentity']> = ResolversObject<{
   autonomyMode?: Resolver<ResolversTypes['AutonomyMode'], ParentType, ContextType>;
   costBudget?: Resolver<ResolversTypes['CostBudget'], ParentType, ContextType>;
@@ -1636,6 +1855,23 @@ export type AgentIdentityResolvers<ContextType = Context, ParentType extends Res
   soulFile?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['OrgAgentStatus'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AgentWorkerStatusResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentWorkerStatus'] = ResolversParentTypes['AgentWorkerStatus']> = ResolversObject<{
+  activeOrganizations?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  openAggregationWindows?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  running?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  uptime?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AggregationWindowInfoResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AggregationWindowInfo'] = ResolversParentTypes['AggregationWindowInfo']> = ResolversObject<{
+  eventCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  lastEventAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  openedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  scopeKey?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -1904,7 +2140,12 @@ export type ProjectResolvers<ContextType = Context, ParentType extends Resolvers
 }>;
 
 export type QueryResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
+  agentAggregationWindows?: Resolver<Array<ResolversTypes['AggregationWindowInfo']>, ParentType, ContextType, RequireFields<QueryAgentAggregationWindowsArgs, 'organizationId'>>;
+  agentCostSummary?: Resolver<ResolversTypes['AgentCostSummary'], ParentType, ContextType, RequireFields<QueryAgentCostSummaryArgs, 'endDate' | 'organizationId' | 'startDate'>>;
+  agentExecutionLog?: Resolver<Maybe<ResolversTypes['AgentExecutionLog']>, ParentType, ContextType, RequireFields<QueryAgentExecutionLogArgs, 'id' | 'organizationId'>>;
+  agentExecutionLogs?: Resolver<ResolversTypes['AgentExecutionLogConnection'], ParentType, ContextType, RequireFields<QueryAgentExecutionLogsArgs, 'organizationId'>>;
   agentIdentity?: Resolver<Maybe<ResolversTypes['AgentIdentity']>, ParentType, ContextType, RequireFields<QueryAgentIdentityArgs, 'organizationId'>>;
+  agentWorkerStatus?: Resolver<ResolversTypes['AgentWorkerStatus'], ParentType, ContextType, RequireFields<QueryAgentWorkerStatusArgs, 'organizationId'>>;
   availableRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableRuntimesArgs, 'tool'>>;
   availableSessionRuntimes?: Resolver<Array<ResolversTypes['SessionRuntimeInstance']>, ParentType, ContextType, RequireFields<QueryAvailableSessionRuntimesArgs, 'sessionId'>>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType, RequireFields<QueryChannelArgs, 'id'>>;
@@ -2099,7 +2340,14 @@ export type UserResolvers<ContextType = Context, ParentType extends ResolversPar
 
 export type Resolvers<ContextType = Context> = ResolversObject<{
   Actor?: ActorResolvers<ContextType>;
+  AgentBudgetStatus?: AgentBudgetStatusResolvers<ContextType>;
+  AgentCostEntry?: AgentCostEntryResolvers<ContextType>;
+  AgentCostSummary?: AgentCostSummaryResolvers<ContextType>;
+  AgentExecutionLog?: AgentExecutionLogResolvers<ContextType>;
+  AgentExecutionLogConnection?: AgentExecutionLogConnectionResolvers<ContextType>;
   AgentIdentity?: AgentIdentityResolvers<ContextType>;
+  AgentWorkerStatus?: AgentWorkerStatusResolvers<ContextType>;
+  AggregationWindowInfo?: AggregationWindowInfoResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
   Channel?: ChannelResolvers<ContextType>;
