@@ -60,6 +60,22 @@ async function main() {
   for (const o of orgs) {
     await ensureAiOrgMember(o.id);
   }
+
+  // Ensure AI is a member of every channel
+  const channels = await prisma.channel.findMany({ select: { id: true, name: true } });
+  for (const ch of channels) {
+    const existing = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: ch.id, userId: TRACE_AI_USER_ID } },
+    });
+    if (!existing) {
+      await prisma.channelMember.create({
+        data: { channelId: ch.id, userId: TRACE_AI_USER_ID },
+      });
+      console.log(`Added AI user to channel "${ch.name}" (${ch.id})`);
+    } else {
+      console.log(`AI user already in channel "${ch.name}"`);
+    }
+  }
 }
 
 main()
