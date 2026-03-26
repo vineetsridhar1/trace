@@ -49,6 +49,7 @@ Wire everything together. The individual components exist (router, aggregator, c
 - [x] Disposition routing: ignore → log+drop, escalate → log as blocked (pending ticket #16), summarize → trigger `refreshSummary()`, suggest/act → policy engine
 
 <!-- Updated after ticket #15 PR: All completion requirements met. Pipeline extracted to dedicated module with 12 unit tests (pipeline.test.ts). The pipeline handles all 5 disposition types. Escalation logs as "blocked" pending Tier 3 implementation in ticket #16 — the integration point is at pipeline.ts:210-228. Cost estimation uses the same model-aware lookup as summary-worker.ts (NOTE: this is duplicated and should be extracted to a shared utility). -->
+<!-- Updated after multi-turn agentic loop PR: The pipeline now operates in an iterative loop of up to 10 turns (MAX_ITERATIONS=10). Each turn: planner proposes actions → policy evaluates → execute/suggest → results fed back as tool_result. The planner uses `done: boolean` to signal completion. Key exports: `runPlannerTurn()` (multi-turn entry point), `buildSystemPrompt()` (exported for pipeline reuse). Default model is Haiku; planner can choose escalation target via `promotionTarget: "sonnet" | "opus"`. @mention replies are forced deterministically in pipeline code. Pipeline logs include elapsed timestamps for observability. -->
 
 ## How to test
 

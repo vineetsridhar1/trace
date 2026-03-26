@@ -69,8 +69,6 @@ export interface PlannerResult {
 const DEFAULT_TIER2_MODEL = "claude-haiku-4-5-20251001";
 export const DEFAULT_SONNET_MODEL = "claude-sonnet-4-20250514";
 export const DEFAULT_OPUS_MODEL = "claude-opus-4-20250514";
-/** @deprecated Use DEFAULT_OPUS_MODEL — kept for backward compat */
-export const DEFAULT_TIER3_MODEL = DEFAULT_OPUS_MODEL;
 
 // ---------------------------------------------------------------------------
 // LLM adapter (lazy singleton, same pattern as summary-generator)

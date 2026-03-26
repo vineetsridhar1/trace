@@ -831,8 +831,16 @@ interface PlannerOutput {
 **Promotion rules:**
 
 - Rule-based promotions bypass Tier 2 entirely (no latency chain). The router can identify "this goes straight to Tier 3" cases.
-- Model-requested promotions discard the Tier 2 output and re-run with Tier 3 using the same context packet.
+- Model-requested promotions discard the Tier 2 output and re-run with the promoted model using the same context packet.
 - Never run Tier 2 as a pre-filter for Tier 3. Either skip to Tier 3 or run Tier 2 and optionally promote.
+
+<!-- Updated after multi-turn agentic loop implementation:
+- The default Tier 2 model is Haiku (fast, cheap). The planner chooses its own escalation target
+  via `promotionTarget: "sonnet" | "opus"` — Sonnet for moderate complexity, Opus for high complexity.
+  Default is Sonnet if omitted. Only Opus promotions are budget-gated.
+- @mentions no longer auto-promote to Tier 3. The planner (Haiku) can escalate if needed.
+- Rule-based Tier 3 remains for: ticket assigned to agent, urgent/high priority tickets.
+-->
 
 ### Planner inputs
 
@@ -840,6 +848,25 @@ interface PlannerOutput {
 - available actions (from action registry, filtered by scope and permissions),
 - policy constraints (autonomy mode, risk thresholds),
 - tier-specific token budget.
+
+### Multi-turn execution model
+
+<!-- Added after multi-turn agentic loop implementation -->
+
+The pipeline operates in an **iterative loop of up to 10 turns**, not a single-shot call:
+
+1. Build context and system prompt (once, before the loop)
+2. **Loop** (turn 1..10): call planner → enforce policy → execute/suggest → feed results back as `tool_result`
+3. The planner sees execution results and decides what to do next
+4. Loop ends when: planner sets `done=true`, returns `ignore`, disposition is `escalate` on turn >1, or hard cap is hit
+
+Key properties:
+- **Context built once** — no DB re-queries mid-loop. Fresh info comes via tool_result observations.
+- **Cost aggregated** — single cost entry at end, not per-iteration.
+- **Tier 3 promotion only on turn 1** — if the planner escalates on a later turn, the loop terminates.
+- **Hard cap of 10** — enforced in pipeline code, not by the LLM. The LLM is told "Turn N of 10" for awareness.
+- **`done` field is a stop hint** — the pipeline respects it but doesn't require it. Missing `done` = `false` (continue).
+- **@mention replies are forced deterministically** — if the trigger is an @mention and no `message.send` was executed across all turns, the pipeline forces a fallback reply. Threading (`parentId`) is also injected by code, not the LLM.
 
 ### Planner outputs
 
@@ -857,6 +884,8 @@ interface PlannedAgentDecision {
   userVisibleMessage?: string;
   followUpAfterMs?: number;
   promotionReason?: string;
+  promotionTarget?: "sonnet" | "opus"; // which model to escalate to (default: "sonnet")
+  done?: boolean; // signal the multi-turn loop to stop
 }
 ```
 

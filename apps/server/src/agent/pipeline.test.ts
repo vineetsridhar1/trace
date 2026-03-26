@@ -29,7 +29,10 @@ vi.mock("./context-builder.js", () => ({
 
 vi.mock("./planner.js", () => ({
   runPlanner: vi.fn(),
-  DEFAULT_TIER3_MODEL: "claude-opus-4-20250514",
+  DEFAULT_SONNET_MODEL: "claude-sonnet-4-20250514",
+  DEFAULT_OPUS_MODEL: "claude-opus-4-20250514",
+  buildSystemPrompt: vi.fn().mockReturnValue("system prompt"),
+  runPlannerTurn: vi.fn(),
 }));
 
 vi.mock("./policy-engine.js", () => ({

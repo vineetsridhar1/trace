@@ -29,7 +29,6 @@ import type { AgentContextPacket } from "./context-builder.js";
 import { TIER3_TOKEN_BUDGET } from "./context-builder.js";
 import type { PlannerOutput, PlannerTurnResult } from "./planner.js";
 import {
-  DEFAULT_TIER3_MODEL,
   DEFAULT_SONNET_MODEL,
   DEFAULT_OPUS_MODEL,
   buildSystemPrompt,
@@ -58,22 +57,28 @@ const MAX_ITERATIONS = 10;
 // Logging helpers
 // ---------------------------------------------------------------------------
 
-let pipelineStartTime = 0;
-
-function log(msg: string, data?: Record<string, unknown>): void {
-  const elapsed = pipelineStartTime ? `+${Date.now() - pipelineStartTime}ms` : "0ms";
-  const prefix = `[agent-pipeline] [${elapsed}]`;
-  if (data) {
-    console.log(prefix, msg, JSON.stringify(data));
-  } else {
-    console.log(prefix, msg);
-  }
+interface PipelineLogger {
+  log: (msg: string, data?: Record<string, unknown>) => void;
+  logError: (msg: string, err: unknown) => void;
 }
 
-function logError(msg: string, err: unknown): void {
-  const elapsed = pipelineStartTime ? `+${Date.now() - pipelineStartTime}ms` : "0ms";
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`[agent-pipeline] [${elapsed}] ${msg}:`, message);
+function createLogger(startTime: number): PipelineLogger {
+  return {
+    log(msg: string, data?: Record<string, unknown>): void {
+      const elapsed = `+${Date.now() - startTime}ms`;
+      const prefix = `[agent-pipeline] [${elapsed}]`;
+      if (data) {
+        console.log(prefix, msg, JSON.stringify(data));
+      } else {
+        console.log(prefix, msg);
+      }
+    },
+    logError(msg: string, err: unknown): void {
+      const elapsed = `+${Date.now() - startTime}ms`;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[agent-pipeline] [${elapsed}] ${msg}:`, message);
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +122,7 @@ interface TurnResult {
 export async function runPipeline(input: PipelineInput): Promise<void> {
   const { batch, agentSettings, executor } = input;
   const startTime = Date.now();
-  pipelineStartTime = startTime;
+  const { log, logError } = createLogger(startTime);
 
   // ── Event dedup — skip events already processed ──
   const triggerEvent = batch.events[batch.events.length - 1];
@@ -745,10 +750,11 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     modelTier: currentTier,
     promoted,
     promotionReason,
+    logger: { log, logError },
   });
 
   // ── Mark trigger event as processed ──
-  await markProcessed(packet);
+  await markProcessed(packet, { log, logError });
 
   log("pipeline complete", {
     scopeKey: packet.scopeKey,
@@ -786,6 +792,7 @@ interface WriteLogInput {
   modelTier?: "tier2" | "tier3";
   promoted?: boolean;
   promotionReason?: string;
+  logger: PipelineLogger;
 }
 
 async function writeExecutionLog(input: WriteLogInput): Promise<void> {
@@ -793,6 +800,7 @@ async function writeExecutionLog(input: WriteLogInput): Promise<void> {
     packet, plannerResult, costCents, agentSettings, batch,
     disposition, status, policyDecision, finalActions, inboxItemId,
     modelTier = "tier2", promoted: wasPromoted = false, promotionReason: promoReason,
+    logger,
   } = input;
   try {
     await executionLoggingService.write({
@@ -821,11 +829,14 @@ async function writeExecutionLog(input: WriteLogInput): Promise<void> {
       latencyMs: plannerResult.latencyMs,
     });
   } catch (err) {
-    logError("execution log write failed (non-fatal)", err);
+    logger.logError("execution log write failed (non-fatal)", err);
   }
 }
 
-async function markProcessed(packet: AgentContextPacket): Promise<void> {
+async function markProcessed(
+  packet: AgentContextPacket,
+  logger: PipelineLogger,
+): Promise<void> {
   try {
     await processedEventService.markProcessed({
       consumerName: CONSUMER_NAME,
@@ -833,6 +844,6 @@ async function markProcessed(packet: AgentContextPacket): Promise<void> {
       organizationId: packet.organizationId,
     });
   } catch (err) {
-    logError("markProcessed failed (non-fatal)", err);
+    logger.logError("markProcessed failed (non-fatal)", err);
   }
 }
