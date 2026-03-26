@@ -2495,8 +2495,8 @@ export class SessionService {
       where: { entityType: "session", entityId: sessionId },
     });
 
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
-      throw new Error(`Cannot move a ${session.agentStatus} session`);
+    if (session.sessionStatus === "merged") {
+      throw new Error("Cannot move a merged session");
     }
     const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId);
     if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
@@ -2671,8 +2671,8 @@ export class SessionService {
       where: { entityType: "session", entityId: sessionId },
     });
 
-    if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus)) {
-      throw new Error(`Cannot move a ${session.agentStatus} session`);
+    if (session.sessionStatus === "merged") {
+      throw new Error("Cannot move a merged session");
     }
 
     // Build conversation context from the old session
