@@ -7,6 +7,7 @@ import type {
 } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
+import { pubsub, topics } from "../lib/pubsub.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -122,6 +123,14 @@ export class AiTurnService {
         return turn;
       },
     );
+
+    // Publish turn events for subscriptions
+    pubsub.publish(topics.branchTurns(input.branchId), {
+      branchTurns: userTurn,
+    });
+    pubsub.publish(topics.branchTurns(input.branchId), {
+      branchTurns: assistantTurn,
+    });
 
     return { userTurn, assistantTurn };
   }

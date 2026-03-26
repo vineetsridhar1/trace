@@ -91,15 +91,15 @@ Add the GraphQL types, queries, mutations, and subscriptions for AI Conversation
 
 ## Completion requirements
 
-- [ ] All types, queries, mutations, and subscriptions are in `schema.graphql`
-- [ ] `pnpm gql:codegen` runs without errors
-- [ ] Resolvers exist and are wired into Apollo Server
-- [ ] `createAiConversation` mutation works end-to-end (creates conversation + root branch)
-- [ ] `sendTurn` mutation works end-to-end (creates user turn, calls LLM, returns assistant turn)
-- [ ] `aiConversations` query returns conversations with correct access control
-- [ ] `branchTurns` subscription emits new turns as they are created
-- [ ] `conversationEvents` subscription emits conversation/branch metadata changes for the active viewport
-- [ ] No business logic in resolvers — all logic lives in the service layer
+- [x] All types, queries, mutations, and subscriptions are in `schema.graphql`
+- [x] `pnpm gql:codegen` runs without errors
+- [x] Resolvers exist and are wired into Apollo Server
+- [x] `createAiConversation` mutation works end-to-end (creates conversation + root branch)
+- [x] `sendTurn` mutation works end-to-end (creates user turn, calls LLM, returns assistant turn)
+- [x] `aiConversations` query returns conversations with correct access control
+- [x] `branchTurns` subscription emits new turns as they are created
+- [x] `conversationEvents` subscription emits conversation/branch metadata changes for the active viewport
+- [x] No business logic in resolvers — all logic lives in the service layer
 
 ## How to test
 

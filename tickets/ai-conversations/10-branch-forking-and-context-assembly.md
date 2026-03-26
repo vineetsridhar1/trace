@@ -48,7 +48,7 @@ Implement the core branching logic: creating a new branch from any turn and asse
 - 03 (Turn Service & LLM Integration)
   <!-- Ticket 03 creates: AiTurnService (separate class in aiTurn.ts) with sendTurn, streamTurn, getTurns, getTurn. Context assembly currently fetches all turns in the branch via prisma.aiTurn.findMany({ where: { branchId }, orderBy: { createdAt: "asc" } }) and maps via turnsToMessages(). Replace this flat fetch with buildContext() call. The turnsToMessages() private method can be reused for the final LLM message mapping. -->
 - 04 (GraphQL Schema & Resolvers)
-  <!-- Ticket 04 creates: the conversation GraphQL module that this ticket extends with forkBranch -->
+  <!-- Ticket 04 creates: ai-conversation.ts resolver module with queries (aiConversations, aiConversation, branch), mutations (createAiConversation, sendTurn, updateAiConversationTitle), subscriptions (branchTurns, conversationEvents), and type resolvers for AiConversation/Branch/Turn. Extend this module with the forkBranch mutation. Branch type resolvers for depth, turnCount, childBranches, parentBranch, forkTurn are already wired. -->
 - 05 (Event Stream Integration)
   <!-- Ticket 05 creates: branch.created event registration and scoped conversation subscriptions -->
 
