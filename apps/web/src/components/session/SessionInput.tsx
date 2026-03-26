@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Send, Square } from "lucide-react";
 import { useEntityField, useEntityStore, eventScopeKey } from "../../stores/entity";
 import { client } from "../../lib/urql";
-import { SEND_SESSION_MESSAGE_MUTATION, RUN_SESSION_MUTATION } from "../../lib/mutations";
+import { SEND_SESSION_MESSAGE_MUTATION } from "../../lib/mutations";
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -61,29 +61,18 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
     setMessage("");
     try {
       const wrappedText = wrapPrompt(mode, text);
-      if (agentStatus === "not_started") {
-        // First message on a new session — use runSession to kick off the agent
-        await client
-          .mutation(RUN_SESSION_MUTATION, {
-            id: sessionId,
-            prompt: wrappedText,
-            interactionMode: mode === "code" ? undefined : mode,
-          })
-          .toPromise();
-      } else {
-        await client
-          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-            sessionId,
-            text: wrappedText,
-            interactionMode: mode === "code" ? undefined : mode,
-          })
-          .toPromise();
-      }
+      await client
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId,
+          text: wrappedText,
+          interactionMode: mode === "code" ? undefined : mode,
+        })
+        .toPromise();
     } finally {
       setSending(false);
       inputRef.current?.focus();
     }
-  }, [sessionId, message, sending, mode, canSend, agentStatus]);
+  }, [sessionId, message, sending, mode, canSend]);
 
   // Show recovery panel when disconnected — but not for not_started sessions
   // where the user still needs to pick a runtime and type their first message
