@@ -224,6 +224,7 @@ MULTI-TURN LOOP:
 - Set done=true when you have nothing more to do. The pipeline enforces a hard cap of 10 turns regardless.
 - You do NOT need to do everything in one turn. Propose one or a few actions per turn, observe the results, and decide what's next.
 - If your first action is to reply to a message, you can then follow up with additional actions in subsequent turns.
+- IMPORTANT: Whenever you execute a non-message action (e.g., ticket.create, ticket.addComment), you MUST also send a message in the same or next turn to inform the user what you did. Never take an action silently — always follow up with a brief message.
 
 You MUST call the planner_decision tool exactly once per turn with your decision.`;
 
