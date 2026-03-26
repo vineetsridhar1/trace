@@ -30,11 +30,14 @@ Wire AI Conversation actions into the Trace event stream. Every mutation that ch
   - optimistic correlation IDs when a client seeded a local optimistic entry
 - Wire the `branchTurns` subscription to emit turn events for the subscribed branch
 - Wire a `conversationEvents` subscription for conversation-level events (title changes, new branches)
+- Move pubsub publishing from the resolver layer (ticket 04 placed it there as a bridge) into the service layer, so agent runtime calls also emit events
+- Add access control to `getBranch` service method — currently has no visibility/org-membership check
+- Add access control to subscription resolvers (`branchTurns`, `conversationEvents`) — verify the subscriber has access to the branch/conversation before starting the stream
 
 ## Dependencies
 
 - 04 (GraphQL Schema & Resolvers)
-  <!-- Ticket 04 creates: GraphQL types, mutations, subscriptions for conversations/branches/turns -->
+  <!-- Ticket 04 creates: GraphQL types (AiConversation, Branch, Turn), queries (aiConversations, aiConversation, branch), mutations (createAiConversation, sendTurn, updateAiConversationTitle), subscriptions (branchTurns, conversationEvents). Pubsub topics already wired: `branchTurns(branchId)` and `conversationEvents(conversationId)`. Resolver currently publishes to these topics directly — this ticket must move that publishing into the service layer and replace the ad-hoc payloads with proper Event-shaped objects. Also: the `branch` query currently has no access control — add a userId check to `getBranch` in the service. The `conversationEvents` subscription currently returns `Event!` but the payload from ticket 04 is ad-hoc and won't match the Event type fields — ensure proper Event construction. -->
 
 ## Completion requirements
 
