@@ -237,15 +237,51 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
   },
 
   async session(organizationId, scopeId) {
-    const session = await prisma.session.findUnique({
-      where: { id: scopeId },
-      include: {
-        repo: { select: { id: true, name: true, remoteUrl: true } },
-        channel: { select: { id: true, name: true } },
-        projects: { include: { project: { select: { id: true, name: true } } } },
-      },
-    });
+    const [session, linkedTicketLinks] = await Promise.all([
+      prisma.session.findUnique({
+        where: { id: scopeId },
+        include: {
+          repo: { select: { id: true, name: true, remoteUrl: true } },
+          channel: { select: { id: true, name: true } },
+          projects: { include: { project: { select: { id: true, name: true } } } },
+        },
+      }),
+      // Reverse lookup: find tickets that link to this session
+      prisma.ticketLink.findMany({
+        where: { entityType: "session", entityId: scopeId },
+        include: {
+          ticket: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              priority: true,
+              assignees: { include: { user: { select: { id: true, name: true } } } },
+            },
+          },
+        },
+      }),
+    ]);
     if (!session) return null;
+
+    const linkedTickets = linkedTicketLinks.map(
+      (l: {
+        ticket: {
+          id: string;
+          title: string;
+          status: string;
+          priority: string | null;
+          assignees: Array<{ user: { id: string; name: string | null } }>;
+        };
+      }) => ({
+        id: l.ticket.id,
+        title: l.ticket.title,
+        status: l.ticket.status,
+        priority: l.ticket.priority,
+        assignees: l.ticket.assignees.map((a) => ({ id: a.user.id, name: a.user.name })),
+      }),
+    );
+
     return {
       id: session.id,
       name: session.name,
@@ -260,6 +296,7 @@ const scopeFetchers: Record<string, ScopeEntityFetcher> = {
         id: p.project.id,
         name: p.project.name,
       })),
+      linkedTickets,
     };
   },
 
@@ -395,6 +432,30 @@ async function findRelevantEntities(input: {
     if (linked) {
       entities.push({ ...linked, hop: 1 });
     }
+  }
+
+  // --- Session-specific: include reverse-linked tickets (Hop 1) ---
+  // Sessions store linked tickets via reverse TicketLink lookup (entityType=session).
+  // These are already fetched in the session scope fetcher as `linkedTickets`.
+  const linkedTickets = (input.scopeEntity?.data.linkedTickets ?? []) as Array<{
+    id: string;
+    title: string;
+    status: string;
+    priority: string | null;
+    assignees: Array<{ id: string; name: string | null }>;
+  }>;
+
+  for (const ticket of linkedTickets) {
+    const key = `ticket:${ticket.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    entities.push({
+      type: "ticket",
+      id: ticket.id,
+      data: ticket as unknown as Record<string, unknown>,
+      hop: 1,
+    });
   }
 
   // --- Follow links from Hop 1 ticket entities (Hop 2) ---

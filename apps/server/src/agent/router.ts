@@ -54,7 +54,8 @@ const DIRECT_RULES: Record<string, (event: AgentEvent, agentId: string) => boole
     const assigneeId = event.payload.assigneeId;
     return typeof assigneeId === "string" && assigneeId === agentId;
   },
-  session_terminated: (event) => event.payload.needsInput === true,
+  session_terminated: (event) =>
+    event.payload.needsInput === true || event.payload.status === "failed",
   session_paused: (event) => event.payload.needsInput === true,
   message_sent: (event, agentId) => {
     const mentions = event.payload.mentions;
@@ -104,6 +105,11 @@ const AGGREGATE_EVENT_TYPES = new Set<string>([
   "ticket_updated",
   "ticket_commented",
   "session_output",
+  "session_started",
+  "session_resumed",
+  "session_pr_opened",
+  "session_pr_merged",
+  "session_pr_closed",
 ]);
 
 /**
@@ -122,6 +128,11 @@ const SELF_TRIGGER_ALLOWLIST = new Set<string>([
   "session_output:session",
   "session_terminated:session",
   "session_paused:session",
+  "session_started:session",
+  "session_resumed:session",
+  "session_pr_opened:session",
+  "session_pr_merged:session",
+  "session_pr_closed:session",
 ]);
 
 // ---------------------------------------------------------------------------

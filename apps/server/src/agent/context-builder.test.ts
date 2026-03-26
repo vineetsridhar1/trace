@@ -317,6 +317,100 @@ describe("buildContext", () => {
     expect(packet.summaries[0].fresh).toBe(true);
   });
 
+  it("includes linked tickets for session scope entities", async () => {
+    const { prisma } = await import("../lib/db.js");
+
+    // Session scope entity
+    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "session_1",
+      name: "Fix login bug",
+      agentStatus: "in_progress",
+      sessionStatus: "in_progress",
+      tool: "claude_code",
+      repo: { id: "repo_1", name: "app", remoteUrl: "https://github.com/org/app" },
+      channel: null,
+      projects: [],
+    });
+
+    // Reverse ticket link lookup — tickets linked to this session
+    (prisma.ticketLink.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        ticket: {
+          id: "ticket_42",
+          title: "Login page broken",
+          status: "in_progress",
+          priority: "high",
+          assignees: [{ user: { id: "user_alice", name: "Alice" } }],
+        },
+      },
+    ]);
+
+    const batch = makeBatch({
+      scopeKey: "session:session_1",
+      events: [
+        makeEvent({
+          scopeType: "session",
+          scopeId: "session_1",
+          eventType: "session_output",
+          payload: { text: "Running tests..." },
+        }),
+      ],
+    });
+
+    const packet = await buildContext({ batch, agentSettings: makeAgentSettings() });
+
+    expect(packet.scopeType).toBe("session");
+    expect(packet.scopeEntity).not.toBeNull();
+    expect(packet.scopeEntity?.data.linkedTickets).toBeDefined();
+
+    const linkedTickets = packet.scopeEntity?.data.linkedTickets as Array<{
+      id: string;
+      title: string;
+      assignees: Array<{ id: string }>;
+    }>;
+    expect(linkedTickets).toHaveLength(1);
+    expect(linkedTickets[0].id).toBe("ticket_42");
+    expect(linkedTickets[0].title).toBe("Login page broken");
+    expect(linkedTickets[0].assignees[0].id).toBe("user_alice");
+
+    // Linked ticket should also appear in relevant entities
+    expect(packet.relevantEntities.some((e) => e.id === "ticket_42")).toBe(true);
+  });
+
+  it("handles session scope with no linked tickets", async () => {
+    const { prisma } = await import("../lib/db.js");
+
+    (prisma.session.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "session_2",
+      name: "Explore codebase",
+      agentStatus: "in_progress",
+      sessionStatus: "in_progress",
+      tool: "claude_code",
+      repo: null,
+      channel: null,
+      projects: [],
+    });
+
+    (prisma.ticketLink.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+    const batch = makeBatch({
+      scopeKey: "session:session_2",
+      events: [
+        makeEvent({
+          scopeType: "session",
+          scopeId: "session_2",
+          eventType: "session_started",
+          payload: {},
+        }),
+      ],
+    });
+
+    const packet = await buildContext({ batch, agentSettings: makeAgentSettings() });
+
+    expect(packet.scopeEntity).not.toBeNull();
+    expect(packet.scopeEntity?.data.linkedTickets).toEqual([]);
+  });
+
   it("handles scope types with no specific fetcher", async () => {
     const batch = makeBatch({
       scopeKey: "unknown:unk_1",

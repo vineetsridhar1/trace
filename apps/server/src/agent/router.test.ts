@@ -231,6 +231,186 @@ describe("router", () => {
     expect(result.maxTier).toBe(2);
   });
 
+  // ---- Session monitoring routing (ticket #18) ----
+
+  it("aggregates session_started events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_started",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_started");
+  });
+
+  it("aggregates session_resumed events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_resumed",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_resumed");
+  });
+
+  it("aggregates session_output events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_output",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_output");
+  });
+
+  it("aggregates session_pr_opened events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_pr_opened",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_pr_opened");
+  });
+
+  it("aggregates session_pr_merged events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_pr_merged",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_pr_merged");
+  });
+
+  it("aggregates session_pr_closed events", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_pr_closed",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_pr_closed");
+  });
+
+  it("routes session_paused with needsInput directly", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_paused",
+        payload: { needsInput: true },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("direct");
+    expect(result.reason).toBe("direct:session_paused");
+  });
+
+  it("routes session_terminated with needsInput directly", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_terminated",
+        payload: { needsInput: true },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("direct");
+    expect(result.reason).toBe("direct:session_terminated");
+  });
+
+  it("routes session_terminated with failure directly", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_terminated",
+        payload: { status: "failed" },
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("direct");
+    expect(result.reason).toBe("direct:session_terminated");
+  });
+
+  it("drops session_terminated without failure or needsInput", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_terminated",
+        payload: { status: "completed" },
+      }),
+      settings,
+    );
+
+    // session_terminated is in DIRECT_RULES but predicate doesn't match,
+    // and it's not in AGGREGATE_EVENT_TYPES, so it falls to no_matching_rule
+    expect(result.decision).toBe("drop");
+    expect(result.reason).toBe("no_matching_rule");
+  });
+
+  it("allows agent self-triggered session events through the allowlist", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_output",
+        actorType: "agent",
+        actorId: "agent-1",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_output");
+  });
+
+  it("allows agent self-triggered session_started through the allowlist", () => {
+    const result = routeEvent(
+      event({
+        scopeType: "session",
+        scopeId: "session-1",
+        eventType: "session_started",
+        actorType: "agent",
+        actorId: "agent-1",
+      }),
+      settings,
+    );
+
+    expect(result.decision).toBe("aggregate");
+    expect(result.reason).toBe("aggregate:session_started");
+  });
+
   it("does not promote normal priority tickets to Tier 3", () => {
     seedChatMemberships("org-1", ["chat-1"]);
 
