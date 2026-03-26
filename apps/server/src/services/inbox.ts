@@ -228,19 +228,13 @@ export class InboxService {
         itemType: input.itemType,
         status: "active",
         sourceType: "agent_suggestion",
-        payload: {
-          path: ["scopeType"],
-          equals: input.scopeType,
-        },
+        AND: [
+          { payload: { path: ["scopeType"], equals: input.scopeType } },
+          { payload: { path: ["scopeId"], equals: input.scopeId } },
+        ],
       },
-    }).then((items) =>
-      // Prisma JSON filtering only supports one path at a time,
-      // so filter scopeId in application code
-      items.filter((item) => {
-        const payload = (item.payload ?? {}) as Record<string, unknown>;
-        return payload.scopeId === input.scopeId;
-      }),
-    );
+      select: { id: true, title: true },
+    });
   }
 
   /**

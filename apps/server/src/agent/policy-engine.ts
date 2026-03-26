@@ -19,7 +19,7 @@ import type { RiskLevel } from "./action-registry.js";
 import { findAction } from "./action-registry.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { redis } from "../lib/redis.js";
-import { mapActionToItemType } from "./suggestion.js";
+import { mapActionToItemType } from "./action-types.js";
 
 // ---------------------------------------------------------------------------
 // Types

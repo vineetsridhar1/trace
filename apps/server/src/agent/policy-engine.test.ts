@@ -14,19 +14,6 @@ import type { AgentContextPacket } from "./context-builder.js";
 // Mock cost-tracking service
 // ---------------------------------------------------------------------------
 
-// Mock modules that would pull in @prisma/client
-vi.mock("../services/inbox.js", () => ({
-  inboxService: {},
-}));
-
-vi.mock("../lib/db.js", () => ({
-  prisma: {},
-}));
-
-vi.mock("../services/event.js", () => ({
-  eventService: {},
-}));
-
 vi.mock("../services/cost-tracking.js", () => ({
   costTrackingService: {
     checkBudget: vi.fn().mockResolvedValue({

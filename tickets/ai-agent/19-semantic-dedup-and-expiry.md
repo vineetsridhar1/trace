@@ -18,15 +18,17 @@ Prevent the agent from suggesting the same thing twice. If users discuss the sam
 
 ### Suggestion expiry
 
-- Each suggestion type has a default TTL:
+<!-- Updated after implementation: TTL values match ticket #14's implementation in suggestion.ts EXPIRY_DEFAULTS_MS. Expiry job runs every 60s (not 15min) for faster cleanup; processed event cleanup runs every ~15min. -->
+- Each suggestion type has a default TTL (as implemented in ticket #14):
   - `ticket_suggestion`: 72 hours
+  - `field_change_suggestion`: 72 hours
   - `link_suggestion`: 48 hours
+  - `comment_suggestion`: 48 hours
+  - `agent_suggestion`: 48 hours
   - `session_suggestion`: 24 hours
-  - `field_change_suggestion`: 48 hours
-  - `comment_suggestion`: 24 hours
   - `message_suggestion`: 24 hours
 - The expiry timestamp is stored in the InboxItem payload's `expiresAt` field
-- A periodic background job (runs every 15 minutes) queries for active InboxItems past their expiry and resolves them as `expired`
+- A periodic background maintenance worker (runs every 60s) queries for active InboxItems past their expiry and resolves them as `expired`
 
 ### Processed event cleanup
 <!-- Added after ticket 08: The `ProcessedAgentEvent` table (ticket 08) grows unboundedly as the worker processes events. Add a periodic cleanup job that deletes records older than 7 days (events are unlikely to be replayed after that). Run alongside the suggestion expiry job. Query: `DELETE FROM "ProcessedAgentEvent" WHERE "processedAt" < NOW() - INTERVAL '7 days'` -->
@@ -50,11 +52,11 @@ Prevent the agent from suggesting the same thing twice. If users discuss the sam
 
 ## Completion requirements
 
-- [ ] Duplicate suggestions are detected and suppressed before creation
-- [ ] Similarity check works with fuzzy title matching (not just exact match)
-- [ ] Expiry background job resolves stale suggestions
-- [ ] Dismissal suppression prevents repeated unwanted suggestions in the same scope
-- [ ] All suppressed/expired/deduplicated suggestions are logged for observability
+- [x] Duplicate suggestions are detected and suppressed before creation
+- [x] Similarity check works with fuzzy title matching (not just exact match)
+- [x] Expiry background job resolves stale suggestions
+- [x] Dismissal suppression prevents repeated unwanted suggestions in the same scope
+- [x] All suppressed/expired/deduplicated suggestions are logged for observability
 
 ## How to test
 
