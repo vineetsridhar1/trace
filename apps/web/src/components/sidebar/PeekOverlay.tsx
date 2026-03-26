@@ -48,6 +48,16 @@ export function PeekOverlay({
     }
   }, [currentTab, jumpToTab, visible]);
 
+  const handleChannelClick = useCallback((id: string) => {
+    setActiveChannelId(id);
+    onMouseLeave();
+  }, [setActiveChannelId, onMouseLeave]);
+
+  const handleChatClick = useCallback((id: string) => {
+    setActiveChatId(id);
+    onMouseLeave();
+  }, [setActiveChatId, onMouseLeave]);
+
   const handleDragActiveChange = useCallback((active: boolean) => {
     isDraggingRef.current = active;
   }, []);
@@ -88,7 +98,7 @@ export function PeekOverlay({
                 activeChatId={activeChatId}
                 chatIds={sidebarData.chatIds}
                 chatsLoading={sidebarData.chatsLoading}
-                onChatClick={setActiveChatId}
+                onChatClick={handleChatClick}
               />
               <SidebarChannelsPane
                 activeChannelId={activeChannelId}
@@ -99,7 +109,7 @@ export function PeekOverlay({
                 channelsById={sidebarData.channelsById}
                 channelsLoading={sidebarData.channelsLoading}
                 groupIds={sidebarData.groupIds}
-                onChannelClick={setActiveChannelId}
+                onChannelClick={handleChannelClick}
                 onDragActiveChange={handleDragActiveChange}
                 topLevelItems={sidebarData.topLevelItems}
               />

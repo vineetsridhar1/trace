@@ -16,10 +16,26 @@ export function AppSidebar() {
   const setActiveChannelId = useUIStore((s) => s.setActiveChannelId);
   const activeChatId = useUIStore((s) => s.activeChatId);
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const sidebarData = useSidebarData();
 
   const restoreLastVisited = useUIStore((s) => s.restoreLastVisited);
+
+  const closeSidebar = useCallback(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
+
+  const handleChannelClick = useCallback((id: string) => {
+    setActiveChannelId(id);
+    closeSidebar();
+  }, [setActiveChannelId, closeSidebar]);
+
+  const handleChatClick = useCallback((id: string) => {
+    setActiveChatId(id);
+    closeSidebar();
+  }, [setActiveChatId, closeSidebar]);
 
   const [peeking, setPeeking] = useState(false);
   const [currentTab, setCurrentTab] = useState<SidebarTab>(activeChatId ? "dm" : "main");
@@ -83,7 +99,7 @@ export function AppSidebar() {
                 activeChatId={activeChatId}
                 chatIds={sidebarData.chatIds}
                 chatsLoading={sidebarData.chatsLoading}
-                onChatClick={setActiveChatId}
+                onChatClick={handleChatClick}
               />
               <SidebarChannelsPane
                 activeChannelId={activeChannelId}
@@ -94,7 +110,7 @@ export function AppSidebar() {
                 channelsById={sidebarData.channelsById}
                 channelsLoading={sidebarData.channelsLoading}
                 groupIds={sidebarData.groupIds}
-                onChannelClick={setActiveChannelId}
+                onChannelClick={handleChannelClick}
                 topLevelItems={sidebarData.topLevelItems}
               />
             </div>

@@ -69,6 +69,17 @@ function pushNav(
   history.pushState({ channelId, sessionGroupId, sessionId, page, chatId }, "", path);
 }
 
+function replaceNav(
+  channelId: string | null,
+  sessionGroupId: string | null,
+  sessionId: string | null,
+  page: ActivePage = "main",
+  chatId: string | null = null,
+) {
+  const path = buildPath(channelId, sessionGroupId, sessionId, page, chatId);
+  history.replaceState({ channelId, sessionGroupId, sessionId, page, chatId }, "", path);
+}
+
 function persistActiveChannelId(channelId: string | null) {
   if (channelId) {
     localStorage.setItem("trace:activeChannelId", channelId);
@@ -180,7 +191,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
       const channelId = resolveChannelIdForSessionGroup(groupId, state.activeChannelId);
       persistActiveSessionNav(groupId, adjacentId);
-      pushNav(channelId, groupId, adjacentId);
+      replaceNav(channelId, groupId, adjacentId);
     }
     set(updates);
   },
@@ -329,6 +340,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     );
     persistActiveChannelId(channelId);
     persistActiveSessionNav(sessionGroupId, id);
+    // If staying within the same session group (tab switching), replace history
+    // so browser back goes to the sessions table instead of the previous tab
+    const stayingInGroup = sessionGroupId === currentSessionGroupId && currentSessionGroupId !== null;
     set((state) => ({
       activeChannelId: channelId,
       activeSessionGroupId: sessionGroupId,
@@ -339,7 +353,11 @@ export const useUIStore = create<UIState>((set, get) => ({
           ? { ...state.lastSelectedSessionIdsByGroup, [sessionGroupId]: id }
           : state.lastSelectedSessionIdsByGroup,
     }));
-    pushNav(channelId, sessionGroupId, id);
+    if (stayingInGroup) {
+      replaceNav(channelId, sessionGroupId, id);
+    } else {
+      pushNav(channelId, sessionGroupId, id);
+    }
   },
 
   setActiveTerminalId: (id) => {
