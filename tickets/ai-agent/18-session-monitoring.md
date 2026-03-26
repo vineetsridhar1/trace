@@ -37,12 +37,12 @@ The ambient AI should watch coding sessions and provide useful oversight: summar
 
 ## Completion requirements
 
-- [ ] Session lifecycle events are routed correctly (direct for failures/blocked, aggregate for output bursts)
-- [ ] Rolling summaries are maintained for active sessions
-- [ ] Progress updates are posted to linked tickets
-- [ ] Blocked/failed sessions trigger notifications to relevant users
-- [ ] Session completion summaries are posted to linked tickets
-- [ ] All session monitoring actions go through the service layer with agent identity
+- [x] Session lifecycle events are routed correctly (direct for failures/blocked, aggregate for output bursts)
+- [x] Rolling summaries are maintained for active sessions
+- [x] Progress updates are posted to linked tickets
+- [x] Blocked/failed sessions trigger notifications to relevant users
+- [x] Session completion summaries are posted to linked tickets
+- [x] All session monitoring actions go through the service layer with agent identity
 
 ## How to test
 

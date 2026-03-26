@@ -281,6 +281,59 @@ function buildContextSection(ctx: AgentContextPacket): string {
     }
   }
 
+  // Add session-specific context hints
+  if (ctx.scopeType === "session") {
+    const linkedTickets = (ctx.scopeEntity?.data.linkedTickets ?? []) as Array<{
+      id: string;
+      title: string;
+      assignees: Array<{ id: string; name: string | null }>;
+    }>;
+    const triggerType = ctx.triggerEvent.eventType;
+
+    if (triggerType === "session_paused" && ctx.triggerEvent.payload.needsInput === true) {
+      scopeLines.push(
+        "BLOCKED SESSION: This session is paused and needs human input. " +
+        "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
+        "Include what the session was trying to do and where it got stuck."
+      );
+    } else if (triggerType === "session_terminated" && ctx.triggerEvent.payload.status === "failed") {
+      scopeLines.push(
+        "FAILED SESSION: This session terminated with a failure. " +
+        "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
+        "Include what went wrong and any error information."
+      );
+    } else if (triggerType === "session_terminated" && ctx.triggerEvent.payload.needsInput === true) {
+      scopeLines.push(
+        "BLOCKED SESSION: This session terminated while waiting for input. " +
+        "Use 'act' to notify the relevant ticket assignee(s) via escalate.toHuman or ticket.addComment. " +
+        "Include what the session was trying to do and where it got stuck."
+      );
+    } else if (triggerType === "session_terminated" || triggerType === "session_pr_opened") {
+      scopeLines.push(
+        "SESSION COMPLETED: This session has completed or opened a PR. " +
+        "If there are linked tickets, post a completion summary via ticket.addComment " +
+        "with key information: what was changed, test results, PR link."
+      );
+    } else if (triggerType === "session_output") {
+      scopeLines.push(
+        "SESSION PROGRESS: Output from an active session. " +
+        "Consider updating rolling summaries. If linked tickets exist, " +
+        "post a progress update via ticket.addComment (silent enrichment — act directly with high confidence)."
+      );
+    }
+
+    if (linkedTickets.length > 0) {
+      const ticketList = linkedTickets
+        .map((t) => `${t.id} "${t.title}" (assignees: ${t.assignees.map((a) => a.name ?? a.id).join(", ") || "none"})`)
+        .join("; ");
+      scopeLines.push(`Linked tickets: ${ticketList}`);
+    } else {
+      scopeLines.push(
+        "No linked tickets. Track the session but do not try to post comments to nonexistent tickets."
+      );
+    }
+  }
+
   // Add @mention context hint
   if (ctx.isMention) {
     scopeLines.push(
