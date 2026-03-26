@@ -29,6 +29,7 @@ import { ticketService } from "./services/ticket.js";
 import { chatService } from "./services/chat.js";
 import { sessionService } from "./services/session.js";
 import { inboxService } from "./services/inbox.js";
+import { channelService } from "./services/channel.js";
 import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,7 @@ const aggregator = new EventAggregator(handleBatch);
 const executor = new ActionExecutor({
   ticketService,
   chatService,
+  channelService,
   sessionService,
   inboxService,
 });

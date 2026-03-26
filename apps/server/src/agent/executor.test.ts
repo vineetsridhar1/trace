@@ -16,6 +16,9 @@ function createServices(): ServiceContainer {
     sessionService: {
       start: vi.fn().mockResolvedValue({ id: "session-1" }),
     } as unknown as ServiceContainer["sessionService"],
+    channelService: {
+      sendMessage: vi.fn().mockResolvedValue({ id: "channel-msg-1" }),
+    } as unknown as ServiceContainer["channelService"],
     inboxService: {
       createItem: vi.fn().mockResolvedValue({ id: "inbox-1" }),
     } as unknown as ServiceContainer["inboxService"],
