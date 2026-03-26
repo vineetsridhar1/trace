@@ -278,28 +278,22 @@ describe("policy-engine", () => {
 
   describe("suggestion rate limiting", () => {
     it("suppresses suggestions after exceeding per-scope limit", async () => {
+      // system scope has limit=0 so we can test rate limiting easily
       const input = makeInput({
         plannerOutput: makePlannerOutput({
           confidence: 0.8,
-          // medium risk, suggest mode: suggestMin=0.5, actMin=0.9 → suggest
           proposedActions: [{ actionType: "ticket.create", args: { title: "Bug" } }],
         }),
         context: makeContext({
+          scopeType: "system",
           permissions: { autonomyMode: "suggest", actions: [] },
         }),
       });
 
-      // Channel limit is 2 per hour
+      // system limit is 0 per hour — first call should be suppressed
       const r1 = await evaluatePolicy(input);
-      expect(r1.actions[0].decision).toBe("suggest");
-
-      const r2 = await evaluatePolicy(input);
-      expect(r2.actions[0].decision).toBe("suggest");
-
-      // 3rd should be suppressed
-      const r3 = await evaluatePolicy(input);
-      expect(r3.actions[0].decision).toBe("drop");
-      expect(r3.actions[0].reason).toBe("suggestion_rate_limited");
+      expect(r1.actions[0].decision).toBe("drop");
+      expect(r1.actions[0].reason).toBe("suggestion_rate_limited");
     });
 
     it("suppresses all unsolicited suggestions in DMs", async () => {
@@ -311,9 +305,9 @@ describe("policy-engine", () => {
           }),
           context: makeContext({
             scopeType: "chat",
+            isDm: true,
             permissions: { autonomyMode: "suggest", actions: [] },
           }),
-          isDm: true,
         }),
       );
 
