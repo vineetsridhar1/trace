@@ -577,27 +577,48 @@ export class SessionService {
     throw new Error("No connected runtime available for this session group");
   }
 
-  async listGroups(channelId: string, organizationId: string) {
+  async listGroups(
+    channelId: string,
+    organizationId: string,
+    options?: { archived?: boolean; status?: string },
+  ) {
+    const where: Record<string, unknown> = { channelId, organizationId };
+
+    if (options?.archived === true) {
+      where.archivedAt = { not: null };
+    } else if (options?.archived === false || !options?.archived) {
+      where.archivedAt = null;
+    }
+
     const groups = await prisma.sessionGroup.findMany({
-      where: { channelId, organizationId },
+      where,
       include: SESSION_GROUP_INCLUDE,
     });
 
-    return groups
-      .map((group) => {
-        const sessions = sortSessionsByRecency(group.sessions);
-        return {
-          ...buildSessionGroupSnapshot(group, sessions),
-          sessions,
-        };
-      })
-      .sort((a, b) => {
-        const aLatest = a.sessions[0];
-        const bLatest = b.sessions[0];
-        const aTs = aLatest?.updatedAt ?? a.updatedAt;
-        const bTs = bLatest?.updatedAt ?? b.updatedAt;
-        return bTs.getTime() - aTs.getTime();
-      });
+    const mapped = groups.map((group) => {
+      const sessions = sortSessionsByRecency(group.sessions);
+      return {
+        ...buildSessionGroupSnapshot(group, sessions),
+        sessions,
+      };
+    });
+
+    // Post-query filter for derived status (computed from child sessions)
+    let filtered = mapped;
+    if (options?.status === "merged") {
+      filtered = mapped.filter((g) => g.status === "merged");
+    } else if (!options?.archived && !options?.status) {
+      // Default main table: exclude merged groups (server-side)
+      filtered = mapped.filter((g) => g.status !== "merged");
+    }
+
+    return filtered.sort((a, b) => {
+      const aLatest = a.sessions[0];
+      const bLatest = b.sessions[0];
+      const aTs = aLatest?.updatedAt ?? a.updatedAt;
+      const bTs = bLatest?.updatedAt ?? b.updatedAt;
+      return bTs.getTime() - aTs.getTime();
+    });
   }
 
   async getGroup(id: string, organizationId: string) {
@@ -3765,6 +3786,59 @@ export class SessionService {
       actorType: "system",
       actorId: "github-webhook",
     });
+  }
+
+  /** Archive a session group: stop agents, unload worktree, mark as archived. */
+  async archiveGroup(
+    groupId: string,
+    organizationId: string,
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: groupId },
+      include: { sessions: { select: { id: true } } },
+    });
+    if (!group) throw new Error("Session group not found");
+    if (group.organizationId !== organizationId) throw new Error("Session group not found");
+
+    // Stop all active agents
+    await prisma.session.updateMany({
+      where: { sessionGroupId: groupId, agentStatus: "active" },
+      data: { agentStatus: "stopped" },
+    });
+
+    // Mark as archived
+    await prisma.sessionGroup.update({
+      where: { id: groupId },
+      data: { archivedAt: new Date() },
+    });
+
+    // Unload worktree and terminals
+    const sessionGroup = await this.syncGroupWorkspaceState(groupId, {
+      workdir: null,
+      worktreeDeleted: true,
+    });
+
+    const latestSessionId = group.sessions[0]?.id;
+    if (latestSessionId) {
+      await this.fullyUnloadSession(latestSessionId, true);
+    }
+
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: latestSessionId ?? groupId,
+      eventType: "session_group_archived",
+      payload: {
+        sessionGroupId: groupId,
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType,
+      actorId,
+    });
+
+    return sessionGroup;
   }
 
   /** Transition all sessions in the group to merged when the group's PR is merged. */
