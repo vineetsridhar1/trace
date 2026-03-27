@@ -159,20 +159,17 @@ export function SessionInputOptions({
       )}
       {isNotStarted ? (
         <Select value={currentRuntimeValue} onValueChange={handleRuntimeChange}>
-          <Tooltip>
-            <TooltipTrigger render={
-              <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0" />
-            }>
-              <SelectValue>
+          <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
+            <SelectValue>
+              <span className="flex items-center gap-1">
                 {isCloud ? (
-                  <Cloud size={12} className="text-blue-400" />
+                  <><Cloud size={12} className="text-blue-400" /> Cloud</>
                 ) : (
-                  <Monitor size={12} className="text-green-400" />
+                  <><Monitor size={12} className="text-green-400" /> {runtimeLabel ?? "Local"}</>
                 )}
-              </SelectValue>
-            </TooltipTrigger>
-            <TooltipContent>{isCloud ? "Cloud" : (runtimeLabel ?? "Local")}</TooltipContent>
-          </Tooltip>
+              </span>
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value={CLOUD_RUNTIME_ID}>
               <span className="flex items-center gap-1.5"><Cloud size={12} className="text-blue-400" /> Cloud</span>
