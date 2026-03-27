@@ -177,6 +177,55 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  queueSessionMessage: (
+    _: unknown,
+    args: { sessionId: string; text: string; interactionMode?: string | null },
+    ctx: Context,
+  ) => {
+    return sessionService.queueMessage({
+      sessionId: args.sessionId,
+      text: args.text,
+      organizationId: requireOrgContext(ctx),
+      interactionMode: args.interactionMode ?? undefined,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
+  updateQueuedMessage: (
+    _: unknown,
+    args: { id: string; text?: string | null; interactionMode?: string | null },
+    ctx: Context,
+  ) => {
+    return sessionService.updateQueuedMessage({
+      id: args.id,
+      organizationId: requireOrgContext(ctx),
+      text: args.text ?? undefined,
+      interactionMode: args.interactionMode ?? undefined,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
+  removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.removeQueuedMessage({
+      id: args.id,
+      organizationId: requireOrgContext(ctx),
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
+  reorderQueuedMessages: (
+    _: unknown,
+    args: { sessionId: string; orderedIds: string[] },
+    ctx: Context,
+  ) => {
+    return sessionService.reorderQueuedMessages({
+      sessionId: args.sessionId,
+      organizationId: requireOrgContext(ctx),
+      orderedIds: args.orderedIds,
+      actorType: ctx.actorType,
+      actorId: ctx.userId,
+    });
+  },
 };
 
 export const sessionTypeResolvers = {
@@ -214,6 +263,13 @@ export const sessionTypeResolvers = {
     },
   },
   Session: {
+    queuedMessages: async (session: { id: string; queuedMessages?: unknown[] }) => {
+      if (Array.isArray(session.queuedMessages)) return session.queuedMessages;
+      return prisma.queuedMessage.findMany({
+        where: { sessionId: session.id },
+        orderBy: { position: "asc" },
+      });
+    },
     tickets: async (session: { id: string }) => {
       const links = await prisma.ticketLink.findMany({
         where: { entityType: "session", entityId: session.id },

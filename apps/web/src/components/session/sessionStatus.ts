@@ -141,7 +141,8 @@ export function isTerminalStatus(
   return agentStatus === "failed" || agentStatus === "stopped" || sessionStatus === "merged";
 }
 
-/** Check if a session can accept new messages (not disconnected and not fully unloaded) */
+/** Check if a session can accept new messages (not disconnected and not fully unloaded).
+ *  Active sessions can now accept input — messages are queued server-side. */
 export function canSendMessage(
   agentStatus: string | undefined,
   connection: Record<string, unknown> | null | undefined,
@@ -149,7 +150,7 @@ export function canSendMessage(
 ): boolean {
   if (!agentStatus) return false;
   if (worktreeDeleted) return false;
-  if (agentStatus === "active") return false; // waiting for response
+  if (isTerminalStatus(agentStatus)) return false;
   if (isDisconnected(connection)) return false;
   return true;
 }

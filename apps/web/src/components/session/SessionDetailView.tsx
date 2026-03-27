@@ -99,6 +99,17 @@ const SESSION_DETAIL_QUERY = gql`
         filesChanged
         createdAt
       }
+      queuedMessages {
+        id
+        sessionId
+        organizationId
+        text
+        interactionMode
+        position
+        createdById
+        createdAt
+        updatedAt
+      }
       channel {
         id
       }
@@ -162,6 +173,12 @@ export function SessionDetailView({
             sessionId,
             existing ? { ...existing, ...result.data.session } : result.data.session,
           );
+          // Seed queued messages into the entity store
+          const queuedMessages = result.data.session.queuedMessages;
+          if (Array.isArray(queuedMessages)) {
+            const { upsertMany } = useEntityStore.getState();
+            upsertMany("queuedMessages", queuedMessages);
+          }
         }
       });
   }, [sessionId]);

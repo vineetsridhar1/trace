@@ -19,6 +19,7 @@ import type {
   InboxItem,
   GitCheckpoint,
   SessionStatus,
+  QueuedMessage,
 } from "@trace/gql";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
@@ -616,6 +617,40 @@ export function useOrgEvents() {
           const item = asJsonObject(payload.inboxItem);
           if (item && typeof item.id === "string") {
             upsert("inboxItems", item.id, item as unknown as InboxItem);
+          }
+        }
+
+        // Queued message events
+        if (event.eventType === ("message_queued" as EventType) && payload) {
+          const qm = asJsonObject(payload.queuedMessage);
+          if (qm && typeof qm.id === "string") {
+            upsert("queuedMessages", qm.id, qm as unknown as QueuedMessage);
+          }
+        }
+        if (event.eventType === ("queued_message_updated" as EventType) && payload) {
+          const qm = asJsonObject(payload.queuedMessage);
+          if (qm && typeof qm.id === "string") {
+            upsert("queuedMessages", qm.id, qm as unknown as QueuedMessage);
+          }
+          // Batch reorder — payload may contain an array
+          const qms = payload.queuedMessages;
+          if (Array.isArray(qms)) {
+            for (const item of qms) {
+              const q = asJsonObject(item);
+              if (q && typeof q.id === "string") {
+                upsert("queuedMessages", q.id, q as unknown as QueuedMessage);
+              }
+            }
+          }
+        }
+        if (event.eventType === ("queued_message_removed" as EventType) && payload) {
+          if (typeof payload.queuedMessageId === "string") {
+            remove("queuedMessages", payload.queuedMessageId);
+          }
+        }
+        if (event.eventType === ("queued_message_sent" as EventType) && payload) {
+          if (typeof payload.queuedMessageId === "string") {
+            remove("queuedMessages", payload.queuedMessageId);
           }
         }
 
