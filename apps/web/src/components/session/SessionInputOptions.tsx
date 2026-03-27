@@ -93,6 +93,9 @@ export function SessionInputOptions({
       .then((result) => {
         const data = result.data?.availableRuntimes as SessionRuntimeInstance[] | undefined;
         if (data) setRuntimes(data);
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to fetch available runtimes:", error);
       });
   }, [isNotStarted, currentTool]);
 

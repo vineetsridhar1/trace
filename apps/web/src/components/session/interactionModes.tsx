@@ -14,6 +14,8 @@ export interface ModeConfig {
   sendButton: string;
   /** Color class for the runtime icon */
   iconColor: string;
+  /** Border class for the outer input container */
+  containerBorder: string;
 }
 
 export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
@@ -24,6 +26,7 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
     inputBorder: "border-border focus:ring-accent",
     sendButton: "bg-accent hover:bg-accent/90 text-accent-foreground",
     iconColor: "text-accent",
+    containerBorder: "border-border",
   },
   plan: {
     label: "Plan",
@@ -32,6 +35,7 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
     inputBorder: "border-violet-500/50 focus:ring-violet-500",
     sendButton: "bg-violet-500 hover:bg-violet-500/90 text-white",
     iconColor: "text-violet-400",
+    containerBorder: "border-violet-500/50",
   },
   ask: {
     label: "Ask",
@@ -40,6 +44,7 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
     inputBorder: "border-orange-600/50 focus:ring-orange-600",
     sendButton: "bg-orange-600 hover:bg-orange-600/90 text-white",
     iconColor: "text-orange-400",
+    containerBorder: "border-orange-600/50",
   },
 };
 

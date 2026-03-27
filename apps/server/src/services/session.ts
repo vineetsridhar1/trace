@@ -481,6 +481,45 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  /**
+   * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
+   * Resolves repo/branch/hosting and delegates to the session router.
+   */
+  private provisionRuntime(params: {
+    sessionId: string;
+    hosting: string;
+    tool: string;
+    model?: string | null;
+    repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
+    branch?: string | null;
+    checkpointSha?: string | null;
+    createdById: string;
+    organizationId: string;
+    readOnly?: boolean;
+  }): void {
+    sessionRouter.createRuntime({
+      sessionId: params.sessionId,
+      hosting: params.hosting as "cloud" | "local",
+      tool: params.tool,
+      model: params.model ?? undefined,
+      repo: params.repo
+        ? {
+            id: params.repo.id,
+            name: params.repo.name,
+            remoteUrl: params.repo.remoteUrl,
+            defaultBranch: params.repo.defaultBranch,
+          }
+        : null,
+      branch: params.branch ?? undefined,
+      checkpointSha: params.checkpointSha ?? undefined,
+      createdById: params.createdById,
+      organizationId: params.organizationId,
+      readOnly: params.readOnly,
+      onFailed: (error) => this.workspaceFailed(params.sessionId, error),
+      onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
+    });
+  }
+
   private assertLocalFileOwnership(
     sessions: Array<{ hosting: string | null; createdById: string }>,
     userId: string,
@@ -973,26 +1012,17 @@ export class SessionService {
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
     // until the user sends their first message.
     if (needsRuntimeProvisioning && input.prompt) {
-      sessionRouter.createRuntime({
+      this.provisionRuntime({
         sessionId: session.id,
-        hosting: session.hosting as "cloud" | "local",
+        hosting: session.hosting,
         tool: session.tool,
-        model: session.model ?? undefined,
-        repo: session.repo
-          ? {
-              id: session.repo.id,
-              name: session.repo.name,
-              remoteUrl: session.repo.remoteUrl,
-              defaultBranch: session.repo.defaultBranch,
-            }
-          : null,
-        branch: resolvedBranch ?? undefined,
-        checkpointSha: restoreCheckpoint?.commitSha ?? undefined,
+        model: session.model,
+        repo: session.repo,
+        branch: resolvedBranch,
+        checkpointSha: restoreCheckpoint?.commitSha,
         createdById: input.createdById,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
-        onFailed: (error) => this.workspaceFailed(session.id, error),
-        onWorkspaceReady: (workdir) => this.workspaceReady(session.id, workdir),
       });
     }
 
@@ -1055,27 +1085,20 @@ export class SessionService {
 
       // If no runtime has been provisioned yet (deferred from startSession),
       // kick it off now that the user has sent their first message.
+      // Guard: skip if a runtime is already bound (provisioning in progress).
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
-      if (needsProvisioning) {
-        sessionRouter.createRuntime({
+      const alreadyProvisioning = !!sessionRouter.getRuntimeForSession(id);
+      if (needsProvisioning && !alreadyProvisioning) {
+        this.provisionRuntime({
           sessionId: id,
-          hosting: session.hosting as "cloud" | "local",
+          hosting: session.hosting,
           tool: session.tool,
-          model: session.model ?? undefined,
-          repo: session.repo
-            ? {
-                id: session.repo.id,
-                name: session.repo.name,
-                remoteUrl: session.repo.remoteUrl,
-                defaultBranch: session.repo.defaultBranch,
-              }
-            : null,
-          branch: session.branch ?? undefined,
+          model: session.model,
+          repo: session.repo,
+          branch: session.branch,
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
-          onFailed: (error) => this.workspaceFailed(id, error),
-          onWorkspaceReady: (workdir) => this.workspaceReady(id, workdir),
         });
       }
 
@@ -1825,25 +1848,16 @@ export class SessionService {
           },
         });
 
-        sessionRouter.createRuntime({
+        this.provisionRuntime({
           sessionId,
-          hosting: session.hosting as "cloud" | "local",
+          hosting: session.hosting,
           tool: session.tool,
-          model: session.model ?? undefined,
-          repo: session.repo
-            ? {
-                id: session.repo.id,
-                name: session.repo.name,
-                remoteUrl: session.repo.remoteUrl,
-                defaultBranch: session.repo.defaultBranch,
-              }
-            : null,
-          branch: session.branch ?? undefined,
+          model: session.model,
+          repo: session.repo,
+          branch: session.branch,
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
-          onFailed: (error) => this.workspaceFailed(sessionId, error),
-          onWorkspaceReady: (workdir) => this.workspaceReady(sessionId, workdir),
         });
 
         const event = await eventService.create({
