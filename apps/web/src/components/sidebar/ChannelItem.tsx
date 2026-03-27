@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { MessageSquare, Code } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -24,6 +24,11 @@ export const ChannelItem = memo(function ChannelItem({
   const name = useEntityField("channels", id, "name");
   const type = useEntityField("channels", id, "type");
 
+  const sortableData = useMemo(
+    () => ({ type: "channel" as const, id, groupId: groupId ?? null }),
+    [id, groupId],
+  );
+
   const {
     attributes,
     listeners,
@@ -33,7 +38,7 @@ export const ChannelItem = memo(function ChannelItem({
     isDragging,
   } = useSortable({
     id: `channel:${id}`,
-    data: { type: "channel", id, groupId: groupId ?? null },
+    data: sortableData,
   });
 
   const style = {

@@ -130,24 +130,18 @@ export const aiConversationTypeResolvers = {
   },
 
   Branch: {
-    conversation: (branch: { conversationId: string }) => {
-      return prisma.aiConversation.findUniqueOrThrow({
-        where: { id: branch.conversationId },
-      });
+    conversation: (branch: { conversationId: string }, _args: unknown, ctx: Context) => {
+      return ctx.conversationLoader.load(branch.conversationId);
     },
 
-    parentBranch: (branch: { parentBranchId: string | null }) => {
+    parentBranch: (branch: { parentBranchId: string | null }, _args: unknown, ctx: Context) => {
       if (!branch.parentBranchId) return null;
-      return prisma.aiBranch.findUnique({
-        where: { id: branch.parentBranchId },
-      });
+      return ctx.branchLoader.load(branch.parentBranchId);
     },
 
-    forkTurn: (branch: { forkTurnId?: string | null }) => {
+    forkTurn: (branch: { forkTurnId?: string | null }, _args: unknown, ctx: Context) => {
       if (!branch.forkTurnId) return null;
-      return prisma.aiTurn.findUnique({
-        where: { id: branch.forkTurnId },
-      });
+      return ctx.turnLoader.load(branch.forkTurnId);
     },
 
     turns: (branch: { id: string }) => {
@@ -185,17 +179,13 @@ export const aiConversationTypeResolvers = {
   },
 
   Turn: {
-    branch: (turn: { branchId: string }) => {
-      return prisma.aiBranch.findUniqueOrThrow({
-        where: { id: turn.branchId },
-      });
+    branch: (turn: { branchId: string }, _args: unknown, ctx: Context) => {
+      return ctx.branchLoader.load(turn.branchId);
     },
 
-    parentTurn: (turn: { parentTurnId?: string | null }) => {
+    parentTurn: (turn: { parentTurnId?: string | null }, _args: unknown, ctx: Context) => {
       if (!turn.parentTurnId) return null;
-      return prisma.aiTurn.findUnique({
-        where: { id: turn.parentTurnId },
-      });
+      return ctx.turnLoader.load(turn.parentTurnId);
     },
 
     branchCount: (turn: { id: string }) => {

@@ -958,5 +958,6 @@ type Subscription {
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
   branchTurns(branchId: ID!): Turn!
+  sessionEvents(sessionId: ID!, organizationId: ID!): Event!
   conversationEvents(conversationId: ID!): AiConversationEvent!
 }

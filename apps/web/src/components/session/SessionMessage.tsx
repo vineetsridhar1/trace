@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
 import { asJsonObject, type JsonObject } from "@trace/shared";
 import { useScopedEventField } from "../../stores/entity";
@@ -115,7 +116,7 @@ function renderSessionOutput(
   return null;
 }
 
-export function SessionMessage({
+export const SessionMessage = memo(function SessionMessage({
   id,
   gitCheckpointsByPromptEventId,
   completedAgentTools,
@@ -190,4 +191,4 @@ export function SessionMessage({
     default:
       return null;
   }
-}
+});

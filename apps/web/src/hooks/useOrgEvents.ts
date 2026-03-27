@@ -248,7 +248,7 @@ export function useOrgEvents() {
         };
 
         // Always upsert the raw event into its scoped bucket
-        batch.upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
+        batch.upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, storedEvent);
 
         // Repo created or updated — upsert directly from payload
         if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {

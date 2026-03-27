@@ -135,13 +135,18 @@ export function useSidebarData() {
     }
   }, [activeOrgId, upsertMany]);
 
+  // Initial fetch — channels, channelGroups, and chats are kept fresh by useOrgEvents,
+  // so they don't need to refetch on refreshTick. Only inbox items need periodic refresh.
   useEffect(() => {
     fetchChannels();
     fetchChannelGroups();
     fetchChats();
     fetchRepos();
+  }, [fetchChannels, fetchChannelGroups, fetchChats, fetchRepos]);
+
+  useEffect(() => {
     fetchInboxItems();
-  }, [fetchChannels, fetchChannelGroups, fetchChats, fetchRepos, fetchInboxItems, refreshTick]);
+  }, [fetchInboxItems, refreshTick]);
 
   const chatIds = useEntityIds("chats");
 

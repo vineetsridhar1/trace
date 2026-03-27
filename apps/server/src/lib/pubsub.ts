@@ -119,4 +119,5 @@ export const topics = {
   sessionPorts: (sessionId: string) => `session:${sessionId}:ports`,
   branchTurns: (branchId: string) => `branch:${branchId}:turns`,
   conversationEvents: (conversationId: string) => `conversation:${conversationId}:events`,
+  sessionEvents: (sessionId: string) => `session:${sessionId}:events`,
 } as const;
