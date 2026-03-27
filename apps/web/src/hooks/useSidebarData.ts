@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { Channel, ChannelGroup, Chat, Repo, InboxItem } from "@trace/gql";
 import { useAuthStore } from "../stores/auth";
 import { useEntityStore, useEntityIds } from "../stores/entity";
@@ -90,8 +91,6 @@ export function useSidebarData() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const refreshTick = useUIStore((s) => s.refreshTick);
-  const channelsById = useEntityStore((s) => s.channels);
-  const channelGroupsById = useEntityStore((s) => s.channelGroups);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [chatsLoading, setChatsLoading] = useState(true);
 
@@ -175,25 +174,44 @@ export function useSidebarData() {
     },
   );
 
+  // Narrow selectors: only re-render when groupId or position fields change,
+  // not when any channel/group field updates (e.g. name, members, etc.)
+  const channelGroupIdAndPosition = useEntityStore(
+    useShallow((s) =>
+      allChannelIds.map((id) => {
+        const ch = s.channels[id];
+        return ch ? `${ch.groupId ?? ""}:${ch.position ?? 0}` : "";
+      }),
+    ),
+  );
+
+  const groupPositions = useEntityStore(
+    useShallow((s) =>
+      groupIds.map((id) => s.channelGroups[id]?.position ?? 0),
+    ),
+  );
+
   const { channelIdsByGroup, topLevelItems } = useMemo(() => {
     const byGroup: Record<string, string[]> = {};
     const items: TopLevelItem[] = [];
 
-    for (const id of allChannelIds) {
-      const channel = channelsById[id];
-      if (!channel) continue;
-      if (channel.groupId) {
-        if (!byGroup[channel.groupId]) byGroup[channel.groupId] = [];
-        byGroup[channel.groupId].push(id);
+    for (let i = 0; i < allChannelIds.length; i++) {
+      const id = allChannelIds[i];
+      const parts = channelGroupIdAndPosition[i];
+      if (!parts && parts !== "") continue;
+      const colonIdx = parts.lastIndexOf(":");
+      const gId = parts.slice(0, colonIdx);
+      const pos = Number(parts.slice(colonIdx + 1));
+      if (gId) {
+        if (!byGroup[gId]) byGroup[gId] = [];
+        byGroup[gId].push(id);
       } else {
-        items.push({ kind: "channel", id, position: channel.position ?? 0 });
+        items.push({ kind: "channel", id, position: pos });
       }
     }
 
-    for (const id of groupIds) {
-      const group = channelGroupsById[id];
-      if (!group) continue;
-      items.push({ kind: "group", id, position: group.position ?? 0 });
+    for (let i = 0; i < groupIds.length; i++) {
+      items.push({ kind: "group", id: groupIds[i], position: groupPositions[i] });
     }
 
     items.sort((a, b) => {
@@ -203,7 +221,12 @@ export function useSidebarData() {
     });
 
     return { channelIdsByGroup: byGroup, topLevelItems: items };
-  }, [allChannelIds, groupIds, channelsById, channelGroupsById]);
+  }, [allChannelIds, groupIds, channelGroupIdAndPosition, groupPositions]);
+
+  // Full maps returned for DnD consumers — these subscribe broadly but only
+  // child components that destructure them will re-render.
+  const channelsById = useEntityStore((s) => s.channels);
+  const channelGroupsById = useEntityStore((s) => s.channelGroups);
 
   return {
     activeOrgId,

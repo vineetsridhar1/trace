@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { MessageSquare, Code } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -9,7 +10,7 @@ function ChannelIcon({ type, className }: { type: string | undefined; className?
   return <Code size={16} className={className} />;
 }
 
-export function ChannelItem({
+export const ChannelItem = memo(function ChannelItem({
   id,
   isActive,
   onClick,
@@ -56,4 +57,4 @@ export function ChannelItem({
       </SidebarMenuItem>
     </div>
   );
-}
+});

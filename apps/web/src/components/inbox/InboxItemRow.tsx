@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import { MessageCircleQuestion, Map, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
@@ -54,7 +54,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export function InboxItemRow({ id }: { id: string }) {
+export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
   const title = useEntityField("inboxItems", id, "title");
   const itemType = useEntityField("inboxItems", id, "itemType");
   const status = useEntityField("inboxItems", id, "status");
@@ -324,4 +324,4 @@ export function InboxItemRow({ id }: { id: string }) {
       )}
     </div>
   );
-}
+});

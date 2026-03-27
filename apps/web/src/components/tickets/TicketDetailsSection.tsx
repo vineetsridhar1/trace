@@ -13,8 +13,8 @@ import {
   Calendar,
   type LucideIcon,
 } from "lucide-react";
-import type { Priority, TicketStatus, Ticket, User } from "@trace/gql";
-import { useEntityStore, useEntityField } from "../../stores/entity";
+import type { Priority, TicketStatus, User } from "@trace/gql";
+import { useEntityField } from "../../stores/entity";
 import { timeAgo } from "../../lib/utils";
 import {
   ticketStatusLabel,
@@ -143,53 +143,62 @@ function LabelsValue({ labels }: { labels: string[] }) {
 }
 
 export function TicketDetailsSection({ ticketId }: { ticketId: string }) {
-  const ticket = useEntityStore((s) => s.tickets[ticketId]) as Ticket | undefined;
+  const title = useEntityField("tickets", ticketId, "title");
+  const description = useEntityField("tickets", ticketId, "description");
+  const status = useEntityField("tickets", ticketId, "status");
+  const priority = useEntityField("tickets", ticketId, "priority");
+  const assignees = useEntityField("tickets", ticketId, "assignees");
+  const labels = useEntityField("tickets", ticketId, "labels");
+  const channel = useEntityField("tickets", ticketId, "channel") as { id: string } | null | undefined;
+  const createdBy = useEntityField("tickets", ticketId, "createdBy") as { name: string; avatarUrl?: string | null } | null | undefined;
+  const createdAt = useEntityField("tickets", ticketId, "createdAt");
+  const updatedAt = useEntityField("tickets", ticketId, "updatedAt");
 
-  if (!ticket) return null;
+  if (!title) return null;
 
   return (
     <div className="grid grid-cols-[20px_80px_1fr] gap-x-3 gap-y-4 items-start">
       <DetailItem
         icon={Pencil}
         label="Title"
-        value={ticket.title}
+        value={title}
       />
       <DetailItem
         icon={FileText}
         label="Description"
-        value={ticket.description || "No description"}
+        value={description || "No description"}
       />
       <DetailItem
         icon={Circle}
         label="Status"
-        value={<StatusValue status={ticket.status} />}
+        value={<StatusValue status={status!} />}
       />
       <DetailItem
         icon={AlertTriangle}
         label="Priority"
-        value={<PriorityValue priority={ticket.priority} />}
+        value={<PriorityValue priority={priority!} />}
       />
       <DetailItem
         icon={Users}
         label="Assignees"
-        value={<AssigneesValue assignees={ticket.assignees} />}
+        value={<AssigneesValue assignees={assignees ?? ([] as User[])} />}
       />
       <DetailItem
         icon={Tag}
         label="Labels"
-        value={<LabelsValue labels={ticket.labels ?? []} />}
+        value={<LabelsValue labels={labels ?? []} />}
       />
       <DetailItem
         icon={Hash}
         label="Channel"
-        value={<ChannelValue channelId={ticket.channel?.id} />}
+        value={<ChannelValue channelId={channel?.id} />}
       />
       <DetailItem
         icon={UserIcon}
         label="Created by"
         value={
-          ticket.createdBy ? (
-            <UserValue user={ticket.createdBy} />
+          createdBy ? (
+            <UserValue user={createdBy} />
           ) : (
             "Unknown"
           )
@@ -198,12 +207,12 @@ export function TicketDetailsSection({ ticketId }: { ticketId: string }) {
       <DetailItem
         icon={Calendar}
         label="Created"
-        value={timeAgo(ticket.createdAt)}
+        value={timeAgo(createdAt!)}
       />
       <DetailItem
         icon={Calendar}
         label="Updated"
-        value={timeAgo(ticket.updatedAt)}
+        value={timeAgo(updatedAt!)}
       />
     </div>
   );

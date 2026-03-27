@@ -8,7 +8,7 @@ import {
   START_SESSION_MUTATION,
 } from "../../lib/mutations";
 import { useDetailPanelStore } from "../../stores/detail-panel";
-import { useEntityField, useEntityStore } from "../../stores/entity";
+import { useEntityField, useEntityStore, useSessionIdsByGroup } from "../../stores/entity";
 import type { SessionEntity } from "../../stores/entity";
 import { useAuthStore } from "../../stores/auth";
 import { useTerminalStore, useSessionGroupTerminals } from "../../stores/terminal";
@@ -165,12 +165,14 @@ export function SessionGroupDetailView({
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
+  const groupSessionIds = useSessionIdsByGroup(sessionGroupId);
+
   const groupSessions = useMemo(
     () =>
-      (Object.values(sessionsMap) as SessionEntity[]).filter(
-        (session) => session.sessionGroupId === sessionGroupId,
-      ),
-    [sessionGroupId, sessionsMap],
+      groupSessionIds
+        .map((id) => sessionsMap[id])
+        .filter(Boolean),
+    [groupSessionIds, sessionsMap],
   );
 
   const sessionsByRecency = useMemo(() => {
