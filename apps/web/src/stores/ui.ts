@@ -30,6 +30,9 @@ interface UIState {
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
+  channelDoneBadges: Record<string, boolean>;
+  markChannelDone: (channelId: string) => void;
+  clearChannelDone: (channelId: string) => void;
   _restoreNav: (
     channelId: string | null,
     sessionGroupId: string | null,
@@ -153,6 +156,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
   unreadChatIds: {},
+  channelDoneBadges: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 
   openSessionTab: (groupId, sessionId) => {
@@ -234,14 +238,22 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveChannelId: (id) => {
     persistActiveChannelId(id);
-    set({
-      activePage: "main",
-      activeChannelId: id,
-      activeChatId: null,
-      activeSessionGroupId: null,
-      activeSessionId: null,
-      activeTerminalId: null,
-      activeThreadId: null,
+    set((s) => {
+      let channelDoneBadges = s.channelDoneBadges;
+      if (id && channelDoneBadges[id]) {
+        const { [id]: _, ...rest } = channelDoneBadges;
+        channelDoneBadges = rest;
+      }
+      return {
+        activePage: "main" as ActivePage,
+        activeChannelId: id,
+        activeChatId: null,
+        activeSessionGroupId: null,
+        activeSessionId: null,
+        activeTerminalId: null,
+        activeThreadId: null,
+        channelDoneBadges,
+      };
     });
     pushNav(id, null, null);
   },
@@ -258,6 +270,21 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (!s.unreadChatIds[chatId]) return s;
       const { [chatId]: _, ...rest } = s.unreadChatIds;
       return { unreadChatIds: rest };
+    });
+  },
+
+  markChannelDone: (channelId) => {
+    set((s) => {
+      if (s.channelDoneBadges[channelId]) return s;
+      return { channelDoneBadges: { ...s.channelDoneBadges, [channelId]: true } };
+    });
+  },
+
+  clearChannelDone: (channelId) => {
+    set((s) => {
+      if (!s.channelDoneBadges[channelId]) return s;
+      const { [channelId]: _, ...rest } = s.channelDoneBadges;
+      return { channelDoneBadges: rest };
     });
   },
 
@@ -304,18 +331,26 @@ export const useUIStore = create<UIState>((set, get) => ({
     const channelId = resolveChannelIdForSessionGroup(groupId, currentChannelId);
     persistActiveChannelId(channelId);
     persistActiveSessionNav(groupId, nextSessionId);
-    set((state) => ({
-      activePage: "main",
-      activeChatId: null,
-      activeChannelId: channelId,
-      activeSessionGroupId: groupId,
-      activeSessionId: nextSessionId,
-      activeTerminalId: null,
-      lastSelectedSessionIdsByGroup:
-        nextSessionId
-          ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
-          : state.lastSelectedSessionIdsByGroup,
-    }));
+    set((state) => {
+      let channelDoneBadges = state.channelDoneBadges;
+      if (channelId && channelDoneBadges[channelId]) {
+        const { [channelId]: _, ...rest } = channelDoneBadges;
+        channelDoneBadges = rest;
+      }
+      return {
+        activePage: "main" as ActivePage,
+        activeChatId: null,
+        activeChannelId: channelId,
+        activeSessionGroupId: groupId,
+        activeSessionId: nextSessionId,
+        activeTerminalId: null,
+        channelDoneBadges,
+        lastSelectedSessionIdsByGroup:
+          nextSessionId
+            ? { ...state.lastSelectedSessionIdsByGroup, [groupId]: nextSessionId }
+            : state.lastSelectedSessionIdsByGroup,
+      };
+    });
     pushNav(channelId, groupId, nextSessionId);
   },
 
