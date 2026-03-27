@@ -42,6 +42,8 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
+  /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
+  private pendingWorktrees = new Map<string, Promise<{ workdir: string }>>();
   /** Sessions running in read-only mode (no worktree, using bare repo path) */
   private readOnlySessions = new Set<string>();
   /** Phase-1 git detection: sessionId → Map<toolUseId → {trigger, command}> */
@@ -249,14 +251,22 @@ export class ContainerBridge implements IBridgeClient {
               this.send({ type: "register_session", sessionId });
               this.send({ type: "workspace_ready", sessionId, workdir });
             } else {
-              const { workdir } = await createWorktree(
-                repoId,
-                sessionId,
-                defaultBranch,
-                branch,
-                checkpointSha,
-                sessionGroupId,
-              );
+              // Coalesce concurrent createWorktree calls for the same group
+              const worktreeKey = sessionGroupId ?? sessionId;
+              let worktreePromise = this.pendingWorktrees.get(worktreeKey);
+              if (!worktreePromise) {
+                worktreePromise = createWorktree({
+                  repoId,
+                  sessionId,
+                  defaultBranch,
+                  branch,
+                  checkpointSha,
+                  sessionGroupId,
+                });
+                this.pendingWorktrees.set(worktreeKey, worktreePromise);
+                worktreePromise.finally(() => this.pendingWorktrees.delete(worktreeKey));
+              }
+              const { workdir } = await worktreePromise;
               this.sessionWorkdirs.set(sessionId, workdir);
               this.send({ type: "register_session", sessionId });
               this.send({ type: "workspace_ready", sessionId, workdir });
@@ -276,14 +286,13 @@ export class ContainerBridge implements IBridgeClient {
         (async () => {
           try {
             await ensureRepo(repoId, repoRemoteUrl);
-            const { workdir } = await createWorktree(
+            const { workdir } = await createWorktree({
               repoId,
               sessionId,
               defaultBranch,
               branch,
-              undefined,
               sessionGroupId,
-            );
+            });
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
             this.send({ type: "workspace_ready", sessionId, workdir });

@@ -47,14 +47,22 @@ export async function ensureRepo(repoId: string, remoteUrl: string): Promise<str
  * The worktree is keyed by `sessionGroupId` when provided so that all sessions
  * in the same group share a single worktree and branch. Falls back to `sessionId`.
  */
-export async function createWorktree(
-  repoId: string,
-  sessionId: string,
-  defaultBranch: string,
-  branch?: string,
-  checkpointSha?: string,
-  sessionGroupId?: string,
-): Promise<{ workdir: string }> {
+export async function createWorktree({
+  repoId,
+  sessionId,
+  defaultBranch,
+  branch,
+  checkpointSha,
+  sessionGroupId,
+}: {
+  repoId: string;
+  sessionId: string;
+  defaultBranch: string;
+  branch?: string;
+  checkpointSha?: string;
+  /** When set, the worktree and branch are keyed by this ID so all sessions in the group share the same workspace. */
+  sessionGroupId?: string;
+}): Promise<{ workdir: string }> {
   const worktreeKey = sessionGroupId ?? sessionId;
   const repoPath = `${REPOS_DIR}/${repoId}`;
   const worktreePath = `${WORKSPACES_DIR}/${worktreeKey}`;
