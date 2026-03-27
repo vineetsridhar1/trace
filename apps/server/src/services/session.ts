@@ -2520,7 +2520,7 @@ export class SessionService {
         runtimeLabel: runtime.label,
         lastSeen: new Date().toISOString(),
         lastError: undefined,
-        retryCount: conn.retryCount + 1,
+        retryCount: 0,
       };
 
       // Preserve agent/session status — only update connection state.
@@ -2564,7 +2564,7 @@ export class SessionService {
       runtimeLabel: runtime.label,
       lastSeen: new Date().toISOString(),
       lastError: undefined,
-      retryCount: conn.retryCount + 1,
+      retryCount: 0,
     };
 
     // Preserve agent/session status — only update connection state.
