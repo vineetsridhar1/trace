@@ -11,8 +11,15 @@ import {
 } from "../lib/session-group-status.js";
 
 export const sessionQueries = {
-  sessionGroups: (_: unknown, args: { channelId: string }, ctx: Context) => {
-    return sessionService.listGroups(args.channelId, requireOrgContext(ctx));
+  sessionGroups: (
+    _: unknown,
+    args: { channelId: string; archived?: boolean | null; status?: string | null },
+    ctx: Context,
+  ) => {
+    return sessionService.listGroups(args.channelId, requireOrgContext(ctx), {
+      archived: args.archived ?? undefined,
+      status: args.status ?? undefined,
+    });
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx));
@@ -109,6 +116,9 @@ export const sessionMutations = {
   },
   deleteSession: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.delete(args.id, ctx.actorType, ctx.userId);
+  },
+  archiveSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
+    return sessionService.archiveGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);
   },
   deleteSessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.deleteGroup(args.id, requireOrgContext(ctx), ctx.actorType, ctx.userId);

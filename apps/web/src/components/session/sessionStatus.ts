@@ -27,6 +27,7 @@ export const sessionStatusColor: Record<string, string> = {
   failed: "text-destructive",
   stopped: "text-muted-foreground",
   merged: "text-emerald-400",
+  archived: "text-muted-foreground",
 };
 
 export const sessionStatusLabel: Record<string, string> = {
@@ -36,6 +37,7 @@ export const sessionStatusLabel: Record<string, string> = {
   failed: "Failed",
   stopped: "Stopped",
   merged: "Merged",
+  archived: "Archived",
 };
 
 // ─── Connection ───

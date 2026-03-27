@@ -199,6 +199,7 @@ enum EventType {
   session_pr_opened
   session_pr_merged
   session_pr_closed
+  session_group_archived
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -515,6 +516,7 @@ model SessionGroup {
   connection     Json?
   prUrl          String?
   worktreeDeleted Boolean     @default(false)
+  archivedAt      DateTime?
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]

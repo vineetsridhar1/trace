@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from "react";
-import { Code, GitBranch } from "lucide-react";
+import { Code, GitBranch, Archive } from "lucide-react";
 import { gql } from "@urql/core";
 import type { SessionGroup } from "@trace/gql";
 import { useEntityStore, useEntityField } from "../../stores/entity";
@@ -8,19 +8,22 @@ import { useUIStore } from "../../stores/ui";
 import { client } from "../../lib/urql";
 import { StartSessionDialog } from "./StartSessionDialog";
 import { SessionsTable } from "./SessionsTable";
+import { MergedArchivedPage } from "./MergedArchivedPage";
 import { SidebarTrigger } from "../ui/sidebar";
 import { ConnectionStatus } from "../ConnectionStatus";
 import { Skeleton } from "../ui/skeleton";
+import { Button } from "../ui/button";
 
 const SESSION_GROUPS_QUERY = gql`
-  query SessionGroups($channelId: ID!) {
-    sessionGroups(channelId: $channelId) {
+  query SessionGroups($channelId: ID!, $archived: Boolean) {
+    sessionGroups(channelId: $channelId, archived: $archived) {
       id
       name
       slug
       status
       prUrl
       worktreeDeleted
+      archivedAt
       channel {
         id
       }
@@ -72,9 +75,11 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [loading, setLoading] = useState(true);
   const refreshTick = useUIStore((s) => s.refreshTick);
+  const channelSubPage = useUIStore((s) => s.channelSubPage);
+  const setChannelSubPage = useUIStore((s) => s.setChannelSubPage);
 
   const fetchSessionGroups = useCallback(async () => {
-    const result = await client.query(SESSION_GROUPS_QUERY, { channelId }).toPromise();
+    const result = await client.query(SESSION_GROUPS_QUERY, { channelId, archived: false }).toPromise();
 
     if (result.data?.sessionGroups) {
       const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
@@ -118,11 +123,22 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
           </span>
         )}
         <ConnectionStatus />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          onClick={() => setChannelSubPage(channelSubPage === "merged-archived" ? null : "merged-archived")}
+          title="Merged & Archived"
+        >
+          <Archive size={15} />
+        </Button>
         <StartSessionDialog channelId={channelId} />
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {loading ? (
+        {channelSubPage === "merged-archived" ? (
+          <MergedArchivedPage channelId={channelId} onBack={() => setChannelSubPage(null)} />
+        ) : loading ? (
           <div className="space-y-1 px-4 pt-2">
             {Array.from({ length: 8 }).map((_, index) => (
               <div key={index} className="flex h-10 items-center gap-4 px-2">

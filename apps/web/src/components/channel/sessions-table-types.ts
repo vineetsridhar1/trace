@@ -21,7 +21,7 @@ export function bucketize(ts: string | undefined): number {
   return Math.floor(t / BUCKET_MS) * BUCKET_MS;
 }
 
-export const collapsedByDefault = new Set(["merged", "failed", "stopped"]);
+export const collapsedByDefault = new Set(["failed", "stopped"]);
 
 export const sessionStatusGroupOrder: Record<string, number> = {
   needs_input: 0,
@@ -29,5 +29,4 @@ export const sessionStatusGroupOrder: Record<string, number> = {
   in_progress: 2,
   failed: 3,
   stopped: 4,
-  merged: 5,
 };

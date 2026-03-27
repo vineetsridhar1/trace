@@ -409,6 +409,7 @@ export type EventType =
   | 'repo_created'
   | 'repo_updated'
   | 'session_deleted'
+  | 'session_group_archived'
   | 'session_output'
   | 'session_paused'
   | 'session_pr_closed'
@@ -540,6 +541,7 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
   commentOnTicket: Event;
   createAiConversation: AiConversation;
@@ -619,6 +621,11 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   role?: InputMaybe<UserRole>;
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationArchiveSessionGroupArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1289,7 +1296,9 @@ export type QuerySessionGroupFilesArgs = {
 
 
 export type QuerySessionGroupsArgs = {
+  archived?: InputMaybe<Scalars['Boolean']['input']>;
   channelId: Scalars['ID']['input'];
+  status?: InputMaybe<SessionGroupStatus>;
 };
 
 
@@ -1420,6 +1429,7 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: 'SessionGroup';
+  archivedAt?: Maybe<Scalars['DateTime']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
@@ -2243,6 +2253,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   acceptAgentSuggestion?: Resolver<ResolversTypes['InboxItem'], ParentType, ContextType, RequireFields<MutationAcceptAgentSuggestionArgs, 'inboxItemId'>>;
   addChatMember?: Resolver<ResolversTypes['Chat'], ParentType, ContextType, RequireFields<MutationAddChatMemberArgs, 'input'>>;
   addOrgMember?: Resolver<ResolversTypes['OrgMember'], ParentType, ContextType, RequireFields<MutationAddOrgMemberArgs, 'organizationId' | 'userId'>>;
+  archiveSessionGroup?: Resolver<ResolversTypes['SessionGroup'], ParentType, ContextType, RequireFields<MutationArchiveSessionGroupArgs, 'id'>>;
   assignTicket?: Resolver<ResolversTypes['Ticket'], ParentType, ContextType, RequireFields<MutationAssignTicketArgs, 'ticketId' | 'userId'>>;
   commentOnTicket?: Resolver<ResolversTypes['Event'], ParentType, ContextType, RequireFields<MutationCommentOnTicketArgs, 'text' | 'ticketId'>>;
   createAiConversation?: Resolver<ResolversTypes['AiConversation'], ParentType, ContextType, RequireFields<MutationCreateAiConversationArgs, 'input' | 'organizationId'>>;
@@ -2467,6 +2478,7 @@ export type SessionEndpointsResolvers<ContextType = Context, ParentType extends 
 }>;
 
 export type SessionGroupResolvers<ContextType = Context, ParentType extends ResolversParentTypes['SessionGroup'] = ResolversParentTypes['SessionGroup']> = ResolversObject<{
+  archivedAt?: Resolver<Maybe<ResolversTypes['DateTime']>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   channel?: Resolver<Maybe<ResolversTypes['Channel']>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes['SessionConnection']>, ParentType, ContextType>;

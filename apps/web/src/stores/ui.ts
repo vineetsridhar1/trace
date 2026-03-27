@@ -40,6 +40,8 @@ interface UIState {
   closeSessionTab: (groupId: string, sessionId: string) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
   restoreLastVisited: (tab: "dm" | "main") => void;
+  channelSubPage: "sessions" | "merged-archived" | null;
+  setChannelSubPage: (subPage: "sessions" | "merged-archived" | null) => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -166,6 +168,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   refreshTick: 0,
   lastSelectedSessionIdsByGroup: {},
   openSessionTabsByGroup: {},
+  channelSubPage: null,
+  setChannelSubPage: (subPage) => set({ channelSubPage: subPage }),
   unreadChatIds: {},
   triggerRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 

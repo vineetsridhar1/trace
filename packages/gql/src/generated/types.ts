@@ -406,6 +406,7 @@ export type EventType =
   | 'repo_created'
   | 'repo_updated'
   | 'session_deleted'
+  | 'session_group_archived'
   | 'session_output'
   | 'session_paused'
   | 'session_pr_closed'
@@ -537,6 +538,7 @@ export type Mutation = {
   acceptAgentSuggestion: InboxItem;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  archiveSessionGroup: SessionGroup;
   assignTicket: Ticket;
   commentOnTicket: Event;
   createAiConversation: AiConversation;
@@ -616,6 +618,11 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars['ID']['input'];
   role?: InputMaybe<UserRole>;
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationArchiveSessionGroupArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1286,7 +1293,9 @@ export type QuerySessionGroupFilesArgs = {
 
 
 export type QuerySessionGroupsArgs = {
+  archived?: InputMaybe<Scalars['Boolean']['input']>;
   channelId: Scalars['ID']['input'];
+  status?: InputMaybe<SessionGroupStatus>;
 };
 
 
@@ -1417,6 +1426,7 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: 'SessionGroup';
+  archivedAt?: Maybe<Scalars['DateTime']['output']>;
   branch?: Maybe<Scalars['String']['output']>;
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;

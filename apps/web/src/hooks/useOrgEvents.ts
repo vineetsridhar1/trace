@@ -458,6 +458,38 @@ export function useOrgEvents() {
           }
         }
 
+        // Session group archived — update group and stop all agents
+        if (event.eventType === "session_group_archived" && payload) {
+          upsertSessionGroupFromPayload();
+          const sessionGroupId =
+            typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+          if (sessionGroupId) {
+            patch("sessionGroups", sessionGroupId, {
+              archivedAt: event.timestamp,
+              worktreeDeleted: true,
+              updatedAt: event.timestamp,
+              _sortTimestamp: event.timestamp,
+            });
+            // Stop all sibling sessions
+            const allSessions = useEntityStore.getState().sessions;
+            for (const [siblingId, sibling] of Object.entries(allSessions)) {
+              if (sibling.sessionGroupId === sessionGroupId) {
+                patch("sessions", siblingId, {
+                  agentStatus: "stopped" as AgentStatus,
+                  worktreeDeleted: true,
+                  updatedAt: event.timestamp,
+                  _sortTimestamp: event.timestamp,
+                });
+              }
+            }
+            // Navigate away if viewing the archived group
+            const ui = useUIStore.getState();
+            if (ui.activeSessionGroupId === sessionGroupId) {
+              ui.setActiveSessionGroupId(null);
+            }
+          }
+        }
+
         // Route session status events
         if (
           SESSION_STATUS_EVENTS.has(event.eventType) &&
