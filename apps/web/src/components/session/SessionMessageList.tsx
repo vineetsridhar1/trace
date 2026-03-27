@@ -126,14 +126,23 @@ export function SessionMessageList({
     if (!container) return;
     const target = container.querySelector(`[data-event-id="${scrollToEventId}"]`);
     if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Small delay to let the DOM settle after session switch
+      requestAnimationFrame(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
       setHighlightEventId(scrollToEventId);
       const timer = setTimeout(() => setHighlightEventId(null), 2000);
       onScrollComplete?.();
       return () => clearTimeout(timer);
     }
-    onScrollComplete?.();
-  }, [scrollToEventId, onScrollComplete, nodes.length]);
+    // Target not in DOM yet — load older events if available
+    if (hasOlder && onLoadOlder && !loadingOlder) {
+      onLoadOlder();
+    } else if (!hasOlder) {
+      // No more events to load, give up
+      onScrollComplete?.();
+    }
+  }, [scrollToEventId, onScrollComplete, nodes.length, hasOlder, loadingOlder, onLoadOlder]);
 
   // IntersectionObserver on the sentinel to trigger loading older messages
   useEffect(() => {
