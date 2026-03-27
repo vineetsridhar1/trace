@@ -2,10 +2,18 @@ import type { Context } from "../context.js";
 import { executionLoggingService, type QueryExecutionLogsInput } from "../services/execution-logging.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { orgMemberService } from "../services/org-member.js";
+import { llmCallLoggingService } from "../services/llm-call-logging.js";
 import {
   getWorkerStatus,
   getAggregationWindows,
 } from "../services/agent-worker-status.js";
+
+export const agentDebugTypeResolvers = {
+  AgentExecutionLog: {
+    llmCalls: (parent: { id: string; organizationId: string }) =>
+      llmCallLoggingService.getByExecutionLogId(parent.organizationId, parent.id),
+  },
+};
 
 export const agentDebugQueries = {
   agentExecutionLogs: async (

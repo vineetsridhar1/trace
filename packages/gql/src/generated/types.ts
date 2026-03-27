@@ -77,6 +77,7 @@ export type AgentExecutionLog = {
   inboxItemId?: Maybe<Scalars['String']['output']>;
   inputTokens: Scalars['Int']['output'];
   latencyMs: Scalars['Int']['output'];
+  llmCalls: Array<AgentLlmCall>;
   model: Scalars['String']['output'];
   modelTier: ModelTier;
   organizationId: Scalars['ID']['output'];
@@ -106,6 +107,27 @@ export type AgentIdentity = {
   soulFile: Scalars['String']['output'];
   status: OrgAgentStatus;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+export type AgentLlmCall = {
+  __typename?: 'AgentLlmCall';
+  createdAt: Scalars['DateTime']['output'];
+  estimatedCostCents: Scalars['Float']['output'];
+  executionLogId: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
+  inputTokens: Scalars['Int']['output'];
+  latencyMs: Scalars['Int']['output'];
+  maxTokens?: Maybe<Scalars['Int']['output']>;
+  messages: Scalars['JSON']['output'];
+  model: Scalars['String']['output'];
+  outputTokens: Scalars['Int']['output'];
+  provider: Scalars['String']['output'];
+  responseContent: Scalars['JSON']['output'];
+  stopReason: Scalars['String']['output'];
+  systemPrompt?: Maybe<Scalars['String']['output']>;
+  temperature?: Maybe<Scalars['Float']['output']>;
+  tools: Scalars['JSON']['output'];
+  turnNumber: Scalars['Int']['output'];
 };
 
 export type AgentStatus =

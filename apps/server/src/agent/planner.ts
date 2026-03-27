@@ -81,7 +81,7 @@ export const setAdapterForTest = setAgentLLMAdapterForTest;
 // Tool definition for structured output
 // ---------------------------------------------------------------------------
 
-const PLANNER_TOOL: LLMToolDefinition = {
+export const PLANNER_TOOL: LLMToolDefinition = {
   name: "planner_decision",
   description:
     "Output your decision about what the agent should do in response to the events. " +
@@ -601,6 +601,10 @@ export interface PlannerTurnResult {
   /** Raw LLM response — pipeline uses content blocks to build message history */
   response: LLMResponse;
   latencyMs: number;
+  /** The LLM provider that handled this call (e.g. "anthropic", "openai"). */
+  provider: string;
+  /** maxTokens setting used for this call. */
+  maxTokens: number;
 }
 
 /**
@@ -618,6 +622,7 @@ export async function runPlannerTurn(
 ): Promise<PlannerTurnResult> {
   const model = options?.model ?? process.env.AGENT_PLANNER_MODEL ?? DEFAULT_TIER2_MODEL;
   const adapter = options?.adapter ?? getAgentLLMAdapter();
+  const maxTokens = 1024;
   const startTime = Date.now();
 
   const response = await withRetry(() =>
@@ -626,12 +631,13 @@ export async function runPlannerTurn(
       system: systemPrompt,
       messages,
       tools: [PLANNER_TOOL],
-      maxTokens: 1024,
+      maxTokens,
       temperature: 0,
     }),
   );
 
   const latencyMs = Date.now() - startTime;
+  const provider = adapter.provider;
 
   const toolUseBlock = response.content.find(
     (b: LLMAssistantContentBlock) => b.type === "tool_use" && b.name === "planner_decision",
@@ -646,11 +652,13 @@ export async function runPlannerTurn(
       },
       response,
       latencyMs,
+      provider,
+      maxTokens,
     };
   }
 
   const rawInput = toolUseBlock.input as Record<string, unknown>;
   const output = parsePlannerOutput(rawInput, availableActions);
 
-  return { output, response, latencyMs };
+  return { output, response, latencyMs, provider, maxTokens };
 }

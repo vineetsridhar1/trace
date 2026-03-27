@@ -286,11 +286,37 @@ model AgentExecutionLog {
   inboxItemId           String?
   latencyMs             Int
 
+  llmCalls  AgentLlmCall[]
+
   createdAt DateTime @default(now())
 
   @@index([organizationId, createdAt])
   @@index([triggerEventId])
   @@index([organizationId, agentId, status])
+}
+
+model AgentLlmCall {
+  id                 String             @id @default(uuid())
+  executionLogId     String
+  executionLog       AgentExecutionLog  @relation(fields: [executionLogId], references: [id], onDelete: Cascade)
+  turnNumber         Int
+  model              String
+  provider           String
+  systemPrompt       String?            @db.Text
+  messages           Json
+  tools              Json               @default("[]")
+  maxTokens          Int?
+  temperature        Float?
+  responseContent    Json
+  stopReason         String
+  inputTokens        Int
+  outputTokens       Int
+  estimatedCostCents Float
+  latencyMs          Int
+  createdAt          DateTime           @default(now())
+
+  @@index([executionLogId, turnNumber])
+  @@index([createdAt])
 }
 
 model ProcessedAgentEvent {

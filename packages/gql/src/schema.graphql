@@ -493,6 +493,27 @@ type AgentExecutionLog {
   inboxItemId: String
   latencyMs: Int!
   createdAt: DateTime!
+  llmCalls: [AgentLlmCall!]!
+}
+
+type AgentLlmCall {
+  id: ID!
+  executionLogId: ID!
+  turnNumber: Int!
+  model: String!
+  provider: String!
+  systemPrompt: String
+  messages: JSON!
+  tools: JSON!
+  maxTokens: Int
+  temperature: Float
+  responseContent: JSON!
+  stopReason: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  estimatedCostCents: Float!
+  latencyMs: Int!
+  createdAt: DateTime!
 }
 
 type AgentExecutionLogConnection {

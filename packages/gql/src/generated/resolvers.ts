@@ -80,6 +80,7 @@ export type AgentExecutionLog = {
   inboxItemId?: Maybe<Scalars['String']['output']>;
   inputTokens: Scalars['Int']['output'];
   latencyMs: Scalars['Int']['output'];
+  llmCalls: Array<AgentLlmCall>;
   model: Scalars['String']['output'];
   modelTier: ModelTier;
   organizationId: Scalars['ID']['output'];
@@ -109,6 +110,27 @@ export type AgentIdentity = {
   soulFile: Scalars['String']['output'];
   status: OrgAgentStatus;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+export type AgentLlmCall = {
+  __typename?: 'AgentLlmCall';
+  createdAt: Scalars['DateTime']['output'];
+  estimatedCostCents: Scalars['Float']['output'];
+  executionLogId: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
+  inputTokens: Scalars['Int']['output'];
+  latencyMs: Scalars['Int']['output'];
+  maxTokens?: Maybe<Scalars['Int']['output']>;
+  messages: Scalars['JSON']['output'];
+  model: Scalars['String']['output'];
+  outputTokens: Scalars['Int']['output'];
+  provider: Scalars['String']['output'];
+  responseContent: Scalars['JSON']['output'];
+  stopReason: Scalars['String']['output'];
+  systemPrompt?: Maybe<Scalars['String']['output']>;
+  temperature?: Maybe<Scalars['Float']['output']>;
+  tools: Scalars['JSON']['output'];
+  turnNumber: Scalars['Int']['output'];
 };
 
 export type AgentStatus =
@@ -1731,6 +1753,7 @@ export type ResolversTypes = ResolversObject<{
   AgentExecutionLog: ResolverTypeWrapper<AgentExecutionLog>;
   AgentExecutionLogConnection: ResolverTypeWrapper<AgentExecutionLogConnection>;
   AgentIdentity: ResolverTypeWrapper<AgentIdentity>;
+  AgentLlmCall: ResolverTypeWrapper<AgentLlmCall>;
   AgentStatus: AgentStatus;
   AgentTrustLevel: AgentTrustLevel;
   AgentWorkerStatus: ResolverTypeWrapper<AgentWorkerStatus>;
@@ -1836,6 +1859,7 @@ export type ResolversParentTypes = ResolversObject<{
   AgentExecutionLog: AgentExecutionLog;
   AgentExecutionLogConnection: AgentExecutionLogConnection;
   AgentIdentity: AgentIdentity;
+  AgentLlmCall: AgentLlmCall;
   AgentWorkerStatus: AgentWorkerStatus;
   AggregationWindowInfo: AggregationWindowInfo;
   AiConversation: AiConversation;
@@ -1954,6 +1978,7 @@ export type AgentExecutionLogResolvers<ContextType = Context, ParentType extends
   inboxItemId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   latencyMs?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  llmCalls?: Resolver<Array<ResolversTypes['AgentLlmCall']>, ParentType, ContextType>;
   model?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   modelTier?: Resolver<ResolversTypes['ModelTier'], ParentType, ContextType>;
   organizationId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
@@ -1983,6 +2008,27 @@ export type AgentIdentityResolvers<ContextType = Context, ParentType extends Res
   soulFile?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['OrgAgentStatus'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AgentLlmCallResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentLlmCall'] = ResolversParentTypes['AgentLlmCall']> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
+  estimatedCostCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  executionLogId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  latencyMs?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  maxTokens?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  messages?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  model?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  outputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  provider?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  responseContent?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  stopReason?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  systemPrompt?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  temperature?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
+  tools?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
+  turnNumber?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -2530,6 +2576,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   AgentExecutionLog?: AgentExecutionLogResolvers<ContextType>;
   AgentExecutionLogConnection?: AgentExecutionLogConnectionResolvers<ContextType>;
   AgentIdentity?: AgentIdentityResolvers<ContextType>;
+  AgentLlmCall?: AgentLlmCallResolvers<ContextType>;
   AgentWorkerStatus?: AgentWorkerStatusResolvers<ContextType>;
   AggregationWindowInfo?: AggregationWindowInfoResolvers<ContextType>;
   AiConversation?: AiConversationResolvers<ContextType>;

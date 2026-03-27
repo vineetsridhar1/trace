@@ -4,6 +4,8 @@ import { useAuthStore } from "../../stores/auth";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { Button } from "../ui/button";
+import { LlmCallTimeline } from "./LlmCallTimeline";
+import type { LlmCallData } from "./LlmCallDetail";
 
 const EXECUTION_LOG_DETAIL_QUERY = gql`
   query AgentExecutionLogDetail($organizationId: ID!, $id: ID!) {
@@ -30,6 +32,25 @@ const EXECUTION_LOG_DETAIL_QUERY = gql`
       inboxItemId
       latencyMs
       createdAt
+      llmCalls {
+        id
+        executionLogId
+        turnNumber
+        model
+        provider
+        systemPrompt
+        messages
+        tools
+        maxTokens
+        temperature
+        responseContent
+        stopReason
+        inputTokens
+        outputTokens
+        estimatedCostCents
+        latencyMs
+        createdAt
+      }
     }
   }
 `;
@@ -57,6 +78,7 @@ interface ExecutionLogDetail {
   inboxItemId: string | null;
   latencyMs: number;
   createdAt: string;
+  llmCalls: LlmCallData[];
 }
 
 function JsonBlock({ label, data }: { label: string; data: unknown }) {
@@ -187,6 +209,12 @@ export function ExecutionDetailView({
               label="Final Actions (Executed)"
               data={detail.finalActions}
             />
+          </div>
+
+          {/* LLM Calls */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold text-foreground">LLM Calls</h3>
+            <LlmCallTimeline calls={detail.llmCalls} />
           </div>
         </div>
       )}
