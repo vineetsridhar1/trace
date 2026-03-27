@@ -138,7 +138,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
         {isActive ? (
           <button
             onClick={onStop}
-            className="shrink-0 self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
+            className="shrink-0 cursor-pointer self-stretch rounded-lg border border-border px-3 text-muted-foreground transition-colors hover:text-foreground hover:bg-surface-elevated"
             title="Stop"
           >
             <Square size={16} />
@@ -147,7 +147,7 @@ export function SessionInput({ sessionId, onStop }: { sessionId: string; onStop:
           <button
             onClick={handleSend}
             disabled={!message.trim() || sending || !canSend}
-            className={cn("shrink-0 self-stretch rounded-lg px-3 transition-colors disabled:opacity-50", MODE_CONFIG[mode].sendButton)}
+            className={cn("shrink-0 cursor-pointer self-stretch rounded-lg px-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed", MODE_CONFIG[mode].sendButton)}
           >
             <Send size={16} />
           </button>
