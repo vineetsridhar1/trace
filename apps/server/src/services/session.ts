@@ -481,6 +481,45 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  /**
+   * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
+   * Resolves repo/branch/hosting and delegates to the session router.
+   */
+  private provisionRuntime(params: {
+    sessionId: string;
+    hosting: string;
+    tool: string;
+    model?: string | null;
+    repo?: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null;
+    branch?: string | null;
+    checkpointSha?: string | null;
+    createdById: string;
+    organizationId: string;
+    readOnly?: boolean;
+  }): void {
+    sessionRouter.createRuntime({
+      sessionId: params.sessionId,
+      hosting: params.hosting as "cloud" | "local",
+      tool: params.tool,
+      model: params.model ?? undefined,
+      repo: params.repo
+        ? {
+            id: params.repo.id,
+            name: params.repo.name,
+            remoteUrl: params.repo.remoteUrl,
+            defaultBranch: params.repo.defaultBranch,
+          }
+        : null,
+      branch: params.branch ?? undefined,
+      checkpointSha: params.checkpointSha ?? undefined,
+      createdById: params.createdById,
+      organizationId: params.organizationId,
+      readOnly: params.readOnly,
+      onFailed: (error) => this.workspaceFailed(params.sessionId, error),
+      onWorkspaceReady: (workdir) => this.workspaceReady(params.sessionId, workdir),
+    });
+  }
+
   private assertLocalFileOwnership(
     sessions: Array<{ hosting: string | null; createdById: string }>,
     userId: string,
@@ -836,6 +875,11 @@ export class SessionService {
       runtimeLabel = runtime.label;
     }
 
+    // Ask-mode sessions skip worktree creation (read-only against repo root).
+    // Checkpoint restores always need a worktree to reset to a specific SHA.
+    const readOnlyWorkspace =
+      input.interactionMode === "ask" && !input.restoreCheckpointId;
+
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
     const initialConnection = sharedConnection
@@ -905,6 +949,7 @@ export class SessionService {
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
           worktreeDeleted: sessionGroup.worktreeDeleted,
+          readOnlyWorkspace,
           ...(projectIds.length > 0 && {
             projects: {
               create: projectIds.map((projectId) => ({ projectId })),
@@ -963,26 +1008,21 @@ export class SessionService {
       sessionRouter.bindSession(session.id, runtimeToBind);
     }
 
-    if (needsRuntimeProvisioning) {
-      sessionRouter.createRuntime({
+    // Only provision the runtime immediately when a prompt is provided.
+    // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
+    // until the user sends their first message.
+    if (needsRuntimeProvisioning && input.prompt) {
+      this.provisionRuntime({
         sessionId: session.id,
-        hosting: session.hosting as "cloud" | "local",
+        hosting: session.hosting,
         tool: session.tool,
-        model: session.model ?? undefined,
-        repo: session.repo
-          ? {
-              id: session.repo.id,
-              name: session.repo.name,
-              remoteUrl: session.repo.remoteUrl,
-              defaultBranch: session.repo.defaultBranch,
-            }
-          : null,
-        branch: resolvedBranch ?? undefined,
-        checkpointSha: restoreCheckpoint?.commitSha ?? undefined,
+        model: session.model,
+        repo: session.repo,
+        branch: resolvedBranch,
+        checkpointSha: restoreCheckpoint?.commitSha,
         createdById: input.createdById,
         organizationId: input.organizationId,
-        onFailed: (error) => this.workspaceFailed(session.id, error),
-        onWorkspaceReady: (workdir) => this.workspaceReady(session.id, workdir),
+        readOnly: readOnlyWorkspace,
       });
     }
 
@@ -1005,6 +1045,24 @@ export class SessionService {
         ? await getSessionStartMetadata(id)
         : null;
 
+    // If session has a read-only workspace and the mode explicitly switched away from ask,
+    // upgrade to a full worktree before running
+    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+      const pendingCommand: PendingSessionCommand = {
+        type: "run",
+        prompt: prompt ?? null,
+        interactionMode: interactionMode ?? null,
+        checkpointContext: buildCheckpointContextFromStartMeta({
+          sessionId: id,
+          sessionGroupId: session.sessionGroupId,
+          repoId: session.repoId,
+          startMeta,
+        }),
+      };
+      await this.triggerWorkspaceUpgrade(id, session, pendingCommand);
+      return prisma.session.findUniqueOrThrow({ where: { id }, include: SESSION_INCLUDE });
+    }
+
     // If workspace is still being prepared, queue the run for later
     if (session.agentStatus === "not_started" && !session.workdir) {
       const updated = await prisma.session.update({
@@ -1024,6 +1082,26 @@ export class SessionService {
         },
         include: SESSION_INCLUDE,
       });
+
+      // If no runtime has been provisioned yet (deferred from startSession),
+      // kick it off now that the user has sent their first message.
+      // Guard: skip if a runtime is already bound (provisioning in progress).
+      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
+      const alreadyProvisioning = !!sessionRouter.getRuntimeForSession(id);
+      if (needsProvisioning && !alreadyProvisioning) {
+        this.provisionRuntime({
+          sessionId: id,
+          hosting: session.hosting,
+          tool: session.tool,
+          model: session.model,
+          repo: session.repo,
+          branch: session.branch,
+          createdById: session.createdById,
+          organizationId: session.organizationId,
+          readOnly: session.readOnlyWorkspace,
+        });
+      }
+
       return updated;
     }
 
@@ -1360,13 +1438,13 @@ export class SessionService {
   async updateConfig(
     sessionId: string,
     organizationId: string,
-    config: { tool?: CodingTool; model?: string },
+    config: { tool?: CodingTool; model?: string; hosting?: string; runtimeInstanceId?: string },
     actorType: ActorType,
     actorId: string,
   ) {
     const prev = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      select: { id: true, tool: true, model: true },
+      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true, readOnlyWorkspace: true },
     });
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
@@ -1386,11 +1464,71 @@ export class SessionService {
       data.toolSessionId = null;
     }
 
+    // Allow runtime switching for not_started sessions
+    const runtimeChanged = prev.agentStatus === "not_started" && (config.hosting != null || config.runtimeInstanceId != null);
+    if (runtimeChanged) {
+      let newHosting = config.hosting ?? prev.hosting;
+      let runtimeLabel: string | undefined;
+      if (config.runtimeInstanceId) {
+        const runtime = sessionRouter.getRuntime(config.runtimeInstanceId);
+        if (!runtime) throw new Error("Requested runtime not found");
+        newHosting = runtime.hostingMode;
+        runtimeLabel = runtime.label;
+        sessionRouter.bindSession(sessionId, config.runtimeInstanceId);
+      }
+      data.hosting = newHosting;
+      data.connection = connJson(
+        defaultConnection({
+          ...(config.runtimeInstanceId && { runtimeInstanceId: config.runtimeInstanceId }),
+          ...(runtimeLabel && { runtimeLabel }),
+        }),
+      );
+      data.workdir = null;
+      data.pendingRun = Prisma.DbNull;
+
+      // Provision the new runtime
+      const needsProvisioning = !!prev.repoId || newHosting === "cloud";
+      if (needsProvisioning) {
+        const sessionForRepo = await prisma.session.findUniqueOrThrow({
+          where: { id: sessionId },
+          include: { repo: true },
+        });
+        sessionRouter.createRuntime({
+          sessionId,
+          hosting: newHosting as "cloud" | "local",
+          tool: nextTool,
+          model: (nextModel !== undefined ? nextModel : sessionForRepo.model) ?? undefined,
+          repo: sessionForRepo.repo
+            ? {
+                id: sessionForRepo.repo.id,
+                name: sessionForRepo.repo.name,
+                remoteUrl: sessionForRepo.repo.remoteUrl,
+                defaultBranch: sessionForRepo.repo.defaultBranch,
+              }
+            : null,
+          branch: sessionForRepo.branch ?? undefined,
+          createdById: actorId,
+          organizationId,
+          readOnly: prev.readOnlyWorkspace,
+          onFailed: (error) => this.workspaceFailed(sessionId, error),
+          onWorkspaceReady: (workdir) => this.workspaceReady(sessionId, workdir),
+        });
+      }
+    }
+
     const session = await prisma.session.update({
       where: { id: prev.id },
       data,
       include: SESSION_INCLUDE,
     });
+
+    // Sync group connection if runtime changed
+    if (runtimeChanged && session.sessionGroupId) {
+      await this.syncGroupWorkspaceState(session.sessionGroupId, {
+        connection: session.connection as Prisma.InputJsonValue,
+        worktreeDeleted: false,
+      });
+    }
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1402,6 +1540,7 @@ export class SessionService {
         tool: config.tool ?? session.tool,
         model: nextModel !== undefined ? nextModel : session.model,
         toolChanged,
+        ...(runtimeChanged && { hosting: session.hosting, connection: session.connection }),
       },
       actorType,
       actorId,
@@ -1671,6 +1810,8 @@ export class SessionService {
         organizationId: true,
         agentStatus: true,
         sessionStatus: true,
+        hosting: true,
+        createdById: true,
         tool: true,
         model: true,
         toolChangedAt: true,
@@ -1680,11 +1821,79 @@ export class SessionService {
         sessionGroupId: true,
         connection: true,
         worktreeDeleted: true,
+        readOnlyWorkspace: true,
+        repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } },
+        branch: true,
       },
     });
 
     if (session.worktreeDeleted) {
       throw new Error("Cannot send messages: session worktree has been deleted");
+    }
+
+    // If runtime was deferred (session created without a prompt), provision it
+    // now and queue the message for delivery once the workspace is ready.
+    if (session.agentStatus === "not_started" && !session.workdir && !session.toolSessionId) {
+      const needsProvisioning = !!session.repoId || session.hosting === "cloud";
+      if (needsProvisioning) {
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: {
+            pendingRun: {
+              type: "send",
+              prompt: text,
+              interactionMode: interactionMode ?? null,
+              checkpointContext: null,
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+
+        this.provisionRuntime({
+          sessionId,
+          hosting: session.hosting,
+          tool: session.tool,
+          model: session.model,
+          repo: session.repo,
+          branch: session.branch,
+          createdById: session.createdById,
+          organizationId: session.organizationId,
+          readOnly: session.readOnlyWorkspace,
+        });
+
+        const event = await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "message_sent",
+          payload: { text },
+          actorType,
+          actorId,
+        });
+        return event;
+      }
+    }
+
+    // If session has a read-only workspace and user explicitly switched away from ask mode,
+    // trigger a workspace upgrade to create a real worktree
+    if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+      const pendingCommand: PendingSessionCommand = {
+        type: "send",
+        prompt: text,
+        interactionMode: interactionMode ?? null,
+        checkpointContext: null,
+      };
+      await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand);
+      // Record the message event so it appears in the UI
+      const event = await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "message_sent",
+        payload: { text },
+        actorType,
+        actorId,
+      });
+      return event;
     }
 
     // If the tool was recently switched and no user message has been sent since,
@@ -1847,6 +2056,7 @@ export class SessionService {
           workdir,
           ...(branch && { branch }),
           pendingRun: Prisma.DbNull,
+          readOnlyWorkspace: false,
         },
         include: SESSION_INCLUDE,
       });
@@ -3229,6 +3439,40 @@ export class SessionService {
       };
     }
     return null;
+  }
+
+  /**
+   * Store a pending command and send upgrade_workspace to the bridge.
+   * If delivery fails, persists the connection failure so the user sees the error.
+   */
+  private async triggerWorkspaceUpgrade(
+    sessionId: string,
+    session: { organizationId: string; repo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null; branch: string | null },
+    pendingCommand: PendingSessionCommand,
+  ) {
+    await this.storePendingCommand(sessionId, pendingCommand);
+
+    const repo = session.repo;
+    if (!repo) return;
+
+    const deliveryResult = sessionRouter.send(sessionId, {
+      type: "upgrade_workspace",
+      sessionId,
+      repoId: repo.id,
+      repoName: repo.name,
+      repoRemoteUrl: repo.remoteUrl,
+      defaultBranch: repo.defaultBranch,
+      branch: session.branch ?? undefined,
+    });
+
+    if (deliveryResult !== "delivered") {
+      await this.persistConnectionFailure(
+        sessionId,
+        session.organizationId,
+        deliveryResult,
+        "upgrade_workspace",
+      );
+    }
   }
 
   private async storePendingCommand(sessionId: string, pending: PendingSessionCommand) {

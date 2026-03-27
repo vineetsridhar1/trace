@@ -8,7 +8,7 @@ import { apiTokenService } from "../services/api-token.js";
 import { runtimeDebug } from "./runtime-debug.js";
 
 interface BaseSessionCommand {
-  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches";
+  type: "run" | "terminate" | "pause" | "resume" | "send" | "prepare" | "delete" | "list_branches" | "upgrade_workspace";
   sessionId: string;
   prompt?: string;
   [key: string]: unknown;
@@ -56,6 +56,7 @@ export interface SessionAdapterCreateOptions {
   checkpointSha?: string;
   createdById: string;
   organizationId: string;
+  readOnly?: boolean;
 }
 
 export interface SessionAdapterDestroyOptions {
@@ -133,6 +134,7 @@ function createCloudAdapter(cloudMachineService: CloudMachineService): SessionAd
               defaultBranch: options.repo.defaultBranch,
               branch: options.branch,
               checkpointSha: options.checkpointSha,
+              readOnly: options.readOnly,
             });
           } else {
             // No repo — signal workspace_ready with home directory so session transitions to pending
@@ -212,6 +214,7 @@ const localAdapter: SessionAdapter = {
       defaultBranch: options.repo.defaultBranch,
       branch: options.branch,
       checkpointSha: options.checkpointSha,
+      readOnly: options.readOnly,
     });
     if (result !== "delivered") {
       ctx.onFailed(`prepare: ${result}`);

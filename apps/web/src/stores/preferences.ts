@@ -2,24 +2,36 @@ import { create } from "zustand";
 
 const STORAGE_KEY = "trace:preferences";
 
+export type DefaultHosting = "bridge" | "cloud";
+
 interface Preferences {
   defaultTool: string | null;
   defaultModel: string | null;
+  /** Preferred runtime: "bridge" prefers a connected local device, "cloud" uses on-demand cloud */
+  defaultHosting: DefaultHosting;
 }
 
 interface PreferencesState extends Preferences {
   setDefaultTool: (tool: string | null) => void;
   setDefaultModel: (model: string | null) => void;
+  setDefaultHosting: (hosting: DefaultHosting) => void;
 }
 
 function load(): Preferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Preferences;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Preferences>;
+      return {
+        defaultTool: parsed.defaultTool ?? null,
+        defaultModel: parsed.defaultModel ?? null,
+        defaultHosting: parsed.defaultHosting ?? "bridge",
+      };
+    }
   } catch {
     // ignore corrupt data
   }
-  return { defaultTool: null, defaultModel: null };
+  return { defaultTool: null, defaultModel: null, defaultHosting: "bridge" };
 }
 
 function persist(prefs: Preferences) {
@@ -31,11 +43,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setDefaultTool: (tool) => {
     set({ defaultTool: tool });
-    persist({ defaultTool: tool, defaultModel: get().defaultModel });
+    persist({ ...get(), defaultTool: tool });
   },
 
   setDefaultModel: (model) => {
     set({ defaultModel: model });
-    persist({ defaultTool: get().defaultTool, defaultModel: model });
+    persist({ ...get(), defaultModel: model });
+  },
+
+  setDefaultHosting: (hosting) => {
+    set({ defaultHosting: hosting });
+    persist({ ...get(), defaultHosting: hosting });
   },
 }));

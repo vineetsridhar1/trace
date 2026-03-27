@@ -21,6 +21,7 @@ import { useIsMobile } from "./hooks/use-mobile";
 import { Toaster } from "./components/ui/sonner";
 import { InstallBanner } from "./components/InstallBanner";
 import { cn } from "./lib/utils";
+import { createQuickSession } from "./lib/create-quick-session";
 
 export function App() {
   const user = useAuthStore((s) => s.user);
@@ -63,6 +64,20 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const isMobile = useIsMobile();
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Cmd+N / Ctrl+N: create a new session with smart defaults
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        const channelId = useUIStore.getState().activeChannelId;
+        if (!channelId) return;
+        createQuickSession(channelId);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const closePanel = useCallback(() => setActiveSessionId(null), [setActiveSessionId]);
 
