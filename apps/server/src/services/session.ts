@@ -602,7 +602,8 @@ export class SessionService {
 
     if (options?.archived === true) {
       where.archivedAt = { not: null };
-    } else if (options?.archived === false || !options?.archived) {
+    } else {
+      // Default: only non-archived groups (covers false, undefined, omitted)
       where.archivedAt = null;
     }
 
@@ -3912,7 +3913,7 @@ export class SessionService {
   ) {
     const group = await prisma.sessionGroup.findUnique({
       where: { id: groupId },
-      include: { sessions: { select: { id: true } } },
+      include: { sessions: { select: { id: true }, orderBy: { updatedAt: "desc" } } },
     });
     if (!group) throw new Error("Session group not found");
     if (group.organizationId !== organizationId) throw new Error("Session group not found");

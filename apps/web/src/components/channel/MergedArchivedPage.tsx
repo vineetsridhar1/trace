@@ -1,16 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import { gql } from "@urql/core";
 import type {
   DefaultMenuItem,
   GetContextMenuItemsParams,
-  GridApi,
   MenuItemDef,
 } from "ag-grid-community";
 import type { SessionGroup } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { useEntityStore } from "../../stores/entity";
-import type { SessionEntity, SessionGroupEntity } from "../../stores/entity";
+import type { SessionEntity } from "../../stores/entity";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
@@ -24,44 +22,9 @@ import {
 } from "../session/sessionStatus";
 import { cn } from "../../lib/utils";
 
-const MERGED_GROUPS_QUERY = gql`
-  query MergedSessionGroups($channelId: ID!, $status: SessionGroupStatus) {
-    sessionGroups(channelId: $channelId, status: $status) {
-      id
-      name
-      status
-      prUrl
-      worktreeDeleted
-      archivedAt
-      channel { id }
-      createdAt
-      updatedAt
-      sessions {
-        id
-        name
-        agentStatus
-        sessionStatus
-        tool
-        model
-        hosting
-        branch
-        prUrl
-        worktreeDeleted
-        sessionGroupId
-        connection { state runtimeInstanceId runtimeLabel lastError retryCount canRetry canMove }
-        createdBy { id name avatarUrl }
-        repo { id name }
-        channel { id }
-        createdAt
-        updatedAt
-      }
-    }
-  }
-`;
-
-const ARCHIVED_GROUPS_QUERY = gql`
-  query ArchivedSessionGroups($channelId: ID!, $archived: Boolean) {
-    sessionGroups(channelId: $channelId, archived: $archived) {
+const FILTERED_SESSION_GROUPS_QUERY = gql`
+  query FilteredSessionGroups($channelId: ID!, $archived: Boolean, $status: SessionGroupStatus) {
+    sessionGroups(channelId: $channelId, archived: $archived, status: $status) {
       id
       name
       status
@@ -157,37 +120,27 @@ function TabTable({
     name: string;
     sessionCount: number;
   } | null>(null);
-  const gridApiRef = useRef<GridApi<SessionGroupRow> | null>(null);
-  const upsertMany = useEntityStore((s) => s.upsertMany);
-  const setRows = tab === "merged" ? useMergedTable((s) => s.setRows) : useArchivedTable((s) => s.setRows);
+  // Call both hooks unconditionally to satisfy Rules of Hooks
+  const setMergedRows = useMergedTable((s) => s.setRows);
+  const setArchivedRows = useArchivedTable((s) => s.setRows);
+  const setRows = tab === "merged" ? setMergedRows : setArchivedRows;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const query = tab === "merged" ? MERGED_GROUPS_QUERY : ARCHIVED_GROUPS_QUERY;
     const variables =
       tab === "merged"
         ? { channelId, status: "merged" }
         : { channelId, archived: true };
 
-    const result = await client.query(query, variables).toPromise();
+    const result = await client.query(FILTERED_SESSION_GROUPS_QUERY, variables).toPromise();
     if (result.data?.sessionGroups) {
       const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
-      const flattenedSessions = groups.flatMap((g) => g.sessions ?? []);
-      upsertMany(
-        "sessionGroups",
-        groups.map((g) => ({
-          ...g,
-          _sortTimestamp: g.sessions?.[0]?.updatedAt ?? g.updatedAt,
-        })) as Array<SessionGroupEntity & { id: string }>,
-      );
-      upsertMany("sessions", flattenedSessions as Array<SessionEntity & { id: string }>);
-
       const rows = groupsToRows(groups);
       setRows(rows);
     }
     setLoading(false);
     setFetched(true);
-  }, [channelId, tab, upsertMany, setRows]);
+  }, [channelId, tab, setRows]);
 
   useEffect(() => {
     if (active && !fetched) {
@@ -253,7 +206,6 @@ function TabTable({
             }
           },
           onGridReady: (event) => {
-            gridApiRef.current = event.api;
             applySessionsColumnMode(event.api, false);
           },
           rowHeight: 40,

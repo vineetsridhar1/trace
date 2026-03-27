@@ -29,7 +29,11 @@ export function useSessionGroupRows(channelId: string): SessionGroupRow[] {
           });
         return { group, groupSessions };
       })
-      .filter(({ group, groupSessions }) => getSessionGroupChannelId(group, groupSessions) === channelId)
+      .filter(({ group, groupSessions }) =>
+        getSessionGroupChannelId(group, groupSessions) === channelId
+        && !group.archivedAt
+        && group.status !== "merged"
+      )
       .map(({ group, groupSessions }) => {
         const latestSession = groupSessions[0];
         const createdBySession = [...groupSessions].sort(
