@@ -161,6 +161,7 @@ export function SessionGroupDetailView({
   const [openFiles, setOpenFiles] = useState<OpenFileTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
+  const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
@@ -279,6 +280,21 @@ export function SessionGroupDetailView({
     },
     [],
   );
+
+  const handleCheckpointClick = useCallback(
+    (sessionId: string, promptEventId: string) => {
+      openSessionTab(sessionGroupId, sessionId);
+      setActiveSessionId(sessionId);
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+      setScrollToEventId(promptEventId);
+    },
+    [sessionGroupId, openSessionTab, setActiveSessionId, setActiveTerminalId],
+  );
+
+  const handleScrollComplete = useCallback(() => {
+    setScrollToEventId(null);
+  }, []);
 
   const handleSidebarTabChange = useCallback((tab: SidebarTab) => {
     setSidebarTab(tab);
@@ -519,7 +535,12 @@ export function SessionGroupDetailView({
                 <TerminalInstance terminalId={activeTerminal.id} visible />
               </div>
             ) : selectedSession ? (
-              <SessionDetailView sessionId={selectedSession.id} hideHeader />
+              <SessionDetailView
+                sessionId={selectedSession.id}
+                hideHeader
+                scrollToEventId={scrollToEventId}
+                onScrollComplete={handleScrollComplete}
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 Select a chat tab to continue.
@@ -536,6 +557,7 @@ export function SessionGroupDetailView({
                 onFileClick={handleFileClick}
                 onDiffFileClick={handleDiffFileClick}
                 highlightCheckpointId={highlightCheckpointId}
+                onCheckpointClick={handleCheckpointClick}
               />
             </div>
           )}

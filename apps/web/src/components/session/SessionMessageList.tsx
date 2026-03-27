@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
 import { SessionMessage } from "./SessionMessage";
@@ -15,6 +15,8 @@ interface SessionMessageListProps {
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
   completedAgentTools: Map<string, AgentToolResult>;
+  scrollToEventId?: string | null;
+  onScrollComplete?: () => void;
 }
 
 export function SessionMessageList({
@@ -24,6 +26,8 @@ export function SessionMessageList({
   loadingOlder,
   onLoadOlder,
   completedAgentTools,
+  scrollToEventId,
+  onScrollComplete,
 }: SessionMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -114,6 +118,23 @@ export function SessionMessageList({
     }
   }, [nodes.length]);
 
+  // Scroll to a specific event when requested (e.g. from checkpoint panel)
+  const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!scrollToEventId) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const target = container.querySelector(`[data-event-id="${scrollToEventId}"]`);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightEventId(scrollToEventId);
+      const timer = setTimeout(() => setHighlightEventId(null), 2000);
+      onScrollComplete?.();
+      return () => clearTimeout(timer);
+    }
+    onScrollComplete?.();
+  }, [scrollToEventId, onScrollComplete, nodes.length]);
+
   // IntersectionObserver on the sentinel to trigger loading older messages
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -153,12 +174,17 @@ export function SessionMessageList({
 
         {nodes.map((node) =>
           node.kind === "event" ? (
-            <SessionMessage
+            <div
               key={node.id}
-              id={node.id}
-              gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
-              completedAgentTools={completedAgentTools}
-            />
+              data-event-id={node.id}
+              className={highlightEventId === node.id ? "rounded-lg ring-2 ring-primary/50 transition-all duration-500" : undefined}
+            >
+              <SessionMessage
+                id={node.id}
+                gitCheckpointsByPromptEventId={gitCheckpointsByPromptEventId}
+                completedAgentTools={completedAgentTools}
+              />
+            </div>
           ) : node.kind === "command-execution" ? (
             <CommandExecutionRow
               key={node.id}
