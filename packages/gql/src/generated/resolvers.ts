@@ -116,8 +116,8 @@ export type AgentLlmCall = {
   __typename?: 'AgentLlmCall';
   createdAt: Scalars['DateTime']['output'];
   estimatedCostCents: Scalars['Float']['output'];
-  executionLogId: Scalars['String']['output'];
-  id: Scalars['String']['output'];
+  executionLogId: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
   inputTokens: Scalars['Int']['output'];
   latencyMs: Scalars['Int']['output'];
   maxTokens?: Maybe<Scalars['Int']['output']>;
@@ -127,7 +127,7 @@ export type AgentLlmCall = {
   provider: Scalars['String']['output'];
   responseContent: Scalars['JSON']['output'];
   stopReason: Scalars['String']['output'];
-  systemPrompt: Scalars['String']['output'];
+  systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
   tools: Scalars['JSON']['output'];
   turnNumber: Scalars['Int']['output'];
@@ -2011,8 +2011,8 @@ export type AgentIdentityResolvers<ContextType = Context, ParentType extends Res
 export type AgentLlmCallResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AgentLlmCall'] = ResolversParentTypes['AgentLlmCall']> = ResolversObject<{
   createdAt?: Resolver<ResolversTypes['DateTime'], ParentType, ContextType>;
   estimatedCostCents?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
-  executionLogId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  executionLogId?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   inputTokens?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   latencyMs?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   maxTokens?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
@@ -2022,7 +2022,7 @@ export type AgentLlmCallResolvers<ContextType = Context, ParentType extends Reso
   provider?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   responseContent?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
   stopReason?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  systemPrompt?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  systemPrompt?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   temperature?: Resolver<Maybe<ResolversTypes['Float']>, ParentType, ContextType>;
   tools?: Resolver<ResolversTypes['JSON'], ParentType, ContextType>;
   turnNumber?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;

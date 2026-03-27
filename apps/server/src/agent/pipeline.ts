@@ -239,14 +239,15 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     accumulateCost(state, llmResponse, turnResult.latencyMs);
 
     // Capture per-call LLM data for observability
+    // Only store systemPrompt on the first turn to avoid redundant multi-KB copies
     state.llmCallRecords.push({
       turnNumber: turn,
       model: llmResponse.model,
-      provider: "anthropic",
-      systemPrompt,
+      provider: turnResult.provider,
+      systemPrompt: turn === 1 ? systemPrompt : null,
       messages: messagesSnapshot,
       tools: [PLANNER_TOOL],
-      maxTokens: 1024,
+      maxTokens: turnResult.maxTokens,
       temperature: 0,
       responseContent: llmResponse.content,
       stopReason: llmResponse.stopReason ?? "end_turn",

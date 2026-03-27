@@ -115,8 +115,8 @@ export type AgentLlmCall = {
   __typename?: 'AgentLlmCall';
   createdAt: Scalars['DateTime']['output'];
   estimatedCostCents: Scalars['Float']['output'];
-  executionLogId: Scalars['String']['output'];
-  id: Scalars['String']['output'];
+  executionLogId: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
   inputTokens: Scalars['Int']['output'];
   latencyMs: Scalars['Int']['output'];
   maxTokens?: Maybe<Scalars['Int']['output']>;
@@ -126,7 +126,7 @@ export type AgentLlmCall = {
   provider: Scalars['String']['output'];
   responseContent: Scalars['JSON']['output'];
   stopReason: Scalars['String']['output'];
-  systemPrompt: Scalars['String']['output'];
+  systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
   tools: Scalars['JSON']['output'];
   turnNumber: Scalars['Int']['output'];
@@ -1698,7 +1698,7 @@ export type AgentExecutionLogDetailQueryVariables = Exact<{
 }>;
 
 
-export type AgentExecutionLogDetailQuery = { __typename?: 'Query', agentExecutionLog?: { __typename?: 'AgentExecutionLog', id: string, organizationId: string, triggerEventId: string, batchSize: number, agentId: string, modelTier: ModelTier, model: string, promoted: boolean, promotionReason?: string | null, inputTokens: number, outputTokens: number, estimatedCostCents: number, contextTokenAllocation?: JsonValue | null, disposition: ExecutionDisposition, confidence: number, plannedActions?: JsonValue | null, policyDecision?: JsonValue | null, finalActions?: JsonValue | null, status: ExecutionStatus, inboxItemId?: string | null, latencyMs: number, createdAt: string, llmCalls: Array<{ __typename?: 'AgentLlmCall', id: string, executionLogId: string, turnNumber: number, model: string, provider: string, systemPrompt: string, messages: JsonValue, tools: JsonValue, maxTokens?: number | null, temperature?: number | null, responseContent: JsonValue, stopReason: string, inputTokens: number, outputTokens: number, estimatedCostCents: number, latencyMs: number, createdAt: string }> } | null };
+export type AgentExecutionLogDetailQuery = { __typename?: 'Query', agentExecutionLog?: { __typename?: 'AgentExecutionLog', id: string, organizationId: string, triggerEventId: string, batchSize: number, agentId: string, modelTier: ModelTier, model: string, promoted: boolean, promotionReason?: string | null, inputTokens: number, outputTokens: number, estimatedCostCents: number, contextTokenAllocation?: JsonValue | null, disposition: ExecutionDisposition, confidence: number, plannedActions?: JsonValue | null, policyDecision?: JsonValue | null, finalActions?: JsonValue | null, status: ExecutionStatus, inboxItemId?: string | null, latencyMs: number, createdAt: string, llmCalls: Array<{ __typename?: 'AgentLlmCall', id: string, executionLogId: string, turnNumber: number, model: string, provider: string, systemPrompt?: string | null, messages: JsonValue, tools: JsonValue, maxTokens?: number | null, temperature?: number | null, responseContent: JsonValue, stopReason: string, inputTokens: number, outputTokens: number, estimatedCostCents: number, latencyMs: number, createdAt: string }> } | null };
 
 export type AgentExecutionLogsQueryVariables = Exact<{
   organizationId: Scalars['ID']['input'];

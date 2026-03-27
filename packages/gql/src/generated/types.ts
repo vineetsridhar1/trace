@@ -113,8 +113,8 @@ export type AgentLlmCall = {
   __typename?: 'AgentLlmCall';
   createdAt: Scalars['DateTime']['output'];
   estimatedCostCents: Scalars['Float']['output'];
-  executionLogId: Scalars['String']['output'];
-  id: Scalars['String']['output'];
+  executionLogId: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
   inputTokens: Scalars['Int']['output'];
   latencyMs: Scalars['Int']['output'];
   maxTokens?: Maybe<Scalars['Int']['output']>;
@@ -124,7 +124,7 @@ export type AgentLlmCall = {
   provider: Scalars['String']['output'];
   responseContent: Scalars['JSON']['output'];
   stopReason: Scalars['String']['output'];
-  systemPrompt: Scalars['String']['output'];
+  systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
   tools: Scalars['JSON']['output'];
   turnNumber: Scalars['Int']['output'];

@@ -302,7 +302,7 @@ model AgentLlmCall {
   turnNumber         Int
   model              String
   provider           String
-  systemPrompt       String             @db.Text
+  systemPrompt       String?            @db.Text
   messages           Json
   tools              Json               @default("[]")
   maxTokens          Int?

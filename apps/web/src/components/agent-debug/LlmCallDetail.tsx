@@ -7,7 +7,7 @@ interface LlmCallData {
   turnNumber: number;
   model: string;
   provider: string;
-  systemPrompt: string;
+  systemPrompt: string | null;
   messages: unknown[];
   tools: unknown[];
   maxTokens: number | null;
@@ -74,11 +74,17 @@ export function LlmCallDetail({ call }: { call: LlmCallData }) {
 
   return (
     <div className="space-y-3">
-      <CollapsibleSection title={`System Prompt (${call.systemPrompt.length.toLocaleString()} chars)`}>
-        <pre className="mt-2 text-xs font-mono text-foreground whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
-          {call.systemPrompt}
-        </pre>
-      </CollapsibleSection>
+      {call.systemPrompt != null ? (
+        <CollapsibleSection title={`System Prompt (${call.systemPrompt.length.toLocaleString()} chars)`}>
+          <pre className="mt-2 text-xs font-mono text-foreground whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
+            {call.systemPrompt}
+          </pre>
+        </CollapsibleSection>
+      ) : (
+        <div className="text-xs text-muted-foreground italic px-1">
+          System prompt same as turn 1
+        </div>
+      )}
 
       <CollapsibleSection title={`Messages (${messages.length})`} defaultOpen>
         <div className="mt-2 space-y-2">

@@ -5,7 +5,7 @@ export interface LlmCallRecord {
   turnNumber: number;
   model: string;
   provider: string;
-  systemPrompt: string;
+  systemPrompt: string | null;
   messages: unknown[];
   tools: unknown[];
   maxTokens?: number;

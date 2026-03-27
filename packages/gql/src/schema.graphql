@@ -497,12 +497,12 @@ type AgentExecutionLog {
 }
 
 type AgentLlmCall {
-  id: String!
-  executionLogId: String!
+  id: ID!
+  executionLogId: ID!
   turnNumber: Int!
   model: String!
   provider: String!
-  systemPrompt: String!
+  systemPrompt: String
   messages: JSON!
   tools: JSON!
   maxTokens: Int
