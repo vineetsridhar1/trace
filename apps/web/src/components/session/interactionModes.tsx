@@ -32,9 +32,9 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
   ask: {
     label: "Ask",
     icon: HelpCircle,
-    style: "border-amber-500 bg-amber-500/20 text-amber-300",
-    inputBorder: "border-amber-500/50 focus:ring-amber-500",
-    sendButton: "bg-amber-500 hover:bg-amber-500/90 text-white",
+    style: "border-orange-600 bg-orange-600/20 text-orange-400",
+    inputBorder: "border-orange-600/50 focus:ring-orange-600",
+    sendButton: "bg-orange-600 hover:bg-orange-600/90 text-white",
   },
 };
 
