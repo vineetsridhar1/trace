@@ -17,7 +17,7 @@ import type { AgentContextPacket } from "./context-builder.js";
 import type { PlannerOutput, ProposedAction } from "./planner.js";
 import type { RiskLevel } from "./action-registry.js";
 import { findAction } from "./action-registry.js";
-import { costTrackingService } from "../services/cost-tracking.js";
+import type { CostTracker } from "./router.js";
 import { redis } from "../lib/redis.js";
 import { mapActionToItemType } from "./action-types.js";
 import { getScopeAdapter } from "./scope-adapter.js";
@@ -230,38 +230,28 @@ export async function clearDismissals(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Cost budget checking
+// Cost budget checking — delegates to shared CostTracker (no duplicate cache)
 // ---------------------------------------------------------------------------
 
-interface CachedBudget {
-  remainingPercent: number;
-  fetchedAt: number;
-}
-
-const budgetCache = new Map<string, CachedBudget>();
-const BUDGET_CACHE_TTL_MS = 30_000; // 30 seconds
-
 /**
- * Get remaining budget percent (0–100) for an org. Uses a short cache to
- * avoid hammering the DB on every policy decision.
+ * The policy engine reuses the same CostTracker that the router uses.
+ * This eliminates the duplicate 30s budget cache that was here before.
+ * The CostTracker converts to a fraction (0.0-1.0), so we multiply by 100.
  */
-async function getBudgetPercent(organizationId: string): Promise<number> {
-  const cached = budgetCache.get(organizationId);
-  if (cached && Date.now() - cached.fetchedAt < BUDGET_CACHE_TTL_MS) {
-    return cached.remainingPercent;
-  }
+let policyCostTracker: CostTracker | null = null;
 
-  const status = await costTrackingService.checkBudget(organizationId);
-  budgetCache.set(organizationId, {
-    remainingPercent: status.remainingPercent,
-    fetchedAt: Date.now(),
-  });
-  return status.remainingPercent;
+export function setPolicyCostTracker(tracker: CostTracker): void {
+  policyCostTracker = tracker;
 }
 
-/** Clear budget cache (for testing). */
+function getBudgetPercent(organizationId: string): number {
+  if (!policyCostTracker) return 100; // assume full budget until tracker is set
+  return policyCostTracker.getRemainingBudgetFraction(organizationId) * 100;
+}
+
+/** @deprecated No longer needed — budget cache is handled by CostTracker. */
 export function clearBudgetCache(): void {
-  budgetCache.clear();
+  // No-op — kept for test compatibility
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +300,7 @@ export async function evaluatePolicy(input: PolicyEngineInput): Promise<PolicyRe
   }
 
   // ── Cost budget check ──
-  const budgetPercent = await getBudgetPercent(orgId);
+  const budgetPercent = getBudgetPercent(orgId);
   if (budgetPercent <= 0) {
     return {
       actions: plannerOutput.proposedActions.map((action) => ({

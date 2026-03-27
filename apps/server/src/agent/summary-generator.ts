@@ -6,7 +6,7 @@
  */
 
 import type { LLMAdapter, LLMAssistantContentBlock } from "@trace/shared";
-import { createLLMAdapter } from "../lib/llm/index.js";
+import { getAgentLLMAdapter, withRetry } from "./llm-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,25 +56,7 @@ export interface GenerateSummaryResult {
 
 const SUMMARY_MODEL = process.env.AGENT_SUMMARY_MODEL ?? "claude-haiku-4-5-20251001";
 
-// ---------------------------------------------------------------------------
-// LLM adapter (lazy, singleton)
-// ---------------------------------------------------------------------------
-
-let cachedAdapter: LLMAdapter | null = null;
-
-function getAdapter(): LLMAdapter {
-  if (cachedAdapter) return cachedAdapter;
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "ANTHROPIC_API_KEY env var is required for agent summary generation",
-    );
-  }
-
-  cachedAdapter = createLLMAdapter({ provider: "anthropic", apiKey });
-  return cachedAdapter;
-}
+// LLM adapter — uses shared singleton from llm-adapter.ts
 
 // ---------------------------------------------------------------------------
 // Prompt
@@ -133,16 +115,18 @@ function buildUserPrompt(input: GenerateSummaryInput): string {
 export async function generateSummary(
   input: GenerateSummaryInput,
 ): Promise<GenerateSummaryResult> {
-  const adapter = getAdapter();
+  const adapter = getAgentLLMAdapter();
   const userPrompt = buildUserPrompt(input);
 
-  const response = await adapter.complete({
-    model: SUMMARY_MODEL,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
-    maxTokens: 1024,
-    temperature: 0,
-  });
+  const response = await withRetry(() =>
+    adapter.complete({
+      model: SUMMARY_MODEL,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userPrompt }],
+      maxTokens: 1024,
+      temperature: 0,
+    }),
+  );
 
   // Extract the text content from the response
   const textBlock = response.content.find((b: LLMAssistantContentBlock) => b.type === "text");
