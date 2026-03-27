@@ -231,15 +231,77 @@ export function useOrgEvents() {
         if (!result.data?.orgEvents) return;
 
         const event = result.data.orgEvents as Event;
-        const { upsert, patch, remove, upsertScopedEvent } = useEntityStore.getState();
+        const { batch } = useEntityStore.getState();
         const payload = asJsonObject(event.payload);
+
+        // Phase 2C: Strip large payloads from session_output events before storing.
+        // The full payload is available via session-scoped subscription/query.
+        // The org-level broadcast already trims these server-side (Phase 3A),
+        // but we also strip here for safety in case old events arrive.
+        const storedEvent = (event.eventType === "session_output" && payload?.type === "assistant")
+          ? { ...event, payload: { type: payload.type } }
+          : event;
+
+        // Phase 2B: Batch all mutations from a single event into one state update.
+        batch((state) => {
+        const upsert = <T extends keyof import("../stores/entity").EntityTableMap>(
+          entityType: T,
+          id: string,
+          data: import("../stores/entity").EntityTableMap[T],
+        ) => {
+          (state[entityType] as Record<string, unknown>)[id] = data;
+          if (entityType === "sessions") {
+            const session = data as unknown as import("../stores/entity").SessionEntity;
+            if (session.sessionGroupId) {
+              if (!state._sessionIdsByGroup[session.sessionGroupId]) {
+                state._sessionIdsByGroup[session.sessionGroupId] = new Set();
+              }
+              state._sessionIdsByGroup[session.sessionGroupId].add(id);
+            }
+          }
+        };
+        const patch = <T extends keyof import("../stores/entity").EntityTableMap>(
+          entityType: T,
+          id: string,
+          data: Partial<import("../stores/entity").EntityTableMap[T]>,
+        ) => {
+          const table = state[entityType] as Record<string, unknown>;
+          const existing = table[id];
+          if (existing) {
+            Object.assign(existing as object, data);
+            if (entityType === "sessions") {
+              const session = existing as import("../stores/entity").SessionEntity;
+              if (session.sessionGroupId) {
+                if (!state._sessionIdsByGroup[session.sessionGroupId]) {
+                  state._sessionIdsByGroup[session.sessionGroupId] = new Set();
+                }
+                state._sessionIdsByGroup[session.sessionGroupId].add(id);
+              }
+            }
+          }
+        };
+        const remove = (entityType: keyof import("../stores/entity").EntityTableMap, id: string) => {
+          if (entityType === "sessions") {
+            const session = state.sessions[id];
+            if (session?.sessionGroupId) {
+              state._sessionIdsByGroup[session.sessionGroupId]?.delete(id);
+            }
+          }
+          delete (state[entityType] as Record<string, unknown>)[id];
+        };
+        const upsertScopedEvent = (scopeKey: string, id: string, ev: Event) => {
+          if (!state.eventsByScope[scopeKey]) {
+            state.eventsByScope[scopeKey] = {};
+          }
+          state.eventsByScope[scopeKey][id] = ev;
+        };
 
         const upsertSessionGroupFromPayload = () => {
           const sessionFromPayload = asJsonObject(payload?.session);
           const sessionGroup =
             asJsonObject(payload?.sessionGroup) ?? asJsonObject(sessionFromPayload?.sessionGroup);
           if (sessionGroup && typeof sessionGroup.id === "string") {
-            const existing = useEntityStore.getState().sessionGroups[sessionGroup.id];
+            const existing = state.sessionGroups[sessionGroup.id];
             upsert("sessionGroups", sessionGroup.id, {
               ...(existing ? { ...existing, ...sessionGroup } : sessionGroup),
               _sortTimestamp: event.timestamp,
@@ -247,14 +309,14 @@ export function useOrgEvents() {
           }
         };
 
-        // Always upsert the raw event into its scoped bucket
-        upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, event);
+        // Always upsert the event into its scoped bucket (stripped for session_output)
+        upsertScopedEvent(eventScopeKey(event.scopeType, event.scopeId), event.id, storedEvent);
 
         // Repo created or updated — upsert directly from payload
         if ((event.eventType === "repo_created" || event.eventType === "repo_updated") && payload) {
           const repo = asJsonObject(payload.repo);
           if (repo && typeof repo.id === "string") {
-            const existing = useEntityStore.getState().repos[repo.id];
+            const existing = state.repos[repo.id];
             upsert(
               "repos",
               repo.id,
@@ -385,7 +447,7 @@ export function useOrgEvents() {
           const session = asJsonObject(payload.session);
           if (session && typeof session.id === "string") {
             upsertSessionGroupFromPayload();
-            const existingSession = useEntityStore.getState().sessions[session.id];
+            const existingSession = state.sessions[session.id];
             upsert("sessions", session.id, {
               ...(existingSession ? { ...existingSession, ...session } : session),
               _sortTimestamp: (session.updatedAt as string | undefined) ?? event.timestamp,
@@ -431,7 +493,7 @@ export function useOrgEvents() {
           if (deletedSessionGroupId && ui.activeSessionGroupId === deletedSessionGroupId) {
             ui.setActiveSessionId(null);
           } else if (ui.activeSessionId === deletedId) {
-            const remaining = Object.values(useEntityStore.getState().sessions)
+            const remaining = Object.values(state.sessions)
               .filter((session) => session.sessionGroupId === sessionGroupId)
               .sort((a, b) => {
                 const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
@@ -470,10 +532,10 @@ export function useOrgEvents() {
             // PR merge transitions ALL sessions in the group, not just the event session.
             // Patch sibling sessions so their tab indicators update immediately.
             if (event.eventType === "session_pr_merged") {
-              const mergedSession = useEntityStore.getState().sessions[event.scopeId];
+              const mergedSession = state.sessions[event.scopeId];
               const groupId = mergedSession?.sessionGroupId;
               if (groupId) {
-                const allSessions = useEntityStore.getState().sessions;
+                const allSessions = state.sessions;
                 for (const [siblingId, sibling] of Object.entries(allSessions)) {
                   if (
                     siblingId !== event.scopeId &&
@@ -530,7 +592,7 @@ export function useOrgEvents() {
 
           const checkpoint = extractGitCheckpoint(payload);
           if (checkpoint) {
-            const existingSession = useEntityStore.getState().sessions[event.scopeId];
+            const existingSession = state.sessions[event.scopeId];
             if (existingSession) {
               patch("sessions", event.scopeId, {
                 gitCheckpoints: mergeGitCheckpoints(
@@ -540,7 +602,7 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[checkpoint.sessionGroupId];
+            const existingGroup = state.sessionGroups[checkpoint.sessionGroupId];
             if (existingGroup) {
               patch("sessionGroups", checkpoint.sessionGroupId, {
                 gitCheckpoints: mergeGitCheckpoints(
@@ -553,7 +615,7 @@ export function useOrgEvents() {
 
           const rewrite = extractGitCheckpointRewrite(payload);
           if (rewrite) {
-            const existingSession = useEntityStore.getState().sessions[event.scopeId];
+            const existingSession = state.sessions[event.scopeId];
             if (existingSession) {
               patch("sessions", event.scopeId, {
                 gitCheckpoints: rewriteGitCheckpoints(
@@ -564,7 +626,7 @@ export function useOrgEvents() {
               } as Partial<SessionEntity>);
             }
 
-            const existingGroup = useEntityStore.getState().sessionGroups[rewrite.checkpoint.sessionGroupId];
+            const existingGroup = state.sessionGroups[rewrite.checkpoint.sessionGroupId];
             if (existingGroup) {
               patch("sessionGroups", rewrite.checkpoint.sessionGroupId, {
                 gitCheckpoints: rewriteGitCheckpoints(
@@ -618,6 +680,8 @@ export function useOrgEvents() {
             upsert("inboxItems", item.id, item as unknown as InboxItem);
           }
         }
+
+        }); // end batch
 
         // Fire notification handlers after all store patches are applied
         notifyForEvent(event);

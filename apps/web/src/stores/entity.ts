@@ -1,5 +1,7 @@
 import { create } from "zustand";
+import { immer } from "zustand/middleware/immer";
 import { useShallow } from "zustand/react/shallow";
+import type { Draft } from "immer";
 import type {
   Organization,
   User,
@@ -50,6 +52,9 @@ type Tables = { [K in EntityType]: Record<string, EntityTableMap[K]> };
 /** Events are partitioned by scope key (`${scopeType}:${scopeId}`) for O(1) scoped lookups */
 type EventsByScope = Record<string, Record<string, Event>>;
 
+/** Derived index: sessionGroupId → Set of session IDs for O(1) lookups */
+type SessionIdsByGroup = Record<string, Set<string>>;
+
 interface EntityActions {
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) => void;
   upsertMany: <T extends EntityType>(
@@ -65,11 +70,33 @@ interface EntityActions {
   upsertManyScopedEvents: (scopeKey: string, items: Array<Event & { id: string }>) => void;
   /** Remove an entire scoped bucket (for eviction) */
   removeScopedEvents: (scopeKey: string) => void;
+  /** Apply multiple mutations in a single state update (reduces re-renders) */
+  batch: (fn: (state: Draft<EntityState>) => void) => void;
 }
 
-type EntityState = Tables & { eventsByScope: EventsByScope } & EntityActions;
+type EntityState = Tables & {
+  eventsByScope: EventsByScope;
+  _sessionIdsByGroup: SessionIdsByGroup;
+} & EntityActions;
 
-export const useEntityStore = create<EntityState>((set) => ({
+/** Maintain the sessionIdsByGroup index when a session is upserted or patched */
+function updateSessionGroupIndex(state: Draft<EntityState>, sessionId: string, groupId: string | null | undefined) {
+  if (!groupId) return;
+  if (!state._sessionIdsByGroup[groupId]) {
+    state._sessionIdsByGroup[groupId] = new Set();
+  }
+  state._sessionIdsByGroup[groupId].add(sessionId);
+}
+
+/** Remove a session from its group index */
+function removeFromSessionGroupIndex(state: Draft<EntityState>, sessionId: string) {
+  const session = state.sessions[sessionId];
+  if (session?.sessionGroupId) {
+    state._sessionIdsByGroup[session.sessionGroupId]?.delete(sessionId);
+  }
+}
+
+export const useEntityStore = create<EntityState>()(immer((set) => ({
   organizations: {},
   users: {},
   repos: {},
@@ -83,61 +110,75 @@ export const useEntityStore = create<EntityState>((set) => ({
   inboxItems: {},
   messages: {},
   eventsByScope: {},
+  _sessionIdsByGroup: {},
 
   upsert: (entityType, id, data) =>
     set((state) => {
-      const table = { ...(state[entityType] as Record<string, unknown>) };
-      table[id] = data;
-      return { [entityType]: table } as Partial<Tables>;
+      (state[entityType] as Record<string, unknown>)[id] = data;
+      if (entityType === "sessions") {
+        const session = data as unknown as SessionEntity;
+        updateSessionGroupIndex(state, id, session.sessionGroupId);
+      }
     }),
 
   upsertMany: (entityType, items) =>
     set((state) => {
-      const table = { ...(state[entityType] as Record<string, unknown>) };
       for (const item of items) {
-        table[item.id] = item;
+        (state[entityType] as Record<string, unknown>)[item.id] = item;
+        if (entityType === "sessions") {
+          const session = item as unknown as SessionEntity;
+          updateSessionGroupIndex(state, item.id, session.sessionGroupId);
+        }
       }
-      return { [entityType]: table } as Partial<Tables>;
     }),
 
   patch: (entityType, id, data) =>
     set((state) => {
-      const table = { ...(state[entityType] as Record<string, unknown>) };
+      const table = state[entityType] as Record<string, unknown>;
       const existing = table[id];
       if (existing) {
-        table[id] = { ...(existing as object), ...data };
+        Object.assign(existing as object, data);
+        if (entityType === "sessions") {
+          const session = existing as SessionEntity;
+          updateSessionGroupIndex(state, id, session.sessionGroupId);
+        }
       }
-      return { [entityType]: table } as Partial<Tables>;
     }),
 
   remove: (entityType, id) =>
     set((state) => {
-      const { [id]: _, ...rest } = state[entityType] as Record<string, unknown>;
-      return { [entityType]: rest } as Partial<Tables>;
+      if (entityType === "sessions") {
+        removeFromSessionGroupIndex(state, id);
+      }
+      delete (state[entityType] as Record<string, unknown>)[id];
     }),
 
   upsertScopedEvent: (scopeKey, id, event) =>
     set((state) => {
-      const bucket = state.eventsByScope[scopeKey];
-      const updated = bucket ? { ...bucket, [id]: event } : { [id]: event };
-      return { eventsByScope: { ...state.eventsByScope, [scopeKey]: updated } };
+      if (!state.eventsByScope[scopeKey]) {
+        state.eventsByScope[scopeKey] = {};
+      }
+      state.eventsByScope[scopeKey][id] = event;
     }),
 
   upsertManyScopedEvents: (scopeKey, items) =>
     set((state) => {
-      const bucket = { ...(state.eventsByScope[scopeKey] ?? {}) };
+      if (!state.eventsByScope[scopeKey]) {
+        state.eventsByScope[scopeKey] = {};
+      }
+      const bucket = state.eventsByScope[scopeKey];
       for (const item of items) {
         bucket[item.id] = item;
       }
-      return { eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket } };
     }),
 
   removeScopedEvents: (scopeKey) =>
     set((state) => {
-      const { [scopeKey]: _, ...rest } = state.eventsByScope;
-      return { eventsByScope: rest };
+      delete state.eventsByScope[scopeKey];
     }),
-}));
+
+  batch: (fn) => set(fn),
+})));
 
 /** Fine-grained selector: subscribe to a single field of a single entity */
 export function useEntityField<T extends EntityType, F extends keyof EntityTableMap[T]>(
@@ -220,3 +261,10 @@ export function useScopedEventField<F extends keyof Event>(
     return bucket?.[id]?.[field];
   });
 }
+
+/** Get session IDs for a group from the derived index (O(1) lookup) */
+export function useSessionIdsByGroup(groupId: string): Set<string> {
+  return useEntityStore((state) => state._sessionIdsByGroup[groupId] ?? EMPTY_SET);
+}
+
+const EMPTY_SET: Set<string> = new Set();

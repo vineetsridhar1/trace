@@ -471,6 +471,7 @@ model ChannelMember {
 
   @@id([channelId, userId])
   @@index([userId])
+  @@index([channelId, leftAt])
 }
 
 model SessionGroup {
@@ -534,6 +535,8 @@ model Session {
   updatedAt DateTime @updatedAt
 
   @@index([sessionGroupId, updatedAt])
+  @@index([organizationId, agentStatus])
+  @@index([channelId, updatedAt])
 }
 
 model SessionProject {
@@ -567,6 +570,8 @@ model Ticket {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status, priority])
 }
 
 model TicketProject {
@@ -632,6 +637,7 @@ model Event {
 
   @@index([organizationId, scopeType, scopeId])
   @@index([organizationId, eventType])
+  @@index([organizationId, timestamp])
   @@index([parentId])
 }
 
@@ -738,6 +744,7 @@ model Message {
 
   @@index([chatId, createdAt])
   @@index([channelId, createdAt])
+  @@index([channelId, deletedAt])
   @@index([parentMessageId, createdAt])
 }
 
@@ -802,6 +809,7 @@ model AiBranch {
   createdAt DateTime @default(now())
 
   @@index([conversationId])
+  @@index([conversationId, createdAt])
   @@index([parentBranchId])
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSidebarData } from "../hooks/useSidebarData";
 import { useSidebarTabScroll } from "../hooks/useSidebarTabScroll";
 import { useUIStore } from "../stores/ui";
@@ -67,11 +67,16 @@ export function AppSidebar() {
       ? peekTabProgress
       : getTabIndex(currentTab);
 
+  const rafRef = useRef<number>(0);
   useLayoutEffect(() => {
-    document.documentElement.style.setProperty(
-      "--trace-shell-bg",
-      `color-mix(in srgb, var(--th-surface-deep) ${tabProgress * 100}%, var(--sidebar-dm))`,
-    );
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      document.documentElement.style.setProperty(
+        "--trace-shell-bg",
+        `color-mix(in srgb, var(--th-surface-deep) ${tabProgress * 100}%, var(--sidebar-dm))`,
+      );
+    });
+    return () => cancelAnimationFrame(rafRef.current);
   }, [tabProgress]);
 
   useEffect(() => {
