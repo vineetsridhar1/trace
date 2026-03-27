@@ -40,7 +40,7 @@ export interface QueryExecutionLogsInput {
 }
 
 export class ExecutionLoggingService {
-  async write(input: WriteExecutionLogInput) {
+  async write(input: WriteExecutionLogInput): Promise<{ id: string }> {
     return prisma.agentExecutionLog.create({
       data: {
         organizationId: input.organizationId,

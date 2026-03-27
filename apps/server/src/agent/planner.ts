@@ -97,7 +97,7 @@ export function setAdapterForTest(adapter: LLMAdapter | null): void {
 // Tool definition for structured output
 // ---------------------------------------------------------------------------
 
-const PLANNER_TOOL: LLMToolDefinition = {
+export const PLANNER_TOOL: LLMToolDefinition = {
   name: "planner_decision",
   description:
     "Output your decision about what the agent should do in response to the events. " +

@@ -32,6 +32,7 @@ import type { PlannerOutput, PlannerTurnResult, ProposedAction } from "./planner
 import {
   DEFAULT_SONNET_MODEL,
   DEFAULT_OPUS_MODEL,
+  PLANNER_TOOL,
   buildSystemPrompt,
   runPlannerTurn,
 } from "./planner.js";
@@ -46,6 +47,7 @@ import { executionLoggingService } from "../services/execution-logging.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { processedEventService } from "../services/processed-event.js";
 import { estimateCostCents } from "./cost-utils.js";
+import { llmCallLoggingService, type LlmCallRecord } from "../services/llm-call-logging.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -125,6 +127,7 @@ interface LoopState {
   promotedModel: string | null;
   messageHistory: LLMMessage[];
   turnResults: TurnResult[];
+  llmCallRecords: LlmCallRecord[];
   totalCostCents: number;
   totalInputTokens: number;
   totalOutputTokens: number;
@@ -203,6 +206,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     promotedModel: isRuleBasedTier3 ? opusModel : null,
     messageHistory: [{ role: "user", content: INITIAL_USER_MESSAGE }],
     turnResults: [],
+    llmCallRecords: [],
     totalCostCents: 0,
     totalInputTokens: 0,
     totalOutputTokens: 0,
@@ -231,7 +235,26 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     }
 
     const { output: plannerOutput, response: llmResponse } = turnResult;
+    const messagesSnapshot = structuredClone(state.messageHistory);
     accumulateCost(state, llmResponse, turnResult.latencyMs);
+
+    // Capture per-call LLM data for observability
+    state.llmCallRecords.push({
+      turnNumber: turn,
+      model: llmResponse.model,
+      provider: "anthropic",
+      systemPrompt,
+      messages: messagesSnapshot,
+      tools: [PLANNER_TOOL],
+      maxTokens: 1024,
+      temperature: 0,
+      responseContent: llmResponse.content,
+      stopReason: llmResponse.stopReason ?? "end_turn",
+      inputTokens: llmResponse.usage.inputTokens,
+      outputTokens: llmResponse.usage.outputTokens,
+      estimatedCostCents: estimateTurnCost(llmResponse),
+      latencyMs: turnResult.latencyMs,
+    });
 
     log("planner decided", {
       scopeKey: state.packet.scopeKey,
@@ -823,7 +846,7 @@ async function postLoop(input: PostLoopInput): Promise<void> {
     model: state.lastModel || (state.promotedModel ?? "unknown"),
   };
 
-  await writeExecutionLog({
+  const executionLogId = await writeExecutionLog({
     packet: state.packet,
     plannerResult: aggregatedPlannerResult,
     costCents: state.totalCostCents,
@@ -838,6 +861,15 @@ async function postLoop(input: PostLoopInput): Promise<void> {
     promotionReason: state.promotionReason,
     logger,
   });
+
+  // Write per-call LLM records
+  if (executionLogId && state.llmCallRecords.length > 0) {
+    try {
+      await llmCallLoggingService.writeMany(executionLogId, state.llmCallRecords);
+    } catch (err) {
+      logError("llm call logging failed (non-fatal)", err);
+    }
+  }
 
   await markProcessed(state.packet, logger);
 
@@ -1091,7 +1123,7 @@ interface WriteLogInput {
   logger: PipelineLogger;
 }
 
-async function writeExecutionLog(input: WriteLogInput): Promise<void> {
+async function writeExecutionLog(input: WriteLogInput): Promise<string | null> {
   const {
     packet, plannerResult, costCents, agentSettings, batch,
     disposition, status, policyDecision, finalActions, inboxItemId,
@@ -1099,7 +1131,7 @@ async function writeExecutionLog(input: WriteLogInput): Promise<void> {
     logger,
   } = input;
   try {
-    await executionLoggingService.write({
+    const log = await executionLoggingService.write({
       organizationId: packet.organizationId,
       triggerEventId: packet.triggerEvent.id,
       batchSize: batch.events.length,
@@ -1124,8 +1156,10 @@ async function writeExecutionLog(input: WriteLogInput): Promise<void> {
       inboxItemId,
       latencyMs: plannerResult.latencyMs,
     });
+    return log.id;
   } catch (err) {
     logger.logError("execution log write failed (non-fatal)", err);
+    return null;
   }
 }
 
