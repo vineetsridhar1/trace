@@ -1,12 +1,8 @@
 import type { SVGProps } from "react";
 
-/** Claude / Anthropic calligraphic star mark */
-export function ClaudeIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <path d="M15.673 2.292a1.084 1.084 0 0 1 2.106 0l1.571 6.316a5.423 5.423 0 0 0 3.749 3.87l.46.127a1.084 1.084 0 0 1 0 2.09l-.46.127a5.423 5.423 0 0 0-3.749 3.87l-1.571 6.316a1.084 1.084 0 0 1-2.106 0l-1.571-6.316a5.423 5.423 0 0 0-3.749-3.87l-.46-.127a1.084 1.084 0 0 1 0-2.09l.46-.127a5.423 5.423 0 0 0 3.749-3.87l1.571-6.316ZM5.397 1.065a.722.722 0 0 1 1.404 0l.631 2.535a3.615 3.615 0 0 0 2.499 2.58l.306.085a.722.722 0 0 1 0 1.393l-.306.085a3.615 3.615 0 0 0-2.499 2.58l-.631 2.535a.722.722 0 0 1-1.404 0l-.631-2.535a3.615 3.615 0 0 0-2.499-2.58l-.306-.085a.722.722 0 0 1 0-1.393l.306-.085a3.615 3.615 0 0 0 2.499-2.58l.631-2.535Z" />
-    </svg>
-  );
+/** Claude / Anthropic starburst logo (uses the PNG from /public) */
+export function ClaudeIcon({ className, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) {
+  return <img src="/claude-logo.png" alt="Claude" className={className} {...props} />;
 }
 
 /** OpenAI / Codex hexagonal mark */
