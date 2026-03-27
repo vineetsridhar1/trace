@@ -605,6 +605,8 @@ export interface PlannerTurnResult {
   provider: string;
   /** maxTokens setting used for this call. */
   maxTokens: number;
+  /** temperature setting used for this call. */
+  temperature: number;
 }
 
 /**
@@ -623,6 +625,7 @@ export async function runPlannerTurn(
   const model = options?.model ?? process.env.AGENT_PLANNER_MODEL ?? DEFAULT_TIER2_MODEL;
   const adapter = options?.adapter ?? getAgentLLMAdapter();
   const maxTokens = 1024;
+  const temperature = 0;
   const startTime = Date.now();
 
   const response = await withRetry(() =>
@@ -632,7 +635,7 @@ export async function runPlannerTurn(
       messages,
       tools: [PLANNER_TOOL],
       maxTokens,
-      temperature: 0,
+      temperature,
     }),
   );
 
@@ -654,11 +657,12 @@ export async function runPlannerTurn(
       latencyMs,
       provider,
       maxTokens,
+      temperature,
     };
   }
 
   const rawInput = toolUseBlock.input as Record<string, unknown>;
   const output = parsePlannerOutput(rawInput, availableActions);
 
-  return { output, response, latencyMs, provider, maxTokens };
+  return { output, response, latencyMs, provider, maxTokens, temperature };
 }

@@ -5,7 +5,7 @@ CREATE TABLE "AgentLlmCall" (
     "turnNumber" INTEGER NOT NULL,
     "model" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
-    "systemPrompt" TEXT NOT NULL,
+    "systemPrompt" TEXT,
     "messages" JSONB NOT NULL,
     "tools" JSONB NOT NULL DEFAULT '[]',
     "maxTokens" INTEGER,

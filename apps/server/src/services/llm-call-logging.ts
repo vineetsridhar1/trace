@@ -6,7 +6,11 @@ export interface LlmCallRecord {
   model: string;
   provider: string;
   systemPrompt: string | null;
-  messages: unknown[];
+  /** Number of messages in the history at the time of this call.
+   *  Combined with `messageHistoryRef`, avoids cloning the full history each turn. */
+  messageCount: number;
+  /** Shared reference to the (append-only) message history array. */
+  messageHistoryRef: unknown[];
   tools: unknown[];
   maxTokens?: number;
   temperature?: number;
@@ -29,7 +33,7 @@ export class LlmCallLoggingService {
         model: call.model,
         provider: call.provider,
         systemPrompt: call.systemPrompt,
-        messages: call.messages as Prisma.InputJsonValue,
+        messages: call.messageHistoryRef.slice(0, call.messageCount) as Prisma.InputJsonValue,
         tools: call.tools as Prisma.InputJsonValue,
         maxTokens: call.maxTokens ?? null,
         temperature: call.temperature ?? null,

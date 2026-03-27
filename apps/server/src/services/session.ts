@@ -86,6 +86,19 @@ function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionC
   };
 }
 
+/** Pick runtime-binding fields from a raw connection JSON value. */
+function runtimeBindingFromConnection(
+  conn: Prisma.InputJsonValue | null,
+): Partial<SessionConnectionData> {
+  if (!conn || typeof conn !== "object") return {};
+  const c = conn as Record<string, unknown>;
+  return {
+    ...(typeof c.runtimeInstanceId === "string" && { runtimeInstanceId: c.runtimeInstanceId }),
+    ...(typeof c.runtimeLabel === "string" && { runtimeLabel: c.runtimeLabel }),
+    ...(typeof c.cloudMachineId === "string" && { cloudMachineId: c.cloudMachineId }),
+  };
+}
+
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
 }
@@ -882,14 +895,17 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const initialConnection = sharedConnection
-      ? sharedConnection
-      : connJson(
-          defaultConnection({
-            ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
-            ...(runtimeLabel && { runtimeLabel }),
-          }),
-        );
+    // New sessions always start with state: "connected", preserving only the
+    // runtime binding info from the group.  The group's connection may be stale
+    // (e.g. "disconnected" from a prior transient error) and inheriting that
+    // would cause the frontend to show a "Connection lost" banner immediately.
+    const initialConnection = connJson(
+      defaultConnection({
+        ...runtimeBindingFromConnection(sharedConnection),
+        ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
+        ...(runtimeLabel && { runtimeLabel }),
+      }),
+    );
 
     // Sessions stay idle until a command is actually delivered to the coding tool.
     const initialAgentStatus: AgentStatus = "not_started";
@@ -1214,6 +1230,7 @@ export class SessionService {
         sessionId: id,
         agentStatus: "active",
         sessionStatus: "in_progress",
+        connection: updated.connection,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "user",
