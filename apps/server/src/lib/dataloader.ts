@@ -8,7 +8,7 @@ export function createUserLoader() {
         where: { id: { in: [...ids] } },
         select: { id: true, name: true, avatarUrl: true },
       });
-      const userMap = new Map(users.map((u: { id: string }) => [u.id, u]));
+      const userMap = new Map(users.map((u) => [u.id, u]));
       return ids.map((id) => userMap.get(id) ?? null);
     },
   );
@@ -37,7 +37,7 @@ function createPrismaLoaderWithInclude<T extends { id: string }>(
 
 export function createSessionLoader() {
   return createPrismaLoaderWithInclude(
-    prisma.session.findMany.bind(prisma.session) as Parameters<typeof createPrismaLoaderWithInclude>[0],
+    prisma.session.findMany.bind(prisma.session) as unknown as Parameters<typeof createPrismaLoaderWithInclude>[0],
     {
       createdBy: true,
       repo: true,
@@ -49,7 +49,7 @@ export function createSessionLoader() {
 
 export function createSessionGroupLoader() {
   return createPrismaLoaderWithInclude(
-    prisma.sessionGroup.findMany.bind(prisma.sessionGroup) as Parameters<typeof createPrismaLoaderWithInclude>[0],
+    prisma.sessionGroup.findMany.bind(prisma.sessionGroup) as unknown as Parameters<typeof createPrismaLoaderWithInclude>[0],
     {
       channel: true,
       repo: true,
@@ -68,31 +68,31 @@ export function createSessionGroupLoader() {
 
 export function createRepoLoader() {
   return createPrismaLoader(
-    prisma.repo.findMany.bind(prisma.repo) as Parameters<typeof createPrismaLoader>[0],
+    prisma.repo.findMany.bind(prisma.repo) as unknown as Parameters<typeof createPrismaLoader>[0],
   );
 }
 
 export function createEventLoader() {
   return createPrismaLoader(
-    prisma.event.findMany.bind(prisma.event) as Parameters<typeof createPrismaLoader>[0],
+    prisma.event.findMany.bind(prisma.event) as unknown as Parameters<typeof createPrismaLoader>[0],
   );
 }
 
 export function createConversationLoader() {
   return createPrismaLoader(
-    prisma.aiConversation.findMany.bind(prisma.aiConversation) as Parameters<typeof createPrismaLoader>[0],
+    prisma.aiConversation.findMany.bind(prisma.aiConversation) as unknown as Parameters<typeof createPrismaLoader>[0],
   );
 }
 
 export function createBranchLoader() {
   return createPrismaLoader(
-    prisma.aiBranch.findMany.bind(prisma.aiBranch) as Parameters<typeof createPrismaLoader>[0],
+    prisma.aiBranch.findMany.bind(prisma.aiBranch) as unknown as Parameters<typeof createPrismaLoader>[0],
   );
 }
 
 export function createTurnLoader() {
   return createPrismaLoader(
-    prisma.aiTurn.findMany.bind(prisma.aiTurn) as Parameters<typeof createPrismaLoader>[0],
+    prisma.aiTurn.findMany.bind(prisma.aiTurn) as unknown as Parameters<typeof createPrismaLoader>[0],
   );
 }
 

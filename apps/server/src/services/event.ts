@@ -138,7 +138,7 @@ export class EventService {
     if (p.session !== undefined) trimmed.session = p.session;
     if (p.sessionGroup !== undefined) trimmed.sessionGroup = p.sessionGroup;
 
-    return trimmed;
+    return trimmed as Prisma.InputJsonValue;
   }
 
   private appendToStream(organizationId: string, event: { id: string } & Record<string, unknown>) {
