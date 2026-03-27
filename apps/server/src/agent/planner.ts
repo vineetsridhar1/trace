@@ -22,9 +22,9 @@ import type {
   LLMResponse,
   LLMToolDefinition,
 } from "@trace/shared";
-import { createLLMAdapter } from "../lib/llm/index.js";
 import type { AgentContextPacket } from "./context-builder.js";
 import type { AgentActionRegistration } from "./action-registry.js";
+import { getAgentLLMAdapter, setAgentLLMAdapterForTest, withRetry } from "./llm-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,27 +71,11 @@ export const DEFAULT_SONNET_MODEL = "claude-sonnet-4-20250514";
 export const DEFAULT_OPUS_MODEL = "claude-opus-4-20250514";
 
 // ---------------------------------------------------------------------------
-// LLM adapter (lazy singleton, same pattern as summary-generator)
+// LLM adapter — uses shared singleton from llm-adapter.ts
 // ---------------------------------------------------------------------------
 
-let cachedAdapter: LLMAdapter | null = null;
-
-function getAdapter(): LLMAdapter {
-  if (cachedAdapter) return cachedAdapter;
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY env var is required for the agent planner");
-  }
-
-  cachedAdapter = createLLMAdapter({ provider: "anthropic", apiKey });
-  return cachedAdapter;
-}
-
 /** Visible for testing — allows injecting a mock adapter. */
-export function setAdapterForTest(adapter: LLMAdapter | null): void {
-  cachedAdapter = adapter;
-}
+export const setAdapterForTest = setAgentLLMAdapterForTest;
 
 // ---------------------------------------------------------------------------
 // Tool definition for structured output
@@ -538,27 +522,29 @@ export async function runPlanner(
   options?: PlannerOptions,
 ): Promise<PlannerResult> {
   const model = options?.model ?? process.env.AGENT_PLANNER_MODEL ?? DEFAULT_TIER2_MODEL;
-  const adapter = options?.adapter ?? getAdapter();
+  const adapter = options?.adapter ?? getAgentLLMAdapter();
   const startTime = Date.now();
 
   try {
     const systemPrompt = buildSystemPrompt(ctx);
 
-    const response = await adapter.complete({
-      model,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content:
-            "Analyze the context above and make your decision. " +
-            "Call the planner_decision tool with your response.",
-        },
-      ],
-      tools: [PLANNER_TOOL],
-      maxTokens: 1024,
-      temperature: 0,
-    });
+    const response = await withRetry(() =>
+      adapter.complete({
+        model,
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content:
+              "Analyze the context above and make your decision. " +
+              "Call the planner_decision tool with your response.",
+          },
+        ],
+        tools: [PLANNER_TOOL],
+        maxTokens: 1024,
+        temperature: 0,
+      }),
+    );
 
     const latencyMs = Date.now() - startTime;
 
@@ -631,17 +617,19 @@ export async function runPlannerTurn(
   options?: PlannerOptions,
 ): Promise<PlannerTurnResult> {
   const model = options?.model ?? process.env.AGENT_PLANNER_MODEL ?? DEFAULT_TIER2_MODEL;
-  const adapter = options?.adapter ?? getAdapter();
+  const adapter = options?.adapter ?? getAgentLLMAdapter();
   const startTime = Date.now();
 
-  const response = await adapter.complete({
-    model,
-    system: systemPrompt,
-    messages,
-    tools: [PLANNER_TOOL],
-    maxTokens: 1024,
-    temperature: 0,
-  });
+  const response = await withRetry(() =>
+    adapter.complete({
+      model,
+      system: systemPrompt,
+      messages,
+      tools: [PLANNER_TOOL],
+      maxTokens: 1024,
+      temperature: 0,
+    }),
+  );
 
   const latencyMs = Date.now() - startTime;
 

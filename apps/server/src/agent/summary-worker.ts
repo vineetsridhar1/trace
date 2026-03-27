@@ -17,6 +17,7 @@ import {
   type SummaryEvent,
 } from "./summary-generator.js";
 import { estimateCostCents } from "./cost-utils.js";
+import { createAgentLogger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -30,6 +31,8 @@ const EVENTS_PER_SUMMARY = 100; // max events to feed into one summary call
 
 /** Redis key tracking per-scope event counts since last summary. */
 const SCOPE_EVENT_COUNT_PREFIX = "agent:summary:events:";
+/** Redis SET that tracks all scopes with pending event counts — avoids SCAN. */
+const ACTIVE_SCOPES_SET_KEY = "agent:summary:active_scopes";
 
 // ---------------------------------------------------------------------------
 // Event count tracking (called from the main event consumption loop)
@@ -45,9 +48,14 @@ export async function trackEventForSummary(
   scopeType: string,
   scopeId: string,
 ): Promise<void> {
-  const key = `${SCOPE_EVENT_COUNT_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
+  const scopeRef = `${organizationId}:${scopeType}:${scopeId}`;
+  const key = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
   try {
-    await redis.incr(key);
+    // Increment counter and register in the active scopes SET (pipeline for efficiency)
+    const pipeline = redis.pipeline();
+    pipeline.incr(key);
+    pipeline.sadd(ACTIVE_SCOPES_SET_KEY, scopeRef);
+    await pipeline.exec();
   } catch {
     // Non-critical — worst case the summary worker falls back to DB counts
   }
@@ -63,16 +71,20 @@ async function getAndResetScopeEventCount(
   scopeType: string,
   scopeId: string,
 ): Promise<number> {
-  const key = `${SCOPE_EVENT_COUNT_PREFIX}${organizationId}:${scopeType}:${scopeId}`;
+  const scopeRef = `${organizationId}:${scopeType}:${scopeId}`;
+  const key = `${SCOPE_EVENT_COUNT_PREFIX}${scopeRef}`;
   try {
     // GETDEL atomically returns and deletes — no events lost between read and reset
     const val = await redis.getdel(key);
+    // Remove from active scopes SET
+    await redis.srem(ACTIVE_SCOPES_SET_KEY, scopeRef);
     return val ? parseInt(val, 10) : 0;
   } catch {
     // Fallback: try non-atomic delete if GETDEL unsupported
     try {
       const val = await redis.get(key);
       await redis.del(key);
+      await redis.srem(ACTIVE_SCOPES_SET_KEY, scopeRef);
       return val ? parseInt(val, 10) : 0;
     } catch {
       return 0;
@@ -250,7 +262,8 @@ interface StaleScopeCandidate {
 }
 
 /**
- * Scan Redis for scopes that have accumulated enough events.
+ * Look up scopes that have accumulated enough events using the tracked SET.
+ * This is O(N) where N = number of active scopes, not O(total Redis keys).
  */
 async function findStaleByEventCount(
   activeOrgIds: Iterable<string>,
@@ -258,42 +271,53 @@ async function findStaleByEventCount(
   const candidates: StaleScopeCandidate[] = [];
 
   try {
-    // Scan Redis keys matching our counter prefix
-    const pattern = `${SCOPE_EVENT_COUNT_PREFIX}*`;
-    let cursor = "0";
     const activeSet = new Set(activeOrgIds);
 
-    do {
-      const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
-      cursor = nextCursor;
+    // Read all tracked scopes from the SET
+    const scopeRefs = await redis.smembers(ACTIVE_SCOPES_SET_KEY);
 
-      for (const key of keys) {
-        const val = await redis.get(key);
-        const count = val ? parseInt(val, 10) : 0;
+    // Batch-fetch all counters using pipeline
+    if (scopeRefs.length === 0) return candidates;
 
-        if (count >= STALE_EVENT_THRESHOLD) {
-          // Parse key: agent:summary:events:{orgId}:{scopeType}:{scopeId}
-          const parts = key.replace(SCOPE_EVENT_COUNT_PREFIX, "").split(":");
-          if (parts.length >= 3) {
-            const orgId = parts[0];
-            const scopeType = parts[1];
-            const scopeId = parts.slice(2).join(":"); // scopeId may contain colons
+    const pipeline = redis.pipeline();
+    for (const ref of scopeRefs) {
+      pipeline.get(`${SCOPE_EVENT_COUNT_PREFIX}${ref}`);
+    }
+    const results = await pipeline.exec();
 
-            if (activeSet.has(orgId)) {
-              candidates.push({
-                organizationId: orgId,
-                entityType: scopeType,
-                entityId: scopeId,
-                reason: "event_count",
-              });
-            }
+    for (let i = 0; i < scopeRefs.length; i++) {
+      const ref = scopeRefs[i];
+      const result = results?.[i];
+      const val = result?.[1] as string | null;
+      const count = val ? parseInt(val, 10) : 0;
+
+      if (count >= STALE_EVENT_THRESHOLD) {
+        // Parse ref: {orgId}:{scopeType}:{scopeId}
+        const parts = ref.split(":");
+        if (parts.length >= 3) {
+          const orgId = parts[0];
+          const scopeType = parts[1];
+          const scopeId = parts.slice(2).join(":");
+
+          if (activeSet.has(orgId)) {
+            candidates.push({
+              organizationId: orgId,
+              entityType: scopeType,
+              entityId: scopeId,
+              reason: "event_count",
+            });
           }
         }
       }
-    } while (cursor !== "0");
+
+      // Clean up entries with 0 count from the SET
+      if (count === 0) {
+        redis.srem(ACTIVE_SCOPES_SET_KEY, ref).catch(() => {});
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[summary-worker] Redis scan failed:", msg);
+    console.error("[summary-worker] Redis lookup failed:", msg);
   }
 
   return candidates;
@@ -341,14 +365,8 @@ let running = false;
 /** Guard against overlapping refresh cycles */
 let cycleInProgress = false;
 
-function log(msg: string, data?: Record<string, unknown>): void {
-  const prefix = "[summary-worker]";
-  if (data) {
-    console.log(prefix, msg, JSON.stringify(data));
-  } else {
-    console.log(prefix, msg);
-  }
-}
+const summaryLogger = createAgentLogger("summary-worker");
+const { log } = summaryLogger;
 
 /**
  * One refresh cycle: find stale summaries and regenerate them.

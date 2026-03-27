@@ -31,7 +31,11 @@ import { sessionService } from "./services/session.js";
 import { inboxService } from "./services/inbox.js";
 import { channelService } from "./services/channel.js";
 import { startSuggestionExpiryWorker, stopSuggestionExpiryWorker } from "./agent/suggestion-expiry.js";
+import { setPolicyCostTracker } from "./agent/policy-engine.js";
 import { publishWorkerStatus, publishAggregationWindows } from "./services/agent-worker-status.js";
+import { Semaphore } from "./agent/concurrency.js";
+import { createAgentLogger, incrementMetric, getMetrics } from "./agent/logger.js";
+import { startRedisHealthMonitor, stopRedisHealthMonitor } from "./agent/redis-health.js";
 
 // ---------------------------------------------------------------------------
 // Cached cost tracker — bridges async CostTrackingService to sync router interface
@@ -115,6 +119,20 @@ let shuttingDown = false;
 const aggregator = new EventAggregator(handleBatch);
 
 /**
+ * Concurrency limiter — caps parallel pipeline executions to prevent
+ * cascading failures when many aggregation windows close simultaneously.
+ */
+const pipelineSemaphore = new Semaphore(
+  parseInt(process.env.AGENT_MAX_CONCURRENT_PIPELINES ?? "5", 10),
+);
+
+/**
+ * Tracks pending pipeline promises for graceful shutdown and ACK timing.
+ * We ACK events optimistically but track pipelines for shutdown draining.
+ */
+const pendingPipelines = new Set<Promise<void>>();
+
+/**
  * Shared executor instance — reused across batch handlers.
  */
 const executor = new ActionExecutor({
@@ -129,6 +147,9 @@ const executor = new ActionExecutor({
  * Handle a closed aggregation window.
  * Delegates to the pipeline module which chains:
  * context → planner → policy engine → execute/suggest → logging.
+ *
+ * Uses a semaphore to cap concurrent pipeline executions and tracks
+ * pending pipelines for graceful shutdown draining.
  */
 function handleBatch(batch: AggregatedBatch): void {
   log("batch ready", {
@@ -146,32 +167,35 @@ function handleBatch(batch: AggregatedBatch): void {
     return;
   }
 
-  // Run the full pipeline asynchronously — don't block the aggregator
-  runPipeline({ batch, agentSettings, executor }).catch((err) => {
-    logError("agent pipeline failed", err);
-  });
+  incrementMetric("pipelineStarted");
+  incrementMetric("batchesClosed");
+
+  // Run through the semaphore to limit concurrent pipeline executions
+  const pipeline = pipelineSemaphore
+    .run(() => runPipeline({ batch, agentSettings, executor }))
+    .then(() => {
+      incrementMetric("pipelineCompleted");
+    })
+    .catch((err) => {
+      incrementMetric("pipelineFailed");
+      logError("agent pipeline failed", err);
+    })
+    .finally(() => {
+      pendingPipelines.delete(pipeline);
+    });
+
+  pendingPipelines.add(pipeline);
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+const workerLogger = createAgentLogger("agent-worker");
+const { log, logError } = workerLogger;
+
 function streamKey(orgId: string): string {
   return `${STREAM_KEY_PREFIX}${orgId}${STREAM_KEY_SUFFIX}`;
-}
-
-function log(msg: string, data?: Record<string, unknown>): void {
-  const prefix = `[agent-worker]`;
-  if (data) {
-    console.log(prefix, msg, JSON.stringify(data));
-  } else {
-    console.log(prefix, msg);
-  }
-}
-
-function logError(msg: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`[agent-worker] ${msg}:`, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -430,6 +454,8 @@ async function processEvents(orgId: string, entries: StreamEntry[]): Promise<voi
 
       // Route the event
       const result = routeEvent(event, agentContext);
+      incrementMetric("eventsProcessed");
+      if (result.decision === "drop") incrementMetric("eventsDropped");
 
       log("event routed", {
         orgId,
@@ -495,12 +521,16 @@ const workerStartedAt = Date.now();
 function startStatusHeartbeat(): void {
   // Publish status immediately, then every 15 seconds
   const publish = () => {
+    const metrics = getMetrics();
     publishWorkerStatus({
       running: !shuttingDown,
       startedAt: workerStartedAt,
       openAggregationWindows: aggregator.openWindowCount,
       activeOrganizations: activeOrgs.size,
       lastHeartbeat: Date.now(),
+      activePipelines: pipelineSemaphore.activeCount,
+      pendingPipelines: pipelineSemaphore.pendingCount,
+      ...metrics,
     }).catch(() => {});
     publishAggregationWindows(aggregator.getOpenWindows()).catch(() => {});
   };
@@ -551,6 +581,7 @@ async function shutdown(signal: string): Promise<void> {
   cachedCostTracker.stop();
   stopSummaryWorker();
   stopSuggestionExpiryWorker();
+  stopRedisHealthMonitor();
 
   // Stop aggregator — emits all open windows so no events are lost
   try {
@@ -558,6 +589,17 @@ async function shutdown(signal: string): Promise<void> {
     log("aggregator stopped");
   } catch (err) {
     logError("error stopping aggregator", err);
+  }
+
+  // Drain pending pipelines — wait for in-flight work to complete
+  if (pendingPipelines.size > 0) {
+    log(`draining ${pendingPipelines.size} pending pipeline(s)...`);
+    const drainTimeout = new Promise<void>((resolve) => setTimeout(resolve, 30_000));
+    await Promise.race([
+      Promise.allSettled([...pendingPipelines]),
+      drainTimeout,
+    ]);
+    log("pipeline drain complete", { remaining: pendingPipelines.size });
   }
 
   // Give the consume loop time to exit its current XREADGROUP block.
@@ -613,8 +655,10 @@ async function main(): Promise<void> {
   // Seed chat membership gate from database
   await seedChatMembershipGate();
 
-  // Wire up cost tracker so the router enforces budget degradation
+  // Wire up cost tracker so the router and policy engine enforce budget degradation.
+  // Both use the same CachedCostTracker — no duplicate caching.
   setCostTracker(cachedCostTracker);
+  setPolicyCostTracker(cachedCostTracker);
   await cachedCostTracker.refreshAll(activeOrgs);
   cachedCostTracker.start(() => activeOrgs);
   log("cost tracker initialized");
@@ -636,6 +680,10 @@ async function main(): Promise<void> {
   // Start the suggestion expiry worker
   startSuggestionExpiryWorker();
   log("suggestion expiry worker started");
+
+  // Start Redis health monitoring
+  startRedisHealthMonitor();
+  log("redis health monitor started");
 
   // Start publishing worker status to Redis for the debug console
   startStatusHeartbeat();

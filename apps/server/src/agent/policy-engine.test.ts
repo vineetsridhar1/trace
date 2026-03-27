@@ -1,17 +1,19 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   evaluatePolicy,
   clearSuggestionRates,
   clearDismissals,
   clearBudgetCache,
   recordDismissal,
+  setPolicyCostTracker,
   type PolicyEngineInput,
 } from "./policy-engine.js";
 import type { PlannerOutput } from "./planner.js";
 import type { AgentContextPacket } from "./context-builder.js";
+import type { CostTracker } from "./router.js";
 
 // ---------------------------------------------------------------------------
-// Mock cost-tracking service
+// Mock cost-tracking service (still needed for tests that mock checkBudget)
 // ---------------------------------------------------------------------------
 
 vi.mock("../services/cost-tracking.js", () => ({
@@ -24,6 +26,16 @@ vi.mock("../services/cost-tracking.js", () => ({
     }),
   },
 }));
+
+// ---------------------------------------------------------------------------
+// Mock cost tracker — the policy engine now uses this synchronous interface
+// ---------------------------------------------------------------------------
+
+let mockBudgetFraction = 1.0; // default: full budget
+
+const mockCostTracker: CostTracker = {
+  getRemainingBudgetFraction: () => mockBudgetFraction,
+};
 
 // Mock Redis for dismissal cooldown (now Redis-backed)
 const mockRedisStore = new Map<string, string>();
@@ -109,6 +121,12 @@ function makeInput(overrides: Partial<PolicyEngineInput> = {}): PolicyEngineInpu
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+beforeEach(() => {
+  // Wire up the mock cost tracker before each test
+  mockBudgetFraction = 1.0;
+  setPolicyCostTracker(mockCostTracker);
+});
 
 afterEach(async () => {
   clearSuggestionRates();
@@ -440,13 +458,7 @@ describe("policy-engine", () => {
 
   describe("cost budget enforcement", () => {
     it("drops all actions when budget is exhausted", async () => {
-      mockCheckBudget.mockResolvedValueOnce({
-        dailyLimitCents: 1000,
-        spentCents: 1000,
-        remainingCents: 0,
-        remainingPercent: 0,
-      });
-      clearBudgetCache();
+      mockBudgetFraction = 0; // 0% remaining
 
       const result = await evaluatePolicy(makeInput());
 
@@ -455,13 +467,7 @@ describe("policy-engine", () => {
     });
 
     it("drops all actions when budget < 10% (observe-only mode)", async () => {
-      mockCheckBudget.mockResolvedValueOnce({
-        dailyLimitCents: 1000,
-        spentCents: 950,
-        remainingCents: 50,
-        remainingPercent: 5,
-      });
-      clearBudgetCache();
+      mockBudgetFraction = 0.05; // 5% remaining
 
       const result = await evaluatePolicy(makeInput());
 

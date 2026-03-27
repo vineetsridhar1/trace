@@ -46,6 +46,7 @@ import { executionLoggingService } from "../services/execution-logging.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { processedEventService } from "../services/processed-event.js";
 import { estimateCostCents } from "./cost-utils.js";
+import { createTimedLogger, incrementMetric, type AgentLogger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -63,32 +64,10 @@ const DEFAULT_MENTION_FALLBACK =
   "Hey! I saw your mention but I'm not sure how to help here. Could you give me more details?";
 
 // ---------------------------------------------------------------------------
-// Logging helpers
+// Logging — uses shared timed logger
 // ---------------------------------------------------------------------------
 
-interface PipelineLogger {
-  log: (msg: string, data?: Record<string, unknown>) => void;
-  logError: (msg: string, err: unknown) => void;
-}
-
-function createLogger(startTime: number): PipelineLogger {
-  return {
-    log(msg: string, data?: Record<string, unknown>): void {
-      const elapsed = `+${Date.now() - startTime}ms`;
-      const prefix = `[agent-pipeline] [${elapsed}]`;
-      if (data) {
-        console.log(prefix, msg, JSON.stringify(data));
-      } else {
-        console.log(prefix, msg);
-      }
-    },
-    logError(msg: string, err: unknown): void {
-      const elapsed = `+${Date.now() - startTime}ms`;
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[agent-pipeline] [${elapsed}] ${msg}:`, message);
-    },
-  };
-}
+type PipelineLogger = AgentLogger;
 
 // ---------------------------------------------------------------------------
 // Pipeline input
@@ -147,7 +126,7 @@ interface LoopState {
 export async function runPipeline(input: PipelineInput): Promise<void> {
   const { batch, agentSettings, executor } = input;
   const startTime = Date.now();
-  const logger = createLogger(startTime);
+  const logger = createTimedLogger("agent-pipeline", startTime);
   const { log, logError } = logger;
 
   // ── Event dedup ──
@@ -840,6 +819,11 @@ async function postLoop(input: PostLoopInput): Promise<void> {
   });
 
   await markProcessed(state.packet, logger);
+
+  // Track aggregated metrics
+  incrementMetric("totalCostCents", state.totalCostCents);
+  incrementMetric("totalInputTokens", state.totalInputTokens);
+  incrementMetric("totalOutputTokens", state.totalOutputTokens);
 
   log("pipeline complete", {
     scopeKey: state.packet.scopeKey,
