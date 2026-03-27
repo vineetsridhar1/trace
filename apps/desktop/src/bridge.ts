@@ -420,7 +420,7 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "prepare": {
-        const { sessionId, repoId, repoName, defaultBranch, branch, checkpointSha, readOnly } = cmd;
+        const { sessionId, sessionGroupId, repoId, repoName, defaultBranch, branch, checkpointSha, readOnly } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -445,6 +445,7 @@ export class BridgeClient implements IBridgeClient {
           repoPath,
           repoId,
           sessionId,
+          sessionGroupId,
           defaultBranch,
           startBranch: branch,
           checkpointSha,
@@ -460,7 +461,7 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "upgrade_workspace": {
-        const { sessionId, repoId, repoName, defaultBranch, branch } = cmd;
+        const { sessionId, sessionGroupId: upgradeGroupId, repoId, repoName, defaultBranch, branch } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
 
@@ -477,6 +478,7 @@ export class BridgeClient implements IBridgeClient {
           repoPath,
           repoId,
           sessionId,
+          sessionGroupId: upgradeGroupId,
           defaultBranch,
           startBranch: branch,
           gitHooksEnabled: repoConfig.gitHooksEnabled,

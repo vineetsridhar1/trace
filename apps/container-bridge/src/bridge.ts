@@ -234,7 +234,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare": {
-        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha, readOnly } = cmd;
+        const { sessionId, sessionGroupId, repoId, repoRemoteUrl, defaultBranch, branch, checkpointSha, readOnly } = cmd;
 
         (async () => {
           try {
@@ -255,6 +255,7 @@ export class ContainerBridge implements IBridgeClient {
                 defaultBranch,
                 branch,
                 checkpointSha,
+                sessionGroupId,
               );
               this.sessionWorkdirs.set(sessionId, workdir);
               this.send({ type: "register_session", sessionId });
@@ -270,7 +271,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "upgrade_workspace": {
-        const { sessionId, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
+        const { sessionId, sessionGroupId, repoId, repoRemoteUrl, defaultBranch, branch } = cmd;
 
         (async () => {
           try {
@@ -280,6 +281,8 @@ export class ContainerBridge implements IBridgeClient {
               sessionId,
               defaultBranch,
               branch,
+              undefined,
+              sessionGroupId,
             );
             this.sessionWorkdirs.set(sessionId, workdir);
             this.readOnlySessions.delete(sessionId);
