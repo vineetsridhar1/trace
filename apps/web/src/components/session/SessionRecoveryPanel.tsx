@@ -46,7 +46,11 @@ export function SessionRecoveryPanel({
     const delay = BASE_DELAY_MS * Math.pow(2, autoRetryCount);
     autoRetryTimer.current = setTimeout(async () => {
       autoRetryTimer.current = null;
-      await doRetry();
+      try {
+        await doRetry();
+      } catch {
+        // doRetry handles its own errors; swallow unexpected failures
+      }
       // Schedule next attempt only if still mounted and not cancelled
       if (!cancelled) {
         setAutoRetryCount((c) => c + 1);
@@ -78,10 +82,8 @@ export function SessionRecoveryPanel({
     await doRetry();
   }, [doRetry]);
 
-  const autoRetrying = autoRetryCount > 0 && autoRetryCount < MAX_AUTO_RETRIES;
-  const nextDelay = autoRetrying
-    ? Math.round((BASE_DELAY_MS * Math.pow(2, autoRetryCount)) / 1000)
-    : null;
+  const autoRetrying = canRetry && autoRetryCount < MAX_AUTO_RETRIES;
+  const autoRetriesExhausted = canRetry && autoRetryCount >= MAX_AUTO_RETRIES;
 
   return (
     <div className="shrink-0 border-t border-border px-4 py-3">
@@ -92,9 +94,14 @@ export function SessionRecoveryPanel({
           {lastError && (
             <p className="text-xs text-muted-foreground truncate">{lastError}</p>
           )}
-          {autoRetrying && nextDelay && (
+          {autoRetrying && (
             <p className="text-xs text-muted-foreground">
-              Retrying in {nextDelay}s…
+              Auto-retrying… (attempt {autoRetryCount + 1} of {MAX_AUTO_RETRIES})
+            </p>
+          )}
+          {autoRetriesExhausted && (
+            <p className="text-xs text-muted-foreground">
+              Auto-retry stopped — use Retry to try manually
             </p>
           )}
         </div>
