@@ -22,8 +22,8 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
   plan: {
     label: "Plan",
     icon: Map,
-    style: "border-accent bg-accent/20 text-accent",
-    inputBorder: "border-accent/50 focus:ring-accent",
+    style: "border-dashed border-accent bg-accent/20 text-accent",
+    inputBorder: "border-dashed border-accent/50 focus:ring-accent",
   },
   ask: {
     label: "Ask",
