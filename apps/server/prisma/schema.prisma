@@ -552,6 +552,7 @@ model Session {
   connection      Json?
   prUrl           String?
   worktreeDeleted Boolean      @default(false)
+  readOnlyWorkspace Boolean    @default(false)
 
   projects SessionProject[]
 

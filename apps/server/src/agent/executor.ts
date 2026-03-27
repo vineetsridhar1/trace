@@ -132,14 +132,11 @@ export class RedisIdempotencyStore implements IdempotencyStore {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Simple string hash for idempotency key differentiation (not cryptographic). */
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash + char) | 0;
-  }
-  return (hash >>> 0).toString(36);
+import { createHash } from "crypto";
+
+/** Cryptographic hash for idempotency key differentiation. */
+function hashArgs(str: string): string {
+  return createHash("sha256").update(str).digest("hex").slice(0, 16);
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +184,7 @@ export class ActionExecutor {
     // ---- Idempotency check ----
     // Include a hash of the args so that two different actions of the same type
     // on the same trigger event are not incorrectly deduplicated.
-    const argsHash = simpleHash(JSON.stringify(args));
+    const argsHash = hashArgs(JSON.stringify(args));
     const idempotencyKey = `agent:${ctx.agentId}:${actionType}:${ctx.triggerEventId}:${argsHash}`;
     if (await this.idempotency.has(idempotencyKey)) {
       return {

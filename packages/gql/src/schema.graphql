@@ -752,6 +752,7 @@ input StartSessionInput {
   restoreCheckpointId: ID
   projectId: ID
   prompt: String
+  interactionMode: String
 }
 
 input SessionFilters {
@@ -918,7 +919,7 @@ type Mutation {
   dismissSession(id: ID!): Session!
   deleteSession(id: ID!): Session!
   deleteSessionGroup(id: ID!): Boolean!
-  updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String): Session!
+  updateSessionConfig(sessionId: ID!, tool: CodingTool, model: String, hosting: HostingMode, runtimeInstanceId: ID): Session!
   sendSessionMessage(sessionId: ID!, text: String!, interactionMode: String): Event!
   retrySessionConnection(sessionId: ID!): Session!
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!

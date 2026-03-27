@@ -19,6 +19,22 @@ export interface WorkerStatusData {
   openAggregationWindows: number;
   activeOrganizations: number;
   lastHeartbeat: number; // epoch ms
+  // Pipeline metrics
+  activePipelines?: number;
+  pendingPipelines?: number;
+  // Cumulative metrics (from AgentMetrics)
+  pipelineStarted?: number;
+  pipelineCompleted?: number;
+  pipelineFailed?: number;
+  llmCallsTotal?: number;
+  llmCallsFailed?: number;
+  llmRetriesTotal?: number;
+  eventsProcessed?: number;
+  eventsDropped?: number;
+  batchesClosed?: number;
+  totalCostCents?: number;
+  totalInputTokens?: number;
+  totalOutputTokens?: number;
 }
 
 /**
@@ -26,13 +42,26 @@ export interface WorkerStatusData {
  */
 export async function publishWorkerStatus(status: WorkerStatusData): Promise<void> {
   try {
-    await redis.hset(STATUS_KEY, {
+    const hash: Record<string, string> = {
       running: status.running ? "1" : "0",
       startedAt: String(status.startedAt),
       openAggregationWindows: String(status.openAggregationWindows),
       activeOrganizations: String(status.activeOrganizations),
       lastHeartbeat: String(status.lastHeartbeat),
-    });
+    };
+    // Add optional metric fields if present
+    for (const key of [
+      "activePipelines", "pendingPipelines",
+      "pipelineStarted", "pipelineCompleted", "pipelineFailed",
+      "llmCallsTotal", "llmCallsFailed", "llmRetriesTotal",
+      "eventsProcessed", "eventsDropped", "batchesClosed",
+      "totalCostCents", "totalInputTokens", "totalOutputTokens",
+    ] as const) {
+      if (status[key] !== undefined) {
+        hash[key] = String(status[key]);
+      }
+    }
+    await redis.hset(STATUS_KEY, hash);
     await redis.expire(STATUS_KEY, STATUS_TTL_SECONDS);
   } catch {
     // Non-critical — don't crash the worker if Redis status write fails

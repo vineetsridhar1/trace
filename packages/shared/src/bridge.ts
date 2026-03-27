@@ -40,6 +40,17 @@ export interface BridgePrepareCommand {
   defaultBranch: string;
   branch?: string;
   checkpointSha?: string;
+  readOnly?: boolean;
+}
+
+export interface BridgeUpgradeWorkspaceCommand {
+  type: "upgrade_workspace";
+  sessionId: string;
+  repoId: string;
+  repoName: string;
+  repoRemoteUrl: string;
+  defaultBranch: string;
+  branch?: string;
 }
 
 export interface BridgeTerminateCommand {
@@ -139,6 +150,7 @@ export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
   | BridgePrepareCommand
+  | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand
   | BridgePauseCommand
   | BridgeResumeCommand

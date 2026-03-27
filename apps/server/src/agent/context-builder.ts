@@ -379,10 +379,11 @@ function extractSearchText(events: AgentEvent[]): string {
 
 /**
  * Find relevant entities via bounded graph traversal.
+ * Uses batched DB queries to avoid N+1 problems.
  *
  * Hop 0: scope entity (already fetched separately)
- * Hop 1: directly linked entities (60% of linked-entity budget)
- * Hop 2: entities linked to Hop 1 entities (40% of linked-entity budget)
+ * Hop 1: directly linked entities + ticket search + reverse links
+ * Hop 2: entities linked to Hop 1 tickets (capped at 3)
  */
 async function findRelevantEntities(input: {
   organizationId: string;
@@ -396,60 +397,68 @@ async function findRelevantEntities(input: {
   const seen = new Set<string>(); // "type:id" dedup
   seen.add(`${input.scopeType}:${input.scopeId}`); // don't re-include scope
 
-  // --- Ticket search by relevance ---
+  // --- Ticket search by relevance (runs in parallel with link collection) ---
   const searchText = extractSearchText(input.events);
-  if (searchText.trim()) {
-    try {
-      const relatedTickets = await ticketService.searchByRelevance({
+  const ticketSearchPromise = searchText.trim()
+    ? ticketService.searchByRelevance({
         organizationId: input.organizationId,
         query: searchText,
         limit: 5,
-      });
+      }).catch(() => [] as Array<{ id: string; title: string; description: string | null; status: string; priority: string | null; labels: string[] }>)
+    : Promise.resolve([]);
 
-      for (const ticket of relatedTickets) {
-        const key = `ticket:${ticket.id}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+  // --- Collect all Hop 1 links that need fetching ---
+  const hop1Links: Array<{ entityType: string; entityId: string }> = [];
 
-        entities.push({
-          type: "ticket",
-          id: ticket.id,
-          data: {
-            id: ticket.id,
-            title: ticket.title,
-            description: ticket.description?.slice(0, 500),
-            status: ticket.status,
-            priority: ticket.priority,
-            labels: ticket.labels,
-          },
-          hop: 1,
-        });
-      }
-    } catch {
-      // Search failure is non-fatal — proceed without ticket matches
-    }
-  }
-
-  // --- Follow links from scope entity (Hop 1) ---
-  const links = (input.scopeEntity?.data.links ?? []) as Array<{
+  const scopeLinks = (input.scopeEntity?.data.links ?? []) as Array<{
     entityType: string;
     entityId: string;
   }>;
-
-  for (const link of links) {
+  for (const link of scopeLinks) {
     const key = `${link.entityType}:${link.entityId}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      hop1Links.push(link);
+    }
+  }
+
+  // Run ticket search and Hop 1 link fetch in parallel
+  const [searchResults, hop1Fetched] = await Promise.all([
+    ticketSearchPromise,
+    batchFetchLinkedEntities(hop1Links),
+  ]);
+
+  // Add ticket search results
+  for (const ticket of searchResults) {
+    const key = `ticket:${ticket.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const linked = await fetchLinkedEntity(link.entityType, link.entityId);
-    if (linked) {
-      entities.push({ ...linked, hop: 1 });
+    entities.push({
+      type: "ticket",
+      id: ticket.id,
+      data: {
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description?.slice(0, 500),
+        status: ticket.status,
+        priority: ticket.priority,
+        labels: ticket.labels,
+      },
+      hop: 1,
+    });
+  }
+
+  // Add Hop 1 linked entities
+  for (const link of hop1Links) {
+    const key = `${link.entityType}:${link.entityId}`;
+    const fetched = hop1Fetched.get(key);
+    if (fetched) {
+      entities.push({ ...fetched, hop: 1 });
     }
   }
 
   // --- Session-specific: include reverse-linked tickets (Hop 1) ---
-  // Sessions store linked tickets via reverse TicketLink lookup (entityType=session).
-  // These are already fetched in the session scope fetcher as `linkedTickets`.
   const linkedTickets = (input.scopeEntity?.data.linkedTickets ?? []) as Array<{
     id: string;
     title: string;
@@ -472,26 +481,35 @@ async function findRelevantEntities(input: {
   }
 
   // --- Follow links from Hop 1 ticket entities (Hop 2) ---
-  // Only follow links from Hop 1 tickets that have links themselves
-  const hop1Tickets = entities.filter((e) => e.type === "ticket" && e.hop === 1);
+  // Batch-fetch all ticket links in one query, then batch-fetch the linked entities
+  const hop1TicketIds = entities
+    .filter((e) => e.type === "ticket" && e.hop === 1)
+    .map((e) => e.id);
 
-  for (const ticketEntity of hop1Tickets) {
-    const ticketLinks = await prisma.ticketLink.findMany({
-      where: { ticketId: ticketEntity.id },
+  if (hop1TicketIds.length > 0) {
+    const allTicketLinks = await prisma.ticketLink.findMany({
+      where: { ticketId: { in: hop1TicketIds } },
     });
 
-    for (const link of ticketLinks) {
+    // Collect unseen Hop 2 links (capped)
+    const hop2Links: Array<{ entityType: string; entityId: string }> = [];
+    for (const link of allTicketLinks) {
+      if (hop2Links.length >= 3) break;
       const key = `${link.entityType}:${link.entityId}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      hop2Links.push({ entityType: link.entityType, entityId: link.entityId });
+    }
 
-      const linked = await fetchLinkedEntity(link.entityType, link.entityId);
-      if (linked) {
-        entities.push({ ...linked, hop: 2 });
+    if (hop2Links.length > 0) {
+      const hop2Fetched = await batchFetchLinkedEntities(hop2Links);
+      for (const link of hop2Links) {
+        const key = `${link.entityType}:${link.entityId}`;
+        const fetched = hop2Fetched.get(key);
+        if (fetched) {
+          entities.push({ ...fetched, hop: 2 });
+        }
       }
-
-      // Cap Hop 2 entities
-      if (entities.filter((e) => e.hop === 2).length >= 3) break;
     }
   }
 
@@ -538,78 +556,118 @@ async function findRelevantEntities(input: {
 }
 
 /**
- * Fetch a linked entity in a compact form.
+ * Batch-fetch linked entities by type. Groups IDs by entity type and executes
+ * one `findMany` per type instead of N individual `findUnique` calls.
  *
  * Privacy guard (ticket #17): DM chats are never included as relevant
  * entities in non-DM context packets — their content must never leak.
  */
-async function fetchLinkedEntity(
-  entityType: string,
-  entityId: string,
-): Promise<Omit<ContextEntity, "hop"> | null> {
-  try {
-    switch (entityType) {
-      case "session": {
-        const s = await prisma.session.findUnique({
-          where: { id: entityId },
-          select: {
-            id: true,
-            name: true,
-            agentStatus: true,
-            sessionStatus: true,
-            tool: true,
-          },
-        });
-        if (!s) return null;
-        return { type: "session", id: s.id, data: s as unknown as Record<string, unknown> };
-      }
-      case "channel": {
-        const c = await prisma.channel.findUnique({
-          where: { id: entityId },
-          select: { id: true, name: true, type: true },
-        });
-        if (!c) return null;
-        return { type: "channel", id: c.id, data: c as unknown as Record<string, unknown> };
-      }
-      case "chat": {
-        const ch = await prisma.chat.findUnique({
-          where: { id: entityId },
-          select: { id: true, name: true, type: true },
-        });
-        if (!ch) return null;
-        // Privacy guard (ticket #17): never include DM chats as linked entities
-        // in context packets for other scopes.
-        if (ch.type === "dm") return null;
-        return { type: "chat", id: ch.id, data: ch as unknown as Record<string, unknown> };
-      }
-      case "ticket": {
-        const t = await prisma.ticket.findUnique({
-          where: { id: entityId },
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            priority: true,
-            labels: true,
-          },
-        });
-        if (!t) return null;
-        return { type: "ticket", id: t.id, data: t as unknown as Record<string, unknown> };
-      }
-      case "project": {
-        const p = await prisma.project.findUnique({
-          where: { id: entityId },
-          select: { id: true, name: true },
-        });
-        if (!p) return null;
-        return { type: "project", id: p.id, data: p as unknown as Record<string, unknown> };
-      }
-      default:
-        return null;
-    }
-  } catch {
-    return null;
+async function batchFetchLinkedEntities(
+  links: Array<{ entityType: string; entityId: string }>,
+): Promise<Map<string, Omit<ContextEntity, "hop">>> {
+  const result = new Map<string, Omit<ContextEntity, "hop">>();
+  if (links.length === 0) return result;
+
+  // Group IDs by entity type
+  const grouped = new Map<string, string[]>();
+  for (const link of links) {
+    const ids = grouped.get(link.entityType) ?? [];
+    ids.push(link.entityId);
+    grouped.set(link.entityType, ids);
   }
+
+  // Execute batched queries in parallel
+  const queries: Promise<void>[] = [];
+
+  const sessionIds = grouped.get("session");
+  if (sessionIds?.length) {
+    queries.push(
+      prisma.session.findMany({
+        where: { id: { in: sessionIds } },
+        select: { id: true, name: true, agentStatus: true, sessionStatus: true, tool: true },
+      }).then((rows: Array<{ id: string; name: string | null; agentStatus: string; sessionStatus: string; tool: string }>) => {
+        for (const s of rows) {
+          result.set(`session:${s.id}`, {
+            type: "session", id: s.id,
+            data: { id: s.id, name: s.name, agentStatus: s.agentStatus, sessionStatus: s.sessionStatus, tool: s.tool },
+          });
+        }
+      }).catch(() => {}),
+    );
+  }
+
+  const channelIds = grouped.get("channel");
+  if (channelIds?.length) {
+    queries.push(
+      prisma.channel.findMany({
+        where: { id: { in: channelIds } },
+        select: { id: true, name: true, type: true },
+      }).then((rows: Array<{ id: string; name: string; type: string }>) => {
+        for (const c of rows) {
+          result.set(`channel:${c.id}`, {
+            type: "channel", id: c.id,
+            data: { id: c.id, name: c.name, type: c.type },
+          });
+        }
+      }).catch(() => {}),
+    );
+  }
+
+  const chatIds = grouped.get("chat");
+  if (chatIds?.length) {
+    queries.push(
+      prisma.chat.findMany({
+        where: { id: { in: chatIds } },
+        select: { id: true, name: true, type: true },
+      }).then((rows: Array<{ id: string; name: string | null; type: string }>) => {
+        for (const ch of rows) {
+          // Privacy guard: never include DM chats as linked entities
+          if (ch.type === "dm") continue;
+          result.set(`chat:${ch.id}`, {
+            type: "chat", id: ch.id,
+            data: { id: ch.id, name: ch.name, type: ch.type },
+          });
+        }
+      }).catch(() => {}),
+    );
+  }
+
+  const ticketIds = grouped.get("ticket");
+  if (ticketIds?.length) {
+    queries.push(
+      prisma.ticket.findMany({
+        where: { id: { in: ticketIds } },
+        select: { id: true, title: true, status: true, priority: true, labels: true },
+      }).then((rows: Array<{ id: string; title: string; status: string; priority: string | null; labels: string[] }>) => {
+        for (const t of rows) {
+          result.set(`ticket:${t.id}`, {
+            type: "ticket", id: t.id,
+            data: { id: t.id, title: t.title, status: t.status, priority: t.priority, labels: t.labels },
+          });
+        }
+      }).catch(() => {}),
+    );
+  }
+
+  const projectIds = grouped.get("project");
+  if (projectIds?.length) {
+    queries.push(
+      prisma.project.findMany({
+        where: { id: { in: projectIds } },
+        select: { id: true, name: true },
+      }).then((rows: Array<{ id: string; name: string }>) => {
+        for (const p of rows) {
+          result.set(`project:${p.id}`, {
+            type: "project", id: p.id,
+            data: { id: p.id, name: p.name },
+          });
+        }
+      }).catch(() => {}),
+    );
+  }
+
+  await Promise.all(queries);
+  return result;
 }
 
 /** Truncate entities list to fit within a token budget, removing least relevant first. */
@@ -692,74 +750,59 @@ async function fetchSummaries(input: {
   const summaries: ContextSummary[] = [];
   let used = 0;
 
-  // Scope entity summary first (highest priority)
-  const scopeSummary = await refreshIfStale(input.organizationId, input.scopeType, input.scopeId);
+  // Collect all entities we want summaries for (scope + relevant, sorted by priority)
+  const targets: Array<{ type: string; id: string; isScope: boolean }> = [
+    { type: input.scopeType, id: input.scopeId, isScope: true },
+    ...[...input.relevantEntities]
+      .sort((a, b) => a.hop - b.hop)
+      .map((e) => ({ type: e.type, id: e.id, isScope: false })),
+  ];
 
-  if (scopeSummary) {
-    const tokens = estimateTokens(scopeSummary.content);
-    if (used + tokens <= input.tokenBudget) {
-      used += tokens;
+  // Batch-fetch all summaries and event counts in parallel
+  const [scopeSummaryResult, ...entitySummaryResults] = await Promise.all(
+    targets.map(async (target) => {
+      try {
+        const summary = target.isScope
+          ? await refreshIfStale(input.organizationId, target.type, target.id)
+          : await summaryService.getLatest({
+              organizationId: input.organizationId,
+              entityType: target.type,
+              entityId: target.id,
+            });
 
-      // Check freshness for metadata
-      const eventCount = await summaryService.countEventsSince({
-        organizationId: input.organizationId,
-        scopeType: input.scopeType,
-        scopeId: input.scopeId,
-        afterEventId: scopeSummary.endEventId ?? undefined,
-      });
-      const totalCount = scopeSummary.eventCount + eventCount;
-      const { fresh } = summaryService.isFresh(scopeSummary, totalCount);
-
-      summaries.push({
-        entityType: input.scopeType,
-        entityId: input.scopeId,
-        content: scopeSummary.content,
-        structuredData: scopeSummary.structuredData as Record<string, unknown>,
-        fresh,
-        eventCount: scopeSummary.eventCount,
-      });
-    }
-  }
-
-  // Summaries for relevant entities (sorted by hop — closer entities first)
-  const sortedEntities = [...input.relevantEntities].sort((a, b) => a.hop - b.hop);
-
-  for (const entity of sortedEntities) {
-    if (used >= input.tokenBudget) break;
-
-    try {
-      const summary = await summaryService.getLatest({
-        organizationId: input.organizationId,
-        entityType: entity.type,
-        entityId: entity.id,
-      });
-
-      if (summary) {
-        const tokens = estimateTokens(summary.content);
-        if (used + tokens > input.tokenBudget) continue;
-        used += tokens;
+        if (!summary) return null;
 
         const eventCount = await summaryService.countEventsSince({
           organizationId: input.organizationId,
-          scopeType: entity.type,
-          scopeId: entity.id,
+          scopeType: target.type,
+          scopeId: target.id,
           afterEventId: summary.endEventId ?? undefined,
         });
         const totalCount = summary.eventCount + eventCount;
         const { fresh } = summaryService.isFresh(summary, totalCount);
 
-        summaries.push({
-          entityType: entity.type,
-          entityId: entity.id,
+        return {
+          entityType: target.type,
+          entityId: target.id,
           content: summary.content,
           structuredData: summary.structuredData as Record<string, unknown>,
           fresh,
           eventCount: summary.eventCount,
-        });
+        };
+      } catch {
+        return null;
       }
-    } catch {
-      // Non-fatal — skip this summary
-    }
+    }),
+  );
+
+  // Add results in priority order, respecting token budget
+  const allResults = [scopeSummaryResult, ...entitySummaryResults];
+  for (const result of allResults) {
+    if (!result) continue;
+    const tokens = estimateTokens(result.content);
+    if (used + tokens > input.tokenBudget) continue;
+    used += tokens;
+    summaries.push(result);
   }
 
   return summaries;

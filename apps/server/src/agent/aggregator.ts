@@ -10,6 +10,8 @@
 import { redis } from "../lib/redis.js";
 import type { AgentEvent, RoutingResult } from "./router.js";
 import { getScopeAdapter } from "./scope-adapter.js";
+import { isRedisHealthy } from "./redis-health.js";
+import { createAgentLogger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +77,8 @@ const MAX_WALL_CLOCK_TIMEOUTS: Record<string, number> = {
 const DEFAULT_MAX_WALL_CLOCK_MS = 2 * 60 * 1_000; // 2 minutes
 const REDIS_KEY_PREFIX = "agent:aggregator:window:";
 const TIMER_CHECK_INTERVAL_MS = 1_000; // check timers every second
+const PERSIST_DEBOUNCE_EVENTS = 5; // persist to Redis every N events (not every event)
+const PERSIST_DEBOUNCE_MS = 3_000; // or every N ms, whichever comes first
 
 // ---------------------------------------------------------------------------
 // Scope key construction
@@ -170,6 +174,9 @@ export class EventAggregator {
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private batchHandler: BatchHandler;
   private checkInterval: ReturnType<typeof setInterval> | null = null;
+  /** Tracks events since last Redis persist per window — enables debounced persistence. */
+  private dirtyCount = new Map<string, number>();
+  private persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(batchHandler: BatchHandler) {
     this.batchHandler = batchHandler;
@@ -223,11 +230,16 @@ export class EventAggregator {
       this.checkInterval = null;
     }
 
-    // Clear all silence timers
+    // Clear all silence timers and persist timers
     for (const timer of this.timers.values()) {
       clearTimeout(timer);
     }
     this.timers.clear();
+    for (const timer of this.persistTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.persistTimers.clear();
+    this.dirtyCount.clear();
 
     // Emit all open windows before shutting down so events aren't lost
     const windowCount = this.windows.size;
@@ -306,13 +318,60 @@ export class EventAggregator {
     // Reset silence timer
     this.scheduleSilenceTimer(window);
 
-    // Persist to Redis
-    await persistWindow(window);
+    // Debounced persistence — only persist every N events or after a time interval.
+    // This reduces Redis writes from 1-per-event to ~1-per-5-events.
+    // On crash, up to PERSIST_DEBOUNCE_EVENTS events may be lost from the Redis
+    // snapshot. The in-memory window is authoritative; Redis is a recovery aid.
+    // On graceful shutdown we persist all dirty windows explicitly.
+    await this.debouncedPersist(windowKey, window);
   }
 
   // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
+
+  /**
+   * Debounced persistence: persist to Redis every PERSIST_DEBOUNCE_EVENTS events
+   * or after PERSIST_DEBOUNCE_MS, whichever comes first.
+   * Skips persistence entirely when Redis is degraded.
+   */
+  private async debouncedPersist(windowKey: string, window: AggregationWindow): Promise<void> {
+    if (!isRedisHealthy()) return;
+
+    const dirty = (this.dirtyCount.get(windowKey) ?? 0) + 1;
+    this.dirtyCount.set(windowKey, dirty);
+
+    if (dirty >= PERSIST_DEBOUNCE_EVENTS) {
+      // Threshold reached — persist immediately
+      this.cancelPersistTimer(windowKey);
+      this.dirtyCount.set(windowKey, 0);
+      await persistWindow(window);
+      return;
+    }
+
+    // Schedule a deferred persist if one isn't already pending
+    if (!this.persistTimers.has(windowKey)) {
+      const timer = setTimeout(() => {
+        this.persistTimers.delete(windowKey);
+        const currentWindow = this.windows.get(windowKey);
+        if (currentWindow && isRedisHealthy()) {
+          this.dirtyCount.set(windowKey, 0);
+          persistWindow(currentWindow).catch((err) => {
+            logError("deferred persist failed", err);
+          });
+        }
+      }, PERSIST_DEBOUNCE_MS);
+      this.persistTimers.set(windowKey, timer);
+    }
+  }
+
+  private cancelPersistTimer(windowKey: string): void {
+    const timer = this.persistTimers.get(windowKey);
+    if (timer) {
+      clearTimeout(timer);
+      this.persistTimers.delete(windowKey);
+    }
+  }
 
   private windowKey(scopeKey: string, orgId: string): string {
     return `${orgId}:${scopeKey}`;
@@ -363,8 +422,10 @@ export class EventAggregator {
     const window = this.windows.get(windowKey);
     if (!window) return;
 
-    // Clean up
+    // Clean up all timers and tracking for this window
     this.windows.delete(windowKey);
+    this.dirtyCount.delete(windowKey);
+    this.cancelPersistTimer(windowKey);
     const timer = this.timers.get(windowKey);
     if (timer) {
       clearTimeout(timer);
@@ -416,6 +477,8 @@ export class EventAggregator {
       const window = this.windows.get(key);
       if (window) {
         this.windows.delete(key);
+        this.dirtyCount.delete(key);
+        this.cancelPersistTimer(key);
         const timer = this.timers.get(key);
         if (timer) {
           clearTimeout(timer);
@@ -465,16 +528,5 @@ export class EventAggregator {
 // Logging
 // ---------------------------------------------------------------------------
 
-function log(msg: string, data?: Record<string, unknown>): void {
-  const prefix = "[aggregator]";
-  if (data) {
-    console.log(prefix, msg, JSON.stringify(data));
-  } else {
-    console.log(prefix, msg);
-  }
-}
-
-function logError(msg: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`[aggregator] ${msg}:`, message);
-}
+const aggregatorLogger = createAgentLogger("aggregator");
+const { log, logError } = aggregatorLogger;

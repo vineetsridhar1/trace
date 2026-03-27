@@ -310,6 +310,21 @@ const actionRegistry: AgentActionRegistration[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Indexed lookups — O(1) by name, pre-computed by scope
+// ---------------------------------------------------------------------------
+
+/** Name → registration map for O(1) lookup. */
+const actionsByName = new Map<string, AgentActionRegistration>(
+  actionRegistry.map((a) => [a.name, a]),
+);
+
+/** Pre-computed actions by scope type — avoids re-filtering on every call. */
+const actionsByScopeCache = new Map<ScopeType, AgentActionRegistration[]>();
+for (const scope of ["chat", "channel", "ticket", "session", "project", "system"] as ScopeType[]) {
+  actionsByScopeCache.set(scope, actionRegistry.filter((a) => a.scopes.includes(scope)));
+}
+
 /** Get all registered actions (for building the planner prompt). */
 export function getAllActions(): readonly AgentActionRegistration[] {
   return actionRegistry;
@@ -317,12 +332,12 @@ export function getAllActions(): readonly AgentActionRegistration[] {
 
 /** Get actions filtered by scope type (e.g., only actions relevant to "chat" events). */
 export function getActionsByScope(scope: ScopeType): AgentActionRegistration[] {
-  return actionRegistry.filter((a) => a.scopes.includes(scope));
+  return actionsByScopeCache.get(scope) ?? [];
 }
 
-/** Find a specific action by name. Returns undefined if not found. */
+/** Find a specific action by name. Returns undefined if not found. O(1). */
 export function findAction(name: string): AgentActionRegistration | undefined {
-  return actionRegistry.find((a) => a.name === name);
+  return actionsByName.get(name);
 }
 
 /** Validate that action parameters contain all required fields and no unknown fields. */
