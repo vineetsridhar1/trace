@@ -142,14 +142,14 @@ export function SessionInputOptions({
         <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
           <SelectValue>
             <span className="flex items-center gap-1.5">
-              {currentTool === "claude_code" ? <ClaudeIcon className="size-3.5" /> : <CodexIcon className="size-3.5" />}
+              {currentTool === "claude_code" ? <ClaudeIcon className="size-3.5 text-[#E07A3A]" /> : <CodexIcon className="size-3.5" />}
               {getToolLabel(currentTool)}
             </span>
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="claude_code">
-            <span className="flex items-center gap-1.5"><ClaudeIcon className="size-3.5" /> Claude Code</span>
+            <span className="flex items-center gap-1.5"><ClaudeIcon className="size-3.5 text-[#E07A3A]" /> Claude Code</span>
           </SelectItem>
           <SelectItem value="codex">
             <span className="flex items-center gap-1.5"><CodexIcon className="size-3.5" /> Codex</span>
