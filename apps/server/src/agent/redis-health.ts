@@ -26,7 +26,6 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 const CHECK_INTERVAL_MS = 10_000; // check every 10s
 const UNHEALTHY_THRESHOLD = 3; // 3 consecutive failures → degraded
-const RECOVERY_THRESHOLD = 1; // 1 success → healthy
 
 // ---------------------------------------------------------------------------
 // Public API

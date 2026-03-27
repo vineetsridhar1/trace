@@ -17,6 +17,7 @@ import {
   type SummaryEvent,
 } from "./summary-generator.js";
 import { estimateCostCents } from "./cost-utils.js";
+import { createAgentLogger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -358,8 +359,6 @@ async function findStaleByTime(): Promise<StaleScopeCandidate[]> {
 // ---------------------------------------------------------------------------
 // Worker loop
 // ---------------------------------------------------------------------------
-
-import { createAgentLogger } from "./logger.js";
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let running = false;
