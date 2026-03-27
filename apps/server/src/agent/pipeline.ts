@@ -214,7 +214,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     }
 
     const { output: plannerOutput, response: llmResponse } = turnResult;
-    const messagesSnapshot = structuredClone(state.messageHistory);
+    const messageCount = state.messageHistory.length;
     accumulateCost(state, llmResponse, turnResult.latencyMs);
 
     // Capture per-call LLM data for observability
@@ -224,10 +224,11 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       model: llmResponse.model,
       provider: turnResult.provider,
       systemPrompt: turn === 1 ? systemPrompt : null,
-      messages: messagesSnapshot,
+      messageCount,
+      messageHistoryRef: state.messageHistory,
       tools: [PLANNER_TOOL],
       maxTokens: turnResult.maxTokens,
-      temperature: 0,
+      temperature: turnResult.temperature,
       responseContent: llmResponse.content,
       stopReason: llmResponse.stopReason ?? "end_turn",
       inputTokens: llmResponse.usage.inputTokens,

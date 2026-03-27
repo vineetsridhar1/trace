@@ -204,6 +204,7 @@ function makeTurnResult(
     latencyMs: 500,
     provider: "anthropic",
     maxTokens: 1024,
+    temperature: 0,
   };
 }
 

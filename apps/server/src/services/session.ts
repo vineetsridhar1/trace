@@ -86,6 +86,19 @@ function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionC
   };
 }
 
+/** Pick runtime-binding fields from a raw connection JSON value. */
+function runtimeBindingFromConnection(
+  conn: Prisma.InputJsonValue | null,
+): Partial<SessionConnectionData> {
+  if (!conn || typeof conn !== "object") return {};
+  const c = conn as Record<string, unknown>;
+  return {
+    ...(typeof c.runtimeInstanceId === "string" && { runtimeInstanceId: c.runtimeInstanceId }),
+    ...(typeof c.runtimeLabel === "string" && { runtimeLabel: c.runtimeLabel }),
+    ...(typeof c.cloudMachineId === "string" && { cloudMachineId: c.cloudMachineId }),
+  };
+}
+
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
 }
@@ -888,19 +901,7 @@ export class SessionService {
     // would cause the frontend to show a "Connection lost" banner immediately.
     const initialConnection = connJson(
       defaultConnection({
-        ...(sharedConnection && typeof sharedConnection === "object"
-          ? {
-              runtimeInstanceId: (sharedConnection as Record<string, unknown>).runtimeInstanceId as
-                | string
-                | undefined,
-              runtimeLabel: (sharedConnection as Record<string, unknown>).runtimeLabel as
-                | string
-                | undefined,
-              cloudMachineId: (sharedConnection as Record<string, unknown>).cloudMachineId as
-                | string
-                | undefined,
-            }
-          : {}),
+        ...runtimeBindingFromConnection(sharedConnection),
         ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
         ...(runtimeLabel && { runtimeLabel }),
       }),
