@@ -158,13 +158,18 @@ export function SessionInputOptions({
       )}
       {isNotStarted ? (
         <Select value={currentRuntimeValue} onValueChange={handleRuntimeChange}>
-          <SelectTrigger className="h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
+          <SelectTrigger className="group/rt h-7 w-auto gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
             <SelectValue>
-              {isCloud ? (
-                <span className="flex items-center gap-1"><Cloud size={12} className="text-blue-400" /> Cloud</span>
-              ) : (
-                <span className="flex items-center gap-1"><Monitor size={12} className="text-green-400" /> {runtimeLabel ?? "Local"}</span>
-              )}
+              <span className="flex items-center gap-1">
+                {isCloud ? (
+                  <Cloud size={12} className="shrink-0 text-blue-400" />
+                ) : (
+                  <Monitor size={12} className="shrink-0 text-green-400" />
+                )}
+                <span className="max-w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover/rt:max-w-[120px] group-hover/rt:opacity-100">
+                  {isCloud ? "Cloud" : (runtimeLabel ?? "Local")}
+                </span>
+              </span>
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -181,12 +186,15 @@ export function SessionInputOptions({
           </SelectContent>
         </Select>
       ) : (
-        <span className="flex items-center gap-1 px-2 text-[11px] text-muted-foreground">
+        <span className="group/rt flex items-center gap-1 px-2 text-[11px] text-muted-foreground">
           {isCloud ? (
-            <><Cloud size={12} className="shrink-0 text-blue-400" /> Cloud</>
+            <Cloud size={12} className="shrink-0 text-blue-400" />
           ) : (
-            <><Monitor size={12} className="shrink-0 text-green-400" /> {runtimeLabel ?? "Local"}</>
+            <Monitor size={12} className="shrink-0 text-green-400" />
           )}
+          <span className="max-w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover/rt:max-w-[120px] group-hover/rt:opacity-100">
+            {isCloud ? "Cloud" : (runtimeLabel ?? "Local")}
+          </span>
         </span>
       )}
       <button
