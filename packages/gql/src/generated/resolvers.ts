@@ -553,7 +553,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  queueSessionMessage: QueuedMessage;
+  queueSessionMessage?: Maybe<QueuedMessage>;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
   removeQueuedMessage: Scalars['Boolean']['output'];
@@ -2268,7 +2268,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   moveSessionToCloud?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToCloudArgs, 'sessionId'>>;
   moveSessionToRuntime?: Resolver<ResolversTypes['Session'], ParentType, ContextType, RequireFields<MutationMoveSessionToRuntimeArgs, 'runtimeInstanceId' | 'sessionId'>>;
   muteScope?: Resolver<ResolversTypes['Participant'], ParentType, ContextType, RequireFields<MutationMuteScopeArgs, 'scopeId' | 'scopeType'>>;
-  queueSessionMessage?: Resolver<ResolversTypes['QueuedMessage'], ParentType, ContextType, RequireFields<MutationQueueSessionMessageArgs, 'sessionId' | 'text'>>;
+  queueSessionMessage?: Resolver<Maybe<ResolversTypes['QueuedMessage']>, ParentType, ContextType, RequireFields<MutationQueueSessionMessageArgs, 'sessionId' | 'text'>>;
   registerRepoWebhook?: Resolver<ResolversTypes['Repo'], ParentType, ContextType, RequireFields<MutationRegisterRepoWebhookArgs, 'repoId'>>;
   removeOrgMember?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRemoveOrgMemberArgs, 'organizationId' | 'userId'>>;
   removeQueuedMessage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationRemoveQueuedMessageArgs, 'id'>>;

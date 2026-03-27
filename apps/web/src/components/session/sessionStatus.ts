@@ -150,6 +150,7 @@ export function canSendMessage(
 ): boolean {
   if (!agentStatus) return false;
   if (worktreeDeleted) return false;
+  if (isTerminalStatus(agentStatus)) return false;
   if (isDisconnected(connection)) return false;
   return true;
 }

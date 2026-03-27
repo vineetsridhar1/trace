@@ -550,7 +550,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  queueSessionMessage: QueuedMessage;
+  queueSessionMessage?: Maybe<QueuedMessage>;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
   removeQueuedMessage: Scalars['Boolean']['output'];

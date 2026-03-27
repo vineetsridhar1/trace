@@ -552,7 +552,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  queueSessionMessage: QueuedMessage;
+  queueSessionMessage?: Maybe<QueuedMessage>;
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars['Boolean']['output'];
   removeQueuedMessage: Scalars['Boolean']['output'];
@@ -2283,7 +2283,7 @@ export type QueueSessionMessageMutationVariables = Exact<{
 }>;
 
 
-export type QueueSessionMessageMutation = { __typename?: 'Mutation', queueSessionMessage: { __typename?: 'QueuedMessage', id: string, sessionId: string, text: string, interactionMode?: string | null, position: number, createdAt: string } };
+export type QueueSessionMessageMutation = { __typename?: 'Mutation', queueSessionMessage?: { __typename?: 'QueuedMessage', id: string, sessionId: string, text: string, interactionMode?: string | null, position: number, createdAt: string } | null };
 
 export type UpdateQueuedMessageMutationVariables = Exact<{
   id: Scalars['ID']['input'];

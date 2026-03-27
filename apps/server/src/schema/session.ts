@@ -185,6 +185,7 @@ export const sessionMutations = {
     return sessionService.queueMessage({
       sessionId: args.sessionId,
       text: args.text,
+      organizationId: requireOrgContext(ctx),
       interactionMode: args.interactionMode ?? undefined,
       actorType: ctx.actorType,
       actorId: ctx.userId,
@@ -197,6 +198,7 @@ export const sessionMutations = {
   ) => {
     return sessionService.updateQueuedMessage({
       id: args.id,
+      organizationId: requireOrgContext(ctx),
       text: args.text ?? undefined,
       interactionMode: args.interactionMode ?? undefined,
       actorType: ctx.actorType,
@@ -206,6 +208,7 @@ export const sessionMutations = {
   removeQueuedMessage: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.removeQueuedMessage({
       id: args.id,
+      organizationId: requireOrgContext(ctx),
       actorType: ctx.actorType,
       actorId: ctx.userId,
     });
@@ -217,6 +220,7 @@ export const sessionMutations = {
   ) => {
     return sessionService.reorderQueuedMessages({
       sessionId: args.sessionId,
+      organizationId: requireOrgContext(ctx),
       orderedIds: args.orderedIds,
       actorType: ctx.actorType,
       actorId: ctx.userId,

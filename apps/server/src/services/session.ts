@@ -1707,15 +1707,36 @@ export class SessionService {
 
   // ─── Queued Messages ───
 
+  /** Delete a queued message and recompact positions atomically. */
+  private async deleteAndRecompact(messageId: string, sessionId: string) {
+    await prisma.$transaction(async (tx) => {
+      await tx.queuedMessage.delete({ where: { id: messageId } });
+      const remaining = await tx.queuedMessage.findMany({
+        where: { sessionId },
+        orderBy: { position: "asc" },
+      });
+      for (let i = 0; i < remaining.length; i++) {
+        if (remaining[i].position !== i) {
+          await tx.queuedMessage.update({
+            where: { id: remaining[i].id },
+            data: { position: i },
+          });
+        }
+      }
+    });
+  }
+
   async queueMessage({
     sessionId,
     text,
+    organizationId,
     interactionMode,
     actorType,
     actorId,
   }: {
     sessionId: string;
     text: string;
+    organizationId: string;
     interactionMode?: string;
     actorType: ActorType;
     actorId: string;
@@ -1724,10 +1745,14 @@ export class SessionService {
       where: { id: sessionId },
       select: { organizationId: true, agentStatus: true },
     });
+    if (session.organizationId !== organizationId) {
+      throw new Error("Session not found");
+    }
 
     // If the agent is NOT active, send directly instead of queuing
     if (session.agentStatus !== "active") {
-      return this.sendMessage(sessionId, text, actorType, actorId, interactionMode);
+      await this.sendMessage(sessionId, text, actorType, actorId, interactionMode);
+      return null;
     }
 
     const maxPos = await prisma.queuedMessage.aggregate({
@@ -1762,18 +1787,23 @@ export class SessionService {
 
   async updateQueuedMessage({
     id,
+    organizationId,
     text,
     interactionMode,
     actorType,
     actorId,
   }: {
     id: string;
+    organizationId: string;
     text?: string;
     interactionMode?: string;
     actorType: ActorType;
     actorId: string;
   }) {
     const existing = await prisma.queuedMessage.findUniqueOrThrow({ where: { id } });
+    if (existing.organizationId !== organizationId) {
+      throw new Error("Queued message not found");
+    }
 
     const queued = await prisma.queuedMessage.update({
       where: { id },
@@ -1798,30 +1828,21 @@ export class SessionService {
 
   async removeQueuedMessage({
     id,
+    organizationId,
     actorType,
     actorId,
   }: {
     id: string;
+    organizationId: string;
     actorType: ActorType;
     actorId: string;
   }) {
     const existing = await prisma.queuedMessage.findUniqueOrThrow({ where: { id } });
-
-    await prisma.queuedMessage.delete({ where: { id } });
-
-    // Recompact positions
-    const remaining = await prisma.queuedMessage.findMany({
-      where: { sessionId: existing.sessionId },
-      orderBy: { position: "asc" },
-    });
-    for (let i = 0; i < remaining.length; i++) {
-      if (remaining[i].position !== i) {
-        await prisma.queuedMessage.update({
-          where: { id: remaining[i].id },
-          data: { position: i },
-        });
-      }
+    if (existing.organizationId !== organizationId) {
+      throw new Error("Queued message not found");
     }
+
+    await this.deleteAndRecompact(id, existing.sessionId);
 
     await eventService.create({
       organizationId: existing.organizationId,
@@ -1838,11 +1859,13 @@ export class SessionService {
 
   async reorderQueuedMessages({
     sessionId,
+    organizationId,
     orderedIds,
     actorType,
     actorId,
   }: {
     sessionId: string;
+    organizationId: string;
     orderedIds: string[];
     actorType: ActorType;
     actorId: string;
@@ -1851,6 +1874,10 @@ export class SessionService {
       where: { sessionId },
       orderBy: { position: "asc" },
     });
+
+    if (current.length > 0 && current[0].organizationId !== organizationId) {
+      throw new Error("Session not found");
+    }
 
     const currentIds = new Set(current.map((q) => q.id));
     if (
@@ -1889,22 +1916,7 @@ export class SessionService {
     });
     if (!next) return;
 
-    // Delete from queue
-    await prisma.queuedMessage.delete({ where: { id: next.id } });
-
-    // Recompact positions
-    const remaining = await prisma.queuedMessage.findMany({
-      where: { sessionId },
-      orderBy: { position: "asc" },
-    });
-    for (let i = 0; i < remaining.length; i++) {
-      if (remaining[i].position !== i) {
-        await prisma.queuedMessage.update({
-          where: { id: remaining[i].id },
-          data: { position: i },
-        });
-      }
-    }
+    await this.deleteAndRecompact(next.id, sessionId);
 
     await eventService.create({
       organizationId: next.organizationId,
