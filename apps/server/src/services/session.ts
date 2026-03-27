@@ -882,14 +882,29 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const initialConnection = sharedConnection
-      ? sharedConnection
-      : connJson(
-          defaultConnection({
-            ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
-            ...(runtimeLabel && { runtimeLabel }),
-          }),
-        );
+    // New sessions always start with state: "connected", preserving only the
+    // runtime binding info from the group.  The group's connection may be stale
+    // (e.g. "disconnected" from a prior transient error) and inheriting that
+    // would cause the frontend to show a "Connection lost" banner immediately.
+    const initialConnection = connJson(
+      defaultConnection({
+        ...(sharedConnection && typeof sharedConnection === "object"
+          ? {
+              runtimeInstanceId: (sharedConnection as Record<string, unknown>).runtimeInstanceId as
+                | string
+                | undefined,
+              runtimeLabel: (sharedConnection as Record<string, unknown>).runtimeLabel as
+                | string
+                | undefined,
+              cloudMachineId: (sharedConnection as Record<string, unknown>).cloudMachineId as
+                | string
+                | undefined,
+            }
+          : {}),
+        ...(input.runtimeInstanceId && { runtimeInstanceId: input.runtimeInstanceId }),
+        ...(runtimeLabel && { runtimeLabel }),
+      }),
+    );
 
     // Sessions stay idle until a command is actually delivered to the coding tool.
     const initialAgentStatus: AgentStatus = "not_started";
@@ -1214,6 +1229,7 @@ export class SessionService {
         sessionId: id,
         agentStatus: "active",
         sessionStatus: "in_progress",
+        connection: updated.connection,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "user",

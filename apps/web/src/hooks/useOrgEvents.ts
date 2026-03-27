@@ -465,6 +465,12 @@ export function useOrgEvents() {
             if (payload.worktreeDeleted === true) {
               sessionPatch.worktreeDeleted = true;
             }
+            // session_resumed may carry an updated connection (e.g. when run()
+            // restores a previously-disconnected session).
+            const resumedConnection = asJsonObject(payload.connection);
+            if (resumedConnection) {
+              sessionPatch.connection = resumedConnection;
+            }
             patch("sessions", event.scopeId, sessionPatch);
 
             // PR merge transitions ALL sessions in the group, not just the event session.
