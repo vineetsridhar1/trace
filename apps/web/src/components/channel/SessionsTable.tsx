@@ -48,12 +48,29 @@ export function SessionsTable({
   );
 
   const rowsWithPlaceholder = useMemo(() => {
-    if (mergedLoaded || hasMergedRows) return filteredGroups;
+    // Real merged rows exist — no placeholder needed.
+    if (hasMergedRows) return filteredGroups;
+    // Still loading — keep the placeholder so the group header stays visible.
+    if (loadingMerged) {
+      return [
+        ...filteredGroups,
+        {
+          id: MERGED_PLACEHOLDER_ID,
+          name: "Loading…",
+          displaySessionStatus: "merged",
+          displayAgentStatus: "idle",
+          _sessionCount: 0,
+        } as SessionGroupRow,
+      ];
+    }
+    // Fetch finished with no merged rows — drop the placeholder.
+    if (mergedLoaded) return filteredGroups;
+    // Haven't fetched yet — show the expandable placeholder.
     return [
       ...filteredGroups,
       {
         id: MERGED_PLACEHOLDER_ID,
-        name: loadingMerged ? "Loading…" : "Expand to load merged workspaces",
+        name: "Expand to load merged workspaces",
         displaySessionStatus: "merged",
         displayAgentStatus: "idle",
         _sessionCount: 0,
