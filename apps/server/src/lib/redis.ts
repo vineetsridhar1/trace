@@ -2,7 +2,11 @@ import Redis from "ioredis";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 
-function createClient(name: string): Redis {
+/**
+ * Create a new Redis client. Exported so other processes (e.g. agent worker)
+ * can create their own dedicated connections.
+ */
+export function createRedisClient(name: string): Redis {
   const client = new Redis(REDIS_URL, {
     maxRetriesPerRequest: null, // required for blocking reads (XREAD)
     lazyConnect: true,
@@ -24,13 +28,13 @@ function createClient(name: string): Redis {
  * General-purpose Redis client for pub/sub publishing, XADD, and commands.
  * Do NOT use this for subscribing — subscribers need a dedicated connection.
  */
-export const redis = createClient("main");
+export const redis = createRedisClient("main");
 
 /**
  * Dedicated subscriber connection. Once a Redis client enters subscribe mode
  * it can only run (P)SUBSCRIBE/(P)UNSUBSCRIBE commands — so we need a separate client.
  */
-export const redisSub = createClient("subscriber");
+export const redisSub = createRedisClient("subscriber");
 
 /**
  * Connect both clients. Call once at server startup.
@@ -46,3 +50,11 @@ export async function disconnectRedis(): Promise<void> {
   redis.disconnect();
   redisSub.disconnect();
 }
+
+/**
+ * Pub/Sub channel used to wake the agent worker when a direct-route event
+ * (DM, @mention, ticket assignment) is published. The worker subscribes on
+ * a dedicated connection and uses the signal to break out of idle sleep,
+ * picking up the event within ~50-100ms instead of waiting up to BLOCK_MS.
+ */
+export const AGENT_WAKE_CHANNEL = "agent:wake";

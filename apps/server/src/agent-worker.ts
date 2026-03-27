@@ -7,7 +7,7 @@
  * Run with: pnpm dev:agent
  */
 
-import { redis, connectRedis, disconnectRedis } from "./lib/redis.js";
+import { redis, connectRedis, disconnectRedis, createRedisClient, AGENT_WAKE_CHANNEL } from "./lib/redis.js";
 import { prisma } from "./lib/db.js";
 import { agentIdentityService, type OrgAgentSettings } from "./services/agent-identity.js";
 import {
@@ -110,6 +110,34 @@ const agentContexts = new Map<string, OrgAgentSettings>();
 
 /** Whether the worker is shutting down */
 let shuttingDown = false;
+
+// ---------------------------------------------------------------------------
+// Wake signal — breaks idle sleep when a direct-route event arrives
+// ---------------------------------------------------------------------------
+
+/** Dedicated Redis subscriber for agent wake signals */
+let wakeSub: ReturnType<typeof createRedisClient> | null = null;
+
+/** Resolver for the current wake promise — called when a wake signal arrives */
+let wakeResolver: (() => void) | null = null;
+
+/** Promise that resolves when a wake signal is received or on shutdown */
+let wakePromise: Promise<void> = createWakePromise();
+
+function createWakePromise(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    wakeResolver = resolve;
+  });
+}
+
+/** Called when a wake signal arrives or on shutdown to break idle sleep */
+function onWakeSignal(): void {
+  if (wakeResolver) {
+    wakeResolver();
+  }
+  // Reset for the next wait cycle
+  wakePromise = createWakePromise();
+}
 
 /** Event aggregator instance */
 const aggregator = new EventAggregator(handleBatch);
@@ -290,69 +318,110 @@ interface StreamEntry {
 }
 
 /**
- * Block-read events from all active org streams using XREADGROUP.
- * Returns parsed entries grouped by org ID.
+ * Parse an XREADGROUP response into a Map of orgId → StreamEntry[].
+ */
+function parseXReadGroupResponse(
+  response: unknown,
+  result: Map<string, StreamEntry[]>,
+): void {
+  if (!response) return;
+  for (const [key, entries] of response as [string, [string, string[]][]][]) {
+    const orgId = key.replace(STREAM_KEY_PREFIX, "").replace(STREAM_KEY_SUFFIX, "");
+
+    const parsed: StreamEntry[] = [];
+    for (const [entryId, fields] of entries) {
+      const fieldMap: Record<string, string> = {};
+      for (let i = 0; i < fields.length; i += 2) {
+        fieldMap[fields[i]] = fields[i + 1];
+      }
+      if (fieldMap.event) {
+        parsed.push({ id: entryId, event: fieldMap.event });
+      }
+    }
+
+    if (parsed.length > 0) {
+      const existing = result.get(orgId);
+      if (existing) {
+        existing.push(...parsed);
+      } else {
+        result.set(orgId, parsed);
+      }
+    }
+  }
+}
+
+/**
+ * Build the list of active org stream keys + ids for XREADGROUP.
+ */
+function buildStreamArgs(): { streams: string[]; ids: string[] } {
+  const streams: string[] = [];
+  const ids: string[] = [];
+  for (const orgId of activeOrgs) {
+    const agentContext = agentContexts.get(orgId);
+    if (agentContext && agentContext.status === "disabled") continue;
+    streams.push(streamKey(orgId));
+    ids.push(">");
+  }
+  return { streams, ids };
+}
+
+/**
+ * Non-blocking XREADGROUP call. Returns immediately with whatever is available.
+ */
+async function xreadNonBlocking(
+  streams: string[],
+  ids: string[],
+): Promise<unknown> {
+  return redis.xreadgroup(
+    "GROUP",
+    CONSUMER_GROUP,
+    CONSUMER_NAME,
+    "COUNT",
+    100,
+    "STREAMS",
+    ...streams,
+    ...ids,
+  );
+}
+
+/**
+ * Read events from all active org streams using non-blocking XREADGROUP.
+ *
+ * Instead of blocking for up to BLOCK_MS inside Redis, we:
+ * 1. Do a non-blocking read — return immediately if events are available
+ * 2. If empty, wait via Promise.race([wakeSignal, sleep(BLOCK_MS)])
+ * 3. After wake/timeout, do one more non-blocking read
+ *
+ * The wake signal is published by the event service when a direct-route
+ * event (DM, @mention, ticket assignment) is created, allowing the worker
+ * to pick it up within ~50-100ms instead of waiting up to BLOCK_MS.
  */
 async function readEvents(): Promise<Map<string, StreamEntry[]>> {
   const result = new Map<string, StreamEntry[]>();
   if (activeOrgs.size === 0) return result;
 
-  const streams: string[] = [];
-  const ids: string[] = [];
-
-  for (const orgId of activeOrgs) {
-    // Skip disabled orgs — leave their events pending in Redis
-    // so they can be processed if the agent is re-enabled
-    const agentContext = agentContexts.get(orgId);
-    if (agentContext && agentContext.status === "disabled") {
-      continue;
-    }
-    streams.push(streamKey(orgId));
-    ids.push(">"); // only new messages not yet delivered to this group
-  }
-
+  const { streams, ids } = buildStreamArgs();
   if (streams.length === 0) return result;
 
   try {
-    // XREADGROUP GROUP <group> <consumer> COUNT 100 BLOCK <ms> STREAMS <keys...> <ids...>
-    const response = await redis.xreadgroup(
-      "GROUP",
-      CONSUMER_GROUP,
-      CONSUMER_NAME,
-      "COUNT",
-      100,
-      "BLOCK",
-      BLOCK_MS,
-      "STREAMS",
-      ...streams,
-      ...ids,
-    );
+    // First: non-blocking read for any immediately available events
+    const response = await xreadNonBlocking(streams, ids);
+    if (response) {
+      parseXReadGroupResponse(response, result);
+      return result;
+    }
 
-    if (!response) return result; // timeout, no new messages
+    // Nothing available — wait for a wake signal or timeout
+    await Promise.race([wakePromise, sleep(BLOCK_MS)]);
 
-    for (const [key, entries] of response as [string, [string, string[]][]][]) {
-      // Extract orgId from stream key: stream:org:{orgId}:events
-      const orgId = key.replace(STREAM_KEY_PREFIX, "").replace(STREAM_KEY_SUFFIX, "");
-
-      const parsed: StreamEntry[] = [];
-      for (const [entryId, fields] of entries) {
-        // fields is [field1, value1, field2, value2, ...]
-        const fieldMap: Record<string, string> = {};
-        for (let i = 0; i < fields.length; i += 2) {
-          fieldMap[fields[i]] = fields[i + 1];
-        }
-        if (fieldMap.event) {
-          parsed.push({ id: entryId, event: fieldMap.event });
-        }
-      }
-
-      if (parsed.length > 0) {
-        result.set(orgId, parsed);
+    // After wake/timeout, read again (non-blocking)
+    if (!shuttingDown) {
+      const response2 = await xreadNonBlocking(streams, ids);
+      if (response2) {
+        parseXReadGroupResponse(response2, result);
       }
     }
   } catch (err) {
-    // If Redis disconnects, the error will surface here.
-    // The main loop will retry after a short delay.
     if (!shuttingDown) {
       logError("XREADGROUP failed", err);
     }
@@ -560,11 +629,20 @@ async function shutdown(signal: string): Promise<void> {
     logError("error stopping aggregator", err);
   }
 
-  // Give the consume loop time to exit its current XREADGROUP block.
-  // BLOCK_MS is 5s, so we wait up to 6s for it to finish.
-  const drainDeadline = Date.now() + BLOCK_MS + 1_000;
-  while (Date.now() < drainDeadline) {
-    await sleep(200);
+  // Wake the consume loop so it exits its idle sleep immediately
+  onWakeSignal();
+
+  // Brief pause to let the consume loop finish its current iteration
+  await sleep(500);
+
+  // Disconnect the wake subscriber
+  if (wakeSub) {
+    try {
+      wakeSub.disconnect();
+      log("wake subscriber disconnected");
+    } catch (err) {
+      logError("error disconnecting wake subscriber", err);
+    }
   }
 
   try {
@@ -605,6 +683,16 @@ async function main(): Promise<void> {
     console.error("[agent-worker] Start Redis with: docker compose up -d redis\n");
     process.exit(1);
   }
+
+  // Set up a dedicated subscriber for wake signals so we can break
+  // out of idle sleep when a DM/@mention/ticket-assignment event arrives
+  wakeSub = createRedisClient("agent-wake-sub");
+  await wakeSub.connect();
+  await wakeSub.subscribe(AGENT_WAKE_CHANNEL);
+  wakeSub.on("message", () => {
+    onWakeSignal();
+  });
+  log("wake subscriber connected");
 
   // Discover all active organizations and set up consumer groups
   await discoverOrgs();

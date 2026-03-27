@@ -1,5 +1,6 @@
 import { useUIStore } from "../../stores/ui";
 import { useChatMessages } from "../../hooks/useChatMessages";
+import { useChatStream } from "../../hooks/useChatStream";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useThreadPanelLayout } from "../../hooks/useThreadPanelLayout";
 import { ChatHeader } from "./ChatHeader";
@@ -13,6 +14,7 @@ const THREAD_WIDTH_KEY = "trace_thread_width";
 export function ChatView({ chatId }: { chatId: string }) {
   const activeThreadId = useUIStore((s) => s.activeThreadId);
   const { messageIds, loading, hasOlder, fetchOlderMessages } = useChatMessages(chatId);
+  const { isAgentTyping, streamingText, agentId } = useChatStream(chatId);
   const isMobile = useIsMobile();
   const { threadId, rendered, slideIn, threadWidth, isDragging, handleDragStart } =
     useThreadPanelLayout(activeThreadId, THREAD_WIDTH_KEY);
@@ -29,6 +31,9 @@ export function ChatView({ chatId }: { chatId: string }) {
             loading={loading}
             hasOlder={hasOlder}
             onLoadOlder={fetchOlderMessages}
+            isAgentTyping={isAgentTyping}
+            streamingText={streamingText}
+            agentId={agentId}
           />
           <ChatComposer chatId={chatId} />
         </div>

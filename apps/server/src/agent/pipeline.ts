@@ -46,6 +46,8 @@ import { executionLoggingService } from "../services/execution-logging.js";
 import { costTrackingService } from "../services/cost-tracking.js";
 import { processedEventService } from "../services/processed-event.js";
 import { estimateCostCents } from "./cost-utils.js";
+import { streamAgentReply } from "./stream-reply.js";
+import { pubsub, topics } from "../lib/pubsub.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -194,6 +196,22 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
     return;
   }
 
+  // ── Determine if this is a direct (DM/@mention) batch eligible for streaming ──
+  const isDirectBatch = batch.closeReason === "direct" && (packet.isDm || packet.isMention);
+
+  // Publish typing indicator for direct batches so the user sees immediate feedback
+  if (isDirectBatch) {
+    const chatId = packet.scopeId;
+    pubsub.publish(topics.chatStream(chatId), {
+      chatStream: {
+        chatId,
+        actorId: agentSettings.agentId,
+        type: "TYPING_START",
+        text: null,
+      },
+    });
+  }
+
   // ── Initialize loop state ──
   const state: LoopState = {
     packet,
@@ -212,6 +230,7 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
 
   const systemPrompt = buildSystemPrompt(packet);
 
+  try {
   // ── Multi-turn loop ──
   for (let turn = 1; turn <= MAX_ITERATIONS; turn++) {
     log(`── turn ${turn}/${MAX_ITERATIONS} start ──`, { scopeKey: packet.scopeKey });
@@ -304,6 +323,9 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
       agentSettings,
       executor,
       logger,
+      isDirectBatch,
+      // Use the promoted model if tier3, otherwise sonnet for user-facing reply quality
+      plannerModel: state.promotedModel ?? sonnetModel,
     });
 
     state.turnResults.push(turnRecord);
@@ -324,6 +346,20 @@ export async function runPipeline(input: PipelineInput): Promise<void> {
 
   // ── Post-loop ──
   await postLoop({ state, agentSettings, executor, batch, startTime, logger });
+  } finally {
+    // Always publish TYPING_STOP for direct batches to clear the client indicator
+    if (isDirectBatch) {
+      const chatId = packet.scopeId;
+      pubsub.publish(topics.chatStream(chatId), {
+        chatStream: {
+          chatId,
+          actorId: agentSettings.agentId,
+          type: "TYPING_STOP",
+          text: null,
+        },
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -339,10 +375,14 @@ interface ExecuteTurnInput {
   agentSettings: OrgAgentSettings;
   executor: ActionExecutor;
   logger: PipelineLogger;
+  /** Whether this is a DM/@mention batch eligible for response streaming. */
+  isDirectBatch: boolean;
+  /** The model used by the planner (streamer uses the same tier). */
+  plannerModel: string;
 }
 
 async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
-  const { turn, plannerOutput, llmResponse, turnResult, state, agentSettings, executor, logger } = input;
+  const { turn, plannerOutput, llmResponse, turnResult, state, agentSettings, executor, logger, isDirectBatch, plannerModel } = input;
   const { log, logError } = logger;
 
   // ── Policy engine ──
@@ -372,6 +412,35 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
   const executionResults: Array<ExecutionResult & { decision: PolicyDecision }> = [];
   for (const actionResult of byDecision.get("execute") ?? []) {
     try {
+      const isMessageAction =
+        actionResult.action.actionType === "message.send" ||
+        actionResult.action.actionType === "message.sendToChannel";
+
+      // For DM/@mention batches, stream message actions via a second LLM call
+      // so the user sees tokens arrive in real time.
+      if (isDirectBatch && isMessageAction && actionResult.action.args.text) {
+        try {
+          const streamResult = await streamAgentReply({
+            packet: state.packet,
+            action: actionResult.action,
+            agentId: agentSettings.agentId,
+            model: plannerModel,
+          });
+          // Replace the planner's text with the streamed output
+          actionResult.action.args.text = streamResult.text;
+          // Clear html since we regenerated the text
+          actionResult.action.args.html = undefined;
+          log("streamed reply", {
+            scopeKey: state.packet.scopeKey,
+            turn,
+            textLength: streamResult.text.length,
+          });
+        } catch (streamErr) {
+          // Fall back to planner's original text if streaming fails
+          logError(`stream-reply failed on turn ${turn}, using planner text`, streamErr);
+        }
+      }
+
       const result = await executor.execute(actionResult.action, {
         organizationId: state.packet.organizationId,
         agentId: agentSettings.agentId,
@@ -379,11 +448,7 @@ async function executeTurn(input: ExecuteTurnInput): Promise<TurnResult> {
       });
       executionResults.push({ ...result, decision: "execute" });
 
-      if (
-        (actionResult.action.actionType === "message.send" ||
-          actionResult.action.actionType === "message.sendToChannel") &&
-        result.status === "success"
-      ) {
+      if (isMessageAction && result.status === "success") {
         state.anyMessageSendExecuted = true;
       }
 

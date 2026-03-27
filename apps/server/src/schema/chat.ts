@@ -101,6 +101,18 @@ export const chatSubscriptions = {
       );
     },
   },
+  chatStream: {
+    subscribe: async (
+      _: unknown,
+      args: { chatId: string },
+      ctx: Context,
+    ) => {
+      await assertChatAccess(args.chatId, ctx.userId);
+      return pubsub.asyncIterator<{ chatStream: unknown }>(
+        topics.chatStream(args.chatId),
+      );
+    },
+  },
 };
 
 export const chatTypeResolvers = {

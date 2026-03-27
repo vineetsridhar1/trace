@@ -35,6 +35,66 @@ export type AddChatMemberInput = {
   userId: Scalars['ID']['input'];
 };
 
+export type AgentBudgetStatus = {
+  __typename?: 'AgentBudgetStatus';
+  dailyLimitCents: Scalars['Int']['output'];
+  remainingCents: Scalars['Float']['output'];
+  remainingPercent: Scalars['Float']['output'];
+  spentCents: Scalars['Float']['output'];
+};
+
+export type AgentCostEntry = {
+  __typename?: 'AgentCostEntry';
+  date: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  organizationId: Scalars['ID']['output'];
+  summaryCalls: Scalars['Int']['output'];
+  summaryCostCents: Scalars['Float']['output'];
+  tier2Calls: Scalars['Int']['output'];
+  tier2CostCents: Scalars['Float']['output'];
+  tier3Calls: Scalars['Int']['output'];
+  tier3CostCents: Scalars['Float']['output'];
+  totalCostCents: Scalars['Float']['output'];
+};
+
+export type AgentCostSummary = {
+  __typename?: 'AgentCostSummary';
+  budget: AgentBudgetStatus;
+  dailyCosts: Array<AgentCostEntry>;
+};
+
+export type AgentExecutionLog = {
+  __typename?: 'AgentExecutionLog';
+  agentId: Scalars['String']['output'];
+  batchSize: Scalars['Int']['output'];
+  confidence: Scalars['Float']['output'];
+  contextTokenAllocation?: Maybe<Scalars['JSON']['output']>;
+  createdAt: Scalars['DateTime']['output'];
+  disposition: ExecutionDisposition;
+  estimatedCostCents: Scalars['Float']['output'];
+  finalActions?: Maybe<Scalars['JSON']['output']>;
+  id: Scalars['ID']['output'];
+  inboxItemId?: Maybe<Scalars['String']['output']>;
+  inputTokens: Scalars['Int']['output'];
+  latencyMs: Scalars['Int']['output'];
+  model: Scalars['String']['output'];
+  modelTier: ModelTier;
+  organizationId: Scalars['ID']['output'];
+  outputTokens: Scalars['Int']['output'];
+  plannedActions?: Maybe<Scalars['JSON']['output']>;
+  policyDecision?: Maybe<Scalars['JSON']['output']>;
+  promoted: Scalars['Boolean']['output'];
+  promotionReason?: Maybe<Scalars['String']['output']>;
+  status: ExecutionStatus;
+  triggerEventId: Scalars['String']['output'];
+};
+
+export type AgentExecutionLogConnection = {
+  __typename?: 'AgentExecutionLogConnection';
+  items: Array<AgentExecutionLog>;
+  totalCount: Scalars['Int']['output'];
+};
+
 export type AgentIdentity = {
   __typename?: 'AgentIdentity';
   autonomyMode: AutonomyMode;
@@ -59,6 +119,23 @@ export type AgentTrustLevel =
   | 'autonomous'
   | 'blocked'
   | 'suggest';
+
+export type AgentWorkerStatus = {
+  __typename?: 'AgentWorkerStatus';
+  activeOrganizations: Scalars['Int']['output'];
+  openAggregationWindows: Scalars['Int']['output'];
+  running: Scalars['Boolean']['output'];
+  uptime?: Maybe<Scalars['Int']['output']>;
+};
+
+export type AggregationWindowInfo = {
+  __typename?: 'AggregationWindowInfo';
+  eventCount: Scalars['Int']['output'];
+  lastEventAt: Scalars['DateTime']['output'];
+  openedAt: Scalars['DateTime']['output'];
+  organizationId: Scalars['ID']['output'];
+  scopeKey: Scalars['String']['output'];
+};
 
 export type AiConversation = {
   __typename?: 'AiConversation';
@@ -128,6 +205,8 @@ export type BranchDiffFile = {
 
 export type Channel = {
   __typename?: 'Channel';
+  aiMode?: Maybe<AutonomyMode>;
+  baseBranch?: Maybe<Scalars['String']['output']>;
   groupId?: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   members: Array<ChannelMember>;
@@ -166,6 +245,7 @@ export type ChannelType =
 
 export type Chat = {
   __typename?: 'Chat';
+  aiMode?: Maybe<AutonomyMode>;
   createdAt: Scalars['DateTime']['output'];
   createdBy: User;
   id: Scalars['ID']['output'];
@@ -188,6 +268,19 @@ export type ChatMember = {
   joinedAt: Scalars['DateTime']['output'];
   user: User;
 };
+
+export type ChatStreamEvent = {
+  __typename?: 'ChatStreamEvent';
+  actorId: Scalars['ID']['output'];
+  chatId: Scalars['ID']['output'];
+  text?: Maybe<Scalars['String']['output']>;
+  type: ChatStreamEventType;
+};
+
+export type ChatStreamEventType =
+  | 'TEXT_DELTA'
+  | 'TYPING_START'
+  | 'TYPING_STOP';
 
 export type ChatType =
   | 'dm'
@@ -215,6 +308,7 @@ export type CreateChannelGroupInput = {
 };
 
 export type CreateChannelInput = {
+  baseBranch?: InputMaybe<Scalars['String']['input']>;
   groupId?: InputMaybe<Scalars['ID']['input']>;
   name: Scalars['String']['input'];
   organizationId: Scalars['ID']['input'];
@@ -319,6 +413,29 @@ export type EventType =
   | 'ticket_unlinked'
   | 'ticket_updated';
 
+export type ExecutionDisposition =
+  | 'act'
+  | 'escalate'
+  | 'ignore'
+  | 'suggest'
+  | 'summarize';
+
+export type ExecutionLogFilters = {
+  disposition?: InputMaybe<ExecutionDisposition>;
+  endDate?: InputMaybe<Scalars['DateTime']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  startDate?: InputMaybe<Scalars['DateTime']['input']>;
+  status?: InputMaybe<ExecutionStatus>;
+};
+
+export type ExecutionStatus =
+  | 'blocked'
+  | 'dropped'
+  | 'failed'
+  | 'succeeded'
+  | 'suggested';
+
 export type GitCheckpoint = {
   __typename?: 'GitCheckpoint';
   author: Scalars['String']['output'];
@@ -396,6 +513,10 @@ export type Message = {
   updatedAt: Scalars['DateTime']['output'];
 };
 
+export type ModelTier =
+  | 'tier2'
+  | 'tier3';
+
 export type MoveChannelInput = {
   channelId: Scalars['ID']['input'];
   groupId?: InputMaybe<Scalars['ID']['input']>;
@@ -461,9 +582,11 @@ export type Mutation = {
   unsubscribe: Scalars['Boolean']['output'];
   updateAgentSettings: AgentIdentity;
   updateAiConversationTitle: AiConversation;
+  updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
   updateRepo: Repo;
+  updateScopeAiMode: Scalars['Boolean']['output'];
   updateSessionConfig: Session;
   updateTicket: Ticket;
 };
@@ -793,6 +916,12 @@ export type MutationUpdateAiConversationTitleArgs = {
 };
 
 
+export type MutationUpdateChannelArgs = {
+  id: Scalars['ID']['input'];
+  input: UpdateChannelInput;
+};
+
+
 export type MutationUpdateChannelGroupArgs = {
   id: Scalars['ID']['input'];
   input: UpdateChannelGroupInput;
@@ -809,6 +938,14 @@ export type MutationUpdateOrgMemberRoleArgs = {
 export type MutationUpdateRepoArgs = {
   id: Scalars['ID']['input'];
   input: UpdateRepoInput;
+};
+
+
+export type MutationUpdateScopeAiModeArgs = {
+  aiMode?: InputMaybe<AutonomyMode>;
+  organizationId: Scalars['ID']['input'];
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
 };
 
 
@@ -880,6 +1017,7 @@ export type Priority =
 
 export type Project = {
   __typename?: 'Project';
+  aiMode?: Maybe<AutonomyMode>;
   channels: Array<Channel>;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -890,7 +1028,12 @@ export type Project = {
 
 export type Query = {
   __typename?: 'Query';
+  agentAggregationWindows: Array<AggregationWindowInfo>;
+  agentCostSummary: AgentCostSummary;
+  agentExecutionLog?: Maybe<AgentExecutionLog>;
+  agentExecutionLogs: AgentExecutionLogConnection;
   agentIdentity?: Maybe<AgentIdentity>;
+  agentWorkerStatus: AgentWorkerStatus;
   aiConversation?: Maybe<AiConversation>;
   aiConversations: Array<AiConversation>;
   availableRuntimes: Array<SessionRuntimeInstance>;
@@ -915,6 +1058,7 @@ export type Query = {
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars['String']['output']>;
   repos: Array<Repo>;
+  resolvedAiMode: AutonomyMode;
   session?: Maybe<Session>;
   sessionGroup?: Maybe<SessionGroup>;
   sessionGroupBranchDiff: Array<BranchDiffFile>;
@@ -931,7 +1075,36 @@ export type Query = {
 };
 
 
+export type QueryAgentAggregationWindowsArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentCostSummaryArgs = {
+  endDate: Scalars['String']['input'];
+  organizationId: Scalars['ID']['input'];
+  startDate: Scalars['String']['input'];
+};
+
+
+export type QueryAgentExecutionLogArgs = {
+  id: Scalars['ID']['input'];
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentExecutionLogsArgs = {
+  filters?: InputMaybe<ExecutionLogFilters>;
+  organizationId: Scalars['ID']['input'];
+};
+
+
 export type QueryAgentIdentityArgs = {
+  organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryAgentWorkerStatusArgs = {
   organizationId: Scalars['ID']['input'];
 };
 
@@ -1057,6 +1230,13 @@ export type QueryRepoBranchesArgs = {
 
 export type QueryReposArgs = {
   organizationId: Scalars['ID']['input'];
+};
+
+
+export type QueryResolvedAiModeArgs = {
+  organizationId: Scalars['ID']['input'];
+  scopeId: Scalars['ID']['input'];
+  scopeType: Scalars['String']['input'];
 };
 
 
@@ -1292,6 +1472,7 @@ export type Subscription = {
   branchTurns: Turn;
   channelEvents: Event;
   chatEvents: Event;
+  chatStream: ChatStreamEvent;
   conversationEvents: AiConversationEvent;
   orgEvents: Event;
   sessionPortsChanged: SessionEndpoints;
@@ -1316,6 +1497,11 @@ export type SubscriptionChannelEventsArgs = {
 export type SubscriptionChatEventsArgs = {
   chatId: Scalars['ID']['input'];
   types?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type SubscriptionChatStreamArgs = {
+  chatId: Scalars['ID']['input'];
 };
 
 
@@ -1375,6 +1561,7 @@ export type ThreadSummary = {
 
 export type Ticket = {
   __typename?: 'Ticket';
+  aiMode?: Maybe<AutonomyMode>;
   assignees: Array<User>;
   channel?: Maybe<Channel>;
   createdAt: Scalars['DateTime']['output'];
@@ -1442,6 +1629,11 @@ export type UpdateChannelGroupInput = {
   isCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   position?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type UpdateChannelInput = {
+  baseBranch?: InputMaybe<Scalars['String']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRepoInput = {

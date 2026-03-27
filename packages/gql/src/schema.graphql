@@ -946,6 +946,21 @@ type Mutation {
   updateAiConversationTitle(conversationId: ID!, title: String!): AiConversation!
 }
 
+# --- Chat streaming (agent typing / response streaming) ---
+
+enum ChatStreamEventType {
+  TYPING_START
+  TEXT_DELTA
+  TYPING_STOP
+}
+
+type ChatStreamEvent {
+  chatId: ID!
+  actorId: ID!
+  type: ChatStreamEventType!
+  text: String
+}
+
 # --- Subscriptions ---
 
 type Subscription {
@@ -956,6 +971,7 @@ type Subscription {
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
+  chatStream(chatId: ID!): ChatStreamEvent!
   branchTurns(branchId: ID!): Turn!
   conversationEvents(conversationId: ID!): AiConversationEvent!
 }

@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { ScopeType, EventType, ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
 import { pubsub, topics } from "../lib/pubsub.js";
-import { redis } from "../lib/redis.js";
+import { redis, AGENT_WAKE_CHANNEL } from "../lib/redis.js";
 
 export interface CreateEventInput {
   organizationId: string;
@@ -35,6 +35,12 @@ const scopeTopicMap: Record<string, (id: string) => string> = {
   ticket: topics.ticketEvents,
   // "system" scope has no entity-level topic — events are broadcast on the org topic only
 };
+
+// Event types that may route as "direct" in the agent worker.
+// Publishing a wake signal for these allows the worker to pick them up
+// within ~50-100ms instead of waiting for the XREADGROUP block timeout.
+// False positives are harmless (just an extra non-blocking XREADGROUP read).
+const DIRECT_WAKE_EVENT_TYPES = new Set(["message_sent", "ticket_assigned"]);
 
 type TxClient = Prisma.TransactionClient;
 
@@ -72,6 +78,14 @@ export class EventService {
       .catch((err) => {
         console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
       });
+
+    // Wake the agent worker immediately for event types that may route as "direct"
+    // (DMs, @mentions, ticket assignments). Fire-and-forget — failure is harmless.
+    if (DIRECT_WAKE_EVENT_TYPES.has(input.eventType)) {
+      redis
+        .publish(AGENT_WAKE_CHANNEL, JSON.stringify({ orgId: input.organizationId }))
+        .catch(() => {});
+    }
 
     return event;
   }

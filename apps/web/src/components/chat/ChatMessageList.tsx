@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatMessageErrorBoundary } from "./ChatMessageErrorBoundary";
+import { TypingIndicator } from "./TypingIndicator";
+import { StreamingMessage } from "./StreamingMessage";
 import { useEntityStore } from "../../stores/entity";
 import { useShallow } from "zustand/react/shallow";
 import { Skeleton } from "../ui/skeleton";
@@ -15,6 +17,9 @@ export function ChatMessageList({
   loading,
   hasOlder,
   onLoadOlder,
+  isAgentTyping,
+  streamingText,
+  agentId,
 }: {
   scopeId: string;
   welcome?: React.ReactNode;
@@ -22,6 +27,9 @@ export function ChatMessageList({
   loading: boolean;
   hasOlder: boolean;
   onLoadOlder: () => void;
+  isAgentTyping?: boolean;
+  streamingText?: string;
+  agentId?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -62,12 +70,12 @@ export function ChatMessageList({
     wasAtBottomRef.current = true;
   }, [scopeId, loading]);
 
-  // Auto-scroll to bottom smoothly when new messages arrive
+  // Auto-scroll to bottom smoothly when new messages arrive or streaming text updates
   useEffect(() => {
     if (wasAtBottomRef.current && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messageIds.length]);
+  }, [messageIds.length, streamingText, isAgentTyping]);
 
   // Track scroll position
   const handleScroll = useCallback(() => {
@@ -121,6 +129,11 @@ export function ChatMessageList({
             </ChatMessageErrorBoundary>
           ))}
         </div>
+      )}
+      {isAgentTyping && agentId && (
+        streamingText
+          ? <StreamingMessage agentId={agentId} text={streamingText} />
+          : <TypingIndicator agentId={agentId} />
       )}
       <div ref={bottomRef} />
     </div>
