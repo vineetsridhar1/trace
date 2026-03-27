@@ -320,8 +320,9 @@ export class EventAggregator {
 
     // Debounced persistence — only persist every N events or after a time interval.
     // This reduces Redis writes from 1-per-event to ~1-per-5-events.
-    // Crash recovery is still safe: the silence timer provides a floor, and
-    // on shutdown we persist all dirty windows explicitly.
+    // On crash, up to PERSIST_DEBOUNCE_EVENTS events may be lost from the Redis
+    // snapshot. The in-memory window is authoritative; Redis is a recovery aid.
+    // On graceful shutdown we persist all dirty windows explicitly.
     await this.debouncedPersist(windowKey, window);
   }
 

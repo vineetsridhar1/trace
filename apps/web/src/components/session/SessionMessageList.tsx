@@ -124,7 +124,7 @@ export function SessionMessageList({
     if (!scrollToEventId) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    const target = container.querySelector(`[data-event-id="${scrollToEventId}"]`);
+    const target = container.querySelector(`[data-event-id="${CSS.escape(scrollToEventId)}"]`);
     if (target) {
       // Small delay to let the DOM settle after session switch
       requestAnimationFrame(() => {

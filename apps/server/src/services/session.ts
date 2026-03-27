@@ -1444,7 +1444,7 @@ export class SessionService {
   ) {
     const prev = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
-      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true, readOnlyWorkspace: true },
+      select: { id: true, tool: true, model: true, agentStatus: true, hosting: true, repoId: true, sessionGroupId: true, connection: true, readOnlyWorkspace: true, branch: true, repo: { select: { id: true, name: true, remoteUrl: true, defaultBranch: true } } },
     });
 
     const toolChanged = config.tool != null && config.tool !== prev.tool;
@@ -1486,32 +1486,19 @@ export class SessionService {
       data.workdir = null;
       data.pendingRun = Prisma.DbNull;
 
-      // Provision the new runtime
+      // Provision the new runtime (repo already included in initial select)
       const needsProvisioning = !!prev.repoId || newHosting === "cloud";
       if (needsProvisioning) {
-        const sessionForRepo = await prisma.session.findUniqueOrThrow({
-          where: { id: sessionId },
-          include: { repo: true },
-        });
-        sessionRouter.createRuntime({
+        this.provisionRuntime({
           sessionId,
-          hosting: newHosting as "cloud" | "local",
+          hosting: newHosting,
           tool: nextTool,
-          model: (nextModel !== undefined ? nextModel : sessionForRepo.model) ?? undefined,
-          repo: sessionForRepo.repo
-            ? {
-                id: sessionForRepo.repo.id,
-                name: sessionForRepo.repo.name,
-                remoteUrl: sessionForRepo.repo.remoteUrl,
-                defaultBranch: sessionForRepo.repo.defaultBranch,
-              }
-            : null,
-          branch: sessionForRepo.branch ?? undefined,
+          model: nextModel !== undefined ? nextModel : prev.model,
+          repo: prev.repo,
+          branch: prev.branch,
           createdById: actorId,
           organizationId,
           readOnly: prev.readOnlyWorkspace,
-          onFailed: (error) => this.workspaceFailed(sessionId, error),
-          onWorkspaceReady: (workdir) => this.workspaceReady(sessionId, workdir),
         });
       }
     }
